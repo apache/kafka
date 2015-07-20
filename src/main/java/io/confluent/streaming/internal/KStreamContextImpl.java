@@ -8,7 +8,6 @@ import io.confluent.streaming.KStreamJob;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StorageEngine;
 import io.confluent.streaming.StreamingConfig;
-import io.confluent.streaming.SyncGroup;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -48,7 +47,7 @@ public class KStreamContextImpl implements KStreamContext {
   private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<>();
   private final HashMap<String, PartitioningInfo> partitioningInfos = new HashMap<>();
   private final TimestampExtractor timestampExtractor;
-  private final HashMap<String, StreamSynchronizer> streamSynchronizerMap = new HashMap<>();
+  private final HashMap<String, StreamGroup> streamGroups = new HashMap<>();
   private final StreamingConfig streamingConfig;
   private final ProcessorConfig processorConfig;
   private final Metrics metrics;
@@ -134,23 +133,21 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
   public KStream<?, ?> from(String... topics) {
-    return from(syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), null, null, topics);
-  }
-
-  @Override
-  public KStream<?, ?> from(SyncGroup syncGroup, String... topics) {
-    return from(syncGroup, null, null, topics);
+    return from(streamGroup(getNextGroupName()), null, null, topics);
   }
 
   @Override
   public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
-    return from(syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), keyDeserializer, valDeserializer, topics);
+    return from(streamGroup(getNextGroupName()), keyDeserializer, valDeserializer, topics);
   }
 
-  @Override
+  private String getNextGroupName() {
+    return "StreamGroup-" + STREAM_GROUP_INDEX.getAndIncrement();
+  }
+
   @SuppressWarnings("unchecked")
-  public <K, V> KStream<K, V> from(SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
-    if (syncGroup == null) throw new NullPointerException();
+  private <K, V> KStream<K, V> from(StreamGroup streamGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+    if (streamGroup == null) throw new IllegalArgumentException("unspecified stream group");
 
     KStreamSource<?, ?> stream = null;
     Set<String> fromTopics;
@@ -187,7 +184,7 @@ public class KStreamContextImpl implements KStreamContext {
       if (stream == null) {
         // create stream metadata
         Map<String, PartitioningInfo> topicPartitionInfos = new HashMap<>();
-        for (String topic : topics) {
+        for (String topic : fromTopics) {
           PartitioningInfo partitioningInfo = this.partitioningInfos.get(topic);
 
           if (partitioningInfo == null) {
@@ -198,7 +195,7 @@ public class KStreamContextImpl implements KStreamContext {
           topicPartitionInfos.put(topic, partitioningInfo);
         }
 
-        KStreamMetadata streamMetadata = new KStreamMetadata(syncGroup, topicPartitionInfos);
+        KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, topicPartitionInfos);
 
         // override the deserializer classes if specified
         if (keyDeserializer == null && valDeserializer == null) {
@@ -219,17 +216,16 @@ public class KStreamContextImpl implements KStreamContext {
         }
 
         // update source stream map
-        for (String topic : topics) {
-          if (sourceStreams.containsKey(topic))
+        for (String topic : fromTopics) {
+          if (!sourceStreams.containsKey(topic))
             sourceStreams.put(topic, stream);
 
           TopicPartition partition = new TopicPartition(topic, id);
-          StreamSynchronizer streamSynchronizer = (StreamSynchronizer)syncGroup;
-          streamSynchronizer.addPartition(partition, stream);
-          ingestor.addStreamSynchronizerForPartition(streamSynchronizer, partition);
+          streamGroup.addPartition(partition, stream);
+          ingestor.addPartitionStreamToGroup(streamGroup, partition);
         }
       } else {
-        if (stream.metadata.syncGroup == syncGroup)
+        if (stream.metadata.streamGroup == streamGroup)
           throw new IllegalStateException("topic is already assigned a different synchronization group");
 
         // TODO: with this constraint we will not allow users to create KStream with different
@@ -270,26 +266,26 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public SyncGroup syncGroup(String name) {
-    return syncGroup(name, new TimeBasedChooser());
+  public StreamGroup streamGroup(String name) {
+    return streamGroup(name, new TimeBasedChooser());
   }
 
   @Override
-  public SyncGroup roundRobinSyncGroup(String name) {
-    return syncGroup(name, new RoundRobinChooser());
+  public StreamGroup roundRobinStreamGroup(String name) {
+    return streamGroup(name, new RoundRobinChooser());
   }
 
-  private SyncGroup syncGroup(String name, Chooser chooser) {
+  private StreamGroup streamGroup(String name, Chooser chooser) {
     int desiredUnprocessedPerPartition = processorConfig.bufferedRecordsPerPartition;
 
     synchronized (this) {
-      StreamSynchronizer streamSynchronizer = streamSynchronizerMap.get(name);
-      if (streamSynchronizer == null) {
-        streamSynchronizer =
-          new StreamSynchronizer(name, ingestor, chooser, timestampExtractor, desiredUnprocessedPerPartition);
-        streamSynchronizerMap.put(name, streamSynchronizer);
+      StreamGroup streamGroup = streamGroups.get(name);
+      if (streamGroup == null) {
+        streamGroup =
+          new StreamGroup(name, ingestor, chooser, timestampExtractor, desiredUnprocessedPerPartition);
+        streamGroups.put(name, streamGroup);
       }
-      return streamSynchronizer;
+      return streamGroup;
     }
   }
 
@@ -302,8 +298,8 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
 
-  public Collection<StreamSynchronizer> streamSynchronizers() {
-    return streamSynchronizerMap.values();
+  public Collection<StreamGroup> streamSynchronizers() {
+    return streamGroups.values();
   }
 
   public void init(Consumer<byte[], byte[]> restoreConsumer) throws IOException {

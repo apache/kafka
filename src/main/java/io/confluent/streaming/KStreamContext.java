@@ -1,11 +1,13 @@
 package io.confluent.streaming;
 
+import io.confluent.streaming.internal.StreamGroup;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.File;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * KStreamContext is the interface that allows an implementation of {@link KStreamJob#init(KStreamContext)} to create KStream instances.
@@ -14,7 +16,7 @@ import java.util.Map;
  */
 public interface KStreamContext {
 
-  String DEFAULT_SYNCHRONIZATION_GROUP = "defaultSynchronizationGroup";
+  AtomicInteger STREAM_GROUP_INDEX = new AtomicInteger(1);
 
   /**
    * Returns the partition id
@@ -57,15 +59,6 @@ public interface KStreamContext {
   KStream<?, ?> from(String... topics);
 
   /**
-   * Creates a KStream instance for the specified topics. The stream is added to the specified synchronization group.
-   * @param syncGroup the synchronization group
-   * @param topics the topic names, if empty default to all the topics in the config
-   * @return KStream
-   */
-  KStream<?, ?> from(SyncGroup syncGroup, String... topics);
-
-
-  /**
    * Creates a KStream instance for the specified topic. The stream is added to the default synchronization group.
    * @param keyDeserializer key deserializer used to read this source KStream,
    *                        if not specified the default deserializer defined in the configs will be used
@@ -75,18 +68,6 @@ public interface KStreamContext {
    * @return KStream
    */
   <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics);
-
-  /**
-   * Creates a KStream instance for the specified topic. The stream is added to the specified synchronization group.
-   * @param syncGroup the synchronization group
-   * @param keyDeserializer key deserializer used to read this source KStream,
-   *                        if not specified the default deserializer defined in the configs will be used
-   * @param valDeserializer value deserializer used to read this source KStream,
-   *                        if not specified the default deserializer defined in the configs will be used
-   * @param topics the topic names, if empty default to all the topics in the config
-   * @return KStream
-   */
-  <K, V> KStream<K, V> from(SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics);
 
   /**
    * Returns a RecordCollector which applies the serializer to key and value.
@@ -119,18 +100,18 @@ public interface KStreamContext {
   Metrics metrics();
 
   /**
-   * Creates a synchronization group with the given name.
+   * Creates a stream synchronization group with the given name.
    * @param name the synchronization group name
    * @return a synchronization group
    */
-  SyncGroup syncGroup(String name);
+  StreamGroup streamGroup(String name);
 
   /**
-   * Creates a round robin synchronization group with the given name.
+   * Creates a round robin stream synchronization group with the given name.
    * @param name the synchronization group name
    * @return a round robin synchronization group
    */
-  SyncGroup roundRobinSyncGroup(String name);
+  StreamGroup roundRobinStreamGroup(String name);
 
   /**
    * Restores the specified storage engine.

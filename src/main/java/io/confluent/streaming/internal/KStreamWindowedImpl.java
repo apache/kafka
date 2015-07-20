@@ -45,6 +45,10 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
     if (!this.metadata.isJoinCompatibleWith(otherImpl.metadata)) throw new NotCopartitionedException();
 
+    // merge the other stream's group with this group
+    this.metadata.streamGroup.mergeStreamGroup(otherImpl.metadata.streamGroup);
+    otherImpl.metadata.streamGroup = this.metadata.streamGroup;
+
     KStreamJoin<K, V2, V, V1> stream =
       new KStreamJoin<K, V2, V, V1>(this.window, otherImpl.window, prior, processor, this.metadata, context);
     otherImpl.registerReceiver(stream.receiverForOtherStream);

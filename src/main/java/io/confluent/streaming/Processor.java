@@ -5,7 +5,7 @@ package io.confluent.streaming;
  */
 public interface Processor<K, V>  {
 
-  void apply(String topic, K key, V value, RecordCollector<K, V> collector, Coordinator coordinator);
+  void process(String topic, K key, V value, RecordCollector<K, V> collector, Coordinator coordinator);
 
   void init(PunctuationScheduler punctuationScheduler);
 

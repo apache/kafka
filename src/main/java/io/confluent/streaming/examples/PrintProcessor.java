@@ -17,7 +17,7 @@ import java.util.Properties;
 public class PrintProcessor<K, V> implements Processor<K, V> {
 
   @Override
-  public void apply(String topic, K key, V value, RecordCollector<K, V> collector, Coordinator coordinator) {
+  public void process(String topic, K key, V value, RecordCollector<K, V> collector, Coordinator coordinator) {
     System.out.println(topic + ": [" + key + ", " + value + "]");
 
     coordinator.commit(Coordinator.RequestScope.CURRENT_TASK);

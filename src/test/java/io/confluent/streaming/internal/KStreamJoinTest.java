@@ -17,7 +17,7 @@ public class KStreamJoinTest {
 
   private Ingestor ingestor = new MockIngestor();
 
-  private StreamSynchronizer streamSynchronizer = new StreamSynchronizer(
+  private StreamGroup streamGroup = new StreamGroup(
     "group",
     ingestor,
     new TimeBasedChooser(),
@@ -31,7 +31,7 @@ public class KStreamJoinTest {
 
   private String topicName = "topic";
 
-  private KStreamMetadata streamMetadata = new KStreamMetadata(streamSynchronizer, Collections.singletonMap(topicName, new PartitioningInfo(1)));
+  private KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
     @Override

@@ -1,6 +1,5 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.KStream;
 import io.confluent.streaming.util.TimestampTracker;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -9,7 +8,7 @@ import java.util.ArrayDeque;
 
 /**
  * RecordQueue is a queue of {@link StampedRecord} (ConsumerRecord + timestamp). It is intended to be used in
- * {@link StreamSynchronizer}.
+ * {@link StreamGroup}.
  */
 public class RecordQueue {
 

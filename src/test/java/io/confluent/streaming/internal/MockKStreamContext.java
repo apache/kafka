@@ -5,7 +5,6 @@ import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StorageEngine;
-import io.confluent.streaming.SyncGroup;
 import io.confluent.streaming.Coordinator;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -46,13 +45,7 @@ public class MockKStreamContext implements KStreamContext {
   public KStream<?, ?> from(String... topic) { throw new UnsupportedOperationException("from() not supported."); }
 
   @Override
-  public KStream<?, ?> from(SyncGroup syncGroup, String... topic) { throw new UnsupportedOperationException("from() not supported."); }
-
-  @Override
   public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topic) { throw new UnsupportedOperationException("from() not supported."); }
-
-  @Override
-  public <K, V> KStream<K, V> from(SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topic) { throw new UnsupportedOperationException("from() not supported."); }
 
   @Override
   public RecordCollector<Object, Object> recordCollector() { throw new UnsupportedOperationException("recordCollector() not supported."); }
@@ -70,10 +63,10 @@ public class MockKStreamContext implements KStreamContext {
   public Metrics metrics() { throw new UnsupportedOperationException("metrics() not supported."); }
 
   @Override
-  public SyncGroup syncGroup(String name) { throw new UnsupportedOperationException("syncGroup() not supported."); }
+  public StreamGroup streamGroup(String name) { throw new UnsupportedOperationException("streamGroup() not supported."); }
 
   @Override
-  public SyncGroup roundRobinSyncGroup(String name) { throw new UnsupportedOperationException("roundRobinSyncGroup() not supported."); }
+  public StreamGroup roundRobinStreamGroup(String name) { throw new UnsupportedOperationException("roundRobinStreamGroup() not supported."); }
 
   @Override
   public void restore(StorageEngine engine) throws Exception { throw new UnsupportedOperationException("restore() not supported."); }

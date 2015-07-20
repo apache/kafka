@@ -16,7 +16,7 @@ public class IngestorImpl implements Ingestor {
   private final Set<TopicPartition> unpaused = new HashSet<>();
   private final Set<TopicPartition> toBePaused = new HashSet<>();
   private final long pollTimeMs;
-  private final Map<TopicPartition, StreamSynchronizer> streamSynchronizers = new HashMap<>();
+  private final Map<TopicPartition, StreamGroup> streamSynchronizers = new HashMap<>();
 
   public IngestorImpl(Consumer<byte[], byte[]> consumer,
                       long pollTimeMs) {
@@ -46,10 +46,10 @@ public class IngestorImpl implements Ingestor {
         ConsumerRecords<byte[], byte[]> records = consumer.poll(timeoutMs);
 
         for (TopicPartition partition : unpaused) {
-          StreamSynchronizer streamSynchronizer = streamSynchronizers.get(partition);
+          StreamGroup streamGroup = streamSynchronizers.get(partition);
 
-          if (streamSynchronizer != null)
-            streamSynchronizer.addRecords(partition, records.records(partition).iterator());
+          if (streamGroup != null)
+            streamGroup.addRecords(partition, records.records(partition).iterator());
           else
             log.warn("unused topic: " + partition.topic());
         }
@@ -82,9 +82,9 @@ public class IngestorImpl implements Ingestor {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void addStreamSynchronizerForPartition(StreamSynchronizer streamSynchronizer, TopicPartition partition) {
+  public void addPartitionStreamToGroup(StreamGroup streamGroup, TopicPartition partition) {
     synchronized (this) {
-      streamSynchronizers.put(partition, streamSynchronizer);
+      streamSynchronizers.put(partition, streamGroup);
       unpaused.add(partition);
     }
   }

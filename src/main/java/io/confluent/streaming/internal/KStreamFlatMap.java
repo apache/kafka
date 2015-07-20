@@ -3,7 +3,6 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KeyValueMapper;
 import io.confluent.streaming.KeyValue;
-import io.confluent.streaming.SyncGroup;
 
 /**
  * Created by yasuhiro on 6/17/15.
@@ -12,8 +11,8 @@ class KStreamFlatMap<K, V, K1, V1> extends KStreamImpl<K, V> {
 
   private final KeyValueMapper<K, ? extends Iterable<V>, K1, V1> mapper;
 
-  KStreamFlatMap(KeyValueMapper<K, ? extends Iterable<V>, K1, V1> mapper, SyncGroup syncGroup, KStreamContext context) {
-    super(KStreamMetadata.unjoinable(syncGroup), context);
+  KStreamFlatMap(KeyValueMapper<K, ? extends Iterable<V>, K1, V1> mapper, StreamGroup streamGroup, KStreamContext context) {
+    super(KStreamMetadata.unjoinable(streamGroup), context);
     this.mapper = mapper;
   }
 

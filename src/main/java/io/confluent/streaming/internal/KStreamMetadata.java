@@ -1,7 +1,5 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.SyncGroup;
-
 import java.util.Collections;
 import java.util.Map;
 
@@ -12,22 +10,22 @@ public class KStreamMetadata {
 
   public static String UNKNOWN_TOPICNAME = "__UNKNOWN_TOPIC__";
 
-  public static KStreamMetadata unjoinable(SyncGroup syncGroup) {
-    return new KStreamMetadata(syncGroup, Collections.singletonMap(UNKNOWN_TOPICNAME, new PartitioningInfo(-1)));
+  public static KStreamMetadata unjoinable(StreamGroup streamGroup) {
+    return new KStreamMetadata(streamGroup, Collections.singletonMap(UNKNOWN_TOPICNAME, new PartitioningInfo(-1)));
   }
 
-  public final SyncGroup syncGroup;
+  public StreamGroup streamGroup;
   public final Map<String, PartitioningInfo> topicPartitionInfos;
 
-  KStreamMetadata(SyncGroup syncGroup, Map<String, PartitioningInfo> topicPartitionInfos) {
-    this.syncGroup = syncGroup;
+  KStreamMetadata(StreamGroup streamGroup, Map<String, PartitioningInfo> topicPartitionInfos) {
+    this.streamGroup = streamGroup;
     this.topicPartitionInfos = topicPartitionInfos;
   }
 
   boolean isJoinCompatibleWith(KStreamMetadata other) {
     // the two streams should only be joinable if they are inside the same sync group
     // and their contained streams all have the same number of partitions
-    if (this.syncGroup != other.syncGroup)
+    if (this.streamGroup != other.streamGroup)
       return false;
 
     int numPartitions = -1;

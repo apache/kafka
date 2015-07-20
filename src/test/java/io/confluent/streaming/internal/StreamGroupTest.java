@@ -18,7 +18,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class StreamSynchronizerTest {
+public class StreamGroupTest {
 
   private static Serializer serializer = new IntegerSerializer();
   private static Deserializer deserializer = new IntegerDeserializer();
@@ -51,7 +51,7 @@ public class StreamSynchronizerTest {
 
     MockIngestor mockIngestor = new MockIngestor();
 
-    StreamSynchronizer streamSynchronizer = new StreamSynchronizer(
+    StreamGroup streamGroup = new StreamGroup(
       "group",
       mockIngestor,
       new TimeBasedChooser(),
@@ -72,15 +72,15 @@ public class StreamSynchronizerTest {
     MockKStreamImpl stream2 = new MockKStreamImpl();
     MockKStreamImpl stream3 = new MockKStreamImpl();
 
-    streamSynchronizer.addPartition(partition1, stream1);
-    mockIngestor.addStreamSynchronizerForPartition(streamSynchronizer, partition1);
+    streamGroup.addPartition(partition1, stream1);
+    mockIngestor.addPartitionStreamToGroup(streamGroup, partition1);
 
-    streamSynchronizer.addPartition(partition2, stream2);
-    mockIngestor.addStreamSynchronizerForPartition(streamSynchronizer, partition2);
+    streamGroup.addPartition(partition2, stream2);
+    mockIngestor.addPartitionStreamToGroup(streamGroup, partition2);
 
     Exception exception = null;
     try {
-      streamSynchronizer.addPartition(partition1, stream3);
+      streamGroup.addPartition(partition1, stream3);
     } catch (Exception ex) {
       exception = ex;
     }
@@ -100,7 +100,7 @@ public class StreamSynchronizerTest {
       new ConsumerRecord(partition2.topic(), partition2.partition(), 4, serializer.serialize(partition1.topic(), new Integer(600)), recordValue)
     ));
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 1);
     assertEquals(stream2.numReceived, 0);
 
@@ -113,7 +113,7 @@ public class StreamSynchronizerTest {
       new ConsumerRecord(partition1.topic(), partition1.partition(), 5, serializer.serialize(partition1.topic(), new Integer(50)), recordValue)
     ));
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 2);
     assertEquals(stream2.numReceived, 0);
 
@@ -121,44 +121,44 @@ public class StreamSynchronizerTest {
     assertTrue(mockIngestor.paused.contains(partition1));
     assertTrue(mockIngestor.paused.contains(partition2));
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 3);
     assertEquals(stream2.numReceived, 0);
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 3);
     assertEquals(stream2.numReceived, 1);
 
     assertEquals(mockIngestor.paused.size(), 1);
     assertTrue(mockIngestor.paused.contains(partition2));
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 4);
     assertEquals(stream2.numReceived, 1);
 
     assertEquals(mockIngestor.paused.size(), 1);
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 4);
     assertEquals(stream2.numReceived, 2);
 
     assertEquals(mockIngestor.paused.size(), 0);
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 5);
     assertEquals(stream2.numReceived, 2);
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 5);
     assertEquals(stream2.numReceived, 3);
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 5);
     assertEquals(stream2.numReceived, 4);
 
     assertEquals(mockIngestor.paused.size(), 0);
 
-    streamSynchronizer.process();
+    streamGroup.process();
     assertEquals(stream1.numReceived, 5);
     assertEquals(stream2.numReceived, 4);
   }

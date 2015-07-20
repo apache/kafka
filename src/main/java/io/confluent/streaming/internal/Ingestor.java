@@ -17,6 +17,6 @@ public interface Ingestor {
 
   int numPartitions(String topic);
 
-  void addStreamSynchronizerForPartition(StreamSynchronizer streamSynchronizer, TopicPartition partition);
+  void addPartitionStreamToGroup(StreamGroup streamGroup, TopicPartition partition);
 
 }

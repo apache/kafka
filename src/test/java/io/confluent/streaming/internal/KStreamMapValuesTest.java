@@ -1,6 +1,5 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.SyncGroup;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.ValueMapper;
 import io.confluent.streaming.testutil.MockIngestor;
@@ -15,7 +14,7 @@ public class KStreamMapValuesTest {
 
   private Ingestor ingestor = new MockIngestor();
 
-  private StreamSynchronizer streamSynchronizer = new StreamSynchronizer(
+  private StreamGroup streamGroup = new StreamGroup(
     "group",
     ingestor,
     new TimeBasedChooser(),
@@ -29,7 +28,7 @@ public class KStreamMapValuesTest {
 
   private String topicName = "topic";
 
-  private KStreamMetadata streamMetadata = new KStreamMetadata(streamSynchronizer, Collections.singletonMap(topicName, new PartitioningInfo(1)));
+  private KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   @Test
   public void testFlatMapValues() {

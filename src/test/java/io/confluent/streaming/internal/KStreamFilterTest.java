@@ -13,7 +13,7 @@ public class KStreamFilterTest {
 
   private Ingestor ingestor = new MockIngestor();
 
-  private StreamSynchronizer streamSynchronizer = new StreamSynchronizer(
+  private StreamGroup streamGroup = new StreamGroup(
     "group",
     ingestor,
     new TimeBasedChooser(),
@@ -27,7 +27,7 @@ public class KStreamFilterTest {
 
   private String topicName = "topic";
 
-  private KStreamMetadata streamMetadata = new KStreamMetadata(streamSynchronizer, Collections.singletonMap(topicName, new PartitioningInfo(1)));
+  private KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
     @Override

@@ -9,7 +9,6 @@ import io.confluent.streaming.Predicate;
 import io.confluent.streaming.Processor;
 import io.confluent.streaming.PunctuationScheduler;
 import io.confluent.streaming.RecordCollector;
-import io.confluent.streaming.SyncGroup;
 import io.confluent.streaming.ValueMapper;
 import io.confluent.streaming.Window;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -54,7 +53,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper) {
-    return chain(new KStreamMap<K1, V1, K, V>(mapper, metadata.syncGroup, context));
+    return chain(new KStreamMap<K1, V1, K, V>(mapper, metadata.streamGroup, context));
   }
 
   @Override
@@ -64,7 +63,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K1, ? extends Iterable<V1>, K, V> mapper) {
-    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, metadata.syncGroup, context));
+    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, metadata.streamGroup, context));
   }
 
   @Override
@@ -87,26 +86,14 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @SuppressWarnings("unchecked")
   @Override
   public KStream<K, V> through(String topic) {
-    return through(topic, null);
-  }
-
-  @SuppressWarnings("unchecked")
-  @Override
-  public KStream<K, V> through(String topic, SyncGroup syncGroup) {
-    return through(topic, syncGroup, null, null, null, null);
+    return through(topic, null, null, null, null);
   }
 
   @SuppressWarnings("unchecked")
   @Override
   public <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer) {
-    return through(topic, context.syncGroup(context.DEFAULT_SYNCHRONIZATION_GROUP), keySerializer, valSerializer, keyDeserializer, valDeserializer);
-  }
-
-  @SuppressWarnings("unchecked")
-  @Override
-  public <K1, V1> KStream<K1, V1> through(String topic, SyncGroup syncGroup, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer) {
     process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer));
-    return context.from(syncGroup, keyDeserializer, valDeserializer, topic);
+    return context.from(keyDeserializer, valDeserializer, topic);
   }
 
   @Override
@@ -130,7 +117,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
     return new Processor<K, V>() {
       @Override
-      public void apply(String topic, K key, V value, RecordCollector<K, V> dummyCollector, Coordinator coordinator) {
+      public void process(String topic, K key, V value, RecordCollector<K, V> dummyCollector, Coordinator coordinator) {
         collector.send(new ProducerRecord<>(sendTopic, key, value));
       }
       @Override
@@ -145,14 +132,14 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     Receiver receiver = new Receiver() {
       public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
         if (topic.equals(KStreamMetadata.UNKNOWN_TOPICNAME))
-          processor.apply(null, (K)key, (V)value, (RecordCollector<K, V>) context.recordCollector(), context.coordinator());
+          processor.process(null, (K) key, (V) value, (RecordCollector<K, V>) context.recordCollector(), context.coordinator());
         else
-          processor.apply(topic, (K)key, (V)value, (RecordCollector<K, V>) context.recordCollector(), context.coordinator());
+          processor.process(topic, (K) key, (V) value, (RecordCollector<K, V>) context.recordCollector(), context.coordinator());
       }
     };
     registerReceiver(receiver);
 
-    PunctuationScheduler scheduler = ((StreamSynchronizer)metadata.syncGroup).getPunctuationScheduler(processor);
+    PunctuationScheduler scheduler = (metadata.streamGroup).getPunctuationScheduler(processor);
     processor.init(scheduler);
   }
 
