@@ -170,7 +170,7 @@ public class NetworkClient implements KafkaClient {
      * @param node The node
      */
     private boolean isSendable(String node) {
-        return connectionStates.isConnected(node) && inFlightRequests.canSendMore(node);
+        return connectionStates.isConnected(node) && selector.isChannelReady(node) && inFlightRequests.canSendMore(node);
     }
 
     /**
@@ -473,7 +473,7 @@ public class NetworkClient implements KafkaClient {
         String nodeConnectionId = node.idString();
 
 
-        if (connectionStates.isConnected(nodeConnectionId) && inFlightRequests.canSendMore(nodeConnectionId)) {
+        if (isSendable(nodeConnectionId)) {
             Set<String> topics = metadata.topics();
             this.metadataFetchInProgress = true;
             ClientRequest metadataRequest = metadataRequest(now, nodeConnectionId, topics);

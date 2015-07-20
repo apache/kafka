@@ -55,8 +55,6 @@ public class SSLTransportLayer implements TransportLayer {
     private ByteBuffer netWriteBuffer;
     private ByteBuffer appReadBuffer;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
-    // interestOps used to cache any pending interestOps during the handshake.
-    private int interestOps;
 
     public SSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
         this.channelId = channelId;
@@ -70,8 +68,7 @@ public class SSLTransportLayer implements TransportLayer {
     }
 
     /**
-     * starts sslEngine handshake process and sets the selectionKey interestOps based
-     * sslEngine handshakeStatus.
+     * starts sslEngine handshake process
      */
     private void startHandshake() throws IOException {
         //clear & set netRead & netWrite buffers
@@ -81,13 +78,9 @@ public class SSLTransportLayer implements TransportLayer {
         netReadBuffer.limit(0);
         handshakeComplete = false;
         closing = false;
-        //caching OP_READ to set it after handshake is done
-        addInterestOps(SelectionKey.OP_READ);
         //initiate handshake
         sslEngine.beginHandshake();
         handshakeStatus = sslEngine.getHandshakeStatus();
-        if (handshakeStatus == HandshakeStatus.NEED_WRAP)
-            key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
     }
 
 
@@ -101,8 +94,6 @@ public class SSLTransportLayer implements TransportLayer {
     @Override
     public void finishConnect() throws IOException {
         socketChannel.finishConnect();
-        // caching interestOps to set after the handshake is finished.
-        removeInterestOps(SelectionKey.OP_CONNECT);
         key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
     }
 
@@ -315,9 +306,7 @@ public class SSLTransportLayer implements TransportLayer {
             //we are complete if we have delivered the last package
             handshakeComplete = !netWriteBuffer.hasRemaining();
             //set interestOps if we are complete, otherwise we still have data to write
-            if (handshakeComplete)
-                key.interestOps(interestOps);
-            else
+            if (!handshakeComplete)
                 key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
         } else {
             throw new IOException("NOT_HANDSHAKING during handshake");
@@ -610,11 +599,8 @@ public class SSLTransportLayer implements TransportLayer {
      * @param ops SelectionKey interestOps
      */
     public void addInterestOps(int ops) {
-        interestOps |= ops;
-        // if handshake is not complete and key is cancelled.
-        // we should check for key.isValid.
         if (handshakeComplete)
-            key.interestOps(interestOps);
+            key.interestOps(key.interestOps() | ops);
         else if (!key.isValid())
             throw new CancelledKeyException();
     }
@@ -624,11 +610,8 @@ public class SSLTransportLayer implements TransportLayer {
      * @param ops SelectionKey interestOps
      */
     public void removeInterestOps(int ops) {
-        interestOps &= ~ops;
-        // if handshake is not complete and key is cancelled.
-        // we should check for key.isValid.
         if (handshakeComplete)
-            key.interestOps(interestOps);
+            key.interestOps(key.interestOps() & ~ops);
         else if (!key.isValid())
             throw new CancelledKeyException();
     }

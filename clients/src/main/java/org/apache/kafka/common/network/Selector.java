@@ -423,7 +423,7 @@ public class Selector implements Selectable {
     }
 
     /**
-     * Begin clsoing this connection
+     * Begin closing this connection
      * @param id channel id
      */
     public void close(String id) {
@@ -443,6 +443,14 @@ public class Selector implements Selectable {
         }
         this.channels.remove(channel.id());
         this.sensors.connectionClosed.record();
+    }
+
+    /**
+     * check if channel is ready
+     */
+    public boolean isChannelReady(String id) {
+        KafkaChannel channel = this.channels.get(id);
+        return channel.ready();
     }
 
     /**
