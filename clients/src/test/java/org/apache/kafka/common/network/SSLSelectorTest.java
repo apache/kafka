@@ -149,6 +149,7 @@ public class SSLSelectorTest {
     public void testMute() throws Exception {
         blockingConnect("0");
         blockingConnect("1");
+        // wait for handshake to finish
         while (!selector.isChannelReady("0") && !selector.isChannelReady("1"))
             selector.poll(5);
         selector.send(createSend("0", "hello"));
@@ -169,10 +170,6 @@ public class SSLSelectorTest {
 
 
     private String blockingRequest(String node, String s) throws IOException {
-        while (!selector.isChannelReady(node)) {
-            selector.poll(1000L);
-        }
-
         selector.send(createSend(node, s));
         while (true) {
             selector.poll(1000L);
@@ -195,12 +192,16 @@ public class SSLSelectorTest {
         selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
             selector.poll(10000L);
+        //finish the handshake as well
+        while (!selector.isChannelReady(node))
+            selector.poll(10000L);
     }
 
 
     private void sendAndReceive(String node, String requestPrefix, int startIndex, int endIndex) throws Exception {
         int requests = startIndex;
         int responses = startIndex;
+        // wait for handshake to finish
         while (!selector.isChannelReady(node)) {
             selector.poll(1000L);
         }
