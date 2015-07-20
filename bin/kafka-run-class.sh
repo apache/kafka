@@ -65,6 +65,16 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for file in $base_dir/tools/build/libs/kafka-tools*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
 # classpath addition for release
 for file in $base_dir/libs/*.jar;
 do

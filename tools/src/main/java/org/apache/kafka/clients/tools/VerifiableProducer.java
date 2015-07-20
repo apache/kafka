@@ -24,9 +24,12 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
-import org.json.simple.JSONObject;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -190,34 +193,47 @@ public class VerifiableProducer {
      */
     String errorString(Exception e, String key, String value, Long nowMs) {
         assert e != null : "Expected non-null exception.";
-    
-        JSONObject obj = new JSONObject();
-        obj.put("class", this.getClass().toString());
-        obj.put("name", "producer_send_error");
+
+        Map<String, Object> errorData = new HashMap<>();
+        errorData.put("class", this.getClass().toString());
+        errorData.put("name", "producer_send_error");
+
+        errorData.put("time_ms", nowMs);
+        errorData.put("exception", e.getClass().toString());
+        errorData.put("message", e.getMessage());
+        errorData.put("topic", this.topic);
+        errorData.put("key", key);
+        errorData.put("value", value);
         
-        obj.put("time_ms", nowMs);
-        obj.put("exception", e.getClass().toString());
-        obj.put("message", e.getMessage());
-        obj.put("topic", this.topic);
-        obj.put("key", key);
-        obj.put("value", value);
-        return obj.toJSONString();
+        return toJsonString(errorData);
     }
   
     String successString(RecordMetadata recordMetadata, String key, String value, Long nowMs) {
         assert recordMetadata != null : "Expected non-null recordMetadata object.";
-    
-        JSONObject obj = new JSONObject();
-        obj.put("class", this.getClass().toString());
-        obj.put("name", "producer_send_success");
+
+        Map<String, Object> successData = new HashMap<>();
+        successData.put("class", this.getClass().toString());
+        successData.put("name", "producer_send_success");
+
+        successData.put("time_ms", nowMs);
+        successData.put("topic", this.topic);
+        successData.put("partition", recordMetadata.partition());
+        successData.put("offset", recordMetadata.offset());
+        successData.put("key", key);
+        successData.put("value", value);
         
-        obj.put("time_ms", nowMs);
-        obj.put("topic", this.topic);
-        obj.put("partition", recordMetadata.partition());
-        obj.put("offset", recordMetadata.offset());
-        obj.put("key", key);
-        obj.put("value", value);
-        return obj.toJSONString();
+        return toJsonString(successData);
+    }
+    
+    private String toJsonString(Map<String, Object> data) {
+        String json;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            json = mapper.writeValueAsString(data);
+        } catch(JsonProcessingException e) {
+            json = "Bad data can't be written as json: " + e.getMessage();
+        }
+        return json;
     }
   
     /** Callback which prints errors to stdout when the producer fails to send. */
@@ -261,14 +277,16 @@ public class VerifiableProducer {
                 // Print a summary
                 long stopMs = System.currentTimeMillis();
                 double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
-                JSONObject obj = new JSONObject();
-                obj.put("class", producer.getClass().toString());
-                obj.put("name", "tool_data");
-                obj.put("sent", producer.numSent);
-                obj.put("acked", producer.numAcked);
-                obj.put("target_throughput", producer.throughput);
-                obj.put("avg_throughput", avgThroughput);
-                System.out.println(obj.toJSONString());
+                
+                Map<String, Object> data = new HashMap<>();
+                data.put("class", producer.getClass().toString());
+                data.put("name", "tool_data");
+                data.put("sent", producer.numSent);
+                data.put("acked", producer.numAcked);
+                data.put("target_throughput", producer.throughput);
+                data.put("avg_throughput", avgThroughput);
+                
+                System.out.println(producer.toJsonString(data));
             }
         });
 
