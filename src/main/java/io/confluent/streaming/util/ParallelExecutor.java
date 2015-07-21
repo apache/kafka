@@ -22,7 +22,7 @@ public class ParallelExecutor {
 
   private final WorkerThread[] workerThreads;
   private final AtomicInteger taskIndex = new AtomicInteger(0);
-  private volatile ArrayList<? extends Task> tasks = new ArrayList();
+  private volatile ArrayList<? extends Task> tasks = new ArrayList<>();
   private volatile CountDownLatch latch;
   private volatile boolean running = true;
   private volatile Exception exception;

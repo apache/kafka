@@ -13,7 +13,7 @@ import java.util.ArrayDeque;
 public class RecordQueue {
 
   private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
-  public final KStreamImpl stream;
+  public final KStreamSource stream;
   private final TopicPartition partition;
   private TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker;
   private long offset;
@@ -32,11 +32,15 @@ public class RecordQueue {
 >>>>>>> more fix
    * @param timestampTracker TimestampTracker
    */
+<<<<<<< HEAD
   public RecordQueue(TopicPartition partition, Receiver receiver, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
 >>>>>>> javadoc
 =======
   public RecordQueue(TopicPartition partition, KStreamImpl stream, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
 >>>>>>> extend sendTo and through with ser-de overriden enabled
+=======
+  public RecordQueue(TopicPartition partition, KStreamSource stream, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
+>>>>>>> do not clone kstream context
     this.partition = partition;
     this.stream = stream;
     this.timestampTracker = timestampTracker;

@@ -15,6 +15,7 @@ class KStreamFilter<K, V> extends KStreamImpl<K, V> {
     this.predicate = predicate;
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void receive(Object key, Object value, long timestamp,long streamTime) {
     synchronized(this) {

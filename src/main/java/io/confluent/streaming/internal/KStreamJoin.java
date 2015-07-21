@@ -53,6 +53,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
     this.receiverForOtherStream = getReceiverForOther();
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void receive(Object key, Object value, long timestamp, long streamTime) {
     Iterator<V2> iter = finder2.find((K)key, timestamp);
@@ -63,9 +64,10 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
     }
   }
 
-  private Receiver getReceiverForOther() {
+ private Receiver getReceiverForOther() {
     return new Receiver() {
 
+      @SuppressWarnings("unchecked")
       @Override
       public void receive(Object key, Object value2, long timestamp, long streamTime) {
         Iterator<V1> iter = finder1.find((K)key, timestamp);

@@ -149,7 +149,7 @@ public class KStreamContextImpl implements KStreamContext {
   private <K, V> KStream<K, V> from(StreamGroup streamGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
     if (streamGroup == null) throw new IllegalArgumentException("unspecified stream group");
 
-    KStreamSource<?, ?> stream = null;
+    KStreamSource<K, V> stream = null;
     Set<String> fromTopics;
 
     synchronized (this) {
@@ -165,7 +165,7 @@ public class KStreamContextImpl implements KStreamContext {
         if (!this.topics.contains(topic))
           throw new IllegalArgumentException("topic not subscribed: " + topic);
 
-        KStreamSource<?, ?> streamForTopic = sourceStreams.get(topic);
+        KStreamSource<K, V> streamForTopic = (KStreamSource<K, V>) sourceStreams.get(topic);
 
         if (stream == null) {
           if (streamForTopic != null)
@@ -198,22 +198,12 @@ public class KStreamContextImpl implements KStreamContext {
         KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, topicPartitionInfos);
 
         // override the deserializer classes if specified
-        if (keyDeserializer == null && valDeserializer == null) {
-          stream = new KStreamSource<Object, Object>(streamMetadata, this);
-        } else {
-          StreamingConfig newConfig = this.streamingConfig.clone();
-          if (keyDeserializer != null)
-            newConfig.keyDeserializer(keyDeserializer);
-          if (valDeserializer != null)
-            newConfig.valueDeserializer(valDeserializer);
-
-          KStreamContextImpl newContext = new KStreamContextImpl(
-              this.id, this.job, this.topics, this.ingestor,
-              this.simpleCollector, this.coordinator,
-              newConfig, this.processorConfig,
-              this.stateMgr, this.metrics);
-          stream = new KStreamSource<Object, Object>(streamMetadata, newContext);
-        }
+        stream = new KStreamSource<>(
+          streamMetadata,
+          this,
+          (Deserializer<K>) (keyDeserializer == null ? keyDeserializer() : keyDeserializer),
+          (Deserializer<V>) (valDeserializer == null ? valueDeserializer() : valDeserializer)
+        );
 
         // update source stream map
         for (String topic : fromTopics) {
@@ -236,7 +226,7 @@ public class KStreamContextImpl implements KStreamContext {
           throw new IllegalStateException("another source stream with the same topic but different value deserializer is already created");
       }
 
-      return (KStream<K, V>) stream;
+      return stream;
     }
   }
 

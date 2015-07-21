@@ -19,10 +19,11 @@ class KStreamBranch<K, V> implements Receiver {
     this.predicates = Arrays.copyOf(predicates, predicates.length);
     this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
     for (int i = 0; i < branches.length; i++) {
-      branches[i] = new KStreamSource<K, V>(streamMetadata, context);
+      branches[i] = new KStreamSource<>(streamMetadata, context);
     }
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void receive(Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {

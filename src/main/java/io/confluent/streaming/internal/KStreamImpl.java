@@ -125,6 +125,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     };
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void process(final Processor<K, V> processor) {
     processor.init(new ProcessorContextImpl((KStreamContextImpl) this.context, this.metadata.streamGroup, this.metadata.streamGroup.getPunctuationScheduler(processor)));

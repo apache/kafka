@@ -23,7 +23,7 @@ public class StreamGroupTest {
   private static Serializer serializer = new IntegerSerializer();
   private static Deserializer deserializer = new IntegerDeserializer();
 
-  private static class MockKStreamImpl extends KStreamImpl {
+  private static class MockKStreamSource extends KStreamSource {
 
     public int numReceived = 0;
     public ArrayList<Object> keys = new ArrayList<>();
@@ -31,7 +31,7 @@ public class StreamGroupTest {
     public ArrayList<Long> timestamps = new ArrayList<>();
     public ArrayList<Long> streamTimes = new ArrayList<>();
 
-    public MockKStreamImpl() {
+    public MockKStreamSource() {
       super(null, new MockKStreamContext(serializer, deserializer));
     }
 
@@ -68,9 +68,9 @@ public class StreamGroupTest {
 
     TopicPartition partition1 = new TopicPartition("topic1", 1);
     TopicPartition partition2 = new TopicPartition("topic2", 1);
-    MockKStreamImpl stream1 = new MockKStreamImpl();
-    MockKStreamImpl stream2 = new MockKStreamImpl();
-    MockKStreamImpl stream3 = new MockKStreamImpl();
+    MockKStreamSource stream1 = new MockKStreamSource();
+    MockKStreamSource stream2 = new MockKStreamSource();
+    MockKStreamSource stream3 = new MockKStreamSource();
 
     streamGroup.addPartition(partition1, stream1);
     mockIngestor.addPartitionStreamToGroup(streamGroup, partition1);

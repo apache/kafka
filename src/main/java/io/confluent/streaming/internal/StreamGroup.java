@@ -111,7 +111,7 @@ public class StreamGroup implements ParallelExecutor.Task {
    * @param stream the instance of KStreamImpl
    */
   @SuppressWarnings("unchecked")
-  public void addPartition(TopicPartition partition, KStreamImpl stream) {
+  public void addPartition(TopicPartition partition, KStreamSource stream) {
     synchronized (this) {
       RecordQueue recordQueue = stash.get(partition);
 
@@ -173,8 +173,8 @@ public class StreamGroup implements ParallelExecutor.Task {
           ConsumerRecord<byte[], byte[]> record = iterator.next();
 
           // deserialize the raw record, extract the timestamp and put into the queue
-          Deserializer<?> keyDeserializer = recordQueue.stream.context().keyDeserializer();
-          Deserializer<?> valDeserializer = recordQueue.stream.context().valueDeserializer();
+          Deserializer<?> keyDeserializer = recordQueue.stream.keyDeserializer;
+          Deserializer<?> valDeserializer = recordQueue.stream.valueDeserializer;
 
           Object key = keyDeserializer.deserialize(record.topic(), record.key());
           Object value = valDeserializer.deserialize(record.topic(), record.value());
@@ -273,7 +273,7 @@ public class StreamGroup implements ParallelExecutor.Task {
     stash.clear();
   }
 
-  protected RecordQueue createRecordQueue(TopicPartition partition, KStreamImpl stream) {
+  protected RecordQueue createRecordQueue(TopicPartition partition, KStreamSource stream) {
     return new RecordQueue(partition, stream, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
   }
 
