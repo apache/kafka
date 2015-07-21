@@ -130,7 +130,12 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
                              '--pretty=format:%an <%ae>']).split("\n")
     distinct_authors = sorted(set(commit_authors),
                               key=lambda x: commit_authors.count(x), reverse=True)
-    primary_author = distinct_authors[0]
+    primary_author = raw_input(
+        "Enter primary author in the format of \"name <email>\" [%s]: " %
+        distinct_authors[0])
+    if primary_author == "":
+        primary_author = distinct_authors[0]
+
     commits = run_cmd(['git', 'log', 'HEAD..%s' % pr_branch_name,
                       '--pretty=format:%h [%an] %s']).split("\n\n")
 
