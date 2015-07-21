@@ -136,6 +136,9 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
     if primary_author == "":
         primary_author = distinct_authors[0]
 
+    reviewers = raw_input(
+        "Enter reviewers in the format of \"name1 <email1>, name2 <email2>\": ").strip()
+
     commits = run_cmd(['git', 'log', 'HEAD..%s' % pr_branch_name,
                       '--pretty=format:%h [%an] %s']).split("\n\n")
 
@@ -150,6 +153,9 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
     authors = "\n".join(["Author: %s" % a for a in distinct_authors])
 
     merge_message_flags += ["-m", authors]
+
+    if (reviewers != ""):
+        merge_message_flags += ["-m", "Reviewers: %s" % reviewers]
 
     if had_conflicts:
         committer_name = run_cmd("git config --get user.name").strip()
