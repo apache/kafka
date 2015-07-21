@@ -48,7 +48,7 @@ public class KStreamFilterTest {
     stream.filter(isMultipleOfThree).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(2, processor.processed.size());
@@ -66,7 +66,7 @@ public class KStreamFilterTest {
     stream.filterOut(isMultipleOfThree).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(5, processor.processed.size());

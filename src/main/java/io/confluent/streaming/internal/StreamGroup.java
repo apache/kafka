@@ -10,6 +10,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -32,7 +33,7 @@ public class StreamSynchronizer implements SyncGroup {
 public class StreamGroup implements ParallelExecutor.Task {
 >>>>>>> remove SyncGroup from user facing APIs:src/main/java/io/confluent/streaming/internal/StreamGroup.java
 
-  public final String name;
+  private final String name;
   private final Ingestor ingestor;
   private final Chooser chooser;
   private final TimestampExtractor timestampExtractor;
@@ -46,6 +47,7 @@ public class StreamGroup implements ParallelExecutor.Task {
   private final ArrayDeque<NewRecords<K, V>> newRecordBuffer = new ArrayDeque<>();
 
   private long streamTime = -1;
+  private boolean commitRequested = false;
   private volatile int buffered = 0;
 
   /**
@@ -230,8 +232,14 @@ public class StreamGroup implements ParallelExecutor.Task {
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-      recordQueue.stream.receive(record.topic(), record.key(), record.value(), record.timestamp, streamTime);
+      recordQueue.stream.receive(record.key(), record.value(), record.timestamp, streamTime);
       consumedOffsets.put(recordQueue.partition(), record.offset());
+
+      // TODO: local state flush and downstream producer flush
+      // need to be done altogether with offset commit atomically
+      if (commitRequested) ingestor.commit(Collections.singletonMap(
+          new TopicPartition(record.topic(), record.partition()),
+          record.offset()));
 
       if (recordQueue.size() > 0) chooser.add(recordQueue);
 
@@ -247,6 +255,13 @@ public class StreamGroup implements ParallelExecutor.Task {
    */
   public Map<TopicPartition, Long> consumedOffsets() {
     return this.consumedOffsets;
+  }
+
+  /**
+   * Request committing the current record's offset
+   */
+  public void commitOffset() {
+    this.commitRequested = true;
   }
 
   public int buffered() {

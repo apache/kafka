@@ -11,12 +11,9 @@ public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
     super(record, timestamp);
   }
 
-  public String topic() {
-    if (value.topic().equals(KStreamMetadata.UNKNOWN_TOPICNAME))
-      return null;
-    else
-      return value.topic();
-  }
+  public String topic() { return value.topic(); }
+
+  public int partition() { return value.partition(); }
 
   public Object key() {
     return value.key();

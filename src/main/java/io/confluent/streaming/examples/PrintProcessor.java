@@ -1,13 +1,9 @@
 package io.confluent.streaming.examples;
 
-import io.confluent.streaming.Coordinator;
 import io.confluent.streaming.KafkaStreaming;
 import io.confluent.streaming.Processor;
 import io.confluent.streaming.ProcessorKStreamJob;
-import io.confluent.streaming.PunctuationScheduler;
-import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StreamingConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.util.Properties;
 
@@ -16,18 +12,20 @@ import java.util.Properties;
  */
 public class PrintProcessor<K, V> implements Processor<K, V> {
 
+  private ProcessorContext context;
+
   @Override
-  public void process(String topic, K key, V value, RecordCollector<K, V> collector, Coordinator coordinator) {
-    System.out.println(topic + ": [" + key + ", " + value + "]");
-
-    coordinator.commit(Coordinator.RequestScope.CURRENT_TASK);
-
-    collector.send(new ProducerRecord<>("topic", key, value));
+  public void init(ProcessorContext context) {
+    this.context = context;
   }
 
   @Override
-  public void init(PunctuationScheduler punctuationScheduler) {
-    // do nothing
+  public void process(K key, V value) {
+    System.out.println("[" + key + ", " + value + "]");
+
+    context.commit();
+
+    context.send("topic", key, value);
   }
 
   @Override

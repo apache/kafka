@@ -357,9 +357,22 @@ public class KafkaStreaming implements Runnable {
             }
         }
 
-        producer.flush();
-        consumer.commit(commit, CommitType.SYNC); // TODO: can this be async?
-        streamingMetrics.commitTime.record(time.milliseconds() - lastCommit);
+        // check if commit is really needed, i.e. if all the offsets are already committed
+        boolean commitNeeded = false;
+        for (TopicPartition tp : commit.keySet()) {
+            if (consumer.committed(tp) != commit.get(tp)) {
+                commitNeeded = true;
+                break;
+            }
+        }
+
+        if (commitNeeded) {
+            // TODO: for exactly-once we need to make sure the flush and commit
+            // are executed atomically whenever it is triggered by user
+            producer.flush();
+            consumer.commit(commit, CommitType.SYNC); // TODO: can this be async?
+            streamingMetrics.commitTime.record(time.milliseconds() - lastCommit);
+        }
     }
 
     private void commitRequesting(long now) {
@@ -372,9 +385,21 @@ public class KafkaStreaming implements Runnable {
                 commit.putAll(streamGroup.consumedOffsets()); // TODO: can this be async?
             }
         }
-        consumer.commit(commit, CommitType.SYNC);
-        requestingCommit.clear();
-        streamingMetrics.commitTime.record(time.milliseconds() - now);
+
+        // check if commit is really needed, i.e. if all the offsets are already committed
+        boolean commitNeeded = false;
+        for (TopicPartition tp : commit.keySet()) {
+            if (consumer.committed(tp) != commit.get(tp)) {
+                commitNeeded = true;
+                break;
+            }
+        }
+
+        if (commitNeeded) {
+            consumer.commit(commit, CommitType.SYNC); // TODO: can this be async?
+            requestingCommit.clear();
+            streamingMetrics.commitTime.record(time.milliseconds() - now);
+        }
     }
 
     /* delete any state dirs that aren't for active contexts */

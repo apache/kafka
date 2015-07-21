@@ -11,7 +11,6 @@ import io.confluent.streaming.PunctuationScheduler;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.ValueMapper;
 import io.confluent.streaming.Window;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -102,26 +101,25 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   }
 
   @Override
-  public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) { process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer)); }
+  public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
+    process(this.getSendProcessor(topic, keySerializer, valSerializer));
+  }
 
   @SuppressWarnings("unchecked")
-  private <K, V> Processor<K, V> getSendProcessor(final String sendTopic, Serializer<?> keySerializer, Serializer<?> valSerializer) {
-    final RecordCollector<K, V> collector;
-    if (keySerializer == null && valSerializer == null)
-      collector = (RecordCollector<K, V>) context.recordCollector();
-    else
-      collector = (RecordCollector<K, V>) new RecordCollectors.SerializingRecordCollector(
-          ((KStreamContextImpl)context).simpleRecordCollector(),
-          keySerializer == null ? context.keySerializer() : keySerializer,
-          valSerializer == null ? context.valueSerializer() : valSerializer);
-
+  private <K, V> Processor<K, V> getSendProcessor(final String sendTopic, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
     return new Processor<K, V>() {
+      private ProcessorContext processorContext;
+
       @Override
-      public void process(String topic, K key, V value, RecordCollector<K, V> dummyCollector, Coordinator coordinator) {
-        collector.send(new ProducerRecord<>(sendTopic, key, value));
+      public void init(ProcessorContext processorContext) {
+        this.processorContext = processorContext;
       }
       @Override
-      public void init(PunctuationScheduler scheduler) {}
+      public void process(K key, V value) {
+        this.processorContext.send(sendTopic, key, value,
+            (Serializer<Object>) keySerializer,
+            (Serializer<Object>) valSerializer);
+      }
       @Override
       public void punctuate(long streamTime) {}
     };
@@ -129,28 +127,24 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public void process(final Processor<K, V> processor) {
+    processor.init(new ProcessorContextImpl((KStreamContextImpl) this.context, this.metadata.streamGroup, this.metadata.streamGroup.getPunctuationScheduler(processor)));
+
     Receiver receiver = new Receiver() {
-      public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
-        if (topic.equals(KStreamMetadata.UNKNOWN_TOPICNAME))
-          processor.process(null, (K) key, (V) value, (RecordCollector<K, V>) context.recordCollector(), context.coordinator());
-        else
-          processor.process(topic, (K) key, (V) value, (RecordCollector<K, V>) context.recordCollector(), context.coordinator());
+      public void receive(Object key, Object value, long timestamp, long streamTime) {
+        processor.process((K) key, (V) value);
       }
     };
     registerReceiver(receiver);
-
-    PunctuationScheduler scheduler = (metadata.streamGroup).getPunctuationScheduler(processor);
-    processor.init(scheduler);
   }
 
   void registerReceiver(Receiver receiver) {
     nextReceivers.add(receiver);
   }
 
-  protected void forward(String topic, Object key, Object value, long timestamp, long streamTime) {
+  protected void forward(Object key, Object value, long timestamp, long streamTime) {
     int numReceivers = nextReceivers.size();
     for (int i = 0; i < numReceivers; i++) {
-      nextReceivers.get(i).receive(topic, key, value, timestamp, streamTime);
+      nextReceivers.get(i).receive(key, value, timestamp, streamTime);
     }
   }
 

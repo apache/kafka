@@ -51,7 +51,7 @@ public class KStreamMapValuesTest {
     stream.mapValues(mapper).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(topicName, expectedKeys[i], Integer.toString(expectedKeys[i]), 0L, 0L);
+      stream.receive(expectedKeys[i], Integer.toString(expectedKeys[i]), 0L, 0L);
     }
 
     assertEquals(4, processor.processed.size());

@@ -55,7 +55,7 @@ public class KStreamFlatMapValuesTest {
     stream.flatMapValues(mapper).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(8, processor.processed.size());

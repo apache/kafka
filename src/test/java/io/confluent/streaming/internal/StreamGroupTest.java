@@ -36,7 +36,7 @@ public class StreamGroupTest {
     }
 
     @Override
-    public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
+    public void receive(Object key, Object value, long timestamp, long streamTime) {
       this.numReceived++;
       this.keys.add(key);
       this.values.add(value);

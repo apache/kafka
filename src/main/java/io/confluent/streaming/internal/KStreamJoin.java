@@ -54,7 +54,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
   }
 
   @Override
-  public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp, long streamTime) {
     Iterator<V2> iter = finder2.find((K)key, timestamp);
     if (iter != null) {
       while (iter.hasNext()) {
@@ -67,7 +67,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
     return new Receiver() {
 
       @Override
-      public void receive(String topic, Object key, Object value2, long timestamp, long streamTime) {
+      public void receive(Object key, Object value2, long timestamp, long streamTime) {
         Iterator<V1> iter = finder1.find((K)key, timestamp);
         if (iter != null) {
           while (iter.hasNext()) {
@@ -80,7 +80,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
 
   // TODO: use the "outer-stream" topic as the resulted join stream topic
   private void doJoin(K key, V1 value1, V2 value2, long timestamp, long streamTime) {
-    forward(KStreamMetadata.UNKNOWN_TOPICNAME, key, joiner.apply(value1, value2), timestamp, streamTime);
+    forward(key, joiner.apply(value1, value2), timestamp, streamTime);
   }
 
 }

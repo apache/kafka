@@ -10,12 +10,12 @@ public class TestProcessor<K, V> implements Processor<K, V> {
   public final ArrayList<Long> punctuated = new ArrayList<Long>();
 
   @Override
-  public void apply(String topic, K key, V value) {
+  public void process(K key, V value) {
     processed.add(key + ":" + value);
   }
 
   @Override
-  public void init(PunctuationScheduler punctuationScheduler) {
+  public void init(ProcessorContext context) {
   }
 
   @Override

@@ -8,5 +8,4 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 public interface RecordCollector<K, V> {
 
   void send(ProducerRecord<K, V> record);
-
 }

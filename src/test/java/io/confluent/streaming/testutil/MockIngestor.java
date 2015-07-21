@@ -7,6 +7,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 public class MockIngestor implements Ingestor {
 
@@ -31,6 +32,9 @@ public class MockIngestor implements Ingestor {
   public void unpause(TopicPartition partition, long offset) {
     paused.remove(partition);
   }
+
+  @Override
+  public void commit(Map<TopicPartition, Long> offsets) { /* do nothing */}
 
   @Override
   public int numPartitions(String topic) {

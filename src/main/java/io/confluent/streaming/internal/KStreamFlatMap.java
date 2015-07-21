@@ -17,11 +17,11 @@ class KStreamFlatMap<K, V, K1, V1> extends KStreamImpl<K, V> {
   }
 
   @Override
-  public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
       KeyValue<K, ? extends Iterable<V>> newPair = mapper.apply((K1)key, (V1)value);
       for (V v : newPair.value) {
-        forward(KStreamMetadata.UNKNOWN_TOPICNAME, newPair.key, v, timestamp, streamTime);
+        forward(newPair.key, v, timestamp, streamTime);
       }
     }
   }

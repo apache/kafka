@@ -1,5 +1,6 @@
 package io.confluent.streaming.internal;
 
+import org.apache.kafka.clients.consumer.CommitType;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
@@ -72,6 +73,13 @@ public class IngestorImpl implements Ingestor {
     synchronized (this) {
       consumer.seek(partition, lastOffset);
       unpaused.add(partition);
+    }
+  }
+
+  @Override
+  public void commit(Map<TopicPartition, Long> offsets) {
+    synchronized (this) {
+      consumer.commit(offsets, CommitType.SYNC);
     }
   }
 
