@@ -45,9 +45,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
   @Override
   public void send(ProducerRecord<Object, Object> record) {
-    byte[] keyBytes = keySerializer.serialize(record.topic(), record.key());
-    byte[] valBytes = valueSerializer.serialize(record.topic(), record.value());
-    this.producer.send(new ProducerRecord<>(record.topic(), keyBytes, valBytes), callback);
+    send(record, this.keySerializer, this.valueSerializer);
   }
 
   @Override
