@@ -64,7 +64,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
     }
   }
 
- private Receiver getReceiverForOther() {
+  private Receiver getReceiverForOther() {
     return new Receiver() {
 
       @SuppressWarnings("unchecked")
