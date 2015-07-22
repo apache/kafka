@@ -13,10 +13,10 @@ public class PunctuationSchedulerImplTest {
   public void testScheduling() {
     PunctuationQueue queue = new PunctuationQueue();
 
-    TestProcessor<String, String> proc1 = new TestProcessor<String, String>();
+    TestProcessor<String, String> proc1 = new TestProcessor<>();
     PunctuationScheduler sched1 = new PunctuationSchedulerImpl(queue, proc1);
 
-    TestProcessor<String, String> proc2 = new TestProcessor<String, String>();
+    TestProcessor<String, String> proc2 = new TestProcessor<>();
     PunctuationScheduler sched2 = new PunctuationSchedulerImpl(queue, proc2);
 
     assertEquals(0, proc1.punctuated.size());

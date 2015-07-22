@@ -46,8 +46,8 @@ public class KStreamMapValuesTest {
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, Integer> processor;
 
-    processor = new TestProcessor<Integer, Integer>();
-    stream = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream = new KStreamSource<>(streamMetadata, null, null, null);
     stream.mapValues(mapper).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {

@@ -37,7 +37,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
         private final Serializer<V> valueSerializer;
         private final Deserializer<K> keyDeserializer;
         private final Deserializer<V> valueDeserializer;
-        private RecordCollector<byte[], byte[]> collector;
+        private RecordCollector collector;
 
         @SuppressWarnings("unchecked")
         public MemoryStore(String name, KStreamContext context) {
@@ -95,7 +95,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
         }
 
         @Override
-        public void registerAndRestore(RecordCollector<byte[], byte[]> collector,
+        public void registerAndRestore(RecordCollector collector,
                                        Consumer<byte[], byte[]> consumer,
                                        TopicPartition partition,
                                        long checkpointedOffset,
@@ -118,9 +118,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
             if(this.collector != null) {
                 for (K k : this.dirty) {
                     V v = this.store.get(k);
-                    byte[] key = this.keySerializer.serialize(this.topic, k);
-                    byte[] value = this.valueSerializer.serialize(this.topic, v);
-                    this.collector.send(new ProducerRecord<byte[], byte[]>(this.topic, this.partition, key, value));
+                    this.collector.send(new ProducerRecord<>(this.topic, this.partition, k, v), this.keySerializer, this.valueSerializer);
                 }
                 this.dirty.clear();
             }
@@ -146,7 +144,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
             @Override
             public Entry<K, V> next() {
                 Map.Entry<K, V> entry = iter.next();
-                return new Entry<K, V>(entry.getKey(), entry.getValue());
+                return new Entry<>(entry.getKey(), entry.getValue());
             }
 
             @Override

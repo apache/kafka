@@ -39,8 +39,8 @@ public class KStreamWindowedTest {
     Window<Integer, String> window;
     String[] expected;
 
-    window = new UnlimitedWindow<Integer, String>();
-    stream = new KStreamSource<Integer, String>(streamMetadata, null);
+    window = new UnlimitedWindow<>();
+    stream = new KStreamSource<>(streamMetadata, null, null, null);
     stream.with(window);
 
     boolean exceptionRaised = false;

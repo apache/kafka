@@ -12,11 +12,11 @@ import org.apache.kafka.common.serialization.Serializer;
  */
 public class ProcessorContextImpl implements Processor.ProcessorContext {
 
-  private final KStreamContextImpl context;
+  private final KStreamContext context;
   private final StreamGroup streamGroup;
   private final PunctuationScheduler scheduler;
 
-  public ProcessorContextImpl(KStreamContextImpl context,
+  public ProcessorContextImpl(KStreamContext context,
                               StreamGroup streamGroup,
                               PunctuationScheduler scheduler) {
 
@@ -35,10 +35,7 @@ public class ProcessorContextImpl implements Processor.ProcessorContext {
     if (keySerializer == null || valSerializer == null)
       throw new IllegalStateException("key and value serializers must be specified");
 
-    final RecordCollector<Object, Object> collector = new RecordCollectors.SerializingRecordCollector(
-        context.simpleRecordCollector(), keySerializer, valSerializer);
-
-    collector.send(new ProducerRecord(topic, key, value));
+    context.recordCollector().send(new ProducerRecord(topic, key, value), keySerializer, valSerializer);
   }
 
   @Override

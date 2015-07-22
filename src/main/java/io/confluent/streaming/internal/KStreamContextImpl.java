@@ -40,8 +40,7 @@ public class KStreamContextImpl implements KStreamContext {
   private final Set<String> topics;
 
   private final Ingestor ingestor;
-  private final RecordCollectors.SimpleRecordCollector simpleCollector;
-  private final RecordCollector<Object, Object> collector;
+  private final RecordCollectorImpl collector;
 
   private final Coordinator coordinator;
   private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<>();
@@ -55,6 +54,7 @@ public class KStreamContextImpl implements KStreamContext {
   private final ProcessorStateManager stateMgr;
   private Consumer<byte[], byte[]> restoreConsumer;
 
+  @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
                             KStreamJob job,
                             Set<String> topics,
@@ -64,33 +64,13 @@ public class KStreamContextImpl implements KStreamContext {
                             StreamingConfig streamingConfig,
                             ProcessorConfig processorConfig,
                             Metrics metrics) {
-
-    this(id, job, topics, ingestor,
-        new RecordCollectors.SimpleRecordCollector(producer),
-        coordinator, streamingConfig, processorConfig,
-        new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id))),
-        metrics);
-  }
-
-  @SuppressWarnings("unchecked")
-  public KStreamContextImpl(int id,
-                            KStreamJob job,
-                            Set<String> topics,
-                            Ingestor ingestor,
-                            RecordCollectors.SimpleRecordCollector simpleCollector,
-                            Coordinator coordinator,
-                            StreamingConfig streamingConfig,
-                            ProcessorConfig processorConfig,
-                            ProcessorStateManager stateMgr,
-                            Metrics metrics) {
     this.id = id;
     this.job = job;
     this.topics = topics;
     this.ingestor = ingestor;
 
-    this.simpleCollector = simpleCollector;
-    this.collector = new RecordCollectors.SerializingRecordCollector(
-        simpleCollector, streamingConfig.keySerializer(), streamingConfig.valueSerializer());
+    this.collector =
+      new RecordCollectorImpl(producer, (Serializer<Object>)streamingConfig.keySerializer(), (Serializer<Object>)streamingConfig.valueSerializer());
 
     this.coordinator = coordinator;
     this.streamingConfig = streamingConfig;
@@ -99,12 +79,10 @@ public class KStreamContextImpl implements KStreamContext {
     this.timestampExtractor = this.streamingConfig.timestampExtractor();
     if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is  missing");
 
-    this.stateMgr = stateMgr;
+    this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)));
     this.stateDir = this.stateMgr.baseDir();
     this.metrics = metrics;
   }
-
-  public RecordCollectors.SimpleRecordCollector simpleRecordCollector() { return this.simpleCollector; }
 
   @Override
   public int id() {
@@ -231,7 +209,7 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public RecordCollector<Object, Object> recordCollector() {
+  public RecordCollector recordCollector() {
     return collector;
   }
 
@@ -284,7 +262,7 @@ public class KStreamContextImpl implements KStreamContext {
   public void restore(StorageEngine engine) throws Exception {
     if (restoreConsumer == null) throw new IllegalStateException();
 
-    stateMgr.registerAndRestore(simpleCollector, restoreConsumer, engine);
+    stateMgr.registerAndRestore(collector, restoreConsumer, engine);
   }
 
 
@@ -317,7 +295,7 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   public void close() throws Exception {
-    stateMgr.close(simpleCollector.offsets());
+    stateMgr.close(collector.offsets());
     job.close();
   }
 

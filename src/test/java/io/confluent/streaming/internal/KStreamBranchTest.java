@@ -55,18 +55,19 @@ public class KStreamBranchTest {
 
     final int[] expectedKeys = new int[] { 1, 2, 3, 4, 5, 6, 7 };
 
+    KStreamContext context = new MockKStreamContext(null, null);
     KStreamSource<Integer, String> stream;
     KStream<Integer, String>[] branches;
     TestProcessor<Integer, String>[] processors;
 
-    stream = new KStreamSource<Integer, String>(streamMetadata, null);
+    stream = new KStreamSource<>(streamMetadata, context);
     branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
     assertEquals(3, branches.length);
 
     processors = (TestProcessor<Integer, String>[]) Array.newInstance(TestProcessor.class, branches.length);
     for (int i = 0; i < branches.length; i++) {
-      processors[i] = new TestProcessor<Integer, String>();
+      processors[i] = new TestProcessor<>();
       branches[i].process(processors[i]);
     }
 
@@ -78,14 +79,14 @@ public class KStreamBranchTest {
     assertEquals(1, processors[1].processed.size());
     assertEquals(3, processors[2].processed.size());
 
-    stream = new KStreamSource<Integer, String>(streamMetadata, null);
+    stream = new KStreamSource<>(streamMetadata, context);
     branches = stream.branch(isEven, isOdd, isMultipleOfThree);
 
     assertEquals(3, branches.length);
 
     processors = (TestProcessor<Integer, String>[]) Array.newInstance(TestProcessor.class, branches.length);
     for (int i = 0; i < branches.length; i++) {
-      processors[i] = new TestProcessor<Integer, String>();
+      processors[i] = new TestProcessor<>();
       branches[i].process(processors[i]);
     }
 

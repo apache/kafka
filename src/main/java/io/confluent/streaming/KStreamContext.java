@@ -70,10 +70,10 @@ public interface KStreamContext {
   <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics);
 
   /**
-   * Returns a RecordCollector which applies the serializer to key and value.
+   * Returns a RecordCollector
    * @return RecordCollector
    */
-  RecordCollector<Object, Object> recordCollector();
+  RecordCollector recordCollector();
 
   /**
    * Returns {@link Coordinator}.

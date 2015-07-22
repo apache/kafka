@@ -43,8 +43,8 @@ public class KStreamFilterTest {
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, String> processor;
 
-    processor = new TestProcessor<Integer, String>();
-    stream = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream = new KStreamSource<>(streamMetadata, null, null, null);
     stream.filter(isMultipleOfThree).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
@@ -61,8 +61,8 @@ public class KStreamFilterTest {
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, String> processor;
 
-    processor = new TestProcessor<Integer, String>();
-    stream = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream = new KStreamSource<>(streamMetadata, null, null, null);
     stream.filterOut(isMultipleOfThree).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {

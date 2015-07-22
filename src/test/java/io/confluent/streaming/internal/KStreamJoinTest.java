@@ -82,9 +82,9 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
-    processor = new TestProcessor<Integer, String>();
-    stream1 = new KStreamSource<Integer, String>(streamMetadata, null);
-    stream2 = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
     windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
     windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
@@ -166,9 +166,9 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
-    processor = new TestProcessor<Integer, String>();
-    stream1 = new KStreamSource<Integer, String>(streamMetadata, null);
-    stream2 = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
     windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
     windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
@@ -244,9 +244,9 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    processor = new TestProcessor<Integer, String>();
-    stream1 = new KStreamSource<Integer, String>(streamMetadata, null);
-    stream2 = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
     mapped1 = stream1.map(keyValueMapper);
     mapped2 = stream2.map(keyValueMapper);
 
@@ -299,9 +299,9 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    processor = new TestProcessor<Integer, String>();
-    stream1 = new KStreamSource<Integer, String>(streamMetadata, null);
-    stream2 = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
     mapped1 = stream1.flatMap(keyValueMapper2);
     mapped2 = stream2.flatMap(keyValueMapper2);
 
@@ -354,9 +354,9 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    processor = new TestProcessor<Integer, String>();
-    stream1 = new KStreamSource<Integer, String>(streamMetadata, null);
-    stream2 = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
     mapped1 = stream1.mapValues(valueMapper);
     mapped2 = stream2.mapValues(valueMapper);
 
@@ -409,9 +409,9 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    processor = new TestProcessor<Integer, String>();
-    stream1 = new KStreamSource<Integer, String>(streamMetadata, null);
-    stream2 = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
     mapped1 = stream1.flatMapValues(valueMapper2);
     mapped2 = stream2.flatMapValues(valueMapper2);
 

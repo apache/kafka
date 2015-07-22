@@ -33,9 +33,9 @@ public class KStreamSourceTest {
   @Test
   public void testKStreamSource() {
 
-    TestProcessor<String, String> processor = new TestProcessor<String, String>();
+    TestProcessor<String, String> processor = new TestProcessor<>();
 
-    KStreamSource<String, String> stream = new KStreamSource<String, String>(streamMetadata, null);
+    KStreamSource<String, String> stream = new KStreamSource<>(streamMetadata, null, null, null);
     stream.process(processor);
 
     final String[] expectedKeys = new String[] { "k1", "k2", "k3" };

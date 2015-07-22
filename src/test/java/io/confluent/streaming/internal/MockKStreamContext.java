@@ -48,7 +48,7 @@ public class MockKStreamContext implements KStreamContext {
   public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topic) { throw new UnsupportedOperationException("from() not supported."); }
 
   @Override
-  public RecordCollector<Object, Object> recordCollector() { throw new UnsupportedOperationException("recordCollector() not supported."); }
+  public RecordCollector recordCollector() { throw new UnsupportedOperationException("recordCollector() not supported."); }
 
   @Override
   public Coordinator coordinator() { throw new UnsupportedOperationException("coordinator() not supported."); }

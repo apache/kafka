@@ -73,7 +73,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void registerAndRestore(RecordCollector<byte[], byte[]> collector,
+    public void registerAndRestore(RecordCollector collector,
                                    Consumer<byte[], byte[]> consumer,
                                    TopicPartition partition,
                                    long checkpointedOffset,

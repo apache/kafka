@@ -50,8 +50,8 @@ public class KStreamFlatMapTest {
     KStreamSource<Integer, String> stream;
     TestProcessor<String, String> processor;
 
-    processor = new TestProcessor<String, String>();
-    stream = new KStreamSource<Integer, String>(streamMetadata, null);
+    processor = new TestProcessor<>();
+    stream = new KStreamSource<>(streamMetadata, null, null, null);
     stream.flatMap(mapper).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {

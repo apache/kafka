@@ -43,9 +43,9 @@ public class ProcessorStateManager {
     public ProcessorStateManager(int id, File baseDir) {
         this.id = id;
         this.baseDir = baseDir;
-        this.stores = new HashMap<String, StorageEngine>();
-        this.checkpointedOffsets = new HashMap<TopicPartition, Long>();
-        this.restoredOffsets = new HashMap<TopicPartition, Long>();
+        this.stores = new HashMap<>();
+        this.checkpointedOffsets = new HashMap<>();
+        this.restoredOffsets = new HashMap<>();
     }
 
     public File baseDir() {
@@ -58,7 +58,7 @@ public class ProcessorStateManager {
         checkpoint.delete();
     }
 
-    public void registerAndRestore(RecordCollector<byte[], byte[]> collector, Consumer<byte[], byte[]> consumer, StorageEngine engine) {
+    public void registerAndRestore(RecordCollector collector, Consumer<byte[], byte[]> consumer, StorageEngine engine) {
         if (engine.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 

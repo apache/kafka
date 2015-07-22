@@ -11,11 +11,12 @@ class KStreamSource<K, V> extends KStreamImpl<K, V> {
   public final Deserializer<K> keyDeserializer;
   public final Deserializer<V> valueDeserializer;
 
+  @SuppressWarnings("unchecked")
   KStreamSource(KStreamMetadata streamMetadata, KStreamContext context) {
-    this(streamMetadata, context, null, null);
+    this(streamMetadata, context, (Deserializer<K>) context.keyDeserializer(), (Deserializer<V>) context.valueDeserializer());
   }
 
-  KStreamSource(KStreamMetadata streamMetadata, KStreamContext context, Deserializer < K > keyDeserializer, Deserializer < V > valueDeserializer) {
+  KStreamSource(KStreamMetadata streamMetadata, KStreamContext context, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
     super(streamMetadata, context);
 
     this.keyDeserializer = keyDeserializer;

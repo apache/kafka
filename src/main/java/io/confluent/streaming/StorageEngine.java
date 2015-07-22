@@ -47,7 +47,7 @@ public interface StorageEngine {
      * @param checkpointedOffset The offset of the last save
      * @param logEndOffset The last offset in the changelog
      */
-    void registerAndRestore(RecordCollector<byte[], byte[]> collector,
+    void registerAndRestore(RecordCollector collector,
                             Consumer<byte[], byte[]> consumer,
                             TopicPartition partition,
                             long checkpointedOffset,
