@@ -70,4 +70,7 @@ public class MockKStreamContext implements KStreamContext {
 
   @Override
   public void restore(StorageEngine engine) throws Exception { throw new UnsupportedOperationException("restore() not supported."); }
+
+  @Override
+  public void flush() { throw new UnsupportedOperationException("flush() not supported."); }
 }

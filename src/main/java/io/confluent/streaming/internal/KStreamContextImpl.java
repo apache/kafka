@@ -290,6 +290,7 @@ public class KStreamContextImpl implements KStreamContext {
     }
   }
 
+  @Override
   public void flush() {
     stateMgr.flush();
   }

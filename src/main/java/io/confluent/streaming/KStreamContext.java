@@ -120,4 +120,8 @@ public interface KStreamContext {
    */
   void restore(StorageEngine engine) throws Exception;
 
+  /**
+   * Flush the local state of this context
+   */
+  void flush();
 }

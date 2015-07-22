@@ -1,14 +1,11 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.Coordinator;
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamWindowed;
 import io.confluent.streaming.KeyValueMapper;
 import io.confluent.streaming.Predicate;
 import io.confluent.streaming.Processor;
-import io.confluent.streaming.PunctuationScheduler;
-import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.ValueMapper;
 import io.confluent.streaming.Window;
 import org.apache.kafka.common.serialization.Deserializer;

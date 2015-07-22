@@ -3,7 +3,6 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
 import io.confluent.streaming.PunctuationScheduler;
-import io.confluent.streaming.RecordCollector;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -23,6 +22,26 @@ public class ProcessorContextImpl implements Processor.ProcessorContext {
     this.context = context;
     this.scheduler = scheduler;
     this.streamGroup = streamGroup;
+  }
+
+  @Override
+  public String topic() {
+    return this.streamGroup.record().topic();
+  }
+
+  @Override
+  public int partition() {
+    return this.streamGroup.record().partition();
+  }
+
+  @Override
+  public long offset() {
+    return this.streamGroup.record().offset();
+  }
+
+  @Override
+  public long timestamp() {
+    return this.streamGroup.record().timestamp;
   }
 
   @Override

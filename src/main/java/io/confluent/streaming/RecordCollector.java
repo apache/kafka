@@ -12,4 +12,5 @@ public interface RecordCollector {
 
   <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer);
 
+  void flush();
 }

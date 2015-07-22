@@ -48,6 +48,7 @@ public class StreamGroup implements ParallelExecutor.Task {
 
   private long streamTime = -1;
   private boolean commitRequested = false;
+  private StampedRecord currRecord = null;
   private volatile int buffered = 0;
 
   /**
@@ -77,6 +78,8 @@ public class StreamGroup implements ParallelExecutor.Task {
     return name;
 >>>>>>> removed some generics
   }
+
+  public StampedRecord record() { return currRecord; }
 
   /**
    * Merges a stream group into this group
@@ -228,18 +231,30 @@ public class StreamGroup implements ParallelExecutor.Task {
       }
 
       long trackedTimestamp = recordQueue.trackedTimestamp();
-      StampedRecord record = recordQueue.next();
+      currRecord = recordQueue.next();
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-      recordQueue.stream.receive(record.key(), record.value(), record.timestamp, streamTime);
-      consumedOffsets.put(recordQueue.partition(), record.offset());
+      recordQueue.stream.receive(currRecord.key(), currRecord.value(), currRecord.timestamp, streamTime);
+      consumedOffsets.put(recordQueue.partition(), currRecord.offset());
 
       // TODO: local state flush and downstream producer flush
       // need to be done altogether with offset commit atomically
+      if (commitRequested) {
+        // flush local state
+        recordQueue.stream.context().flush();
+
+        // flush produced records in the downstream
+        recordQueue.stream.context().recordCollector().flush();
+
+        // commit consumed offsets
+        ingestor.commit(consumedOffsets());
+      }
+
+
       if (commitRequested) ingestor.commit(Collections.singletonMap(
-          new TopicPartition(record.topic(), record.partition()),
-          record.offset()));
+          new TopicPartition(currRecord.topic(), currRecord.partition()),
+          currRecord.offset()));
 
       if (recordQueue.size() > 0) chooser.add(recordQueue);
 

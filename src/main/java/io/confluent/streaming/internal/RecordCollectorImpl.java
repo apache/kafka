@@ -55,6 +55,11 @@ public class RecordCollectorImpl implements RecordCollector {
     this.producer.send(new ProducerRecord<>(record.topic(), keyBytes, valBytes), callback);
   }
 
+  @Override
+  public void flush() {
+    this.producer.flush();
+  }
+
   /**
    * The last ack'd offset from the producer
    * @return the map from TopicPartition to offset

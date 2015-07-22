@@ -16,6 +16,14 @@ public interface Processor<K, V>  {
     void schedule(long timestamp);
 
     void commit();
+
+    String topic();
+
+    int partition();
+
+    long offset();
+
+    long timestamp();
   }
 
   void init(ProcessorContext context);
