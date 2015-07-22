@@ -16,23 +16,15 @@ public class IngestorImpl implements Ingestor {
   private final Consumer<byte[], byte[]> consumer;
   private final Set<TopicPartition> unpaused = new HashSet<>();
   private final Set<TopicPartition> toBePaused = new HashSet<>();
-  private final long pollTimeMs;
   private final Map<TopicPartition, StreamGroup> streamSynchronizers = new HashMap<>();
 
-  public IngestorImpl(Consumer<byte[], byte[]> consumer,
-                      long pollTimeMs) {
+  public IngestorImpl(Consumer<byte[], byte[]> consumer) {
     this.consumer = consumer;
-    this.pollTimeMs = pollTimeMs;
   }
 
   public void init() {
     unpaused.clear();
     unpaused.addAll(consumer.subscriptions());
-  }
-
-  @Override
-  public void poll() {
-    poll(pollTimeMs);
   }
 
   @Override

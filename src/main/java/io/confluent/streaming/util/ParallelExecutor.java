@@ -16,14 +16,16 @@ public class ParallelExecutor {
   public interface Task {
     /**
      * Executes a task
+     * @return boolean true if the task are ready for next execution
      */
-    void process();
+    boolean process();
   }
 
   private final WorkerThread[] workerThreads;
   private final AtomicInteger taskIndex = new AtomicInteger(0);
   private volatile ArrayList<? extends Task> tasks = new ArrayList<>();
   private volatile CountDownLatch latch;
+  private volatile boolean readyForNextExecution = true;
   private volatile boolean running = true;
   private volatile Exception exception;
 
@@ -39,13 +41,15 @@ public class ParallelExecutor {
   /**
    * Executes tasks in parallel. While this method is executing, other execute call will be blocked.
    * @param tasks a list of tasks executed in parallel
+   * @return boolean true if all tasks are ready for next execution
    * @throws Exception an exception thrown by a failed task
    */
-  public void execute(ArrayList<? extends Task> tasks) throws Exception {
+  public boolean execute(ArrayList<? extends Task> tasks) throws Exception {
     synchronized (this) {
       try {
         int numTasks = tasks.size();
         exception = null;
+        readyForNextExecution = true;
         if (numTasks > 0) {
           this.tasks = tasks;
           this.latch = new CountDownLatch(numTasks);
@@ -72,6 +76,7 @@ public class ParallelExecutor {
         this.latch = null;
         this.exception = null;
       }
+      return readyForNextExecution;
     }
   }
 
@@ -90,7 +95,8 @@ public class ParallelExecutor {
     int index = taskIndex.decrementAndGet();
     if (index >= 0) {
       try {
-        tasks.get(index).process();
+        if (!tasks.get(index).process())
+          this.readyForNextExecution = false;
       }
       catch (Exception ex) {
         exception = ex;

@@ -71,7 +71,7 @@ public class ParallelExecutorTest {
       if (i == 15) {
         taskList.add(new TestTask(counter) {
           @Override
-          public void process() {
+          public boolean process() {
             throw new TestException();
           }
         });
@@ -103,7 +103,7 @@ public class ParallelExecutorTest {
     }
 
     @Override
-    public void process() {
+    public boolean process() {
       try {
         Thread.sleep(20);
         executionCount++;
@@ -112,6 +112,8 @@ public class ParallelExecutorTest {
         // ignore
       }
       counter.incrementAndGet();
+
+      return true;
     }
   }
 

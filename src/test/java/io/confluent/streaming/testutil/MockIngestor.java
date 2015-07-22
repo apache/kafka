@@ -16,10 +16,6 @@ public class MockIngestor implements Ingestor {
   public HashSet<TopicPartition> paused = new HashSet<>();
 
   @Override
-  public void poll() {
-  }
-
-  @Override
   public void poll(long timeoutMs) {
   }
 

@@ -156,6 +156,7 @@ public class KafkaStreaming implements Runnable {
         this.requestingCommit = new ArrayList<>();
         this.config = new ProcessorConfig(config.config());
 <<<<<<< HEAD
+<<<<<<< HEAD
         this.ingestor =
 <<<<<<< HEAD
             new IngestorImpl<>(this.consumer,
@@ -171,6 +172,9 @@ public class KafkaStreaming implements Runnable {
 =======
         this.ingestor = new IngestorImpl(this.consumer, this.config.pollTimeMs);
 >>>>>>> clean up ingestor and stream synchronizer
+=======
+        this.ingestor = new IngestorImpl(this.consumer);
+>>>>>>> use poll(0) for non-blocking poll
         this.running = true;
         this.lastCommit = 0;
         this.nextStateCleaning = Long.MAX_VALUE;
@@ -272,9 +276,12 @@ public class KafkaStreaming implements Runnable {
 
     private void runLoop() {
         try {
-            while (stillRunning()) {
-                ingestor.poll();
+            boolean readyForNextExecution = false;
 
+            while (stillRunning()) {
+                ingestor.poll(readyForNextExecution ? 0 : this.config.pollTimeMs);
+
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -285,6 +292,9 @@ public class KafkaStreaming implements Runnable {
 =======
                 parallelExecutor.execute(streamGroups);
 >>>>>>> remove SyncGroup from user facing APIs
+=======
+                readyForNextExecution = parallelExecutor.execute(streamGroups);
+>>>>>>> use poll(0) for non-blocking poll
 
 =======
                 for (Map.Entry<Integer, Collection<StreamSynchronizer>> entry : streamSynchronizersForPartition.entrySet()) {

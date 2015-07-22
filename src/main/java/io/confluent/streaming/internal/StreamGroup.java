@@ -215,13 +215,14 @@ public class StreamGroup implements ParallelExecutor.Task {
    */
   @SuppressWarnings("unchecked")
   @Override
-  public void process() {
+  public boolean process() {
     synchronized (this) {
+      boolean readyForNExtExecution = false;
       ingestNewRecords();
 
       RecordQueue recordQueue = chooser.next();
       if (recordQueue == null) {
-        return;
+        return false;
       }
 
       if (recordQueue.size() == 0) throw new IllegalStateException("empty record queue");
@@ -256,11 +257,17 @@ public class StreamGroup implements ParallelExecutor.Task {
           new TopicPartition(currRecord.topic(), currRecord.partition()),
           currRecord.offset()));
 
-      if (recordQueue.size() > 0) chooser.add(recordQueue);
+      if (recordQueue.size() > 0) {
+        readyForNExtExecution = true;
+        chooser.add(recordQueue);
+      }
+
 
       buffered--;
 
       punctuationQueue.mayPunctuate(streamTime);
+
+      return readyForNExtExecution;
     }
   }
 

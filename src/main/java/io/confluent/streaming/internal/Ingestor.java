@@ -9,8 +9,6 @@ import java.util.Map;
  */
 public interface Ingestor {
 
-  void poll();
-
   void poll(long timeoutMs);
 
   void pause(TopicPartition partition);
