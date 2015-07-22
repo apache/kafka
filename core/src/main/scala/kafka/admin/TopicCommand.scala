@@ -31,7 +31,7 @@ import org.apache.kafka.common.utils.Utils
 import kafka.coordinator.ConsumerCoordinator
 
 
-object TopicCommand {
+object TopicCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
     
@@ -48,7 +48,7 @@ object TopicCommand {
     opts.checkArgs()
 
     val zkClient = ZkUtils.createZkClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000)
-
+    var exitCode = 0
     try {
       if(opts.options.has(opts.createOpt))
         createTopic(zkClient, opts)
@@ -62,11 +62,14 @@ object TopicCommand {
         deleteTopic(zkClient, opts)
     } catch {
       case e: Throwable =>
-        println("Error while executing topic command " + e.getMessage)
-        println(Utils.stackTrace(e))
+        println("Error while executing topic command : " + e.getMessage)
+        error(Utils.stackTrace(e))
+        exitCode = 1
     } finally {
       zkClient.close()
+      System.exit(exitCode)
     }
+
   }
 
   private def getTopics(zkClient: ZkClient, opts: TopicCommandOptions): Seq[String] = {
@@ -82,9 +85,11 @@ object TopicCommand {
   def createTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topic = opts.options.valueOf(opts.topicOpt)
     val configs = parseTopicConfigsToBeAdded(opts)
+    if (Topic.hasCollisionChars(topic))
+      println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.")
     if (opts.options.has(opts.replicaAssignmentOpt)) {
       val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
-      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, assignment, configs)
+      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, assignment, configs, update = false)
     } else {
       CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
       val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
@@ -97,7 +102,8 @@ object TopicCommand {
   def alterTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
     if (topics.length == 0) {
-      println("Topic %s does not exist".format(opts.options.valueOf(opts.topicOpt)))
+      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
+          opts.options.valueOf(opts.zkConnectOpt)))
     }
     topics.foreach { topic =>
       val configs = AdminUtils.fetchTopicConfig(zkClient, topic)
@@ -138,7 +144,8 @@ object TopicCommand {
   def deleteTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
     if (topics.length == 0) {
-      println("Topic %s does not exist".format(opts.options.valueOf(opts.topicOpt)))
+      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
+          opts.options.valueOf(opts.zkConnectOpt)))
     }
     topics.foreach { topic =>
       try {

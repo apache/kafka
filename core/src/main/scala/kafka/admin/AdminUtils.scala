@@ -163,7 +163,13 @@ object AdminUtils extends Logging {
   }
   
   def deleteTopic(zkClient: ZkClient, topic: String) {
-    ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
+    try {
+      ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
+    } catch {
+      case e1: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+        "topic %s is already marked for deletion".format(topic))
+      case e2: Throwable => throw new AdminOperationException(e2.toString)
+    }
   }
   
   def isConsumerGroupActive(zkClient: ZkClient, group: String) = {
@@ -244,8 +250,19 @@ object AdminUtils extends Logging {
     require(partitionReplicaAssignment.values.map(_.size).toSet.size == 1, "All partitions should have the same number of replicas.")
 
     val topicPath = ZkUtils.getTopicPath(topic)
-    if(!update && zkClient.exists(topicPath))
-      throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
+
+    if (!update) {
+      if (zkClient.exists(topicPath))
+        throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
+      else if (Topic.hasCollisionChars(topic)) {
+        val allTopics = ZkUtils.getAllTopics(zkClient)
+        val collidingTopics = allTopics.filter(t => Topic.hasCollision(topic, t))
+        if (collidingTopics.nonEmpty) {
+          throw new InvalidTopicException("Topic \"%s\" collides with existing topics: %s".format(topic, collidingTopics.mkString(", ")))
+        }
+      }
+    }
+
     partitionReplicaAssignment.values.foreach(reps => require(reps.size == reps.toSet.size, "Duplicate replica assignment found: "  + partitionReplicaAssignment))
     
     // write out the config if there is any, this isn't transactional with the partition assignments
@@ -254,7 +271,7 @@ object AdminUtils extends Logging {
     // create the partition assignment
     writeTopicPartitionAssignment(zkClient, topic, partitionReplicaAssignment, update)
   }
-  
+
   private def writeTopicPartitionAssignment(zkClient: ZkClient, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
       val zkPath = ZkUtils.getTopicPath(topic)

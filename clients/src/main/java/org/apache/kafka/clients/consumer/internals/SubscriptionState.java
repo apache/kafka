@@ -138,7 +138,6 @@ public class SubscriptionState {
 
     public void committed(TopicPartition tp, long offset) {
         this.committed.put(tp, offset);
-        this.needsFetchCommittedOffsets = false;
     }
 
     public Long committed(TopicPartition tp) {
@@ -151,6 +150,10 @@ public class SubscriptionState {
 
     public boolean refreshCommitsNeeded() {
         return this.needsFetchCommittedOffsets;
+    }
+
+    public void commitsRefreshed() {
+        this.needsFetchCommittedOffsets = false;
     }
     
     public void seek(TopicPartition tp, long offset) {

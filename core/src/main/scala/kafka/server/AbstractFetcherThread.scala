@@ -67,7 +67,9 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition])
 
   override def shutdown(){
-    initiateShutdown()
+    val justShutdown = initiateShutdown()
+    if (justShutdown && isInterruptible)
+      simpleConsumer.disconnectToHandleJavaIOBug()
     inLock(partitionMapLock) {
       partitionMapCond.signalAll()
     }

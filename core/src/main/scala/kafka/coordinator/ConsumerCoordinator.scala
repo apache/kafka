@@ -210,7 +210,7 @@ class ConsumerCoordinator(val brokerId: Int,
             responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
           } else if (!group.has(consumerId)) {
             responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
-          } else if (generationId != group.generationId) {
+          } else if (generationId != group.generationId || !group.is(Stable)) {
             responseCallback(Errors.ILLEGAL_GENERATION.code)
           } else {
             val consumer = group.get(consumerId)

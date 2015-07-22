@@ -15,9 +15,10 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Coordinator;
+import org.apache.kafka.clients.consumer.internals.DelayedTask;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
-import org.apache.kafka.clients.consumer.internals.RequestFuture;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -49,8 +50,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.min;
@@ -65,9 +66,8 @@ import static org.apache.kafka.common.utils.Utils.min;
  * The consumer maintains TCP connections to the necessary brokers to fetch data for the topics it subscribes to.
  * Failure to close the consumer after use will leak these connections.
  * <p>
- * The consumer is thread safe but generally will be used only from within a single thread. The consumer client has no
- * threads of it's own, all work is done in the caller's thread when calls are made on the various methods exposed.
- * 
+ * The consumer is not thread-safe. See <a href="#multithreaded">Multi-threaded Processing</a> for more details.
+ *
  * <h3>Offsets and Consumer Position</h3>
  * Kafka maintains a numerical offset for each record in a partition. This offset acts as a kind of unique identifier of
  * a record within that partition, and also denotes the position of the consumer in the partition. That is, a consumer
@@ -301,7 +301,8 @@ import static org.apache.kafka.common.utils.Utils.min;
  * methods for seeking to the earliest and latest offset the server maintains are also available (
  * {@link #seekToBeginning(TopicPartition...)} and {@link #seekToEnd(TopicPartition...)} respectively).
  * 
- * <h3>Multithreaded Processing</h3>
+ *
+ * <h3><a name="multithreaded">Multi-threaded Processing</a></h3>
  * 
  * The Kafka consumer is NOT thread-safe. All network I/O happens in the thread of the application
  * making the call. It is the responsibility of the user to ensure that multi-threaded access
@@ -393,8 +394,7 @@ import static org.apache.kafka.common.utils.Utils.min;
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
-    private static final long EARLIEST_OFFSET_TIMESTAMP = -2L;
-    private static final long LATEST_OFFSET_TIMESTAMP = -1L;
+    private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     private final Coordinator coordinator;
@@ -403,21 +403,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Fetcher<K, V> fetcher;
 
     private final Time time;
-    private final NetworkClient client;
+    private final ConsumerNetworkClient client;
     private final Metrics metrics;
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
     private final long retryBackoffMs;
     private final boolean autoCommit;
     private final long autoCommitIntervalMs;
-    private final ConsumerRebalanceCallback rebalanceCallback;
-    private long lastCommitAttemptMs;
     private boolean closed = false;
-    private final AtomicBoolean wakeup = new AtomicBoolean(false);
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
-    private final AtomicReference<Long> currentThread = new AtomicReference<Long>();
+    private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     // refcount is used to allow reentrant access by the thread who has acquired currentThread
     private final AtomicInteger refcount = new AtomicInteger(0);
 
@@ -505,14 +502,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Starting the Kafka consumer");
             if (callback == null)
-                this.rebalanceCallback = config.getConfiguredInstance(ConsumerConfig.CONSUMER_REBALANCE_CALLBACK_CLASS_CONFIG,
+                callback = config.getConfiguredInstance(ConsumerConfig.CONSUMER_REBALANCE_CALLBACK_CLASS_CONFIG,
                         ConsumerRebalanceCallback.class);
-            else
-                this.rebalanceCallback = callback;
             this.time = new SystemTime();
             this.autoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
             this.autoCommitIntervalMs = config.getLong(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
-            this.lastCommitAttemptMs = time.milliseconds();
 
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -533,7 +527,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             String metricGrpPrefix = "consumer";
             Map<String, String> metricsTags = new LinkedHashMap<String, String>();
             metricsTags.put("client-id", clientId);
-            this.client = new NetworkClient(
+            NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, metricsTags),
                     this.metadata,
                     clientId,
@@ -541,6 +535,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG));
+            this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs);
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase());
             this.subscriptions = new SubscriptionState(offsetResetStrategy);
             this.coordinator = new Coordinator(this.client,
@@ -551,8 +546,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metrics,
                     metricGrpPrefix,
                     metricsTags,
-                    this.time);
-
+                    this.time,
+                    requestTimeoutMs,
+                    retryBackoffMs,
+                    wrapRebalanceCallback(callback));
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                         Deserializer.class);
@@ -579,9 +576,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metrics,
                     metricGrpPrefix,
                     metricsTags,
-                    this.time);
+                    this.time,
+                    this.retryBackoffMs);
 
             config.logUnused();
+
+            if (autoCommit)
+                scheduleAutoCommitTask(autoCommitIntervalMs);
 
             log.debug("Kafka consumer created");
         } catch (Throwable t) {
@@ -717,27 +718,25 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (timeout < 0)
                 throw new IllegalArgumentException("Timeout must not be negative");
 
-            // Poll for new data until the timeout expires
+            // poll for new data until the timeout expires
             long remaining = timeout;
             while (remaining >= 0) {
                 long start = time.milliseconds();
-                long pollTimeout = min(remaining, timeToNextCommit(start), coordinator.timeToNextHeartbeat(start));
-
-                Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(pollTimeout, start);
+                Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
                 long end = time.milliseconds();
 
                 if (!records.isEmpty()) {
-                    // If data is available, then return it, but first send off the
+                    // if data is available, then return it, but first send off the
                     // next round of fetches to enable pipelining while the user is
                     // handling the fetched records.
-                    fetcher.initFetches(metadata.fetch(), end);
-                    pollClient(0, end);
+                    fetcher.initFetches(metadata.fetch());
+                    client.poll(0);
                     return new ConsumerRecords<K, V>(records);
                 }
 
                 remaining -= end - start;
 
-                // Nothing was available, so we should backoff before retrying
+                // nothing was available, so we should backoff before retrying
                 if (remaining > 0) {
                     Utils.sleep(min(remaining, retryBackoffMs));
                     remaining -= time.milliseconds() - end;
@@ -750,44 +749,40 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-
     /**
      * Do one round of polling. In addition to checking for new data, this does any needed
      * heart-beating, auto-commits, and offset updates.
      * @param timeout The maximum time to block in the underlying poll
-     * @param now Current time in millis
      * @return The fetched records (may be empty)
      */
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout, long now) {
-        Cluster cluster = this.metadata.fetch();
-
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
+        coordinator.ensureCoordinatorKnown();
 
-        if (subscriptions.partitionsAutoAssigned()) {
-            if (subscriptions.partitionAssignmentNeeded()) {
-                // rebalance to get partition assignment
-                reassignPartitions(now);
-            } else {
-                // try to heartbeat with the coordinator if needed
-                coordinator.maybeHeartbeat(now);
-            }
-        }
+        // ensure we have partitions assigned if we expect to
+        if (subscriptions.partitionsAutoAssigned())
+            coordinator.ensurePartitionAssignment();
 
         // fetch positions if we have partitions we're subscribed to that we
         // don't know the offset for
         if (!subscriptions.hasAllFetchPositions())
             updateFetchPositions(this.subscriptions.missingFetchPositions());
 
-        // maybe autocommit position
-        if (shouldAutoCommit(now))
-            commit(CommitType.ASYNC);
-
-        // Init any new fetches (won't resend pending fetches)
-        fetcher.initFetches(cluster, now);
-
-        pollClient(timeout, now);
-
+        // init any new fetches (won't resend pending fetches)
+        Cluster cluster = this.metadata.fetch();
+        fetcher.initFetches(cluster);
+        client.poll(timeout);
         return fetcher.fetchedRecords();
+    }
+
+    private void scheduleAutoCommitTask(final long interval) {
+        DelayedTask task = new DelayedTask() {
+            public void run(long now) {
+                commit(CommitType.ASYNC);
+                client.schedule(this, now + interval);
+            }
+        };
+        client.schedule(task, time.milliseconds() + interval);
     }
 
     /**
@@ -797,25 +792,42 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * A non-blocking commit will attempt to commit offsets asynchronously. No error will be thrown if the commit fails.
-     * A blocking commit will wait for a response acknowledging the commit. In the event of an error it will retry until
-     * the commit succeeds.
-     * 
+     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
+     * commit are silently discarded. If you need to determine the result of an asynchronous commit, you should use
+     * {@link #commit(Map, CommitType, ConsumerCommitCallback)}. Synchronous commits (i.e. {@link CommitType#SYNC})
+     * block until either the commit succeeds or an unrecoverable error is encountered (in which case it is thrown
+     * to the caller).
+     *
      * @param offsets The list of offsets per partition that should be committed to Kafka.
      * @param commitType Control whether the commit is blocking
      */
     @Override
     public void commit(final Map<TopicPartition, Long> offsets, CommitType commitType) {
+        commit(offsets, commitType, null);
+    }
+
+    /**
+     * Commits the specified offsets for the specified list of topics and partitions to Kafka.
+     * <p>
+     * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
+     * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * should not be used.
+     * <p>
+     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
+     * commit are either passed to the callback (if provided) or silently discarded. Synchronous commits (i.e.
+     * {@link CommitType#SYNC}) block until either the commit succeeds or an unrecoverable error is encountered. In
+     * this case, the error is either passed to the callback (if provided) or thrown to the caller.
+     *
+     * @param offsets The list of offsets per partition that should be committed to Kafka.
+     * @param commitType Control whether the commit is blocking
+     * @param callback Callback to invoke when the commit completes
+     */
+    @Override
+    public void commit(final Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback) {
         acquire();
         try {
             log.debug("Committing offsets ({}): {} ", commitType.toString().toLowerCase(), offsets);
-
-            this.lastCommitAttemptMs = time.milliseconds();
-
-            // commit the offsets with the coordinator
-            if (commitType == CommitType.ASYNC)
-                this.subscriptions.needRefreshCommits();
-            commitOffsets(offsets, commitType);
+            coordinator.commitOffsets(offsets, commitType, callback);
         } finally {
             release();
         }
@@ -827,19 +839,45 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
-     * 
+     * <p>
+     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
+     * commit are either passed to the callback (if provided) or silently discarded. Synchronous commits (i.e.
+     * {@link CommitType#SYNC}) block until either the commit succeeds or an unrecoverable error is encountered. In
+     * this case, the error is either passed to the callback (if provided) or thrown to the caller.
+     *
+     * @param commitType Whether or not the commit should block until it is acknowledged.
+     * @param callback Callback to invoke when the commit completes
+     */
+    @Override
+    public void commit(CommitType commitType, ConsumerCommitCallback callback) {
+        acquire();
+        try {
+            // need defensive copy to ensure offsets are not removed before completion (e.g. in rebalance)
+            Map<TopicPartition, Long> allConsumed = new HashMap<TopicPartition, Long>(this.subscriptions.allConsumed());
+            commit(allConsumed, commitType, callback);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Commits offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
+     * <p>
+     * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
+     * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * should not be used.
+     * <p>
+     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
+     * commit are silently discarded. If you need to determine the result of an asynchronous commit, you should use
+     * {@link #commit(CommitType, ConsumerCommitCallback)}. Synchronous commits (i.e. {@link CommitType#SYNC})
+     * block until either the commit succeeds or an unrecoverable error is encountered (in which case it is thrown
+     * to the caller).
+     *
      * @param commitType Whether or not the commit should block until it is acknowledged.
      */
     @Override
     public void commit(CommitType commitType) {
-        acquire();
-        try {
-            // Need defensive copy to ensure offsets are not removed before completion (e.g. in rebalance)
-            Map<TopicPartition, Long> allConsumed = new HashMap<TopicPartition, Long>(this.subscriptions.allConsumed());
-            commit(allConsumed, commitType);
-        } finally {
-            release();
-        }
+        commit(commitType, null);
     }
 
     /**
@@ -866,8 +904,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Collection<TopicPartition> parts = partitions.length == 0 ? this.subscriptions.assignedPartitions()
                     : Arrays.asList(partitions);
-            for (TopicPartition tp : parts)
+            for (TopicPartition tp : parts) {
+                log.debug("Seeking to beginning of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
+            }
         } finally {
             release();
         }
@@ -881,8 +921,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Collection<TopicPartition> parts = partitions.length == 0 ? this.subscriptions.assignedPartitions()
                     : Arrays.asList(partitions);
-            for (TopicPartition tp : parts)
+            for (TopicPartition tp : parts) {
+                log.debug("Seeking to end of partition {}", tp);
                 subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
+            }
         } finally {
             release();
         }
@@ -929,19 +971,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public long committed(TopicPartition partition) {
         acquire();
         try {
-            Set<TopicPartition> partitionsToFetch;
+            Long committed;
             if (subscriptions.assignedPartitions().contains(partition)) {
-                Long committed = this.subscriptions.committed(partition);
-                if (committed != null)
-                    return committed;
-                partitionsToFetch = subscriptions.assignedPartitions();
+                committed = this.subscriptions.committed(partition);
+                if (committed == null) {
+                    coordinator.refreshCommittedOffsetsIfNeeded();
+                    committed = this.subscriptions.committed(partition);
+                }
             } else {
-                partitionsToFetch = Collections.singleton(partition);
+                Map<TopicPartition, Long> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
+                committed = offsets.get(partition);
             }
-            refreshCommittedOffsets(partitionsToFetch);
-            Long committed = this.subscriptions.committed(partition);
+
             if (committed == null)
                 throw new NoOffsetForPartitionException("No offset has been committed for partition " + partition);
+
             return committed;
         } finally {
             release();
@@ -971,7 +1015,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
             if (parts == null) {
                 metadata.add(topic);
-                awaitMetadataUpdate();
+                client.awaitMetadataUpdate();
                 parts = metadata.fetch().partitionsForTopic(topic);
             }
             return parts;
@@ -997,7 +1041,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void wakeup() {
-        this.wakeup.set(true);
         this.client.wakeup();
     }
 
@@ -1015,55 +1058,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    private Coordinator.RebalanceCallback wrapRebalanceCallback(final ConsumerRebalanceCallback callback) {
+        return new Coordinator.RebalanceCallback() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                callback.onPartitionsAssigned(KafkaConsumer.this, partitions);
+            }
 
-    private boolean shouldAutoCommit(long now) {
-        return this.autoCommit && this.lastCommitAttemptMs <= now - this.autoCommitIntervalMs;
-    }
-
-    private long timeToNextCommit(long now) {
-        if (!this.autoCommit)
-            return Long.MAX_VALUE;
-        long timeSinceLastCommit = now - this.lastCommitAttemptMs;
-        if (timeSinceLastCommit > this.autoCommitIntervalMs)
-            return 0;
-        return this.autoCommitIntervalMs - timeSinceLastCommit;
-    }
-
-    /**
-     * Request a metadata update and wait until it has occurred
-     */
-    private void awaitMetadataUpdate() {
-        int version = this.metadata.requestUpdate();
-        do {
-            long now = time.milliseconds();
-            this.pollClient(this.retryBackoffMs, now);
-        } while (this.metadata.version() == version);
-    }
-
-    /**
-     * Get partition assignment
-     */
-    private void reassignPartitions(long now) {
-        // execute the user's callback before rebalance
-        log.debug("Revoking previously assigned partitions {}", this.subscriptions.assignedPartitions());
-        try {
-            this.rebalanceCallback.onPartitionsRevoked(this, this.subscriptions.assignedPartitions());
-        } catch (Exception e) {
-            log.error("User provided callback " + this.rebalanceCallback.getClass().getName()
-                + " failed on partition revocation: ", e);
-        }
-
-        // get new assigned partitions from the coordinator
-        assignPartitions();
-
-        // execute the user's callback after rebalance
-        log.debug("Setting newly assigned partitions {}", this.subscriptions.assignedPartitions());
-        try {
-            this.rebalanceCallback.onPartitionsAssigned(this, this.subscriptions.assignedPartitions());
-        } catch (Exception e) {
-            log.error("User provided callback " + this.rebalanceCallback.getClass().getName()
-                + " failed on partition assignment: ", e);
-        }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                callback.onPartitionsRevoked(KafkaConsumer.this, partitions);
+            }
+        };
     }
 
     /**
@@ -1075,267 +1081,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             defined
      */
     private void updateFetchPositions(Set<TopicPartition> partitions) {
-        // first refresh the committed positions in case they are not up-to-date
-        refreshCommittedOffsets(partitions);
+        // refresh commits for all assigned partitions
+        coordinator.refreshCommittedOffsetsIfNeeded();
 
-        // reset the fetch position to the committed position
-        for (TopicPartition tp : partitions) {
-            // Skip if we already have a fetch position
-            if (subscriptions.fetched(tp) != null)
-                continue;
-
-            // TODO: If there are several offsets to reset, we could submit offset requests in parallel
-            if (subscriptions.isOffsetResetNeeded(tp)) {
-                resetOffset(tp);
-            } else if (subscriptions.committed(tp) == null) {
-                // There's no committed position, so we need to reset with the default strategy
-                subscriptions.needOffsetReset(tp);
-                resetOffset(tp);
-            } else {
-                log.debug("Resetting offset for partition {} to the committed offset {}",
-                    tp, subscriptions.committed(tp));
-                subscriptions.seek(tp, subscriptions.committed(tp));
-            }
-        }
-    }
-
-    /**
-     * Reset offsets for the given partition using the offset reset strategy.
-     *
-     * @param partition The given partition that needs reset offset
-     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
-     */
-    private void resetOffset(TopicPartition partition) {
-        OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-        final long timestamp;
-        if (strategy == OffsetResetStrategy.EARLIEST)
-            timestamp = EARLIEST_OFFSET_TIMESTAMP;
-        else if (strategy == OffsetResetStrategy.LATEST)
-            timestamp = LATEST_OFFSET_TIMESTAMP;
-        else
-            throw new NoOffsetForPartitionException("No offset is set and no reset policy is defined");
-
-        log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase());
-        long offset = listOffset(partition, timestamp);
-        this.subscriptions.seek(partition, offset);
-    }
-
-    /**
-     * Fetch a single offset before the given timestamp for the partition.
-     *
-     * @param partition The partition that needs fetching offset.
-     * @param timestamp The timestamp for fetching offset.
-     * @return The offset of the message that is published before the given timestamp
-     */
-    private long listOffset(TopicPartition partition, long timestamp) {
-        while (true) {
-            RequestFuture<Long> future = fetcher.listOffset(partition, timestamp);
-
-            if (!future.isDone())
-                pollFuture(future, requestTimeoutMs);
-
-            if (future.isDone()) {
-                if (future.succeeded())
-                    return future.value();
-                handleRequestFailure(future);
-            }
-        }
-    }
-
-    /**
-     * Refresh the committed offsets for given set of partitions and update the cache
-     */
-    private void refreshCommittedOffsets(Set<TopicPartition> partitions) {
-        // we only need to fetch latest committed offset from coordinator if there
-        // is some commit process in progress, otherwise our current
-        // committed cache is up-to-date
-        if (subscriptions.refreshCommitsNeeded()) {
-            // contact coordinator to fetch committed offsets
-            Map<TopicPartition, Long> offsets = fetchCommittedOffsets(partitions);
-
-            // update the position with the offsets
-            for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
-                TopicPartition tp = entry.getKey();
-                this.subscriptions.committed(tp, entry.getValue());
-            }
-        }
-    }
-
-    /**
-     * Block until we have received a partition assignment from the coordinator.
-     */
-    private void assignPartitions() {
-        // Ensure that there are no pending requests to the coordinator. This is important
-        // in particular to avoid resending a pending JoinGroup request.
-        awaitCoordinatorInFlightRequests();
-
-        while (subscriptions.partitionAssignmentNeeded()) {
-            RequestFuture<Void> future = coordinator.assignPartitions(time.milliseconds());
-
-            // Block indefinitely for the join group request (which can take as long as a session timeout)
-            if (!future.isDone())
-                pollFuture(future);
-
-            if (future.failed())
-                handleRequestFailure(future);
-        }
-    }
-
-    /**
-     * Block until the coordinator for this group is known.
-     */
-    private void ensureCoordinatorKnown() {
-        while (coordinator.coordinatorUnknown()) {
-            RequestFuture<Void> future = coordinator.discoverConsumerCoordinator();
-
-            if (!future.isDone())
-                pollFuture(future, requestTimeoutMs);
-
-            if (future.failed())
-                handleRequestFailure(future);
-        }
-    }
-
-    /**
-     * Block until any pending requests to the coordinator have been handled.
-     */
-    public void awaitCoordinatorInFlightRequests() {
-        while (coordinator.hasInFlightRequests()) {
-            long now = time.milliseconds();
-            pollClient(-1, now);
-        }
-    }
-
-    /**
-     * Lookup the committed offsets for a set of partitions. This will block until the coordinator has
-     * responded to the offset fetch request.
-     * @param partitions List of partitions to get offsets for
-     * @return Map from partition to its respective offset
-     */
-    private Map<TopicPartition, Long> fetchCommittedOffsets(Set<TopicPartition> partitions) {
-        while (true) {
-            long now = time.milliseconds();
-            RequestFuture<Map<TopicPartition, Long>> future = coordinator.fetchOffsets(partitions, now);
-
-            if (!future.isDone())
-                pollFuture(future, requestTimeoutMs);
-
-            if (future.isDone()) {
-                if (future.succeeded())
-                    return future.value();
-                handleRequestFailure(future);
-            }
-        }
-    }
-
-    /**
-     * Commit offsets. This call blocks (regardless of commitType) until the coordinator
-     * can receive the commit request. Once the request has been made, however, only the
-     * synchronous commits will wait for a successful response from the coordinator.
-     * @param offsets Offsets to commit.
-     * @param commitType Commit policy
-     */
-    private void commitOffsets(Map<TopicPartition, Long> offsets, CommitType commitType) {
-        if (commitType == CommitType.ASYNC) {
-            commitOffsetsAsync(offsets);
-        } else {
-            commitOffsetsSync(offsets);
-        }
-    }
-
-    private void commitOffsetsAsync(Map<TopicPartition, Long> offsets) {
-        while (true) {
-            long now = time.milliseconds();
-            RequestFuture<Void> future = coordinator.commitOffsets(offsets, now);
-
-            if (!future.isDone() || future.succeeded())
-                return;
-
-            handleRequestFailure(future);
-        }
-    }
-
-    private void commitOffsetsSync(Map<TopicPartition, Long> offsets) {
-        while (true) {
-            long now = time.milliseconds();
-            RequestFuture<Void> future = coordinator.commitOffsets(offsets, now);
-
-            if (!future.isDone())
-                pollFuture(future, requestTimeoutMs);
-
-            if (future.isDone()) {
-                if (future.succeeded())
-                    return;
-                else
-                    handleRequestFailure(future);
-            }
-        }
-    }
-
-    private void handleRequestFailure(RequestFuture<?> future) {
-        if (future.hasException())
-            throw future.exception();
-
-        switch (future.retryAction()) {
-            case BACKOFF:
-                Utils.sleep(retryBackoffMs);
-                break;
-            case POLL:
-                pollClient(retryBackoffMs, time.milliseconds());
-                break;
-            case FIND_COORDINATOR:
-                ensureCoordinatorKnown();
-                break;
-            case REFRESH_METADATA:
-                awaitMetadataUpdate();
-                break;
-            case NOOP:
-                // Do nothing (retry now)
-        }
-    }
-
-    /**
-     * Poll until a result is ready or timeout expires
-     * @param future The future to poll for
-     * @param timeout The time in milliseconds to wait for the result
-     */
-    private void pollFuture(RequestFuture<?> future, long timeout) {
-        // TODO: Update this code for KAFKA-2120, which adds request timeout to NetworkClient
-        // In particular, we must ensure that "timed out" requests will not have their callbacks
-        // invoked at a later time.
-        long remaining = timeout;
-        while (!future.isDone() && remaining >= 0) {
-            long start = time.milliseconds();
-            pollClient(remaining, start);
-            if (future.isDone()) return;
-            remaining -= time.milliseconds() - start;
-        }
-    }
-
-    /**
-     * Poll indefinitely until the result is ready.
-     * @param future The future to poll for.
-     */
-    private void pollFuture(RequestFuture<?> future) {
-        while (!future.isDone()) {
-            long now = time.milliseconds();
-            pollClient(-1, now);
-        }
-    }
-
-    /**
-     * Poll for IO.
-     * @param timeout The maximum time to wait for IO to become available
-     * @param now The current time in milliseconds
-     * @throws ConsumerWakeupException if {@link #wakeup()} is invoked while the poll is active
-     */
-    private void pollClient(long timeout, long now) {
-        this.client.poll(timeout, now);
-
-        if (wakeup.get()) {
-            wakeup.set(false);
-            throw new ConsumerWakeupException();
-        }
+        // then do any offset lookups in case some positions are not known
+        fetcher.updateFetchPositions(partitions);
     }
 
     /*
@@ -1355,8 +1105,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     private void acquire() {
         ensureNotClosed();
-        Long threadId = Thread.currentThread().getId();
-        if (!threadId.equals(currentThread.get()) && !currentThread.compareAndSet(null, threadId))
+        long threadId = Thread.currentThread().getId();
+        if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
             throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access");
         refcount.incrementAndGet();
     }
@@ -1366,6 +1116,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     private void release() {
         if (refcount.decrementAndGet() == 0)
-            currentThread.set(null);
+            currentThread.set(NO_CURRENT_THREAD);
     }
 }

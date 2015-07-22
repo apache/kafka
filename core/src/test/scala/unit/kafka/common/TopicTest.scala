@@ -57,4 +57,45 @@ class TopicTest {
       }
     }
   }
+
+  @Test
+  def testTopicHasCollisionChars() = {
+    val falseTopics = List("start", "end", "middle", "many")
+    val trueTopics = List(
+      ".start", "end.", "mid.dle", ".ma.ny.",
+      "_start", "end_", "mid_dle", "_ma_ny."
+    )
+
+    falseTopics.foreach( t =>
+      assertFalse(Topic.hasCollisionChars(t))
+    )
+
+    trueTopics.foreach( t =>
+      assertTrue(Topic.hasCollisionChars(t))
+    )
+  }
+
+  @Test
+  def testTopicHasCollision() = {
+    val periodFirstMiddleLastNone = List(".topic", "to.pic", "topic.", "topic")
+    val underscoreFirstMiddleLastNone = List("_topic", "to_pic", "topic_", "topic")
+
+    // Self
+    periodFirstMiddleLastNone.foreach { t =>
+      assertTrue(Topic.hasCollision(t, t))
+    }
+    underscoreFirstMiddleLastNone.foreach { t =>
+      assertTrue(Topic.hasCollision(t, t))
+    }
+
+    // Same Position
+    periodFirstMiddleLastNone.zip(underscoreFirstMiddleLastNone).foreach { case (t1, t2) =>
+      assertTrue(Topic.hasCollision(t1, t2))
+    }
+
+    // Different Position
+    periodFirstMiddleLastNone.zip(underscoreFirstMiddleLastNone.reverse).foreach { case (t1, t2) =>
+      assertFalse(Topic.hasCollision(t1, t2))
+    }
+  }
 }

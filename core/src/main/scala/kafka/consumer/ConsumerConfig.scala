@@ -58,6 +58,7 @@ object ConsumerConfig extends Config {
     validateGroupId(config.groupId)
     validateAutoOffsetReset(config.autoOffsetReset)
     validateOffsetsStorage(config.offsetsStorage)
+    validatePartitionAssignmentStrategy(config.partitionAssignmentStrategy)
   }
 
   def validateClientId(clientId: String) {
@@ -83,6 +84,15 @@ object ConsumerConfig extends Config {
       case "kafka" =>
       case _ => throw new InvalidConfigException("Wrong value " + storage + " of offsets.storage in consumer config; " +
                                                  "Valid values are 'zookeeper' and 'kafka'")
+    }
+  }
+
+  def validatePartitionAssignmentStrategy(strategy: String) {
+    strategy match {
+      case "range" =>
+      case "roundrobin" =>
+      case _ => throw new InvalidConfigException("Wrong value " + strategy + " of partition.assignment.strategy in consumer config; " +
+        "Valid values are 'range' and 'roundrobin'")
     }
   }
 }

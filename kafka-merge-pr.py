@@ -95,8 +95,9 @@ def continue_maybe(prompt):
         fail("Okay, exiting")
 
 def clean_up():
-    print "Restoring head pointer to %s" % original_head
-    run_cmd("git checkout %s" % original_head)
+    if original_head != get_current_branch():
+        print "Restoring head pointer to %s" % original_head
+        run_cmd("git checkout %s" % original_head)
 
     branches = run_cmd("git branch").replace(" ", "").split("\n")
 
@@ -104,6 +105,8 @@ def clean_up():
         print "Deleting local branch %s" % branch
         run_cmd("git branch -D %s" % branch)
 
+def get_current_branch():
+    return run_cmd("git rev-parse --abbrev-ref HEAD").replace("\n", "")
 
 # merge the requested PR and return the merge hash
 def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
@@ -350,7 +353,7 @@ def standardize_jira_ref(text):
 def main():
     global original_head
 
-    original_head = run_cmd("git rev-parse HEAD")[:8]
+    original_head = get_current_branch()
 
     branches = get_json("%s/branches" % GITHUB_API_BASE)
     branch_names = filter(lambda x: x.startswith(RELEASE_BRANCH_PREFIX), [x['name'] for x in branches])

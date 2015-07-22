@@ -34,7 +34,7 @@ object TopicMetadata {
     val partitionsMetadata: Array[PartitionMetadata] = new Array[PartitionMetadata](numPartitions)
     for(i <- 0 until numPartitions) {
       val partitionMetadata = PartitionMetadata.readFrom(buffer, brokers)
-      partitionsMetadata(partitionMetadata.partitionId) = partitionMetadata
+      partitionsMetadata(i) = partitionMetadata
     }
     new TopicMetadata(topic, partitionsMetadata, errorCode)
   }

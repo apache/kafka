@@ -24,7 +24,7 @@ import kafka.utils._
 import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{Logging, ZkUtils, TestUtils}
-import kafka.common.{TopicExistsException, TopicAndPartition}
+import kafka.common.{InvalidTopicException, TopicExistsException, TopicAndPartition}
 import kafka.server.{KafkaServer, KafkaConfig}
 import java.io.File
 import TestUtils._
@@ -131,6 +131,20 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     intercept[TopicExistsException] {
       // shouldn't be able to create a topic that already exists
       AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
+    }
+  }
+
+  @Test
+  def testTopicCreationWithCollision() {
+    val topic = "test.topic"
+    val collidingTopic = "test_topic"
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
+    // create the topic
+    AdminUtils.createTopic(zkClient, topic, 3, 1)
+
+    intercept[InvalidTopicException] {
+      // shouldn't be able to create a topic that collides
+      AdminUtils.createTopic(zkClient, collidingTopic, 3, 1)
     }
   }
 

@@ -387,8 +387,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
   /**
    * This callback is invoked by the replica state machine's broker change listener, with the list of newly started
    * brokers as input. It does the following -
-   * 1. Triggers the OnlinePartition state change for all new/offline partitions
-   * 2. It checks whether there are reassigned replicas assigned to any newly started brokers.  If
+   * 1. Sends update metadata request to all live and shutting down brokers
+   * 2. Triggers the OnlinePartition state change for all new/offline partitions
+   * 3. It checks whether there are reassigned replicas assigned to any newly started brokers.  If
    *    so, it performs the reassignment logic for each topic/partition.
    *
    * Note that we don't need to refresh the leader/isr cache for all topic/partitions at this point for two reasons:
@@ -400,10 +401,11 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
   def onBrokerStartup(newBrokers: Seq[Int]) {
     info("New broker startup callback for %s".format(newBrokers.mkString(",")))
     val newBrokersSet = newBrokers.toSet
-    // send update metadata request for all partitions to the newly restarted brokers. In cases of controlled shutdown
-    // leaders will not be elected when a new broker comes up. So at least in the common controlled shutdown case, the
-    // metadata will reach the new brokers faster
-    sendUpdateMetadataRequest(newBrokers)
+    // send update metadata request to all live and shutting down brokers. Old brokers will get to know of the new
+    // broker via this update.
+    // In cases of controlled shutdown leaders will not be elected when a new broker comes up. So at least in the
+    // common controlled shutdown case, the metadata will reach the new brokers faster
+    sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
     // the very first thing to do when a new broker comes up is send it the entire list of partitions that it is
     // supposed to host. Based on that the broker starts the high watermark threads for the input list of partitions
     val allReplicasOnNewBrokers = controllerContext.replicasOnBrokers(newBrokersSet)
@@ -433,6 +435,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
    * 1. Mark partitions with dead leaders as offline
    * 2. Triggers the OnlinePartition state change for all new/offline partitions
    * 3. Invokes the OfflineReplica state change on the input list of newly started brokers
+   * 4. If no partitions are effected then send UpdateMetadataRequest to live or shutting down brokers
    *
    * Note that we don't need to refresh the leader/isr cache for all topic/partitions at this point.  This is because
    * the partition state machine will refresh our cache for us when performing leader election for all new/offline
@@ -463,6 +466,12 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       // deleted when the broker is down. This will prevent the replica from being in TopicDeletionStarted state indefinitely
       // since topic deletion cannot be retried until at least one replica is in TopicDeletionStarted state
       deleteTopicManager.failReplicaDeletion(replicasForTopicsToBeDeleted)
+    }
+
+    // If broker failure did not require leader re-election, inform brokers of failed broker
+    // Note that during leader re-election, brokers update their metadata
+    if (partitionsWithoutLeader.isEmpty) {
+      sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
     }
   }
 
