@@ -7,14 +7,10 @@ import org.apache.kafka.common.utils.Utils;
  */
 public abstract class ProcessorKStreamJob<K, V> implements KStreamJob, Processor<K, V> {
 
-  public static String PROCESSOR_CLASSNAME = "__PROCESSOR_CLASSNAME__";
-
   @SuppressWarnings("unchecked")
   @Override
   public void init(KStreamContext context) {
-    Processor processor = (Processor) Utils.newInstance((Class<? extends Processor>) context.getContext().get(PROCESSOR_CLASSNAME));
-
-    context.from(null).process(processor);
+    context.from(null).process((Processor) this);
   }
 
   @Override
