@@ -26,21 +26,33 @@ public class ProcessorContextImpl implements Processor.ProcessorContext {
 
   @Override
   public String topic() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
+
     return this.streamGroup.record().topic();
   }
 
   @Override
   public int partition() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
+
     return this.streamGroup.record().partition();
   }
 
   @Override
   public long offset() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as offset() should only be called while a record is processed");
+
     return this.streamGroup.record().offset();
   }
 
   @Override
   public long timestamp() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
+
     return this.streamGroup.record().timestamp;
   }
 
