@@ -20,8 +20,8 @@ import static org.junit.Assert.assertTrue;
 
 public class StreamGroupTest {
 
-  private static Serializer serializer = new IntegerSerializer();
-  private static Deserializer deserializer = new IntegerDeserializer();
+  private static Serializer<Integer> serializer = new IntegerSerializer();
+  private static Deserializer<Integer> deserializer = new IntegerDeserializer();
 
   private static class MockKStreamSource extends KStreamSource {
 
@@ -46,6 +46,7 @@ public class StreamGroupTest {
 
   }
 
+  @SuppressWarnings("unchecked")
   @Test
   public void testAddPartition() {
 
@@ -89,15 +90,15 @@ public class StreamGroupTest {
     byte[] recordValue = serializer.serialize(null, new Integer(10));
 
     mockIngestor.addRecords(partition1, records(
-      new ConsumerRecord(partition1.topic(), partition1.partition(), 1, serializer.serialize(partition1.topic(), new Integer(10)), recordValue),
-      new ConsumerRecord(partition1.topic(), partition1.partition(), 2, serializer.serialize(partition1.topic(), new Integer(20)), recordValue)
+      new ConsumerRecord<>(partition1.topic(), partition1.partition(), 1, serializer.serialize(partition1.topic(), new Integer(10)), recordValue),
+      new ConsumerRecord<>(partition1.topic(), partition1.partition(), 2, serializer.serialize(partition1.topic(), new Integer(20)), recordValue)
     ));
 
     mockIngestor.addRecords(partition2, records(
-      new ConsumerRecord(partition2.topic(), partition2.partition(), 1, serializer.serialize(partition1.topic(), new Integer(300)), recordValue),
-      new ConsumerRecord(partition2.topic(), partition2.partition(), 2, serializer.serialize(partition1.topic(), new Integer(400)), recordValue),
-      new ConsumerRecord(partition2.topic(), partition2.partition(), 3, serializer.serialize(partition1.topic(), new Integer(500)), recordValue),
-      new ConsumerRecord(partition2.topic(), partition2.partition(), 4, serializer.serialize(partition1.topic(), new Integer(600)), recordValue)
+      new ConsumerRecord<>(partition2.topic(), partition2.partition(), 1, serializer.serialize(partition1.topic(), new Integer(300)), recordValue),
+      new ConsumerRecord<>(partition2.topic(), partition2.partition(), 2, serializer.serialize(partition1.topic(), new Integer(400)), recordValue),
+      new ConsumerRecord<>(partition2.topic(), partition2.partition(), 3, serializer.serialize(partition1.topic(), new Integer(500)), recordValue),
+      new ConsumerRecord<>(partition2.topic(), partition2.partition(), 4, serializer.serialize(partition1.topic(), new Integer(600)), recordValue)
     ));
 
     streamGroup.process();
@@ -108,9 +109,9 @@ public class StreamGroupTest {
     assertTrue(mockIngestor.paused.contains(partition2));
 
     mockIngestor.addRecords(partition1, records(
-      new ConsumerRecord(partition1.topic(), partition1.partition(), 3, serializer.serialize(partition1.topic(), new Integer(30)), recordValue),
-      new ConsumerRecord(partition1.topic(), partition1.partition(), 4, serializer.serialize(partition1.topic(), new Integer(40)), recordValue),
-      new ConsumerRecord(partition1.topic(), partition1.partition(), 5, serializer.serialize(partition1.topic(), new Integer(50)), recordValue)
+      new ConsumerRecord<>(partition1.topic(), partition1.partition(), 3, serializer.serialize(partition1.topic(), new Integer(30)), recordValue),
+      new ConsumerRecord<>(partition1.topic(), partition1.partition(), 4, serializer.serialize(partition1.topic(), new Integer(40)), recordValue),
+      new ConsumerRecord<>(partition1.topic(), partition1.partition(), 5, serializer.serialize(partition1.topic(), new Integer(50)), recordValue)
     ));
 
     streamGroup.process();
@@ -163,7 +164,7 @@ public class StreamGroupTest {
     assertEquals(stream2.numReceived, 4);
   }
 
-  private List<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
+  private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
     return Arrays.asList(recs);
   }
 }

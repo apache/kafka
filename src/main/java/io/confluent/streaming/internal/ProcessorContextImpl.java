@@ -27,7 +27,7 @@ public class ProcessorContextImpl implements Processor.ProcessorContext {
 
   @Override
   public void send(String topic, Object key, Object value) {
-    this.context.recordCollector().send(new ProducerRecord(topic, key, value));
+    this.context.recordCollector().send(new ProducerRecord<>(topic, key, value));
   }
 
   @Override
@@ -35,7 +35,7 @@ public class ProcessorContextImpl implements Processor.ProcessorContext {
     if (keySerializer == null || valSerializer == null)
       throw new IllegalStateException("key and value serializers must be specified");
 
-    context.recordCollector().send(new ProducerRecord(topic, key, value), keySerializer, valSerializer);
+    context.recordCollector().send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer);
   }
 
   @Override
