@@ -5,7 +5,7 @@ import org.apache.kafka.common.utils.Utils;
 /**
  * Created by guozhang on 7/14/15.
  */
-public class ProcessorKStreamJob implements KStreamJob {
+public abstract class ProcessorKStreamJob<K, V> implements KStreamJob, Processor<K, V> {
 
   public static String PROCESSOR_CLASSNAME = "__PROCESSOR_CLASSNAME__";
 
