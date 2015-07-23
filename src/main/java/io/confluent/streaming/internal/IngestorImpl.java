@@ -15,7 +15,6 @@ public class IngestorImpl implements Ingestor {
 
   private final Consumer<byte[], byte[]> consumer;
   private final Set<TopicPartition> unpaused = new HashSet<>();
-  private final Set<TopicPartition> toBePaused = new HashSet<>();
   private final Map<TopicPartition, StreamGroup> streamSynchronizers = new HashMap<>();
 
   public IngestorImpl(Consumer<byte[], byte[]> consumer) {
@@ -30,11 +29,6 @@ public class IngestorImpl implements Ingestor {
   @Override
   public void poll(long timeoutMs) {
     synchronized (this) {
-      for (TopicPartition partition : toBePaused) {
-        doPause(partition);
-      }
-      toBePaused.clear();
-
       if (!unpaused.isEmpty()) {
         ConsumerRecords<byte[], byte[]> records = consumer.poll(timeoutMs);
 
@@ -52,12 +46,10 @@ public class IngestorImpl implements Ingestor {
 
   @Override
   public void pause(TopicPartition partition) {
-    toBePaused.add(partition);
-  }
-
-  private void doPause(TopicPartition partition) {
-    consumer.seek(partition, Long.MAX_VALUE); // hack: stop consuming from this partition by setting a big offset
-    unpaused.remove(partition);
+    synchronized (this) {
+      consumer.seek(partition, Long.MAX_VALUE); // hack: stop consuming from this partition by setting a big offset
+      unpaused.remove(partition);
+    }
   }
 
   @Override
@@ -91,7 +83,6 @@ public class IngestorImpl implements Ingestor {
 
   public void clear() {
     unpaused.clear();
-    toBePaused.clear();
     streamSynchronizers.clear();
   }
 }
