@@ -142,7 +142,7 @@ public class KStreamContextImpl implements KStreamContext {
         if (!this.topics.contains(topic))
           throw new IllegalArgumentException("topic not subscribed: " + topic);
 
-        if (sourceStreams.get(topic) != null)
+        if (sourceStreams.containsKey(topic))
           throw new IllegalArgumentException("another stream created with the same topic " + topic);
       }
 
@@ -170,12 +170,10 @@ public class KStreamContextImpl implements KStreamContext {
 
       // update source stream map
       for (String topic : fromTopics) {
-        if (!sourceStreams.containsKey(topic))
-          sourceStreams.put(topic, stream);
+        sourceStreams.put(topic, stream);
 
         TopicPartition partition = new TopicPartition(topic, id);
         streamGroup.addPartition(partition, stream);
-        ingestor.addPartitionStreamToGroup(streamGroup, partition);
       }
 
       return stream;
@@ -254,8 +252,15 @@ public class KStreamContextImpl implements KStreamContext {
       this.restoreConsumer = null;
     }
 
+    // add partition -> stream group mappings to the ingestor
+    for (Map.Entry<String, KStreamSource<?,?>> entry : sourceStreams.entrySet()) {
+      TopicPartition partition = new TopicPartition(entry.getKey(), id);
+      StreamGroup streamGroup = entry.getValue().metadata.streamGroup;
+      ingestor.addPartitionStreamToGroup(streamGroup, partition);
+    }
+
     if (!topics.equals(sourceStreams.keySet())) {
-      LinkedList<String> unusedTopics = new LinkedList<String>();
+      LinkedList<String> unusedTopics = new LinkedList<>();
       for (String topic : topics) {
         if (!sourceStreams.containsKey(topic))
           unusedTopics.add(topic);
