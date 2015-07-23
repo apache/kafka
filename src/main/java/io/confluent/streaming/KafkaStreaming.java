@@ -118,7 +118,7 @@ public class KafkaStreaming implements Runnable {
     private final Metrics metrics;
     private final KafkaStreamingMetrics streamingMetrics;
     private final Time time;
-    private final List<Integer> requestingCommit;
+    private volatile boolean requestingCommit = false;
     private final AtomicBoolean started = new AtomicBoolean(false);
     private volatile boolean running;
     private CountDownLatch shutdownComplete = new CountDownLatch(1);
@@ -153,7 +153,6 @@ public class KafkaStreaming implements Runnable {
         this.streamingConfig = config;
         this.metrics = new Metrics();
         this.streamingMetrics = new KafkaStreamingMetrics();
-        this.requestingCommit = new ArrayList<>();
         this.config = new ProcessorConfig(config.config());
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -329,11 +328,10 @@ public class KafkaStreaming implements Runnable {
         if (config.commitTimeMs >= 0 && lastCommit + config.commitTimeMs < time.milliseconds()) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
             commitAll(now);
-        } else {
-            if (!requestingCommit.isEmpty()) {
-                log.trace("Committing processor instances because of user request.");
-                commitRequesting(now);
-            }
+        } else if (requestingCommit) {
+            requestingCommit = false;
+            log.trace("Committing processor instances because of user request.");
+            commitAll(now);
         }
     }
 
@@ -385,33 +383,6 @@ public class KafkaStreaming implements Runnable {
         }
     }
 
-    private void commitRequesting(long now) {
-        Map<TopicPartition, Long> commit = new HashMap<>(requestingCommit.size());
-        for (Integer id : requestingCommit) {
-            KStreamContextImpl context = kstreamContexts.get(id);
-            context.flush();
-
-            for (StreamGroup streamGroup : streamSynchronizersForPartition.get(id)) {
-                commit.putAll(streamGroup.consumedOffsets()); // TODO: can this be async?
-            }
-        }
-
-        // check if commit is really needed, i.e. if all the offsets are already committed
-        boolean commitNeeded = false;
-        for (TopicPartition tp : commit.keySet()) {
-            if (consumer.committed(tp) != commit.get(tp)) {
-                commitNeeded = true;
-                break;
-            }
-        }
-
-        if (commitNeeded) {
-            consumer.commit(commit, CommitType.SYNC); // TODO: can this be async?
-            requestingCommit.clear();
-            streamingMetrics.commitTime.record(time.milliseconds() - now);
-        }
-    }
-
     /* delete any state dirs that aren't for active contexts */
     private void maybeCleanState() {
         long now = time.milliseconds();
@@ -451,12 +422,12 @@ public class KafkaStreaming implements Runnable {
 
                 Coordinator coordinator = new Coordinator() {
                     @Override
-                    public void commit(Coordinator.RequestScope scope) {
-                        requestingCommit.add(id);
+                    public void commit() {
+                        requestingCommit = true;
                     }
 
                     @Override
-                    public void shutdown(Coordinator.RequestScope scope) {
+                    public void shutdown() {
                         running = true;
                     }
                 };

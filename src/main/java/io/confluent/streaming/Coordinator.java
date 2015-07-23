@@ -27,55 +27,19 @@ package io.confluent.streaming;
 public interface Coordinator {
 
     /**
-     * Requests that the stream processor flush all it's state as well as any buffered output and commit the offsets.
-     *
-     * <p>
-     * If <code>CURRENT_TASK</code> is given, a checkpoint is only written for the current task. If
-     * <code>ALL_TASKS_IN_CONTAINER</code> is given, a checkpoint is written for all tasks in the current container.
+     * Requests that the framework to flush all it's state as well as any buffered output and commit the offsets.
      *
      * <p>
      * Note that if you also have also configured your job to commit in regular intervals (using the
      * <code>task.commit.ms</code> property), those time-based commits are not affected by calling this method. Any
      * commits you request explicitly are in addition to timer-based commits. You can set <code>task.commit.ms=-1</code>
      * if you don't want commits to happen automatically.
-     *
-     * @param scope Which tasks are being asked to commit.
      */
-    public void commit(RequestScope scope);
+    void commit();
 
     /**
-     * Requests that the container should be shut down.
-     *
-     * <p>
-     * If <code>CURRENT_TASK</code> is given, that indicates a willingness of the current task to shut down. All tasks
-     * in the container (including the one that requested shutdown) will continue processing messages. Only when every
-     * task in the container has called <code>shutdown(CURRENT_TASK)</code>, the container is shut down. Once a task has
-     * called <code>shutdown(CURRENT_TASK)</code>, it cannot change its mind (i.e. it cannot revoke its willingness to
-     * shut down).
-     *
-     * <p>
-     * If <code>ALL_TASKS_IN_CONTAINER</code> is given, the container will shut down immediately after it has finished
-     * processing the current message. Any buffers of pending writes are flushed, but no further messages will be
-     * processed in this container.
-     *
-     * @param scope The approach we should use for shutting down the container.
+     * Requests that the framework to shut down.
      */
-    public void shutdown(RequestScope scope);
+    void shutdown();
 
-    /**
-     * A task can make requests to the Samza framework while processing messages, such as
-     * {@link Coordinator#commit(RequestScope)} and {@link Coordinator#shutdown(RequestScope)}. This enum is used to
-     * indicate whether those requests apply only to the current task, or to all tasks in the current container.
-     */
-    public enum RequestScope {
-        /**
-         * Indicates that a request applies only to the task making the call.
-         */
-        CURRENT_TASK,
-
-        /**
-         * Indicates that a request applies to all tasks in the current container.
-         */
-        ALL_TASKS_IN_CONTAINER;
-    }
 }
