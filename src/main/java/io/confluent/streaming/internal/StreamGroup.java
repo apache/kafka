@@ -86,7 +86,7 @@ public class StreamGroup implements ParallelExecutor.Task {
    */
   public void mergeStreamGroup(StreamGroup other) {
     // check these groups have the same ingestor
-    if (ingestor == other.ingestor)
+    if (ingestor != other.ingestor)
       throw new IllegalArgumentException("groups with different ingestors cannot be merged");
 
     // check these group have the same chooser and time extractor types
