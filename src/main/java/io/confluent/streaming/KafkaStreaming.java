@@ -99,10 +99,13 @@ public class KafkaStreaming implements Runnable {
     private final Set<String> topics;
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     private final Map<Integer, Collection<SyncGroup>> syncGroups = new HashMap<>();
     private final ArrayList<StreamSynchronizer<?, ?>> streamSynchronizers = new ArrayList<>();
 =======
     private final Map<Integer, Collection<StreamGroup>> streamSynchronizersForPartition = new HashMap<>();
+=======
+>>>>>>> remove unused member variable
     private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
 >>>>>>> remove SyncGroup from user facing APIs
     private final ParallelExecutor parallelExecutor;
@@ -251,10 +254,13 @@ public class KafkaStreaming implements Runnable {
         consumer.close();
         parallelExecutor.shutdown();
 <<<<<<< HEAD
+<<<<<<< HEAD
         syncGroups.clear();
         streamSynchronizers.clear();
 =======
         streamSynchronizersForPartition.clear();
+=======
+>>>>>>> remove unused member variable
         streamGroups.clear();
 >>>>>>> remove SyncGroup from user facing APIs
         shutdownComplete.countDown();
@@ -452,7 +458,6 @@ public class KafkaStreaming implements Runnable {
                     streamSynchronizers.add(syncGroup.streamSynchronizer);
 =======
                 Collection<StreamGroup> streamGroups = kstreamContext.streamSynchronizers();
-                this.streamSynchronizersForPartition.put(id, streamGroups);
                 for (StreamGroup streamGroup : streamGroups) {
                     streamGroups.add(streamGroup);
 >>>>>>> remove SyncGroup from user facing APIs
