@@ -127,7 +127,6 @@ public class KStreamContextImpl implements KStreamContext {
   private <K, V> KStream<K, V> from(StreamGroup streamGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
     if (streamGroup == null) throw new IllegalArgumentException("unspecified stream group");
 
-    KStreamSource<K, V> stream = null;
     Set<String> fromTopics;
 
     synchronized (this) {
@@ -143,65 +142,40 @@ public class KStreamContextImpl implements KStreamContext {
         if (!this.topics.contains(topic))
           throw new IllegalArgumentException("topic not subscribed: " + topic);
 
-        KStreamSource<K, V> streamForTopic = (KStreamSource<K, V>) sourceStreams.get(topic);
-
-        if (stream == null) {
-          if (streamForTopic != null)
-            stream = streamForTopic;
-        } else {
-          if (streamForTopic != null) {
-            if (!stream.equals(streamForTopic))
-              throw new IllegalArgumentException("another stream created with the same topic " + topic);
-          } else {
-            sourceStreams.put(topic, stream);
-          }
-        }
+        if (sourceStreams.get(topic) != null)
+          throw new IllegalArgumentException("another stream created with the same topic " + topic);
       }
 
-      // if there is no stream for any of the topics, create one
-      if (stream == null) {
-        // create stream metadata
-        Map<String, PartitioningInfo> topicPartitionInfos = new HashMap<>();
-        for (String topic : fromTopics) {
-          PartitioningInfo partitioningInfo = this.partitioningInfos.get(topic);
+      // create stream metadata
+      Map<String, PartitioningInfo> topicPartitionInfos = new HashMap<>();
+      for (String topic : fromTopics) {
+        PartitioningInfo partitioningInfo = this.partitioningInfos.get(topic);
 
-          if (partitioningInfo == null) {
-            partitioningInfo = new PartitioningInfo(ingestor.numPartitions(topic));
-            this.partitioningInfos.put(topic, partitioningInfo);
-          }
-
-          topicPartitionInfos.put(topic, partitioningInfo);
+        if (partitioningInfo == null) {
+          partitioningInfo = new PartitioningInfo(ingestor.numPartitions(topic));
+          this.partitioningInfos.put(topic, partitioningInfo);
         }
 
-        KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, topicPartitionInfos);
+        topicPartitionInfos.put(topic, partitioningInfo);
+      }
+      KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, topicPartitionInfos);
 
-        // override the deserializer classes if specified
-        stream = new KStreamSource<>(
-          streamMetadata,
-          this,
-          (Deserializer<K>) (keyDeserializer == null ? keyDeserializer() : keyDeserializer),
-          (Deserializer<V>) (valDeserializer == null ? valueDeserializer() : valDeserializer)
-        );
+      // override the deserializer classes if specified
+      KStreamSource<K, V> stream = new KStreamSource<>(
+        streamMetadata,
+        this,
+        (Deserializer<K>) (keyDeserializer == null ? keyDeserializer() : keyDeserializer),
+        (Deserializer<V>) (valDeserializer == null ? valueDeserializer() : valDeserializer)
+      );
 
-        // update source stream map
-        for (String topic : fromTopics) {
-          if (!sourceStreams.containsKey(topic))
-            sourceStreams.put(topic, stream);
+      // update source stream map
+      for (String topic : fromTopics) {
+        if (!sourceStreams.containsKey(topic))
+          sourceStreams.put(topic, stream);
 
-          TopicPartition partition = new TopicPartition(topic, id);
-          streamGroup.addPartition(partition, stream);
-          ingestor.addPartitionStreamToGroup(streamGroup, partition);
-        }
-      } else {
-        if (stream.metadata.streamGroup == streamGroup)
-          throw new IllegalStateException("topic is already assigned a different synchronization group");
-
-        // TODO: with this constraint we will not allow users to create KStream with different
-        // deser from the same topic, this constraint may better be relaxed later.
-        if (keyDeserializer != null && !keyDeserializer.getClass().equals(this.keyDeserializer().getClass()))
-          throw new IllegalStateException("another source stream with the same topic but different key deserializer is already created");
-        if (valDeserializer != null && !valDeserializer.getClass().equals(this.valueDeserializer().getClass()))
-          throw new IllegalStateException("another source stream with the same topic but different value deserializer is already created");
+        TopicPartition partition = new TopicPartition(topic, id);
+        streamGroup.addPartition(partition, stream);
+        ingestor.addPartitionStreamToGroup(streamGroup, partition);
       }
 
       return stream;
