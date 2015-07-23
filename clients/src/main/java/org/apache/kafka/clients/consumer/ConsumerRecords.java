@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -76,6 +77,13 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         for (List<ConsumerRecord<K, V>> recs: this.records.values())
             count += recs.size();
         return count;
+    }
+
+    /**
+     * Get partitions of records returned by a {@link Consumer#poll(long)} operation
+     */
+    public Set<TopicPartition> partitions() {
+        return Collections.unmodifiableSet(this.records.keySet());
     }
 
     private static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {
