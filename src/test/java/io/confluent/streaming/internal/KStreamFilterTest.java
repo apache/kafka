@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.testutil.MockIngestor;
+import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
@@ -40,11 +41,12 @@ public class KStreamFilterTest {
   public void testFilter() {
     final int[] expectedKeys = new int[] { 1, 2, 3, 4, 5, 6, 7 };
 
+    KStreamContext context = new MockKStreamContext(null, null);
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, String> processor;
 
     processor = new TestProcessor<>();
-    stream = new KStreamSource<>(streamMetadata, null, null, null);
+    stream = new KStreamSource<>(streamMetadata, context, null, null);
     stream.filter(isMultipleOfThree).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
@@ -58,11 +60,12 @@ public class KStreamFilterTest {
   public void testFilterOut() {
     final int[] expectedKeys = new int[] { 1, 2, 3, 4, 5, 6, 7 };
 
+    KStreamContext context = new MockKStreamContext(null, null);
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, String> processor;
 
     processor = new TestProcessor<>();
-    stream = new KStreamSource<>(streamMetadata, null, null, null);
+    stream = new KStreamSource<>(streamMetadata, context, null, null);
     stream.filterOut(isMultipleOfThree).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {

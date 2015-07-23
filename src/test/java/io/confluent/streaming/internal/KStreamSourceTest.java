@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 import io.confluent.streaming.*;
 
 import io.confluent.streaming.testutil.MockIngestor;
+import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
@@ -33,9 +34,10 @@ public class KStreamSourceTest {
   @Test
   public void testKStreamSource() {
 
+    KStreamContext context = new MockKStreamContext(null, null);
     TestProcessor<String, String> processor = new TestProcessor<>();
 
-    KStreamSource<String, String> stream = new KStreamSource<>(streamMetadata, null, null, null);
+    KStreamSource<String, String> stream = new KStreamSource<>(streamMetadata, context, null, null);
     stream.process(processor);
 
     final String[] expectedKeys = new String[] { "k1", "k2", "k3" };

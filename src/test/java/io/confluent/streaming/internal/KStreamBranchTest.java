@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.testutil.MockIngestor;
+import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 

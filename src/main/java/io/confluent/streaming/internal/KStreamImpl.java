@@ -23,6 +23,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   final KStreamContext context;
 
   protected KStreamImpl(KStreamMetadata metadata, KStreamContext context) {
+    context.ensureInitialization();
     this.metadata = metadata;
     this.context = context;
   }

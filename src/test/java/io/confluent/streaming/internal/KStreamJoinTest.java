@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.testutil.MockIngestor;
+import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.TestProcessor;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import io.confluent.streaming.util.Util;
@@ -82,9 +83,10 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
+    KStreamContext context = new MockKStreamContext(null, null);
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
     windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
     windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
@@ -166,9 +168,10 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
+    KStreamContext context = new MockKStreamContext(null, null);
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
     windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
     windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
@@ -244,9 +247,10 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
+    KStreamContext context = new MockKStreamContext(null, null);
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
     mapped1 = stream1.map(keyValueMapper);
     mapped2 = stream2.map(keyValueMapper);
 
@@ -299,9 +303,10 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
+    KStreamContext context = new MockKStreamContext(null, null);
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
     mapped1 = stream1.flatMap(keyValueMapper2);
     mapped2 = stream2.flatMap(keyValueMapper2);
 
@@ -354,9 +359,10 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
+    KStreamContext context = new MockKStreamContext(null, null);
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
     mapped1 = stream1.mapValues(valueMapper);
     mapped2 = stream2.mapValues(valueMapper);
 
@@ -409,9 +415,10 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
+    KStreamContext context = new MockKStreamContext(null, null);
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, null, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, null, null, null);
+    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
+    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
     mapped1 = stream1.flatMapValues(valueMapper2);
     mapped2 = stream2.flatMapValues(valueMapper2);
 

@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.testutil.MockIngestor;
+import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import org.junit.Test;
 
@@ -37,10 +38,10 @@ public class KStreamWindowedTest {
 
     KStreamSource<Integer, String> stream;
     Window<Integer, String> window;
-    String[] expected;
+    KStreamContext context = new MockKStreamContext(null, null);
 
     window = new UnlimitedWindow<>();
-    stream = new KStreamSource<>(streamMetadata, null, null, null);
+    stream = new KStreamSource<>(streamMetadata, context, null, null);
     stream.with(window);
 
     boolean exceptionRaised = false;

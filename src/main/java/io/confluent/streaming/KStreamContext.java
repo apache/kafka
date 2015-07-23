@@ -121,7 +121,12 @@ public interface KStreamContext {
   void restore(StorageEngine engine) throws Exception;
 
   /**
-   * Flush the local state of this context
+   * Ensures that the context is in the initialization phase where KStream topology can be constructed
    */
+  void ensureInitialization();
+
+    /**
+     * Flush the local state of this context
+     */
   void flush();
 }

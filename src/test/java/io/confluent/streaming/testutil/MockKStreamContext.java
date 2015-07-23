@@ -1,4 +1,4 @@
-package io.confluent.streaming.internal;
+package io.confluent.streaming.testutil;
 
 
 import io.confluent.streaming.KStream;
@@ -6,6 +6,7 @@ import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StorageEngine;
 import io.confluent.streaming.Coordinator;
+import io.confluent.streaming.internal.StreamGroup;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -70,6 +71,9 @@ public class MockKStreamContext implements KStreamContext {
 
   @Override
   public void restore(StorageEngine engine) throws Exception { throw new UnsupportedOperationException("restore() not supported."); }
+
+  @Override
+  public void ensureInitialization() {}
 
   @Override
   public void flush() { throw new UnsupportedOperationException("flush() not supported."); }

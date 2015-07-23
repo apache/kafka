@@ -86,7 +86,7 @@ public class StreamGroup implements ParallelExecutor.Task {
    */
   public void mergeStreamGroup(StreamGroup other) {
     // check these groups have the same ingestor
-    if (!this.ingestor.equals(other.ingestor))
+    if (ingestor == other.ingestor)
       throw new IllegalArgumentException("groups with different ingestors cannot be merged");
 
     // check these group have the same chooser and time extractor types
@@ -97,15 +97,7 @@ public class StreamGroup implements ParallelExecutor.Task {
       throw new IllegalArgumentException("groups with different type of time extractors cannot be merged");
 
     // add all the other's groups partitions
-    for (TopicPartition partition : other.stash.keySet()) {
-      this.stash.put(partition, other.stash.get(partition));
-      this.consumedOffsets.put(partition, other.consumedOffsets.get(partition));
-    }
-
-    // add all the other's buffered records
-    for (NewRecords records : other.newRecordBuffer) {
-      this.newRecordBuffer.addLast(records);
-    }
+    this.stash.putAll(stash);
   }
 
   /**

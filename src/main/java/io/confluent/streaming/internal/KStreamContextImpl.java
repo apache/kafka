@@ -125,6 +125,8 @@ public class KStreamContextImpl implements KStreamContext {
 
   @SuppressWarnings("unchecked")
   private <K, V> KStream<K, V> from(StreamGroup streamGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+    ensureInitialization();
+
     if (streamGroup == null) throw new IllegalArgumentException("unspecified stream group");
 
     Set<String> fromTopics;
@@ -232,11 +234,16 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
   public void restore(StorageEngine engine) throws Exception {
-    if (restoreConsumer == null) throw new IllegalStateException();
+    ensureInitialization();
 
     stateMgr.registerAndRestore(collector, restoreConsumer, engine);
   }
 
+  @Override
+  public void ensureInitialization() {
+    if (restoreConsumer != null)
+      throw new IllegalStateException("context initialization is already finished");
+  }
 
   public Collection<StreamGroup> streamSynchronizers() {
     return streamGroups.values();
