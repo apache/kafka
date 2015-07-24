@@ -106,4 +106,19 @@
 		<allow pkg="org.apache.kafka" />
 	</subpackage>
 
+	<subpackage name="copycat">
+		<allow pkg="org.apache.kafka.copycat.data" />
+		<allow pkg="org.apache.kafka.copycat.errors" />
+
+		<subpackage name="source">
+			<allow pkg="org.apache.kafka.copycat.connector" />
+			<allow pkg="org.apache.kafka.copycat.storage" />
+		</subpackage>
+
+		<subpackage name="sink">
+			<allow pkg="org.apache.kafka.copycat.connector" />
+			<allow pkg="org.apache.kafka.copycat.storage" />
+		</subpackage>
+	</subpackage>
+
 </import-control>
