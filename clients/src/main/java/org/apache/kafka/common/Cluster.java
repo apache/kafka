@@ -203,7 +203,8 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
-        return this.partitionsByTopic.get(topic);
+        List<PartitionInfo> parts = this.partitionsByTopic.get(topic);
+        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
     }
 
     /**
@@ -222,7 +223,8 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> availablePartitionsForTopic(String topic) {
-        return this.availablePartitionsByTopic.get(topic);
+        List<PartitionInfo> parts = this.availablePartitionsByTopic.get(topic);
+        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
     }
 
     /**
@@ -231,7 +233,8 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
-        return this.partitionsByNode.get(nodeId);
+        List<PartitionInfo> parts = this.partitionsByNode.get(nodeId);
+        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
     }
 
     /**

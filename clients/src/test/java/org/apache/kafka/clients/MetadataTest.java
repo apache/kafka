@@ -408,7 +408,7 @@ public class MetadataTest {
     private Thread asyncFetch(final String topic, final long maxWaitMs) {
         Thread thread = new Thread() {
             public void run() {
-                while (metadata.fetch().partitionsForTopic(topic) == null) {
+                while (metadata.fetch().partitionsForTopic(topic).isEmpty()) {
                     try {
                         metadata.awaitUpdate(metadata.requestUpdate(), maxWaitMs);
                     } catch (Exception e) {
