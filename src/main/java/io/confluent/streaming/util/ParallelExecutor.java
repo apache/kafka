@@ -41,7 +41,7 @@ public class ParallelExecutor {
   /**
    * Executes tasks in parallel. While this method is executing, other execute call will be blocked.
    * @param tasks a list of tasks executed in parallel
-   * @return boolean true if all tasks are ready for next execution
+   * @return boolean true if at least one task is ready for next execution, otherwise false
    * @throws Exception an exception thrown by a failed task
    */
   public boolean execute(ArrayList<? extends Task> tasks) throws Exception {
@@ -49,7 +49,7 @@ public class ParallelExecutor {
       try {
         int numTasks = tasks.size();
         exception = null;
-        readyForNextExecution = true;
+        readyForNextExecution = false;
         if (numTasks > 0) {
           this.tasks = tasks;
           this.latch = new CountDownLatch(numTasks);
@@ -95,8 +95,8 @@ public class ParallelExecutor {
     int index = taskIndex.decrementAndGet();
     if (index >= 0) {
       try {
-        if (!tasks.get(index).process())
-          this.readyForNextExecution = false;
+        if (tasks.get(index).process())
+          this.readyForNextExecution = true;
       }
       catch (Exception ex) {
         exception = ex;
