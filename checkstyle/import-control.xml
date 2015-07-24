@@ -119,6 +119,49 @@
 			<allow pkg="org.apache.kafka.copycat.connector" />
 			<allow pkg="org.apache.kafka.copycat.storage" />
 		</subpackage>
+
+		<subpackage name="avro">
+			<allow pkg="org.apache.avro" />
+			<allow pkg="org.apache.kafka.copycat" />
+			<!-- FIXME/move Avro plugin out of Kafka -->
+			<allow pkg="io.confluent.kafka.serializers" />
+			<allow pkg="io.confluent.kafka.schemaregistry" />
+		</subpackage>
+
+		<subpackage name="runtime">
+			<allow pkg="org.apache.kafka.copycat" />
+			<allow pkg="org.apache.kafka.common" />
+			<allow pkg="org.apache.kafka.clients" />
+			<!-- for tests -->
+			<allow pkg="org.easymock" />
+			<allow pkg="org.powermock" />
+
+			<!-- FIXME Remove when dependency on core for sink partition assignment is removed -->
+			<allow pkg="kafka.utils" />
+			<allow pkg="org.I0Itec.zkclient" />
+		</subpackage>
+
+		<subpackage name="cli">
+			<allow pkg="org.apache.kafka.copycat.runtime" />
+			<allow pkg="org.apache.kafka.copycat.util" />
+			<allow pkg="org.apache.kafka.common" />
+		</subpackage>
+
+		<subpackage name="storage">
+			<allow pkg="org.apache.kafka.copycat" />
+			<!-- for tests -->
+			<allow pkg="org.easymock" />
+			<allow pkg="org.powermock" />
+		</subpackage>
+
+		<subpackage name="util">
+			<allow pkg="org.apache.kafka.copycat" />
+
+			<!-- FIXME Remove when dependency on core for sink partition assignment is removed -->
+			<allow pkg="kafka.utils" />
+			<allow pkg="org.I0Itec.zkclient" />
+			<allow pkg="scala" />
+		</subpackage>
 	</subpackage>
 
 </import-control>

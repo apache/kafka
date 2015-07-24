@@ -33,6 +33,7 @@ allprojects {
   apply plugin: 'idea'
   repositories {
     mavenCentral()
+    mavenLocal() // FIXME Currently required to get io.confluent:kafka-avro-serializer:2.0-SNAPSHOT
   }
 }
 
@@ -239,7 +240,7 @@ project(':core') {
     }
 
     testCompile 'junit:junit:4.6'
-    testCompile 'org.easymock:easymock:3.0'
+    testCompile 'org.easymock:easymock:3.3.1'
     testCompile 'org.objenesis:objenesis:1.2'
     testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
 
@@ -514,7 +515,7 @@ project(':copycat-api') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/api/*"
+    include "**/org/apache/kafka/copycat/*"
   }
 
   artifacts {
@@ -525,9 +526,103 @@ project(':copycat-api') {
     archives.extendsFrom (testCompile)
   }
 
-  /* FIXME
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }
-  test.dependsOn('checkstyleMain', 'checkstyleTest') */
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':copycat-avro') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "copycat-avro"
+
+  dependencies {
+    compile project(':copycat-api')
+    compile "org.slf4j:slf4j-api:1.7.6"
+    compile "io.confluent:kafka-avro-serializer:2.0-SNAPSHOT"
+
+    testCompile 'junit:junit:4.6'
+    testCompile 'org.easymock:easymock:3.3.1'
+    testCompile 'org.powermock:powermock-module-junit4:1.6.2'
+    testCompile 'org.powermock:powermock-api-easymock:1.6.2'
+    testRuntime "$slf4jlog4j"
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/copycat/*"
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom(testCompile)
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':copycat-runtime') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "copycat-runtime"
+
+  dependencies {
+    compile project(':copycat-api')
+    compile project(':copycat-avro')
+    compile project(':clients')
+    compile "org.slf4j:slf4j-api:1.7.6"
+    // FIXME we shouldn't depend on core since we only need clients, but currently we're doing sink task topic-partition assignment manually until we switch over to new consumer group functionality
+    compile project(':core')
+
+    testCompile 'junit:junit:4.6'
+    testCompile 'org.easymock:easymock:3.3.1'
+    testCompile 'org.powermock:powermock-module-junit4:1.6.2'
+    testCompile 'org.powermock:powermock-api-easymock:1.6.2'
+    testRuntime "$slf4jlog4j"
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/copycat/*"
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom(testCompile)
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }

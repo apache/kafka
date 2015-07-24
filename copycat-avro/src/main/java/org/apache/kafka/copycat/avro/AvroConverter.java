@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,24 +15,21 @@
  * limitations under the License.
  **/
 
-package org.apache.kafka.copycat.util;
+package org.apache.kafka.copycat.avro;
 
-import org.junit.Test;
+import org.apache.kafka.copycat.storage.Converter;
 
-import java.util.Arrays;
-import java.util.Collections;
+/**
+ * Implementation of Converter that uses Avro schemas and objects.
+ */
+public class AvroConverter implements Converter {
+    @Override
+    public Object fromCopycatData(Object value) {
+        return AvroData.convertToAvro(value);
+    }
 
-import static org.junit.Assert.assertEquals;
-
-public class StringUtilsTest {
-
-    @Test
-    public void testJoin() {
-        assertEquals("", StringUtils.join(Collections.EMPTY_LIST, ""));
-        assertEquals("", StringUtils.join(Collections.EMPTY_LIST, ","));
-
-        assertEquals("ab", StringUtils.join(Arrays.asList("a", "b"), ""));
-
-        assertEquals("a,b,c", StringUtils.join(Arrays.asList("a", "b", "c"), ","));
+    @Override
+    public Object toCopycatData(Object value) {
+        return AvroData.convertFromAvro(value);
     }
 }
