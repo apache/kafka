@@ -61,6 +61,7 @@ object ZkUtils extends Logging {
 
   val isSecure: Boolean = {
     val loginConfigurationFile: String = System.getProperty("java.security.auth.login.config")
+    var isSecurityEnabled  = false
     if (loginConfigurationFile != null && loginConfigurationFile.length > 0) {
       val config_file: File = new File(loginConfigurationFile)
       if (!config_file.canRead) {
@@ -69,14 +70,14 @@ object ZkUtils extends Logging {
       try {
         val config_uri: URI = config_file.toURI
         val login_conf = Configuration.getInstance("JavaLoginConfig", new URIParameter(config_uri))
-        login_conf.getAppConfigurationEntry("Client") != null
+        isSecurityEnabled = login_conf.getAppConfigurationEntry("Client") != null
       } catch {
         case ex: Exception => {
           throw new KafkaException(ex)
         }
       }
     }
-    false
+    isSecurityEnabled
   }
 
   val DefaultAcls: List[ACL] = if (isSecure) {
