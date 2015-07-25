@@ -64,7 +64,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   this.logIdent = "[Socket Server on Broker " + config.brokerId + "], "
 
   val requestChannel = new RequestChannel(totalProcessorThreads, maxQueuedRequests)
-  val processors = new Array[Processor](totalProcessorThreads)
+  private val processors = new Array[Processor](totalProcessorThreads)
 
   private[network] var acceptors =  mutable.Map[EndPoint,Acceptor]()
 

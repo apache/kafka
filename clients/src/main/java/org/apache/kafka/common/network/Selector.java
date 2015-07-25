@@ -217,9 +217,9 @@ public class Selector implements Selectable {
      */
     public void send(Send send) {
         KafkaChannel channel = channelForId(send.destination());
-        if (channel == null) {
+        if (channel == null)
             throw new IllegalStateException("channel is not connected");
-        }
+
         try {
             channel.setSend(send);
         } catch (CancelledKeyException e) {

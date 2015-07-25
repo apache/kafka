@@ -157,6 +157,7 @@ public class SSLTransportLayer implements TransportLayer {
     /**
      * returns true if there are any pending contents in netWriteBuffer
      */
+    @Override
     public boolean hasPendingWrites() {
         return netWriteBuffer.remaining() != 0;
     }
@@ -198,6 +199,7 @@ public class SSLTransportLayer implements TransportLayer {
     *
     * @throws IOException
     */
+    @Override
     public void handshake() throws IOException {
         boolean read = key.isReadable();
         boolean write = key.isWritable();
@@ -231,8 +233,7 @@ public class SSLTransportLayer implements TransportLayer {
                     log.trace("SSLHandshake NEED_WRAP handshakeStatus ", channelId, handshakeResult);
                     //if handshake status is not NEED_UNWRAP or unable to flush netWriteBuffer contents
                     //we will break here otherwise we can do need_unwrap in the same call.
-
-                    if (handshakeStatus != HandshakeStatus.NEED_UNWRAP ||  (!write && !flush(netWriteBuffer))) {
+                    if (handshakeStatus != HandshakeStatus.NEED_UNWRAP || (!write && !flush(netWriteBuffer))) {
                         key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
                         break;
                     }
@@ -309,9 +310,11 @@ public class SSLTransportLayer implements TransportLayer {
             log.trace("SSLHandshake FINISHED", channelId);
             //we are complete if we have delivered the last package
             handshakeComplete = !netWriteBuffer.hasRemaining();
-            //set interestOps if we are complete, otherwise we still have data to write
+            //remove OP_WRITE if we are complete, otherwise we still have data to write
             if (!handshakeComplete)
                 key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
+            else
+                key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
         } else {
             throw new IOException("NOT_HANDSHAKING during handshake");
         }
@@ -379,8 +382,6 @@ public class SSLTransportLayer implements TransportLayer {
 
         return result;
     }
-
-
 
 
     /**
@@ -602,6 +603,7 @@ public class SSLTransportLayer implements TransportLayer {
      * Adds interestOps to SelectionKey of the TransportLayer
      * @param ops SelectionKey interestOps
      */
+    @Override
     public void addInterestOps(int ops) {
         if (!key.isValid())
             throw new CancelledKeyException();
@@ -615,6 +617,7 @@ public class SSLTransportLayer implements TransportLayer {
      * removes interestOps to SelectionKey of the TransportLayer
      * @param ops SelectionKey interestOps
      */
+    @Override
     public void removeInterestOps(int ops) {
         if (!key.isValid())
             throw new CancelledKeyException();
@@ -667,6 +670,7 @@ public class SSLTransportLayer implements TransportLayer {
         }
     }
 
+    @Override
     public boolean isMute() {
         return  key.isValid() && (key.interestOps() & SelectionKey.OP_READ) == 0;
     }

@@ -96,6 +96,7 @@ public class PlainTextTransportLayer implements TransportLayer {
      * implementation
      * @throws IOException
     */
+    @Override
     public void handshake() throws IOException {}
 
     /**
@@ -173,11 +174,11 @@ public class PlainTextTransportLayer implements TransportLayer {
         return socketChannel.write(srcs, offset, length);
     }
 
-
     /**
      * always returns false as there will be not be any
-     * pending writes
+     * pending writes since we directly write to socketChannel.
      */
+    @Override
     public boolean hasPendingWrites() {
         return false;
     }
@@ -185,6 +186,7 @@ public class PlainTextTransportLayer implements TransportLayer {
     /**
      * Returns ANONYMOUS as Principal.
      */
+    @Override
     public Principal peerPrincipal() throws IOException {
         return principal;
     }
@@ -193,6 +195,7 @@ public class PlainTextTransportLayer implements TransportLayer {
      * Adds the interestOps to selectionKey.
      * @param interestOps
      */
+    @Override
     public void addInterestOps(int ops) {
         key.interestOps(key.interestOps() | ops);
 
@@ -202,10 +205,12 @@ public class PlainTextTransportLayer implements TransportLayer {
      * Removes the interestOps from selectionKey.
      * @param interestOps
      */
+    @Override
     public void removeInterestOps(int ops) {
         key.interestOps(key.interestOps() & ~ops);
     }
 
+    @Override
     public boolean isMute() {
         return key.isValid() && (key.interestOps() & SelectionKey.OP_READ) == 0;
     }
