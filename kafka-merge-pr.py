@@ -95,8 +95,9 @@ def continue_maybe(prompt):
         fail("Okay, exiting")
 
 def clean_up():
-    print "Restoring head pointer to %s" % original_head
-    run_cmd("git checkout %s" % original_head)
+    if original_head != get_current_branch():
+        print "Restoring head pointer to %s" % original_head
+        run_cmd("git checkout %s" % original_head)
 
     branches = run_cmd("git branch").replace(" ", "").split("\n")
 
@@ -104,6 +105,8 @@ def clean_up():
         print "Deleting local branch %s" % branch
         run_cmd("git branch -D %s" % branch)
 
+def get_current_branch():
+    return run_cmd("git rev-parse --abbrev-ref HEAD").replace("\n", "")
 
 # merge the requested PR and return the merge hash
 def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
@@ -127,7 +130,15 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
                              '--pretty=format:%an <%ae>']).split("\n")
     distinct_authors = sorted(set(commit_authors),
                               key=lambda x: commit_authors.count(x), reverse=True)
-    primary_author = distinct_authors[0]
+    primary_author = raw_input(
+        "Enter primary author in the format of \"name <email>\" [%s]: " %
+        distinct_authors[0])
+    if primary_author == "":
+        primary_author = distinct_authors[0]
+
+    reviewers = raw_input(
+        "Enter reviewers in the format of \"name1 <email1>, name2 <email2>\": ").strip()
+
     commits = run_cmd(['git', 'log', 'HEAD..%s' % pr_branch_name,
                       '--pretty=format:%h [%an] %s']).split("\n\n")
 
@@ -142,6 +153,9 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
     authors = "\n".join(["Author: %s" % a for a in distinct_authors])
 
     merge_message_flags += ["-m", authors]
+
+    if (reviewers != ""):
+        merge_message_flags += ["-m", "Reviewers: %s" % reviewers]
 
     if had_conflicts:
         committer_name = run_cmd("git config --get user.name").strip()
@@ -275,7 +289,10 @@ def resolve_jira_issue(merge_branches, comment, default_jira_id=""):
     jira_fix_versions = map(lambda v: get_version_json(v), fix_versions)
 
     resolve = filter(lambda a: a['name'] == "Resolve Issue", asf_jira.transitions(jira_id))[0]
-    asf_jira.transition_issue(jira_id, resolve["id"], fixVersions=jira_fix_versions, comment=comment)
+    resolution = filter(lambda r: r.raw['name'] == "Fixed", asf_jira.resolutions())[0]
+    asf_jira.transition_issue(
+        jira_id, resolve["id"], fixVersions = jira_fix_versions,
+        comment = comment, resolution = {'id': resolution.raw['id']})
 
     print "Successfully resolved %s with fixVersions=%s!" % (jira_id, fix_versions)
 
@@ -350,7 +367,7 @@ def standardize_jira_ref(text):
 def main():
     global original_head
 
-    original_head = run_cmd("git rev-parse HEAD")[:8]
+    original_head = get_current_branch()
 
     branches = get_json("%s/branches" % GITHUB_API_BASE)
     branch_names = filter(lambda x: x.startswith(RELEASE_BRANCH_PREFIX), [x['name'] for x in branches])
@@ -432,11 +449,13 @@ def main():
             print "JIRA_USERNAME and JIRA_PASSWORD not set"
             print "Exiting without trying to close the associated JIRA."
     else:
-        print "Could not find jira-python library. Run 'sudo pip install jira-python' to install."
+        print "Could not find jira-python library. Run 'sudo pip install jira' to install."
         print "Exiting without trying to close the associated JIRA."
 
 if __name__ == "__main__":
     import doctest
-    doctest.testmod()
+    (failure_count, test_count) = doctest.testmod()
+    if (failure_count):
+        exit(-1)
 
     main()

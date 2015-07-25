@@ -43,4 +43,26 @@ object Topic {
       case None => throw new InvalidTopicException("topic name " + topic + " is illegal,  contains a character other than ASCII alphanumerics, '.', '_' and '-'")
     }
   }
+
+  /**
+   * Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide.
+   *
+   * @param topic The topic to check for colliding character
+   * @return true if the topic has collision characters
+   */
+  def hasCollisionChars(topic: String): Boolean = {
+    topic.contains("_") || topic.contains(".")
+  }
+
+  /**
+   * Returns true if the topicNames collide due to a period ('.') or underscore ('_') in the same position.
+   *
+   * @param topicA A topic to check for collision
+   * @param topicB A topic to check for collision
+   * @return true if the topics collide
+   */
+  def hasCollision(topicA: String, topicB: String): Boolean = {
+    topicA.replace('.', '_') == topicB.replace('.', '_')
+  }
+
 }

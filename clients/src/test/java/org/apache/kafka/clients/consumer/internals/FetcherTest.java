@@ -36,6 +36,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -115,8 +116,25 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchDuringRebalance() {
+        subscriptions.subscribe(topicName);
+        subscriptions.changePartitionAssignment(Arrays.asList(tp));
+        subscriptions.fetched(tp, 0);
+        subscriptions.consumed(tp, 0);
+
+        fetcher.initFetches(cluster);
+
+        // Now the rebalance happens and fetch positions are cleared
+        subscriptions.changePartitionAssignment(Arrays.asList(tp));
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L));
+        consumerClient.poll(0);
+
+        // The active fetch should be ignored since its position is no longer valid
+        assertTrue(fetcher.fetchedRecords().isEmpty());
+    }
+
+    @Test
     public void testFetchFailed() {
-        List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.subscribe(tp);
         subscriptions.fetched(tp, 0);
         subscriptions.consumed(tp, 0);
@@ -148,7 +166,6 @@ public class FetcherTest {
 
     @Test
     public void testFetchOutOfRange() {
-        List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.subscribe(tp);
         subscriptions.fetched(tp, 5);
         subscriptions.consumed(tp, 5);
