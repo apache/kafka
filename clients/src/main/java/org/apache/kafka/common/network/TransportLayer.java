@@ -82,4 +82,5 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
 
     void removeInterestOps(int ops);
 
+    boolean isMute();
 }

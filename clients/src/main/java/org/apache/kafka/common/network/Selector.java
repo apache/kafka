@@ -72,6 +72,7 @@ public class Selector implements Selectable {
     private final Map<String, KafkaChannel> channels;
     private final List<Send> completedSends;
     private final List<NetworkReceive> completedReceives;
+    private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final List<String> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
@@ -105,6 +106,7 @@ public class Selector implements Selectable {
         this.channels = new HashMap<String, KafkaChannel>();
         this.completedSends = new ArrayList<Send>();
         this.completedReceives = new ArrayList<NetworkReceive>();
+        this.stagedReceives = new HashMap<KafkaChannel, Deque<NetworkReceive>>();
         this.connected = new ArrayList<String>();
         this.disconnected = new ArrayList<String>();
         this.failedSends = new ArrayList<String>();
@@ -242,7 +244,8 @@ public class Selector implements Selectable {
     @Override
     public void poll(long timeout) throws IOException {
         clear();
-
+        if (this.stagedReceives.size() > 0)
+            timeout = 0;
         /* check ready keys */
         long startSelect = time.nanoseconds();
         int readyKeys = select(timeout);
@@ -271,18 +274,17 @@ public class Selector implements Selectable {
                     }
 
                     /* if channel is not ready finish prepare */
-                    if (channel.isConnected() && !channel.ready()) {
+                    if (channel.isConnected() && !channel.ready())
                         channel.prepare();
-                    }
 
                     /* if channel is ready read from any connections that have readable data */
                     if (channel.ready() && key.isReadable()) {
                         NetworkReceive networkReceive;
                         try {
-                            if ((networkReceive = channel.read()) != null) {
-                                this.completedReceives.add(networkReceive);
-                                this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
+                            while ((networkReceive = channel.read()) != null) {
+                                addToStagedReceives(channel, networkReceive);
                             }
+                            addToCompletedReceives(channel);
                         } catch (InvalidReceiveException e) {
                             log.error("Invalid data received from " + channel.id() + " closing connection", e);
                             close(channel);
@@ -315,11 +317,15 @@ public class Selector implements Selectable {
                     this.disconnected.add(channel.id());
                 }
             }
+        } else {
+            addToCompletedReceives();
         }
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
         maybeCloseOldestConnection();
     }
+
+
 
     @Override
     public List<Send> completedSends() {
@@ -441,13 +447,16 @@ public class Selector implements Selectable {
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);
         }
+        this.stagedReceives.remove(channel);
         this.channels.remove(channel.id());
+        this.lruConnections.remove(channel.id());
         this.sensors.connectionClosed.record();
     }
 
     /**
      * check if channel is ready
      */
+    @Override
     public boolean isChannelReady(String id) {
         KafkaChannel channel = this.channels.get(id);
         return channel.ready();
@@ -470,6 +479,51 @@ public class Selector implements Selectable {
         return (KafkaChannel) key.attachment();
     }
 
+    /**
+     * adds a receive to staged receieves
+     */
+    private void addToStagedReceives(KafkaChannel channel, NetworkReceive receive) {
+        if (!stagedReceives.containsKey(channel))
+            stagedReceives.put(channel, new ArrayDeque<NetworkReceive>());
+
+        Deque<NetworkReceive> deque = stagedReceives.get(channel);
+        deque.add(receive);
+    }
+
+    /**
+     * checks if there are any staged receives and adds to completedReceives
+     */
+    private void addToCompletedReceives() {
+        if (this.stagedReceives.size() > 0) {
+            Iterator<Map.Entry<KafkaChannel, Deque<NetworkReceive>>> iter = this.stagedReceives.entrySet().iterator();
+            while (iter.hasNext()) {
+                Map.Entry<KafkaChannel, Deque<NetworkReceive>> entry = iter.next();
+                KafkaChannel channel = entry.getKey();
+                if (!channel.hasSend() && !channel.isMute()) {
+                    Deque<NetworkReceive> deque = entry.getValue();
+                    NetworkReceive networkReceive = deque.poll();
+                    this.completedReceives.add(networkReceive);
+                    this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
+                    if (deque.size() == 0)
+                        iter.remove();
+                }
+            }
+        }
+    }
+
+    /**
+     * checks if there are any staged receives and adds to completedReceives
+     */
+    private void addToCompletedReceives(KafkaChannel channel) {
+        Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
+        if (!channel.hasSend() && deque != null) {
+            NetworkReceive networkReceive = deque.poll();
+            this.completedReceives.add(networkReceive);
+            this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
+            if (deque.size() == 0)
+                this.stagedReceives.remove(channel);
+        }
+    }
 
     private class SelectorMetrics {
         private final Metrics metrics;

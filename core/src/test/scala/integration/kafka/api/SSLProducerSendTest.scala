@@ -47,7 +47,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
   private var consumer2: SimpleConsumer = null
 
   private val topic = "topic"
-  private val numRecords = 100
+  private val numRecords = 10
 
   override def setUp() {
     super.setUp()
@@ -135,55 +135,6 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testSerializer() {
-    // send a record with a wrong type should receive a serialization exception
-    try {
-      val producer = createNewProducerWithWrongSerializer(brokerList)
-      val record5 = new ProducerRecord[Array[Byte],Array[Byte]](topic, new Integer(0), "key".getBytes, "value".getBytes)
-      producer.send(record5)
-      fail("Should have gotten a SerializationException")
-    } catch {
-      case se: SerializationException => // this is ok
-    }
-
-    try {
-      createNewProducerWithNoSerializer(brokerList)
-      fail("Instantiating a producer without specifying a serializer should cause a ConfigException")
-    } catch {
-      case ce : ConfigException => // this is ok
-    }
-
-    // create a producer with explicit serializers should succeed
-    createNewProducerWithExplicitSerializer(brokerList)
-  }
-
-  private def createNewProducerWithWrongSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
-    import org.apache.kafka.clients.producer.ProducerConfig
-
-    val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
-    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
-    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
-  }
-
-  private def createNewProducerWithNoSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
-    import org.apache.kafka.clients.producer.ProducerConfig
-
-    val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
-  }
-
-  private def createNewProducerWithExplicitSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
-    import org.apache.kafka.clients.producer.ProducerConfig
-
-    val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps, new ByteArraySerializer, new ByteArraySerializer)
-  }
-
   /**
     * testClose checks the closing behavior
     *
@@ -191,8 +142,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
     */
   @Test
   def testClose() {
-    var producer = TestUtils.createNewProducer(brokerList)
-
+    var producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile))
     try {
       // create topic
       TestUtils.createTopic(zkClient, topic, 1, 2, servers)
@@ -227,8 +177,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
     */
   @Test
   def testSendToPartition() {
-    var producer = TestUtils.createNewProducer(brokerList)
-
+    var producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile))
     try {
       // create topic
       val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)
@@ -282,7 +231,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
     */
   @Test
   def testAutoCreateTopic() {
-    var producer = TestUtils.createNewProducer(brokerList, retries = 5)
+    var producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile), retries = 5)
 
     try {
       // Send a message to auto-create the topic
@@ -300,26 +249,6 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
     }
   }
 
-  /**
-    * Test that flush immediately sends all accumulated requests.
-    */
-  @Test
-  def testFlush() {
-    var producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
-    try {
-      TestUtils.createTopic(zkClient, topic, 2, 2, servers)
-      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "value".getBytes)
-      for(i <- 0 until 50) {
-        val responses = (0 until numRecords) map (i => producer.send(record))
-        assertTrue("No request is complete.", responses.forall(!_.isDone()))
-        producer.flush()
-        assertTrue("All requests are complete.", responses.forall(_.isDone()))
-      }
-    } finally {
-      if (producer != null)
-        producer.close()
-    }
-  }
 
   /**
     * Test close with zero timeout from caller thread
@@ -339,7 +268,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
 
       // Test closing from caller thread.
       for(i <- 0 until 50) {
-        producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile), lingerMs = Long.MaxValue)
         val responses = (0 until numRecords) map (i => producer.send(record0))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
         producer.close(0, TimeUnit.MILLISECONDS)
@@ -393,12 +322,14 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
           producer.close(Long.MaxValue, TimeUnit.MICROSECONDS)
         }
       }
+
       for(i <- 0 until 50) {
-        producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        //producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile), lingerMs = Long.MaxValue)
         // send message to partition 0
         var responses = (0 until numRecords) map (i => producer.send(record0))
         // send message to partition 1
-        responses ++= ((0 until numRecords) map (i => producer.send(record1, new CloseCallback(producer))))
+        responses ++= ((0 until numRecords) map (i => producer.send(record1)))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
         // flush the messages.
         producer.flush()
@@ -415,7 +346,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
           consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 1, 0, Int.MaxValue).build())
         }
         val expectedNumRecords = (i + 1) * numRecords
-        assertEquals("Fetch response to partition 0 should have %d messages.".format(expectedNumRecords),
+        assertEquals("Fetch response to partition 1 should have %d messages.".format(expectedNumRecords),
           expectedNumRecords, fetchResponse0.messageSet(topic, 0).size)
         assertEquals("Fetch response to partition 1 should have %d messages.".format(expectedNumRecords),
           expectedNumRecords, fetchResponse1.messageSet(topic, 1).size)

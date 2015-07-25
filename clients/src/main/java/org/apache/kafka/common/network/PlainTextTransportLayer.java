@@ -44,6 +44,7 @@ public class PlainTextTransportLayer implements TransportLayer {
         this.socketChannel = (SocketChannel) key.channel();
     }
 
+    @Override
     public boolean ready() {
         return true;
     }
@@ -86,6 +87,8 @@ public class PlainTextTransportLayer implements TransportLayer {
     public void close() throws IOException {
         socketChannel.socket().close();
         socketChannel.close();
+        key.attach(null);
+        key.cancel();
     }
 
     /**
@@ -147,7 +150,7 @@ public class PlainTextTransportLayer implements TransportLayer {
     /**
     * Writes a sequence of bytes to this channel from the given buffer.
     *
-    * @param src The buffer from which bytes are to be retrieved
+    * @param srcs The buffer from which bytes are to be retrieved
     * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
     * @throws IOException If some other I/O error occurs
     */
@@ -180,7 +183,7 @@ public class PlainTextTransportLayer implements TransportLayer {
     }
 
     /**
-     * Rerturns ANONYMOUS as Principal.
+     * Returns ANONYMOUS as Principal.
      */
     public Principal peerPrincipal() throws IOException {
         return principal;
@@ -188,7 +191,7 @@ public class PlainTextTransportLayer implements TransportLayer {
 
     /**
      * Adds the interestOps to selectionKey.
-     * @param SelectionKey interestOps
+     * @param interestOps
      */
     public void addInterestOps(int ops) {
         key.interestOps(key.interestOps() | ops);
@@ -197,10 +200,13 @@ public class PlainTextTransportLayer implements TransportLayer {
 
     /**
      * Removes the interestOps from selectionKey.
-     * @param SelectionKey interestOps
+     * @param interestOps
      */
     public void removeInterestOps(int ops) {
         key.interestOps(key.interestOps() & ~ops);
     }
 
+    public boolean isMute() {
+        return key.isValid() && (key.interestOps() & SelectionKey.OP_READ) == 0;
+    }
 }

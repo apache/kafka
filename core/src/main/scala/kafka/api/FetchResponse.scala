@@ -24,6 +24,7 @@ import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.network.TransportLayer
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.network.MultiSend
 
@@ -56,7 +57,7 @@ class PartitionDataSend(val partitionId: Int,
                         val partitionData: FetchResponsePartitionData) extends Send {
   private val messageSize = partitionData.messages.sizeInBytes
   private var messagesSentSize = 0
-
+  private var pending = false
   private val buffer = ByteBuffer.allocate( 4 /** partitionId **/ + FetchResponsePartitionData.headerSize)
   buffer.putInt(partitionId)
   buffer.putShort(partitionData.error)
@@ -64,7 +65,7 @@ class PartitionDataSend(val partitionId: Int,
   buffer.putInt(partitionData.messages.sizeInBytes)
   buffer.rewind()
 
-  override def completed = !buffer.hasRemaining && messagesSentSize >= messageSize
+  override def completed = !buffer.hasRemaining && messagesSentSize >= messageSize && !pending
 
   override def destination: String = ""
 
@@ -77,6 +78,8 @@ class PartitionDataSend(val partitionId: Int,
       messagesSentSize += bytesSent
       written += bytesSent
     }
+    if (channel.isInstanceOf[TransportLayer])
+      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
     written
   }
 
@@ -111,7 +114,9 @@ class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
 
   private var sent = 0L
 
-  override def completed: Boolean = sent >= size
+  private var pending = false
+
+  override def completed: Boolean = sent >= size && !pending
 
   override def destination: String = dest
 
@@ -135,6 +140,10 @@ class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
     if(!buffer.hasRemaining && !sends.completed) {
       written += sends.writeTo(channel)
     }
+
+    if (channel.isInstanceOf[TransportLayer])
+      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
+
     sent += written
     written
   }
@@ -214,9 +223,11 @@ class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) exte
 
   private var sent = 0L
 
+  private var pending = false
+
   override def size = 4 /* for size byte */ + payloadSize
 
-  override def completed = sent >= size
+  override def completed = sent >= size && !pending
 
   override def destination = dest
 
@@ -242,7 +253,10 @@ class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) exte
       written += sends.writeTo(channel)
     }
     sent += written
+
+    if (channel.isInstanceOf[TransportLayer])
+      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
+
     written
   }
 }
-

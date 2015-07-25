@@ -169,6 +169,54 @@ public class SSLSelectorTest {
     }
 
 
+    /**
+     * Tests that SSL renegotiation initiated by the server are handled correctly by the client
+     * @throws Exception
+     */
+    @Test
+    public void testRenegotiation() throws Exception {
+        int reqs = 500;
+        String node = "0";
+        // create connections
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        // send echo requests and receive responses
+        int requests = 0;
+        int responses = 0;
+        int renegotiates = 0;
+        while (!selector.isChannelReady(node)) {
+            selector.poll(1000L);
+        }
+        selector.send(createSend(node, node + "-" + 0));
+        requests++;
+
+        // loop until we complete all requests
+        while (responses < reqs) {
+            selector.poll(0L);
+            if (responses >= 100 && renegotiates == 0) {
+                renegotiates++;
+                server.renegotiate();
+            }
+            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
+
+            // handle any responses we may have gotten
+            for (NetworkReceive receive : selector.completedReceives()) {
+                String[] pieces = asString(receive).split("-");
+                assertEquals("Should be in the form 'conn-counter'", 2, pieces.length);
+                assertEquals("Check the source", receive.source(), pieces[0]);
+                assertEquals("Check that the receive has kindly been rewound", 0, receive.payload().position());
+                assertEquals("Check the request counter", responses, Integer.parseInt(pieces[1]));
+                responses++;
+            }
+
+            // prepare new sends for the next round
+            for (int i = 0; i < selector.completedSends().size() && requests < reqs && selector.isChannelReady(node); i++, requests++) {
+                selector.send(createSend(node, node + "-" + requests));
+            }
+        }
+    }
+
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         while (true) {

@@ -191,7 +191,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   def close(channel: SocketChannel) {
 
     if(channel != null) {
-      println("Closing connection from " + channel.socket.getRemoteSocketAddress())
+      debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
       connectionQuotas.dec(channel.socket.getInetAddress)
       swallowError(channel.socket().close())
       swallowError(channel.close())

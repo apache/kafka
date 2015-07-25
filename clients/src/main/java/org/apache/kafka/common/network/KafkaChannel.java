@@ -96,8 +96,16 @@ public class KafkaChannel {
         transportLayer.addInterestOps(SelectionKey.OP_READ);
     }
 
+    public boolean isMute() {
+        return transportLayer.isMute();
+    }
+
     public boolean ready() {
         return transportLayer.ready() && authenticator.complete();
+    }
+
+    public boolean hasSend() {
+        return send != null;
     }
 
     public String socketDescription() {
