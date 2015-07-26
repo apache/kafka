@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 
 import java.util.Properties;
 
-public class CopycatCommandConfig extends AbstractConfig {
+public class CopycatConfig extends AbstractConfig {
 
     public static final String WORKER_PROPERTIES_CONFIG = "worker-config";
     public static final String WORKER_PROPERTIES_CONFIG_DEFAULT = "";
@@ -55,18 +55,18 @@ public class CopycatCommandConfig extends AbstractConfig {
 
     private Properties originalProperties;
 
-    public CopycatCommandConfig(Properties props) {
+    public CopycatConfig(Properties props) {
         super(config, props);
         this.originalProperties = props;
     }
 
     /**
      * Parses command line arguments into a Properties object and instantiate a
-     * CopycatCommandConfig with it.
+     * CopycatConfig with it.
      * @param args
      * @return
      */
-    public static CopycatCommandConfig parseCommandLineArgs(String[] args) {
+    public static CopycatConfig parseCommandLineArgs(String[] args) {
         Properties props = new Properties();
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -91,6 +91,6 @@ public class CopycatCommandConfig extends AbstractConfig {
             props.setProperty(key, value);
         }
 
-        return new CopycatCommandConfig(props);
+        return new CopycatConfig(props);
     }
 }

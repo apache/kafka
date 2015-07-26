@@ -20,7 +20,6 @@ package org.apache.kafka.copycat.cli;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.runtime.Coordinator;
-import org.apache.kafka.copycat.runtime.Copycat;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.runtime.standalone.StandaloneCoordinator;
 import org.apache.kafka.copycat.util.Callback;
@@ -41,16 +40,16 @@ import java.util.Properties;
  * fault tolerant by overriding the settings to use file storage for both.
  * </p>
  */
-public class CopycatCommand {
-    private static final Logger log = LoggerFactory.getLogger(CopycatCommand.class);
+public class Copycat {
+    private static final Logger log = LoggerFactory.getLogger(Copycat.class);
 
     public static void main(String[] args) throws Exception {
-        CopycatCommandConfig config;
+        CopycatConfig config;
         Properties workerProps;
         Properties connectorProps;
 
         try {
-            config = CopycatCommandConfig.parseCommandLineArgs(args);
+            config = CopycatConfig.parseCommandLineArgs(args);
         } catch (ConfigException e) {
             log.error(e.getMessage());
             log.info("Usage: copycat [--worker-config worker.properties]"
@@ -60,18 +59,18 @@ public class CopycatCommand {
             return;
         }
 
-        String workerPropsFile = config.getString(CopycatCommandConfig.WORKER_PROPERTIES_CONFIG);
+        String workerPropsFile = config.getString(CopycatConfig.WORKER_PROPERTIES_CONFIG);
         workerProps = !workerPropsFile.isEmpty() ? Utils.loadProps(workerPropsFile) : new Properties();
 
         WorkerConfig workerConfig = new WorkerConfig(workerProps);
         Worker worker = new Worker(workerConfig);
         Coordinator coordinator = new StandaloneCoordinator(worker, workerConfig.getUnusedProperties());
-        final Copycat copycat = new Copycat(worker, coordinator);
+        final org.apache.kafka.copycat.runtime.Copycat copycat = new org.apache.kafka.copycat.runtime.Copycat(worker, coordinator);
         copycat.start();
 
         try {
             // Destroy any requested connectors
-            for (final String connName : config.getList(CopycatCommandConfig.DELETE_CONNECTORS_CONFIG)) {
+            for (final String connName : config.getList(CopycatConfig.DELETE_CONNECTORS_CONFIG)) {
                 FutureCallback cb = new FutureCallback(new Callback<Void>() {
                     @Override
                     public void onCompletion(Throwable error, Void result) {
@@ -86,7 +85,7 @@ public class CopycatCommand {
 
             // Create any new connectors
             for (final String connectorPropsFile : config
-                    .getList(CopycatCommandConfig.CREATE_CONNECTORS_CONFIG)) {
+                    .getList(CopycatConfig.CREATE_CONNECTORS_CONFIG)) {
                 connectorProps = Utils.loadProps(connectorPropsFile);
                 FutureCallback cb = new FutureCallback(new Callback<String>() {
                     @Override

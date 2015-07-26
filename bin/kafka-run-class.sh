@@ -65,6 +65,14 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for pkg in "copycat-api" "copycat-avro" "copycat-data" "copycat-file" "copycat-runtime"
+do
+  for file in $base_dir/${pkg}/build/libs/${pkg}*.jar $base_dir/${pkg}/build/dependant-libs/*.jar;
+  do
+    CLASSPATH=$CLASSPATH:$file
+  done
+done
+
 # classpath addition for release
 for file in $base_dir/libs/*.jar;
 do
