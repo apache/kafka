@@ -230,7 +230,7 @@ public class VerifiableProducer {
         try {
             ObjectMapper mapper = new ObjectMapper();
             json = mapper.writeValueAsString(data);
-        } catch(JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             json = "Bad data can't be written as json: " + e.getMessage();
         }
         return json;
