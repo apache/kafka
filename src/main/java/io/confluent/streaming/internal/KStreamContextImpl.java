@@ -127,8 +127,13 @@ public class KStreamContextImpl implements KStreamContext {
 
     synchronized (this) {
       // if topics not specified, use all the topics be default
+<<<<<<< HEAD
       if (topics == null) {
         fromTopics = ingestor.topics();
+=======
+      if (topics == null || topics.length == 0) {
+        fromTopics = this.topics;
+>>>>>>> fix vararg in KStreamContextImpl.from()
       } else {
         fromTopics = Collections.unmodifiableSet(Util.mkSet(topics));
       }
