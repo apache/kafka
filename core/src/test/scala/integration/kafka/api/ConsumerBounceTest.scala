@@ -58,7 +58,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     TestUtils.createTopic(this.zkClient, topic, 1, serverCount, this.servers)
   }
 
-  def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(20)
+  def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(10)
 
   /*
    * 1. Produce a bunch of messages

@@ -219,7 +219,7 @@ public class Fetcher<K, V> {
             for (PartitionRecords<K, V> part : this.records) {
                 Long consumed = subscriptions.consumed(part.partition);
                 if (this.subscriptions.assignedPartitions().contains(part.partition)
-                    && (consumed == null || part.fetchOffset == consumed)) {
+                    && consumed != null && part.fetchOffset == consumed) {
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
                     if (records == null) {
                         records = part.records;
@@ -364,6 +364,20 @@ public class Fetcher<K, V> {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
                     }
+
+                    // we are interested in this fetch only if the beginning offset matches the
+                    // current consumed position
+                    Long consumed = subscriptions.consumed(tp);
+                    if (consumed == null) {
+                        continue;
+                    } else if (consumed != fetchOffset) {
+                        // the fetched position has gotten out of sync with the consumed position
+                        // (which might happen when a rebalance occurs with a fetch in-flight),
+                        // so we need to reset the fetch position so the next fetch is right
+                        subscriptions.fetched(tp, consumed);
+                        continue;
+                    }
+
                     if (parsed.size() > 0) {
                         ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                         this.subscriptions.fetched(tp, record.offset() + 1);
