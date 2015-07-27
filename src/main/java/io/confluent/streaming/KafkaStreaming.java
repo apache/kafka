@@ -82,6 +82,7 @@ public class KafkaStreaming implements Runnable {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     private final Class<? extends KStreamJob> jobClass;
     private final Set<String> topics;
 <<<<<<< HEAD
@@ -116,6 +117,9 @@ public class KafkaStreaming implements Runnable {
     //    |           startShutdown()                  |
     //    +--------------------------------------------+
     //
+=======
+    // Container States
+>>>>>>> fixed comments
     private final int CREATED = 0;
     private final int RUNNING = 1;
     private final int STOPPING = 2;
