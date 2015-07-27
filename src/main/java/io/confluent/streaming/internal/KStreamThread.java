@@ -67,7 +67,6 @@ public class KStreamThread extends Thread {
     private final Metrics metrics;
     private final KafkaStreamingMetrics streamingMetrics;
     private final Time time;
-    private volatile boolean requestingCommit = false;
     private volatile boolean running;
     private long lastCommit;
     private long nextStateCleaning;
@@ -185,10 +184,6 @@ public class KStreamThread extends Thread {
         long now = time.milliseconds();
         if (config.commitTimeMs >= 0 && lastCommit + config.commitTimeMs < time.milliseconds()) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
-            commitAll(now);
-        } else if (requestingCommit) {
-            requestingCommit = false;
-            log.trace("Committing processor instances because of user request.");
             commitAll(now);
         }
     }
