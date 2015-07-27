@@ -1,12 +1,10 @@
 package io.confluent.streaming.kv.internals;
 
-import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.kv.Entry;
 import io.confluent.streaming.kv.KeyValueIterator;
 import io.confluent.streaming.kv.KeyValueStore;
-import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -73,10 +71,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void restore() {
+    public void restore(ConsumerRecord<byte[], byte[]> record) {
         long startNs = time.nanoseconds();
         try {
-            inner.restore();
+            inner.restore(record);
         } finally {
             recordLatency(this.restoreTime, startNs, time.nanoseconds());
         }

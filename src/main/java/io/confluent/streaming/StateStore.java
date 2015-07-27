@@ -17,8 +17,8 @@
 
 package io.confluent.streaming;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.TopicPartition;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 /**
  * A storage engine for managing state maintained by a stream processor.
@@ -30,18 +30,13 @@ import org.apache.kafka.common.TopicPartition;
  * as basic lifecycle management.
  * </p>
  */
-public interface StorageEngine {
+public interface StateStore {
 
     /**
      * The name of this store.
      * @return the storage name
      */
     String name();
-
-    /**
-     * Restore the store's state
-     */
-    void restore();
 
     /**
      * Flush any cached data
@@ -53,4 +48,8 @@ public interface StorageEngine {
      */
     void close();
 
+    /**
+     * Consume one changelog record to restore its recorded state change
+     */
+    void restore(ConsumerRecord<byte[], byte[]> record);
 }

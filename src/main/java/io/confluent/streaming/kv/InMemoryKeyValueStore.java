@@ -2,12 +2,10 @@ package io.confluent.streaming.kv;
 
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
+import io.confluent.streaming.internal.KStreamContextImpl;
 import io.confluent.streaming.kv.internals.MeteredKeyValueStore;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 
@@ -25,7 +23,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         super(name, "kafka-streams", new MemoryStore<K, V>(name, context), context.metrics(), new SystemTime());
     }
 
-    private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
+    private static class MemoryStore<K, V> extends KeyValueStore<K, V> {
 
         private final String topic;
         private final int partition;
@@ -86,23 +84,6 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         }
 
         @Override
-        public void restore() {
-            Deserializer<K> keyDeserializer = (Deserializer<K>) context.keyDeserializer();
-            Deserializer<V> valueDeserializer = (Deserializer<V>) context.valueDeserializer();
-
-            while (true) {
-                for(ConsumerRecord<byte[], byte[]> record: consumer.poll(100))
-                    this.map.put(keyDeserializer.deserialize(partition.topic(), record.key()),
-                                   valueDeserializer.deserialize(partition.topic(), record.value()));
-                long position = consumer.position(partition);
-                if (position == endOffset)
-                    break;
-                else if(position > endOffset)
-                    throw new IllegalStateException("This should not happen.");
-            }
-        }
-
-        @Override
         public void flush() {
             RecordCollector collector = context.recordCollector();
             Serializer<K> keySerializer = (Serializer<K>) context.keySerializer();
@@ -115,6 +96,11 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
                 }
                 this.dirty.clear();
             }
+        }
+
+        @Override
+        public void restore(ConsumerRecord<byte[], byte[]> record) {
+
         }
 
         @Override

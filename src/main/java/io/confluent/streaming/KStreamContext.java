@@ -112,7 +112,7 @@ public interface KStreamContext {
    * @param engine the storage engine
    * @throws Exception an exception thrown by the engine
    */
-  void restore(StorageEngine engine) throws Exception;
+  void restore(StateStore engine) throws Exception;
 
   /**
    * Ensures that the context is in the initialization phase where KStream topology can be constructed

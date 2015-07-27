@@ -19,7 +19,7 @@
 
 package io.confluent.streaming.kv;
 
-import io.confluent.streaming.StorageEngine;
+import io.confluent.streaming.StateStore;
 
 import java.util.List;
 
@@ -29,7 +29,7 @@ import java.util.List;
  * @param <K> The key type
  * @param <V> The value type
  */
-public interface KeyValueStore<K, V> extends StorageEngine {
+public interface KeyValueStore<K, V> extends StateStore {
 
     /**
      * Get the value corresponding to this key

@@ -17,10 +17,12 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.RecordCollector;
-import io.confluent.streaming.StorageEngine;
+import io.confluent.streaming.StateStore;
 import io.confluent.streaming.util.OffsetCheckpoint;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,14 +38,16 @@ public class ProcessorStateManager {
 
     private final int id;
     private final File baseDir;
-    private final Map<String, StorageEngine> stores;
+    private final Map<String, StateStore> stores;
+    private final Consumer<byte[], byte[]> restoreConsumer;
     private final Map<TopicPartition, Long> restoredOffsets;
     private final Map<TopicPartition, Long> checkpointedOffsets;
 
-    public ProcessorStateManager(int id, File baseDir) {
+    public ProcessorStateManager(int id, File baseDir, Consumer<byte[], byte[]> restoreConsumer) {
         this.id = id;
         this.baseDir = baseDir;
         this.stores = new HashMap<>();
+        this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
         this.checkpointedOffsets = new HashMap<>();
     }
@@ -52,40 +56,56 @@ public class ProcessorStateManager {
         return this.baseDir;
     }
 
+    public Consumer<byte[], byte[]> restoreConsumer() {
+        return this.restoreConsumer;
+    }
+
     public void init() throws IOException {
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
         this.checkpointedOffsets.putAll(checkpoint.read());
         checkpoint.delete();
     }
 
-    public void registerAndRestore(RecordCollector collector, Consumer<byte[], byte[]> consumer, StorageEngine engine) {
-        if (engine.name().equals(CHECKPOINT_FILE_NAME))
+    public void registerAndRestore(StateStore store) {
+        if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
-        if(this.stores.containsKey(engine.name()))
-            throw new IllegalArgumentException("Store " + engine.name() + " has already been registered.");
+        if(this.stores.containsKey(store.name()))
+            throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
         // register store
-        this.stores.put(engine.name(), engine);
+        this.stores.put(store.name(), store);
 
-        TopicPartition storePartition = new TopicPartition(engine.name(), id);
-        consumer.subscribe(storePartition);
+        // subscribe to the store's partition
+        TopicPartition storePartition = new TopicPartition(store.name(), id);
+        restoreConsumer.subscribe(storePartition);
 
         // calculate the end offset of the partition
-        consumer.seekToEnd(storePartition);
-        long partitionEndOffset = consumer.position(storePartition);
+        // TODO: this is a bit hacky to first seek then position to get the end offset
+        restoreConsumer.seekToEnd(storePartition);
+        long endOffset = restoreConsumer.position(storePartition);
 
-        // what was the last-written offset when we shutdown last?
+        // reset the consumer to the written offset when we shutdown last time
         long checkpointedOffset = 0;
-        if(checkpointedOffsets.containsKey(storePartition))
+        if (checkpointedOffsets.containsKey(storePartition))
             checkpointedOffset = checkpointedOffsets.get(storePartition);
+        restoreConsumer.seek(storePartition, checkpointedOffset);
 
-        // restore
-        consumer.subscribe(storePartition);
-        consumer.seekToBeginning(storePartition);
-        engine.restore(collector, consumer, storePartition, checkpointedOffset, partitionEndOffset);
-        consumer.unsubscribe(storePartition);
-        restoredOffsets.put(storePartition, partitionEndOffset);
+        // restore its state from changelog records
+        while (true) {
+            for(ConsumerRecord<byte[], byte[]> record: restoreConsumer.poll(100))
+                store.restore(record);
+
+            long position = restoreConsumer.position(storePartition);
+            if (position == endOffset)
+                break;
+            else if(position > endOffset)
+                throw new IllegalStateException("This should not happen.");
+        }
+
+        // record the restored offset for its partition
+        restoredOffsets.put(storePartition, restoreConsumer.position(storePartition));
+        restoreConsumer.unsubscribe(storePartition);
     }
 
     public void cleanup() throws IOException {
@@ -101,7 +121,7 @@ public class ProcessorStateManager {
     public void flush() {
         if(!this.stores.isEmpty()) {
             log.debug("Flushing stores.");
-            for (StorageEngine engine : this.stores.values())
+            for (StateStore engine : this.stores.values())
                 engine.flush();
         }
     }
@@ -109,7 +129,7 @@ public class ProcessorStateManager {
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         if(!stores.isEmpty()) {
             log.debug("Closing stores.");
-            for (Map.Entry<String, StorageEngine> entry : stores.entrySet()) {
+            for (Map.Entry<String, StateStore> entry : stores.entrySet()) {
                 log.debug("Closing storage engine {}", entry.getKey());
                 entry.getValue().flush();
                 entry.getValue().close();
@@ -127,6 +147,7 @@ public class ProcessorStateManager {
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
             checkpoint.write(checkpointOffsets);
         }
+        restoreConsumer.close();
     }
 
 }

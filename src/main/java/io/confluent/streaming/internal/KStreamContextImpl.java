@@ -5,13 +5,16 @@ import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamException;
 import io.confluent.streaming.KStreamJob;
 import io.confluent.streaming.RecordCollector;
-import io.confluent.streaming.StorageEngine;
+import io.confluent.streaming.StateStore;
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.Util;
+<<<<<<< HEAD
 import org.apache.kafka.clients.consumer.Consumer;
 <<<<<<< HEAD
 =======
+=======
+>>>>>>> wip
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.Producer;
 >>>>>>> wip
@@ -53,7 +56,8 @@ public class KStreamContextImpl implements KStreamContext {
   private final Metrics metrics;
   private final File stateDir;
   private final ProcessorStateManager stateMgr;
-  private Consumer<byte[], byte[]> restoreConsumer;
+
+  private boolean initialized = false;
 
   @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
@@ -73,8 +77,8 @@ public class KStreamContextImpl implements KStreamContext {
     this.timestampExtractor = this.streamingConfig.timestampExtractor();
     if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is missing");
 
-    this.restoreConsumer = new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-    this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)));
+    this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)),
+        new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
     this.stateDir = this.stateMgr.baseDir();
     this.metrics = metrics;
   }
@@ -197,6 +201,10 @@ public class KStreamContextImpl implements KStreamContext {
     return stateDir;
   }
 
+  public ProcessorStateManager stateMgr() {
+    return stateMgr;
+  }
+
   @Override
   public Metrics metrics() {
     return metrics;
@@ -228,24 +236,20 @@ public class KStreamContextImpl implements KStreamContext {
 
 
   @Override
-  public void restore(StorageEngine engine) throws Exception {
+  public void restore(StateStore engine) throws Exception {
     ensureInitialization();
 
-    stateMgr.registerAndRestore(collector, restoreConsumer, engine);
+    stateMgr.registerAndRestore(collector, engine);
   }
 
   @Override
   public void ensureInitialization() {
-    if (restoreConsumer != null)
+    if (!initialized)
       throw new IllegalStateException("context initialization is already finished");
   }
 
   public Collection<StreamGroup> streamSynchronizers() {
     return streamGroups.values();
-  }
-
-  public Consumer<byte[], byte[]> restoreConsumer() {
-    return restoreConsumer;
   }
 
   public void init() throws IOException {
@@ -267,6 +271,8 @@ public class KStreamContextImpl implements KStreamContext {
       }
       throw new KStreamException("unused topics: " + Util.mkString(unusedTopics));
     }
+
+    initialized = true;
   }
 
   @Override
@@ -275,7 +281,6 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   public void close() throws Exception {
-    restoreConsumer.close();
     stateMgr.close(collector.offsets());
     job.close();
   }
