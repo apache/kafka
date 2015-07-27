@@ -386,7 +386,7 @@ public class KafkaStreaming implements Runnable {
                 kstreamContexts.put(id, kstreamContext);
 
                 try {
-                    kstreamContext.init(restoreConsumer);
+                    kstreamContext.init();
                 }
                 catch (Exception e) {
                     throw new KafkaException(e);
@@ -415,6 +415,11 @@ public class KafkaStreaming implements Runnable {
 >>>>>>> added KStreamThread
             }
         }
+<<<<<<< HEAD
+=======
+
+        nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;
+>>>>>>> wip
     }
 
     /**

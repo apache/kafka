@@ -39,19 +39,9 @@ public interface StorageEngine {
     String name();
 
     /**
-     * Register the given storage engine with the changelog and restore it's state using the given
-     * consumer instance.
-     * @param collector The record collector to write records to
-     * @param consumer The consumer to read with
-     * @param partition The partition to use as the change log
-     * @param checkpointedOffset The offset of the last save
-     * @param logEndOffset The last offset in the changelog
+     * Restore the store's state
      */
-    void registerAndRestore(RecordCollector collector,
-                            Consumer<byte[], byte[]> consumer,
-                            TopicPartition partition,
-                            long checkpointedOffset,
-                            long logEndOffset);
+    void restore();
 
     /**
      * Flush any cached data

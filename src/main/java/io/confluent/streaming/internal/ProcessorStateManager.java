@@ -37,15 +37,15 @@ public class ProcessorStateManager {
     private final int id;
     private final File baseDir;
     private final Map<String, StorageEngine> stores;
-    private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<TopicPartition, Long> restoredOffsets;
+    private final Map<TopicPartition, Long> checkpointedOffsets;
 
     public ProcessorStateManager(int id, File baseDir) {
         this.id = id;
         this.baseDir = baseDir;
         this.stores = new HashMap<>();
-        this.checkpointedOffsets = new HashMap<>();
         this.restoredOffsets = new HashMap<>();
+        this.checkpointedOffsets = new HashMap<>();
     }
 
     public File baseDir() {
@@ -83,7 +83,7 @@ public class ProcessorStateManager {
         // restore
         consumer.subscribe(storePartition);
         consumer.seekToBeginning(storePartition);
-        engine.registerAndRestore(collector, consumer, storePartition, checkpointedOffset, partitionEndOffset);
+        engine.restore(collector, consumer, storePartition, checkpointedOffset, partitionEndOffset);
         consumer.unsubscribe(storePartition);
         restoredOffsets.put(storePartition, partitionEndOffset);
     }

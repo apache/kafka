@@ -10,8 +10,14 @@ import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.Consumer;
+<<<<<<< HEAD
+=======
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.Producer;
+>>>>>>> wip
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.slf4j.Logger;
@@ -67,6 +73,7 @@ public class KStreamContextImpl implements KStreamContext {
     this.timestampExtractor = this.streamingConfig.timestampExtractor();
     if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is missing");
 
+    this.restoreConsumer = new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)));
     this.stateDir = this.stateMgr.baseDir();
     this.metrics = metrics;
@@ -237,15 +244,13 @@ public class KStreamContextImpl implements KStreamContext {
     return streamGroups.values();
   }
 
-  public void init(Consumer<byte[], byte[]> restoreConsumer) throws IOException {
+  public Consumer<byte[], byte[]> restoreConsumer() {
+    return restoreConsumer;
+  }
+
+  public void init() throws IOException {
     stateMgr.init();
-    try {
-      this.restoreConsumer = restoreConsumer;
-      job.init(this);
-    }
-    finally {
-      this.restoreConsumer = null;
-    }
+    job.init(this);
 
     // add partition -> stream group mappings to the ingestor
     for (Map.Entry<String, KStreamSource<?,?>> entry : sourceStreams.entrySet()) {
@@ -270,6 +275,7 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   public void close() throws Exception {
+    restoreConsumer.close();
     stateMgr.close(collector.offsets());
     job.close();
   }
