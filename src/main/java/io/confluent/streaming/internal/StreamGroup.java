@@ -97,7 +97,7 @@ public class StreamGroup implements ParallelExecutor.Task {
       throw new IllegalArgumentException("groups with different type of time extractors cannot be merged");
 
     // add all the other's groups partitions
-    this.stash.putAll(stash);
+    this.stash.putAll(other.stash);
   }
 
   /**
