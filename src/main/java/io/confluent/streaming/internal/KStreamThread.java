@@ -115,6 +115,7 @@ public class KStreamThread extends Thread {
      */
     public synchronized void run() {
         try {
+            ingestor.open();
             runLoop();
         } catch (RuntimeException e) {
             log.error("Uncaught error during processing: ", e);

@@ -24,6 +24,10 @@ public class IngestorImpl implements Ingestor {
     for (String topic : this.topics) consumer.subscribe(topic);
   }
 
+  public void open() {
+    for (String topic : this.topics) consumer.subscribe(topic);
+  }
+
   public void init() {
     unpaused.clear();
     unpaused.addAll(consumer.subscriptions());
