@@ -3,11 +3,14 @@ package io.confluent.streaming.internal;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Created by yasuhiro on 6/30/15.
  */
 public interface Ingestor {
+
+  Set<String> topics();
 
   void poll(long timeoutMs);
 

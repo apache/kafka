@@ -37,8 +37,6 @@ public class KStreamContextImpl implements KStreamContext {
 
   public final int id;
   private final KStreamJob job;
-  private final Set<String> topics;
-
   private final Ingestor ingestor;
   private final RecordCollectorImpl collector;
 
@@ -59,25 +57,21 @@ public class KStreamContextImpl implements KStreamContext {
                             KStreamJob job,
                             Set<String> topics,
                             Ingestor ingestor,
-                            Producer<byte[], byte[]> producer,
+                            RecordCollectorImpl collector,
                             Coordinator coordinator,
                             StreamingConfig streamingConfig,
                             ProcessorConfig processorConfig,
                             Metrics metrics) {
     this.id = id;
     this.job = job;
-    this.topics = topics;
     this.ingestor = ingestor;
-
-    this.collector =
-      new RecordCollectorImpl(producer, (Serializer<Object>)streamingConfig.keySerializer(), (Serializer<Object>)streamingConfig.valueSerializer());
-
+    this.collector = collector;
     this.coordinator = coordinator;
     this.streamingConfig = streamingConfig;
     this.processorConfig = processorConfig;
 
     this.timestampExtractor = this.streamingConfig.timestampExtractor();
-    if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is  missing");
+    if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is missing");
 
     this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)));
     this.stateDir = this.stateMgr.baseDir();
@@ -134,14 +128,14 @@ public class KStreamContextImpl implements KStreamContext {
     synchronized (this) {
       // if topics not specified, use all the topics be default
       if (topics == null) {
-        fromTopics = this.topics;
+        fromTopics = ingestor.topics();
       } else {
         fromTopics = Collections.unmodifiableSet(Util.mkSet(topics));
       }
 
       // iterate over the topics and check if the stream has already been created for them
       for (String topic : fromTopics) {
-        if (!this.topics.contains(topic))
+        if (!ingestor.topics().contains(topic))
           throw new IllegalArgumentException("topic not subscribed: " + topic);
 
         if (sourceStreams.containsKey(topic))
@@ -266,9 +260,9 @@ public class KStreamContextImpl implements KStreamContext {
       ingestor.addPartitionStreamToGroup(streamGroup, partition);
     }
 
-    if (!topics.equals(sourceStreams.keySet())) {
+    if (!ingestor.topics().equals(sourceStreams.keySet())) {
       LinkedList<String> unusedTopics = new LinkedList<>();
-      for (String topic : topics) {
+      for (String topic : ingestor.topics()) {
         if (!sourceStreams.containsKey(topic))
           unusedTopics.add(topic);
       }

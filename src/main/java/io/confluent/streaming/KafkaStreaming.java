@@ -17,8 +17,9 @@
 
 package io.confluent.streaming;
 
-import io.confluent.streaming.internal.KStreamContextImpl;
+import io.confluent.streaming.internal.KStreamThread;
 import io.confluent.streaming.internal.ProcessorConfig;
+<<<<<<< HEAD
 import io.confluent.streaming.internal.IngestorImpl;
 <<<<<<< HEAD
 import io.confluent.streaming.internal.StreamSynchronizer;
@@ -37,31 +38,15 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
+=======
+>>>>>>> added KStreamThread
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
@@ -95,6 +80,7 @@ public class KafkaStreaming implements Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
 
+<<<<<<< HEAD
     private final Class<? extends KStreamJob> jobClass;
     private final Set<String> topics;
 <<<<<<< HEAD
@@ -117,34 +103,17 @@ public class KafkaStreaming implements Runnable {
     protected final Consumer<byte[], byte[]> consumer;
     private final IngestorImpl ingestor;
     private final StreamingConfig streamingConfig;
+=======
+>>>>>>> added KStreamThread
     private final ProcessorConfig config;
-    private final Metrics metrics;
-    private final KafkaStreamingMetrics streamingMetrics;
-    private final Time time;
-    private volatile boolean requestingCommit = false;
-    private final AtomicBoolean started = new AtomicBoolean(false);
-    private volatile boolean running;
-    private CountDownLatch shutdownComplete = new CountDownLatch(1);
-    private long lastCommit;
-    private long nextStateCleaning;
-    private long recordsProcessed;
+    private final Object lock = new Object();
+    private final KStreamThread[] threads;
+    private final Set<String> topics;
+    private boolean started = false;
+    private boolean stopping = false;
 
-    protected final ConsumerRebalanceCallback rebalanceCallback = new ConsumerRebalanceCallback() {
-        @Override
-        public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
-            addPartitions(assignment);
-        }
 
-        @Override
-        public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
-            removePartitions(assignment);
-        }
-    };
-
-    public KafkaStreaming(Class<? extends KStreamJob> jobClass, StreamingConfig config) {
-        this(jobClass, config, null, null);
-    }
-
+<<<<<<< HEAD
     @SuppressWarnings("unchecked")
     protected KafkaStreaming(Class<? extends KStreamJob> jobClass,
                              StreamingConfig config,
@@ -183,49 +152,19 @@ public class KafkaStreaming implements Runnable {
         this.recordsProcessed = 0;
         this.time = new SystemTime();
         this.parallelExecutor = new ParallelExecutor(this.config.numStreamThreads);
+=======
+    public KafkaStreaming(Class<? extends KStreamJob> jobClass, StreamingConfig streamingConfig) {
+>>>>>>> added KStreamThread
 
+        this.config = new ProcessorConfig(streamingConfig.config());
         try {
             this.topics = new HashSet<>(Arrays.asList(this.config.topics.split(",")));
         }
         catch (Exception e) {
-            throw new KStreamException("failed to get a topic list from the job", e);
+            throw new KStreamException("failed to get a topic list from the streaming config", e);
         }
-    }
 
-    /**
-     * Execute the stream processors
-     */
-    public synchronized void run() {
-        init();
-        try {
-            runLoop();
-        } catch (RuntimeException e) {
-            log.error("Uncaught error during processing: ", e);
-            throw e;
-        } finally {
-            shutdown();
-        }
-    }
-
-    private void init() {
-        log.info("Starting container");
-        if (started.compareAndSet(false, true)) {
-            if (!config.stateDir.exists() && !config.stateDir.mkdirs())
-                throw new IllegalArgumentException("Failed to create state directory: " + config.stateDir.getAbsolutePath());
-
-            for (String topic : topics)
-                consumer.subscribe(topic);
-
-            log.info("Start-up complete");
-        } else {
-            throw new IllegalStateException("This container was already started");
-        }
-    }
-
-    private void shutdown() {
-        log.info("Shutting down container");
-        commitAll(time.milliseconds());
-
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
         for (StreamSynchronizer<?, ?> streamSynchronizer : streamSynchronizers) {
@@ -247,9 +186,21 @@ public class KafkaStreaming implements Runnable {
                     log.error("Error while closing stream synchronizers: ", e);
                 }
 >>>>>>> removed some generics
+=======
+        Coordinator coordinator = new Coordinator() {
+            @Override
+            public void commit() {
+                throw new UnsupportedOperationException();
             }
-        }
 
+            @Override
+            public void shutdown() {
+                startShutdown();
+>>>>>>> added KStreamThread
+            }
+        };
+
+<<<<<<< HEAD
         producer.close();
         consumer.close();
         parallelExecutor.shutdown();
@@ -265,11 +216,19 @@ public class KafkaStreaming implements Runnable {
 >>>>>>> remove SyncGroup from user facing APIs
         shutdownComplete.countDown();
         log.info("Shut down complete");
+=======
+        Metrics metrics = new Metrics();
+
+        // TODO: Fix this after the threading model is decided (also fix KStreamThread)
+        this.threads = new KStreamThread[1];
+        threads[0] = new KStreamThread(jobClass, topics, streamingConfig, coordinator, metrics);
+>>>>>>> added KStreamThread
     }
 
     /**
-     * Shutdown this streaming instance.
+     * Execute the stream processors
      */
+<<<<<<< HEAD
     public synchronized void close() {
         running = false;
         try {
@@ -311,36 +270,22 @@ public class KafkaStreaming implements Runnable {
 >>>>>>> removed some generics
                 maybeCommit();
                 maybeCleanState();
+=======
+    public void run() {
+        synchronized (lock) {
+            log.info("Starting container");
+            if (!started) {
+                if (!config.stateDir.exists() && !config.stateDir.mkdirs())
+                    throw new IllegalArgumentException("Failed to create state directory: " + config.stateDir.getAbsolutePath());
+
+                for (KStreamThread thread : threads) thread.start();
+                log.info("Start-up complete");
+            } else {
+                throw new IllegalStateException("This container was already started");
+>>>>>>> added KStreamThread
             }
-        } catch (Exception e) {
-            throw new KafkaException(e);
-        }
-    }
 
-    private boolean stillRunning() {
-        if(!running) {
-            log.debug("Shutting down at user request.");
-            return false;
-        }
-        if(config.totalRecordsToProcess >= 0 && recordsProcessed >= config.totalRecordsToProcess) {
-            log.debug("Shutting down as we've reached the user-configured limit of {} records to process.", config.totalRecordsToProcess);
-            return false;
-        }
-        return true;
-    }
-
-    private void maybeCommit() {
-        long now = time.milliseconds();
-        if (config.commitTimeMs >= 0 && lastCommit + config.commitTimeMs < time.milliseconds()) {
-            log.trace("Committing processor instances because the commit interval has elapsed.");
-            commitAll(now);
-        } else if (requestingCommit) {
-            requestingCommit = false;
-            log.trace("Committing processor instances because of user request.");
-            commitAll(now);
-        }
-    }
-
+<<<<<<< HEAD
     private void commitAll(long now) {
         Map<TopicPartition, Long> commit = new HashMap<>();
         for (KStreamContextImpl context : kstreamContexts.values()) {
@@ -377,65 +322,44 @@ public class KafkaStreaming implements Runnable {
             if (consumer.committed(tp) != commit.get(tp)) {
                 commitNeeded = true;
                 break;
-            }
-        }
-
-        if (commitNeeded) {
-            // TODO: for exactly-once we need to make sure the flush and commit
-            // are executed atomically whenever it is triggered by user
-            producer.flush();
-            consumer.commit(commit, CommitType.SYNC); // TODO: can this be async?
-            streamingMetrics.commitTime.record(time.milliseconds() - lastCommit);
-        }
-    }
-
-    /* delete any state dirs that aren't for active contexts */
-    private void maybeCleanState() {
-        long now = time.milliseconds();
-        if(now > nextStateCleaning) {
-            File[] stateDirs = config.stateDir.listFiles();
-            if(stateDirs != null) {
-                for(File dir: stateDirs) {
-                    try {
-                        Integer id = Integer.parseInt(dir.getName());
-                        if(!kstreamContexts.keySet().contains(id)) {
-                            log.info("Deleting obsolete state directory {} after {} delay ms.", dir.getAbsolutePath(), config.stateCleanupDelay);
-                            Util.rm(dir);
-                        }
-                    } catch(NumberFormatException e) {
-                        log.warn("Deleting unknown directory in state directory {}.", dir.getAbsolutePath());
-                        Util.rm(dir);
-                    }
+=======
+            while (!stopping) {
+                try {
+                    lock.wait();
                 }
+                catch (InterruptedException ex) {
+                    Thread.interrupted();
+                }
+>>>>>>> added KStreamThread
             }
-            nextStateCleaning = Long.MAX_VALUE;
+        }
+        shutdown();
+    }
+
+    private void startShutdown() {
+        synchronized (lock) {
+            if (!stopping) {
+                stopping = true;
+                lock.notifyAll();
+            }
         }
     }
 
-    private void addPartitions(Collection<TopicPartition> assignment) {
-        HashSet<TopicPartition> partitions = new HashSet<>(assignment);
+    private void shutdown() {
+        synchronized (lock) {
+            if (stopping) {
+                log.info("Shutting down the container");
 
-        ingestor.init();
+                for (KStreamThread thread : threads)
+                    thread.close();
 
-        Consumer<byte[], byte[]> restoreConsumer =
-          new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-
-        for (TopicPartition partition : partitions) {
-            final Integer id = partition.partition();
-            KStreamContextImpl kstreamContext = kstreamContexts.get(id);
-            if (kstreamContext == null) {
-                KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
-
-                Coordinator coordinator = new Coordinator() {
-                    @Override
-                    public void commit() {
-                        requestingCommit = true;
+                for (KStreamThread thread : threads) {
+                    try {
+                        thread.join();
+                    } catch (InterruptedException ex) {
+                        Thread.interrupted();
                     }
-
-                    @Override
-                    public void shutdown() {
-                        running = true;
-                    }
+<<<<<<< HEAD
                 };
 
                 kstreamContext =
@@ -465,77 +389,21 @@ public class KafkaStreaming implements Runnable {
 =======
                 streamSynchronizersForPartition.put(id, kstreamContext.streamSynchronizers());
 >>>>>>> removed some generics
+=======
+                }
+                stopping = false;
+                log.info("Shutdown complete");
+>>>>>>> added KStreamThread
             }
-        }
-
-        restoreConsumer.close();
-        nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;
-    }
-
-    private void removePartitions(Collection<TopicPartition> assignment) {
-        commitAll(time.milliseconds());
-        for (StreamGroup streamGroup : streamGroups) {
-            log.info("Removing synchronization groups {}", streamGroup.name());
-            streamGroup.close();
-        }
-        for (KStreamContextImpl kstreamContext : kstreamContexts.values()) {
-            log.info("Removing stream context {}", kstreamContext.id());
-            try {
-                kstreamContext.close();
-            }
-            catch (Exception e) {
-                throw new KafkaException(e);
-            }
-            streamingMetrics.processorDestruction.record();
-        }
-        streamGroups.clear();
-        ingestor.clear();
-    }
-
-    private static Set<String> extractTopics(Class<? extends KStreamJob> jobClass) {
-        // extract topics from a jobClass's static member field, topics
-        try {
-            Object instance = Utils.newInstance(jobClass);
-            return ((Topics)instance).topics;
-        }
-        catch (Exception e) {
-            throw new KStreamException("failed to get a topic list from the job", e);
         }
     }
 
-    private class KafkaStreamingMetrics {
-        final Sensor commitTime;
-        final Sensor processTime;
-        final Sensor windowTime;
-        final Sensor processorCreation;
-        final Sensor processorDestruction;
-
-        public KafkaStreamingMetrics() {
-            String group = "kafka-streaming";
-
-            this.commitTime = metrics.sensor("commit-time");
-            this.commitTime.add(new MetricName(group, "commit-time-avg-ms"), new Avg());
-            this.commitTime.add(new MetricName(group, "commits-time-max-ms"), new Max());
-            this.commitTime.add(new MetricName(group, "commits-per-second"), new Rate(new Count()));
-
-            this.processTime = metrics.sensor("process-time");
-            this.commitTime.add(new MetricName(group, "process-time-avg-ms"), new Avg());
-            this.commitTime.add(new MetricName(group, "process-time-max-ms"), new Max());
-            this.commitTime.add(new MetricName(group, "process-calls-per-second"), new Rate(new Count()));
-
-            this.windowTime = metrics.sensor("window-time");
-            this.windowTime.add(new MetricName(group, "window-time-avg-ms"), new Avg());
-            this.windowTime.add(new MetricName(group, "window-time-max-ms"), new Max());
-            this.windowTime.add(new MetricName(group, "window-calls-per-second"), new Rate(new Count()));
-
-            this.processorCreation = metrics.sensor("processor-creation");
-            this.processorCreation.add(new MetricName(group, "processor-creation"), new Rate(new Count()));
-
-            this.processorDestruction = metrics.sensor("processor-destruction");
-            this.processorDestruction.add(new MetricName(group, "processor-destruction"), new Rate(new Count()));
-
-        }
-
+    /**
+     * Shutdown this streaming instance.
+     */
+    public void close() {
+        startShutdown();
+        shutdown();
     }
 
 }

@@ -13,12 +13,15 @@ public class IngestorImpl implements Ingestor {
 
   private static final Logger log = LoggerFactory.getLogger(IngestorImpl.class);
 
+  private final Set<String> topics;
   private final Consumer<byte[], byte[]> consumer;
   private final Set<TopicPartition> unpaused = new HashSet<>();
   private final Map<TopicPartition, StreamGroup> streamSynchronizers = new HashMap<>();
 
-  public IngestorImpl(Consumer<byte[], byte[]> consumer) {
+  public IngestorImpl(Consumer<byte[], byte[]> consumer, Set<String> topics) {
     this.consumer = consumer;
+    this.topics = Collections.unmodifiableSet(topics);
+    for (String topic : this.topics) consumer.subscribe(topic);
   }
 
   public void init() {
@@ -27,19 +30,22 @@ public class IngestorImpl implements Ingestor {
   }
 
   @Override
+  public Set<String> topics() {
+    return topics;
+  }
+
+  @Override
   public void poll(long timeoutMs) {
     synchronized (this) {
-      if (!unpaused.isEmpty()) {
-        ConsumerRecords<byte[], byte[]> records = consumer.poll(timeoutMs);
+      ConsumerRecords<byte[], byte[]> records = consumer.poll(timeoutMs);
 
-        for (TopicPartition partition : unpaused) {
-          StreamGroup streamGroup = streamSynchronizers.get(partition);
+      for (TopicPartition partition : unpaused) {
+        StreamGroup streamGroup = streamSynchronizers.get(partition);
 
-          if (streamGroup != null)
-            streamGroup.addRecords(partition, records.records(partition).iterator());
-          else
-            log.warn("unused topic: " + partition.topic());
-        }
+        if (streamGroup != null)
+          streamGroup.addRecords(partition, records.records(partition).iterator());
+        else
+          log.warn("unused topic: " + partition.topic());
       }
     }
   }
@@ -84,5 +90,19 @@ public class IngestorImpl implements Ingestor {
   public void clear() {
     unpaused.clear();
     streamSynchronizers.clear();
+  }
+
+  boolean commitNeeded(Map<TopicPartition, Long> offsets) {
+    for (TopicPartition tp : offsets.keySet()) {
+      if (consumer.committed(tp) != offsets.get(tp)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void close() {
+    consumer.close();
+    clear();
   }
 }

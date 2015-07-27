@@ -8,12 +8,18 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class MockIngestor implements Ingestor {
 
   private HashMap<TopicPartition, StreamGroup> streamSynchronizers = new HashMap<>();
 
   public HashSet<TopicPartition> paused = new HashSet<>();
+
+  @Override
+  public Set<String> topics() {
+    return null;
+  }
 
   @Override
   public void poll(long timeoutMs) {
