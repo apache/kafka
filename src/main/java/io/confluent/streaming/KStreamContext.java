@@ -76,12 +76,6 @@ public interface KStreamContext {
   RecordCollector recordCollector();
 
   /**
-   * Returns {@link Coordinator}.
-   * @return Coordinator
-   */
-  Coordinator coordinator();
-
-  /**
    * Returns an application context registered to {@link StreamingConfig}.
    * @return an application context
    */

@@ -17,7 +17,8 @@
 
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.*;
+import io.confluent.streaming.KStreamJob;
+import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.util.ParallelExecutor;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -28,7 +29,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -45,18 +45,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class KStreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(KStreamThread.class);
 
     private final Class<? extends KStreamJob> jobClass;
-    private final Set<String> topics;
     private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
-    private final Coordinator containerCoordinator;
     private final ParallelExecutor parallelExecutor;
     private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<>();
     private final IngestorImpl ingestor;
@@ -85,12 +86,10 @@ public class KStreamThread extends Thread {
     };
 
     @SuppressWarnings("unchecked")
-    public KStreamThread(Class<? extends KStreamJob> jobClass, Set<String> topics, StreamingConfig streamingConfig, Coordinator coordinator, Metrics metrics) {
+    public KStreamThread(Class<? extends KStreamJob> jobClass, Set<String> topics, StreamingConfig streamingConfig, Metrics metrics) {
         super();
         this.config = new ProcessorConfig(streamingConfig.config());
-        this.containerCoordinator = coordinator;
         this.jobClass = jobClass;
-        this.topics = topics;
         this.streamingConfig = streamingConfig;
         this.metrics = metrics;
         this.streamingMetrics = new KafkaStreamingMetrics();
@@ -197,7 +196,6 @@ public class KStreamThread extends Thread {
         Map<TopicPartition, Long> commit = new HashMap<>();
         for (KStreamContextImpl context : kstreamContexts.values()) {
             context.flush();
-            // check co-ordinator
         }
         for (StreamGroup streamGroup : streamGroups) {
             try {
@@ -255,20 +253,8 @@ public class KStreamThread extends Thread {
             if (kstreamContext == null) {
                 KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
 
-                Coordinator coordinator = new Coordinator() {
-                    @Override
-                    public void commit() {
-                        requestingCommit = true;
-                    }
-
-                    @Override
-                    public void shutdown() {
-                        containerCoordinator.shutdown();
-                    }
-                };
-
                 kstreamContext =
-                  new KStreamContextImpl(id, job, topics, ingestor, collector, coordinator, streamingConfig, config, metrics);
+                  new KStreamContextImpl(id, job, ingestor, collector, streamingConfig, config, metrics);
 
                 kstreamContexts.put(id, kstreamContext);
 

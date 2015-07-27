@@ -81,6 +81,7 @@ public class KafkaStreaming implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     private final Class<? extends KStreamJob> jobClass;
     private final Set<String> topics;
 <<<<<<< HEAD
@@ -105,12 +106,27 @@ public class KafkaStreaming implements Runnable {
     private final StreamingConfig streamingConfig;
 =======
 >>>>>>> added KStreamThread
+=======
+    //
+    // Container State Transition
+    //
+    //           run()            startShutdown()            shutdown()
+    // CREATED --------> RUNNING ----------------> STOPPING -----------> STOPPED
+    //    |                                            ^
+    //    |           startShutdown()                  |
+    //    +--------------------------------------------+
+    //
+    private final int CREATED = 0;
+    private final int RUNNING = 1;
+    private final int STOPPING = 2;
+    private final int STOPPED = 3;
+    private int state = CREATED;
+
+>>>>>>> removed Coordinator
     private final ProcessorConfig config;
     private final Object lock = new Object();
     private final KStreamThread[] threads;
     private final Set<String> topics;
-    private boolean started = false;
-    private boolean stopping = false;
 
 
 <<<<<<< HEAD
@@ -167,6 +183,7 @@ public class KafkaStreaming implements Runnable {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         for (StreamSynchronizer<?, ?> streamSynchronizer : streamSynchronizers) {
 =======
         for (StreamGroup streamGroup : streamGroups) {
@@ -217,12 +234,18 @@ public class KafkaStreaming implements Runnable {
         shutdownComplete.countDown();
         log.info("Shut down complete");
 =======
+=======
+>>>>>>> removed Coordinator
         Metrics metrics = new Metrics();
 
         // TODO: Fix this after the threading model is decided (also fix KStreamThread)
         this.threads = new KStreamThread[1];
+<<<<<<< HEAD
         threads[0] = new KStreamThread(jobClass, topics, streamingConfig, coordinator, metrics);
 >>>>>>> added KStreamThread
+=======
+        threads[0] = new KStreamThread(jobClass, topics, streamingConfig, metrics);
+>>>>>>> removed Coordinator
     }
 
     /**
@@ -274,7 +297,7 @@ public class KafkaStreaming implements Runnable {
     public void run() {
         synchronized (lock) {
             log.info("Starting container");
-            if (!started) {
+            if (state == CREATED) {
                 if (!config.stateDir.exists() && !config.stateDir.mkdirs())
                     throw new IllegalArgumentException("Failed to create state directory: " + config.stateDir.getAbsolutePath());
 
@@ -285,6 +308,7 @@ public class KafkaStreaming implements Runnable {
 >>>>>>> added KStreamThread
             }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     private void commitAll(long now) {
         Map<TopicPartition, Long> commit = new HashMap<>();
@@ -324,6 +348,10 @@ public class KafkaStreaming implements Runnable {
                 break;
 =======
             while (!stopping) {
+=======
+            state = RUNNING;
+            while (state == RUNNING) {
+>>>>>>> removed Coordinator
                 try {
                     lock.wait();
                 }
@@ -332,22 +360,8 @@ public class KafkaStreaming implements Runnable {
                 }
 >>>>>>> added KStreamThread
             }
-        }
-        shutdown();
-    }
 
-    private void startShutdown() {
-        synchronized (lock) {
-            if (!stopping) {
-                stopping = true;
-                lock.notifyAll();
-            }
-        }
-    }
-
-    private void shutdown() {
-        synchronized (lock) {
-            if (stopping) {
+            if (state == STOPPING) {
                 log.info("Shutting down the container");
 
                 for (KStreamThread thread : threads)
@@ -391,7 +405,8 @@ public class KafkaStreaming implements Runnable {
 >>>>>>> removed some generics
 =======
                 }
-                stopping = false;
+                state = STOPPED;
+                lock.notifyAll();
                 log.info("Shutdown complete");
 >>>>>>> added KStreamThread
             }
@@ -402,8 +417,20 @@ public class KafkaStreaming implements Runnable {
      * Shutdown this streaming instance.
      */
     public void close() {
-        startShutdown();
-        shutdown();
+        synchronized (lock) {
+            if (state == CREATED || state == RUNNING) {
+                state = STOPPING;
+                lock.notifyAll();
+            }
+            while (state == STOPPING) {
+                try {
+                    lock.wait();
+                }
+                catch (InterruptedException ex) {
+                    Thread.interrupted();
+                }
+            }
+        }
     }
 
 }

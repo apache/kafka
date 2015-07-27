@@ -5,7 +5,6 @@ import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StorageEngine;
-import io.confluent.streaming.Coordinator;
 import io.confluent.streaming.internal.StreamGroup;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -50,9 +49,6 @@ public class MockKStreamContext implements KStreamContext {
 
   @Override
   public RecordCollector recordCollector() { throw new UnsupportedOperationException("recordCollector() not supported."); }
-
-  @Override
-  public Coordinator coordinator() { throw new UnsupportedOperationException("coordinator() not supported."); }
 
   @Override
   public Map<String, Object> getContext() { throw new UnsupportedOperationException("getContext() not supported."); }

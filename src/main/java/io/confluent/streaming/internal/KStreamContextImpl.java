@@ -1,6 +1,5 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.Coordinator;
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamException;
@@ -11,7 +10,6 @@ import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -40,7 +38,6 @@ public class KStreamContextImpl implements KStreamContext {
   private final Ingestor ingestor;
   private final RecordCollectorImpl collector;
 
-  private final Coordinator coordinator;
   private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<>();
   private final HashMap<String, PartitioningInfo> partitioningInfos = new HashMap<>();
   private final TimestampExtractor timestampExtractor;
@@ -55,10 +52,8 @@ public class KStreamContextImpl implements KStreamContext {
   @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
                             KStreamJob job,
-                            Set<String> topics,
                             Ingestor ingestor,
                             RecordCollectorImpl collector,
-                            Coordinator coordinator,
                             StreamingConfig streamingConfig,
                             ProcessorConfig processorConfig,
                             Metrics metrics) {
@@ -66,7 +61,6 @@ public class KStreamContextImpl implements KStreamContext {
     this.job = job;
     this.ingestor = ingestor;
     this.collector = collector;
-    this.coordinator = coordinator;
     this.streamingConfig = streamingConfig;
     this.processorConfig = processorConfig;
 
@@ -184,11 +178,6 @@ public class KStreamContextImpl implements KStreamContext {
   @Override
   public RecordCollector recordCollector() {
     return collector;
-  }
-
-  @Override
-  public Coordinator coordinator() {
-    return coordinator;
   }
 
   @Override
