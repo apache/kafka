@@ -60,6 +60,7 @@ rat {
   excludes.addAll([
     '**/.git/**',
     'build/**',
+    'CONTRIBUTING.md',
     'gradlew',
     'gradlew.bat',
     '**/README.md',
