@@ -378,7 +378,7 @@ public class NetworkClient implements KafkaClient {
             short apiKey = req.request().header().apiKey();
             Struct body = (Struct) ProtoUtils.currentResponseSchema(apiKey).read(receive.payload());
             correlate(req.request().header(), header);
-            if (apiKey == ApiKeys.METADATA.id) {
+            if (apiKey == ApiKeys.METADATA.id && req.isInitiatedByNetworkClient()) {
                 handleMetadataResponse(req.request().header(), body, now);
             } else {
                 // need to add body/header to response here
@@ -454,7 +454,7 @@ public class NetworkClient implements KafkaClient {
     private ClientRequest metadataRequest(long now, String node, Set<String> topics) {
         MetadataRequest metadata = new MetadataRequest(new ArrayList<String>(topics));
         RequestSend send = new RequestSend(node, nextRequestHeader(ApiKeys.METADATA), metadata.toStruct());
-        return new ClientRequest(now, true, send, null);
+        return new ClientRequest(now, true, send, null, true);
     }
 
     /**

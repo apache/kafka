@@ -39,6 +39,8 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
+import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -158,6 +160,48 @@ public class Fetcher<K, V> {
                 subscriptions.seek(tp, subscriptions.committed(tp));
             }
         }
+    }
+
+
+
+    /**
+     * Get metadata for all topics present in Kafka cluster
+     *
+     * @param timeout time for which getting all topics is attempted
+     * @return The map of topics and its partitions
+     */
+    public Map<String, List<PartitionInfo>> getAllTopics(long timeout) {
+        final HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
+        long startTime = time.milliseconds();
+
+        while (time.milliseconds() - startTime < timeout) {
+            final Node node = client.leastLoadedNode();
+            if (node != null) {
+                MetadataRequest metadataRequest = new MetadataRequest(Collections.<String>emptyList());
+                final RequestFuture<ClientResponse> requestFuture =
+                    client.send(node, ApiKeys.METADATA, metadataRequest);
+
+                client.poll(requestFuture);
+
+                if (requestFuture.succeeded()) {
+                    MetadataResponse response =
+                        new MetadataResponse(requestFuture.value().responseBody());
+
+                    for (String topic : response.cluster().topics())
+                        topicsPartitionInfos.put(
+                            topic, response.cluster().availablePartitionsForTopic(topic));
+
+                    return topicsPartitionInfos;
+                }
+
+                if (!requestFuture.isRetriable())
+                    throw requestFuture.exception();
+            }
+
+            Utils.sleep(retryBackoffMs);
+        }
+
+        return topicsPartitionInfos;
     }
 
     /**

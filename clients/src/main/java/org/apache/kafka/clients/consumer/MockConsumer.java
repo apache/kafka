@@ -177,6 +177,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             return parts;
     }
 
+    @Override
+    public Map<String, List<PartitionInfo>> listTopics() {
+        ensureNotClosed();
+        return partitions;
+    }
+
     public synchronized void updatePartitions(String topic, List<PartitionInfo> partitions) {
         ensureNotClosed();
         this.partitions.put(topic, partitions);
