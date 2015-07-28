@@ -73,6 +73,27 @@ public class SubscriptionStateTest {
         assertAllPositions(tp0, null);
         assertEquals(Collections.singleton(tp1), state.assignedPartitions());
     }
+
+    @Test
+    public void topicUnsubscription() {
+        final String topic = "test";
+        state.subscribe(topic);
+        assertEquals(1, state.subscribedTopics().size());
+        assertTrue(state.assignedPartitions().isEmpty());
+        assertTrue(state.partitionsAutoAssigned());
+        state.changePartitionAssignment(asList(tp0));
+        state.committed(tp0, 1);
+        state.fetched(tp0, 1);
+        state.consumed(tp0, 1);
+        assertAllPositions(tp0, 1L);
+        state.changePartitionAssignment(asList(tp1));
+        assertAllPositions(tp0, null);
+        assertEquals(Collections.singleton(tp1), state.assignedPartitions());
+
+        state.unsubscribe(topic);
+        assertEquals(0, state.subscribedTopics().size());
+        assertTrue(state.assignedPartitions().isEmpty());
+    }
     
     @Test(expected = IllegalArgumentException.class)
     public void cantChangeFetchPositionForNonAssignedPartition() {

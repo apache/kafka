@@ -217,6 +217,25 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     consumer0.close()
   }
 
+  def testUnsubscribeTopic() {
+    val callback = new TestConsumerReassignmentCallback()
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
+    val consumer0 = new KafkaConsumer(this.consumerConfig, callback, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    try {
+      consumer0.subscribe(topic)
+
+      // the initial subscription should cause a callback execution
+      while (callback.callsToAssigned == 0)
+        consumer0.poll(50)
+
+      consumer0.unsubscribe(topic)
+      assertEquals(0, consumer0.subscriptions.size())
+    } finally {
+      consumer0.close()
+    }
+  }
+
   private class TestConsumerReassignmentCallback extends ConsumerRebalanceCallback {
     var callsToAssigned = 0
     var callsToRevoked = 0
