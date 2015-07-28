@@ -187,7 +187,7 @@ public class KStreamThread extends Thread {
         Map<TopicPartition, Long> commit = new HashMap<>();
         for (KStreamContextImpl context : kstreamContexts.values()) {
             context.flush();
-            context.getConsumedOffsets(commit);
+            context.putConsumedOffsetsTo(commit);
         }
 
         // check if commit is really needed, i.e. if all the offsets are already committed
