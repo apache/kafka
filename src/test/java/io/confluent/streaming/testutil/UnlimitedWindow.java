@@ -42,4 +42,20 @@ public class UnlimitedWindow<K, V> implements Window<K, V> {
     list.add(new Stamped<KeyValue<K, V>>(KeyValue.pair(key, value), timestamp));
   }
 
+  @Override
+  public String name() {
+    return null;
+  }
+
+  @Override
+  public void flush() {
+  }
+
+  @Override
+  public void close() {
+  }
+
+  @Override
+  public void restore() {
+  }
 }

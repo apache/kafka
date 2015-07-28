@@ -5,7 +5,7 @@ import java.util.Iterator;
 /**
  * Created by yasuhiro on 6/17/15.
  */
-public interface Window<K, V> {
+public interface Window<K, V> extends StateStore {
 
   Iterator<V> find(K key, long timestamp);
 

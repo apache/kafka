@@ -10,14 +10,16 @@ import java.util.LinkedList;
 /**
  * Created by yasuhiro on 6/18/15.
  */
-public class WindowByTime<K, V> implements Window<K, V> {
+public class SlidingWindow<K, V> implements Window<K, V> {
 
+  private String name;
   private final long duration;
   private final int maxCount;
   private LinkedList<K> list = new LinkedList<K>();
   private HashMap<K, LinkedList<Stamped<V>>> map = new HashMap<K, LinkedList<Stamped<V>>>();
 
-  public WindowByTime(long duration, int maxCount) {
+  public SlidingWindow(String name, long duration, int maxCount) {
+    this.name = name;
     this.duration = duration;
     this.maxCount = maxCount;
   }
@@ -105,4 +107,23 @@ public class WindowByTime<K, V> implements Window<K, V> {
     }
   }
 
+  @Override
+  public String name() {
+    return name;
+  }
+
+  @Override
+  public void flush() {
+    // TODO
+  }
+
+  @Override
+  public void close() {
+    // TODO
+  }
+
+  @Override
+  public void restore() {
+    // TODO
+  }
 }
