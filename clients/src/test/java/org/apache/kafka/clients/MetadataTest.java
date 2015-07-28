@@ -12,7 +12,7 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -27,11 +27,11 @@ public class MetadataTest {
     private long refreshBackoffMs = 100;
     private long metadataExpireMs = 1000;
     private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs);
-    private AtomicBoolean backgroundError = new AtomicBoolean(false);
+    private AtomicReference<String> backgroundError = new AtomicReference<String>();
     
     @After
     public void tearDown() {
-        assertFalse(backgroundError.get());
+        assertNull("Exception in background thread : " + backgroundError.get(), backgroundError.get());
     }
 
     @Test
@@ -48,7 +48,15 @@ public class MetadataTest {
         Thread t2 = asyncFetch(topic);
         assertTrue("Awaiting update", t1.isAlive());
         assertTrue("Awaiting update", t2.isAlive());
-        metadata.update(TestUtils.singletonCluster(topic, 1), time);
+        // Perform metadata update when an update is requested on the async fetch thread
+        // This simulates the metadata update sequence in KafkaProducer
+        while (t1.isAlive() || t2.isAlive()) {
+            if (metadata.timeToNextUpdate(time) == 0) {
+                metadata.update(TestUtils.singletonCluster(topic, 1), time);
+                time += refreshBackoffMs;
+            }
+            Thread.sleep(1);
+        }
         t1.join();
         t2.join();
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
@@ -106,7 +114,7 @@ public class MetadataTest {
                     try {
                         metadata.awaitUpdate(metadata.requestUpdate(), refreshBackoffMs);
                     } catch (Exception e) {
-                        backgroundError.set(true);
+                        backgroundError.set(e.toString());
                     }
                 }
             }
