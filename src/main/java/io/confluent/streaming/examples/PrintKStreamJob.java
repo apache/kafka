@@ -11,20 +11,20 @@ import java.util.Properties;
  */
 public class PrintKStreamJob<K, V> extends ProcessorKStreamJob<K, V> {
 
-  private ProcessorContext context;
+  private ProcessorContext processorContext;
 
   @Override
   public void init(ProcessorContext context) {
-    this.context = context;
+    this.processorContext = context;
   }
 
   @Override
   public void process(K key, V value) {
     System.out.println("[" + key + ", " + value + "]");
 
-    context.commit();
+    processorContext.commit();
 
-    context.send("topic", key, value);
+    processorContext.send("topic", key, value);
   }
 
   @Override
