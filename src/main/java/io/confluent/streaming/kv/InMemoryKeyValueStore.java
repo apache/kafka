@@ -4,7 +4,6 @@ import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.kv.internals.MeteredKeyValueStore;
 import io.confluent.streaming.kv.internals.RestoreFunc;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -90,6 +89,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
             return new MemoryStoreIterator<K, V>(this.map.entrySet().iterator());
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public void flush() {
             RecordCollector collector = context.recordCollector();

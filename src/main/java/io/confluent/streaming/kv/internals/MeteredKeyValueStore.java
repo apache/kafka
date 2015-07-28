@@ -3,7 +3,6 @@ package io.confluent.streaming.kv.internals;
 import io.confluent.streaming.kv.Entry;
 import io.confluent.streaming.kv.KeyValueIterator;
 import io.confluent.streaming.kv.KeyValueStore;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;

@@ -91,15 +91,17 @@ public class ProcessorStateManager {
         restoreConsumer.seek(storePartition, checkpointedOffset);
 
         // restore its state from changelog records
-        while (true) {
-            for(ConsumerRecord<byte[], byte[]> record: restoreConsumer.poll(100))
-                restoreFunc.apply(record.key(), record.value());
+        boolean consumedToEnd = false;
+        while (!consumedToEnd) {
+            for(ConsumerRecord<byte[], byte[]> record: restoreConsumer.poll(100)) {
+                if (record.offset() > endOffset) {
+                    consumedToEnd = true;
+                    break;
+                }
 
-            long position = restoreConsumer.position(storePartition);
-            if (position == endOffset)
-                break;
-            else if(position > endOffset)
-                throw new IllegalStateException("This should not happen.");
+                restoreFunc.apply(record.key(), record.value());
+            }
+
         }
 
         // record the restored offset for its partition
