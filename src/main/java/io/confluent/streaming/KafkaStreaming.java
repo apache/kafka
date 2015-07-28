@@ -176,6 +176,8 @@ public class KafkaStreaming implements Runnable {
     public KafkaStreaming(Class<? extends KStreamJob> jobClass, StreamingConfig streamingConfig) {
 >>>>>>> added KStreamThread
 
+        if (streamingConfig.timestampExtractor() == null) throw new NullPointerException("timestamp extractor is missing");
+
         this.config = new ProcessorConfig(streamingConfig.config());
         try {
             this.topics = new HashSet<>(Arrays.asList(this.config.topics.split(",")));

@@ -75,12 +75,15 @@ public class KStreamThread extends Thread {
     protected final ConsumerRebalanceCallback rebalanceCallback = new ConsumerRebalanceCallback() {
         @Override
         public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
+            ingestor.init();
             addPartitions(assignment);
         }
 
         @Override
         public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
-            removePartitions(assignment);
+            commitAll(time.milliseconds());
+            removePartitions();
+            ingestor.clear();
         }
     };
 
@@ -113,6 +116,7 @@ public class KStreamThread extends Thread {
      * Execute the stream processors
      */
     public synchronized void run() {
+        log.info("Starting a kstream thread");
         try {
             ingestor.open();
             runLoop();
@@ -128,24 +132,15 @@ public class KStreamThread extends Thread {
         log.info("Shutting down a kstream thread");
         commitAll(time.milliseconds());
 
-        for (StreamGroup streamGroup : streamGroups) {
-            try {
-                streamGroup.close();
-            }
-            catch(Exception e) {
-                log.error("Error while closing stream groups: ", e);
-            }
-        }
-
         collector.close();
         ingestor.close();
         parallelExecutor.shutdown();
-        streamGroups.clear();
+        removePartitions();
         log.info("kstream thread shutdown complete");
     }
 
     /**
-     * Shutdown this streaming instance.
+     * Shutdown this streaming thread.
      */
     public synchronized void close() {
         running = false;
@@ -182,7 +177,7 @@ public class KStreamThread extends Thread {
 
     private void maybeCommit() {
         long now = time.milliseconds();
-        if (config.commitTimeMs >= 0 && lastCommit + config.commitTimeMs < time.milliseconds()) {
+        if (config.commitTimeMs >= 0 && lastCommit + config.commitTimeMs < now) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
             commitAll(now);
         }
@@ -192,14 +187,7 @@ public class KStreamThread extends Thread {
         Map<TopicPartition, Long> commit = new HashMap<>();
         for (KStreamContextImpl context : kstreamContexts.values()) {
             context.flush();
-        }
-        for (StreamGroup streamGroup : streamGroups) {
-            try {
-                commit.putAll(streamGroup.consumedOffsets());
-            }
-            catch(Exception e) {
-                log.error("Error while closing processor: ", e);
-            }
+            context.getConsumedOffsets(commit);
         }
 
         // check if commit is really needed, i.e. if all the offsets are already committed
@@ -208,7 +196,7 @@ public class KStreamThread extends Thread {
             // are executed atomically whenever it is triggered by user
             collector.flush();
             ingestor.commit(commit); // TODO: can this be async?
-            streamingMetrics.commitTime.record(time.milliseconds() - lastCommit);
+            streamingMetrics.commitTime.record(now - lastCommit);
         }
     }
 
@@ -238,7 +226,12 @@ public class KStreamThread extends Thread {
     private void addPartitions(Collection<TopicPartition> assignment) {
         HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
+<<<<<<< HEAD
         ingestor.init();
+=======
+        Consumer<byte[], byte[]> restoreConsumer =
+          new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+>>>>>>> close stream groups in context
 
         for (TopicPartition partition : partitions) {
             final Integer id = partition.partition();
@@ -258,7 +251,7 @@ public class KStreamThread extends Thread {
                     throw new KafkaException(e);
                 }
 
-                Collection<StreamGroup> streamGroups = kstreamContext.streamSynchronizers();
+                Collection<StreamGroup> streamGroups = kstreamContext.streamGroups();
                 for (StreamGroup streamGroup : streamGroups) {
                     streamGroups.add(streamGroup);
                 }
@@ -268,12 +261,7 @@ public class KStreamThread extends Thread {
         nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;
     }
 
-    private void removePartitions(Collection<TopicPartition> assignment) {
-        commitAll(time.milliseconds());
-        for (StreamGroup streamGroup : streamGroups) {
-            log.info("Removing synchronization groups {}", streamGroup.name());
-            streamGroup.close();
-        }
+    private void removePartitions() {
         for (KStreamContextImpl kstreamContext : kstreamContexts.values()) {
             log.info("Removing stream context {}", kstreamContext.id());
             try {
@@ -285,7 +273,6 @@ public class KStreamThread extends Thread {
             streamingMetrics.processorDestruction.record();
         }
         streamGroups.clear();
-        ingestor.clear();
     }
 
     private class KafkaStreamingMetrics {
