@@ -1,6 +1,7 @@
 package io.confluent.streaming;
 
 import io.confluent.streaming.internal.StreamGroup;
+import io.confluent.streaming.kv.internals.RestoreFunc;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -109,10 +110,9 @@ public interface KStreamContext {
 
   /**
    * Restores the specified storage engine.
-   * @param engine the storage engine
-   * @throws Exception an exception thrown by the engine
+   * @param store the storage engine
    */
-  void restore(StateStore engine) throws Exception;
+  void restore(StateStore store, RestoreFunc restoreFunc);
 
   /**
    * Ensures that the context is in the initialization phase where KStream topology can be constructed

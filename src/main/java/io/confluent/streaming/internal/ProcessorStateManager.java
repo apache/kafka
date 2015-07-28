@@ -16,13 +16,12 @@
  */
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StateStore;
+import io.confluent.streaming.kv.internals.RestoreFunc;
 import io.confluent.streaming.util.OffsetCheckpoint;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +65,7 @@ public class ProcessorStateManager {
         checkpoint.delete();
     }
 
-    public void registerAndRestore(StateStore store) {
+    public void registerAndRestore(StateStore store, RestoreFunc restoreFunc) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
@@ -94,7 +93,7 @@ public class ProcessorStateManager {
         // restore its state from changelog records
         while (true) {
             for(ConsumerRecord<byte[], byte[]> record: restoreConsumer.poll(100))
-                store.restore(record);
+                restoreFunc.apply(record.key(), record.value());
 
             long position = restoreConsumer.position(storePartition);
             if (position == endOffset)

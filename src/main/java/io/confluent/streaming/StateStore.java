@@ -49,7 +49,7 @@ public interface StateStore {
     void close();
 
     /**
-     * Consume one changelog record to restore its recorded state change
+     * Restore the state of the storage
      */
-    void restore(ConsumerRecord<byte[], byte[]> record);
+    void restore();
 }

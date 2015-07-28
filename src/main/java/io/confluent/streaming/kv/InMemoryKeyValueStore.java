@@ -2,14 +2,21 @@ package io.confluent.streaming.kv;
 
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
-import io.confluent.streaming.internal.KStreamContextImpl;
 import io.confluent.streaming.kv.internals.MeteredKeyValueStore;
+import io.confluent.streaming.kv.internals.RestoreFunc;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * An in-memory key-value store based on a TreeMap
@@ -23,7 +30,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         super(name, "kafka-streams", new MemoryStore<K, V>(name, context), context.metrics(), new SystemTime());
     }
 
-    private static class MemoryStore<K, V> extends KeyValueStore<K, V> {
+    private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
 
         private final String topic;
         private final int partition;
@@ -99,8 +106,17 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         }
 
         @Override
-        public void restore(ConsumerRecord<byte[], byte[]> record) {
+        public void restore() {
+            final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keySerializer();
+            final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueSerializer();
 
+            context.restore(this, new RestoreFunc () {
+                @Override
+                public void apply(byte[] key, byte[] value) {
+                    map.put(keyDeserializer.deserialize(topic, key),
+                        valDeserializer.deserialize(topic, value));
+                }
+            });
         }
 
         @Override

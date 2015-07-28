@@ -71,10 +71,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void restore(ConsumerRecord<byte[], byte[]> record) {
+    public void restore() {
         long startNs = time.nanoseconds();
         try {
-            inner.restore(record);
+            inner.restore();
         } finally {
             recordLatency(this.restoreTime, startNs, time.nanoseconds());
         }
