@@ -17,7 +17,7 @@
 
 package org.apache.kafka.copycat.file;
 
-import org.apache.kafka.copycat.connector.TopicPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.junit.Before;

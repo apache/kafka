@@ -17,11 +17,11 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
-import org.apache.kafka.copycat.connector.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.sink.SinkRecord;
@@ -118,14 +118,9 @@ public class WorkerSinkTask implements WorkerTask {
      * the write commit. This should only be invoked by the WorkerSinkTaskThread.
      **/
     public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
-        // Because of the different representations, we need to build two copies of the same map
         HashMap<TopicPartition, Long> offsets = new HashMap<TopicPartition, Long>();
-        HashMap<org.apache.kafka.common.TopicPartition, Long> offsetsKafka
-                = new HashMap<org.apache.kafka.common.TopicPartition, Long>();
-        for (org.apache.kafka.common.TopicPartition tp : consumer.subscriptions()) {
-            long pos = consumer.position(tp);
-            offsets.put(new TopicPartition(tp.topic(), tp.partition()), pos);
-            offsetsKafka.put(tp, pos);
+        for (TopicPartition tp : consumer.subscriptions()) {
+            offsets.put(tp, consumer.position(tp));
         }
         // We only don't flush the task in one case: when shutting down, the task has already been
         // stopped and all data should have already been flushed
@@ -141,11 +136,11 @@ public class WorkerSinkTask implements WorkerTask {
 
         ConsumerCommitCallback cb = new ConsumerCommitCallback() {
             @Override
-            public void onComplete(Map<org.apache.kafka.common.TopicPartition, Long> offsets, Exception error) {
+            public void onComplete(Map<TopicPartition, Long> offsets, Exception error) {
                 workThread.onCommitCompleted(error, seqno);
             }
         };
-        consumer.commit(offsetsKafka, sync ? CommitType.SYNC : CommitType.ASYNC, cb);
+        consumer.commit(offsets, sync ? CommitType.SYNC : CommitType.ASYNC, cb);
     }
 
     public Time getTime() {
@@ -193,11 +188,10 @@ public class WorkerSinkTask implements WorkerTask {
         // We ask for offsets after this poll to make sure any offsets committed before the rebalance are picked up correctly.
         newConsumer.poll(0);
         Map<TopicPartition, Long> offsets = context.getOffsets();
-        for (org.apache.kafka.common.TopicPartition kafkatp : newConsumer.subscriptions()) {
-            TopicPartition tp = new TopicPartition(kafkatp.topic(), kafkatp.partition());
+        for (TopicPartition tp : newConsumer.subscriptions()) {
             Long offset = offsets.get(tp);
             if (offset != null)
-                newConsumer.seek(kafkatp, offset);
+                newConsumer.seek(tp, offset);
         }
         return newConsumer;
     }

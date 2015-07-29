@@ -59,8 +59,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     private static final String TOPIC_PARTITION_STR = "test-12";
 
     private static final TopicPartition TOPIC_PARTITION = new TopicPartition(TOPIC, PARTITION);
-    private static final org.apache.kafka.copycat.connector.TopicPartition TOPIC_PARTITION_COPYCAT =
-            new org.apache.kafka.copycat.connector.TopicPartition(TOPIC, PARTITION);
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private Time time;
@@ -348,7 +346,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
                 }
         );
 
-        sinkTask.flush(Collections.singletonMap(TOPIC_PARTITION_COPYCAT, finalOffset));
+        sinkTask.flush(Collections.singletonMap(TOPIC_PARTITION, finalOffset));
         IExpectationSetters<Object> flushExpectation = PowerMock.expectLastCall();
         if (flushError != null) {
             flushExpectation.andThrow(flushError).once();

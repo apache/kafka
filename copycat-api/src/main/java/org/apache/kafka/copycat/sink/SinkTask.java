@@ -16,8 +16,8 @@
  **/
 package org.apache.kafka.copycat.sink;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.connector.Task;
-import org.apache.kafka.copycat.connector.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
 
 import java.util.Collection;

@@ -17,9 +17,9 @@
 
 package org.apache.kafka.copycat.runtime.standalone;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.Task;
-import org.apache.kafka.copycat.connector.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.Worker;

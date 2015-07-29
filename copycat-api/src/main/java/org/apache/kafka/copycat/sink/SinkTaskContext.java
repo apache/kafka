@@ -17,7 +17,7 @@
 
 package org.apache.kafka.copycat.sink;
 
-import org.apache.kafka.copycat.connector.TopicPartition;
+import org.apache.kafka.common.TopicPartition;
 
 import java.util.HashMap;
 import java.util.Map;
