@@ -31,6 +31,7 @@ ram_megabytes = 1280
 # EC2
 ec2_access_key = ENV['AWS_ACCESS_KEY']
 ec2_secret_key = ENV['AWS_SECRET_KEY']
+ec2_session_token = ENV['AWS_SESSION_TOKEN']
 ec2_keypair_name = nil
 ec2_keypair_file = nil
 
@@ -48,6 +49,24 @@ ec2_associate_public_ip = nil
 local_config_file = File.join(File.dirname(__FILE__), "Vagrantfile.local")
 if File.exists?(local_config_file) then
   eval(File.read(local_config_file), binding, "Vagrantfile.local")
+end
+
+# This is a horrible hack to work around bad interactions between
+# vagrant-hostmanager and vagrant-aws/vagrant's implementation. Hostmanager
+# wants to update the /etc/hosts entries, but tries to do so even on nodes that
+# aren't up (e.g. even when all nodes are stopped and you run vagrant
+# destroy). Because of the way the underlying code in vagrant works, it still
+# tries to communicate with the node and has to wait for a very long
+# timeout. This modifies the update to check for hosts that are not created or
+# stopped, skipping the update in that case since it's impossible to update
+# nodes in that state.
+Object.const_get("VagrantPlugins").const_get("HostManager").const_get("HostsFile").class_eval do
+  alias_method :old_update_guest, :update_guest
+  def update_guest(machine)
+    state_id = machine.state.id
+    return if state_id == :not_created || state_id == :stopped
+    old_update_guest(machine)
+  end
 end
 
 # TODO(ksweeney): RAM requirements are not empirical and can probably be significantly lowered.
@@ -85,13 +104,31 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     override.vm.box = "dummy"
     override.vm.box_url = "https://github.com/mitchellh/vagrant-aws/raw/master/dummy.box"
 
-    override.hostmanager.ignore_private_ip = true
+    cached_addresses = {}
+    # Use a custom resolver that SSH's into the machine and finds the IP address
+    # directly. This lets us get at the private IP address directly, avoiding
+    # some issues with using the default IP resolver, which uses the public IP
+    # address.
+    override.hostmanager.ip_resolver = proc do |vm, resolving_vm|
+      if !cached_addresses.has_key?(vm.name)
+        state_id = vm.state.id
+        if state_id != :not_created && state_id != :stopped && vm.communicate.ready?
+          vm.communicate.execute("/sbin/ifconfig eth0 | grep 'inet addr' | tail -n 1 | egrep -o '[0-9\.]+' | head -n 1 2>&1") do |type, contents|
+            cached_addresses[vm.name] = contents.split("\n").first[/(\d+\.\d+\.\d+\.\d+)/, 1]
+          end
+        else
+          cached_addresses[vm.name] = nil
+        end
+      end
+      cached_addresses[vm.name]
+    end
 
     override.ssh.username = ec2_user
     override.ssh.private_key_path = ec2_keypair_file
 
     aws.access_key_id = ec2_access_key
     aws.secret_access_key = ec2_secret_key
+    aws.session_token = ec2_session_token
     aws.keypair_name = ec2_keypair_name
 
     aws.region = ec2_region
