@@ -15,6 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -83,7 +84,8 @@ public class SubscriptionState {
             throw new IllegalStateException("Topic " + topic + " was never subscribed to.");
         this.subscribedTopics.remove(topic);
         this.needsPartitionAssignment = true;
-        for (TopicPartition tp: assignedPartitions())
+        final List<TopicPartition> existingAssignedPartitions = new ArrayList<>(assignedPartitions());
+        for (TopicPartition tp: existingAssignedPartitions)
             if (topic.equals(tp.topic()))
                 clearPartition(tp);
     }

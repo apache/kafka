@@ -61,6 +61,7 @@ rat {
   excludes.addAll([
     '**/.git/**',
     'build/**',
+    'CONTRIBUTING.md',
     'gradlew',
     'gradlew.bat',
     '**/README.md',
@@ -205,7 +206,7 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
 }
 
 def copycatPkgs = ['copycat-data', 'copycat-api', 'copycat-runtime', 'copycat-avro', 'copycat-file']
-def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender'] + copycatPkgs
+def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools'] + copycatPkgs
 
 tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
 tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) {
@@ -416,6 +417,56 @@ project(':clients') {
      configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':tools') {
+    apply plugin: 'checkstyle'
+    archivesBaseName = "kafka-tools"
+
+    dependencies {
+        compile project(':clients')
+        compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
+        compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
+        compile "$slf4jlog4j"
+
+        testCompile 'junit:junit:4.6'
+        testCompile project(path: ':clients', configuration: 'archives')
+    }
+
+    task testJar(type: Jar) {
+        classifier = 'test'
+        from sourceSets.test.output
+    }
+
+    test {
+        testLogging {
+            events "passed", "skipped", "failed"
+            exceptionFormat = 'full'
+        }
+    }
+
+    javadoc {
+        include "**/org/apache/kafka/tools/*"
+    }
+
+    tasks.create(name: "copyDependantLibs", type: Copy) {
+        from (configurations.testRuntime) {
+            include('slf4j-log4j12*')
+        }
+        from (configurations.runtime) {
+            exclude('kafka-clients*')
+        }
+        into "$buildDir/dependant-libs-${scalaVersion}"
+    }
+
+    jar {
+        dependsOn 'copyDependantLibs'
+    }
+
+    checkstyle {
+        configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    }
+    test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
 project(':log4j-appender') {

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
@@ -178,6 +180,17 @@ public class FetcherTest {
         assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(null, subscriptions.fetched(tp));
         assertEquals(null, subscriptions.consumed(tp));
+    }
+
+    @Test
+    public void testGetAllTopics() throws InterruptedException {
+        // sending response before request, as getAllTopics is a blocking call
+        client.prepareResponse(
+            new MetadataResponse(cluster, Collections.<String, Errors>emptyMap()).toStruct());
+
+        Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopics(5000L);
+
+        assertEquals(cluster.topics().size(), allTopics.size());
     }
 
     private Struct fetchResponse(ByteBuffer buffer, short error, long hw) {

@@ -76,6 +76,12 @@ public interface ConsumerConnector {
   public void commitOffsets(Map<TopicAndPartition, OffsetAndMetadata> offsetsToCommit, boolean retryOnFailure);
 
   /**
+   * Wire in a consumer rebalance listener to be executed when consumer rebalance occurs.
+   * @param listener The consumer rebalance listener to wire in
+   */
+  public void setConsumerRebalanceListener(ConsumerRebalanceListener listener);
+
+  /**
    *  Shut down the connector
    */
   public void shutdown();

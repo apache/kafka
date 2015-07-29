@@ -1024,6 +1024,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    /**
+     * Get metadata about partitions for all topics. This method will issue a remote call to the
+     * server.
+     *
+     * @return The map of topics and its partitions
+     */
+    @Override
+    public Map<String, List<PartitionInfo>> listTopics() {
+        acquire();
+        try {
+            return fetcher.getAllTopics(requestTimeoutMs);
+        } finally {
+            release();
+        }
+    }
+
     @Override
     public void close() {
         acquire();

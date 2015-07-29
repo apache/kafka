@@ -186,6 +186,24 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertNull(this.consumers(0).partitionsFor("non-exist-topic"))
   }
 
+  def testListTopics() {
+    val numParts = 2
+    val topic1: String = "part-test-topic-1"
+    val topic2: String = "part-test-topic-2"
+    val topic3: String = "part-test-topic-3"
+    TestUtils.createTopic(this.zkClient, topic1, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkClient, topic2, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkClient, topic3, numParts, 1, this.servers)
+
+    val topics = this.consumers.head.listTopics()
+    assertNotNull(topics)
+    assertEquals(5, topics.size())
+    assertEquals(5, topics.keySet().size())
+    assertEquals(2, topics.get(topic1).length)
+    assertEquals(2, topics.get(topic2).length)
+    assertEquals(2, topics.get(topic3).length)
+  }
+
   def testPartitionReassignmentCallback() {
     val callback = new TestConsumerReassignmentCallback()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
@@ -215,6 +233,25 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(2, callback.callsToRevoked)
 
     consumer0.close()
+  }
+
+  def testUnsubscribeTopic() {
+    val callback = new TestConsumerReassignmentCallback()
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
+    val consumer0 = new KafkaConsumer(this.consumerConfig, callback, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    try {
+      consumer0.subscribe(topic)
+
+      // the initial subscription should cause a callback execution
+      while (callback.callsToAssigned == 0)
+        consumer0.poll(50)
+
+      consumer0.unsubscribe(topic)
+      assertEquals(0, consumer0.subscriptions.size())
+    } finally {
+      consumer0.close()
+    }
   }
 
   private class TestConsumerReassignmentCallback extends ConsumerRebalanceCallback {
