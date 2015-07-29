@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.storage;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.util.Callback;
 import org.slf4j.Logger;
@@ -67,8 +68,8 @@ public class OffsetStorageWriter {
 
     private final OffsetBackingStore backingStore;
     private final Converter converter;
-    private final OffsetSerializer keySerializer;
-    private final OffsetSerializer valueSerializer;
+    private final Serializer keySerializer;
+    private final Serializer valueSerializer;
     private final String namespace;
     private Map<Object, Object> data = new HashMap<Object, Object>();
 
@@ -79,7 +80,7 @@ public class OffsetStorageWriter {
 
     public OffsetStorageWriter(OffsetBackingStore backingStore,
                                String namespace, Converter converter,
-                               OffsetSerializer keySerializer, OffsetSerializer valueSerializer) {
+                               Serializer keySerializer, Serializer valueSerializer) {
         this.backingStore = backingStore;
         this.namespace = namespace;
         this.converter = converter;
@@ -134,11 +135,9 @@ public class OffsetStorageWriter {
         try {
             offsetsSerialized = new HashMap<ByteBuffer, ByteBuffer>();
             for (Map.Entry<Object, Object> entry : toFlush.entrySet()) {
-                byte[] key = keySerializer.serializeOffset(namespace,
-                        converter.fromCopycatData(entry.getKey()));
+                byte[] key = keySerializer.serialize(namespace, converter.fromCopycatData(entry.getKey()));
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
-                byte[] value = valueSerializer.serializeOffset(namespace,
-                        converter.fromCopycatData(entry.getValue()));
+                byte[] value = valueSerializer.serialize(namespace, converter.fromCopycatData(entry.getValue()));
                 ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
                 offsetsSerialized.put(keyBuffer, valueBuffer);
             }

@@ -76,7 +76,14 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         super.setup();
         time = new MockTime();
         sinkTask = PowerMock.createMock(SinkTask.class);
-        workerConfig = new WorkerConfig();
+        Properties workerProps = new Properties();
+        // TODO: Non-avro built-ins?
+        workerProps.setProperty("converter", "org.apache.kafka.copycat.avro.AvroConverter");
+        workerProps.setProperty("key.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
+        workerProps.setProperty("value.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
+        workerProps.setProperty("key.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
+        workerProps.setProperty("value.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
+        workerConfig = new WorkerConfig(workerProps);
         converter = PowerMock.createMock(Converter.class);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer", "createWorkerThread"},

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.storage;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.util.Callback;
 import org.easymock.Capture;
@@ -49,8 +50,8 @@ public class OffsetStorageWriterTest {
 
     private OffsetBackingStore store;
     private Converter converter;
-    private OffsetSerializer keySerializer;
-    private OffsetSerializer valueSerializer;
+    private Serializer keySerializer;
+    private Serializer valueSerializer;
     private OffsetStorageWriter writer;
 
     private static Exception exception = new RuntimeException("error");
@@ -61,8 +62,8 @@ public class OffsetStorageWriterTest {
     public void setup() {
         store = PowerMock.createMock(OffsetBackingStore.class);
         converter = PowerMock.createMock(Converter.class);
-        keySerializer = PowerMock.createMock(OffsetSerializer.class);
-        valueSerializer = PowerMock.createMock(OffsetSerializer.class);
+        keySerializer = PowerMock.createMock(Serializer.class);
+        valueSerializer = PowerMock.createMock(Serializer.class);
         writer = new OffsetStorageWriter(store, NAMESPACE, converter, keySerializer, valueSerializer);
 
         service = Executors.newFixedThreadPool(1);
@@ -193,9 +194,9 @@ public class OffsetStorageWriterTest {
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
         EasyMock.expect(converter.fromCopycatData(OFFSET_KEY)).andReturn(OFFSET_KEY_CONVERTED);
-        EasyMock.expect(keySerializer.serializeOffset(NAMESPACE, OFFSET_KEY_CONVERTED)).andReturn(OFFSET_KEY_SERIALIZED);
+        EasyMock.expect(keySerializer.serialize(NAMESPACE, OFFSET_KEY_CONVERTED)).andReturn(OFFSET_KEY_SERIALIZED);
         EasyMock.expect(converter.fromCopycatData(OFFSET_VALUE)).andReturn(OFFSET_VALUE_CONVERTED);
-        EasyMock.expect(valueSerializer.serializeOffset(NAMESPACE, OFFSET_VALUE_CONVERTED)).andReturn(OFFSET_VALUE_SERIALIZED);
+        EasyMock.expect(valueSerializer.serialize(NAMESPACE, OFFSET_VALUE_CONVERTED)).andReturn(OFFSET_VALUE_SERIALIZED);
 
         final Capture<Callback<Void>> storeCallback = Capture.newInstance();
         EasyMock.expect(store.set(EasyMock.eq(NAMESPACE), EasyMock.eq(OFFSETS_SERIALIZED),

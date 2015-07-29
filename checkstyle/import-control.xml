@@ -145,6 +145,7 @@
 
 		<subpackage name="storage">
 			<allow pkg="org.apache.kafka.copycat" />
+			<allow pkg="org.apache.kafka.common.serialization" />
 			<!-- for tests -->
 			<allow pkg="org.easymock" />
 			<allow pkg="org.powermock" />

@@ -17,8 +17,6 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.copycat.data.Schema;
-
 import java.util.Collection;
 import java.util.Map;
 
@@ -33,15 +31,14 @@ public interface OffsetStorageReader {
      * gets it from the backing store, which may require some network round trips.
      *
      * @param stream object uniquely identifying the stream of data
-     * @param schema schema used to decode the offset value
      * @return object uniquely identifying the offset in the stream of data
      */
-    public Object getOffset(Object stream, Schema schema);
+    public Object getOffset(Object stream);
 
     /**
      * <p>
      * Get a set of offsets for the specified stream identifiers. This may be more efficient
-     * than calling {@link #getOffset(Object, Schema)} repeatedly.
+     * than calling {@link #getOffset(Object)} repeatedly.
      * </p>
      * <p>
      * Note that when errors occur, this method omits the associated data and tries to return as
@@ -53,8 +50,7 @@ public interface OffsetStorageReader {
      * </p>
      *
      * @param streams set of identifiers for streams of data
-     * @param schema schema used to decode offset values
      * @return a map of stream identifiers to decoded offsets
      */
-    public Map<Object, Object> getOffsets(Collection<Object> streams, Schema schema);
+    public Map<Object, Object> getOffsets(Collection<Object> streams);
 }

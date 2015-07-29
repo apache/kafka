@@ -66,7 +66,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private static final String CONVERTED_RECORD = "converted-record";
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
-    private WorkerConfig config = new WorkerConfig();
+    private WorkerConfig config;
     private SourceTask sourceTask;
     private Converter converter;
     private KafkaProducer<Object, Object> producer;
@@ -86,6 +86,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Override
     public void setup() {
         super.setup();
+        Properties workerProps = new Properties();
+        // TODO: Non-avro built-ins?
+        workerProps.setProperty("converter", "org.apache.kafka.copycat.avro.AvroConverter");
+        workerProps.setProperty("key.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
+        workerProps.setProperty("value.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
+        workerProps.setProperty("key.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
+        workerProps.setProperty("value.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
+        config = new WorkerConfig(workerProps);
         sourceTask = PowerMock.createMock(SourceTask.class);
         converter = PowerMock.createMock(Converter.class);
         producer = PowerMock.createMock(KafkaProducer.class);

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.copycat.cli.WorkerConfig;
@@ -48,18 +50,24 @@ public class WorkerTest extends ThreadedTest {
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private Worker worker;
     private OffsetBackingStore offsetBackingStore = PowerMock.createMock(OffsetBackingStore.class);
-    private OffsetSerializer offsetKeySerializer = PowerMock.createMock(OffsetSerializer.class);
-    private OffsetSerializer offsetValueSerializer = PowerMock.createMock(OffsetSerializer.class);
-    private OffsetDeserializer offsetKeyDeserializer = PowerMock.createMock(OffsetDeserializer.class);
-    private OffsetDeserializer offsetValueDeserializer = PowerMock.createMock(OffsetDeserializer.class);
+    private Serializer offsetKeySerializer = PowerMock.createMock(Serializer.class);
+    private Serializer offsetValueSerializer = PowerMock.createMock(Serializer.class);
+    private Deserializer offsetKeyDeserializer = PowerMock.createMock(Deserializer.class);
+    private Deserializer offsetValueDeserializer = PowerMock.createMock(Deserializer.class);
 
     @Before
     public void setup() {
         super.setup();
 
         // TODO: Remove schema registry URL
+        // TODO: Non-avro built-ins?
         Properties workerProps = new Properties();
         workerProps.setProperty("schema.registry.url", "http://localhost:8081");
+        workerProps.setProperty("converter", "org.apache.kafka.copycat.avro.AvroConverter");
+        workerProps.setProperty("key.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
+        workerProps.setProperty("value.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
+        workerProps.setProperty("key.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
+        workerProps.setProperty("value.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
         WorkerConfig config = new WorkerConfig(workerProps);
         worker = new Worker(new MockTime(), config, offsetBackingStore,
                 offsetKeySerializer, offsetValueSerializer,

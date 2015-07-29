@@ -52,58 +52,22 @@ public class WorkerConfig extends AbstractConfig {
     public static final String CONVERTER_CLASS_CONFIG = "converter";
     public static final String CONVERTER_CLASS_DOC =
             "Converter class for Copycat data that implements the <code>Converter</code> interface.";
-    public static final String CONVERTER_CLASS_DEFAULT
-            = "org.apache.kafka.copycat.avro.AvroConverter"; // TODO: Non-avro built-in?
 
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
     public static final String KEY_SERIALIZER_CLASS_DOC =
             "Serializer class for key that implements the <code>Serializer</code> interface.";
-    public static final String KEY_SERIALIZER_CLASS_DEFAULT
-            = "io.confluent.kafka.serializers.KafkaAvroSerializer"; // TODO: Non-avro built-in?
 
     public static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
     public static final String VALUE_SERIALIZER_CLASS_DOC =
             "Serializer class for value that implements the <code>Serializer</code> interface.";
-    public static final String VALUE_SERIALIZER_CLASS_DEFAULT
-            = "io.confluent.kafka.serializers.KafkaAvroSerializer"; // TODO: Non-avro built-in?
-
-    public static final String OFFSET_KEY_SERIALIZER_CLASS_CONFIG = "offset.key.serializer";
-    public static final String OFFSET_KEY_SERIALIZER_CLASS_DOC =
-            "Serializer class for key that implements the <code>OffsetSerializer</code> interface.";
-    public static final String OFFSET_KEY_SERIALIZER_CLASS_DEFAULT
-            = "org.apache.kafka.copycat.avro.AvroSerializer"; // TODO: Non-avro built-in?
-
-    public static final String OFFSET_VALUE_SERIALIZER_CLASS_CONFIG = "offset.value.serializer";
-    public static final String OFFSET_VALUE_SERIALIZER_CLASS_DOC =
-            "Serializer class for value that implements the <code>OffsetSerializer</code> interface.";
-    public static final String OFFSET_VALUE_SERIALIZER_CLASS_DEFAULT
-            = "org.apache.kafka.copycat.avro.AvroSerializer"; // TODO: Non-avro built-in?
-
 
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
     public static final String KEY_DESERIALIZER_CLASS_DOC =
             "Serializer class for key that implements the <code>Deserializer</code> interface.";
-    public static final String KEY_DESERIALIZER_CLASS_DEFAULT
-            = "io.confluent.kafka.serializers.KafkaAvroDeserializer"; // TODO: Non-avro built-in?
 
     public static final String VALUE_DESERIALIZER_CLASS_CONFIG = "value.deserializer";
     public static final String VALUE_DESERIALIZER_CLASS_DOC =
             "Deserializer class for value that implements the <code>Deserializer</code> interface.";
-    public static final String VALUE_DESERIALIZER_CLASS_DEFAULT
-            = "io.confluent.kafka.serializers.KafkaAvroDeserializer"; // TODO: Non-avro built-in?
-
-    public static final String OFFSET_KEY_DESERIALIZER_CLASS_CONFIG = "offset.key.deserializer";
-    public static final String OFFSET_KEY_DESERIALIZER_CLASS_DOC =
-            "Deserializer class for key that implements the <code>OffsetDeserializer</code> interface.";
-    public static final String OFFSET_KEY_DESERIALIZER_CLASS_DEFAULT
-            = "org.apache.kafka.copycat.avro.AvroDeserializer"; // TODO: Non-avro built-in?
-
-    public static final String OFFSET_VALUE_DESERIALIZER_CLASS_CONFIG = "offset.value.deserializer";
-    public static final String OFFSET_VALUE_DESERIALIZER_CLASS_DOC =
-            "Deserializer class for value that implements the <code>OffsetDeserializer</code> interface.";
-    public static final String OFFSET_VALUE_DESERIALIZER_CLASS_DEFAULT
-            = "org.apache.kafka.copycat.avro.AvroDeserializer"; // TODO: Non-avro built-in?
-
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -137,27 +101,16 @@ public class WorkerConfig extends AbstractConfig {
                 .define(CLUSTER_CONFIG, Type.STRING, CLUSTER_DEFAULT, Importance.HIGH, CLUSTER_CONFIG_DOC)
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOSTRAP_SERVERS_DOC)
-                .define(CONVERTER_CLASS_CONFIG, Type.CLASS, CONVERTER_CLASS_DEFAULT,
+                .define(CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, CONVERTER_CLASS_DOC)
-                .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS, KEY_SERIALIZER_CLASS_DEFAULT,
+                .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, KEY_SERIALIZER_CLASS_DOC)
-                .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS, VALUE_SERIALIZER_CLASS_DEFAULT,
+                .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_SERIALIZER_CLASS_DOC)
-                .define(OFFSET_KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS, OFFSET_KEY_SERIALIZER_CLASS_DEFAULT,
-                        Importance.HIGH, OFFSET_KEY_SERIALIZER_CLASS_DOC)
-                .define(OFFSET_VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS,
-                        OFFSET_VALUE_SERIALIZER_CLASS_DEFAULT,
-                        Importance.HIGH, OFFSET_VALUE_SERIALIZER_CLASS_DOC)
-                .define(KEY_DESERIALIZER_CLASS_CONFIG, Type.CLASS, KEY_DESERIALIZER_CLASS_DEFAULT,
+                .define(KEY_DESERIALIZER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, KEY_DESERIALIZER_CLASS_DOC)
-                .define(VALUE_DESERIALIZER_CLASS_CONFIG, Type.CLASS, VALUE_DESERIALIZER_CLASS_DEFAULT,
+                .define(VALUE_DESERIALIZER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_DESERIALIZER_CLASS_DOC)
-                .define(OFFSET_KEY_DESERIALIZER_CLASS_CONFIG, Type.CLASS,
-                        OFFSET_KEY_DESERIALIZER_CLASS_DEFAULT,
-                        Importance.HIGH, OFFSET_KEY_DESERIALIZER_CLASS_DOC)
-                .define(OFFSET_VALUE_DESERIALIZER_CLASS_CONFIG, Type.CLASS,
-                        OFFSET_VALUE_DESERIALIZER_CLASS_DEFAULT,
-                        Importance.HIGH, OFFSET_VALUE_DESERIALIZER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)

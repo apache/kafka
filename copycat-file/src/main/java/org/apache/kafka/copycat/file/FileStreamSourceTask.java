@@ -17,8 +17,6 @@
 
 package org.apache.kafka.copycat.file;
 
-import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.source.SourceRecord;
@@ -55,9 +53,7 @@ public class FileStreamSourceTask extends SourceTask<Object, Object> {
         } else {
             try {
                 stream = new FileInputStream(filename);
-                Schema longSchema = SchemaBuilder.builder().longType();
-                Long lastRecordedOffset
-                        = (Long) context.getOffsetStorageReader().getOffset(null, longSchema);
+                Long lastRecordedOffset = (Long) context.getOffsetStorageReader().getOffset(null);
                 if (lastRecordedOffset != null) {
                     log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
                     long skipLeft = lastRecordedOffset;

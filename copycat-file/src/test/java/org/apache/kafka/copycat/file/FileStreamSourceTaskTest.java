@@ -17,7 +17,6 @@
 
 package org.apache.kafka.copycat.file;
 
-import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.source.SourceRecord;
@@ -137,8 +136,7 @@ public class FileStreamSourceTaskTest {
 
     private void expectOffsetLookupReturnNone() {
         EasyMock.expect(
-                offsetStorageReader.getOffset(
-                        EasyMock.anyObject(Object.class), EasyMock.anyObject(Schema.class)))
+                offsetStorageReader.getOffset(EasyMock.anyObject(Object.class)))
                 .andReturn(null);
     }
 }

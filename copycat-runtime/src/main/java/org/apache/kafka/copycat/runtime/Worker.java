@@ -17,6 +17,8 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -54,10 +56,10 @@ public class Worker {
     private WorkerConfig config;
     private Converter converter;
     private OffsetBackingStore offsetBackingStore;
-    private OffsetSerializer offsetKeySerializer;
-    private OffsetSerializer offsetValueSerializer;
-    private OffsetDeserializer offsetKeyDeserializer;
-    private OffsetDeserializer offsetValueDeserializer;
+    private Serializer offsetKeySerializer;
+    private Serializer offsetValueSerializer;
+    private Deserializer offsetKeyDeserializer;
+    private Deserializer offsetValueDeserializer;
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<ConnectorTaskId, WorkerTask>();
     private KafkaProducer producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
@@ -71,8 +73,8 @@ public class Worker {
     }
 
     public Worker(Time time, WorkerConfig config, OffsetBackingStore offsetBackingStore,
-                  OffsetSerializer offsetKeySerializer, OffsetSerializer offsetValueSerializer,
-                  OffsetDeserializer offsetKeyDeserializer, OffsetDeserializer offsetValueDeserializer) {
+                  Serializer offsetKeySerializer, Serializer offsetValueSerializer,
+                  Deserializer offsetKeyDeserializer, Deserializer offsetValueDeserializer) {
         this.time = time;
         this.config = config;
         this.converter = Reflection.instantiate(config.getClass(WorkerConfig.CONVERTER_CLASS_CONFIG).getName(),
@@ -83,8 +85,7 @@ public class Worker {
             this.offsetKeySerializer = offsetKeySerializer;
         } else {
             this.offsetKeySerializer = Reflection.instantiate(
-                    config.getClass(WorkerConfig.OFFSET_KEY_SERIALIZER_CLASS_CONFIG).getName(),
-                    OffsetSerializer.class);
+                    config.getClass(WorkerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName(), Serializer.class);
             this.offsetKeySerializer.configure(config.getOriginalProperties(), true);
         }
 
@@ -92,8 +93,7 @@ public class Worker {
             this.offsetValueSerializer = offsetValueSerializer;
         } else {
             this.offsetValueSerializer = Reflection.instantiate(
-                    config.getClass(WorkerConfig.OFFSET_VALUE_SERIALIZER_CLASS_CONFIG).getName(),
-                    OffsetSerializer.class);
+                    config.getClass(WorkerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName(), Serializer.class);
             this.offsetValueSerializer.configure(config.getOriginalProperties(), false);
         }
 
@@ -101,8 +101,7 @@ public class Worker {
             this.offsetKeyDeserializer = offsetKeyDeserializer;
         } else {
             this.offsetKeyDeserializer = Reflection.instantiate(
-                    config.getClass(WorkerConfig.OFFSET_KEY_DESERIALIZER_CLASS_CONFIG).getName(),
-                    OffsetDeserializer.class);
+                    config.getClass(WorkerConfig.KEY_DESERIALIZER_CLASS_CONFIG).getName(), Deserializer.class);
             this.offsetKeyDeserializer.configure(config.getOriginalProperties(), true);
         }
 
@@ -110,8 +109,7 @@ public class Worker {
             this.offsetValueDeserializer = offsetValueDeserializer;
         } else {
             this.offsetValueDeserializer = Reflection.instantiate(
-                    config.getClass(WorkerConfig.OFFSET_VALUE_DESERIALIZER_CLASS_CONFIG).getName(),
-                    OffsetDeserializer.class);
+                    config.getClass(WorkerConfig.VALUE_DESERIALIZER_CLASS_CONFIG).getName(), Deserializer.class);
             this.offsetValueDeserializer.configure(config.getOriginalProperties(), false);
         }
     }
