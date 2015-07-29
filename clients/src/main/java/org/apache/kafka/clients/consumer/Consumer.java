@@ -119,6 +119,16 @@ public interface Consumer<K, V> extends Closeable {
     public Map<String, List<PartitionInfo>> listTopics();
 
     /**
+     * @see KafkaConsumer#pause(TopicPartition...)
+     */
+    public void pause(TopicPartition... partitions);
+
+    /**
+     * @see KafkaConsumer#resume(TopicPartition...)
+     */
+    public void resume(TopicPartition... partitions);
+
+    /**
      * @see KafkaConsumer#close()
      */
     public void close();

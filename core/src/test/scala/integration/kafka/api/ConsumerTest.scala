@@ -18,7 +18,7 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 
 import kafka.utils.{TestUtils, Logging}
 import kafka.server.KafkaConfig
@@ -254,6 +254,34 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     }
   }
 
+  def testPartitionPauseAndResume() {
+    sendRecords(5)
+    this.consumers(0).subscribe(tp)
+    consumeRecords(this.consumers(0), 5, 0)
+    this.consumers(0).pause(tp)
+    sendRecords(5)
+    assertTrue(this.consumers(0).poll(0).isEmpty)
+    this.consumers(0).resume(tp)
+    consumeRecords(this.consumers(0), 5, 5)
+  }
+
+  def testPauseStateNotPreservedByRebalance() {
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
+    val consumer0 = new KafkaConsumer(this.consumerConfig, null, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    sendRecords(5)
+    consumer0.subscribe(topic)
+    consumeRecords(consumer0, 5, 0)
+    consumer0.pause(tp)
+
+    // subscribe to a new topic to trigger a rebalance
+    consumer0.subscribe("topic2")
+
+    // after rebalance, our position should be reset and our pause state lost,
+    // so we should be able to consume from the beginning
+    consumeRecords(consumer0, 0, 5)
+  }
+
   private class TestConsumerReassignmentCallback extends ConsumerRebalanceCallback {
     var callsToAssigned = 0
     var callsToRevoked = 0
@@ -264,7 +292,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     def onPartitionsRevoked(consumer: Consumer[_,_], partitions: java.util.Collection[TopicPartition]) {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
-    } 
+    }
   }
 
   private def sendRecords(numRecords: Int): Unit = {

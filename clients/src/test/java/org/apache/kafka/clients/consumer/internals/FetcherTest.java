@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class FetcherTest {
@@ -99,8 +100,7 @@ public class FetcherTest {
     public void testFetchNormal() {
         List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.subscribe(tp);
-        subscriptions.fetched(tp, 0);
-        subscriptions.consumed(tp, 0);
+        subscriptions.seek(tp, 0);
 
         // normal fetch
         fetcher.initFetches(cluster);
@@ -121,8 +121,7 @@ public class FetcherTest {
     public void testFetchDuringRebalance() {
         subscriptions.subscribe(topicName);
         subscriptions.changePartitionAssignment(Arrays.asList(tp));
-        subscriptions.fetched(tp, 0);
-        subscriptions.consumed(tp, 0);
+        subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
 
@@ -136,10 +135,32 @@ public class FetcherTest {
     }
 
     @Test
+    public void testInFlightFetchOnPausedPartition() {
+        subscriptions.subscribe(tp);
+        subscriptions.seek(tp, 0);
+
+        fetcher.initFetches(cluster);
+        subscriptions.pause(tp);
+
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L));
+        consumerClient.poll(0);
+        assertNull(fetcher.fetchedRecords().get(tp));
+    }
+
+    @Test
+    public void testFetchOnPausedPartition() {
+        subscriptions.subscribe(tp);
+        subscriptions.seek(tp, 0);
+
+        subscriptions.pause(tp);
+        fetcher.initFetches(cluster);
+        assertTrue(client.requests().isEmpty());
+    }
+
+    @Test
     public void testFetchFailed() {
         subscriptions.subscribe(tp);
-        subscriptions.fetched(tp, 0);
-        subscriptions.consumed(tp, 0);
+        subscriptions.seek(tp, 0);
 
         // fetch with not leader
         fetcher.initFetches(cluster);
@@ -169,8 +190,7 @@ public class FetcherTest {
     @Test
     public void testFetchOutOfRange() {
         subscriptions.subscribe(tp);
-        subscriptions.fetched(tp, 5);
-        subscriptions.consumed(tp, 5);
+        subscriptions.seek(tp, 5);
 
         // fetch with out of range
         fetcher.initFetches(cluster);

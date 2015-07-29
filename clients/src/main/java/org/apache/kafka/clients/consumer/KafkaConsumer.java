@@ -43,7 +43,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -852,9 +851,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commit(CommitType commitType, ConsumerCommitCallback callback) {
         acquire();
         try {
-            // need defensive copy to ensure offsets are not removed before completion (e.g. in rebalance)
-            Map<TopicPartition, Long> allConsumed = new HashMap<TopicPartition, Long>(this.subscriptions.allConsumed());
-            commit(allConsumed, commitType, callback);
+            commit(subscriptions.allConsumed(), commitType, callback);
         } finally {
             release();
         }
@@ -941,7 +938,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public long position(TopicPartition partition) {
         acquire();
         try {
-            if (!this.subscriptions.assignedPartitions().contains(partition))
+            if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.consumed(partition);
             if (offset == null) {
@@ -972,7 +969,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             Long committed;
-            if (subscriptions.assignedPartitions().contains(partition)) {
+            if (subscriptions.isAssigned(partition)) {
                 committed = this.subscriptions.committed(partition);
                 if (committed == null) {
                     coordinator.refreshCommittedOffsetsIfNeeded();
@@ -1035,6 +1032,45 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             return fetcher.getAllTopics(requestTimeoutMs);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Suspend fetching from the requested partitions. Future calls to {@link #poll(long)} will not return
+     * any records from these partitions until they have been resumed using {@link #resume(TopicPartition...)}.
+     * Note that this method does not affect partition subscription. In particular, it does not cause a group
+     * rebalance when automatic assignment is used.
+     * @param partitions The partitions which should be paused
+     */
+    @Override
+    public void pause(TopicPartition... partitions) {
+        acquire();
+        try {
+            for (TopicPartition partition: partitions) {
+                log.debug("Pausing partition {}", partition);
+                subscriptions.pause(partition);
+            }
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Resume any partitions which have been paused with {@link #pause(TopicPartition...)}. New calls to
+     * {@link #poll(long)} will return records from these partitions if there are any to be fetched.
+     * If the partitions were not previously paused, this method is a no-op.
+     * @param partitions The partitions which should be resumed
+     */
+    @Override
+    public void resume(TopicPartition... partitions) {
+        acquire();
+        try {
+            for (TopicPartition partition: partitions) {
+                log.debug("Resuming partition {}", partition);
+                subscriptions.resume(partition);
+            }
         } finally {
             release();
         }
