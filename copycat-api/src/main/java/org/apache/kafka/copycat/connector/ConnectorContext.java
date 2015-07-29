@@ -17,8 +17,6 @@
 
 package org.apache.kafka.copycat.connector;
 
-import java.util.List;
-
 /**
  * ConnectorContext allows Connectors to proactively interact with the Copycat runtime.
  */
@@ -29,21 +27,4 @@ public interface ConnectorContext {
      * added/removed) and the running Tasks will need to be modified.
      */
     public void requestTaskReconfiguration();
-
-    /**
-     * Get a list of TopicPartitions for the specified topics. This should be used to determine how
-     * to divide TopicPartitions between child tasks.
-     * @param topics list of topics to get partitions for
-     * @return list of all TopicPartitions for the input topics
-     */
-    public abstract List<TopicPartition> getTopicPartitions(String... topics);
-
-    /**
-     * Get a list of TopicPartitions for the specified topics. This should be used to determine how
-     * to divide TopicPartitions between child tasks.
-     * @param topics list of topics to get partitions for
-     * @return list of all TopicPartitions for the input topics
-     */
-    public abstract List<TopicPartition> getTopicPartitions(List<String> topics);
-
 }

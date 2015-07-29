@@ -20,7 +20,6 @@ package org.apache.kafka.copycat.file;
 import org.apache.kafka.copycat.connector.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkRecord;
-import org.apache.kafka.copycat.sink.SinkTask;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -45,8 +44,6 @@ public class FileStreamSinkTaskTest {
         printStream = new PrintStream(os);
         task = new FileStreamSinkTask(printStream);
         config = new Properties();
-
-        config.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, "topic1-1,topic2-2");
     }
 
     @Test

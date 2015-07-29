@@ -17,7 +17,6 @@
 
 package org.apache.kafka.copycat.runtime.standalone;
 
-import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.connector.TopicPartition;
@@ -30,22 +29,16 @@ import org.apache.kafka.copycat.source.SourceConnector;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.util.Callback;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
-import org.apache.kafka.copycat.util.KafkaUtils;
 import org.easymock.EasyMock;
 import org.powermock.api.easymock.PowerMock;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Properties;
 
 public class StandaloneCoordinatorTestBase {
 
     protected static final String CONNECTOR_NAME = "test";
     protected static final String TOPICS_LIST_STR = "topic1,topic2";
-    protected static final List<String> TOPICS_LIST = Arrays.asList("topic1", "topic2");
-    protected static final List<TopicPartition> TOPIC_PARTITIONS = Arrays.asList(
-            new TopicPartition("topic1", 1), new TopicPartition("topic2", 1));
-    protected static final String TOPIC_PARTITIONS_STR = "topic1-1,topic2-1";
 
     protected StandaloneCoordinator coordinator;
     protected Worker worker;
@@ -79,8 +72,6 @@ public class StandaloneCoordinatorTestBase {
             PowerMock.expectLastCall();
         }
 
-        ZkClient zkClient = PowerMock.createMock(ZkClient.class);
-        EasyMock.expect(worker.getZkClient()).andStubReturn(zkClient);
         connector.initialize(EasyMock.anyObject(StandaloneConnectorContext.class));
         PowerMock.expectLastCall();
         connector.start(new Properties());
@@ -89,20 +80,14 @@ public class StandaloneCoordinatorTestBase {
         // Just return the connector properties for the individual task we generate by default
         EasyMock.<Class<? extends Task>>expect(connector.getTaskClass()).andReturn(taskClass);
 
-        if (sink) {
-            EasyMock.expect(KafkaUtils.getTopicPartitions(zkClient, TOPICS_LIST))
-                    .andReturn(TOPIC_PARTITIONS);
-        }
-
         EasyMock.expect(connector.getTaskConfigs(ConnectorConfig.TASKS_MAX_DEFAULT))
                 .andReturn(Arrays.asList(taskProps));
         // And we should instantiate the tasks. For a sink task, we should see added properties for
         // the input topic partitions
         Properties generatedTaskProps = new Properties();
         generatedTaskProps.putAll(taskProps);
-        if (sink) {
-            generatedTaskProps.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, TOPIC_PARTITIONS_STR);
-        }
+        if (sink)
+            generatedTaskProps.setProperty(SinkTask.TOPICS_CONFIG, TOPICS_LIST_STR);
         worker.addTask(new ConnectorTaskId(CONNECTOR_NAME, 0), taskClass.getName(), generatedTaskProps);
         PowerMock.expectLastCall();
     }

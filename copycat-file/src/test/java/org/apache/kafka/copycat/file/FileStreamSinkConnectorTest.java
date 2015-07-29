@@ -21,7 +21,6 @@ import org.apache.kafka.copycat.connector.ConnectorContext;
 import org.apache.kafka.copycat.connector.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkConnector;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.powermock.api.easymock.PowerMock;
@@ -83,10 +82,5 @@ public class FileStreamSinkConnectorTest {
         assertEquals(FileStreamSinkTask.class, connector.getTaskClass());
 
         PowerMock.verifyAll();
-    }
-
-    private void expectGetTopicPartitionsMultiple() {
-        EasyMock.expect(ctx.getTopicPartitions(MULTIPLE_TOPICS_LIST[0], MULTIPLE_TOPICS_LIST[1]))
-                .andReturn(MULTIPLE_TOPICS_PARTITIONS);
     }
 }

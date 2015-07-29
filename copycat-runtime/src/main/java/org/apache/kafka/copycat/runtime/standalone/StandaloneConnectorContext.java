@@ -17,12 +17,7 @@
 
 package org.apache.kafka.copycat.runtime.standalone;
 
-import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.copycat.connector.ConnectorContext;
-import org.apache.kafka.copycat.connector.TopicPartition;
-import org.apache.kafka.copycat.util.KafkaUtils;
-
-import java.util.List;
 
 /**
  * ConnectorContext for use with the StandaloneCoordinator, which maintains all connectors and tasks
@@ -32,13 +27,10 @@ public class StandaloneConnectorContext implements ConnectorContext {
 
     private StandaloneCoordinator coordinator;
     private String connectorName;
-    private ZkClient zkClient;
 
-    public StandaloneConnectorContext(StandaloneCoordinator coordinator, String connectorName,
-                                      ZkClient zkClient) {
+    public StandaloneConnectorContext(StandaloneCoordinator coordinator, String connectorName) {
         this.coordinator = coordinator;
         this.connectorName = connectorName;
-        this.zkClient = zkClient;
     }
 
     @Override
@@ -46,15 +38,5 @@ public class StandaloneConnectorContext implements ConnectorContext {
         // This is trivial to forward since there is only one coordinator and it's in memory in this
         // process
         coordinator.requestTaskReconfiguration(connectorName);
-    }
-
-    @Override
-    public List<TopicPartition> getTopicPartitions(String... topics) {
-        return KafkaUtils.getTopicPartitions(zkClient, topics);
-    }
-
-    @Override
-    public List<TopicPartition> getTopicPartitions(List<String> topics) {
-        return KafkaUtils.getTopicPartitions(zkClient, topics);
     }
 }

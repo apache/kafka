@@ -37,30 +37,6 @@ public class WorkerConfig extends AbstractConfig {
                     + "or instances may co-exist while sharing a single Kafka cluster.";
     public static final String CLUSTER_DEFAULT = "copycat";
 
-    public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
-    private static final String ZOOKEEPER_CONNECT_DOC =
-            "Specifies the ZooKeeper connection string in the form "
-                    + "hostname:port where host and port are the host and port of a ZooKeeper server. To allow connecting "
-                    + "through other ZooKeeper nodes when that ZooKeeper machine is down you can also specify multiple hosts "
-                    + "in the form hostname1:port1,hostname2:port2,hostname3:port3.\n"
-                    + "\n"
-                    + "The server may also have a ZooKeeper chroot path as part of it's ZooKeeper connection string which puts "
-                    + "its data under some path in the global ZooKeeper namespace. If so the consumer should use the same "
-                    + "chroot path in its connection string. For example to give a chroot path of /chroot/path you would give "
-                    + "the connection string as hostname1:port1,hostname2:port2,hostname3:port3/chroot/path.";
-    public static final String ZOOKEEPER_CONNECT_DEFAULT = "localhost:2181";
-
-    public static final String ZOOKEEPER_SESSION_TIMEOUT_MS_CONFIG = "zookeeper.session.timeout.ms";
-    private static final String ZOOKEEPER_SESSION_TIMEOUT_MS_DOC
-            = "Session timeout for ZooKeeper connections.";
-    public static final String ZOOKEEPER_SESSION_TIMEOUT_MS_DEFAULT = "30000";
-
-    public static final String ZOOKEEPER_CONNECTION_TIMEOUT_MS_CONFIG
-            = "zookeeper.session.connection.ms";
-    private static final String ZOOKEEPER_CONNECTION_TIMEOUT_MS_DOC
-            = "Connection timeout for ZooKeeper.";
-    public static final String ZOOKEEPER_CONNECTION_TIMEOUT_MS_DEFAULT = "30000";
-
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOSTRAP_SERVERS_DOC
             = "A list of host/port pairs to use for establishing the initial connection to the Kafka "
@@ -159,14 +135,6 @@ public class WorkerConfig extends AbstractConfig {
     static {
         config = new ConfigDef()
                 .define(CLUSTER_CONFIG, Type.STRING, CLUSTER_DEFAULT, Importance.HIGH, CLUSTER_CONFIG_DOC)
-                .define(ZOOKEEPER_CONNECT_CONFIG, Type.STRING, ZOOKEEPER_CONNECT_DEFAULT,
-                        Importance.HIGH, ZOOKEEPER_CONNECT_DOC)
-                .define(ZOOKEEPER_SESSION_TIMEOUT_MS_CONFIG, Type.INT,
-                        ZOOKEEPER_SESSION_TIMEOUT_MS_DEFAULT,
-                        Importance.LOW, ZOOKEEPER_SESSION_TIMEOUT_MS_DOC)
-                .define(ZOOKEEPER_CONNECTION_TIMEOUT_MS_CONFIG, Type.INT,
-                        ZOOKEEPER_CONNECTION_TIMEOUT_MS_DEFAULT,
-                        Importance.LOW, ZOOKEEPER_CONNECTION_TIMEOUT_MS_DOC)
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOSTRAP_SERVERS_DOC)
                 .define(CONVERTER_CLASS_CONFIG, Type.CLASS, CONVERTER_CLASS_DEFAULT,

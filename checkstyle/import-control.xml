@@ -135,10 +135,6 @@
 			<!-- for tests -->
 			<allow pkg="org.easymock" />
 			<allow pkg="org.powermock" />
-
-			<!-- FIXME Remove when dependency on core for sink partition assignment is removed -->
-			<allow pkg="kafka.utils" />
-			<allow pkg="org.I0Itec.zkclient" />
 		</subpackage>
 
 		<subpackage name="cli">
@@ -156,11 +152,6 @@
 
 		<subpackage name="util">
 			<allow pkg="org.apache.kafka.copycat" />
-
-			<!-- FIXME Remove when dependency on core for sink partition assignment is removed -->
-			<allow pkg="kafka.utils" />
-			<allow pkg="org.I0Itec.zkclient" />
-			<allow pkg="scala" />
 		</subpackage>
 
 		<subpackage name="file">

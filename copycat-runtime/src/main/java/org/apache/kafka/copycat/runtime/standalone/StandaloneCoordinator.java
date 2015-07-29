@@ -19,7 +19,6 @@ package org.apache.kafka.copycat.runtime.standalone;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.connector.Connector;
-import org.apache.kafka.copycat.connector.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
@@ -141,7 +140,7 @@ public class StandaloneCoordinator implements Coordinator {
             // may be caused by user code
             throw new CopycatRuntimeException("Failed to create connector instance", t);
         }
-        connector.initialize(new StandaloneConnectorContext(this, connName, worker.getZkClient()));
+        connector.initialize(new StandaloneConnectorContext(this, connName));
         try {
             connector.start(configs);
         } catch (CopycatException e) {
@@ -194,32 +193,21 @@ public class StandaloneCoordinator implements Coordinator {
 
         log.info("Creating tasks for connector {} of type {}", state.name, taskClassName);
 
-        int maxTasks = state.maxTasks;
-        // For sink tasks, we may also be limited by the number of input topic partitions
-        List<TopicPartition> topicPartitions = null;
-        if (state.connector instanceof SinkConnector) {
-            topicPartitions = KafkaUtils.getTopicPartitions(worker.getZkClient(), state.inputTopics);
-            maxTasks = Math.min(maxTasks, topicPartitions.size());
-        }
-        List<Properties> taskConfigs = state.connector.getTaskConfigs(maxTasks);
-
-        // If necessary, figure out how to distribute input topic partitions
-        // TODO: This needs to run periodically so we detect new partitions
-        List<List<TopicPartition>> taskAssignments = null;
-        if (state.connector instanceof SinkConnector) {
-            taskAssignments = ConnectorUtils.groupPartitions(topicPartitions, taskConfigs.size());
-        }
+        List<Properties> taskConfigs = state.connector.getTaskConfigs(state.maxTasks);
 
         // Generate the final configs, including framework provided settings
         Map<ConnectorTaskId, Properties> taskProps = new HashMap<ConnectorTaskId, Properties>();
         for (int i = 0; i < taskConfigs.size(); i++) {
             ConnectorTaskId taskId = new ConnectorTaskId(state.name, i);
             Properties config = taskConfigs.get(i);
+            // TODO: This probably shouldn't be in the Coordinator. It's nice to have Copycat ensure the list of topics
+            // is automatically provided to tasks since it is required by the framework, but this
+            String subscriptionTopics = Utils.join(state.inputTopics, ",");
             if (state.connector instanceof SinkConnector) {
                 // Make sure we don't modify the original since the connector may reuse it internally
                 Properties configForSink = new Properties();
                 configForSink.putAll(config);
-                configForSink.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, Utils.join(taskAssignments.get(i), ","));
+                configForSink.setProperty(SinkTask.TOPICS_CONFIG, subscriptionTopics);
                 config = configForSink;
             }
             taskProps.put(taskId, config);

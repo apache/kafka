@@ -21,7 +21,6 @@ import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.sink.SinkConnector;
 import org.apache.kafka.copycat.util.Callback;
-import org.apache.kafka.copycat.util.KafkaUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,7 +34,7 @@ import java.io.File;
 import java.util.Properties;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({StandaloneCoordinator.class, KafkaUtils.class})
+@PrepareForTest({StandaloneCoordinator.class})
 @PowerMockIgnore("javax.management.*")
 public class StandaloneCoordinatorRestoreTest extends StandaloneCoordinatorTestBase {
     private File coordinatorConfigFile;
@@ -57,7 +56,6 @@ public class StandaloneCoordinatorRestoreTest extends StandaloneCoordinatorTestB
         connectorProps.setProperty(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
         connectorProps.setProperty(SinkConnector.TOPICS_CONFIG, TOPICS_LIST_STR);
         PowerMock.mockStatic(StandaloneCoordinator.class);
-        PowerMock.mockStatic(KafkaUtils.class);
 
         // These can be anything since connectors can pass along whatever they want.
         taskProps = new Properties();

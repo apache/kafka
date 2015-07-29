@@ -25,7 +25,6 @@ import org.apache.kafka.copycat.data.GenericRecord;
 import org.apache.kafka.copycat.data.GenericRecordBuilder;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaBuilder;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -89,20 +88,8 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testGetInputTopicPartitions() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, "topic-1,foo-2");
-        assertEquals(
-                Arrays.asList(new org.apache.kafka.copycat.connector.TopicPartition("topic", 1),
-                        new org.apache.kafka.copycat.connector.TopicPartition("foo", 2)),
-                Whitebox.invokeMethod(workerTask, "getInputTopicPartitions", props)
-        );
-    }
-
-    @Test
     public void testPollsInBackground() throws Exception {
         Properties taskProps = new Properties();
-        taskProps.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, TOPIC_PARTITION_STR);
 
         expectInitializeTask(taskProps);
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(1L);
@@ -170,7 +157,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     @Test
     public void testCommit() throws Exception {
         Properties taskProps = new Properties();
-        taskProps.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, TOPIC_PARTITION_STR);
 
         expectInitializeTask(taskProps);
         // Make each poll() take the offset commit interval
@@ -199,7 +185,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     @Test
     public void testCommitTaskFlushFailure() throws Exception {
         Properties taskProps = new Properties();
-        taskProps.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, TOPIC_PARTITION_STR);
 
         expectInitializeTask(taskProps);
         Capture<Collection<SinkRecord>> capturedRecords
@@ -224,7 +209,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     @Test
     public void testCommitConsumerFailure() throws Exception {
         Properties taskProps = new Properties();
-        taskProps.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, TOPIC_PARTITION_STR);
 
         expectInitializeTask(taskProps);
         Capture<Collection<SinkRecord>> capturedRecords
@@ -250,7 +234,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     @Test
     public void testCommitTimeout() throws Exception {
         Properties taskProps = new Properties();
-        taskProps.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, TOPIC_PARTITION_STR);
 
         expectInitializeTask(taskProps);
         // Cut down amount of time to pass in each poll so we trigger exactly 1 offset commit
@@ -276,34 +259,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
 
         PowerMock.verifyAll();
     }
-
-    @Test
-    public void testGetInputPartitionsSingle() throws Exception {
-        Properties taskProps = new Properties();
-        taskProps.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, "test-1");
-
-        assertEquals(Arrays.asList(new org.apache.kafka.copycat.connector.TopicPartition("test", 1)),
-                Whitebox.invokeMethod(workerTask, "getInputTopicPartitions", taskProps));
-    }
-
-    @Test
-    public void testGetInputPartitionsList() throws Exception {
-        Properties taskProps = new Properties();
-        taskProps.setProperty(SinkTask.TOPICPARTITIONS_CONFIG, "test-1,foo-2,bar-3");
-
-        assertEquals(Arrays.asList(
-                        new org.apache.kafka.copycat.connector.TopicPartition("test", 1),
-                        new org.apache.kafka.copycat.connector.TopicPartition("foo", 2),
-                        new org.apache.kafka.copycat.connector.TopicPartition("bar", 3)),
-                Whitebox.invokeMethod(workerTask, "getInputTopicPartitions", taskProps));
-    }
-
-    @Test(expected = CopycatRuntimeException.class)
-    public void testGetInputPartitionsMissing() throws Exception {
-        // Missing setting
-        Whitebox.invokeMethod(workerTask, "getInputTopicPartitions", new Properties());
-    }
-
 
     private KafkaConsumer<Object, Object> expectInitializeTask(Properties taskProps)
             throws Exception {

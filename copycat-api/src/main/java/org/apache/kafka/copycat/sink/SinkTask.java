@@ -32,16 +32,11 @@ public abstract class SinkTask implements Task {
 
     /**
      * <p>
-     * The configuration key that provides the list of topic partitions that are inputs for this
+     * The configuration key that provides the list of topics that are inputs for this
      * SinkTask.
      * </p>
-     * <p>
-     * Usually this setting is only used by the Copycat framework since it manages the Kafka
-     * consumer that provides input records. However, it is provided here for the convenience of
-     * SinkTask implementations that may also want to know the input set of topic partitions.
-     * </p>
      */
-    public static final String TOPICPARTITIONS_CONFIG = "topic.partitions";
+    public static final String TOPICS_CONFIG = "topics";
 
     protected SinkTaskContext context;
 

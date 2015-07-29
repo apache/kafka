@@ -19,8 +19,6 @@ package org.apache.kafka.copycat.runtime;
 
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import kafka.utils.ZKStringSerializer$;
-import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Utils;
@@ -62,7 +60,6 @@ public class Worker {
     private OffsetDeserializer offsetValueDeserializer;
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<ConnectorTaskId, WorkerTask>();
     private KafkaProducer producer;
-    private ZkClient zkClient;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(WorkerConfig config) {
@@ -70,14 +67,12 @@ public class Worker {
                 Reflection.instantiateConfigurable(
                         config.getClass(WorkerConfig.OFFSET_STORAGE_CLASS_CONFIG).getName(),
                         OffsetBackingStore.class, config.getUnusedProperties()),
-                null, null, null, null,
-                createZkClient(config));
+                null, null, null, null);
     }
 
     public Worker(Time time, WorkerConfig config, OffsetBackingStore offsetBackingStore,
                   OffsetSerializer offsetKeySerializer, OffsetSerializer offsetValueSerializer,
-                  OffsetDeserializer offsetKeyDeserializer, OffsetDeserializer offsetValueDeserializer,
-                  ZkClient zkClient) {
+                  OffsetDeserializer offsetKeyDeserializer, OffsetDeserializer offsetValueDeserializer) {
         this.time = time;
         this.config = config;
         this.converter = Reflection.instantiate(config.getClass(WorkerConfig.CONVERTER_CLASS_CONFIG).getName(),
@@ -119,16 +114,6 @@ public class Worker {
                     OffsetDeserializer.class);
             this.offsetValueDeserializer.configure(config.getOriginalProperties(), false);
         }
-
-        this.zkClient = zkClient;
-
-    }
-
-    private static ZkClient createZkClient(WorkerConfig config) {
-        return new ZkClient(config.getString(WorkerConfig.ZOOKEEPER_CONNECT_CONFIG),
-                config.getInt(WorkerConfig.ZOOKEEPER_SESSION_TIMEOUT_MS_CONFIG),
-                config.getInt(WorkerConfig.ZOOKEEPER_CONNECTION_TIMEOUT_MS_CONFIG),
-                ZKStringSerializer$.MODULE$);
     }
 
     public void start() {
@@ -243,10 +228,6 @@ public class Worker {
         }
         task.close();
         tasks.remove(id);
-    }
-
-    public ZkClient getZkClient() {
-        return zkClient;
     }
 
     private WorkerTask getTask(ConnectorTaskId id) {

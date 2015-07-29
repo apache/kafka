@@ -74,9 +74,8 @@ public class Copycat {
                 FutureCallback cb = new FutureCallback(new Callback<Void>() {
                     @Override
                     public void onCompletion(Throwable error, Void result) {
-                        if (error != null) {
+                        if (error != null)
                             log.error("Failed to stop job {}", connName);
-                        }
                     }
                 });
                 coordinator.deleteConnector(connName, cb);
@@ -84,15 +83,13 @@ public class Copycat {
             }
 
             // Create any new connectors
-            for (final String connectorPropsFile : config
-                    .getList(CopycatConfig.CREATE_CONNECTORS_CONFIG)) {
+            for (final String connectorPropsFile : config.getList(CopycatConfig.CREATE_CONNECTORS_CONFIG)) {
                 connectorProps = Utils.loadProps(connectorPropsFile);
                 FutureCallback cb = new FutureCallback(new Callback<String>() {
                     @Override
                     public void onCompletion(Throwable error, String id) {
-                        if (error != null) {
+                        if (error != null)
                             log.error("Failed to create job for {}", connectorPropsFile);
-                        }
                     }
                 });
                 coordinator.addConnector(connectorProps, cb);

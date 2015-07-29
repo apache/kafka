@@ -604,8 +604,6 @@ project(':copycat-runtime') {
     compile project(':copycat-avro')
     compile project(':clients')
     compile "org.slf4j:slf4j-api:1.7.6"
-    // FIXME we shouldn't depend on core since we only need clients, but currently we're doing sink task topic-partition assignment manually until we switch over to new consumer group functionality
-    compile project(':core')
 
     testCompile 'junit:junit:4.6'
     testCompile 'org.easymock:easymock:3.3.1'

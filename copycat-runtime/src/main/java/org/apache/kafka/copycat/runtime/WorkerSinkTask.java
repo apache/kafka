@@ -157,6 +157,12 @@ public class WorkerSinkTask implements WorkerTask {
     }
 
     private KafkaConsumer<Object, Object> createConsumer(Properties taskProps) {
+        String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
+        if (topicsStr == null || topicsStr.isEmpty()) {
+            throw new CopycatRuntimeException("Sink tasks require a list of topics.");
+        }
+        String[] topics = topicsStr.split(",");
+
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
         Properties props = workerConfig.getUnusedProperties();
@@ -177,17 +183,21 @@ public class WorkerSinkTask implements WorkerTask {
             throw new CopycatRuntimeException("Failed to create consumer", t);
         }
 
-        List<TopicPartition> topicPartitions = getInputTopicPartitions(taskProps);
-        log.debug("Task {} subscribing to topic-partitions {}", id, topicPartitions);
+        log.debug("Task {} subscribing to topics {}", id, topics);
+        newConsumer.subscribe(topics);
+
+        // Seek to any user-provided offsets. This is useful if offsets are tracked in the downstream system (e.g., to
+        // enable exactly once delivery to that system).
+        //
+        // To do this correctly, we need to first make sure we have been assigned partitions, which poll() will guarantee.
+        // We ask for offsets after this poll to make sure any offsets committed before the rebalance are picked up correctly.
+        newConsumer.poll(0);
         Map<TopicPartition, Long> offsets = context.getOffsets();
-        for (TopicPartition tp : topicPartitions) {
-            org.apache.kafka.common.TopicPartition kafkatp = new
-                    org.apache.kafka.common.TopicPartition(tp.topic(), tp.partition());
-            newConsumer.subscribe(kafkatp);
-            if (offsets.containsKey(tp)) {
-                long offset = offsets.get(tp);
+        for (org.apache.kafka.common.TopicPartition kafkatp : newConsumer.subscriptions()) {
+            TopicPartition tp = new TopicPartition(kafkatp.topic(), kafkatp.partition());
+            Long offset = offsets.get(tp);
+            if (offset != null)
                 newConsumer.seek(kafkatp, offset);
-            }
         }
         return newConsumer;
     }
@@ -195,24 +205,6 @@ public class WorkerSinkTask implements WorkerTask {
     private WorkerSinkTaskThread createWorkerThread() {
         return new WorkerSinkTaskThread(this, "WorkerSinkTask-" + id, time, workerConfig);
     }
-
-    private List<TopicPartition> getInputTopicPartitions(Properties taskProps) {
-        String topicPartitionsStr = taskProps.getProperty(SinkTask.TOPICPARTITIONS_CONFIG);
-        if (topicPartitionsStr == null || topicPartitionsStr.isEmpty()) {
-            throw new CopycatRuntimeException("Sink tasks require a list of topic partitions, which "
-                    + "copycat should generate automatically. This might "
-                    + "indicate your Task class inherits from SinkTask, but "
-                    + "your Connector class does not inherit from "
-                    + "SinkConnector.");
-        }
-
-        List<TopicPartition> topicPartitions = new ArrayList<TopicPartition>();
-        for (String topicPartitionStr : Arrays.asList(topicPartitionsStr.split(","))) {
-            topicPartitions.add(new TopicPartition(topicPartitionStr));
-        }
-        return topicPartitions;
-    }
-
 
     private void deliverMessages(ConsumerRecords<Object, Object> msgs) {
         // Finally, deliver this batch to the sink

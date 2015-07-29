@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.runtime;
 
 import org.apache.kafka.common.utils.Time;
-import org.I0Itec.zkclient.ZkClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.errors.CopycatException;
@@ -62,11 +61,9 @@ public class WorkerTest extends ThreadedTest {
         Properties workerProps = new Properties();
         workerProps.setProperty("schema.registry.url", "http://localhost:8081");
         WorkerConfig config = new WorkerConfig(workerProps);
-        ZkClient zkClient = PowerMock.createMock(ZkClient.class);
         worker = new Worker(new MockTime(), config, offsetBackingStore,
                 offsetKeySerializer, offsetValueSerializer,
-                offsetKeyDeserializer, offsetValueDeserializer,
-                zkClient);
+                offsetKeyDeserializer, offsetValueDeserializer);
         worker.start();
     }
 
