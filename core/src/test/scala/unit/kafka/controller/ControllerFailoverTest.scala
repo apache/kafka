@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.controller
+package kafka.controller
 
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.Properties
@@ -30,11 +30,6 @@ import org.apache.log4j.{Logger, Level}
 
 import kafka.api.RequestOrResponse
 import kafka.common.TopicAndPartition
-import kafka.controller.ControllerBrokerStateInfo
-import kafka.controller.ControllerContext
-import kafka.controller.ControllerChannelManager
-import kafka.controller.KafkaController
-import kafka.controller.OnlinePartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.BrokerState
 import kafka.server.KafkaConfig
