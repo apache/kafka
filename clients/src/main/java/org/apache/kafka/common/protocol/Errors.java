@@ -20,6 +20,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.errors.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
@@ -83,6 +85,8 @@ public enum Errors {
     INVALID_COMMIT_OFFSET_SIZE(28,
             new ApiException("The committing offset data size is not valid"));
 
+    private static final Logger log = LoggerFactory.getLogger(Errors.class);
+
     private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
     private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();
 
@@ -130,11 +134,16 @@ public enum Errors {
      */
     public static Errors forCode(short code) {
         Errors error = codeToError.get(code);
-        return error == null ? UNKNOWN : error;
+        if (error != null) {
+            return error;
+        } else {
+            log.warn("Unexpected error code: {}.", code);
+            return UNKNOWN;
+        }
     }
 
     /**
-     * Return the error instance associated with this exception (or UKNOWN if there is none)
+     * Return the error instance associated with this exception (or UNKNOWN if there is none)
      */
     public static Errors forException(Throwable t) {
         Errors error = classToError.get(t.getClass());
