@@ -24,11 +24,12 @@ public final class ConsumerRecord<K, V> {
     private final V value;
 
     /**
-     * Create a record with no key
-     * 
+     * Creates a record to be received from a specified topic and partition
+     *
      * @param topic The topic this record is received from
      * @param partition The partition of the topic this record is received from
      * @param offset The offset of this record in the corresponding Kafka partition
+     * @param key The key of the record, if one exists (null is allowed)
      * @param value The record contents
      */
     public ConsumerRecord(String topic, int partition, long offset, K key, V value) {
