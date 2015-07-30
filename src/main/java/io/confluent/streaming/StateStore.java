@@ -52,4 +52,9 @@ public interface StateStore {
      * Restore the state of the storage
      */
     void restore();
+
+    /**
+     * If the storage is persistent
+     */
+    boolean persistent();
 }

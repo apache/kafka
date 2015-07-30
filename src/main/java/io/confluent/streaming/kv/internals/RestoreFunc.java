@@ -8,4 +8,6 @@ package io.confluent.streaming.kv.internals;
 public interface RestoreFunc {
 
   void apply(byte[] key, byte[] value);
+
+  void load();
 }

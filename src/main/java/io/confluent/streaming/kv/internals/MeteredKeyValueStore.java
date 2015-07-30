@@ -70,6 +70,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public boolean persistent() {
+        return inner.persistent();
+    }
+
+    @Override
     public void restore() {
         long startNs = time.nanoseconds();
         try {

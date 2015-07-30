@@ -54,6 +54,9 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         }
 
         @Override
+        public boolean persistent() { return false; }
+
+        @Override
         public V get(K key) {
             return this.map.get(key);
         }
@@ -115,6 +118,12 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
                 public void apply(byte[] key, byte[] value) {
                     map.put(keyDeserializer.deserialize(topic, key),
                         valDeserializer.deserialize(topic, value));
+                }
+
+                @Override
+                public void load() {
+                    // this should not happen since it is in-memory, hence no state to load from disk
+                    throw new IllegalStateException("This should not happen");
                 }
             });
         }
