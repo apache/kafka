@@ -122,7 +122,7 @@ public class AbstractConfig {
      */
     public void logUnused() {
         for (String key : unused())
-            log.warn("The configuration {} = {} was supplied but isn't a known config.", key, this.values.get(key));
+            log.warn("The configuration {} = {} was supplied but isn't a known config.", key, this.originals.get(key));
     }
 
     /**
