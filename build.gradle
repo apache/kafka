@@ -33,7 +33,6 @@ allprojects {
   apply plugin: 'idea'
   repositories {
     mavenCentral()
-    mavenLocal() // FIXME Currently required to get io.confluent:kafka-avro-serializer:2.0-SNAPSHOT
   }
 }
 
@@ -205,7 +204,7 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
   }
 }
 
-def copycatPkgs = ['copycat-data', 'copycat-api', 'copycat-runtime', 'copycat-avro', 'copycat-file']
+def copycatPkgs = ['copycat-data', 'copycat-api', 'copycat-runtime', 'copycat-json', 'copycat-file']
 def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools'] + copycatPkgs
 
 tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
@@ -588,14 +587,14 @@ project(':copycat-api') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat-avro') {
+project(':copycat-json') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-avro"
+  archivesBaseName = "copycat-json"
 
   dependencies {
     compile project(':copycat-api')
     compile "org.slf4j:slf4j-api:1.7.6"
-    compile "io.confluent:kafka-avro-serializer:2.0-SNAPSHOT"
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
 
     testCompile 'junit:junit:4.6'
     testCompile 'org.easymock:easymock:3.3.1'
@@ -652,7 +651,6 @@ project(':copycat-runtime') {
 
   dependencies {
     compile project(':copycat-api')
-    compile project(':copycat-avro')
     compile project(':clients')
     compile "org.slf4j:slf4j-api:1.7.6"
 
@@ -661,6 +659,7 @@ project(':copycat-runtime') {
     testCompile 'org.powermock:powermock-module-junit4:1.6.2'
     testCompile 'org.powermock:powermock-api-easymock:1.6.2'
     testRuntime "$slf4jlog4j"
+    testRuntime project(":copycat-json")
   }
 
   task testJar(type: Jar) {

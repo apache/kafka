@@ -159,7 +159,7 @@ public class WorkerSourceTask implements WorkerTask {
                             recordSent(producerRecord);
                         }
                     });
-            // Offsets are converted to Avro & serialized in the OffsetWriter
+            // Offsets are converted & serialized in the OffsetWriter
             offsetWriter.setOffset(record.getStream(), record.getOffset());
         }
     }

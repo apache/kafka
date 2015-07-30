@@ -87,12 +87,11 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     public void setup() {
         super.setup();
         Properties workerProps = new Properties();
-        // TODO: Non-avro built-ins?
-        workerProps.setProperty("converter", "org.apache.kafka.copycat.avro.AvroConverter");
-        workerProps.setProperty("key.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
-        workerProps.setProperty("value.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
-        workerProps.setProperty("key.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
-        workerProps.setProperty("value.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
+        workerProps.setProperty("converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("key.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
+        workerProps.setProperty("value.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
+        workerProps.setProperty("key.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
+        workerProps.setProperty("value.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
         config = new WorkerConfig(workerProps);
         sourceTask = PowerMock.createMock(SourceTask.class);
         converter = PowerMock.createMock(Converter.class);

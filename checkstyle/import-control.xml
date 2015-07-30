@@ -122,14 +122,6 @@
 			<allow pkg="org.apache.kafka.copycat.storage" />
 		</subpackage>
 
-		<subpackage name="avro">
-			<allow pkg="org.apache.avro" />
-			<allow pkg="org.apache.kafka.copycat" />
-			<!-- FIXME/move Avro plugin out of Kafka -->
-			<allow pkg="io.confluent.kafka.serializers" />
-			<allow pkg="io.confluent.kafka.schemaregistry" />
-		</subpackage>
-
 		<subpackage name="runtime">
 			<allow pkg="org.apache.kafka.copycat" />
 			<allow pkg="org.apache.kafka.common" />
@@ -155,6 +147,13 @@
 
 		<subpackage name="util">
 			<allow pkg="org.apache.kafka.copycat" />
+		</subpackage>
+
+		<subpackage name="json">
+			<allow pkg="com.fasterxml.jackson" />
+			<allow pkg="org.apache.kafka.common.serialization" />
+			<allow pkg="org.apache.kafka.common.errors" />
+			<allow pkg="org.apache.kafka.copycat.storage" />
 		</subpackage>
 
 		<subpackage name="file">

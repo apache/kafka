@@ -59,15 +59,12 @@ public class WorkerTest extends ThreadedTest {
     public void setup() {
         super.setup();
 
-        // TODO: Remove schema registry URL
-        // TODO: Non-avro built-ins?
         Properties workerProps = new Properties();
-        workerProps.setProperty("schema.registry.url", "http://localhost:8081");
-        workerProps.setProperty("converter", "org.apache.kafka.copycat.avro.AvroConverter");
-        workerProps.setProperty("key.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
-        workerProps.setProperty("value.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
-        workerProps.setProperty("key.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
-        workerProps.setProperty("value.deserializer", "io.confluent.kafka.serializers.KafkaAvroDeserializer");
+        workerProps.setProperty("converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("key.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
+        workerProps.setProperty("value.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
+        workerProps.setProperty("key.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
+        workerProps.setProperty("value.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
         WorkerConfig config = new WorkerConfig(workerProps);
         worker = new Worker(new MockTime(), config, offsetBackingStore,
                 offsetKeySerializer, offsetValueSerializer,
