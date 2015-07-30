@@ -90,7 +90,7 @@ public class ProcessorStateManager {
                 throw new IllegalStateException("Store " + store.name() + "'s change log does not contain the partition for group " + id);
 
         } else {
-            // try to create a topic the the number of partitions
+            // try to create the topic with the number of partitions equal to the total number of store instances.
             // TODO: this is not possible yet since we do not know the total number of ids.
         }
 
