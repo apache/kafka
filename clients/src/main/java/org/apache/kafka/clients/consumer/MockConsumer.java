@@ -12,6 +12,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,12 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.MetricName;
 
 /**
  * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka. This class is <i> not
@@ -83,9 +83,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         // update the consumed offset
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
-            List<ConsumerRecord<K, V>> recs = entry.getValue();
-            if (!recs.isEmpty())
-                this.subscriptions.consumed(entry.getKey(), recs.get(recs.size() - 1).offset());
+            if (!subscriptions.isPaused(entry.getKey())) {
+                List<ConsumerRecord<K, V>> recs = entry.getValue();
+                if (!recs.isEmpty())
+                    this.subscriptions.consumed(entry.getKey(), recs.get(recs.size() - 1).offset());
+            }
         }
 
         ConsumerRecords<K, V> copy = new ConsumerRecords<K, V>(this.records);
@@ -96,7 +98,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void addRecord(ConsumerRecord<K, V> record) {
         ensureNotClosed();
         TopicPartition tp = new TopicPartition(record.topic(), record.partition());
-        this.subscriptions.assignedPartitions().add(tp);
+        ArrayList<TopicPartition> currentAssigned = new ArrayList<>(this.subscriptions.assignedPartitions());
+        if (!currentAssigned.contains(tp)) {
+            currentAssigned.add(tp);
+            this.subscriptions.changePartitionAssignment(currentAssigned);
+        }
+        subscriptions.seek(tp, record.offset());
         List<ConsumerRecord<K, V>> recs = this.records.get(tp);
         if (recs == null) {
             recs = new ArrayList<ConsumerRecord<K, V>>();
@@ -186,6 +193,18 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void updatePartitions(String topic, List<PartitionInfo> partitions) {
         ensureNotClosed();
         this.partitions.put(topic, partitions);
+    }
+
+    @Override
+    public void pause(TopicPartition... partitions) {
+        for (TopicPartition partition : partitions)
+            subscriptions.pause(partition);
+    }
+
+    @Override
+    public void resume(TopicPartition... partitions) {
+        for (TopicPartition partition : partitions)
+            subscriptions.resume(partition);
     }
 
     @Override

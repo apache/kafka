@@ -119,7 +119,9 @@ public final class Coordinator {
             Map<TopicPartition, Long> offsets = fetchCommittedOffsets(subscriptions.assignedPartitions());
             for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
                 TopicPartition tp = entry.getKey();
-                this.subscriptions.committed(tp, entry.getValue());
+                // verify assignment is still active
+                if (subscriptions.isAssigned(tp))
+                    this.subscriptions.committed(tp, entry.getValue());
             }
             this.subscriptions.commitsRefreshed();
         }
@@ -459,7 +461,9 @@ public final class Coordinator {
                 short errorCode = entry.getValue();
                 if (errorCode == Errors.NONE.code()) {
                     log.debug("Committed offset {} for partition {}", offset, tp);
-                    subscriptions.committed(tp, offset);
+                    if (subscriptions.isAssigned(tp))
+                        // update the local cache only if the partition is still assigned
+                        subscriptions.committed(tp, offset);
                 } else if (errorCode == Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code()
                         || errorCode == Errors.NOT_COORDINATOR_FOR_CONSUMER.code()) {
                     coordinatorDead();
