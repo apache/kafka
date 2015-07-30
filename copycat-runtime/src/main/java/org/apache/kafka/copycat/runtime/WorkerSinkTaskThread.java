@@ -54,6 +54,8 @@ class WorkerSinkTaskThread extends ShutdownableThread {
         while (getRunning()) {
             iteration();
         }
+        // Make sure any uncommitted data has committed
+        task.commitOffsets(task.getTime().milliseconds(), true, -1, false);
     }
 
     public void iteration() {

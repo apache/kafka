@@ -290,18 +290,10 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         sinkTask.stop();
         PowerMock.expectLastCall();
 
-        // Triggers final offset commit
-        EasyMock.expect(consumer.subscriptions()).andReturn(Collections.singleton(TOPIC_PARTITION));
-        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andAnswer(new IAnswer<Long>() {
-            @Override
-            public Long answer() throws Throwable {
-                return FIRST_OFFSET + recordsReturned - 1;
-            }
-        });
-        final Capture<ConsumerCommitCallback> capturedCallback = EasyMock.newCapture();
-        consumer.commit(EasyMock.eq(Collections.singletonMap(TOPIC_PARTITION, finalOffset)),
-                EasyMock.eq(CommitType.SYNC),
-                EasyMock.capture(capturedCallback));
+        // No offset commit since it happens in the mocked worker thread, but the main thread does need to wake up the
+        // consumer so it exits quickly
+        consumer.wakeup();
+        PowerMock.expectLastCall();
 
         consumer.close();
         PowerMock.expectLastCall();

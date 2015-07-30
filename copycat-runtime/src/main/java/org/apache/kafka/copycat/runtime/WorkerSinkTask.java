@@ -71,13 +71,12 @@ public class WorkerSinkTask implements WorkerTask {
 
     @Override
     public void stop() throws CopycatException {
+        // Offset commit is handled upon exit in work thread
         task.stop();
-        commitOffsets(time.milliseconds(), true, -1, false);
         if (workThread != null) {
             workThread.startGracefulShutdown();
         }
-        // Closing the consumer has to wait until we're sure the work thread has exited so it won't
-        // call poll() anymore.
+        consumer.wakeup();
     }
 
     @Override
@@ -107,10 +106,14 @@ public class WorkerSinkTask implements WorkerTask {
 
     /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
     public void poll(long timeoutMs) {
-        log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
-        ConsumerRecords<Object, Object> msgs = consumer.poll(timeoutMs);
-        log.trace("{} polling returned {} messages", id, msgs.count());
-        deliverMessages(msgs);
+        try {
+            log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
+            ConsumerRecords<Object, Object> msgs = consumer.poll(timeoutMs);
+            log.trace("{} polling returned {} messages", id, msgs.count());
+            deliverMessages(msgs);
+        } catch (ConsumerWakeupException we) {
+            log.trace("{} consumer woken up", id);
+        }
     }
 
     /**
