@@ -44,7 +44,6 @@ import scala.collection.mutable
 
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
-  //val zkConnect = TestZKUtils.zookeeperConnect
   val numNodes = 2
   val numParts = 1
   val msgQueueSize = 1
@@ -69,10 +68,10 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
    */
   def testMetadataUpdate() {
     log.setLevel(Level.INFO)
-    var controller : KafkaServer = this.servers.head;
+    var controller: KafkaServer = this.servers.head;
     // Find the current controller
-    val epochMap : mutable.Map[Int, Int] = mutable.Map.empty
-    for(server <- this.servers) {
+    val epochMap: mutable.Map[Int, Int] = mutable.Map.empty
+    for (server <- this.servers) {
       epochMap += (server.config.brokerId -> server.kafkaController.epoch)
       if(server.kafkaController.isActive()) {
         controller = server
@@ -82,7 +81,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     kafka.admin.AdminUtils.createTopic(controller.zkClient, topic, 1, 1)
     val topicPartition = TopicAndPartition("topic1", 0)
     var partitions = controller.kafkaController.partitionStateMachine.partitionsInState(OnlinePartition)
-    while(!partitions.contains(topicPartition)) {
+    while (!partitions.contains(topicPartition)) {
       partitions = controller.kafkaController.partitionStateMachine.partitionsInState(OnlinePartition)
       Thread.sleep(100)
     }
@@ -112,7 +111,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     })
     thread.setName("mythread")
     thread.start()
-    while(thread.getState() != Thread.State.WAITING){
+    while (thread.getState() != Thread.State.WAITING) {
       Thread.sleep(100)
     }
     // Assume that the thread is WAITING because it is
@@ -123,8 +122,8 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     // Wait and find current controller
     var found = false
     var counter = 0
-    while(!found && counter < 10) {
-      for(server <- this.servers) {
+    while (!found && counter < 10) {
+      for (server <- this.servers) {
         val previousEpoch = (epochMap get server.config.brokerId) match {
           case Some(epoch) =>
             epoch
@@ -133,13 +132,13 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
             throw new IllegalStateException(msg)
         }
 
-        if(server.kafkaController.isActive()
+        if (server.kafkaController.isActive
             && (previousEpoch) < server.kafkaController.epoch) {
           controller = server
           found = true
         }
       }
-      if(!found){
+      if (!found) {
           Thread.sleep(100)
           counter += 1
       }
@@ -161,12 +160,12 @@ class MockChannelManager(private val controllerContext: ControllerContext,
   def stopSendThread(brokerId: Int) {
     val requestThread = brokerStateInfo(brokerId).requestSendThread
     requestThread.isRunning.set(false)
-    requestThread.interrupt()
-    requestThread.join()
+    requestThread.interrupt
+    requestThread.join
   }
 
   def shrinkBlockingQueue(brokerId: Int) {
-    val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)](1)
+    val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, RequestOrResponse => Unit)](1)
     val brokerInfo = this.brokerStateInfo(brokerId)
     this.brokerStateInfo.put(brokerId, new ControllerBrokerStateInfo(brokerInfo.channel,
                                                                       brokerInfo.broker,
@@ -178,11 +177,11 @@ class MockChannelManager(private val controllerContext: ControllerContext,
     this.startRequestSendThread(0)
   }
 
-  def queueCapacity(broker : Int): Int = {
-    this.brokerStateInfo(broker).messageQueue.remainingCapacity()
+  def queueCapacity(brokerId: Int): Int = {
+    this.brokerStateInfo(brokerId).messageQueue.remainingCapacity
   }
 
-  def queueSize(broker : Int): Int = {
-    this.brokerStateInfo(broker).messageQueue.size()
+  def queueSize(brokerId: Int): Int = {
+    this.brokerStateInfo(brokerId).messageQueue.size
   }
 }
