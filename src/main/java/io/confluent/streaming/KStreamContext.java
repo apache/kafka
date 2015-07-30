@@ -115,6 +115,12 @@ public interface KStreamContext {
   void restore(StateStore store, RestoreFunc restoreFunc);
 
   /**
+   * Registers the specified storage enging.
+   * @param store the storage engine
+   */
+  void register(StateStore store);
+
+  /**
    * Ensures that the context is in the initialization phase where KStream topology can be constructed
    */
   void ensureInitialization();

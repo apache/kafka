@@ -19,8 +19,10 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.StateStore;
 import io.confluent.streaming.kv.internals.RestoreFunc;
 import io.confluent.streaming.util.OffsetCheckpoint;
+import kafka.cluster.Partition;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,16 +67,38 @@ public class ProcessorStateManager {
         checkpoint.delete();
     }
 
-    public void registerAndRestore(StateStore store, RestoreFunc restoreFunc) {
+    public void register(StateStore store) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
         if(this.stores.containsKey(store.name()))
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
+        // check that the underlying change log topic exist or not
+        if (restoreConsumer.listTopics().keySet().contains(store.name())) {
+            // TODO: if we know the total number of context ids then we can just check if the #.partitions match that number.
+            // my id must be in the partition list
+            boolean partitionNotFound = true;
+            for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(store.name())) {
+                if (partitionInfo.partition() == id) {
+                    partitionNotFound = false;
+                    break;
+                }
+            }
+
+            if (partitionNotFound)
+                throw new IllegalStateException("Store " + store.name() + "'s change log does not contain the partition for group " + id);
+
+        } else {
+            // try to create a topic the the number of partitions
+            // TODO: this is not possible yet since we do not know the total number of ids.
+        }
+
         // register store
         this.stores.put(store.name(), store);
+    }
 
+    public void restore(StateStore store, RestoreFunc restoreFunc) {
         // subscribe to the store's partition
         TopicPartition storePartition = new TopicPartition(store.name(), id);
         if (!restoreConsumer.subscriptions().isEmpty()) {

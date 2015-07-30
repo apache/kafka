@@ -204,10 +204,6 @@ public class KStreamContextImpl implements KStreamContext {
     return stateMgr.baseDir();
   }
 
-  public ProcessorStateManager stateMgr() {
-    return stateMgr;
-  }
-
   @Override
   public Metrics metrics() {
     return metrics;
@@ -241,7 +237,14 @@ public class KStreamContextImpl implements KStreamContext {
   public void restore(StateStore store, RestoreFunc restoreFunc) {
     ensureInitialization();
 
-    stateMgr.registerAndRestore(store, restoreFunc);
+    stateMgr.restore(store, restoreFunc);
+  }
+
+  @Override
+  public void register(StateStore store) {
+    ensureInitialization();
+
+    stateMgr.register(store);
   }
 
   @Override

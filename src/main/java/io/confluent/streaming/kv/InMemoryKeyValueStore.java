@@ -46,6 +46,8 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
             this.dirty = new HashSet<K>();
             this.maxDirty = 100;
             this.context = context;
+
+            this.context.register(this);
         }
 
         @Override
