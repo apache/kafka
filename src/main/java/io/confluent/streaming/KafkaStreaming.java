@@ -226,7 +226,7 @@ public class KafkaStreaming implements Runnable {
             }
 =======
 
-        TopologyAnalyzer topologyAnalyzer = new TopologyAnalyzer(jobClass, streamingConfig);
+        TopologyAnalyzer topologyAnalyzer = new TopologyAnalyzer(jobClass);
 
         this.topics = topologyAnalyzer.topics;
 >>>>>>> new api model

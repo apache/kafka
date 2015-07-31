@@ -70,10 +70,14 @@ public class KStreamJoinTest {
     String[] expected;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -164,10 +168,14 @@ public class KStreamJoinTest {
     String[] expected;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -252,10 +260,14 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -343,10 +355,14 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -434,10 +450,14 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -525,10 +545,14 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);

@@ -1,9 +1,13 @@
 package io.confluent.streaming.internal;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamTopology;
 =======
+=======
+import io.confluent.streaming.KStreamContext;
+>>>>>>> wip
 import io.confluent.streaming.KStreamInitializer;
 >>>>>>> new api model
 import org.apache.kafka.common.serialization.Deserializer;
@@ -22,20 +26,24 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
   private Deserializer<V> valueDeserializer;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   String[] topics;
 
   public KStreamSource(String[] topics, KStreamTopology topology) {
     this(topics, null, null, topology);
   }
+=======
+  private Deserializer<K> keyDeserializer;
+  private Deserializer<V> valueDeserializer;
+>>>>>>> wip
 
   public KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamTopology topology) {
     super(topology);
 =======
   final String[] topics;
 
-  @SuppressWarnings("unchecked")
   KStreamSource(String[] topics, KStreamInitializer initializer) {
-    this(topics, (Deserializer<K>) initializer.keyDeserializer(), (Deserializer<V>) initializer.valueDeserializer(), initializer);
+    this(topics, null, null, initializer);
   }
 
   KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamInitializer initializer) {
@@ -47,6 +55,17 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
   }
 
   @SuppressWarnings("unchecked")
+<<<<<<< HEAD
+=======
+  @Override
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
+    if (keyDeserializer == null) keyDeserializer = (Deserializer<K>) context.keyDeserializer();
+    if (valueDeserializer == null) valueDeserializer = (Deserializer<V>) context.valueDeserializer();
+
+    super.bind(context, metadata);
+  }
+
+>>>>>>> wip
   @Override
   public void bind(KStreamContext context, KStreamMetadata metadata) {
     if (keyDeserializer == null) keyDeserializer = (Deserializer<K>) context.keyDeserializer();
@@ -71,8 +90,11 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
     return valueDeserializer;
   }
 
+<<<<<<< HEAD
   public Set<String> topics() {
     return new HashSet<>(Arrays.asList(topics));
   }
 
+=======
+>>>>>>> wip
 }

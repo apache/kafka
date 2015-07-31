@@ -12,32 +12,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public interface KStreamInitializer {
 
-  AtomicInteger STREAM_GROUP_INDEX = new AtomicInteger(1);
-
-  /**
-   * Returns the key serializer
-   * @return the key serializer
-   */
-  Serializer<?> keySerializer();
-
-  /**
-   * Returns the value serializer
-   * @return the value serializer
-   */
-  Serializer<?> valueSerializer();
-
-  /**
-   * Returns the key deserializer
-   * @return the key deserializer
-   */
-  Deserializer<?> keyDeserializer();
-
-  /**
-   * Returns the value deserializer
-   * @return the value deserializer
-   */
-  Deserializer<?> valueDeserializer();
-
   // TODO: support regex topic matching in from() calls, for example:
   // context.from("Topic*PageView")
 

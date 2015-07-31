@@ -252,12 +252,7 @@ public class KStreamThread extends Thread {
             KStreamContextImpl context = kstreamContexts.get(id);
             if (context == null) {
                 try {
-                    KStreamInitializerImpl initializer = new KStreamInitializerImpl(
-                      streamingConfig.keySerializer(),
-                      streamingConfig.valueSerializer(),
-                      streamingConfig.keyDeserializer(),
-                      streamingConfig.valueDeserializer()
-                    );
+                    KStreamInitializerImpl initializer = new KStreamInitializerImpl();
                     KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
 
                     job.init(initializer);

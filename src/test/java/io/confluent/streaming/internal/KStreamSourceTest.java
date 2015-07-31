@@ -21,10 +21,14 @@ public class KStreamSourceTest {
   public void testKStreamSource() {
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     TestProcessor<String, String> processor = new TestProcessor<>();
 
     KStreamSource<String, String> stream = new KStreamSource<>(null, initializer);

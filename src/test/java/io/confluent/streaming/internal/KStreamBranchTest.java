@@ -43,10 +43,14 @@ public class KStreamBranchTest {
     final int[] expectedKeys = new int[] { 1, 2, 3, 4, 5, 6, 7 };
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     KStreamSource<Integer, String> stream;
     KStream<Integer, String>[] branches;
     TestProcessor<Integer, String>[] processors;

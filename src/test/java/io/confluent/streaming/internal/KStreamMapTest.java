@@ -30,10 +30,14 @@ public class KStreamMapTest {
     final int[] expectedKeys = new int[] { 0, 1, 2, 3 };
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
     KStreamSource<Integer, String> stream;
     TestProcessor<String, Integer> processor;
 

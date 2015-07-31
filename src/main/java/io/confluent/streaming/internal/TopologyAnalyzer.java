@@ -1,7 +1,6 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamJob;
-import io.confluent.streaming.StreamingConfig;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collection;
@@ -17,9 +16,9 @@ public class TopologyAnalyzer {
   public final Set<String> topics;
   public final Collection<KStreamSource<?, ?>> streams;
 
-  public TopologyAnalyzer(Class<? extends KStreamJob> jobClass, StreamingConfig streamingConfig) {
+  public TopologyAnalyzer(Class<? extends KStreamJob> jobClass) {
     KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
-    KStreamInitializerImpl context = new KStreamInitializerImpl(streamingConfig);
+    KStreamInitializerImpl context = new KStreamInitializerImpl();
 
     job.init(context);
 
