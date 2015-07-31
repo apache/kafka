@@ -41,6 +41,11 @@
       <artifactId>slf4j-log4j12</artifactId>
       <version>1.7.6</version>
     </dependency>
+    <dependency>
+      <groupId>org.rocksdb</groupId>
+      <artifactId>rocksdbjni</artifactId>
+      <version>3.10.1</version>
+    </dependency>
   </dependencies>
 
   <build>

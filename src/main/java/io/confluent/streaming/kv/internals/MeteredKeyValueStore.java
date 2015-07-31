@@ -135,7 +135,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void close() {}
+    public void close() { inner.close(); }
 
     @Override
     public void flush() {
