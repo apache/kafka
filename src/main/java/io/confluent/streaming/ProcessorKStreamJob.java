@@ -5,6 +5,11 @@ package io.confluent.streaming;
  */
 public abstract class ProcessorKStreamJob<K, V> extends KStreamTopology implements Processor<K, V> {
 
+  private final String[] topics;
+
+  public ProcessorKStreamJob(String... topics) {
+    this.topics = topics;
+  }
   @SuppressWarnings("unchecked")
   @Override
 <<<<<<< HEAD
@@ -21,8 +26,12 @@ public abstract class ProcessorKStreamJob<K, V> extends KStreamTopology implemen
 >>>>>>> new api model
 =======
   public void topology() {
+<<<<<<< HEAD
     ((KStream<K, V>)from()).process(this);
 >>>>>>> wip
+=======
+    ((KStream<K, V>)from(topics)).process(this);
+>>>>>>> fix examples
   }
 
 }

@@ -19,6 +19,10 @@ public class StatefulKStreamJob extends ProcessorKStreamJob<String, Integer> {
   private ProcessorContext processorContext;
   private KeyValueStore<String, Integer> kvStore;
 
+  public StatefulKStreamJob(String... topics) {
+    super(topics);
+  }
+
   @Override
   public void init(ProcessorContext context) {
     this.processorContext = context;
@@ -56,7 +60,7 @@ public class StatefulKStreamJob extends ProcessorKStreamJob<String, Integer> {
   }
 
   public static void main(String[] args) {
-    KafkaStreaming kstream = new KafkaStreaming(new StatefulKStreamJob(), new StreamingConfig(new Properties()));
+    KafkaStreaming kstream = new KafkaStreaming(new StatefulKStreamJob(args), new StreamingConfig(new Properties()));
     kstream.run();
   }
 }

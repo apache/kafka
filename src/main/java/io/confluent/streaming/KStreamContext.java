@@ -9,9 +9,8 @@ import java.io.File;
 import java.util.Map;
 
 /**
- * KStreamContext is the interface that allows an implementation of {@link KStreamJob#init(KStreamContext)} to create KStream instances.
- * It also provides access to the system resources for a stream processing job.
- * An instance of KStreamContext is created for each partition.
+ * KStreamContext is access to the system resources for a stream processing job.
+ * An instance of KStreamContext is created for each partition group.
  */
 public interface KStreamContext {
 

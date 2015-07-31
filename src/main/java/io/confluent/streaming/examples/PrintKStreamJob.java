@@ -13,6 +13,10 @@ public class PrintKStreamJob<K, V> extends ProcessorKStreamJob<K, V> {
 
   private ProcessorContext processorContext;
 
+  public PrintKStreamJob(String... topics) {
+    super(topics);
+  }
+
   @Override
   public void init(ProcessorContext context) {
     this.processorContext = context;
@@ -38,7 +42,7 @@ public class PrintKStreamJob<K, V> extends ProcessorKStreamJob<K, V> {
   }
 
   public static void main(String[] args) {
-    KafkaStreaming kstream = new KafkaStreaming(new PrintKStreamJob(), new StreamingConfig(new Properties()));
+    KafkaStreaming kstream = new KafkaStreaming(new PrintKStreamJob(args), new StreamingConfig(new Properties()));
     kstream.run();
   }
 }
