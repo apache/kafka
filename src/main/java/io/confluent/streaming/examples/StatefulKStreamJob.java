@@ -50,8 +50,13 @@ public class StatefulKStreamJob extends ProcessorKStreamJob<String, Integer> {
     }
   }
 
+  @Override
+  public void close() {
+    // do nothing
+  }
+
   public static void main(String[] args) {
-    KafkaStreaming kstream = new KafkaStreaming(PrintKStreamJob.class, new StreamingConfig(new Properties()));
+    KafkaStreaming kstream = new KafkaStreaming(new StatefulKStreamJob(), new StreamingConfig(new Properties()));
     kstream.run();
   }
 }

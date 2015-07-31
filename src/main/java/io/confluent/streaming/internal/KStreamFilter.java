@@ -1,6 +1,6 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.KStreamInitializer;
+import io.confluent.streaming.KStreamTopology;
 import io.confluent.streaming.Predicate;
 
 /**
@@ -10,7 +10,7 @@ class KStreamFilter<K, V> extends KStreamImpl<K, V> {
 
   private final Predicate<K, V> predicate;
 
-  KStreamFilter(Predicate<K, V> predicate, KStreamInitializer initializer) {
+  KStreamFilter(Predicate<K, V> predicate, KStreamTopology initializer) {
     super(initializer);
     this.predicate = predicate;
   }

@@ -32,8 +32,13 @@ public class PrintKStreamJob<K, V> extends ProcessorKStreamJob<K, V> {
     // do nothing
   }
 
+  @Override
+  public void close() {
+    // do nothing
+  }
+
   public static void main(String[] args) {
-    KafkaStreaming kstream = new KafkaStreaming(PrintKStreamJob.class, new StreamingConfig(new Properties()));
+    KafkaStreaming kstream = new KafkaStreaming(new PrintKStreamJob(), new StreamingConfig(new Properties()));
     kstream.run();
   }
 }

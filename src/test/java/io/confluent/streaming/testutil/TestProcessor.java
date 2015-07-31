@@ -22,4 +22,9 @@ public class TestProcessor<K, V> implements Processor<K, V> {
   public void punctuate(long streamTime) {
     punctuated.add(streamTime);
   }
+
+  @Override
+  public void close() {
+  }
+
 }

@@ -17,8 +17,7 @@
 
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamJob;
+import io.confluent.streaming.KStreamTopology;
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.util.ParallelExecutor;
 import io.confluent.streaming.util.Util;
@@ -41,7 +40,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +55,7 @@ public class KStreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(KStreamThread.class);
 
-    private final Class<? extends KStreamJob> jobClass;
+    private final KStreamTopology topology;
     private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
     private final ParallelExecutor parallelExecutor;
     private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<>();
@@ -89,10 +87,10 @@ public class KStreamThread extends Thread {
     };
 
     @SuppressWarnings("unchecked")
-    public KStreamThread(Class<? extends KStreamJob> jobClass, Set<String> topics, StreamingConfig streamingConfig, Metrics metrics) {
+    public KStreamThread(KStreamTopology topology, Set<String> topics, StreamingConfig streamingConfig, Metrics metrics) {
         super();
         this.config = new ProcessorConfig(streamingConfig.config());
-        this.jobClass = jobClass;
+        this.topology = topology;
         this.streamingConfig = streamingConfig;
         this.metrics = metrics;
         this.streamingMetrics = new KafkaStreamingMetrics();
@@ -239,13 +237,8 @@ public class KStreamThread extends Thread {
             KStreamContextImpl context = kstreamContexts.get(id);
             if (context == null) {
                 try {
-                    KStreamInitializerImpl initializer = new KStreamInitializerImpl();
-                    KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
-
-                    job.init(initializer);
-
                     context = new KStreamContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
-                    context.init(initializer.sourceStreams());
+                    context.init(topology.sourceStreams());
 
                     kstreamContexts.put(id, context);
                 }

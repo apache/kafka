@@ -3,7 +3,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamInitializer;
+import io.confluent.streaming.KStreamTopology;
 import io.confluent.streaming.KStreamWindowed;
 import io.confluent.streaming.ValueJoiner;
 import io.confluent.streaming.Window;
@@ -15,7 +15,7 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
   final Window<K, V> window;
 
-  KStreamWindowedImpl(Window<K, V> window, KStreamInitializer initializer) {
+  KStreamWindowedImpl(Window<K, V> window, KStreamTopology initializer) {
     super(initializer);
     this.window = window;
   }
@@ -34,6 +34,12 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
       // KStreamWindowed needs to forward the topic name since it may receive directly from KStreamSource
       forward(key, value, timestamp, streamTime);
     }
+  }
+
+  @Override
+  public void close() {
+    window.close();
+    super.close();
   }
 
   @Override

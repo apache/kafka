@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.testutil.MockKStreamContext;
+import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
@@ -33,12 +34,13 @@ public class KStreamFlatMapTest {
 
     final int[] expectedKeys = new int[] { 0, 1, 2, 3 };
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology topology = new MockKStreamTopology();
+
     KStreamSource<Integer, String> stream;
     TestProcessor<String, String> processor;
 
     processor = new TestProcessor<>();
-    stream = new KStreamSource<>(null, initializer);
+    stream = new KStreamSource<>(null, topology);
     stream.flatMap(mapper).process(processor);
 
     KStreamContext context = new MockKStreamContext(null, null);

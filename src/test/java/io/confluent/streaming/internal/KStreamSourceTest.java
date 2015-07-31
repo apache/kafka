@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 import io.confluent.streaming.*;
 
 import io.confluent.streaming.testutil.MockKStreamContext;
+import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
@@ -19,7 +20,7 @@ public class KStreamSourceTest {
   @Test
   public void testKStreamSource() {
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     TestProcessor<String, String> processor = new TestProcessor<>();
 
     KStreamSource<String, String> stream = new KStreamSource<>(null, initializer);

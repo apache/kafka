@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.testutil.MockKStreamContext;
+import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
@@ -41,7 +42,7 @@ public class KStreamBranchTest {
 
     final int[] expectedKeys = new int[] { 1, 2, 3, 4, 5, 6, 7 };
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     KStreamSource<Integer, String> stream;
     KStream<Integer, String>[] branches;
     TestProcessor<Integer, String>[] processors;

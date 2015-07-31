@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.testutil.MockKStreamContext;
+import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import org.junit.Test;
 
@@ -23,7 +24,7 @@ public class KStreamWindowedTest {
 
     KStreamSource<Integer, String> stream;
     Window<Integer, String> window;
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
 
     window = new UnlimitedWindow<>();
     stream = new KStreamSource<>(null, initializer);

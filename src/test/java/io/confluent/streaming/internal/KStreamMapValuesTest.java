@@ -1,9 +1,10 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamInitializer;
+import io.confluent.streaming.KStreamTopology;
 import io.confluent.streaming.ValueMapper;
 import io.confluent.streaming.testutil.MockKStreamContext;
+import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
@@ -30,7 +31,7 @@ public class KStreamMapValuesTest {
 
     final int[] expectedKeys = new int[] { 1, 10, 100, 1000 };
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, Integer> processor;
 

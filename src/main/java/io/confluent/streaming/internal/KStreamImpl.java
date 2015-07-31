@@ -2,7 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamInitializer;
+import io.confluent.streaming.KStreamTopology;
 import io.confluent.streaming.KStreamWindowed;
 import io.confluent.streaming.KeyValueMapper;
 import io.confluent.streaming.Predicate;
@@ -20,19 +20,30 @@ import java.util.ArrayList;
 abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   private final ArrayList<Receiver> nextReceivers = new ArrayList<>(1);
+  protected KStreamTopology initializer;
+  protected KStreamContext context;
   protected KStreamMetadata metadata;
-  protected KStreamInitializer initializer;
 
-  protected KStreamImpl(KStreamInitializer initializer) {
+  protected KStreamImpl(KStreamTopology initializer) {
     this.initializer = initializer;
   }
 
   @Override
   public void bind(KStreamContext context, KStreamMetadata metadata) {
+    if (this.context != null) throw new IllegalStateException("kstream topology is already bound");
+    this.context = context;
     this.metadata = metadata;
     int numReceivers = nextReceivers.size();
     for (int i = 0; i < numReceivers; i++) {
       nextReceivers.get(i).bind(context, metadata);
+    }
+  }
+
+  @Override
+  public void close() {
+    int numReceivers = nextReceivers.size();
+    for (int i = 0; i < numReceivers; i++) {
+      nextReceivers.get(i).close();
     }
   }
 
@@ -116,27 +127,19 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
       }
       @Override
       public void process(K key, V value) {
-        this.processorContext.send(sendTopic, key, value,
-            (Serializer<Object>) keySerializer,
-            (Serializer<Object>) valSerializer);
+        this.processorContext.send(sendTopic, key, value, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer);
       }
       @Override
       public void punctuate(long streamTime) {}
+      @Override
+      public void close() {}
     };
   }
 
   @SuppressWarnings("unchecked")
   @Override
   public void process(final Processor<K, V> processor) {
-    Receiver receiver = new Receiver() {
-      public void bind(KStreamContext context, KStreamMetadata metadata) {
-        processor.init(new ProcessorContextImpl(context, context.getPunctuationScheduler(processor)));
-      }
-      public void receive(Object key, Object value, long timestamp, long streamTime) {
-        processor.process((K) key, (V) value);
-      }
-    };
-    registerReceiver(receiver);
+    registerReceiver(new ProcessorNode<>(processor));
   }
 
   void registerReceiver(Receiver receiver) {

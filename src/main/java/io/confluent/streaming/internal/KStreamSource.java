@@ -1,24 +1,29 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamInitializer;
+import io.confluent.streaming.KStreamTopology;
 import org.apache.kafka.common.serialization.Deserializer;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Created by yasuhiro on 6/17/15.
  */
-class KStreamSource<K, V> extends KStreamImpl<K, V> {
+public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
   private Deserializer<K> keyDeserializer;
   private Deserializer<V> valueDeserializer;
 
-  final String[] topics;
+  String[] topics;
 
-  KStreamSource(String[] topics, KStreamInitializer initializer) {
+  public KStreamSource(String[] topics, KStreamTopology initializer) {
     this(topics, null, null, initializer);
   }
 
-  KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamInitializer initializer) {
+  public KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamTopology initializer) {
     super(initializer);
     this.topics = topics;
     this.keyDeserializer = keyDeserializer;
@@ -48,6 +53,10 @@ class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
   public Deserializer<V> valueDeserializer() {
     return valueDeserializer;
+  }
+
+  public Set<String> topics() {
+    return new HashSet<>(Arrays.asList(topics));
   }
 
 }

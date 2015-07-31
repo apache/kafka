@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.testutil.MockKStreamContext;
+import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import io.confluent.streaming.util.Util;
@@ -68,7 +69,7 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -158,7 +159,7 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -242,16 +243,17 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(null, initializer);
-    stream2 = new KStreamSource<>(null, initializer);
-    mapped1 = stream1.map(keyValueMapper);
-    mapped2 = stream2.map(keyValueMapper);
 
     boolean exceptionRaised;
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.map(keyValueMapper);
+      mapped2 = stream2.map(keyValueMapper);
+
       exceptionRaised = false;
       windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
@@ -269,6 +271,11 @@ public class KStreamJoinTest {
     assertTrue(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.map(keyValueMapper);
+      mapped2 = stream2.map(keyValueMapper);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
@@ -286,6 +293,11 @@ public class KStreamJoinTest {
     assertTrue(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.map(keyValueMapper);
+      mapped2 = stream2.map(keyValueMapper);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
@@ -313,16 +325,17 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(null, initializer);
-    stream2 = new KStreamSource<>(null, initializer);
-    mapped1 = stream1.flatMap(keyValueMapper2);
-    mapped2 = stream2.flatMap(keyValueMapper2);
 
     boolean exceptionRaised;
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMap(keyValueMapper2);
+      mapped2 = stream2.flatMap(keyValueMapper2);
+
       exceptionRaised = false;
       windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
@@ -340,6 +353,11 @@ public class KStreamJoinTest {
     assertTrue(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMap(keyValueMapper2);
+      mapped2 = stream2.flatMap(keyValueMapper2);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
@@ -357,6 +375,11 @@ public class KStreamJoinTest {
     assertTrue(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMap(keyValueMapper2);
+      mapped2 = stream2.flatMap(keyValueMapper2);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
@@ -384,16 +407,17 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(null, initializer);
-    stream2 = new KStreamSource<>(null, initializer);
-    mapped1 = stream1.mapValues(valueMapper);
-    mapped2 = stream2.mapValues(valueMapper);
 
     boolean exceptionRaised;
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.mapValues(valueMapper);
+      mapped2 = stream2.mapValues(valueMapper);
+
       exceptionRaised = false;
       windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
@@ -411,6 +435,11 @@ public class KStreamJoinTest {
     assertFalse(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.mapValues(valueMapper);
+      mapped2 = stream2.mapValues(valueMapper);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
@@ -428,6 +457,11 @@ public class KStreamJoinTest {
     assertFalse(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.mapValues(valueMapper);
+      mapped2 = stream2.mapValues(valueMapper);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
@@ -455,16 +489,17 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl();
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(null, initializer);
-    stream2 = new KStreamSource<>(null, initializer);
-    mapped1 = stream1.flatMapValues(valueMapper2);
-    mapped2 = stream2.flatMapValues(valueMapper2);
 
     boolean exceptionRaised;
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMapValues(valueMapper2);
+      mapped2 = stream2.flatMapValues(valueMapper2);
+
       exceptionRaised = false;
       windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
@@ -482,6 +517,11 @@ public class KStreamJoinTest {
     assertFalse(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMapValues(valueMapper2);
+      mapped2 = stream2.flatMapValues(valueMapper2);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
@@ -499,6 +539,11 @@ public class KStreamJoinTest {
     assertFalse(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMapValues(valueMapper2);
+      mapped2 = stream2.flatMapValues(valueMapper2);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
