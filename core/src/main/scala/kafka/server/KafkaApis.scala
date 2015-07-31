@@ -30,7 +30,7 @@ import kafka.coordinator.ConsumerCoordinator
 import kafka.log._
 import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
-import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse, HeartbeatRequest, HeartbeatResponse, ResponseHeader, ResponseSend}
+import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse, HeartbeatRequest, HeartbeatResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend}
 import kafka.utils.{ZkUtils, ZKGroupTopicDirs, SystemTime, Logging}
 import scala.collection._
 import org.I0Itec.zkclient.ZkClient
@@ -76,6 +76,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.ConsumerMetadataKey => handleConsumerMetadataRequest(request)
         case RequestKeys.JoinGroupKey => handleJoinGroupRequest(request)
         case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
+        case RequestKeys.LeaveGroupKey => handleLeaveGroupRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -773,6 +774,25 @@ class KafkaApis(val requestChannel: RequestChannel,
               new ClientQuotaManager(consumerQuotaManagerCfg, metrics, RequestKeys.nameForKey(RequestKeys.FetchKey), new org.apache.kafka.common.utils.SystemTime)
     )
     quotaManagers
+  }
+
+  def handleLeaveGroupRequest(request: RequestChannel.Request) {
+    val leaveGroupRequest = request.body.asInstanceOf[LeaveGroupRequest]
+    val respHeader = new ResponseHeader(request.header.correlationId)
+
+    // the callback for sending a leave-group response
+    def sendResponseCallback(errorCode: Short) {
+      val response = new LeaveGroupResponse(errorCode)
+      trace("Sending leave group response %s for correlation id %d to client %s."
+                    .format(response, request.header.correlationId, request.header.clientId))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, response)))
+    }
+
+    // let the coordinator to handle leave-group
+    coordinator.handleLeaveGroup(
+      leaveGroupRequest.groupId(),
+      leaveGroupRequest.consumerId(),
+      sendResponseCallback)
   }
 
   def close() {
