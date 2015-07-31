@@ -57,11 +57,10 @@ public class FileConfigStorage implements ConfigStorage {
 
     @Override
     public void putConnectorConfig(String connector, Properties properties) {
-        if (properties == null) {
+        if (properties == null)
             connectorConfig.remove(connector);
-        } else {
+        else
             connectorConfig.put(connector, properties);
-        }
         save();
     }
 

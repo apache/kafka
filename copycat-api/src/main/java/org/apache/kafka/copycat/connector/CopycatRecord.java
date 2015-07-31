@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -70,27 +70,21 @@ public abstract class CopycatRecord {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
+        if (this == o)
             return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
+        if (o == null || getClass() != o.getClass())
             return false;
-        }
 
         CopycatRecord that = (CopycatRecord) o;
 
-        if (key != null ? !key.equals(that.key) : that.key != null) {
+        if (key != null ? !key.equals(that.key) : that.key != null)
             return false;
-        }
-        if (partition != null ? !partition.equals(that.partition) : that.partition != null) {
+        if (partition != null ? !partition.equals(that.partition) : that.partition != null)
             return false;
-        }
-        if (topic != null ? !topic.equals(that.topic) : that.topic != null) {
+        if (topic != null ? !topic.equals(that.topic) : that.topic != null)
             return false;
-        }
-        if (value != null ? !value.equals(that.value) : that.value != null) {
+        if (value != null ? !value.equals(that.value) : that.value != null)
             return false;
-        }
 
         return true;
     }

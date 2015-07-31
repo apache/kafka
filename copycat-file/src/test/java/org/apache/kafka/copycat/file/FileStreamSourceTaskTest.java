@@ -62,9 +62,8 @@ public class FileStreamSourceTaskTest {
     public void teardown() {
         tempFile.delete();
 
-        if (verifyMocks) {
+        if (verifyMocks)
             PowerMock.verifyAll();
-        }
     }
 
     private void replay() {

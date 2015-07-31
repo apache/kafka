@@ -69,9 +69,8 @@ public class ConnectorTest {
         @Override
         public void stop() throws CopycatException {
             stopOrder = order++;
-            if (stopException) {
+            if (stopException)
                 throw new CopycatException("error");
-            }
         }
     }
 }

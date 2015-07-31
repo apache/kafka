@@ -74,9 +74,8 @@ public class FileStreamSourceTask extends SourceTask<Object, Object> {
             }
         }
         topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
-        if (topic == null) {
+        if (topic == null)
             throw new CopycatRuntimeException("ConsoleSourceTask config missing topic setting");
-        }
         reader = new BufferedReader(new InputStreamReader(stream));
     }
 
@@ -90,9 +89,8 @@ public class FileStreamSourceTask extends SourceTask<Object, Object> {
             synchronized (this) {
                 readerCopy = reader;
             }
-            if (readerCopy == null) {
+            if (readerCopy == null)
                 return null;
-            }
 
             ArrayList<SourceRecord> records = null;
 
@@ -112,9 +110,8 @@ public class FileStreamSourceTask extends SourceTask<Object, Object> {
                     do {
                         line = extractLine();
                         if (line != null) {
-                            if (records == null) {
+                            if (records == null)
                                 records = new ArrayList<>();
-                            }
                             records.add(new SourceRecord(null, streamOffset, topic, line));
                         }
                         new ArrayList<SourceRecord>();
@@ -122,9 +119,8 @@ public class FileStreamSourceTask extends SourceTask<Object, Object> {
                 }
             }
 
-            if (nread <= 0) {
+            if (nread <= 0)
                 Thread.sleep(1);
-            }
 
             return records;
         } catch (IOException e) {
@@ -143,9 +139,8 @@ public class FileStreamSourceTask extends SourceTask<Object, Object> {
                 break;
             } else if (buffer[i] == '\r') {
                 // We need to check for \r\n, so we must skip this if we can't check the next char
-                if (i + 1 >= offset) {
+                if (i + 1 >= offset)
                     return null;
-                }
 
                 until = i;
                 newStart = (buffer[i + 1] == '\n') ? i + 2 : i + 1;
@@ -157,9 +152,8 @@ public class FileStreamSourceTask extends SourceTask<Object, Object> {
             String result = new String(buffer, 0, until);
             System.arraycopy(buffer, newStart, buffer, 0, buffer.length - newStart);
             offset = offset - newStart;
-            if (streamOffset != null) {
+            if (streamOffset != null)
                 streamOffset += newStart;
-            }
             return result;
         } else {
             return null;

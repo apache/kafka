@@ -107,14 +107,12 @@ public class JsonConverter implements Converter {
 
     @Override
     public Object toCopycatData(Object value) {
-        if (!(value instanceof JsonNode)) {
+        if (!(value instanceof JsonNode))
             throw new CopycatRuntimeException("JsonConvert can only convert JsonNode objects.");
-        }
 
         JsonNode data = (JsonNode) value;
-        if (!data.isObject() || data.size() != 2 || !data.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !data.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)) {
+        if (!data.isObject() || data.size() != 2 || !data.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !data.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
             throw new CopycatRuntimeException("JSON data converted to Copycat must be in envelope containing schema");
-        }
 
         return convertToCopycat(data.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME), data.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
@@ -155,14 +153,12 @@ public class JsonConverter implements Converter {
 
 
     private static Schema asCopycatSchema(JsonNode jsonSchema) {
-        if (jsonSchema.isNull()) {
+        if (jsonSchema.isNull())
             return null;
-        }
 
         JsonNode schemaTypeNode = jsonSchema.get(JsonSchema.SCHEMA_TYPE_FIELD_NAME);
-        if (schemaTypeNode == null || !schemaTypeNode.isTextual()) {
+        if (schemaTypeNode == null || !schemaTypeNode.isTextual())
             throw new CopycatRuntimeException("Schema must contain 'type' field");
-        }
 
         switch (schemaTypeNode.textValue()) {
             case JsonSchema.BOOLEAN_TYPE_NAME:
@@ -238,9 +234,8 @@ public class JsonConverter implements Converter {
                     itemSchema = fieldSchemaAndValue.schema;
                     schema.set(JsonSchema.ARRAY_ITEMS_FIELD_NAME, itemSchema);
                 } else {
-                    if (!itemSchema.equals(fieldSchemaAndValue.schema)) {
+                    if (!itemSchema.equals(fieldSchemaAndValue.schema))
                         throw new CopycatRuntimeException("Mismatching schemas found in a list.");
-                    }
                 }
 
                 list.add(fieldSchemaAndValue.payload);
@@ -253,19 +248,16 @@ public class JsonConverter implements Converter {
 
 
     private static Object convertToCopycat(JsonNode jsonSchema, JsonNode jsonValue) {
-        if (jsonSchema.isNull()) {
+        if (jsonSchema.isNull())
             return null;
-        }
 
         JsonNode schemaTypeNode = jsonSchema.get(JsonSchema.SCHEMA_TYPE_FIELD_NAME);
-        if (schemaTypeNode == null || !schemaTypeNode.isTextual()) {
+        if (schemaTypeNode == null || !schemaTypeNode.isTextual())
             throw new CopycatRuntimeException("Schema must contain 'type' field. Schema: " + jsonSchema.toString());
-        }
 
         JsonToCopycatTypeConverter typeConverter = TO_COPYCAT_CONVERTERS.get(schemaTypeNode.textValue());
-        if (typeConverter != null) {
+        if (typeConverter != null)
             return typeConverter.convert(jsonSchema, jsonValue);
-        }
 
         throw new CopycatRuntimeException("Unknown schema type: " + schemaTypeNode);
     }

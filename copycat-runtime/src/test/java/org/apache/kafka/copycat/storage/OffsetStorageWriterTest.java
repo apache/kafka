@@ -207,9 +207,8 @@ public class OffsetStorageWriterTest {
                         return service.submit(new Callable<Void>() {
                             @Override
                             public Void call() throws Exception {
-                                if (waitForCompletion != null) {
+                                if (waitForCompletion != null)
                                     assertTrue(waitForCompletion.await(10000, TimeUnit.MILLISECONDS));
-                                }
 
                                 if (fail) {
                                     storeCallback.getValue().onCompletion(exception, null);

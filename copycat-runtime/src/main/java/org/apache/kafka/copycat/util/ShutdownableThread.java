@@ -59,9 +59,8 @@ public abstract class ShutdownableThread extends Thread {
     public ShutdownableThread(String name, boolean daemon) {
         super(name);
         this.setDaemon(daemon);
-        if (funcaughtExceptionHandler != null) {
+        if (funcaughtExceptionHandler != null)
             this.setUncaughtExceptionHandler(funcaughtExceptionHandler);
-        }
     }
 
     /**
@@ -98,9 +97,8 @@ public abstract class ShutdownableThread extends Thread {
     public void shutdown(long gracefulTimeout, TimeUnit unit)
             throws InterruptedException {
         boolean success = gracefulShutdown(gracefulTimeout, unit);
-        if (!success) {
+        if (!success)
             forceShutdown();
-        }
     }
 
     /**

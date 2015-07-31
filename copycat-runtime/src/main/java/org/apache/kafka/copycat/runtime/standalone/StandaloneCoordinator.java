@@ -91,15 +91,13 @@ public class StandaloneCoordinator implements Coordinator {
                                           Callback<String> callback) {
         try {
             ConnectorState connState = createConnector(connectorProps);
-            if (callback != null) {
+            if (callback != null)
                 callback.onCompletion(null, connState.name);
-            }
             // This should always be a new job, create jobs from scratch
             createConnectorTasks(connState);
         } catch (CopycatRuntimeException e) {
-            if (callback != null) {
+            if (callback != null)
                 callback.onCompletion(e, null);
-            }
         }
     }
 
@@ -107,13 +105,11 @@ public class StandaloneCoordinator implements Coordinator {
     public synchronized void deleteConnector(String name, Callback<Void> callback) {
         try {
             destroyConnector(name);
-            if (callback != null) {
+            if (callback != null)
                 callback.onCompletion(null, null);
-            }
         } catch (CopycatRuntimeException e) {
-            if (callback != null) {
+            if (callback != null)
                 callback.onCompletion(e, null);
-            }
         }
     }
 
@@ -148,9 +144,8 @@ public class StandaloneCoordinator implements Coordinator {
         }
         ConnectorState state = new ConnectorState(connName, connector, maxTasks, topics);
         connectors.put(connName, state);
-        if (configStorage != null) {
+        if (configStorage != null)
             configStorage.putConnectorConfig(connName, connectorProps);
-        }
 
         log.info("Finished creating connector {}", connName);
 
@@ -171,9 +166,8 @@ public class StandaloneCoordinator implements Coordinator {
 
         stopConnector(state);
         connectors.remove(state.name);
-        if (configStorage != null) {
+        if (configStorage != null)
             configStorage.putConnectorConfig(state.name, null);
-        }
 
         log.info("Finished destroying connector {}", connName);
     }
@@ -251,9 +245,8 @@ public class StandaloneCoordinator implements Coordinator {
     }
 
     private void restoreConnectors() {
-        if (configStorage == null) {
+        if (configStorage == null)
             return;
-        }
 
         Collection<String> connNames = configStorage.getConnectors();
         for (String connName : connNames) {

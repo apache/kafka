@@ -154,9 +154,8 @@ public class Worker {
         for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
             WorkerTask task = entry.getValue();
             log.debug("Waiting for task {} to finish shutting down", task);
-            if (!task.awaitStop(Math.max(limit - time.milliseconds(), 0))) {
+            if (!task.awaitStop(Math.max(limit - time.milliseconds(), 0)))
                 log.error("Graceful shutdown of task {} failed.", task);
-            }
             task.close();
         }
 
@@ -221,9 +220,8 @@ public class Worker {
     public void stopTask(ConnectorTaskId id) throws CopycatException {
         WorkerTask task = getTask(id);
         task.stop();
-        if (!task.awaitStop(config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG))) {
+        if (!task.awaitStop(config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG)))
             log.error("Graceful stop of task {} failed.", task);
-        }
         task.close();
         tasks.remove(id);
     }

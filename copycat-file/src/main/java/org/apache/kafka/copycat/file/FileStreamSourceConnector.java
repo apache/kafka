@@ -40,13 +40,10 @@ public class FileStreamSourceConnector extends SourceConnector {
     public void start(Properties props) throws CopycatException {
         filename = props.getProperty(FILE_CONFIG);
         topic = props.getProperty(TOPIC_CONFIG);
-        if (topic == null || topic.isEmpty()) {
+        if (topic == null || topic.isEmpty())
             throw new CopycatException("ConsoleConnector configuration must include 'topic' setting");
-        }
-        if (topic.contains(",")) {
-            throw new CopycatException("ConsoleConnector should only have a single topic when used as a"
-                    + " source.");
-        }
+        if (topic.contains(","))
+            throw new CopycatException("ConsoleConnector should only have a single topic when used as a source.");
     }
 
     @Override
@@ -59,9 +56,8 @@ public class FileStreamSourceConnector extends SourceConnector {
         ArrayList<Properties> configs = new ArrayList<>();
         // Only one input stream makes sense.
         Properties config = new Properties();
-        if (filename != null) {
+        if (filename != null)
             config.setProperty(FILE_CONFIG, filename);
-        }
         config.setProperty(TOPIC_CONFIG, topic);
         configs.add(config);
         return configs;

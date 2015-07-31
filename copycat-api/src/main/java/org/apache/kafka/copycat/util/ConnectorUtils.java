@@ -38,9 +38,8 @@ public class ConnectorUtils {
      * @param numGroups the number of output groups to generate.
      */
     public static <T> List<List<T>> groupPartitions(List<T> elements, int numGroups) {
-        if (numGroups <= 0) {
+        if (numGroups <= 0)
             throw new IllegalArgumentException("Number of groups must be positive.");
-        }
 
         List<List<T>> result = new ArrayList<>(numGroups);
 

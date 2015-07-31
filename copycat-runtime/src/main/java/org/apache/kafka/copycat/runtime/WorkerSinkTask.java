@@ -73,9 +73,8 @@ public class WorkerSinkTask implements WorkerTask {
     public void stop() throws CopycatException {
         // Offset commit is handled upon exit in work thread
         task.stop();
-        if (workThread != null) {
+        if (workThread != null)
             workThread.startGracefulShutdown();
-        }
         consumer.wakeup();
     }
 
@@ -84,9 +83,8 @@ public class WorkerSinkTask implements WorkerTask {
         if (workThread != null) {
             try {
                 boolean success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
-                if (!success) {
+                if (!success)
                     workThread.forceShutdown();
-                }
                 return success;
             } catch (InterruptedException e) {
                 return false;
@@ -99,9 +97,8 @@ public class WorkerSinkTask implements WorkerTask {
     public void close() {
         // FIXME Kafka needs to add a timeout parameter here for us to properly obey the timeout
         // passed in
-        if (consumer != null) {
+        if (consumer != null)
             consumer.close();
-        }
     }
 
     /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
@@ -156,9 +153,8 @@ public class WorkerSinkTask implements WorkerTask {
 
     private KafkaConsumer<Object, Object> createConsumer(Properties taskProps) {
         String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
-        if (topicsStr == null || topicsStr.isEmpty()) {
+        if (topicsStr == null || topicsStr.isEmpty())
             throw new CopycatRuntimeException("Sink tasks require a list of topics.");
-        }
         String[] topics = topicsStr.split(",");
 
         // Include any unknown worker configs so consumer configs can be set globally on the worker

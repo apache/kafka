@@ -109,9 +109,8 @@ public class OffsetStorageWriter {
             throw new CopycatRuntimeException("OffsetStorageWriter is already flushing");
         }
 
-        if (data.isEmpty()) {
+        if (data.isEmpty())
             return false;
-        }
 
         assert !flushing();
         toFlush = data;
@@ -157,9 +156,8 @@ public class OffsetStorageWriter {
             @Override
             public void onCompletion(Throwable error, Void result) {
                 boolean isCurrent = handleFinishWrite(flushId, error, result);
-                if (isCurrent && callback != null) {
+                if (isCurrent && callback != null)
                     callback.onCompletion(error, result);
-                }
             }
         });
     }
@@ -188,9 +186,8 @@ public class OffsetStorageWriter {
     private synchronized boolean handleFinishWrite(long flushId, Throwable error, Void result) {
         // Callbacks need to be handled carefully since the flush operation may have already timed
         // out and been cancelled.
-        if (flushId != currentFlushId) {
+        if (flushId != currentFlushId)
             return false;
-        }
 
         if (error != null) {
             cancelFlush();

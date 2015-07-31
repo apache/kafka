@@ -26,14 +26,12 @@ public class TestBackgroundThreadExceptionHandler implements Thread.UncaughtExce
 
     @Override
     public void uncaughtException(Thread t, Throwable e) {
-        if (this.firstException == null) {
+        if (this.firstException == null)
             this.firstException = e;
-        }
     }
 
     public void verifyNoExceptions() {
-        if (this.firstException != null) {
+        if (this.firstException != null)
             throw new AssertionError(this.firstException);
-        }
     }
 }

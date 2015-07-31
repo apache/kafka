@@ -69,16 +69,14 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
                 Map<ByteBuffer, ByteBuffer> result = new HashMap<>();
                 synchronized (MemoryOffsetBackingStore.this) {
                     Map<ByteBuffer, ByteBuffer> namespaceData = data.get(namespace);
-                    if (namespaceData == null) {
+                    if (namespaceData == null)
                         return result;
-                    }
                     for (ByteBuffer key : keys) {
                         result.put(key, namespaceData.get(key));
                     }
                 }
-                if (callback != null) {
+                if (callback != null)
                     callback.onCompletion(null, result);
-                }
                 return result;
             }
         });
@@ -102,9 +100,8 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
                     }
                     save();
                 }
-                if (callback != null) {
+                if (callback != null)
                     callback.onCompletion(null, null);
-                }
                 return null;
             }
         });

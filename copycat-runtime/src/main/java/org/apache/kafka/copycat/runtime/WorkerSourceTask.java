@@ -99,9 +99,8 @@ public class WorkerSourceTask implements WorkerTask {
     public void stop() throws CopycatException {
         task.stop();
         commitOffsets();
-        if (workThread != null) {
+        if (workThread != null)
             workThread.startGracefulShutdown();
-        }
     }
 
     @Override
@@ -109,9 +108,8 @@ public class WorkerSourceTask implements WorkerTask {
         if (workThread != null) {
             try {
                 boolean success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
-                if (!success) {
+                if (!success)
                     workThread.forceShutdown();
-                }
                 return success;
             } catch (InterruptedException e) {
                 return false;
@@ -165,9 +163,8 @@ public class WorkerSourceTask implements WorkerTask {
     private synchronized void recordSent(final ProducerRecord<Object, Object> record) {
         ProducerRecord<Object, Object> removed = outstandingMessages.remove(record);
         // While flushing, we may also see callbacks for items in the backlog
-        if (removed == null && flushing) {
+        if (removed == null && flushing)
             removed = outstandingMessagesBacklog.remove(record);
-        }
         // But if neither one had it, something is very wrong
         if (removed == null) {
             log.error("Saw callback for record that was not present in the outstanding message set: "
@@ -294,9 +291,8 @@ public class WorkerSourceTask implements WorkerTask {
             try {
                 while (getRunning()) {
                     List<SourceRecord> records = task.poll();
-                    if (records == null) {
+                    if (records == null)
                         continue;
-                    }
                     sendRecords(records);
                 }
             } catch (InterruptedException e) {

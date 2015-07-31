@@ -84,9 +84,8 @@ public class CopycatConfig extends AbstractConfig {
             }
 
             // Check for -- prefix on key
-            if (key.startsWith("--")) {
+            if (key.startsWith("--"))
                 key = key.substring(2);
-            }
 
             props.setProperty(key, value);
         }

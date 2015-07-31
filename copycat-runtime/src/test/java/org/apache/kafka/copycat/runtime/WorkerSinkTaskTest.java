@@ -355,9 +355,8 @@ public class WorkerSinkTaskTest extends ThreadedTest {
             @Override
             public Object answer() throws Throwable {
                 time.sleep(consumerCommitDelayMs);
-                if (invokeCallback) {
+                if (invokeCallback)
                     capturedCallback.getValue().onComplete(offsets, consumerCommitError);
-                }
                 return null;
             }
         });

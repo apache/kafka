@@ -49,9 +49,8 @@ public class FileStreamSinkConnector extends SinkConnector {
         ArrayList<Properties> configs = new ArrayList<>();
         for (int i = 0; i < maxTasks; i++) {
             Properties config = new Properties();
-            if (filename != null) {
+            if (filename != null)
                 config.setProperty(FILE_CONFIG, filename);
-            }
             configs.add(config);
         }
         return configs;
