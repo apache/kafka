@@ -2,11 +2,15 @@ package io.confluent.streaming.examples;
 
 import io.confluent.streaming.KStream;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
 =======
 import io.confluent.streaming.KStreamInitializer;
 import io.confluent.streaming.KStreamJob;
 >>>>>>> new api model
+=======
+import io.confluent.streaming.KStreamTopology;
+>>>>>>> wip
 import io.confluent.streaming.KafkaStreaming;
 import io.confluent.streaming.KeyValue;
 import io.confluent.streaming.KeyValueMapper;
@@ -24,10 +28,14 @@ public class MapKStreamJob extends KStreamTopology {
   @SuppressWarnings("unchecked")
   @Override
 <<<<<<< HEAD
+<<<<<<< HEAD
   public void topology() {
 =======
   public void init(KStreamInitializer context) {
 >>>>>>> new api model
+=======
+  public void topology() {
+>>>>>>> wip
 
     // With overriden de-serializer
     KStream stream1 = from(new StringDeserializer(), new StringDeserializer(), "topic1");

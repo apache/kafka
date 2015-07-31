@@ -23,6 +23,7 @@ import io.confluent.streaming.internal.ProcessorConfig;
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.internal.IngestorImpl;
 <<<<<<< HEAD
 import io.confluent.streaming.internal.StreamSynchronizer;
@@ -51,6 +52,8 @@ import io.confluent.streaming.internal.TopologyAnalyzer;
 =======
 import io.confluent.streaming.internal.TopologyAnalyzer;
 >>>>>>> new api model
+=======
+>>>>>>> wip
 import org.apache.kafka.common.metrics.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -144,6 +147,7 @@ public class KafkaStreaming implements Runnable {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     @SuppressWarnings("unchecked")
     protected KafkaStreaming(Class<? extends KStreamJob> jobClass,
                              StreamingConfig config,
@@ -188,10 +192,14 @@ public class KafkaStreaming implements Runnable {
 =======
     public KafkaStreaming(KStreamTopology topology, StreamingConfig streamingConfig) {
 >>>>>>> wip
+=======
+    public KafkaStreaming(KStreamTopology topology, StreamingConfig streamingConfig) {
+>>>>>>> wip
 
         if (streamingConfig.timestampExtractor() == null) throw new NullPointerException("timestamp extractor is missing");
 
         this.config = new ProcessorConfig(streamingConfig.config());
+<<<<<<< HEAD
 <<<<<<< HEAD
         this.topics = topology.topics();
 
@@ -237,6 +245,9 @@ public class KafkaStreaming implements Runnable {
 >>>>>>> added KStreamThread
             }
         };
+=======
+        this.topics = topology.topics();
+>>>>>>> wip
 
 <<<<<<< HEAD
         producer.close();
@@ -263,11 +274,15 @@ public class KafkaStreaming implements Runnable {
         this.threads = new KStreamThread[1];
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         threads[0] = new KStreamThread(jobClass, topics, streamingConfig, coordinator, metrics);
 >>>>>>> added KStreamThread
 =======
         threads[0] = new KStreamThread(jobClass, topics, streamingConfig, metrics);
 >>>>>>> removed Coordinator
+=======
+        threads[0] = new KStreamThread(topology, topics, streamingConfig, metrics);
+>>>>>>> wip
 =======
         threads[0] = new KStreamThread(topology, topics, streamingConfig, metrics);
 >>>>>>> wip

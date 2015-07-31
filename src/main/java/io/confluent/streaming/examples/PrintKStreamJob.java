@@ -40,10 +40,15 @@ public class PrintKStreamJob<K, V> implements Processor<K, V> {
   }
 
   public static void main(String[] args) {
+<<<<<<< HEAD
     KafkaStreaming streaming = new KafkaStreaming(
       new SingleProcessorTopology(PrintKStreamJob.class, args),
       new StreamingConfig(new Properties())
     );
     streaming.run();
+=======
+    KafkaStreaming kstream = new KafkaStreaming(new PrintKStreamJob(), new StreamingConfig(new Properties()));
+    kstream.run();
+>>>>>>> wip
   }
 }

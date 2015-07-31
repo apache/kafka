@@ -4,10 +4,14 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
 =======
 import io.confluent.streaming.KStreamInitializer;
 >>>>>>> new api model
+=======
+import io.confluent.streaming.KStreamTopology;
+>>>>>>> wip
 import io.confluent.streaming.KStreamWindowed;
 import io.confluent.streaming.ValueJoiner;
 import io.confluent.streaming.Window;
@@ -20,10 +24,14 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
   final Window<K, V> window;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   KStreamWindowedImpl(Window<K, V> window, KStreamTopology initializer) {
 =======
   KStreamWindowedImpl(Window<K, V> window, KStreamInitializer initializer) {
 >>>>>>> new api model
+=======
+  KStreamWindowedImpl(Window<K, V> window, KStreamTopology initializer) {
+>>>>>>> wip
     super(initializer);
     this.window = window;
   }

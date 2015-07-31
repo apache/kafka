@@ -3,10 +3,14 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
 =======
 import io.confluent.streaming.KStreamInitializer;
 >>>>>>> new api model
+=======
+import io.confluent.streaming.KStreamTopology;
+>>>>>>> wip
 import io.confluent.streaming.KStreamWindowed;
 import io.confluent.streaming.KeyValueMapper;
 import io.confluent.streaming.Predicate;
@@ -25,6 +29,7 @@ import java.util.ArrayList;
 abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   private final ArrayList<Receiver> nextReceivers = new ArrayList<>(1);
+<<<<<<< HEAD
 <<<<<<< HEAD
   protected KStreamTopology topology;
   protected KStreamContext context;
@@ -51,20 +56,33 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     for (int i = 0; i < numReceivers; i++) {
       nextReceivers.get(i).close();
 =======
+=======
+  protected KStreamTopology initializer;
+  protected KStreamContext context;
+>>>>>>> wip
   protected KStreamMetadata metadata;
-  protected KStreamInitializer initializer;
 
-  protected KStreamImpl(KStreamInitializer initializer) {
+  protected KStreamImpl(KStreamTopology initializer) {
     this.initializer = initializer;
   }
 
   @Override
   public void bind(KStreamContext context, KStreamMetadata metadata) {
+    if (this.context != null) throw new IllegalStateException("kstream topology is already bound");
+    this.context = context;
     this.metadata = metadata;
     int numReceivers = nextReceivers.size();
     for (int i = 0; i < numReceivers; i++) {
       nextReceivers.get(i).bind(context, metadata);
 >>>>>>> new api model
+    }
+  }
+
+  @Override
+  public void close() {
+    int numReceivers = nextReceivers.size();
+    for (int i = 0; i < numReceivers; i++) {
+      nextReceivers.get(i).close();
     }
   }
 
@@ -180,7 +198,11 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
       }
       @Override
       public void process(K key, V value) {
+<<<<<<< HEAD
         this.context.send(sendTopic, key, value, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer);
+=======
+        this.processorContext.send(sendTopic, key, value, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer);
+>>>>>>> wip
       }
       @Override
       public void punctuate(long streamTime) {}
@@ -202,6 +224,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     return chain(new KStreamTransform<>(transformer, topology));
 =======
   public void process(final Processor<K, V> processor) {
+<<<<<<< HEAD
     Receiver receiver = new Receiver() {
       public void bind(KStreamContext context, KStreamMetadata metadata) {
         processor.init(new ProcessorContextImpl(context, context.getPunctuationScheduler(processor)));
@@ -212,6 +235,9 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     };
     registerReceiver(receiver);
 >>>>>>> new api model
+=======
+    registerReceiver(new ProcessorNode<>(processor));
+>>>>>>> wip
   }
 
   void registerReceiver(Receiver receiver) {

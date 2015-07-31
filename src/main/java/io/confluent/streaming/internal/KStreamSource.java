@@ -4,12 +4,15 @@ package io.confluent.streaming.internal;
 <<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamTopology;
+<<<<<<< HEAD
 =======
 =======
 import io.confluent.streaming.KStreamContext;
 >>>>>>> wip
 import io.confluent.streaming.KStreamInitializer;
 >>>>>>> new api model
+=======
+>>>>>>> wip
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Arrays;
@@ -27,6 +30,7 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   String[] topics;
 
   public KStreamSource(String[] topics, KStreamTopology topology) {
@@ -41,12 +45,15 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
     super(topology);
 =======
   final String[] topics;
+=======
+  String[] topics;
+>>>>>>> wip
 
-  KStreamSource(String[] topics, KStreamInitializer initializer) {
+  public KStreamSource(String[] topics, KStreamTopology initializer) {
     this(topics, null, null, initializer);
   }
 
-  KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamInitializer initializer) {
+  public KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamTopology initializer) {
     super(initializer);
 >>>>>>> new api model
     this.topics = topics;
@@ -91,10 +98,16 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
   }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> wip
   public Set<String> topics() {
     return new HashSet<>(Arrays.asList(topics));
   }
 
+<<<<<<< HEAD
+=======
+>>>>>>> wip
 =======
 >>>>>>> wip
 }

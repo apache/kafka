@@ -17,4 +17,5 @@ public interface Receiver {
   void receive(Object key, Object value, long timestamp, long streamTime);
 >>>>>>> new api model
 
+  void close();
 }

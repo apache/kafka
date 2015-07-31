@@ -2,10 +2,14 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamContext;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
 =======
 import io.confluent.streaming.KStreamInitializer;
 >>>>>>> new api model
+=======
+import io.confluent.streaming.KStreamTopology;
+>>>>>>> wip
 import io.confluent.streaming.ValueMapper;
 import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.MockKStreamTopology;
@@ -37,12 +41,16 @@ public class KStreamMapValuesTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
 >>>>>>> wip
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, Integer> processor;

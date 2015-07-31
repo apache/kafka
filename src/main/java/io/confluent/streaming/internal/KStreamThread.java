@@ -18,11 +18,15 @@
 package io.confluent.streaming.internal;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
 =======
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamJob;
 >>>>>>> new api model
+=======
+import io.confluent.streaming.KStreamTopology;
+>>>>>>> wip
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.util.ParallelExecutor;
 import io.confluent.streaming.util.Util;
@@ -252,13 +256,8 @@ public class KStreamThread extends Thread {
             KStreamContextImpl context = kstreamContexts.get(id);
             if (context == null) {
                 try {
-                    KStreamInitializerImpl initializer = new KStreamInitializerImpl();
-                    KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
-
-                    job.init(initializer);
-
                     context = new KStreamContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
-                    context.init(initializer.sourceStreams());
+                    context.init(topology.sourceStreams());
 
 >>>>>>> new api model
                     kstreamContexts.put(id, context);

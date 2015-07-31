@@ -44,12 +44,16 @@ public class KStreamBranchTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
 >>>>>>> wip
     KStreamSource<Integer, String> stream;
     KStream<Integer, String>[] branches;

@@ -34,12 +34,16 @@ public class StreamGroupTest {
     public MockKStreamSource() {
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
       super(null, deserializer, deserializer, new MockKStreamTopology());
 =======
       super(null, deserializer, deserializer, new KStreamInitializerImpl(serializer, serializer, deserializer, deserializer));
 >>>>>>> new api model
 =======
       super(null, deserializer, deserializer, new KStreamInitializerImpl());
+>>>>>>> wip
+=======
+      super(null, deserializer, deserializer, new MockKStreamTopology());
 >>>>>>> wip
     }
 

@@ -2,10 +2,14 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamContext;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
 =======
 import io.confluent.streaming.KStreamInitializer;
 >>>>>>> new api model
+=======
+import io.confluent.streaming.KStreamTopology;
+>>>>>>> wip
 import io.confluent.streaming.Predicate;
 
 import java.lang.reflect.Array;
@@ -21,6 +25,7 @@ class KStreamBranch<K, V> implements Receiver {
 
   @SuppressWarnings("unchecked")
 <<<<<<< HEAD
+<<<<<<< HEAD
   KStreamBranch(Predicate<K, V>[] predicates, KStreamTopology topology) {
     this.predicates = Arrays.copyOf(predicates, predicates.length);
     this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
@@ -28,6 +33,9 @@ class KStreamBranch<K, V> implements Receiver {
       branches[i] = new KStreamSource<>(null, topology);
 =======
   KStreamBranch(Predicate<K, V>[] predicates, KStreamInitializer initializer) {
+=======
+  KStreamBranch(Predicate<K, V>[] predicates, KStreamTopology initializer) {
+>>>>>>> wip
     this.predicates = Arrays.copyOf(predicates, predicates.length);
     this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
     for (int i = 0; i < branches.length; i++) {
@@ -39,12 +47,17 @@ class KStreamBranch<K, V> implements Receiver {
   @Override
   public void bind(KStreamContext context, KStreamMetadata metadata) {
 <<<<<<< HEAD
+<<<<<<< HEAD
     for (KStreamSource<K, V> branch : branches) {
       branch.bind(context, metadata);
 =======
     for (KStreamSource stream : branches) {
       stream.bind(context, metadata);
 >>>>>>> new api model
+=======
+    for (KStreamSource<K, V> branch : branches) {
+      branch.bind(context, metadata);
+>>>>>>> wip
     }
   }
 
@@ -75,7 +88,13 @@ class KStreamBranch<K, V> implements Receiver {
       }
 >>>>>>> new api model
     }
-    return;
+  }
+
+  @Override
+  public void close() {
+    for (KStreamSource<K, V> branch : branches) {
+      branch.close();
+    }
   }
 
 }

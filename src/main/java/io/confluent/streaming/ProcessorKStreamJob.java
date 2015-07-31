@@ -15,6 +15,7 @@ public abstract class ProcessorKStreamJob<K, V> extends KStreamTopology implemen
   @Override
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   public void init(KStreamContext context) {
 <<<<<<< HEAD
 =======
@@ -39,6 +40,10 @@ public abstract class ProcessorKStreamJob<K, V> extends KStreamTopology implemen
   public void init(KStreamInitializer initializer) {
     initializer.from().process((Processor) this);
 >>>>>>> new api model
+=======
+  public void topology() {
+    ((KStream<K, V>)from()).process(this);
+>>>>>>> wip
   }
 
 }

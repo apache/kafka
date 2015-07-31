@@ -36,6 +36,7 @@ public class KStreamFlatMapTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology topology = new MockKStreamTopology();
 
 =======
@@ -44,15 +45,23 @@ public class KStreamFlatMapTest {
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl();
 >>>>>>> wip
+=======
+    KStreamTopology topology = new MockKStreamTopology();
+
+>>>>>>> wip
     KStreamSource<Integer, String> stream;
     TestProcessor<String, String> processor;
 
     processor = new TestProcessor<>();
 <<<<<<< HEAD
+<<<<<<< HEAD
     stream = new KStreamSource<>(null, topology);
 =======
     stream = new KStreamSource<>(null, initializer);
 >>>>>>> new api model
+=======
+    stream = new KStreamSource<>(null, topology);
+>>>>>>> wip
     stream.flatMap(mapper).process(processor);
 
     KStreamContext context = new MockKStreamContext(null, null);

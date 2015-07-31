@@ -63,10 +63,15 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
   }
 
   public static void main(String[] args) {
+<<<<<<< HEAD
     KafkaStreaming streaming = new KafkaStreaming(
       new SingleProcessorTopology(StatefulKStreamJob.class, args),
       new StreamingConfig(new Properties())
     );
     streaming.run();
+=======
+    KafkaStreaming kstream = new KafkaStreaming(new StatefulKStreamJob(), new StreamingConfig(new Properties()));
+    kstream.run();
+>>>>>>> wip
   }
 }

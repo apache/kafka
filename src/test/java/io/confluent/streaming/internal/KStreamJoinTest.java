@@ -71,12 +71,16 @@ public class KStreamJoinTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
 >>>>>>> wip
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
@@ -169,12 +173,16 @@ public class KStreamJoinTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
 >>>>>>> wip
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
@@ -261,6 +269,7 @@ public class KStreamJoinTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 =======
@@ -274,6 +283,10 @@ public class KStreamJoinTest {
     mapped1 = stream1.map(keyValueMapper);
     mapped2 = stream2.map(keyValueMapper);
 >>>>>>> new api model
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
+    processor = new TestProcessor<>();
+>>>>>>> wip
 
     boolean exceptionRaised;
 
@@ -356,6 +369,7 @@ public class KStreamJoinTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 =======
@@ -369,6 +383,10 @@ public class KStreamJoinTest {
     mapped1 = stream1.flatMap(keyValueMapper2);
     mapped2 = stream2.flatMap(keyValueMapper2);
 >>>>>>> new api model
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
+    processor = new TestProcessor<>();
+>>>>>>> wip
 
     boolean exceptionRaised;
 
@@ -451,6 +469,7 @@ public class KStreamJoinTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 =======
@@ -464,6 +483,10 @@ public class KStreamJoinTest {
     mapped1 = stream1.mapValues(valueMapper);
     mapped2 = stream2.mapValues(valueMapper);
 >>>>>>> new api model
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
+    processor = new TestProcessor<>();
+>>>>>>> wip
 
     boolean exceptionRaised;
 
@@ -546,6 +569,7 @@ public class KStreamJoinTest {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 =======
@@ -559,6 +583,10 @@ public class KStreamJoinTest {
     mapped1 = stream1.flatMapValues(valueMapper2);
     mapped2 = stream2.flatMapValues(valueMapper2);
 >>>>>>> new api model
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
+    processor = new TestProcessor<>();
+>>>>>>> wip
 
     boolean exceptionRaised;
 
