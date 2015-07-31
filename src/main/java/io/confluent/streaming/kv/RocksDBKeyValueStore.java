@@ -1,9 +1,12 @@
 package io.confluent.streaming.kv;
 
 import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.kv.internals.LoggedKeyValueStore;
 import io.confluent.streaming.kv.internals.MeteredKeyValueStore;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.SystemTime;
 
+import org.apache.kafka.common.utils.Time;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -12,14 +15,11 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
-import org.rocksdb.TtlDB;
 import org.rocksdb.WriteOptions;
 
 import java.io.File;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 
 /**
@@ -28,7 +28,19 @@ import java.util.NoSuchElementException;
 public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
 
     public RocksDBKeyValueStore(String name, KStreamContext context) {
-        super(name, "kafka-streams", new RocksDBStore(name, context), context.metrics(), new SystemTime());
+        this(name, context, new SystemTime());
+    }
+
+    public RocksDBKeyValueStore(String name, KStreamContext context, Time time) {
+        // always wrap the logged store with the metered store
+        // TODO: this may need to be relaxed in the future
+        super(name,
+            "kafka-streams",
+            new LoggedKeyValueStore<>(name, /* store name as topic name */
+                                      new RocksDBStore(name, context),
+                                      context),
+            context.metrics(),
+            time);
     }
 
     private static class RocksDBStore implements KeyValueStore<byte[], byte[]> {
@@ -43,10 +55,9 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         private static final int MAX_WRITE_BUFFERS = 3;
         private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
         private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
-        private static final String DB_FILE_DIR = "/tmp/rocksdb";
+        private static final String DB_FILE_DIR = "rocksdb";
+        private static final String TMP_FILE_SUFFIX = ".tmp";
 
-
-        private final RocksDB db;
         private final String topic;
         private final int partition;
         private final KStreamContext context;
@@ -54,6 +65,12 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         private final Options options;
         private final WriteOptions wOptions;
         private final FlushOptions fOptions;
+
+        private final String dbName;
+        private final String dirName;
+        private final File tmpFile;
+
+        private RocksDB db;
 
         @SuppressWarnings("unchecked")
         public RocksDBStore(String name, KStreamContext context) {
@@ -81,8 +98,16 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
             fOptions = new FlushOptions();
             fOptions.setWaitForFlush(true);
 
-            String dbName = this.topic + "." + this.partition;
-            db = openDB(new File(DB_FILE_DIR, dbName), this.options, TTL_SECONDS);
+            dbName = this.topic + "." + this.partition;
+            dirName = this.context.stateDir() + File.separator + DB_FILE_DIR;
+
+            // rename the file with a tmp suffix to make sure the db instance is created fresh at first
+            tmpFile = new File(dirName, dbName);
+            if (tmpFile.exists()) {
+                if (!tmpFile.renameTo(new File(dirName, dbName + TMP_FILE_SUFFIX)))
+                    throw new KafkaException("Failed to add the tmp suffix to the existing file " + tmpFile.getName());
+            }
+            db = openDB(new File(dirName, dbName), this.options, TTL_SECONDS);
 
             this.context.register(this);
         }
@@ -92,13 +117,13 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
                 if (ttl == TTL_NOT_USED) {
                     return RocksDB.open(options, dir.toString());
                 } else {
-                    throw new IllegalStateException("Change log is not supported for store " + this.topic + " since it is TTL based.");
+                    throw new KafkaException("Change log is not supported for store " + this.topic + " since it is TTL based.");
                     // TODO: support TTL with change log?
                     // return TtlDB.open(options, dir.toString(), ttl, false);
                 }
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
-                throw new RuntimeException("Error opening store " + this.topic + " at location " + dir.toString(), e);
+                throw new KafkaException("Error opening store " + this.topic + " at location " + dir.toString(), e);
             }
         }
 
@@ -118,7 +143,7 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
                 return this.db.get(key);
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
-                throw new RuntimeException("Error while executing get " + key.toString() + " from store " + this.topic, e);
+                throw new KafkaException("Error while executing get " + key.toString() + " from store " + this.topic, e);
             }
         }
 
@@ -132,7 +157,7 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
                 }
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
-                throw new RuntimeException("Error while executing put " + key.toString() + " from store " + this.topic, e);
+                throw new KafkaException("Error while executing put " + key.toString() + " from store " + this.topic, e);
             }
         }
 
@@ -165,13 +190,26 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
                 db.flush(fOptions);
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
-                throw new RuntimeException("Error while executing flush from store " + this.topic, e);
+                throw new KafkaException("Error while executing flush from store " + this.topic, e);
             }
         }
 
         @Override
         public void restore() {
+            if (tmpFile.exists()) {
+                // close the db and delete its file
+                // TODO: this db should not take any writes yet
+                db.close();
+                File file = new File(dirName, dbName);
+                if (!file.delete())
+                    throw new KafkaException("Failed to delete the existing file " + file.getName());
 
+                // rename the tmp file by removing its tmp suffix and reopen the database
+                if (!tmpFile.renameTo(file))
+                    throw new KafkaException("Failed to remove the tmp suffix to the existing file " + tmpFile.getName());
+
+                db = openDB(tmpFile, this.options, TTL_SECONDS);
+            }
         }
 
         @Override

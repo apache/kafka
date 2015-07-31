@@ -120,9 +120,8 @@ public class LoggedKeyValueStore<K, V> implements KeyValueStore<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public void flush() {
-        // TODO: these two operations should be done atomically
-        log();
         inner.flush();
+        log();
     }
 
     private void log() {

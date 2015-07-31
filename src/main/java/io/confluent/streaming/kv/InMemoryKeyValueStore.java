@@ -4,6 +4,7 @@ import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.kv.internals.LoggedKeyValueStore;
 import io.confluent.streaming.kv.internals.MeteredKeyValueStore;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 
 import java.util.Iterator;
 import java.util.List;
@@ -20,15 +21,19 @@ import java.util.TreeMap;
 public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
     public InMemoryKeyValueStore(String name, KStreamContext context) {
+        this(name, context, new SystemTime());
+    }
+
+    public InMemoryKeyValueStore(String name, KStreamContext context, Time time) {
         // always wrap the logged store with the metered store
         // TODO: this may need to be relaxed in the future
-        super(name, /* topic name as store name */
+        super(name,
             "kafka-streams",
-            new LoggedKeyValueStore<>(name, /* topic name as store name */
+            new LoggedKeyValueStore<>(name, /* store name as topic name */
                                       new MemoryStore<K, V>(name, context),
                                       context),
             context.metrics(),
-            new SystemTime());
+            time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {

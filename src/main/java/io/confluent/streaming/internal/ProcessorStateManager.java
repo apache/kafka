@@ -64,6 +64,8 @@ public class ProcessorStateManager {
     public void init() throws IOException {
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
         this.checkpointedOffsets.putAll(checkpoint.read());
+
+        // delete the checkpoint file after finish loading its stored offsets
         checkpoint.delete();
     }
 
@@ -92,6 +94,7 @@ public class ProcessorStateManager {
         } else {
             // try to create the topic with the number of partitions equal to the total number of store instances.
             // TODO: this is not possible yet since we do not know the total number of ids.
+            throw new UnsupportedOperationException("Cannot create change log topic on-the-fly");
         }
 
         // register store
@@ -175,7 +178,7 @@ public class ProcessorStateManager {
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {
-                    if(ackedOffsets.containsKey(part))
+                    if (ackedOffsets.containsKey(part))
                         // store the last ack'd offset + 1 (the log position after restoration)
                         checkpointOffsets.put(part, ackedOffsets.get(part) + 1);
                 } else {
@@ -183,7 +186,7 @@ public class ProcessorStateManager {
                 }
             }
 
-            // write the checkpoint offset file to indicate clean shutdown
+            // write the checkpoint file before closing, to indicate clean shutdown
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
             checkpoint.write(checkpointOffsets);
         }
