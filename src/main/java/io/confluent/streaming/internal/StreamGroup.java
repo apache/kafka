@@ -75,11 +75,14 @@ public class StreamGroup implements ParallelExecutor.Task {
   }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   public String name() {
     return name;
 >>>>>>> removed some generics
   }
 
+=======
+>>>>>>> new api model
 =======
 >>>>>>> new api model
   public StampedRecord record() { return currRecord; }

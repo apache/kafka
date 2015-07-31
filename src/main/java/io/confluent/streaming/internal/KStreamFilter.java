@@ -1,6 +1,10 @@
 package io.confluent.streaming.internal;
 
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
+=======
+import io.confluent.streaming.KStreamInitializer;
+>>>>>>> new api model
 import io.confluent.streaming.Predicate;
 
 /**
@@ -10,8 +14,13 @@ class KStreamFilter<K, V> extends KStreamImpl<K, V> {
 
   private final Predicate<K, V> predicate;
 
+<<<<<<< HEAD
   KStreamFilter(Predicate<K, V> predicate, KStreamTopology topology) {
     super(topology);
+=======
+  KStreamFilter(Predicate<K, V> predicate, KStreamInitializer initializer) {
+    super(initializer);
+>>>>>>> new api model
     this.predicate = predicate;
   }
 

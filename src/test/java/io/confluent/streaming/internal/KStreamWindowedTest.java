@@ -24,7 +24,12 @@ public class KStreamWindowedTest {
 
     KStreamSource<Integer, String> stream;
     Window<Integer, String> window;
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null) {
+    };
+>>>>>>> new api model
 
     window = new UnlimitedWindow<>();
     stream = new KStreamSource<>(null, initializer);

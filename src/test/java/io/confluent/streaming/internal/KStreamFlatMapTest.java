@@ -34,13 +34,21 @@ public class KStreamFlatMapTest {
 
     final int[] expectedKeys = new int[] { 0, 1, 2, 3 };
 
+<<<<<<< HEAD
     KStreamTopology topology = new MockKStreamTopology();
 
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+>>>>>>> new api model
     KStreamSource<Integer, String> stream;
     TestProcessor<String, String> processor;
 
     processor = new TestProcessor<>();
+<<<<<<< HEAD
     stream = new KStreamSource<>(null, topology);
+=======
+    stream = new KStreamSource<>(null, initializer);
+>>>>>>> new api model
     stream.flatMap(mapper).process(processor);
 
     KStreamContext context = new MockKStreamContext(null, null);

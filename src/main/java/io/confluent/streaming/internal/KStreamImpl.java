@@ -2,7 +2,11 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
+=======
+import io.confluent.streaming.KStreamInitializer;
+>>>>>>> new api model
 import io.confluent.streaming.KStreamWindowed;
 import io.confluent.streaming.KeyValueMapper;
 import io.confluent.streaming.Predicate;
@@ -21,6 +25,7 @@ import java.util.ArrayList;
 abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   private final ArrayList<Receiver> nextReceivers = new ArrayList<>(1);
+<<<<<<< HEAD
   protected KStreamTopology topology;
   protected KStreamContext context;
   protected KStreamMetadata metadata;
@@ -45,12 +50,31 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     int numReceivers = nextReceivers.size();
     for (int i = 0; i < numReceivers; i++) {
       nextReceivers.get(i).close();
+=======
+  protected KStreamMetadata metadata;
+  protected KStreamInitializer initializer;
+
+  protected KStreamImpl(KStreamInitializer initializer) {
+    this.initializer = initializer;
+  }
+
+  @Override
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
+    this.metadata = metadata;
+    int numReceivers = nextReceivers.size();
+    for (int i = 0; i < numReceivers; i++) {
+      nextReceivers.get(i).bind(context, metadata);
+>>>>>>> new api model
     }
   }
 
   @Override
   public KStream<K, V> filter(Predicate<K, V> predicate) {
+<<<<<<< HEAD
     return chain(new KStreamFilter<K, V>(predicate, topology));
+=======
+    return chain(new KStreamFilter<K, V>(predicate, initializer));
+>>>>>>> new api model
   }
 
   @Override
@@ -64,32 +88,56 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper) {
+<<<<<<< HEAD
     return chain(new KStreamMap<K1, V1, K, V>(mapper, topology));
+=======
+    return chain(new KStreamMap<K1, V1, K, V>(mapper, initializer));
+>>>>>>> new api model
   }
 
   @Override
   public <V1> KStream<K, V1> mapValues(ValueMapper<V1, V> mapper) {
+<<<<<<< HEAD
     return chain(new KStreamMapValues<K, V1, V>(mapper, topology));
+=======
+    return chain(new KStreamMapValues<K, V1, V>(mapper, initializer));
+>>>>>>> new api model
   }
 
   @Override
   public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K1, ? extends Iterable<V1>, K, V> mapper) {
+<<<<<<< HEAD
     return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, topology));
+=======
+    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, initializer));
+>>>>>>> new api model
   }
 
   @Override
   public <V1> KStream<K, V1> flatMapValues(ValueMapper<? extends Iterable<V1>, V> mapper) {
+<<<<<<< HEAD
     return chain(new KStreamFlatMapValues<K, V1, V>(mapper, topology));
+=======
+    return chain(new KStreamFlatMapValues<K, V1, V>(mapper, initializer));
+>>>>>>> new api model
   }
 
   @Override
   public KStreamWindowed<K, V> with(Window<K, V> window) {
+<<<<<<< HEAD
     return (KStreamWindowed<K, V>)chain(new KStreamWindowedImpl<>(window, topology));
+=======
+    return (KStreamWindowed<K, V>)chain(new KStreamWindowedImpl<>(window, initializer));
+>>>>>>> new api model
   }
 
   @Override
   public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
+<<<<<<< HEAD
     KStreamBranch<K, V> branch = new KStreamBranch<>(predicates, topology);
+=======
+    KStreamBranch<K, V> branch = new KStreamBranch<>(predicates, initializer);
+>>>>>>> new api model
     registerReceiver(branch);
     return branch.branches;
   }
@@ -104,7 +152,11 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @Override
   public <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer) {
     process(this.getSendProcessor(topic, keySerializer, valSerializer));
+<<<<<<< HEAD
     return topology.from(keyDeserializer, valDeserializer, topic);
+=======
+    return initializer.from(keyDeserializer, valDeserializer, topic);
+>>>>>>> new api model
   }
 
   @Override
@@ -139,6 +191,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @SuppressWarnings("unchecked")
   @Override
+<<<<<<< HEAD
   public void process(Processor<K, V> processor) {
     registerReceiver(new ProcessorNode<>(processor));
   }
@@ -147,6 +200,18 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @Override
   public <K1, V1> KStream<K1, V1> transform(Transformer<K1, V1, K, V> transformer) {
     return chain(new KStreamTransform<>(transformer, topology));
+=======
+  public void process(final Processor<K, V> processor) {
+    Receiver receiver = new Receiver() {
+      public void bind(KStreamContext context, KStreamMetadata metadata) {
+        processor.init(new ProcessorContextImpl(context, context.getPunctuationScheduler(processor)));
+      }
+      public void receive(Object key, Object value, long timestamp, long streamTime) {
+        processor.process((K) key, (V) value);
+      }
+    };
+    registerReceiver(receiver);
+>>>>>>> new api model
   }
 
   void registerReceiver(Receiver receiver) {

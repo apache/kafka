@@ -1,7 +1,11 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamContext;
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
+=======
+import io.confluent.streaming.KStreamInitializer;
+>>>>>>> new api model
 import io.confluent.streaming.NotCopartitionedException;
 import io.confluent.streaming.ValueJoiner;
 import io.confluent.streaming.Window;
@@ -24,8 +28,13 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
   private KStreamMetadata thisMetadata;
   private KStreamMetadata otherMetadata;
 
+<<<<<<< HEAD
   KStreamJoin(KStreamWindowedImpl<K, V1> stream1, KStreamWindowedImpl<K, V2> stream2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamTopology topology) {
     super(topology);
+=======
+  KStreamJoin(KStreamWindowedImpl<K, V1> stream1, KStreamWindowedImpl<K, V2> stream2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamInitializer initializer) {
+    super(initializer);
+>>>>>>> new api model
 
     final Window<K, V1> window1 = stream1.window;
     final Window<K, V2> window2 = stream2.window;
@@ -86,6 +95,10 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
         otherMetadata = metadata;
         if (thisMetadata != null && !thisMetadata.isJoinCompatibleWith(otherMetadata)) throw new NotCopartitionedException();
       }
+<<<<<<< HEAD
+=======
+
+>>>>>>> new api model
       @SuppressWarnings("unchecked")
       @Override
       public void receive(Object key, Object value2, long timestamp) {

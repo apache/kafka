@@ -3,17 +3,26 @@ package io.confluent.streaming.testutil;
 
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
+<<<<<<< HEAD
+=======
+import io.confluent.streaming.PunctuationScheduler;
+>>>>>>> new api model
 import io.confluent.streaming.RecordCollector;
 <<<<<<< HEAD
 import io.confluent.streaming.StorageEngine;
 =======
 import io.confluent.streaming.StateStore;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.Coordinator;
 >>>>>>> wip
 import io.confluent.streaming.internal.StreamGroup;
 =======
 import io.confluent.streaming.internal.PunctuationQueue;
+=======
+import io.confluent.streaming.internal.PunctuationQueue;
+import io.confluent.streaming.internal.PunctuationSchedulerImpl;
+>>>>>>> new api model
 import io.confluent.streaming.kv.internals.RestoreFunc;
 >>>>>>> new api model
 import org.apache.kafka.common.metrics.Metrics;
@@ -66,15 +75,22 @@ public class MockKStreamContext implements KStreamContext {
 
   @Override
   public void restore(StateStore store, RestoreFunc func) { throw new UnsupportedOperationException("restore() not supported."); }
+<<<<<<< HEAD
 
   public void register(StateStore store) { throw new UnsupportedOperationException("restore() not supported."); }
+=======
+>>>>>>> new api model
 
   @Override
   public void flush() { throw new UnsupportedOperationException("flush() not supported."); }
 
   @Override
 <<<<<<< HEAD
+<<<<<<< HEAD
   public void restore(StateStore engine) throws Exception { throw new UnsupportedOperationException("restore() not supported."); }
+=======
+  public void send(String topic, Object key, Object value) { throw new UnsupportedOperationException("send() not supported."); }
+>>>>>>> new api model
 =======
   public void send(String topic, Object key, Object value) { throw new UnsupportedOperationException("send() not supported."); }
 >>>>>>> new api model
@@ -83,8 +99,13 @@ public class MockKStreamContext implements KStreamContext {
   public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) { throw new UnsupportedOperationException("send() not supported."); }
 
   @Override
+<<<<<<< HEAD
   public void schedule(Processor processor, long interval) {
     throw new UnsupportedOperationException("schedule() not supported");
+=======
+  public PunctuationScheduler getPunctuationScheduler(Processor processor) {
+    return new PunctuationSchedulerImpl(punctuationQueue, processor);
+>>>>>>> new api model
   }
 
   @Override

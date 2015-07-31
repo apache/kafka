@@ -1,7 +1,11 @@
 package io.confluent.streaming.internal;
 
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamTopology;
+=======
+import io.confluent.streaming.KStreamInitializer;
+>>>>>>> new api model
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Arrays;
@@ -17,6 +21,7 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
   private Deserializer<K> keyDeserializer;
   private Deserializer<V> valueDeserializer;
 
+<<<<<<< HEAD
   String[] topics;
 
   public KStreamSource(String[] topics, KStreamTopology topology) {
@@ -25,6 +30,17 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
   public KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamTopology topology) {
     super(topology);
+=======
+  final String[] topics;
+
+  @SuppressWarnings("unchecked")
+  KStreamSource(String[] topics, KStreamInitializer initializer) {
+    this(topics, (Deserializer<K>) initializer.keyDeserializer(), (Deserializer<V>) initializer.valueDeserializer(), initializer);
+  }
+
+  KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamInitializer initializer) {
+    super(initializer);
+>>>>>>> new api model
     this.topics = topics;
     this.keyDeserializer = keyDeserializer;
     this.valueDeserializer = valueDeserializer;

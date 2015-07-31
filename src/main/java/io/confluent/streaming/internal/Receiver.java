@@ -9,8 +9,12 @@ public interface Receiver {
 
   void bind(KStreamContext context, KStreamMetadata metadata);
 
+<<<<<<< HEAD
   void receive(Object key, Object value, long timestamp);
 
   void close();
+=======
+  void receive(Object key, Object value, long timestamp, long streamTime);
+>>>>>>> new api model
 
 }

@@ -2,6 +2,10 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamException;
 import io.confluent.streaming.Processor;
+<<<<<<< HEAD
+=======
+import io.confluent.streaming.PunctuationScheduler;
+>>>>>>> new api model
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StateStore;
 import io.confluent.streaming.StreamingConfig;
@@ -17,8 +21,12 @@ import org.apache.kafka.clients.consumer.Consumer;
 >>>>>>> wip
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import org.apache.kafka.clients.producer.Producer;
 >>>>>>> wip
+=======
+import org.apache.kafka.clients.producer.ProducerRecord;
+>>>>>>> new api model
 =======
 import org.apache.kafka.clients.producer.ProducerRecord;
 >>>>>>> new api model
@@ -114,6 +122,7 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
 <<<<<<< HEAD
+<<<<<<< HEAD
   public KStream<?, ?> from(String... topics) {
     return from(streamGroup(getNextGroupName()), null, null, topics);
   }
@@ -194,6 +203,8 @@ public class KStreamContextImpl implements KStreamContext {
   @Override
 =======
 >>>>>>> new api model
+=======
+>>>>>>> new api model
   public RecordCollector recordCollector() {
     return collector;
   }
@@ -214,10 +225,17 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
+<<<<<<< HEAD
   public void restore(StateStore store, RestoreFunc restoreFunc) {
     ensureInitialization();
 
     stateMgr.registerAndRestore(store, restoreFunc);
+=======
+  public void register(StateStore store, RestoreFunc restoreFunc) {
+    ensureInitialization();
+
+    stateMgr.register(store, restoreFunc);
+>>>>>>> new api model
   }
 
   public void ensureInitialization() {
@@ -232,26 +250,50 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
   public String topic() {
+<<<<<<< HEAD
     if (streamGroup.record() == null)
       throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
 
     return streamGroup.record().topic();
+=======
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
+
+    return this.streamGroup.record().topic();
+>>>>>>> new api model
   }
 
   @Override
   public int partition() {
+<<<<<<< HEAD
     if (streamGroup.record() == null)
       throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
 
 <<<<<<< HEAD
 <<<<<<< HEAD
     stateMgr.restore(store, restoreFunc);
+=======
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
+
+    return this.streamGroup.record().partition();
+  }
+  
+  @Override
+  public long offset() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as offset() should only be called while a record is processed");
+
+    return this.streamGroup.record().offset();
+>>>>>>> new api model
   }
 
   @Override
-  public void register(StateStore store) {
-    ensureInitialization();
+  public long timestamp() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
 
+<<<<<<< HEAD
     stateMgr.register(store);
 =======
     return this.streamGroup.record().partition();
@@ -283,11 +325,23 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
+=======
+    return this.streamGroup.record().timestamp;
+  }
+
+  @Override
+  public void send(String topic, Object key, Object value) {
+    collector.send(new ProducerRecord<>(topic, key, value));
+  }
+
+  @Override
+>>>>>>> new api model
   public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) {
     if (keySerializer == null || valSerializer == null)
       throw new IllegalStateException("key and value serializers must be specified");
 
     collector.send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer);
+<<<<<<< HEAD
   }
 
   @Override
@@ -301,6 +355,21 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   void init(Collection<KStreamSource<?, ?>> streams) throws IOException {
+=======
+  }
+
+  @Override
+  public void commit() {
+    this.streamGroup.commitOffset();
+  }
+
+  @Override
+  public PunctuationScheduler getPunctuationScheduler(Processor processor) {
+    return streamGroup.getPunctuationScheduler(processor);
+  }
+
+  public void init(Collection<KStreamSource<?, ?>> streams) throws IOException {
+>>>>>>> new api model
     stateMgr.init();
 
     for (KStreamSource stream: streams) {

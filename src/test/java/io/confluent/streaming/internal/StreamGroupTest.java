@@ -32,7 +32,11 @@ public class StreamGroupTest {
     public ArrayList<Long> timestamps = new ArrayList<>();
 
     public MockKStreamSource() {
+<<<<<<< HEAD
       super(null, deserializer, deserializer, new MockKStreamTopology());
+=======
+      super(null, deserializer, deserializer, new KStreamInitializerImpl(serializer, serializer, deserializer, deserializer));
+>>>>>>> new api model
     }
 
     @Override

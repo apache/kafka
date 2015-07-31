@@ -83,7 +83,12 @@ public interface KStreamContext {
 
   /**
    * Ensures that the context is in the initialization phase where KStream topology can be constructed
+<<<<<<< HEAD
 =======
+   * Flush the local state of this context
+>>>>>>> new api model
+=======
+   *
    * Flush the local state of this context
 >>>>>>> new api model
    */
@@ -94,7 +99,11 @@ public interface KStreamContext {
 
   void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer);
 
+<<<<<<< HEAD
   void schedule(Processor processor, long interval);
+=======
+  PunctuationScheduler getPunctuationScheduler(Processor processor);
+>>>>>>> new api model
 
   void commit();
 

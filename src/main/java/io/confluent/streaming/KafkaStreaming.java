@@ -22,6 +22,7 @@ import io.confluent.streaming.internal.ProcessorConfig;
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.internal.IngestorImpl;
 <<<<<<< HEAD
 import io.confluent.streaming.internal.StreamSynchronizer;
@@ -47,6 +48,9 @@ import io.confluent.streaming.internal.TopologyAnalyzer;
 >>>>>>> new api model
 =======
 >>>>>>> wip
+=======
+import io.confluent.streaming.internal.TopologyAnalyzer;
+>>>>>>> new api model
 import org.apache.kafka.common.metrics.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -188,6 +192,7 @@ public class KafkaStreaming implements Runnable {
         if (streamingConfig.timestampExtractor() == null) throw new NullPointerException("timestamp extractor is missing");
 
         this.config = new ProcessorConfig(streamingConfig.config());
+<<<<<<< HEAD
         this.topics = topology.topics();
 
 <<<<<<< HEAD
@@ -219,6 +224,12 @@ public class KafkaStreaming implements Runnable {
             public void commit() {
                 throw new UnsupportedOperationException();
             }
+=======
+
+        TopologyAnalyzer topologyAnalyzer = new TopologyAnalyzer(jobClass, streamingConfig);
+
+        this.topics = topologyAnalyzer.topics;
+>>>>>>> new api model
 
             @Override
             public void shutdown() {

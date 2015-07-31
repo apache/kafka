@@ -3,7 +3,11 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
+=======
+import io.confluent.streaming.KStreamInitializer;
+>>>>>>> new api model
 import io.confluent.streaming.KStreamWindowed;
 import io.confluent.streaming.ValueJoiner;
 import io.confluent.streaming.Window;
@@ -15,7 +19,11 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
   final Window<K, V> window;
 
+<<<<<<< HEAD
   KStreamWindowedImpl(Window<K, V> window, KStreamTopology initializer) {
+=======
+  KStreamWindowedImpl(Window<K, V> window, KStreamInitializer initializer) {
+>>>>>>> new api model
     super(initializer);
     this.window = window;
   }
@@ -56,7 +64,11 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
     KStreamWindowedImpl<K, V1> otherImpl = (KStreamWindowedImpl<K, V1>) other;
 
+<<<<<<< HEAD
     KStreamJoin<K, V2, V, V1> stream = new KStreamJoin<>(this, otherImpl, prior, processor, topology);
+=======
+    KStreamJoin<K, V2, V, V1> stream = new KStreamJoin<>(this, otherImpl, prior, processor, initializer);
+>>>>>>> new api model
     otherImpl.registerReceiver(stream.receiverForOtherStream);
 
     return chain(stream);

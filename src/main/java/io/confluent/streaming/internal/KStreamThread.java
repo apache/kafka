@@ -17,7 +17,12 @@
 
 package io.confluent.streaming.internal;
 
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
+=======
+import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamJob;
+>>>>>>> new api model
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.util.ParallelExecutor;
 import io.confluent.streaming.util.Util;
@@ -226,6 +231,7 @@ public class KStreamThread extends Thread {
         HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         ingestor.init();
 =======
         Consumer<byte[], byte[]> restoreConsumer =
@@ -240,6 +246,26 @@ public class KStreamThread extends Thread {
                     context = new KStreamContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
                     context.init(topology.sourceStreams());
 
+=======
+        for (TopicPartition partition : partitions) {
+            final Integer id = partition.partition(); // TODO: switch this to the group id
+            KStreamContextImpl context = kstreamContexts.get(id);
+            if (context == null) {
+                try {
+                    KStreamInitializerImpl initializer = new KStreamInitializerImpl(
+                      streamingConfig.keySerializer(),
+                      streamingConfig.valueSerializer(),
+                      streamingConfig.keyDeserializer(),
+                      streamingConfig.valueDeserializer()
+                    );
+                    KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
+
+                    job.init(initializer);
+
+                    context = new KStreamContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
+                    context.init(initializer.sourceStreams());
+
+>>>>>>> new api model
                     kstreamContexts.put(id, context);
                 }
                 catch (Exception e) {
