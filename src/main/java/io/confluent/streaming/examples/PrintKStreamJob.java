@@ -15,6 +15,10 @@ public class PrintKStreamJob<K, V> implements Processor<K, V> {
 
   private KStreamContext context;
 
+  public PrintKStreamJob(String... topics) {
+    super(topics);
+  }
+
   @Override
   public void init(KStreamContext context) {
     this.context = context;
@@ -41,6 +45,7 @@ public class PrintKStreamJob<K, V> implements Processor<K, V> {
 
   public static void main(String[] args) {
 <<<<<<< HEAD
+<<<<<<< HEAD
     KafkaStreaming streaming = new KafkaStreaming(
       new SingleProcessorTopology(PrintKStreamJob.class, args),
       new StreamingConfig(new Properties())
@@ -48,6 +53,9 @@ public class PrintKStreamJob<K, V> implements Processor<K, V> {
     streaming.run();
 =======
     KafkaStreaming kstream = new KafkaStreaming(new PrintKStreamJob(), new StreamingConfig(new Properties()));
+=======
+    KafkaStreaming kstream = new KafkaStreaming(new PrintKStreamJob(args), new StreamingConfig(new Properties()));
+>>>>>>> fix examples
     kstream.run();
 >>>>>>> wip
   }

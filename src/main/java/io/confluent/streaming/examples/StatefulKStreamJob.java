@@ -21,6 +21,10 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
   private KStreamContext context;
   private KeyValueStore<String, Integer> kvStore;
 
+  public StatefulKStreamJob(String... topics) {
+    super(topics);
+  }
+
   @Override
   public void init(KStreamContext context) {
     this.context = context;
@@ -64,6 +68,7 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
 
   public static void main(String[] args) {
 <<<<<<< HEAD
+<<<<<<< HEAD
     KafkaStreaming streaming = new KafkaStreaming(
       new SingleProcessorTopology(StatefulKStreamJob.class, args),
       new StreamingConfig(new Properties())
@@ -71,6 +76,9 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
     streaming.run();
 =======
     KafkaStreaming kstream = new KafkaStreaming(new StatefulKStreamJob(), new StreamingConfig(new Properties()));
+=======
+    KafkaStreaming kstream = new KafkaStreaming(new StatefulKStreamJob(args), new StreamingConfig(new Properties()));
+>>>>>>> fix examples
     kstream.run();
 >>>>>>> wip
   }
