@@ -18,4 +18,5 @@ public interface Receiver {
 >>>>>>> new api model
 
   void close();
+  
 }
