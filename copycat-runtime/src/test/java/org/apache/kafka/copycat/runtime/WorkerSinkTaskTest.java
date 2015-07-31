@@ -133,7 +133,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         GenericRecord record = new GenericRecordBuilder(schema).build();
         byte[] rawKey = "key".getBytes(), rawValue = "value".getBytes();
 
-        ConsumerRecords<Object, Object> records = new ConsumerRecords<Object, Object>(
+        ConsumerRecords<Object, Object> records = new ConsumerRecords<>(
                 Collections.singletonMap(
                         new TopicPartition("topic", 0),
                         Collections.singletonList(
@@ -309,7 +309,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
                     public ConsumerRecords<Object, Object> answer() throws Throwable {
                         // "Sleep" so time will progress
                         time.sleep(pollDelayMs);
-                        ConsumerRecords<Object, Object> records = new ConsumerRecords<Object, Object>(
+                        ConsumerRecords<Object, Object> records = new ConsumerRecords<>(
                                 Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), Arrays.asList(
                                         new ConsumerRecord<Object, Object>(TOPIC, PARTITION,
                                                 FIRST_OFFSET + recordsReturned, KEY,

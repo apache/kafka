@@ -56,7 +56,7 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     @Override
     public List<Properties> getTaskConfigs(int maxTasks) {
-        ArrayList<Properties> configs = new ArrayList<Properties>();
+        ArrayList<Properties> configs = new ArrayList<>();
         // Only one input stream makes sense.
         Properties config = new Properties();
         if (filename != null) {

@@ -27,7 +27,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
@@ -36,19 +35,17 @@ public class FileStreamSinkTaskTest {
     private FileStreamSinkTask task;
     private ByteArrayOutputStream os;
     private PrintStream printStream;
-    private Properties config;
 
     @Before
     public void setup() {
         os = new ByteArrayOutputStream();
         printStream = new PrintStream(os);
         task = new FileStreamSinkTask(printStream);
-        config = new Properties();
     }
 
     @Test
     public void testPutFlush() throws CopycatException {
-        HashMap<TopicPartition, Long> offsets = new HashMap<TopicPartition, Long>();
+        HashMap<TopicPartition, Long> offsets = new HashMap<>();
 
         // We do not call task.start() since it would override the output stream
 

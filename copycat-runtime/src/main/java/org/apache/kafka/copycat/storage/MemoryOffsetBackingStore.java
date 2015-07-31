@@ -39,7 +39,7 @@ import java.util.concurrent.Future;
 public class MemoryOffsetBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(MemoryOffsetBackingStore.class);
 
-    protected HashMap<String, Map<ByteBuffer, ByteBuffer>> data = new HashMap<String, Map<ByteBuffer, ByteBuffer>>();
+    protected HashMap<String, Map<ByteBuffer, ByteBuffer>> data = new HashMap<>();
     protected ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public MemoryOffsetBackingStore() {
@@ -66,7 +66,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
         return executor.submit(new Callable<Map<ByteBuffer, ByteBuffer>>() {
             @Override
             public Map<ByteBuffer, ByteBuffer> call() throws Exception {
-                Map<ByteBuffer, ByteBuffer> result = new HashMap<ByteBuffer, ByteBuffer>();
+                Map<ByteBuffer, ByteBuffer> result = new HashMap<>();
                 synchronized (MemoryOffsetBackingStore.this) {
                     Map<ByteBuffer, ByteBuffer> namespaceData = data.get(namespace);
                     if (namespaceData == null) {
@@ -94,7 +94,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
                 synchronized (MemoryOffsetBackingStore.this) {
                     Map<ByteBuffer, ByteBuffer> namespaceData = data.get(namespace);
                     if (namespaceData == null) {
-                        namespaceData = new HashMap<ByteBuffer, ByteBuffer>();
+                        namespaceData = new HashMap<>();
                         data.put(namespace, namespaceData);
                     }
                     for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {

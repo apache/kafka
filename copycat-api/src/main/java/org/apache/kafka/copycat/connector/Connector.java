@@ -66,7 +66,8 @@ public abstract class Connector {
      * </p>
      *
      * @param ctx context object used to interact with the Copycat runtime
-     * @param taskConfigs
+     * @param taskConfigs existing task configurations, which may be used when generating new task configs to avoid
+     *                    churn in partition to task assignments
      */
     public void initialize(ConnectorContext ctx, List<Properties> taskConfigs) {
         context = ctx;

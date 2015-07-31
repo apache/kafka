@@ -85,7 +85,7 @@ public class StandaloneCoordinatorTest extends StandaloneCoordinatorTestBase {
         PowerMock.replayAll();
 
         coordinator.addConnector(connectorProps, createCallback);
-        FutureCallback<Void> futureCb = new FutureCallback<Void>(new Callback() {
+        FutureCallback<Void> futureCb = new FutureCallback<>(new Callback() {
             @Override
             public void onCompletion(Throwable error, Object result) {
 

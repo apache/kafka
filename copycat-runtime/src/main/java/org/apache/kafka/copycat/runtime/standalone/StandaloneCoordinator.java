@@ -43,7 +43,7 @@ public class StandaloneCoordinator implements Coordinator {
     private Worker worker;
     private Properties configs;
     private ConfigStorage configStorage;
-    private HashMap<String, ConnectorState> connectors = new HashMap<String, ConnectorState>();
+    private HashMap<String, ConnectorState> connectors = new HashMap<>();
 
     public StandaloneCoordinator(Worker worker, Properties props) {
         this.worker = worker;
@@ -196,7 +196,7 @@ public class StandaloneCoordinator implements Coordinator {
         List<Properties> taskConfigs = state.connector.getTaskConfigs(state.maxTasks);
 
         // Generate the final configs, including framework provided settings
-        Map<ConnectorTaskId, Properties> taskProps = new HashMap<ConnectorTaskId, Properties>();
+        Map<ConnectorTaskId, Properties> taskProps = new HashMap<>();
         for (int i = 0; i < taskConfigs.size(); i++) {
             ConnectorTaskId taskId = new ConnectorTaskId(state.name, i);
             Properties config = taskConfigs.get(i);
@@ -297,7 +297,7 @@ public class StandaloneCoordinator implements Coordinator {
             this.connector = connector;
             this.maxTasks = maxTasks;
             this.inputTopics = inputTopics;
-            this.tasks = new HashSet<ConnectorTaskId>();
+            this.tasks = new HashSet<>();
         }
     }
 }

@@ -22,15 +22,10 @@ package org.apache.kafka.copycat.connector;
  * Base class for records containing data to be copied to/from Kafka. This corresponds closely to
  * Kafka's ProducerRecord and ConsumerRecord classes, and holds the data that may be used by both
  * sources and sinks (topic, partition, key, value). Although both implementations include a
- * notion of offest, it is not included here because they differ in type.
- * </p>
- * <p>
- * This class uses type parameters for keys and values. These are provided primarily for
- * connector developer convenience. Internally, Copycat will handle any primitive types or
- * org.apache.kafka.copycat.data types.
+ * notion of offset, it is not included here because they differ in type.
  * </p>
  */
-public class CopycatRecord {
+public abstract class CopycatRecord {
     private final String topic;
     private final Integer partition;
     private final Object key;

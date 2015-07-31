@@ -62,7 +62,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
     @Override
     public Map<Object, Object> getOffsets(Collection<Object> streams) {
         // Serialize keys so backing store can work with them
-        Map<ByteBuffer, Object> serializedToOriginal = new HashMap<ByteBuffer, Object>(streams.size());
+        Map<ByteBuffer, Object> serializedToOriginal = new HashMap<>(streams.size());
         for (Object key : streams) {
             try {
                 byte[] keySerialized = keySerializer.serialize(namespace, converter.fromCopycatData(key));
@@ -85,7 +85,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         }
 
         // Deserialize all the values and map back to the original keys
-        Map<Object, Object> result = new HashMap<Object, Object>(streams.size());
+        Map<Object, Object> result = new HashMap<>(streams.size());
         for (Map.Entry<ByteBuffer, ByteBuffer> rawEntry : raw.entrySet()) {
             try {
                 // Since null could be a valid key, explicitly check whether map contains the key

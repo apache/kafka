@@ -113,7 +113,7 @@ public class FileStreamSourceTask extends SourceTask<Object, Object> {
                         line = extractLine();
                         if (line != null) {
                             if (records == null) {
-                                records = new ArrayList<SourceRecord>();
+                                records = new ArrayList<>();
                             }
                             records.add(new SourceRecord(null, streamOffset, topic, line));
                         }

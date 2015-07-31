@@ -81,10 +81,7 @@ public abstract class ShutdownableThread extends Thread {
     public void run() {
         try {
             execute();
-        } catch (Error e) {
-            log.error("Thread {} exiting with uncaught exception: ", getName(), e);
-            throw e;
-        } catch (RuntimeException e) {
+        } catch (Error | RuntimeException e) {
             log.error("Thread {} exiting with uncaught exception: ", getName(), e);
             throw e;
         } finally {

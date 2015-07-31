@@ -38,7 +38,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final String CLUSTER_DEFAULT = "copycat";
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    public static final String BOOSTRAP_SERVERS_DOC
+    public static final String BOOTSTRAP_SERVERS_DOC
             = "A list of host/port pairs to use for establishing the initial connection to the Kafka "
             + "cluster. The client will make use of all servers irrespective of which servers are "
             + "specified here for bootstrapping&mdash;this list only impacts the initial hosts used "
@@ -100,7 +100,7 @@ public class WorkerConfig extends AbstractConfig {
         config = new ConfigDef()
                 .define(CLUSTER_CONFIG, Type.STRING, CLUSTER_DEFAULT, Importance.HIGH, CLUSTER_CONFIG_DOC)
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
-                        Importance.HIGH, BOOSTRAP_SERVERS_DOC)
+                        Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, CONVERTER_CLASS_DOC)
                 .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS,

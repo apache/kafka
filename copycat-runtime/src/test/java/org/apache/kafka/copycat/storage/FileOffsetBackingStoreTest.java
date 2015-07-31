@@ -40,7 +40,7 @@ public class FileOffsetBackingStoreTest {
     Properties props;
     File tempFile;
 
-    private static Map<ByteBuffer, ByteBuffer> firstSet = new HashMap<ByteBuffer, ByteBuffer>();
+    private static Map<ByteBuffer, ByteBuffer> firstSet = new HashMap<>();
 
     static {
         firstSet.put(buffer("key"), buffer("value"));

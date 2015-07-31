@@ -196,7 +196,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     public void testSendRecordsConvertsData() throws Exception {
         createWorkerTask();
 
-        List<SourceRecord> records = new ArrayList<SourceRecord>();
+        List<SourceRecord> records = new ArrayList<>();
         // Can just use the same record for key and value
         records.add(new SourceRecord(STREAM_BYTES, OFFSET_BYTES, "topic", null, RECORD, RECORD));
 

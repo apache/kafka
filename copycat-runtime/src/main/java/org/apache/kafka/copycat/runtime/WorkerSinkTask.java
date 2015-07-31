@@ -121,7 +121,7 @@ public class WorkerSinkTask implements WorkerTask {
      * the write commit. This should only be invoked by the WorkerSinkTaskThread.
      **/
     public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
-        HashMap<TopicPartition, Long> offsets = new HashMap<TopicPartition, Long>();
+        HashMap<TopicPartition, Long> offsets = new HashMap<>();
         for (TopicPartition tp : consumer.subscriptions()) {
             offsets.put(tp, consumer.position(tp));
         }
@@ -176,7 +176,7 @@ public class WorkerSinkTask implements WorkerTask {
 
         KafkaConsumer<Object, Object> newConsumer;
         try {
-            newConsumer = new KafkaConsumer<Object, Object>(props);
+            newConsumer = new KafkaConsumer<>(props);
         } catch (Throwable t) {
             throw new CopycatRuntimeException("Failed to create consumer", t);
         }
@@ -206,7 +206,7 @@ public class WorkerSinkTask implements WorkerTask {
     private void deliverMessages(ConsumerRecords<Object, Object> msgs) {
         // Finally, deliver this batch to the sink
         if (msgs.count() > 0) {
-            List<SinkRecord> records = new ArrayList<SinkRecord>();
+            List<SinkRecord> records = new ArrayList<>();
             for (ConsumerRecord<Object, Object> msg : msgs) {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
                 records.add(

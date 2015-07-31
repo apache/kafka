@@ -46,7 +46,7 @@ public class FileStreamSinkConnector extends SinkConnector {
 
     @Override
     public List<Properties> getTaskConfigs(int maxTasks) {
-        ArrayList<Properties> configs = new ArrayList<Properties>();
+        ArrayList<Properties> configs = new ArrayList<>();
         for (int i = 0; i < maxTasks; i++) {
             Properties config = new Properties();
             if (filename != null) {

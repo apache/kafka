@@ -60,7 +60,7 @@ public class Worker {
     private Serializer offsetValueSerializer;
     private Deserializer offsetKeyDeserializer;
     private Deserializer offsetValueDeserializer;
-    private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<ConnectorTaskId, WorkerTask>();
+    private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
     private KafkaProducer producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
@@ -119,14 +119,14 @@ public class Worker {
 
         Properties unusedConfigs = config.getUnusedProperties();
 
-        Map<String, Object> producerProps = new HashMap<String, Object>();
+        Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, config.getClass(WorkerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, config.getClass(WorkerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName());
         for (String propName : unusedConfigs.stringPropertyNames()) {
             producerProps.put(propName, unusedConfigs.getProperty(propName));
         }
-        producer = new KafkaProducer<Object, Object>(producerProps);
+        producer = new KafkaProducer<>(producerProps);
 
         offsetBackingStore.start();
         sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(time, config);
@@ -232,7 +232,7 @@ public class Worker {
         WorkerTask task = tasks.get(id);
         if (task == null) {
             log.error("Task not found: " + id);
-            throw new CopycatRuntimeException();
+            throw new CopycatRuntimeException("Task not found: " + id);
         }
         return task;
     }

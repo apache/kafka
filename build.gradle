@@ -28,6 +28,11 @@ buildscript {
 }
 
 def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
+def slf4japi="org.slf4j:slf4j-api:1.7.6"
+def junit='junit:junit:4.6'
+def easymock='org.easymock:easymock:3.3.1'
+def powermock='org.powermock:powermock-module-junit4:1.6.2'
+def powermock_easymock='org.powermock:powermock-api-easymock:1.6.2'
 
 allprojects {
   apply plugin: 'idea'
@@ -59,7 +64,7 @@ rat {
   // And some of the files that we have checked in should also be excluded from this check
   excludes.addAll([
     '**/.git/**',
-    'build/**',
+    '**/build/**',
     'CONTRIBUTING.md',
     'gradlew',
     'gradlew.bat',
@@ -244,8 +249,8 @@ project(':core') {
       compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.4'
     }
 
-    testCompile 'junit:junit:4.6'
-    testCompile 'org.easymock:easymock:3.3.1'
+    testCompile "$junit"
+    testCompile "$easymock"
     testCompile 'org.objenesis:objenesis:1.2'
     testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
 
@@ -376,11 +381,11 @@ project(':clients') {
   archivesBaseName = "kafka-clients"
 
   dependencies {
-    compile "org.slf4j:slf4j-api:1.7.6"
+    compile "$slf4japi"
     compile 'org.xerial.snappy:snappy-java:1.1.1.7'
     compile 'net.jpountz.lz4:lz4:1.2.0'
 
-    testCompile 'junit:junit:4.6'
+    testCompile "$junit"
     testRuntime "$slf4jlog4j"
   }
 
@@ -428,7 +433,7 @@ project(':tools') {
         compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
         compile "$slf4jlog4j"
 
-        testCompile 'junit:junit:4.6'
+        testCompile "$junit"
         testCompile project(path: ':clients', configuration: 'archives')
     }
 
@@ -476,7 +481,7 @@ project(':log4j-appender') {
     compile project(':clients')
     compile "$slf4jlog4j"
 
-    testCompile 'junit:junit:4.6'
+    testCompile "$junit"
     testCompile project(path: ':clients', configuration: 'archives')
   }
 
@@ -508,9 +513,9 @@ project(':copycat-data') {
 
   dependencies {
     compile project(':clients')
-    compile "org.slf4j:slf4j-api:1.7.6"
+    compile "$slf4japi"
 
-    testCompile 'junit:junit:4.6'
+    testCompile "$junit"
     testRuntime "$slf4jlog4j"
   }
 
@@ -551,9 +556,9 @@ project(':copycat-api') {
 
   dependencies {
     compile project(':copycat-data')
-    compile "org.slf4j:slf4j-api:1.7.6"
+    compile "$slf4japi"
 
-    testCompile 'junit:junit:4.6'
+    testCompile "$junit"
     testRuntime "$slf4jlog4j"
   }
 
@@ -593,13 +598,13 @@ project(':copycat-json') {
 
   dependencies {
     compile project(':copycat-api')
-    compile "org.slf4j:slf4j-api:1.7.6"
+    compile "$slf4japi"
     compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
 
-    testCompile 'junit:junit:4.6'
-    testCompile 'org.easymock:easymock:3.3.1'
-    testCompile 'org.powermock:powermock-module-junit4:1.6.2'
-    testCompile 'org.powermock:powermock-api-easymock:1.6.2'
+    testCompile "$junit"
+    testCompile "$easymock"
+    testCompile "$powermock"
+    testCompile "$powermock_easymock"
     testRuntime "$slf4jlog4j"
   }
 
@@ -652,12 +657,12 @@ project(':copycat-runtime') {
   dependencies {
     compile project(':copycat-api')
     compile project(':clients')
-    compile "org.slf4j:slf4j-api:1.7.6"
+    compile "$slf4japi"
 
-    testCompile 'junit:junit:4.6'
-    testCompile 'org.easymock:easymock:3.3.1'
-    testCompile 'org.powermock:powermock-module-junit4:1.6.2'
-    testCompile 'org.powermock:powermock-api-easymock:1.6.2'
+    testCompile "$junit"
+    testCompile "$easymock"
+    testCompile "$powermock"
+    testCompile "$powermock_easymock"
     testRuntime "$slf4jlog4j"
     testRuntime project(":copycat-json")
   }
@@ -698,12 +703,12 @@ project(':copycat-file') {
 
   dependencies {
     compile project(':copycat-api')
-    compile "org.slf4j:slf4j-api:1.7.6"
+    compile "$slf4japi"
 
-    testCompile 'junit:junit:4.6'
-    testCompile 'org.easymock:easymock:3.3.1'
-    testCompile 'org.powermock:powermock-module-junit4:1.6.2'
-    testCompile 'org.powermock:powermock-api-easymock:1.6.2'
+    testCompile "$junit"
+    testCompile "$easymock"
+    testCompile "$powermock"
+    testCompile "$powermock_easymock"
     testRuntime "$slf4jlog4j"
   }
 

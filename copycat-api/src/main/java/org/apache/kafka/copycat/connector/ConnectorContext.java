@@ -26,5 +26,5 @@ public interface ConnectorContext {
      * indicate to the runtime that something about the input/output has changed (e.g. streams
      * added/removed) and the running Tasks will need to be modified.
      */
-    public void requestTaskReconfiguration();
+    void requestTaskReconfiguration();
 }

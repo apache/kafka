@@ -29,7 +29,7 @@ public abstract class SinkTaskContext {
     private Map<TopicPartition, Long> offsets;
 
     public SinkTaskContext() {
-        offsets = new HashMap<TopicPartition, Long>();
+        offsets = new HashMap<>();
     }
 
     public void resetOffset(Map<TopicPartition, Long> offsets) {

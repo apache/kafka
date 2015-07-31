@@ -26,10 +26,10 @@ import java.util.List;
  */
 public class ConnectorUtils {
     /**
-     * Given a set of elements and a target number of groups, generates an set of groups of
+     * Given a list of elements and a target number of groups, generates list of groups of
      * elements to match the target number of groups, spreading them evenly among the groups.
      * This generates groups with contiguous elements, which results in intuitive ordering if
-     * your elements are also ordered (e.g. alphabetical sets of table names if you sort
+     * your elements are also ordered (e.g. alphabetical lists of table names if you sort
      * table names alphabetically to generate the raw partitions) or can result in efficient
      * partitioning if elements are sorted according to some criteria that affects performance
      * (e.g. topic partitions with the same leader).
@@ -42,7 +42,7 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("Number of groups must be positive.");
         }
 
-        List<List<T>> result = new ArrayList<List<T>>(numGroups);
+        List<List<T>> result = new ArrayList<>(numGroups);
 
         // Each group has either n+1 or n raw partitions
         int perGroup = elements.size() / numGroups;
@@ -51,7 +51,7 @@ public class ConnectorUtils {
         int assigned = 0;
         for (int group = 0; group < numGroups; group++) {
             int numThisGroup = group < leftover ? perGroup + 1 : perGroup;
-            List<T> groupList = new ArrayList<T>(numThisGroup);
+            List<T> groupList = new ArrayList<>(numThisGroup);
             for (int i = 0; i < numThisGroup; i++) {
                 groupList.add(elements.get(assigned));
                 assigned++;

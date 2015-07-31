@@ -50,8 +50,7 @@ public class SourceTaskOffsetCommitter {
     private Time time;
     private WorkerConfig config;
     private ScheduledExecutorService commitExecutorService = null;
-    private HashMap<ConnectorTaskId, ScheduledFuture<?>> commiters
-            = new HashMap<ConnectorTaskId, ScheduledFuture<?>>();
+    private HashMap<ConnectorTaskId, ScheduledFuture<?>> committers = new HashMap<>();
 
     SourceTaskOffsetCommitter(Time time, WorkerConfig config) {
         this.time = time;
@@ -78,11 +77,11 @@ public class SourceTaskOffsetCommitter {
                 commit(workerTask);
             }
         }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
-        commiters.put(id, commitFuture);
+        committers.put(id, commitFuture);
     }
 
     public void remove(ConnectorTaskId id) {
-        ScheduledFuture<?> commitFuture = commiters.remove(id);
+        ScheduledFuture<?> commitFuture = committers.remove(id);
         commitFuture.cancel(false);
     }
 

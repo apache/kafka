@@ -71,7 +71,7 @@ public class OffsetStorageWriter {
     private final Serializer keySerializer;
     private final Serializer valueSerializer;
     private final String namespace;
-    private Map<Object, Object> data = new HashMap<Object, Object>();
+    private Map<Object, Object> data = new HashMap<>();
 
     // Not synchronized, should only be accessed by flush thread
     private Map<Object, Object> toFlush = null;
@@ -115,7 +115,7 @@ public class OffsetStorageWriter {
 
         assert !flushing();
         toFlush = data;
-        data = new HashMap<Object, Object>();
+        data = new HashMap<>();
         return true;
     }
 
@@ -133,7 +133,7 @@ public class OffsetStorageWriter {
         // Serialize
         Map<ByteBuffer, ByteBuffer> offsetsSerialized;
         try {
-            offsetsSerialized = new HashMap<ByteBuffer, ByteBuffer>();
+            offsetsSerialized = new HashMap<>();
             for (Map.Entry<Object, Object> entry : toFlush.entrySet()) {
                 byte[] key = keySerializer.serialize(namespace, converter.fromCopycatData(entry.getKey()));
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;

@@ -40,7 +40,7 @@ public class FileConfigStorage implements ConfigStorage {
     public static final String FILE_DEFAULT = "configs.db";
 
     private String filename;
-    private Map<String, Properties> connectorConfig = new HashMap<String, Properties>();
+    private Map<String, Properties> connectorConfig = new HashMap<>();
 
     @Override
     public void configure(Properties props) {
@@ -101,9 +101,7 @@ public class FileConfigStorage implements ConfigStorage {
             connectorConfig = (Map<String, Properties>) is.readObject();
         } catch (FileNotFoundException e) {
             // Expected on first run
-        } catch (IOException e) {
-            throw new CopycatRuntimeException("Failed to load config data", e);
-        } catch (ClassNotFoundException e) {
+        } catch (IOException | ClassNotFoundException e) {
             throw new CopycatRuntimeException("Failed to load config data", e);
         }
     }

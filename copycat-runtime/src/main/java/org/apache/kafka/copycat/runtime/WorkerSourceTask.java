@@ -82,10 +82,8 @@ public class WorkerSourceTask implements WorkerTask {
         this.workerConfig = workerConfig;
         this.time = time;
 
-        this.outstandingMessages
-                = new IdentityHashMap<ProducerRecord<Object, Object>, ProducerRecord<Object, Object>>();
-        this.outstandingMessagesBacklog
-                = new IdentityHashMap<ProducerRecord<Object, Object>, ProducerRecord<Object, Object>>();
+        this.outstandingMessages = new IdentityHashMap<>();
+        this.outstandingMessagesBacklog = new IdentityHashMap<>();
         this.flushing = false;
     }
 
@@ -135,7 +133,7 @@ public class WorkerSourceTask implements WorkerTask {
     private synchronized void sendRecords(List<SourceRecord> records) {
         for (SourceRecord record : records) {
             final ProducerRecord<Object, Object> producerRecord
-                    = new ProducerRecord<Object, Object>(record.getTopic(), record.getPartition(),
+                    = new ProducerRecord<>(record.getTopic(), record.getPartition(),
                     converter.fromCopycatData(record.getKey()),
                     converter.fromCopycatData(record.getValue()));
             log.trace("Appending record with key {}, value {}", record.getKey(), record.getValue());

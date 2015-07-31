@@ -19,6 +19,19 @@ package org.apache.kafka.copycat.data;
 
 
 public class BinaryData {
+    /**
+     * Compares regions of two byte arrays, returning a negative integer, zero, or positive integer when the first byte
+     * array region is less than, equal to, or greater than the second byte array region, respectively.
+     *
+     * @param b1 first byte array
+     * @param s1 start of region in first byte array
+     * @param l1 length of region in first byte array
+     * @param b2 second byte array
+     * @param s2 start of region in second byte array
+     * @param l2 length of region in second byte array
+     * @return a negative integer, zero, or a positive integer as the first byte array is less than, equal to, or greater
+     *         than the second byte array
+     */
     public static int compareBytes(byte[] b1, int s1, int l1,
                                    byte[] b2, int s2, int l2) {
         int end1 = s1 + l1;
@@ -26,9 +39,8 @@ public class BinaryData {
         for (int i = s1, j = s2; i < end1 && j < end2; i++, j++) {
             int a = b1[i] & 0xff;
             int b = b2[j] & 0xff;
-            if (a != b) {
+            if (a != b)
                 return a - b;
-            }
         }
         return l1 - l2;
     }

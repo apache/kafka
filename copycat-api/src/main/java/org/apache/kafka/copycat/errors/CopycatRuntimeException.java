@@ -18,9 +18,6 @@
 package org.apache.kafka.copycat.errors;
 
 public class CopycatRuntimeException extends RuntimeException {
-    public CopycatRuntimeException() {
-    }
-
     public CopycatRuntimeException(String s) {
         super(s);
     }

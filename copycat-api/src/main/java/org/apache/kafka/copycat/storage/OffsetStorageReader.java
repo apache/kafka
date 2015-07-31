@@ -33,7 +33,7 @@ public interface OffsetStorageReader {
      * @param stream object uniquely identifying the stream of data
      * @return object uniquely identifying the offset in the stream of data
      */
-    public Object getOffset(Object stream);
+    Object getOffset(Object stream);
 
     /**
      * <p>
@@ -52,5 +52,5 @@ public interface OffsetStorageReader {
      * @param streams set of identifiers for streams of data
      * @return a map of stream identifiers to decoded offsets
      */
-    public Map<Object, Object> getOffsets(Collection<Object> streams);
+    Map<Object, Object> getOffsets(Collection<Object> streams);
 }
