@@ -69,6 +69,8 @@ public class MockKStreamContext implements KStreamContext {
   @Override
   public void restore(StateStore store, RestoreFunc func) { throw new UnsupportedOperationException("restore() not supported."); }
 
+  public void register(StateStore store) { throw new UnsupportedOperationException("restore() not supported."); }
+
   @Override
   public void flush() { throw new UnsupportedOperationException("flush() not supported."); }
 
