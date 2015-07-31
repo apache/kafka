@@ -1,7 +1,8 @@
 package io.confluent.streaming.examples;
 
 import io.confluent.streaming.KafkaStreaming;
-import io.confluent.streaming.ProcessorKStreamJob;
+import io.confluent.streaming.Processor;
+import io.confluent.streaming.SingleProcessorTopology;
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.kv.Entry;
 import io.confluent.streaming.kv.InMemoryKeyValueStore;
@@ -14,14 +15,10 @@ import java.util.Properties;
  * Created by guozhang on 7/27/15.
  */
 
-public class StatefulKStreamJob extends ProcessorKStreamJob<String, Integer> {
+public class StatefulKStreamJob implements Processor<String, Integer> {
 
   private ProcessorContext processorContext;
   private KeyValueStore<String, Integer> kvStore;
-
-  public StatefulKStreamJob(String... topics) {
-    super(topics);
-  }
 
   @Override
   public void init(ProcessorContext context) {
@@ -29,7 +26,7 @@ public class StatefulKStreamJob extends ProcessorKStreamJob<String, Integer> {
     this.processorContext.schedule(1000);
 
     this.kvStore = new InMemoryKeyValueStore<>("local-state", context.kstreamContext());
-    this.kvStore.restore(); // call restore inside processor.bind
+    this.kvStore.restore(); // call restore inside processor.init
   }
 
   @Override
@@ -60,7 +57,10 @@ public class StatefulKStreamJob extends ProcessorKStreamJob<String, Integer> {
   }
 
   public static void main(String[] args) {
-    KafkaStreaming kstream = new KafkaStreaming(new StatefulKStreamJob(args), new StreamingConfig(new Properties()));
-    kstream.run();
+    KafkaStreaming streaming = new KafkaStreaming(
+      new SingleProcessorTopology(StatefulKStreamJob.class, args),
+      new StreamingConfig(new Properties())
+    );
+    streaming.run();
   }
 }

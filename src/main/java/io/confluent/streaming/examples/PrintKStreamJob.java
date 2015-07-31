@@ -1,7 +1,8 @@
 package io.confluent.streaming.examples;
 
 import io.confluent.streaming.KafkaStreaming;
-import io.confluent.streaming.ProcessorKStreamJob;
+import io.confluent.streaming.Processor;
+import io.confluent.streaming.SingleProcessorTopology;
 import io.confluent.streaming.StreamingConfig;
 
 import java.util.Properties;
@@ -9,13 +10,9 @@ import java.util.Properties;
 /**
  * Created by guozhang on 7/14/15.
  */
-public class PrintKStreamJob<K, V> extends ProcessorKStreamJob<K, V> {
+public class PrintKStreamJob<K, V> implements Processor<K, V> {
 
   private ProcessorContext processorContext;
-
-  public PrintKStreamJob(String... topics) {
-    super(topics);
-  }
 
   @Override
   public void init(ProcessorContext context) {
@@ -42,7 +39,10 @@ public class PrintKStreamJob<K, V> extends ProcessorKStreamJob<K, V> {
   }
 
   public static void main(String[] args) {
-    KafkaStreaming kstream = new KafkaStreaming(new PrintKStreamJob(args), new StreamingConfig(new Properties()));
-    kstream.run();
+    KafkaStreaming streaming = new KafkaStreaming(
+      new SingleProcessorTopology(PrintKStreamJob.class, args),
+      new StreamingConfig(new Properties())
+    );
+    streaming.run();
   }
 }
