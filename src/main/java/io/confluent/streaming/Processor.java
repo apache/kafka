@@ -24,6 +24,9 @@ public interface Processor<K, V>  {
     long offset();
 
     long timestamp();
+
+    KStreamContext kstreamContext();
+
   }
 
   void init(ProcessorContext context);

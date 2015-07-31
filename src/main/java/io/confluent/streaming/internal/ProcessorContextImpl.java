@@ -1,8 +1,8 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
 import io.confluent.streaming.PunctuationScheduler;
+import io.confluent.streaming.KStreamContext;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -12,70 +12,57 @@ import org.apache.kafka.common.serialization.Serializer;
 public class ProcessorContextImpl implements Processor.ProcessorContext {
 
   private final KStreamContext context;
-  private final StreamGroup streamGroup;
   private final PunctuationScheduler scheduler;
 
   public ProcessorContextImpl(KStreamContext context,
-                              StreamGroup streamGroup,
                               PunctuationScheduler scheduler) {
 
     this.context = context;
     this.scheduler = scheduler;
-    this.streamGroup = streamGroup;
   }
 
   @Override
   public String topic() {
-    if (this.streamGroup.record() == null)
-      throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
-
-    return this.streamGroup.record().topic();
+    return context.topic();
   }
 
   @Override
   public int partition() {
-    if (this.streamGroup.record() == null)
-      throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
-
-    return this.streamGroup.record().partition();
+    return context.partition();
   }
 
   @Override
   public long offset() {
-    if (this.streamGroup.record() == null)
-      throw new IllegalStateException("this should not happen as offset() should only be called while a record is processed");
-
-    return this.streamGroup.record().offset();
+    return context.offset();
   }
 
   @Override
   public long timestamp() {
-    if (this.streamGroup.record() == null)
-      throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
-
-    return this.streamGroup.record().timestamp;
+    return context.timestamp();
   }
 
   @Override
   public void send(String topic, Object key, Object value) {
-    this.context.recordCollector().send(new ProducerRecord<>(topic, key, value));
+    context.send(topic, key, value);
   }
 
   @Override
   public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) {
-    if (keySerializer == null || valSerializer == null)
-      throw new IllegalStateException("key and value serializers must be specified");
-
-    context.recordCollector().send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer);
+    context.send(topic, key, value, keySerializer, valSerializer);
   }
 
   @Override
   public void commit() {
-    this.streamGroup.commitOffset();
+    context.commit();
   }
 
   @Override
   public void schedule(long timestamp) {
     scheduler.schedule(timestamp);
+  }
+
+  @Override
+  public KStreamContext kstreamContext() {
+    return context;
   }
 }

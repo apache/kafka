@@ -17,14 +17,14 @@ public interface KStreamJob {
    * For example,
    * </p>
    * <pre>
-   *   public init(KStreamContext context) {
+   *   public bind(KStreamContext context) {
    *     KStream&lt;Integer, PageView&gt; pageViewStream = context.from("pageView").mapValues(...);
    *     KStream&lt;Integer, AdClick&gt; adClickStream = context.from("adClick").join(pageViewStream, ...).process(...);
    *   }
    * </pre>
    * @param context KStreamContext for this partition
    */
-  void init(KStreamContext context);
+  void init(KStreamInitializer context);
 
   /**
    * Closes this partition of the stream processing job.

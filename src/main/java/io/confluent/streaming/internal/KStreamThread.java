@@ -17,6 +17,7 @@
 
 package io.confluent.streaming.internal;
 
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamJob;
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.util.ParallelExecutor;
@@ -187,7 +188,7 @@ public class KStreamThread extends Thread {
         Map<TopicPartition, Long> commit = new HashMap<>();
         for (KStreamContextImpl context : kstreamContexts.values()) {
             context.flush();
-            context.putConsumedOffsetsTo(commit);
+            commit.putAll(context.consumedOffsets());
         }
 
         // check if commit is really needed, i.e. if all the offsets are already committed
@@ -234,27 +235,30 @@ public class KStreamThread extends Thread {
 >>>>>>> close stream groups in context
 
         for (TopicPartition partition : partitions) {
-            final Integer id = partition.partition();
-            KStreamContextImpl kstreamContext = kstreamContexts.get(id);
-            if (kstreamContext == null) {
-                KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
-
-                kstreamContext =
-                  new KStreamContextImpl(id, job, ingestor, collector, streamingConfig, config, metrics);
-
-                kstreamContexts.put(id, kstreamContext);
-
+            final Integer id = partition.partition(); // TODO: switch this to the group id
+            KStreamContextImpl context = kstreamContexts.get(id);
+            if (context == null) {
                 try {
-                    kstreamContext.init();
+                    KStreamInitializerImpl initializer = new KStreamInitializerImpl(
+                      streamingConfig.keySerializer(),
+                      streamingConfig.valueSerializer(),
+                      streamingConfig.keyDeserializer(),
+                      streamingConfig.valueDeserializer()
+                    );
+                    KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
+
+                    job.init(initializer);
+
+                    context = new KStreamContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
+                    context.init(initializer.sourceStreams());
+
+                    kstreamContexts.put(id, context);
                 }
                 catch (Exception e) {
                     throw new KafkaException(e);
                 }
 
-                Collection<StreamGroup> streamGroups = kstreamContext.streamGroups();
-                for (StreamGroup streamGroup : streamGroups) {
-                    streamGroups.add(streamGroup);
-                }
+                streamGroups.add(context.streamGroup);
             }
         }
 
@@ -262,10 +266,10 @@ public class KStreamThread extends Thread {
     }
 
     private void removePartitions() {
-        for (KStreamContextImpl kstreamContext : kstreamContexts.values()) {
-            log.info("Removing stream context {}", kstreamContext.id());
+        for (KStreamContextImpl context : kstreamContexts.values()) {
+            log.info("Removing task context {}", context.id());
             try {
-                kstreamContext.close();
+                context.close();
             }
             catch (Exception e) {
                 throw new KafkaException(e);

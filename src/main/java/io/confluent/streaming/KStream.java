@@ -9,12 +9,6 @@ import org.apache.kafka.common.serialization.Serializer;
 public interface KStream<K, V> {
 
   /**
-   * Returns the KStreamContext used to create this stream
-   * @return KStreamContext
-   */
-  KStreamContext context();
-
-  /**
    * Creates a new stream consists of all elements of this stream which satisfy a predicate
    * @param predicate the instance of Predicate
    * @return KStream

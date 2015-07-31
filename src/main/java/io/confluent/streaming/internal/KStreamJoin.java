@@ -1,6 +1,8 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamInitializer;
+import io.confluent.streaming.NotCopartitionedException;
 import io.confluent.streaming.ValueJoiner;
 import io.confluent.streaming.Window;
 
@@ -19,9 +21,14 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
   private final Finder<K, V2> finder2;
   private final ValueJoiner<V, V1, V2> joiner;
   final Receiver receiverForOtherStream;
+  private KStreamMetadata thisMetadata;
+  private KStreamMetadata otherMetadata;
 
-  KStreamJoin(final Window<K, V1> window1, final Window<K, V2> window2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamMetadata streamMetadata, KStreamContext context) {
-    super(streamMetadata, context);
+  KStreamJoin(KStreamWindowedImpl<K, V1> stream1, KStreamWindowedImpl<K, V2> stream2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamInitializer initializer) {
+    super(initializer);
+
+    final Window<K, V1> window1 = stream1.window;
+    final Window<K, V2> window2 = stream2.window;
 
     if (prior) {
       this.finder1 = new Finder<K, V1>() {
@@ -53,6 +60,14 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
     this.receiverForOtherStream = getReceiverForOther();
   }
 
+  @Override
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
+    super.bind(context, metadata);
+
+    thisMetadata = metadata;
+    if (otherMetadata != null && !thisMetadata.isJoinCompatibleWith(otherMetadata)) throw new NotCopartitionedException();
+  }
+
   @SuppressWarnings("unchecked")
   @Override
   public void receive(Object key, Object value, long timestamp, long streamTime) {
@@ -66,6 +81,11 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
 
   private Receiver getReceiverForOther() {
     return new Receiver() {
+      @Override
+      public void bind(KStreamContext context, KStreamMetadata metadata) {
+        otherMetadata = metadata;
+        if (thisMetadata != null && !thisMetadata.isJoinCompatibleWith(otherMetadata)) throw new NotCopartitionedException();
+      }
 
       @SuppressWarnings("unchecked")
       @Override

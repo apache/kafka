@@ -1,9 +1,8 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.TimestampExtractor;
+import io.confluent.streaming.KStreamInitializer;
 import io.confluent.streaming.ValueMapper;
-import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
@@ -14,23 +13,9 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamMapValuesTest {
 
-  private Ingestor ingestor = new MockIngestor();
-
-  private StreamGroup streamGroup = new StreamGroup(
-    "group",
-    ingestor,
-    new TimeBasedChooser(),
-    new TimestampExtractor() {
-      public long extract(String topic, Object key, Object value) {
-        return 0L;
-      }
-    },
-    10
-  );
-
   private String topicName = "topic";
 
-  private KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, Collections.singletonMap(topicName, new PartitioningInfo(1)));
+  private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   @Test
   public void testFlatMapValues() {
@@ -45,14 +30,16 @@ public class KStreamMapValuesTest {
 
     final int[] expectedKeys = new int[] { 1, 10, 100, 1000 };
 
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, Integer> processor;
 
     processor = new TestProcessor<>();
-    stream = new KStreamSource<>(streamMetadata, context, null, null);
+    stream = new KStreamSource<>(null, initializer);
     stream.mapValues(mapper).process(processor);
 
+    KStreamContext context = new MockKStreamContext(null, null);
+    stream.bind(context, streamMetadata);
     for (int i = 0; i < expectedKeys.length; i++) {
       stream.receive(expectedKeys[i], Integer.toString(expectedKeys[i]), 0L, 0L);
     }

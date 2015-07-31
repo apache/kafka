@@ -24,8 +24,8 @@ public class StatefulKStreamJob extends ProcessorKStreamJob<String, Integer> {
     this.processorContext = context;
     this.processorContext.schedule(1000);
 
-    this.kvStore = new InMemoryKeyValueStore<>("local-state", this.streamContext);
-    this.kvStore.restore(); // call restore inside processor.init
+    this.kvStore = new InMemoryKeyValueStore<>("local-state", context.kstreamContext());
+    this.kvStore.restore(); // call restore inside processor.bind
   }
 
   @Override

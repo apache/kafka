@@ -1,5 +1,6 @@
 package io.confluent.streaming.testutil;
 
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KeyValue;
 import io.confluent.streaming.Window;
 import io.confluent.streaming.util.FilteredIterator;
@@ -12,6 +13,10 @@ public class UnlimitedWindow<K, V> implements Window<K, V> {
 
   private LinkedList<Stamped<KeyValue<K, V>>> list = new LinkedList<Stamped<KeyValue<K, V>>>();
 
+  @Override
+  public void init(KStreamContext context) {
+
+  }
   @Override
   public Iterator<V> find(final K key, long timestamp) {
     return find(key, Long.MIN_VALUE, timestamp);

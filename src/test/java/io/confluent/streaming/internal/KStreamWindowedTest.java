@@ -1,7 +1,6 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
-import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import org.junit.Test;
@@ -13,23 +12,9 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamWindowedTest {
 
-  private Ingestor ingestor = new MockIngestor();
-
-  private StreamGroup streamGroup = new StreamGroup(
-    "group",
-    ingestor,
-    new TimeBasedChooser(),
-    new TimestampExtractor() {
-      public long extract(String topic, Object key, Object value) {
-        return 0L;
-      }
-    },
-    10
-  );
-
   private String topicName = "topic";
 
-  private KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, Collections.singletonMap(topicName, new PartitioningInfo(1)));
+  private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   @Test
   public void testWindowedStream() {
@@ -38,13 +23,17 @@ public class KStreamWindowedTest {
 
     KStreamSource<Integer, String> stream;
     Window<Integer, String> window;
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null) {
+    };
 
     window = new UnlimitedWindow<>();
-    stream = new KStreamSource<>(streamMetadata, context, null, null);
+    stream = new KStreamSource<>(null, initializer);
     stream.with(window);
 
     boolean exceptionRaised = false;
+
+    KStreamContext context = new MockKStreamContext(null, null);
+    stream.bind(context, streamMetadata);
 
     // two items in the window
 

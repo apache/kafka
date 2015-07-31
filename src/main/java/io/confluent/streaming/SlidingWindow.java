@@ -25,6 +25,10 @@ public class SlidingWindow<K, V> implements Window<K, V> {
   }
 
   @Override
+  public void init(KStreamContext context) {
+  }
+
+  @Override
   public Iterator<V> findAfter(K key, final long timestamp) {
     return find(key, timestamp, timestamp + duration);
   }

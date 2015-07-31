@@ -1,6 +1,6 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamInitializer;
 import org.apache.kafka.common.serialization.Deserializer;
 
 /**
@@ -11,14 +11,16 @@ class KStreamSource<K, V> extends KStreamImpl<K, V> {
   public final Deserializer<K> keyDeserializer;
   public final Deserializer<V> valueDeserializer;
 
+  final String[] topics;
+
   @SuppressWarnings("unchecked")
-  KStreamSource(KStreamMetadata streamMetadata, KStreamContext context) {
-    this(streamMetadata, context, (Deserializer<K>) context.keyDeserializer(), (Deserializer<V>) context.valueDeserializer());
+  KStreamSource(String[] topics, KStreamInitializer initializer) {
+    this(topics, (Deserializer<K>) initializer.keyDeserializer(), (Deserializer<V>) initializer.valueDeserializer(), initializer);
   }
 
-  KStreamSource(KStreamMetadata streamMetadata, KStreamContext context, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
-    super(streamMetadata, context);
-
+  KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamInitializer initializer) {
+    super(initializer);
+    this.topics = topics;
     this.keyDeserializer = keyDeserializer;
     this.valueDeserializer = valueDeserializer;
   }

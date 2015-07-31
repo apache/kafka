@@ -1,6 +1,6 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamInitializer;
 import io.confluent.streaming.ValueMapper;
 
 /**
@@ -10,8 +10,8 @@ class KStreamFlatMapValues<K, V, V1> extends KStreamImpl<K, V> {
 
   private final ValueMapper<? extends Iterable<V>, V1> mapper;
 
-  KStreamFlatMapValues(ValueMapper<? extends Iterable<V>, V1> mapper, KStreamMetadata streamMetadata, KStreamContext context) {
-    super(streamMetadata, context);
+  KStreamFlatMapValues(ValueMapper<? extends Iterable<V>, V1> mapper, KStreamInitializer initializer) {
+    super(initializer);
     this.mapper = mapper;
   }
 

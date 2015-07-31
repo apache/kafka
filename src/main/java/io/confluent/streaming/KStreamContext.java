@@ -1,6 +1,5 @@
 package io.confluent.streaming;
 
-import io.confluent.streaming.internal.StreamGroup;
 import io.confluent.streaming.kv.internals.RestoreFunc;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -8,7 +7,6 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.File;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * KStreamContext is the interface that allows an implementation of {@link KStreamJob#init(KStreamContext)} to create KStream instances.
@@ -17,11 +15,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public interface KStreamContext {
 
-  AtomicInteger STREAM_GROUP_INDEX = new AtomicInteger(1);
-
   /**
-   * Returns the partition id
-   * @return partition id
+   * Returns the partition group id
+   * @return partition group id
    */
   int id();
 
@@ -49,27 +45,6 @@ public interface KStreamContext {
    */
   Deserializer<?> valueDeserializer();
 
-  // TODO: support regex topic matching in from() calls, for example:
-  // context.from("Topic*PageView")
-
-  /**
-   * Creates a KStream instance for the specified topics. The stream is added to the default synchronization group.
-   * @param topics the topic names, if empty default to all the topics in the config
-   * @return KStream
-   */
-  KStream<?, ?> from(String... topics);
-
-  /**
-   * Creates a KStream instance for the specified topic. The stream is added to the default synchronization group.
-   * @param keyDeserializer key deserializer used to read this source KStream,
-   *                        if not specified the default deserializer defined in the configs will be used
-   * @param valDeserializer value deserializer used to read this source KStream,
-   *                        if not specified the default deserializer defined in the configs will be used
-   * @param topics the topic names, if empty default to all the topics in the config
-   * @return KStream
-   */
-  <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics);
-
   /**
    * Returns a RecordCollector
    * @return RecordCollector
@@ -95,26 +70,13 @@ public interface KStreamContext {
   Metrics metrics();
 
   /**
-   * Creates a stream synchronization group with the given name.
-   * @param name the synchronization group name
-   * @return a synchronization group
-   */
-  StreamGroup streamGroup(String name);
-
-  /**
-   * Creates a round robin stream synchronization group with the given name.
-   * @param name the synchronization group name
-   * @return a round robin synchronization group
-   */
-  StreamGroup roundRobinStreamGroup(String name);
-
-  /**
    * Restores the specified storage engine.
    * @param store the storage engine
    */
   void restore(StateStore store, RestoreFunc restoreFunc);
 
   /**
+<<<<<<< HEAD
    * Registers the specified storage enging.
    * @param store the storage engine
    */
@@ -122,11 +84,27 @@ public interface KStreamContext {
 
   /**
    * Ensures that the context is in the initialization phase where KStream topology can be constructed
+=======
+   * Flush the local state of this context
+>>>>>>> new api model
    */
-  void ensureInitialization();
-
-    /**
-     * Flush the local state of this context
-     */
   void flush();
+
+
+  void send(String topic, Object key, Object value);
+
+  void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer);
+
+  PunctuationScheduler getPunctuationScheduler(Processor processor);
+
+  void commit();
+
+  String topic();
+
+  int partition();
+
+  long offset();
+
+  long timestamp();
+
 }

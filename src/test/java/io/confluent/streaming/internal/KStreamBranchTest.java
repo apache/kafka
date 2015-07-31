@@ -1,7 +1,6 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
-import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
@@ -13,23 +12,9 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamBranchTest {
 
-  private Ingestor ingestor = new MockIngestor();
-
-  private StreamGroup streamGroup = new StreamGroup(
-    "group",
-    ingestor,
-    new TimeBasedChooser(),
-    new TimestampExtractor() {
-      public long extract(String topic, Object key, Object value) {
-        return 0L;
-      }
-    },
-    10
-  );
-
   private String topicName = "topic";
 
-  private KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, Collections.singletonMap(topicName, new PartitioningInfo(1)));
+  private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   @SuppressWarnings("unchecked")
   @Test
@@ -56,12 +41,12 @@ public class KStreamBranchTest {
 
     final int[] expectedKeys = new int[] { 1, 2, 3, 4, 5, 6, 7 };
 
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
     KStreamSource<Integer, String> stream;
     KStream<Integer, String>[] branches;
     TestProcessor<Integer, String>[] processors;
 
-    stream = new KStreamSource<>(streamMetadata, context);
+    stream = new KStreamSource<>(null, initializer);
     branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
     assertEquals(3, branches.length);
@@ -80,7 +65,7 @@ public class KStreamBranchTest {
     assertEquals(1, processors[1].processed.size());
     assertEquals(3, processors[2].processed.size());
 
-    stream = new KStreamSource<>(streamMetadata, context);
+    stream = new KStreamSource<>(null, initializer);
     branches = stream.branch(isEven, isOdd, isMultipleOfThree);
 
     assertEquals(3, branches.length);
@@ -91,6 +76,8 @@ public class KStreamBranchTest {
       branches[i].process(processors[i]);
     }
 
+    KStreamContext context = new MockKStreamContext(null, null);
+    stream.bind(context, streamMetadata);
     for (int i = 0; i < expectedKeys.length; i++) {
       stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }

@@ -7,6 +7,8 @@ import java.util.Iterator;
  */
 public interface Window<K, V> extends StateStore {
 
+  void init(KStreamContext context);
+
   Iterator<V> find(K key, long timestamp);
 
   Iterator<V> findAfter(K key, long timestamp);

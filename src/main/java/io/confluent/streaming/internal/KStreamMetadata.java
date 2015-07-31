@@ -11,15 +11,14 @@ public class KStreamMetadata {
   public static String UNKNOWN_TOPICNAME = "__UNKNOWN_TOPIC__";
   public static int UNKNOWN_PARTITION = -1;
 
-  public static KStreamMetadata unjoinable(StreamGroup streamGroup) {
-    return new KStreamMetadata(streamGroup, Collections.singletonMap(UNKNOWN_TOPICNAME, new PartitioningInfo(UNKNOWN_PARTITION)));
+  public static KStreamMetadata unjoinable() {
+    return new KStreamMetadata(Collections.singletonMap(UNKNOWN_TOPICNAME, new PartitioningInfo(UNKNOWN_PARTITION)));
   }
 
   public StreamGroup streamGroup;
   public final Map<String, PartitioningInfo> topicPartitionInfos;
 
-  KStreamMetadata(StreamGroup streamGroup, Map<String, PartitioningInfo> topicPartitionInfos) {
-    this.streamGroup = streamGroup;
+  KStreamMetadata(Map<String, PartitioningInfo> topicPartitionInfos) {
     this.topicPartitionInfos = topicPartitionInfos;
   }
 

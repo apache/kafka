@@ -1,16 +1,23 @@
 package io.confluent.streaming.testutil;
 
 
-import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.Processor;
+import io.confluent.streaming.PunctuationScheduler;
 import io.confluent.streaming.RecordCollector;
 <<<<<<< HEAD
 import io.confluent.streaming.StorageEngine;
 =======
 import io.confluent.streaming.StateStore;
+<<<<<<< HEAD
 import io.confluent.streaming.Coordinator;
 >>>>>>> wip
 import io.confluent.streaming.internal.StreamGroup;
+=======
+import io.confluent.streaming.internal.PunctuationQueue;
+import io.confluent.streaming.internal.PunctuationSchedulerImpl;
+import io.confluent.streaming.kv.internals.RestoreFunc;
+>>>>>>> new api model
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -25,6 +32,7 @@ public class MockKStreamContext implements KStreamContext {
 
   Serializer serializer;
   Deserializer deserializer;
+  private final PunctuationQueue punctuationQueue = new PunctuationQueue();
 
   public MockKStreamContext(Serializer<?> serializer, Deserializer<?> deserializer) {
     this.serializer = serializer;
@@ -47,12 +55,6 @@ public class MockKStreamContext implements KStreamContext {
   public Deserializer<?> valueDeserializer() { return deserializer; }
 
   @Override
-  public KStream<?, ?> from(String... topic) { throw new UnsupportedOperationException("from() not supported."); }
-
-  @Override
-  public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topic) { throw new UnsupportedOperationException("from() not supported."); }
-
-  @Override
   public RecordCollector recordCollector() { throw new UnsupportedOperationException("recordCollector() not supported."); }
 
   @Override
@@ -65,17 +67,39 @@ public class MockKStreamContext implements KStreamContext {
   public Metrics metrics() { throw new UnsupportedOperationException("metrics() not supported."); }
 
   @Override
-  public StreamGroup streamGroup(String name) { throw new UnsupportedOperationException("streamGroup() not supported."); }
-
-  @Override
-  public StreamGroup roundRobinStreamGroup(String name) { throw new UnsupportedOperationException("roundRobinStreamGroup() not supported."); }
-
-  @Override
-  public void restore(StateStore engine) throws Exception { throw new UnsupportedOperationException("restore() not supported."); }
-
-  @Override
-  public void ensureInitialization() {}
+  public void restore(StateStore store, RestoreFunc func) { throw new UnsupportedOperationException("restore() not supported."); }
 
   @Override
   public void flush() { throw new UnsupportedOperationException("flush() not supported."); }
+
+  @Override
+<<<<<<< HEAD
+  public void restore(StateStore engine) throws Exception { throw new UnsupportedOperationException("restore() not supported."); }
+=======
+  public void send(String topic, Object key, Object value) { throw new UnsupportedOperationException("send() not supported."); }
+>>>>>>> new api model
+
+  @Override
+  public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) { throw new UnsupportedOperationException("send() not supported."); }
+
+  @Override
+  public PunctuationScheduler getPunctuationScheduler(Processor processor) {
+    return new PunctuationSchedulerImpl(punctuationQueue, processor);
+  }
+
+  @Override
+  public void commit() { throw new UnsupportedOperationException("commit() not supported."); }
+
+  @Override
+  public String topic() { throw new UnsupportedOperationException("topic() not supported."); }
+
+  @Override
+  public int partition() { throw new UnsupportedOperationException("partition() not supported."); }
+
+  @Override
+  public long offset() { throw new UnsupportedOperationException("offset() not supported."); }
+
+  @Override
+  public long timestamp() { throw new UnsupportedOperationException("timestamp() not supported."); }
+
 }

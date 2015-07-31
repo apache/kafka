@@ -1,7 +1,7 @@
 package io.confluent.streaming.examples;
 
 import io.confluent.streaming.KStream;
-import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamInitializer;
 import io.confluent.streaming.KStreamJob;
 import io.confluent.streaming.KafkaStreaming;
 import io.confluent.streaming.KeyValue;
@@ -19,7 +19,7 @@ public class MapKStreamJob implements KStreamJob {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void init(KStreamContext context) {
+  public void init(KStreamInitializer context) {
 
     // With overriden de-serializer
     KStream stream1 = context.from(new StringDeserializer(), new StringDeserializer(), "topic1");

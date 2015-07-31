@@ -22,8 +22,8 @@ public class PunctuationSchedulerImplTest {
     assertEquals(0, proc1.punctuated.size());
     assertEquals(0, proc2.punctuated.size());
 
-    proc1.init(new ProcessorContextImpl(null, null, sched1));
-    proc2.init(new ProcessorContextImpl(null, null, sched2));
+    proc1.init(new ProcessorContextImpl(null, sched1));
+    proc2.init(new ProcessorContextImpl(null, sched2));
 
     sched1.schedule(500);
     sched2.schedule(1000);
@@ -70,8 +70,8 @@ public class PunctuationSchedulerImplTest {
     assertEquals(0, proc1.punctuated.size());
     assertEquals(0, proc2.punctuated.size());
 
-    proc1.init(new ProcessorContextImpl(null, null, sched1));
-    proc2.init(new ProcessorContextImpl(null, null, sched2));
+    proc1.init(new ProcessorContextImpl(null, sched1));
+    proc2.init(new ProcessorContextImpl(null, sched2));
 
     sched1.schedule(500);
     sched2.schedule(1000);
@@ -107,7 +107,7 @@ public class PunctuationSchedulerImplTest {
 
     assertEquals(0, proc1.punctuated.size());
 
-    proc1.init(new ProcessorContextImpl(null, null, sched1));
+    proc1.init(new ProcessorContextImpl(null, sched1));
 
     sched1.schedule(500);
 

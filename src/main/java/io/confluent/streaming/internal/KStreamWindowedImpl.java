@@ -3,8 +3,8 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamInitializer;
 import io.confluent.streaming.KStreamWindowed;
-import io.confluent.streaming.NotCopartitionedException;
 import io.confluent.streaming.ValueJoiner;
 import io.confluent.streaming.Window;
 
@@ -15,9 +15,15 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
   final Window<K, V> window;
 
-  KStreamWindowedImpl(Window<K, V> window, KStreamMetadata streamMetadata, KStreamContext context) {
-    super(streamMetadata, context);
+  KStreamWindowedImpl(Window<K, V> window, KStreamInitializer initializer) {
+    super(initializer);
     this.window = window;
+  }
+
+  @Override
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
+    super.bind(context, metadata);
+    window.init(context);
   }
 
   @SuppressWarnings("unchecked")
@@ -44,14 +50,7 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
     KStreamWindowedImpl<K, V1> otherImpl = (KStreamWindowedImpl<K, V1>) other;
 
-    if (!this.metadata.isJoinCompatibleWith(otherImpl.metadata)) throw new NotCopartitionedException();
-
-    // merge the other stream's group with this group
-    this.metadata.streamGroup.mergeStreamGroup(otherImpl.metadata.streamGroup);
-    otherImpl.metadata.streamGroup = this.metadata.streamGroup;
-
-    KStreamJoin<K, V2, V, V1> stream =
-      new KStreamJoin<K, V2, V, V1>(this.window, otherImpl.window, prior, processor, this.metadata, context);
+    KStreamJoin<K, V2, V, V1> stream = new KStreamJoin<>(this, otherImpl, prior, processor, initializer);
     otherImpl.registerReceiver(stream.receiverForOtherStream);
 
     return chain(stream);

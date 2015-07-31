@@ -20,6 +20,7 @@ package io.confluent.streaming;
 import io.confluent.streaming.internal.KStreamThread;
 import io.confluent.streaming.internal.ProcessorConfig;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.internal.IngestorImpl;
 <<<<<<< HEAD
 import io.confluent.streaming.internal.StreamSynchronizer;
@@ -40,12 +41,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 =======
 >>>>>>> added KStreamThread
+=======
+import io.confluent.streaming.internal.TopologyAnalyzer;
+>>>>>>> new api model
 import org.apache.kafka.common.metrics.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -179,12 +181,10 @@ public class KafkaStreaming implements Runnable {
         if (streamingConfig.timestampExtractor() == null) throw new NullPointerException("timestamp extractor is missing");
 
         this.config = new ProcessorConfig(streamingConfig.config());
-        try {
-            this.topics = new HashSet<>(Arrays.asList(this.config.topics.split(",")));
-        }
-        catch (Exception e) {
-            throw new KStreamException("failed to get a topic list from the streaming config", e);
-        }
+
+        TopologyAnalyzer topologyAnalyzer = new TopologyAnalyzer(jobClass, streamingConfig);
+
+        this.topics = topologyAnalyzer.topics;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
