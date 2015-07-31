@@ -21,10 +21,6 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
   private KStreamContext context;
   private KeyValueStore<String, Integer> kvStore;
 
-  public StatefulKStreamJob(String... topics) {
-    super(topics);
-  }
-
   @Override
   public void init(KStreamContext context) {
     this.context = context;
@@ -35,8 +31,12 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
     this.kvStore.restore(); // call restore inside processor.init
 =======
     this.kvStore = new InMemoryKeyValueStore<>("local-state", context.kstreamContext());
+<<<<<<< HEAD
     this.kvStore.restore(); // call restore inside processor.bind
 >>>>>>> new api model
+=======
+    this.kvStore.restore(); // call restore inside processor.init
+>>>>>>> fix examples
   }
 
   @Override
@@ -69,11 +69,15 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
   public static void main(String[] args) {
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> fix examples
     KafkaStreaming streaming = new KafkaStreaming(
       new SingleProcessorTopology(StatefulKStreamJob.class, args),
       new StreamingConfig(new Properties())
     );
     streaming.run();
+<<<<<<< HEAD
 =======
     KafkaStreaming kstream = new KafkaStreaming(new StatefulKStreamJob(), new StreamingConfig(new Properties()));
 =======
@@ -81,5 +85,7 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
 >>>>>>> fix examples
     kstream.run();
 >>>>>>> wip
+=======
+>>>>>>> fix examples
   }
 }
