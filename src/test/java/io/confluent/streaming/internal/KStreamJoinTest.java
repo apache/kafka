@@ -68,7 +68,7 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -158,7 +158,7 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -242,7 +242,7 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -313,7 +313,7 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -384,7 +384,7 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
@@ -455,7 +455,7 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     processor = new TestProcessor<>();
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);

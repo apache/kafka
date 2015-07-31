@@ -32,7 +32,7 @@ public class StreamGroupTest {
     public ArrayList<Long> streamTimes = new ArrayList<>();
 
     public MockKStreamSource() {
-      super(null, deserializer, deserializer, new KStreamInitializerImpl(serializer, serializer, deserializer, deserializer));
+      super(null, deserializer, deserializer, new KStreamInitializerImpl());
     }
 
     @Override

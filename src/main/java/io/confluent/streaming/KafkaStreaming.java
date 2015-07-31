@@ -182,7 +182,7 @@ public class KafkaStreaming implements Runnable {
 
         this.config = new ProcessorConfig(streamingConfig.config());
 
-        TopologyAnalyzer topologyAnalyzer = new TopologyAnalyzer(jobClass, streamingConfig);
+        TopologyAnalyzer topologyAnalyzer = new TopologyAnalyzer(jobClass);
 
         this.topics = topologyAnalyzer.topics;
 

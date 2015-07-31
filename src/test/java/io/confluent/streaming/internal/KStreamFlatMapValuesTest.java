@@ -32,7 +32,7 @@ public class KStreamFlatMapValuesTest {
 
     final int[] expectedKeys = new int[] { 0, 1, 2, 3 };
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, String> processor;
 

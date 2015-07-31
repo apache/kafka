@@ -172,8 +172,8 @@ public class StreamGroup implements ParallelExecutor.Task {
           ConsumerRecord<byte[], byte[]> record = iterator.next();
 
           // deserialize the raw record, extract the timestamp and put into the queue
-          Deserializer<?> keyDeserializer = recordQueue.stream.keyDeserializer;
-          Deserializer<?> valDeserializer = recordQueue.stream.valueDeserializer;
+          Deserializer<?> keyDeserializer = recordQueue.stream.keyDeserializer();
+          Deserializer<?> valDeserializer = recordQueue.stream.valueDeserializer();
 
           Object key = keyDeserializer.deserialize(record.topic(), record.key());
           Object value = valDeserializer.deserialize(record.topic(), record.value());

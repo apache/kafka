@@ -19,7 +19,7 @@ public class KStreamSourceTest {
   @Test
   public void testKStreamSource() {
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     TestProcessor<String, String> processor = new TestProcessor<>();
 
     KStreamSource<String, String> stream = new KStreamSource<>(null, initializer);

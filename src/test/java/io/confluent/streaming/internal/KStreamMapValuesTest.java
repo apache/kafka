@@ -30,7 +30,7 @@ public class KStreamMapValuesTest {
 
     final int[] expectedKeys = new int[] { 1, 10, 100, 1000 };
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     KStreamSource<Integer, String> stream;
     TestProcessor<Integer, Integer> processor;
 

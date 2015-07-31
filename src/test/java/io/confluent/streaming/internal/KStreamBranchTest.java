@@ -41,7 +41,7 @@ public class KStreamBranchTest {
 
     final int[] expectedKeys = new int[] { 1, 2, 3, 4, 5, 6, 7 };
 
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+    KStreamInitializer initializer = new KStreamInitializerImpl();
     KStreamSource<Integer, String> stream;
     KStream<Integer, String>[] branches;
     TestProcessor<Integer, String>[] processors;

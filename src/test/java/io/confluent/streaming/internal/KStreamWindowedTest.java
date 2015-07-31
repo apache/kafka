@@ -23,8 +23,7 @@ public class KStreamWindowedTest {
 
     KStreamSource<Integer, String> stream;
     Window<Integer, String> window;
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null) {
-    };
+    KStreamInitializer initializer = new KStreamInitializerImpl();
 
     window = new UnlimitedWindow<>();
     stream = new KStreamSource<>(null, initializer);
