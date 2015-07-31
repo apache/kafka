@@ -60,12 +60,6 @@ public abstract class Schema extends ObjectProperties {
 
     /** The type of a schema. */
     public enum Type {
-        RECORD {
-            @Override
-            public Object defaultValue(Schema schema) {
-                return new GenericRecordBuilder(schema).build();
-            }
-        },
         ENUM {
             @Override
             public Object defaultValue(Schema schema) {
@@ -75,7 +69,7 @@ public abstract class Schema extends ObjectProperties {
         ARRAY {
             @Override
             public Object defaultValue(Schema schema) {
-                return new GenericData.Array(0, schema);
+                return new ArrayList<>();
             }
         },
         MAP {
@@ -89,12 +83,6 @@ public abstract class Schema extends ObjectProperties {
             public Object defaultValue(Schema schema) {
                 Schema firstSchema = schema.getTypes().get(0);
                 return firstSchema.getType().defaultValue(firstSchema);
-            }
-        },
-        FIXED {
-            @Override
-            public Object defaultValue(Schema schema) {
-                return new GenericData.Fixed(schema);
             }
         },
         STRING {
@@ -205,19 +193,6 @@ public abstract class Schema extends ObjectProperties {
         hashCode = NO_HASHCODE;
     }
 
-    /** Create an anonymous record schema. */
-    public static Schema createRecord(List<Field> fields) {
-        Schema result = createRecord(null, null, null, false);
-        result.setFields(fields);
-        return result;
-    }
-
-    /** Create a named record schema. */
-    public static Schema createRecord(String name, String doc, String namespace,
-                                      boolean isError) {
-        return new RecordSchema(new Name(name, namespace), doc, isError);
-    }
-
     /** Create an enum schema. */
     public static Schema createEnum(String name, String doc, String namespace,
                                     List<String> values) {
@@ -243,12 +218,6 @@ public abstract class Schema extends ObjectProperties {
     /** Create a union schema. */
     public static Schema createUnion(Schema... types) {
         return createUnion(new LockableArrayList<Schema>(types));
-    }
-
-    /** Create a union schema. */
-    public static Schema createFixed(String name, String doc, String space,
-                                     int size) {
-        return new FixedSchema(new Name(name, space), doc, size);
     }
 
     /** Return the type of this schema. */
@@ -655,92 +624,6 @@ public abstract class Schema extends ObjectProperties {
         }
     };
 
-    @SuppressWarnings(value = "unchecked")
-    private static class RecordSchema extends NamedSchema {
-        private List<Field> fields;
-        private Map<String, Field> fieldMap;
-        private final boolean isError;
-
-        public RecordSchema(Name name, String doc, boolean isError) {
-            super(Type.RECORD, name, doc);
-            this.isError = isError;
-        }
-
-        public boolean isError() {
-            return isError;
-        }
-
-        @Override
-        public Field getField(String fieldname) {
-            if (fieldMap == null)
-                throw new DataRuntimeException("Schema fields not set yet");
-            return fieldMap.get(fieldname);
-        }
-
-        @Override
-        public List<Field> getFields() {
-            if (fields == null)
-                throw new DataRuntimeException("Schema fields not set yet");
-            return fields;
-        }
-
-        @Override
-        public void setFields(List<Field> fields) {
-            if (this.fields != null) {
-                throw new DataRuntimeException("Fields are already set");
-            }
-            int i = 0;
-            fieldMap = new HashMap<String, Field>();
-            LockableArrayList ff = new LockableArrayList();
-            for (Field f : fields) {
-                if (f.position != -1)
-                    throw new DataRuntimeException("Field already used: " + f);
-                f.position = i++;
-                final Field existingField = fieldMap.put(f.name(), f);
-                if (existingField != null) {
-                    throw new DataRuntimeException(String.format(
-                            "Duplicate field %s in record %s: %s and %s.",
-                            f.name(), name, f, existingField));
-                }
-                ff.add(f);
-            }
-            this.fields = ff.lock();
-            this.hashCode = NO_HASHCODE;
-        }
-
-        public boolean equals(Object o) {
-            if (o == this) return true;
-            if (!(o instanceof RecordSchema)) return false;
-            RecordSchema that = (RecordSchema) o;
-            if (!equalCachedHash(that)) return false;
-            if (!equalNames(that)) return false;
-            if (!props.equals(that.props)) return false;
-            Set seen = SEEN_EQUALS.get();
-            SeenPair here = new SeenPair(this, o);
-            if (seen.contains(here)) return true;       // prevent stack overflow
-            boolean first = seen.isEmpty();
-            try {
-                seen.add(here);
-                return fields.equals(((RecordSchema) o).fields);
-            } finally {
-                if (first) seen.clear();
-            }
-        }
-
-        @Override
-        int computeHash() {
-            Map seen = SEEN_HASHCODE.get();
-            if (seen.containsKey(this)) return 0;       // prevent stack overflow
-            boolean first = seen.isEmpty();
-            try {
-                seen.put(this, this);
-                return super.computeHash() + fields.hashCode();
-            } finally {
-                if (first) seen.clear();
-            }
-        }
-    }
-
     private static class EnumSchema extends NamedSchema {
         private final List<String> symbols;
         private final Map<String, Integer> ordinals;
@@ -881,36 +764,6 @@ public abstract class Schema extends ObjectProperties {
             for (Schema type : types)
                 hash += type.computeHash();
             return hash;
-        }
-    }
-
-    private static class FixedSchema extends NamedSchema {
-        private final int size;
-
-        public FixedSchema(Name name, String doc, int size) {
-            super(Type.FIXED, name, doc);
-            if (size < 0)
-                throw new IllegalArgumentException("Invalid fixed size: " + size);
-            this.size = size;
-        }
-
-        public int getFixedSize() {
-            return size;
-        }
-
-        public boolean equals(Object o) {
-            if (o == this) return true;
-            if (!(o instanceof FixedSchema)) return false;
-            FixedSchema that = (FixedSchema) o;
-            return equalCachedHash(that)
-                    && equalNames(that)
-                    && size == that.size
-                    && props.equals(that.props);
-        }
-
-        @Override
-        int computeHash() {
-            return super.computeHash() + size;
         }
     }
 
@@ -1075,8 +928,6 @@ public abstract class Schema extends ObjectProperties {
             case ENUM:
                 return (defaultValue instanceof String);
             case BYTES:
-            case FIXED:
-                return (defaultValue instanceof byte[] || defaultValue instanceof ByteBuffer);
             case INT:
                 return (defaultValue instanceof Integer);
             case LONG:
@@ -1105,13 +956,6 @@ public abstract class Schema extends ObjectProperties {
                 return true;
             case UNION:                                   // union default: first branch
                 return isValidDefault(schema.getTypes().get(0), defaultValue);
-            case RECORD:
-                if (!(defaultValue instanceof GenericData.Record))
-                    return false;
-                for (Field field : schema.getFields())
-                    if (!isValidDefault(field.schema(), ((GenericData.Record) defaultValue).get(field.name())))
-                        return false;
-                return true;
             default:
                 return false;
         }

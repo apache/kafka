@@ -20,10 +20,6 @@ package org.apache.kafka.copycat.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import org.apache.kafka.copycat.data.GenericRecord;
-import org.apache.kafka.copycat.data.GenericRecordBuilder;
-import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -86,21 +82,6 @@ public class JsonConverterTest {
     public void arrayToCopycat() {
         JsonNode arrayJson = parse("{ \"schema\": { \"type\": \"array\", \"items\": { \"type\" : \"int\" } }, \"payload\": [1, 2, 3] }");
         assertEquals(Arrays.asList(1, 2, 3), converter.toCopycatData(arrayJson));
-    }
-
-    @Test
-    public void objectToCopycat() {
-        JsonNode objectJson = parse("{ \"schema\": { \"type\": \"object\", \"name\": \"record\", \"fields\": [{ \"name\": \"first\", \"type\" : \"int\"}, { \"name\": \"second\", \"type\" : \"string\"}] }" +
-                ", \"payload\": { \"first\": 15, \"second\": \"foobar\" } }");
-        Schema schema = SchemaBuilder.record("record").fields()
-                .requiredInt("first")
-                .requiredString("second")
-                .endRecord();
-        GenericRecord record = new GenericRecordBuilder(schema)
-                .set("first", 15)
-                .set("second", "foobar")
-                .build();
-        assertEquals(record, converter.toCopycatData(objectJson));
     }
 
 
@@ -168,25 +149,6 @@ public class JsonConverterTest {
         assertEquals(parse("{ \"type\": \"array\", \"items\": { \"type\": \"int\" } }"),
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(JsonNodeFactory.instance.arrayNode().add(1).add(2).add(3),
-                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
-    }
-
-    @Test
-    public void objectToJson() {
-        Schema schema = SchemaBuilder.record("record").fields()
-                .requiredInt("first")
-                .requiredString("second")
-                .endRecord();
-        GenericRecord record = new GenericRecordBuilder(schema)
-                .set("first", 15)
-                .set("second", "foobar")
-                .build();
-
-        JsonNode converted = converter.fromCopycatData(record);
-        validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"object\", \"name\": \"record\", \"fields\": [{ \"name\": \"first\", \"type\" : \"int\"}, { \"name\": \"second\", \"type\" : \"string\"}] }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        assertEquals(parse("{ \"first\": 15, \"second\": \"foobar\" }"),
                 converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 

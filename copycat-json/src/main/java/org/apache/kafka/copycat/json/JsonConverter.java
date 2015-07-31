@@ -84,33 +84,6 @@ public class JsonConverter implements Converter {
                 return value.textValue();
             }
         });
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.OBJECT_TYPE_NAME, new JsonToCopycatTypeConverter() {
-            @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
-                JsonNode jsonSchemaFields = jsonSchema.get(JsonSchema.OBJECT_FIELDS_FIELD_NAME);
-                if (jsonSchemaFields == null || !jsonSchemaFields.isArray())
-                    throw new CopycatRuntimeException("Invalid object schema, should contain list of fields.");
-
-                HashMap<String, JsonNode> jsonSchemaFieldsByName = new HashMap<>();
-                for (JsonNode fieldSchema : jsonSchemaFields) {
-                    JsonNode name = fieldSchema.get("name");
-                    if (name == null || !name.isTextual())
-                        throw new CopycatRuntimeException("Invalid field name");
-                    jsonSchemaFieldsByName.put(name.textValue(), fieldSchema);
-                }
-
-                Schema schema = asCopycatSchema(jsonSchema);
-                GenericRecordBuilder builder = new GenericRecordBuilder(schema);
-                // TODO: We should verify both the schema fields and actual fields are exactly identical
-                Iterator<Map.Entry<String, JsonNode>> fieldIt = value.fields();
-                while (fieldIt.hasNext()) {
-                    Map.Entry<String, JsonNode> entry = fieldIt.next();
-                    JsonNode fieldSchema = jsonSchemaFieldsByName.get(entry.getKey());
-                    builder.set(entry.getKey(), convertToCopycat(fieldSchema, entry.getValue()));
-                }
-                return builder.build();
-            }
-        });
         TO_COPYCAT_CONVERTERS.put(JsonSchema.ARRAY_TYPE_NAME, new JsonToCopycatTypeConverter() {
             @Override
             public Object convert(JsonNode jsonSchema, JsonNode value) {
@@ -165,14 +138,6 @@ public class JsonConverter implements Converter {
                 throw new UnsupportedOperationException("null schema not supported");
             case STRING:
                 return JsonSchema.STRING_SCHEMA;
-            case RECORD: {
-                ObjectNode recordSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.OBJECT_TYPE_NAME);
-                ArrayNode fields = recordSchema.putArray(JsonSchema.OBJECT_FIELDS_FIELD_NAME);
-                for (Schema.Field field : schema.getFields()) {
-                    fields.add(JsonNodeFactory.instance.objectNode().set(field.name(), asJsonSchema(field.schema())));
-                }
-                return recordSchema;
-            }
             case UNION: {
                 throw new UnsupportedOperationException("union schema not supported");
             }
@@ -181,8 +146,6 @@ public class JsonConverter implements Converter {
                         .set(JsonSchema.ARRAY_ITEMS_FIELD_NAME, asJsonSchema(schema.getElementType()));
             case ENUM:
                 throw new UnsupportedOperationException("enum schema not supported");
-            case FIXED:
-                throw new UnsupportedOperationException("fixed schema not supported");
             case MAP:
                 throw new UnsupportedOperationException("map schema not supported");
             default:
@@ -221,25 +184,6 @@ public class JsonConverter implements Converter {
                 if (elemSchema == null)
                     throw new CopycatRuntimeException("Array schema did not specify the element type");
                 return Schema.createArray(asCopycatSchema(elemSchema));
-            case JsonSchema.OBJECT_TYPE_NAME:
-                JsonNode jsonSchemaName = jsonSchema.get(JsonSchema.SCHEMA_NAME_FIELD_NAME);
-                if (jsonSchemaName == null || !jsonSchemaName.isTextual())
-                    throw new CopycatRuntimeException("Invalid object schema, should contain name.");
-                JsonNode jsonSchemaFields = jsonSchema.get(JsonSchema.OBJECT_FIELDS_FIELD_NAME);
-                if (jsonSchemaFields == null || !jsonSchemaFields.isArray())
-                    throw new CopycatRuntimeException("Invalid object schema, should contain list of fields.");
-                List<Schema.Field> fields = new ArrayList<>();
-                // TODO: We should verify both the schema fields and actual fields are exactly identical
-                for (JsonNode fieldJsonSchema : jsonSchemaFields) {
-                    JsonNode fieldName = fieldJsonSchema.get(JsonSchema.OBJECT_FIELD_NAME_FIELD_NAME);
-                    if (fieldName == null || !fieldName.isTextual())
-                        throw new CopycatRuntimeException("Object field missing name");
-                    // TODO: doc, default value?
-                    fields.add(new Schema.Field(fieldName.textValue(), asCopycatSchema(fieldJsonSchema), null, null));
-                }
-                Schema result = Schema.createRecord(jsonSchemaName.textValue(), null, null, false);
-                result.setFields(fields);
-                return result;
             default:
                 throw new CopycatRuntimeException("Unknown schema type: " + schemaTypeNode.textValue());
         }
@@ -283,25 +227,6 @@ public class JsonConverter implements Converter {
             return JsonSchema.bytesEnvelope(((ByteBuffer) value).array());
         } else if (value instanceof CharSequence) {
             return JsonSchema.stringEnvelope(value.toString());
-        } else if (value instanceof GenericRecord) {
-            GenericRecord recordValue = (GenericRecord) value;
-            ObjectNode schema = JsonNodeFactory.instance.objectNode();
-            schema.put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.OBJECT_TYPE_NAME);
-            schema.put(JsonSchema.SCHEMA_NAME_FIELD_NAME, recordValue.getSchema().getName());
-            ArrayNode schemaFields = JsonNodeFactory.instance.arrayNode();
-            schema.set(JsonSchema.OBJECT_FIELDS_FIELD_NAME, schemaFields);
-            ObjectNode record = JsonNodeFactory.instance.objectNode();
-            for (Schema.Field field : recordValue.getSchema().getFields()) {
-                JsonSchema.Envelope fieldSchemaAndValue = convertToJson(recordValue.get(field.name()));
-                // Fill in the field name since this is part of the field schema spec but the call to convertToJson that
-                // created it does not have access to the field name. This *must* copy the schema since it may be one of
-                // the primitive schemas.
-                ObjectNode fieldSchema = ((ObjectNode) fieldSchemaAndValue.schema).deepCopy();
-                fieldSchema.put(JsonSchema.OBJECT_FIELD_NAME_FIELD_NAME, field.name());
-                schemaFields.add(fieldSchema);
-                record.set(field.name(), fieldSchemaAndValue.payload);
-            }
-            return new JsonSchema.Envelope(schema, record);
         } else if (value instanceof Collection) {
             Collection collection = (Collection) value;
             ObjectNode schema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.ARRAY_TYPE_NAME);

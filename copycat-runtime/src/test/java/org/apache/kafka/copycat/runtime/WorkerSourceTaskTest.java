@@ -23,10 +23,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.cli.WorkerConfig;
-import org.apache.kafka.copycat.data.GenericRecord;
-import org.apache.kafka.copycat.data.GenericRecordBuilder;
-import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -59,8 +55,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private static final byte[] STREAM_BYTES = "stream".getBytes();
     private static final byte[] OFFSET_BYTES = "offset-1".getBytes();
 
-    private static final Schema RECORD_SCHEMA = SchemaBuilder.record("sample").fields().endRecord();
-    private static final GenericRecord RECORD = new GenericRecordBuilder(RECORD_SCHEMA).build();
+    private static final Integer RECORD = 12;
     // The actual format of this data doesn't matter -- we just want to see that the right version
     // is used in the right place.
     private static final String CONVERTED_RECORD = "converted-record";

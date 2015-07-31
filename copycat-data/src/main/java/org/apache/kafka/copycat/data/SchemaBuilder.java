@@ -225,18 +225,6 @@ public class SchemaBuilder {
     }
 
     /**
-     * Create a builder for an Avro record with the specified name.
-     * This is equivalent to:
-     * <pre>
-     *   builder().record(name);
-     * </pre>
-     * @param name the record name
-     */
-    public static RecordBuilder<Schema> record(String name) {
-        return builder().record(name);
-    }
-
-    /**
      * Create a builder for an Avro enum with the specified name and symbols (values).
      * This is equivalent to:
      * <pre>
@@ -246,18 +234,6 @@ public class SchemaBuilder {
      */
     public static EnumBuilder<Schema> enumeration(String name) {
         return builder().enumeration(name);
-    }
-
-    /**
-     * Create a builder for an Avro fixed type with the specified name and size.
-     * This is equivalent to:
-     * <pre>
-     *   builder().fixed(name);
-     * </pre>
-     * @param name the fixed name
-     */
-    public static FixedBuilder<Schema> fixed(String name) {
-        return builder().fixed(name);
     }
 
     /**
@@ -688,41 +664,6 @@ public class SchemaBuilder {
         /** complete building this type, return control to context **/
         public R endNull() {
             return super.end();
-        }
-    }
-
-    /**
-     * Builds an Avro Fixed type with optional properties, namespace, doc, and
-     * aliases.
-     * <p/>
-     * Set properties with {@link #prop(String, Object)}, namespace with
-     * {@link #namespace(String)}, doc with {@link #doc(String)}, and aliases with
-     * {@link #aliases(String[])}.
-     * <p/>
-     * The Fixed schema is finalized when its required size is set via
-     * {@link #size(int)}.
-     **/
-    public static final class FixedBuilder<R> extends
-            NamespacedBuilder<R, FixedBuilder<R>> {
-        private FixedBuilder(Completion<R> context, NameContext names, String name) {
-            super(context, names, name);
-        }
-
-        private static <R> FixedBuilder<R> create(Completion<R> context,
-                                                  NameContext names, String name) {
-            return new FixedBuilder<R>(context, names, name);
-        }
-
-        @Override
-        protected FixedBuilder<R> self() {
-            return this;
-        }
-
-        /** Configure this fixed type's size, and end its configuration. **/
-        public R size(int size) {
-            Schema schema = Schema.createFixed(name(), super.doc(), space(), size);
-            completeSchema(schema);
-            return context().complete(schema);
         }
     }
 
@@ -1162,19 +1103,6 @@ public class SchemaBuilder {
             return ArrayBuilder.create(context, names);
         }
 
-        /** Build an Avro fixed type. Example usage:
-         * <pre>
-         * fixed("com.foo.IPv4").size(4)
-         * </pre>
-         * Equivalent to Avro JSON Schema:
-         * <pre>
-         * {"type":"fixed", "name":"com.foo.IPv4", "size":4}
-         * </pre>
-         **/
-        public final FixedBuilder<R> fixed(String name) {
-            return FixedBuilder.create(context, names, name);
-        }
-
         /** Build an Avro enum type. Example usage:
          * <pre>
          * enumeration("Suits").namespace("org.cards").doc("card suit names")
@@ -1189,29 +1117,6 @@ public class SchemaBuilder {
          **/
         public final EnumBuilder<R> enumeration(String name) {
             return EnumBuilder.create(context, names, name);
-        }
-
-        /** Build an Avro record type. Example usage:
-         * <pre>
-         * record("com.foo.Foo").fields()
-         *   .name("field1").typeInt().intDefault(1)
-         *   .name("field2").typeString().noDefault()
-         *   .name("field3").optional().typeFixed("FooFixed").size(4)
-         *   .endRecord()
-         * </pre>
-         * Equivalent to Avro JSON Schema:
-         * <pre>
-         * {"type":"record", "name":"com.foo.Foo", "fields": [
-         *   {"name":"field1", "type":"int", "default":1},
-         *   {"name":"field2", "type":"string"},
-         *   {"name":"field3", "type":[
-         *     null, {"type":"fixed", "name":"FooFixed", "size":4}
-         *     ]}
-         *   ]}
-         * </pre>
-         **/
-        public final RecordBuilder<R> record(String name) {
-            return RecordBuilder.create(context, names, name);
         }
 
         /** Build an Avro union schema type. Example usage:
@@ -1450,19 +1355,9 @@ public class SchemaBuilder {
             return ArrayBuilder.create(wrap(new ArrayDefault<R>(bldr)), names);
         }
 
-        /** Build an Avro fixed type. **/
-        public final FixedBuilder<FixedDefault<R>> fixed(String name) {
-            return FixedBuilder.create(wrap(new FixedDefault<R>(bldr)), names, name);
-        }
-
         /** Build an Avro enum type. **/
         public final EnumBuilder<EnumDefault<R>> enumeration(String name) {
             return EnumBuilder.create(wrap(new EnumDefault<R>(bldr)), names, name);
-        }
-
-        /** Build an Avro record type. **/
-        public final RecordBuilder<RecordDefault<R>> record(String name) {
-            return RecordBuilder.create(wrap(new RecordDefault<R>(bldr)), names, name);
         }
 
         private <C> Completion<C> wrap(
@@ -1677,48 +1572,13 @@ public class SchemaBuilder {
             return ArrayBuilder.create(completion(new ArrayDefault<R>(bldr)), names);
         }
 
-        /** Build an Avro fixed type. **/
-        public FixedBuilder<UnionAccumulator<FixedDefault<R>>> fixed(String name) {
-            return FixedBuilder.create(completion(new FixedDefault<R>(bldr)), names, name);
-        }
-
         /** Build an Avro enum type. **/
         public EnumBuilder<UnionAccumulator<EnumDefault<R>>> enumeration(String name) {
             return EnumBuilder.create(completion(new EnumDefault<R>(bldr)), names, name);
         }
 
-        /** Build an Avro record type. **/
-        public RecordBuilder<UnionAccumulator<RecordDefault<R>>> record(String name) {
-            return RecordBuilder.create(completion(new RecordDefault<R>(bldr)), names, name);
-        }
-
         private <C> UnionCompletion<C> completion(Completion<C> context) {
             return new UnionCompletion<C>(context, names, new ArrayList<Schema>());
-        }
-    }
-
-    public final static class RecordBuilder<R> extends
-            NamespacedBuilder<R, RecordBuilder<R>> {
-        private RecordBuilder(Completion<R> context, NameContext names, String name) {
-            super(context, names, name);
-        }
-
-        private static <R> RecordBuilder<R> create(Completion<R> context,
-                                                   NameContext names, String name) {
-            return new RecordBuilder<R>(context, names, name);
-        }
-
-        @Override
-        protected RecordBuilder<R> self() {
-            return this;
-        }
-
-        public FieldAssembler<R> fields() {
-            Schema record = Schema.createRecord(name(), doc(), space(), false);
-            // place the record in the name context, fields yet to be set.
-            completeSchema(record);
-            return new FieldAssembler<R>(
-                    context(), names().namespace(record.getNamespace()), record);
         }
     }
 
@@ -2372,11 +2232,6 @@ public class SchemaBuilder {
     public static class RecordDefault<R> extends FieldDefault<R, RecordDefault<R>> {
         private RecordDefault(FieldBuilder<R> field) {
             super(field);
-        }
-
-        /** Completes this field with the default value provided, cannot be null **/
-        public final FieldAssembler<R> recordDefault(GenericRecord defaultVal) {
-            return super.usingDefault(defaultVal);
         }
 
         @Override

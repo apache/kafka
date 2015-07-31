@@ -29,8 +29,6 @@ public class JsonSchema {
     static final String ENVELOPE_PAYLOAD_FIELD_NAME = "payload";
     static final String SCHEMA_TYPE_FIELD_NAME = "type";
     static final String SCHEMA_NAME_FIELD_NAME = "name";
-    static final String OBJECT_FIELD_NAME_FIELD_NAME = "name";
-    static final String OBJECT_FIELDS_FIELD_NAME = "fields";
     static final String ARRAY_ITEMS_FIELD_NAME = "items";
     static final String BOOLEAN_TYPE_NAME = "boolean";
     static final JsonNode BOOLEAN_SCHEMA = JsonNodeFactory.instance.objectNode().put(SCHEMA_TYPE_FIELD_NAME, BOOLEAN_TYPE_NAME);
@@ -47,7 +45,6 @@ public class JsonSchema {
     static final String STRING_TYPE_NAME = "string";
     static final JsonNode STRING_SCHEMA = JsonNodeFactory.instance.objectNode().put(SCHEMA_TYPE_FIELD_NAME, STRING_TYPE_NAME);
     static final String ARRAY_TYPE_NAME = "array";
-    static final String OBJECT_TYPE_NAME = "object";
 
     public static ObjectNode envelope(JsonNode schema, JsonNode payload) {
         ObjectNode result = JsonNodeFactory.instance.objectNode();

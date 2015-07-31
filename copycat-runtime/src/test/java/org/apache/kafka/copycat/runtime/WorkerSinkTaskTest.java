@@ -21,10 +21,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.cli.WorkerConfig;
-import org.apache.kafka.copycat.data.GenericRecord;
-import org.apache.kafka.copycat.data.GenericRecordBuilder;
-import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -129,8 +125,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     @Test
     public void testDeliverConvertsData() throws Exception {
         // Validate conversion is performed when data is delivered
-        Schema schema = SchemaBuilder.record("sample").fields().endRecord();
-        GenericRecord record = new GenericRecordBuilder(schema).build();
+        Integer record = 12;
         byte[] rawKey = "key".getBytes(), rawValue = "value".getBytes();
 
         ConsumerRecords<Object, Object> records = new ConsumerRecords<>(
