@@ -52,7 +52,7 @@ import java.util.concurrent.TimeoutException;
 import static org.junit.Assert.*;
 
 public class WorkerSourceTaskTest extends ThreadedTest {
-    private static final byte[] STREAM_BYTES = "stream".getBytes();
+    private static final byte[] PARTITION_BYTES = "partition".getBytes();
     private static final byte[] OFFSET_BYTES = "offset-1".getBytes();
 
     private static final Integer RECORD = 12;
@@ -74,7 +74,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private static final Properties EMPTY_TASK_PROPS = new Properties();
     private static final List<SourceRecord> RECORDS = Arrays.asList(
-            new SourceRecord(STREAM_BYTES, OFFSET_BYTES,
+            new SourceRecord(PARTITION_BYTES, OFFSET_BYTES,
                     "topic", RECORD)
     );
 
@@ -193,7 +193,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         List<SourceRecord> records = new ArrayList<>();
         // Can just use the same record for key and value
-        records.add(new SourceRecord(STREAM_BYTES, OFFSET_BYTES, "topic", null, RECORD, RECORD));
+        records.add(new SourceRecord(PARTITION_BYTES, OFFSET_BYTES, "topic", null, RECORD, RECORD));
 
         Capture<ProducerRecord> sent = expectSendRecord();
 
@@ -247,7 +247,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                     }
                 });
         // 2. Offset data is passed to the offset storage.
-        offsetWriter.setOffset(STREAM_BYTES, OFFSET_BYTES);
+        offsetWriter.setOffset(PARTITION_BYTES, OFFSET_BYTES);
         PowerMock.expectLastCall().anyTimes();
 
         return sent;

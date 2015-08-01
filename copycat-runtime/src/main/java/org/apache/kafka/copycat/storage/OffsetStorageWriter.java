@@ -38,13 +38,13 @@ import java.util.concurrent.Future;
  * </p>
  * <p>
  * Copycat uses an OffsetStorage implementation to save state about the current progress of
- * source (import to Kafka) jobs, which may have many input streams and "offsets" may not be as
+ * source (import to Kafka) jobs, which may have many input partitions and "offsets" may not be as
  * simple as they are for Kafka partitions or files. Offset storage is not required for sink jobs
  * because they can use Kafka's native offset storage (or the sink data store can handle offset
  * storage to achieve exactly once semantics).
  * </p>
  * <p>
- * Both streams and offsets are generic data objects. This allows different connectors to use
+ * Both partitions and offsets are generic data objects. This allows different connectors to use
  * whatever representation they need, even arbitrarily complex records. These are translated
  * internally into the serialized form the OffsetBackingStore uses.
  * </p>
@@ -53,8 +53,8 @@ import java.util.concurrent.Future;
  * never read. Offset data should only be read during startup or reconfiguration of a task. By
  * always serving those requests by reading the values from the backing store, we ensure we never
  * accidentally use stale data. (One example of how this can occur: a task is processing input
- * stream A, writing offsets; reconfiguration causes stream A to be reassigned elsewhere;
- * reconfiguration causes stream A to be reassigned to this node, but now the offset data is out
+ * partition A, writing offsets; reconfiguration causes partition A to be reassigned elsewhere;
+ * reconfiguration causes partition A to be reassigned to this node, but now the offset data is out
  * of date). Since these offsets are created and managed by the connector itself, there's no way
  * for the offset management layer to know which keys are "owned" by which tasks at any given
  * time.
@@ -88,8 +88,8 @@ public class OffsetStorageWriter {
         this.valueSerializer = valueSerializer;
     }
 
-    public synchronized void setOffset(Object stream, Object offset) {
-        data.put(stream, offset);
+    public synchronized void setOffset(Object partition, Object offset) {
+        data.put(partition, offset);
     }
 
     private boolean flushing() {
@@ -145,7 +145,7 @@ public class OffsetStorageWriter {
             // unable to make progress.
             log.error("CRITICAL: Failed to serialize offset data, making it impossible to commit "
                     + "offsets under namespace {}. This likely won't recover unless the "
-                    + "unserializable stream or offset information is overwritten.", namespace);
+                    + "unserializable partition or offset information is overwritten.", namespace);
             callback.onCompletion(t, null);
             return null;
         }

@@ -89,7 +89,7 @@ public class FileStreamSourceTaskTest {
         assertEquals(1, records.size());
         assertEquals(TOPIC, records.get(0).getTopic());
         assertEquals("partial line finished", records.get(0).getValue());
-        assertEquals(22L, records.get(0).getOffset());
+        assertEquals(22L, records.get(0).getSourceOffset());
         assertEquals(null, task.poll());
 
         // Different line endings, and make sure the final \r doesn't result in a line until we can
@@ -99,20 +99,20 @@ public class FileStreamSourceTaskTest {
         records = task.poll();
         assertEquals(4, records.size());
         assertEquals("line1", records.get(0).getValue());
-        assertEquals(28L, records.get(0).getOffset());
+        assertEquals(28L, records.get(0).getSourceOffset());
         assertEquals("line2", records.get(1).getValue());
-        assertEquals(35L, records.get(1).getOffset());
+        assertEquals(35L, records.get(1).getSourceOffset());
         assertEquals("line3", records.get(2).getValue());
-        assertEquals(41L, records.get(2).getOffset());
+        assertEquals(41L, records.get(2).getSourceOffset());
         assertEquals("line4", records.get(3).getValue());
-        assertEquals(47L, records.get(3).getOffset());
+        assertEquals(47L, records.get(3).getSourceOffset());
 
         os.write("subsequent text".getBytes());
         os.flush();
         records = task.poll();
         assertEquals(1, records.size());
         assertEquals("", records.get(0).getValue());
-        assertEquals(48L, records.get(0).getOffset());
+        assertEquals(48L, records.get(0).getSourceOffset());
 
         task.stop();
     }

@@ -78,7 +78,7 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String OFFSET_STORAGE_CLASS_CONFIG = "offset.storage.class";
     private static final String OFFSET_STORAGE_CLASS_DOC =
-            "OffsetBackingStore implementation to use for storing stream offset data";
+            "OffsetBackingStore implementation to use for storing partition offset data";
     public static final String OFFSET_STORAGE_CLASS_DEFAULT
             = "org.apache.kafka.copycat.storage.MemoryOffsetBackingStore";
 
@@ -89,7 +89,7 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String OFFSET_COMMIT_TIMEOUT_MS_CONFIG = "offset.flush.timeout.ms";
     private static final String OFFSET_COMMIT_TIMEOUT_MS_DOC
-            = "Maximum number of milliseconds to wait for records to flush and stream offset data to be"
+            = "Maximum number of milliseconds to wait for records to flush and partition offset data to be"
             + " committed to offset storage before cancelling the process and restoring the offset "
             + "data to be committed in a future attempt.";
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;

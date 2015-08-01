@@ -20,20 +20,20 @@ package org.apache.kafka.copycat.sink;
 import org.apache.kafka.copycat.connector.CopycatRecord;
 
 /**
- * SinkRecord is a CopycatRecord that has been read from Kafka and includes the offset of
+ * SinkRecord is a CopycatRecord that has been read from Kafka and includes the kafkaOffset of
  * the record in the Kafka topic-partition in addition to the standard fields. This information
- * should be used by the SinkTask to coordinate offset commits.
+ * should be used by the SinkTask to coordinate kafkaOffset commits.
  */
 public class SinkRecord extends CopycatRecord {
-    private final long offset;
+    private final long kafkaOffset;
 
-    public SinkRecord(String topic, int partition, Object key, Object value, long offset) {
+    public SinkRecord(String topic, int partition, Object key, Object value, long kafkaOffset) {
         super(topic, partition, key, value);
-        this.offset = offset;
+        this.kafkaOffset = kafkaOffset;
     }
 
-    public long getOffset() {
-        return offset;
+    public long getKafkaOffset() {
+        return kafkaOffset;
     }
 
     @Override
@@ -47,7 +47,7 @@ public class SinkRecord extends CopycatRecord {
 
         SinkRecord that = (SinkRecord) o;
 
-        if (offset != that.offset)
+        if (kafkaOffset != that.kafkaOffset)
             return false;
 
         return true;
@@ -56,14 +56,14 @@ public class SinkRecord extends CopycatRecord {
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + (int) (offset ^ (offset >>> 32));
+        result = 31 * result + (int) (kafkaOffset ^ (kafkaOffset >>> 32));
         return result;
     }
 
     @Override
     public String toString() {
         return "SinkRecord{" +
-                "offset=" + offset +
+                "kafkaOffset=" + kafkaOffset +
                 "} " + super.toString();
     }
 }

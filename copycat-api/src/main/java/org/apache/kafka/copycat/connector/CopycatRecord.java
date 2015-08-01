@@ -21,23 +21,23 @@ package org.apache.kafka.copycat.connector;
  * <p>
  * Base class for records containing data to be copied to/from Kafka. This corresponds closely to
  * Kafka's ProducerRecord and ConsumerRecord classes, and holds the data that may be used by both
- * sources and sinks (topic, partition, key, value). Although both implementations include a
+ * sources and sinks (topic, kafkaPartition, key, value). Although both implementations include a
  * notion of offset, it is not included here because they differ in type.
  * </p>
  */
 public abstract class CopycatRecord {
     private final String topic;
-    private final Integer partition;
+    private final Integer kafkaPartition;
     private final Object key;
     private final Object value;
 
-    public CopycatRecord(String topic, Integer partition, Object value) {
-        this(topic, partition, null, value);
+    public CopycatRecord(String topic, Integer kafkaPartition, Object value) {
+        this(topic, kafkaPartition, null, value);
     }
 
-    public CopycatRecord(String topic, Integer partition, Object key, Object value) {
+    public CopycatRecord(String topic, Integer kafkaPartition, Object key, Object value) {
         this.topic = topic;
-        this.partition = partition;
+        this.kafkaPartition = kafkaPartition;
         this.key = key;
         this.value = value;
     }
@@ -46,8 +46,8 @@ public abstract class CopycatRecord {
         return topic;
     }
 
-    public Integer getPartition() {
-        return partition;
+    public Integer getKafkaPartition() {
+        return kafkaPartition;
     }
 
     public Object getKey() {
@@ -62,7 +62,7 @@ public abstract class CopycatRecord {
     public String toString() {
         return "CopycatRecord{" +
                 "topic='" + topic + '\'' +
-                ", partition=" + partition +
+                ", kafkaPartition=" + kafkaPartition +
                 ", key=" + key +
                 ", value=" + value +
                 '}';
@@ -79,7 +79,7 @@ public abstract class CopycatRecord {
 
         if (key != null ? !key.equals(that.key) : that.key != null)
             return false;
-        if (partition != null ? !partition.equals(that.partition) : that.partition != null)
+        if (kafkaPartition != null ? !kafkaPartition.equals(that.kafkaPartition) : that.kafkaPartition != null)
             return false;
         if (topic != null ? !topic.equals(that.topic) : that.topic != null)
             return false;
@@ -92,7 +92,7 @@ public abstract class CopycatRecord {
     @Override
     public int hashCode() {
         int result = topic != null ? topic.hashCode() : 0;
-        result = 31 * result + (partition != null ? partition.hashCode() : 0);
+        result = 31 * result + (kafkaPartition != null ? kafkaPartition.hashCode() : 0);
         result = 31 * result + (key != null ? key.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         return result;

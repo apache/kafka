@@ -131,7 +131,7 @@ public class WorkerSourceTask implements WorkerTask {
     private synchronized void sendRecords(List<SourceRecord> records) {
         for (SourceRecord record : records) {
             final ProducerRecord<Object, Object> producerRecord
-                    = new ProducerRecord<>(record.getTopic(), record.getPartition(),
+                    = new ProducerRecord<>(record.getTopic(), record.getKafkaPartition(),
                     converter.fromCopycatData(record.getKey()),
                     converter.fromCopycatData(record.getValue()));
             log.trace("Appending record with key {}, value {}", record.getKey(), record.getValue());
@@ -156,7 +156,7 @@ public class WorkerSourceTask implements WorkerTask {
                         }
                     });
             // Offsets are converted & serialized in the OffsetWriter
-            offsetWriter.setOffset(record.getStream(), record.getOffset());
+            offsetWriter.setOffset(record.getSourcePartition(), record.getSourceOffset());
         }
     }
 

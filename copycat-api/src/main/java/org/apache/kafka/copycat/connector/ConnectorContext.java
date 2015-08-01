@@ -23,7 +23,7 @@ package org.apache.kafka.copycat.connector;
 public interface ConnectorContext {
     /**
      * Requests that the runtime reconfigure the Tasks for this source. This should be used to
-     * indicate to the runtime that something about the input/output has changed (e.g. streams
+     * indicate to the runtime that something about the input/output has changed (e.g. partitions
      * added/removed) and the running Tasks will need to be modified.
      */
     void requestTaskReconfiguration();

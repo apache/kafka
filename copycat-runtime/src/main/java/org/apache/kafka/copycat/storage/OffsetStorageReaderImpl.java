@@ -55,21 +55,21 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
     }
 
     @Override
-    public Object getOffset(Object stream) {
-        return getOffsets(Arrays.asList(stream)).get(stream);
+    public Object getOffset(Object partition) {
+        return getOffsets(Arrays.asList(partition)).get(partition);
     }
 
     @Override
-    public Map<Object, Object> getOffsets(Collection<Object> streams) {
+    public Map<Object, Object> getOffsets(Collection<Object> partitions) {
         // Serialize keys so backing store can work with them
-        Map<ByteBuffer, Object> serializedToOriginal = new HashMap<>(streams.size());
-        for (Object key : streams) {
+        Map<ByteBuffer, Object> serializedToOriginal = new HashMap<>(partitions.size());
+        for (Object key : partitions) {
             try {
                 byte[] keySerialized = keySerializer.serialize(namespace, converter.fromCopycatData(key));
                 ByteBuffer keyBuffer = (keySerialized != null) ? ByteBuffer.wrap(keySerialized) : null;
                 serializedToOriginal.put(keyBuffer, key);
             } catch (Throwable t) {
-                log.error("CRITICAL: Failed to serialize stream key when getting offsets for task with "
+                log.error("CRITICAL: Failed to serialize partition key when getting offsets for task with "
                         + "namespace {}. No value for this data will be returned, which may break the "
                         + "task or cause it to skip some data.", namespace, t);
             }
@@ -85,12 +85,12 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         }
 
         // Deserialize all the values and map back to the original keys
-        Map<Object, Object> result = new HashMap<>(streams.size());
+        Map<Object, Object> result = new HashMap<>(partitions.size());
         for (Map.Entry<ByteBuffer, ByteBuffer> rawEntry : raw.entrySet()) {
             try {
                 // Since null could be a valid key, explicitly check whether map contains the key
                 if (!serializedToOriginal.containsKey(rawEntry.getKey())) {
-                    log.error("Should be able to map {} back to a requested stream-offset key, backing "
+                    log.error("Should be able to map {} back to a requested partition-offset key, backing "
                             + "store may have returned invalid data", rawEntry.getKey());
                     continue;
                 }

@@ -27,30 +27,30 @@ import java.util.Map;
  */
 public interface OffsetStorageReader {
     /**
-     * Get the offset for the specified stream. If the data isn't already available locally, this
+     * Get the offset for the specified partition. If the data isn't already available locally, this
      * gets it from the backing store, which may require some network round trips.
      *
-     * @param stream object uniquely identifying the stream of data
-     * @return object uniquely identifying the offset in the stream of data
+     * @param partition object uniquely identifying the partition of data
+     * @return object uniquely identifying the offset in the partition of data
      */
-    Object getOffset(Object stream);
+    Object getOffset(Object partition);
 
     /**
      * <p>
-     * Get a set of offsets for the specified stream identifiers. This may be more efficient
+     * Get a set of offsets for the specified partition identifiers. This may be more efficient
      * than calling {@link #getOffset(Object)} repeatedly.
      * </p>
      * <p>
      * Note that when errors occur, this method omits the associated data and tries to return as
-     * many of the requested values as possible. This allows a task that's managing many streams to
+     * many of the requested values as possible. This allows a task that's managing many partitions to
      * still proceed with any available data. Therefore, implementations should take care to check
      * that the data is actually available in the returned response. The only case when an
      * exception will be thrown is if the entire request failed, e.g. because the underlying
      * storage was unavailable.
      * </p>
      *
-     * @param streams set of identifiers for streams of data
-     * @return a map of stream identifiers to decoded offsets
+     * @param partitions set of identifiers for partitions of data
+     * @return a map of partition identifiers to decoded offsets
      */
-    Map<Object, Object> getOffsets(Collection<Object> streams);
+    Map<Object, Object> getOffsets(Collection<Object> partitions);
 }
