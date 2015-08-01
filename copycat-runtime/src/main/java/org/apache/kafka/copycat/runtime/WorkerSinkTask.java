@@ -45,17 +45,19 @@ public class WorkerSinkTask implements WorkerTask {
     private final SinkTask task;
     private final WorkerConfig workerConfig;
     private final Time time;
-    private final Converter converter;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
     private WorkerSinkTaskThread workThread;
     private KafkaConsumer<Object, Object> consumer;
     private final SinkTaskContext context;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
-                          Converter converter, Time time) {
+                          Converter keyConverter, Converter valueConverter, Time time) {
         this.id = id;
         this.task = task;
         this.workerConfig = workerConfig;
-        this.converter = converter;
+        this.keyConverter = keyConverter;
+        this.valueConverter = valueConverter;
         context = new SinkTaskContextImpl();
         this.time = time;
     }
@@ -207,8 +209,8 @@ public class WorkerSinkTask implements WorkerTask {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
                 records.add(
                         new SinkRecord(msg.topic(), msg.partition(),
-                                converter.toCopycatData(msg.key()),
-                                converter.toCopycatData(msg.value()),
+                                keyConverter.toCopycatData(msg.key()),
+                                valueConverter.toCopycatData(msg.value()),
                                 msg.offset())
                 );
             }

@@ -49,9 +49,13 @@ public class WorkerConfig extends AbstractConfig {
             + "than one, though, in case a server is down).";
     public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
 
-    public static final String CONVERTER_CLASS_CONFIG = "converter";
-    public static final String CONVERTER_CLASS_DOC =
-            "Converter class for Copycat data that implements the <code>Converter</code> interface.";
+    public static final String KEY_CONVERTER_CLASS_CONFIG = "key.converter";
+    public static final String KEY_CONVERTER_CLASS_DOC =
+            "Converter class for key Copycat data that implements the <code>Converter</code> interface.";
+
+    public static final String VALUE_CONVERTER_CLASS_CONFIG = "value.converter";
+    public static final String VALUE_CONVERTER_CLASS_DOC =
+            "Converter class for value Copycat data that implements the <code>Converter</code> interface.";
 
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
     public static final String KEY_SERIALIZER_CLASS_DOC =
@@ -101,8 +105,10 @@ public class WorkerConfig extends AbstractConfig {
                 .define(CLUSTER_CONFIG, Type.STRING, CLUSTER_DEFAULT, Importance.HIGH, CLUSTER_CONFIG_DOC)
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
-                .define(CONVERTER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, CONVERTER_CLASS_DOC)
+                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
+                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
                 .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, KEY_SERIALIZER_CLASS_DOC)
                 .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS,

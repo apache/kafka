@@ -51,7 +51,8 @@ public class WorkerSourceTask implements WorkerTask {
 
     private ConnectorTaskId id;
     private SourceTask task;
-    private final Converter converter;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
     private KafkaProducer<Object, Object> producer;
     private WorkerSourceTaskThread workThread;
     private OffsetStorageReader offsetReader;
@@ -69,13 +70,14 @@ public class WorkerSourceTask implements WorkerTask {
     private boolean flushing;
 
     public WorkerSourceTask(ConnectorTaskId id, SourceTask task,
-                            Converter converter,
+                            Converter keyConverter, Converter valueConverter,
                             KafkaProducer<Object, Object> producer,
                             OffsetStorageReader offsetReader, OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig, Time time) {
         this.id = id;
         this.task = task;
-        this.converter = converter;
+        this.keyConverter = keyConverter;
+        this.valueConverter = valueConverter;
         this.producer = producer;
         this.offsetReader = offsetReader;
         this.offsetWriter = offsetWriter;
@@ -132,8 +134,8 @@ public class WorkerSourceTask implements WorkerTask {
         for (SourceRecord record : records) {
             final ProducerRecord<Object, Object> producerRecord
                     = new ProducerRecord<>(record.getTopic(), record.getKafkaPartition(),
-                    converter.fromCopycatData(record.getKey()),
-                    converter.fromCopycatData(record.getValue()));
+                    keyConverter.fromCopycatData(record.getKey()),
+                    valueConverter.fromCopycatData(record.getValue()));
             log.trace("Appending record with key {}, value {}", record.getKey(), record.getValue());
             if (!flushing) {
                 outstandingMessages.put(producerRecord, producerRecord);

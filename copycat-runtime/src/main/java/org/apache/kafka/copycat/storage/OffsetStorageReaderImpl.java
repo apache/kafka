@@ -39,17 +39,19 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
 
     private final OffsetBackingStore backingStore;
     private final String namespace;
-    private final Converter converter;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
     private final Serializer keySerializer;
     private final Deserializer valueDeserializer;
 
     public OffsetStorageReaderImpl(OffsetBackingStore backingStore, String namespace,
-                                   Converter converter,
+                                   Converter keyConverter, Converter valueConverter,
                                    Serializer keySerializer,
                                    Deserializer valueDeserializer) {
         this.backingStore = backingStore;
         this.namespace = namespace;
-        this.converter = converter;
+        this.keyConverter = keyConverter;
+        this.valueConverter = valueConverter;
         this.keySerializer = keySerializer;
         this.valueDeserializer = valueDeserializer;
     }
@@ -65,7 +67,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         Map<ByteBuffer, Object> serializedToOriginal = new HashMap<>(partitions.size());
         for (Object key : partitions) {
             try {
-                byte[] keySerialized = keySerializer.serialize(namespace, converter.fromCopycatData(key));
+                byte[] keySerialized = keySerializer.serialize(namespace, keyConverter.fromCopycatData(key));
                 ByteBuffer keyBuffer = (keySerialized != null) ? ByteBuffer.wrap(keySerialized) : null;
                 serializedToOriginal.put(keyBuffer, key);
             } catch (Throwable t) {
@@ -95,7 +97,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
                     continue;
                 }
                 Object origKey = serializedToOriginal.get(rawEntry.getKey());
-                Object deserializedValue = converter.toCopycatData(
+                Object deserializedValue = valueConverter.toCopycatData(
                         valueDeserializer.deserialize(namespace, rawEntry.getValue().array())
                 );
 

@@ -49,7 +49,8 @@ public class OffsetStorageWriterTest {
             ByteBuffer.wrap(OFFSET_VALUE_SERIALIZED));
 
     private OffsetBackingStore store;
-    private Converter converter;
+    private Converter keyConverter;
+    private Converter valueConverter;
     private Serializer keySerializer;
     private Serializer valueSerializer;
     private OffsetStorageWriter writer;
@@ -61,10 +62,11 @@ public class OffsetStorageWriterTest {
     @Before
     public void setup() {
         store = PowerMock.createMock(OffsetBackingStore.class);
-        converter = PowerMock.createMock(Converter.class);
+        keyConverter = PowerMock.createMock(Converter.class);
+        valueConverter = PowerMock.createMock(Converter.class);
         keySerializer = PowerMock.createMock(Serializer.class);
         valueSerializer = PowerMock.createMock(Serializer.class);
-        writer = new OffsetStorageWriter(store, NAMESPACE, converter, keySerializer, valueSerializer);
+        writer = new OffsetStorageWriter(store, NAMESPACE, keyConverter, valueConverter, keySerializer, valueSerializer);
 
         service = Executors.newFixedThreadPool(1);
     }
@@ -193,9 +195,9 @@ public class OffsetStorageWriterTest {
     private void expectStore(final Callback<Void> callback,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
-        EasyMock.expect(converter.fromCopycatData(OFFSET_KEY)).andReturn(OFFSET_KEY_CONVERTED);
+        EasyMock.expect(keyConverter.fromCopycatData(OFFSET_KEY)).andReturn(OFFSET_KEY_CONVERTED);
         EasyMock.expect(keySerializer.serialize(NAMESPACE, OFFSET_KEY_CONVERTED)).andReturn(OFFSET_KEY_SERIALIZED);
-        EasyMock.expect(converter.fromCopycatData(OFFSET_VALUE)).andReturn(OFFSET_VALUE_CONVERTED);
+        EasyMock.expect(valueConverter.fromCopycatData(OFFSET_VALUE)).andReturn(OFFSET_VALUE_CONVERTED);
         EasyMock.expect(valueSerializer.serialize(NAMESPACE, OFFSET_VALUE_CONVERTED)).andReturn(OFFSET_VALUE_SERIALIZED);
 
         final Capture<Callback<Void>> storeCallback = Capture.newInstance();

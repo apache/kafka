@@ -67,7 +67,8 @@ public class OffsetStorageWriter {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageWriter.class);
 
     private final OffsetBackingStore backingStore;
-    private final Converter converter;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
     private final Serializer keySerializer;
     private final Serializer valueSerializer;
     private final String namespace;
@@ -79,11 +80,12 @@ public class OffsetStorageWriter {
     private long currentFlushId = 0;
 
     public OffsetStorageWriter(OffsetBackingStore backingStore,
-                               String namespace, Converter converter,
+                               String namespace, Converter keyConverter, Converter valueConverter,
                                Serializer keySerializer, Serializer valueSerializer) {
         this.backingStore = backingStore;
         this.namespace = namespace;
-        this.converter = converter;
+        this.keyConverter = keyConverter;
+        this.valueConverter = valueConverter;
         this.keySerializer = keySerializer;
         this.valueSerializer = valueSerializer;
     }
@@ -134,9 +136,9 @@ public class OffsetStorageWriter {
         try {
             offsetsSerialized = new HashMap<>();
             for (Map.Entry<Object, Object> entry : toFlush.entrySet()) {
-                byte[] key = keySerializer.serialize(namespace, converter.fromCopycatData(entry.getKey()));
+                byte[] key = keySerializer.serialize(namespace, keyConverter.fromCopycatData(entry.getKey()));
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
-                byte[] value = valueSerializer.serialize(namespace, converter.fromCopycatData(entry.getValue()));
+                byte[] value = valueSerializer.serialize(namespace, valueConverter.fromCopycatData(entry.getValue()));
                 ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
                 offsetsSerialized.put(keyBuffer, valueBuffer);
             }

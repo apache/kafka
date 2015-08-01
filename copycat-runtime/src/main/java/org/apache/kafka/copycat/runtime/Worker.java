@@ -53,7 +53,8 @@ public class Worker {
 
     private Time time;
     private WorkerConfig config;
-    private Converter converter;
+    private Converter keyConverter;
+    private Converter valueConverter;
     private OffsetBackingStore offsetBackingStore;
     private Serializer offsetKeySerializer;
     private Serializer offsetValueSerializer;
@@ -74,7 +75,8 @@ public class Worker {
                   Deserializer offsetKeyDeserializer, Deserializer offsetValueDeserializer) {
         this.time = time;
         this.config = config;
-        this.converter = config.getConfiguredInstance(WorkerConfig.CONVERTER_CLASS_CONFIG, Converter.class);
+        this.keyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.valueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
         this.offsetBackingStore = offsetBackingStore;
 
         if (offsetKeySerializer != null) {
@@ -183,17 +185,14 @@ public class Worker {
         final WorkerTask workerTask;
         if (task instanceof SourceTask) {
             SourceTask sourceTask = (SourceTask) task;
-            OffsetStorageReader offsetReader
-                    = new OffsetStorageReaderImpl(offsetBackingStore, id.getConnector(), converter,
-                    offsetKeySerializer, offsetValueDeserializer);
-            OffsetStorageWriter offsetWriter
-                    = new OffsetStorageWriter(offsetBackingStore, id.getConnector(), converter,
-                    offsetKeySerializer, offsetValueSerializer);
-            workerTask = new WorkerSourceTask(id, sourceTask, converter, producer,
-                    offsetReader, offsetWriter,
-                    config, time);
+            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.getConnector(),
+                    keyConverter, valueConverter, offsetKeySerializer, offsetValueDeserializer);
+            OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.getConnector(),
+                    keyConverter, valueConverter, offsetKeySerializer, offsetValueSerializer);
+            workerTask = new WorkerSourceTask(id, sourceTask, keyConverter, valueConverter, producer,
+                    offsetReader, offsetWriter, config, time);
         } else if (task instanceof SinkTask) {
-            workerTask = new WorkerSinkTask(id, (SinkTask) task, config, converter, time);
+            workerTask = new WorkerSinkTask(id, (SinkTask) task, config, keyConverter, valueConverter, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new CopycatException("Tasks must be a subclass of either SourceTask or SinkTask");

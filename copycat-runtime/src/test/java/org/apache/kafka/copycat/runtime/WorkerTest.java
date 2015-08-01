@@ -60,7 +60,8 @@ public class WorkerTest extends ThreadedTest {
         super.setup();
 
         Properties workerProps = new Properties();
-        workerProps.setProperty("converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("key.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
         workerProps.setProperty("value.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
         workerProps.setProperty("key.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
@@ -86,6 +87,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(taskId), EasyMock.eq(task),
+                EasyMock.anyObject(Converter.class),
                 EasyMock.anyObject(Converter.class),
                 EasyMock.anyObject(KafkaProducer.class),
                 EasyMock.anyObject(OffsetStorageReader.class),
@@ -131,6 +133,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(taskId), EasyMock.eq(task),
+                EasyMock.anyObject(Converter.class),
                 EasyMock.anyObject(Converter.class),
                 EasyMock.anyObject(KafkaProducer.class),
                 EasyMock.anyObject(OffsetStorageReader.class),
