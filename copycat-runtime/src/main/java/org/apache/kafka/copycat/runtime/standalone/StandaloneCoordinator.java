@@ -55,7 +55,11 @@ public class StandaloneCoordinator implements Coordinator {
 
         String storage = configs.getProperty(STORAGE_CONFIG);
         if (storage != null && !storage.isEmpty()) {
-            configStorage = Reflection.instantiate(storage, ConfigStorage.class);
+            try {
+                configStorage = Utils.newInstance(storage, ConfigStorage.class);
+            } catch (ClassNotFoundException e) {
+                throw new CopycatRuntimeException("Couldn't configure storage", e);
+            }
             configStorage.configure(configs);
         } else {
             configStorage = null;
@@ -153,7 +157,11 @@ public class StandaloneCoordinator implements Coordinator {
     }
 
     private static Connector instantiateConnector(String className) {
-        return Reflection.instantiate(className, Connector.class);
+        try {
+            return Utils.newInstance(className, Connector.class);
+        } catch (ClassNotFoundException e) {
+            throw new CopycatRuntimeException("Couldn't instantiate connector class", e);
+        }
     }
 
     private void destroyConnector(String connName) {

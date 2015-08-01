@@ -271,7 +271,7 @@ public class Utils {
     /**
      * Instantiate the class
      */
-    public static Object newInstance(Class<?> c) {
+    public static <T> T newInstance(Class<T> c) {
         try {
             return c.newInstance();
         } catch (IllegalAccessException e) {
@@ -279,6 +279,17 @@ public class Utils {
         } catch (InstantiationException e) {
             throw new KafkaException("Could not instantiate class " + c.getName() + " Does it have a public no-argument constructor?", e);
         }
+    }
+
+    /**
+     * Look up the class by name and instantiate it.
+     * @param klass class name
+     * @param base super class of the class to be instantiated
+     * @param <T>
+     * @return the new instance
+     */
+    public static <T> T newInstance(String klass, Class<T> base) throws ClassNotFoundException {
+        return Utils.newInstance(Class.forName(klass).asSubclass(base));
     }
 
     /**

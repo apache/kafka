@@ -32,7 +32,6 @@ import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.storage.*;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
-import org.apache.kafka.copycat.util.Reflection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,9 +65,7 @@ public class Worker {
 
     public Worker(WorkerConfig config) {
         this(new SystemTime(), config,
-                Reflection.instantiateConfigurable(
-                        config.getClass(WorkerConfig.OFFSET_STORAGE_CLASS_CONFIG).getName(),
-                        OffsetBackingStore.class, config.getUnusedProperties()),
+                config.getConfiguredInstance(WorkerConfig.OFFSET_STORAGE_CLASS_CONFIG, OffsetBackingStore.class),
                 null, null, null, null);
     }
 
@@ -77,38 +74,34 @@ public class Worker {
                   Deserializer offsetKeyDeserializer, Deserializer offsetValueDeserializer) {
         this.time = time;
         this.config = config;
-        this.converter = Reflection.instantiate(config.getClass(WorkerConfig.CONVERTER_CLASS_CONFIG).getName(), Converter.class);
+        this.converter = config.getConfiguredInstance(WorkerConfig.CONVERTER_CLASS_CONFIG, Converter.class);
         this.offsetBackingStore = offsetBackingStore;
 
         if (offsetKeySerializer != null) {
             this.offsetKeySerializer = offsetKeySerializer;
         } else {
-            this.offsetKeySerializer = Reflection.instantiate(
-                    config.getClass(WorkerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName(), Serializer.class);
+            this.offsetKeySerializer = config.getConfiguredInstance(WorkerConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
             this.offsetKeySerializer.configure(config.getOriginalProperties(), true);
         }
 
         if (offsetValueSerializer != null) {
             this.offsetValueSerializer = offsetValueSerializer;
         } else {
-            this.offsetValueSerializer = Reflection.instantiate(
-                    config.getClass(WorkerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName(), Serializer.class);
+            this.offsetValueSerializer = config.getConfiguredInstance(WorkerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
             this.offsetValueSerializer.configure(config.getOriginalProperties(), false);
         }
 
         if (offsetKeyDeserializer != null) {
             this.offsetKeyDeserializer = offsetKeyDeserializer;
         } else {
-            this.offsetKeyDeserializer = Reflection.instantiate(
-                    config.getClass(WorkerConfig.KEY_DESERIALIZER_CLASS_CONFIG).getName(), Deserializer.class);
+            this.offsetKeyDeserializer = config.getConfiguredInstance(WorkerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
             this.offsetKeyDeserializer.configure(config.getOriginalProperties(), true);
         }
 
         if (offsetValueDeserializer != null) {
             this.offsetValueDeserializer = offsetValueDeserializer;
         } else {
-            this.offsetValueDeserializer = Reflection.instantiate(
-                    config.getClass(WorkerConfig.VALUE_DESERIALIZER_CLASS_CONFIG).getName(), Deserializer.class);
+            this.offsetValueDeserializer = config.getConfiguredInstance(WorkerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
             this.offsetValueDeserializer.configure(config.getOriginalProperties(), false);
         }
     }
@@ -213,7 +206,11 @@ public class Worker {
     }
 
     private static Task instantiateTask(String taskClassName) {
-        return Reflection.instantiate(taskClassName, Task.class);
+        try {
+            return Utils.newInstance(Class.forName(taskClassName).asSubclass(Task.class));
+        } catch (ClassNotFoundException e) {
+            throw new CopycatRuntimeException("Task class not found", e);
+        }
     }
 
     public void stopTask(ConnectorTaskId id) throws CopycatException {
