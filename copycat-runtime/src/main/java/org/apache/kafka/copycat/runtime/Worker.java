@@ -77,8 +77,7 @@ public class Worker {
                   Deserializer offsetKeyDeserializer, Deserializer offsetValueDeserializer) {
         this.time = time;
         this.config = config;
-        this.converter = Reflection.instantiate(config.getClass(WorkerConfig.CONVERTER_CLASS_CONFIG).getName(),
-                Converter.class);
+        this.converter = Reflection.instantiate(config.getClass(WorkerConfig.CONVERTER_CLASS_CONFIG).getName(), Converter.class);
         this.offsetBackingStore = offsetBackingStore;
 
         if (offsetKeySerializer != null) {

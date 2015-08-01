@@ -32,7 +32,7 @@ public class JsonSerializer implements Serializer<JsonNode> {
     private static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
     private static final boolean SCHEMAS_ENABLE_DEFAULT = true;
 
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private boolean enableSchemas = SCHEMAS_ENABLE_DEFAULT;
 
     /**
