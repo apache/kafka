@@ -71,7 +71,7 @@ public class Copycat {
         try {
             // Destroy any requested connectors
             for (final String connName : config.getList(CopycatConfig.DELETE_CONNECTORS_CONFIG)) {
-                FutureCallback cb = new FutureCallback(new Callback<Void>() {
+                FutureCallback<Void> cb = new FutureCallback<>(new Callback<Void>() {
                     @Override
                     public void onCompletion(Throwable error, Void result) {
                         if (error != null)
@@ -85,7 +85,7 @@ public class Copycat {
             // Create any new connectors
             for (final String connectorPropsFile : config.getList(CopycatConfig.CREATE_CONNECTORS_CONFIG)) {
                 connectorProps = Utils.loadProps(connectorPropsFile);
-                FutureCallback cb = new FutureCallback(new Callback<String>() {
+                FutureCallback<String> cb = new FutureCallback<>(new Callback<String>() {
                     @Override
                     public void onCompletion(Throwable error, String id) {
                         if (error != null)

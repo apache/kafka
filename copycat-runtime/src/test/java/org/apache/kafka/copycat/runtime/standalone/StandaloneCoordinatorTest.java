@@ -42,7 +42,6 @@ public class StandaloneCoordinatorTest extends StandaloneCoordinatorTestBase {
     public void setup() {
         worker = PowerMock.createMock(Worker.class);
         coordinator = new StandaloneCoordinator(worker, new Properties());
-        createCallback = PowerMock.createMock(Callback.class);
 
         connectorProps = new Properties();
         connectorProps.setProperty(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
@@ -85,9 +84,9 @@ public class StandaloneCoordinatorTest extends StandaloneCoordinatorTestBase {
         PowerMock.replayAll();
 
         coordinator.addConnector(connectorProps, createCallback);
-        FutureCallback<Void> futureCb = new FutureCallback<>(new Callback() {
+        FutureCallback<Void> futureCb = new FutureCallback<>(new Callback<Void>() {
             @Override
-            public void onCompletion(Throwable error, Object result) {
+            public void onCompletion(Throwable error, Void result) {
 
             }
         });

@@ -62,11 +62,14 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
         log.info("Stopped FileOffsetBackingStore");
     }
 
+    @SuppressWarnings("unchecked")
     private void load() {
         try {
             ObjectInputStream is = new ObjectInputStream(new FileInputStream(file));
-            HashMap<String, Map<byte[], byte[]>> raw
-                    = (HashMap<String, Map<byte[], byte[]>>) is.readObject();
+            Object obj = is.readObject();
+            if (!(obj instanceof HashMap))
+                throw new CopycatRuntimeException("Expected HashMap but found " + obj.getClass());
+            HashMap<String, Map<byte[], byte[]>> raw = (HashMap<String, Map<byte[], byte[]>>) obj;
             data = new HashMap<>();
             for (Map.Entry<String, Map<byte[], byte[]>> entry : raw.entrySet()) {
                 HashMap<ByteBuffer, ByteBuffer> converted = new HashMap<>();

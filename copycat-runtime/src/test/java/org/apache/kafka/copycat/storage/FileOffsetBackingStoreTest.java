@@ -71,8 +71,7 @@ public class FileOffsetBackingStoreTest {
 
         store.set("namespace", firstSet, setCallback).get();
 
-        Map<ByteBuffer, ByteBuffer> values
-                = store.get("namespace", Arrays.asList(buffer("key"), buffer("bad")), getCallback).get();
+        Map<ByteBuffer, ByteBuffer> values = store.get("namespace", Arrays.asList(buffer("key"), buffer("bad")), getCallback).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
         assertEquals(null, values.get(buffer("bad")));
 
@@ -92,8 +91,7 @@ public class FileOffsetBackingStoreTest {
         FileOffsetBackingStore restore = new FileOffsetBackingStore();
         restore.configure(props);
         restore.start();
-        Map<ByteBuffer, ByteBuffer> values
-                = restore.get("namespace", Arrays.asList(buffer("key")), getCallback).get();
+        Map<ByteBuffer, ByteBuffer> values = restore.get("namespace", Arrays.asList(buffer("key")), getCallback).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
 
         PowerMock.verifyAll();
@@ -104,15 +102,16 @@ public class FileOffsetBackingStoreTest {
     }
 
     private Callback<Void> expectSuccessfulSetCallback() {
+        @SuppressWarnings("unchecked")
         Callback<Void> setCallback = PowerMock.createMock(Callback.class);
-        setCallback.onCompletion(null, null);
+        setCallback.onCompletion(EasyMock.isNull(Throwable.class), EasyMock.isNull(Void.class));
         PowerMock.expectLastCall();
         return setCallback;
     }
 
+    @SuppressWarnings("unchecked")
     private Callback<Map<ByteBuffer, ByteBuffer>> expectSuccessfulGetCallback() {
-        Callback<Map<ByteBuffer, ByteBuffer>> getCallback
-                = PowerMock.createMock(Callback.class);
+        Callback<Map<ByteBuffer, ByteBuffer>> getCallback = PowerMock.createMock(Callback.class);
         getCallback.onCompletion(EasyMock.isNull(Throwable.class), EasyMock.anyObject(Map.class));
         PowerMock.expectLastCall();
         return getCallback;

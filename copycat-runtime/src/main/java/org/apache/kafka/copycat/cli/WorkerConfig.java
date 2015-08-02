@@ -128,27 +128,20 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, OFFSET_COMMIT_TIMEOUT_MS_DOC);
     }
 
-    private Properties originalProperties;
-
     public WorkerConfig() {
         this(new Properties());
     }
 
     public WorkerConfig(Properties props) {
         super(config, props);
-        this.originalProperties = props;
     }
 
     public Properties getUnusedProperties() {
         Set<String> unusedKeys = this.unused();
         Properties unusedProps = new Properties();
         for (String key : unusedKeys) {
-            unusedProps.setProperty(key, originalProperties.getProperty(key));
+            unusedProps.put(key, this.originals().get(key));
         }
         return unusedProps;
-    }
-
-    public Properties getOriginalProperties() {
-        return originalProperties;
     }
 }

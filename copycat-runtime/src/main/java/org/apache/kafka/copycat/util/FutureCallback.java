@@ -21,12 +21,12 @@ import java.util.concurrent.*;
 
 public class FutureCallback<T> implements Callback<T>, Future<T> {
 
-    private Callback underlying;
+    private Callback<T> underlying;
     private CountDownLatch finishedLatch;
     private T result = null;
     private Throwable exception = null;
 
-    public FutureCallback(Callback underlying) {
+    public FutureCallback(Callback<T> underlying) {
         this.underlying = underlying;
         this.finishedLatch = new CountDownLatch(1);
     }

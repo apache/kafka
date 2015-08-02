@@ -24,7 +24,7 @@ import java.util.List;
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
  */
-public abstract class SourceTask<K, V> implements Task {
+public abstract class SourceTask implements Task {
 
     protected SourceTaskContext context;
 

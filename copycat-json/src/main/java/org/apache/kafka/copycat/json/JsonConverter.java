@@ -32,7 +32,7 @@ import java.util.*;
 /**
  * Implementation of Converter that uses JSON to store schemas and objects.
  */
-public class JsonConverter implements Converter {
+public class JsonConverter implements Converter<JsonNode> {
 
     private static final HashMap<String, JsonToCopycatTypeConverter> TO_COPYCAT_CONVERTERS
             = new HashMap<>();
@@ -106,15 +106,11 @@ public class JsonConverter implements Converter {
     }
 
     @Override
-    public Object toCopycatData(Object value) {
-        if (!(value instanceof JsonNode))
-            throw new CopycatRuntimeException("JsonConvert can only convert JsonNode objects.");
+    public Object toCopycatData(JsonNode value) {
+        if (!value.isObject() || value.size() != 2 || !value.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !value.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
+            throw new CopycatRuntimeException("JSON value converted to Copycat must be in envelope containing schema");
 
-        JsonNode data = (JsonNode) value;
-        if (!data.isObject() || data.size() != 2 || !data.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !data.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
-            throw new CopycatRuntimeException("JSON data converted to Copycat must be in envelope containing schema");
-
-        return convertToCopycat(data.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME), data.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+        return convertToCopycat(value.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME), value.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
 

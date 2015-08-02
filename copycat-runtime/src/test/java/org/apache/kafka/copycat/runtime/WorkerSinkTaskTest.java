@@ -32,6 +32,7 @@ import org.easymock.*;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -46,33 +47,36 @@ import static org.junit.Assert.assertEquals;
 @PowerMockIgnore("javax.management.*")
 public class WorkerSinkTaskTest extends ThreadedTest {
 
-    // These are fixed to keep this code simpler
+    // These are fixed to keep this code simpler. In this example we assume byte[] raw values
+    // with mix of integer/string in Copycat
     private static final String TOPIC = "test";
     private static final int PARTITION = 12;
     private static final long FIRST_OFFSET = 45;
-    private static final String KEY = "KEY";
+    private static final int KEY = 12;
     private static final String VALUE = "VALUE";
-    private static final String TOPIC_PARTITION_STR = "test-12";
+    private static final byte[] RAW_KEY = "key".getBytes();
+    private static final byte[] RAW_VALUE = "value".getBytes();
 
     private static final TopicPartition TOPIC_PARTITION = new TopicPartition(TOPIC, PARTITION);
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private Time time;
-    private SinkTask sinkTask;
+    @Mock private SinkTask sinkTask;
     private WorkerConfig workerConfig;
-    private Converter keyConverter;
-    private Converter valueConverter;
-    private WorkerSinkTask workerTask;
-    private KafkaConsumer<Object, Object> consumer;
+    @Mock private Converter<byte[]> keyConverter;
+    @Mock
+    private Converter<byte[]> valueConverter;
+    private WorkerSinkTask<Integer, String> workerTask;
+    @Mock private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskThread workerThread;
 
     private long recordsReturned;
 
+    @SuppressWarnings("unchecked")
     @Override
     public void setup() {
         super.setup();
         time = new MockTime();
-        sinkTask = PowerMock.createMock(SinkTask.class);
         Properties workerProps = new Properties();
         workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
@@ -81,8 +85,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         workerProps.setProperty("key.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
         workerProps.setProperty("value.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
         workerConfig = new WorkerConfig(workerProps);
-        keyConverter = PowerMock.createMock(Converter.class);
-        valueConverter = PowerMock.createMock(Converter.class);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer", "createWorkerThread"},
                 taskId, sinkTask, workerConfig, keyConverter, valueConverter, time);
@@ -129,19 +131,15 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     public void testDeliverConvertsData() throws Exception {
         // Validate conversion is performed when data is delivered
         Integer record = 12;
-        byte[] rawKey = "key".getBytes(), rawValue = "value".getBytes();
 
-        ConsumerRecords<Object, Object> records = new ConsumerRecords<>(
+        ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
                 Collections.singletonMap(
                         new TopicPartition("topic", 0),
-                        Collections.singletonList(
-                                new ConsumerRecord<Object, Object>("topic", 0, 0, rawKey, rawValue))));
+                        Collections.singletonList(new ConsumerRecord<>("topic", 0, 0, RAW_KEY, RAW_VALUE))));
 
         // Exact data doesn't matter, but should be passed directly to sink task
-        EasyMock.expect(keyConverter.toCopycatData(rawKey))
-                .andReturn(record);
-        EasyMock.expect(valueConverter.toCopycatData(rawValue))
-                .andReturn(record);
+        EasyMock.expect(keyConverter.toCopycatData(RAW_KEY)).andReturn(record);
+        EasyMock.expect(valueConverter.toCopycatData(RAW_VALUE)).andReturn(record);
         Capture<Collection<SinkRecord>> capturedRecords
                 = EasyMock.newCapture(CaptureType.ALL);
         sinkTask.put(EasyMock.capture(capturedRecords));
@@ -262,14 +260,13 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    private KafkaConsumer<Object, Object> expectInitializeTask(Properties taskProps)
+    private KafkaConsumer<byte[], byte[]> expectInitializeTask(Properties taskProps)
             throws Exception {
         sinkTask.initialize(EasyMock.anyObject(SinkTaskContext.class));
         PowerMock.expectLastCall();
         sinkTask.start(taskProps);
         PowerMock.expectLastCall();
 
-        consumer = PowerMock.createMock(KafkaConsumer.class);
         PowerMock.expectPrivate(workerTask, "createConsumer", taskProps)
                 .andReturn(consumer);
         workerThread = PowerMock.createPartialMock(WorkerSinkTaskThread.class, new String[]{"start"},
@@ -302,22 +299,23 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         // Stub out all the consumer stream/iterator responses, which we just want to verify occur,
         // but don't care about the exact details here.
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andStubAnswer(
-                new IAnswer<ConsumerRecords<Object, Object>>() {
+                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
-                    public ConsumerRecords<Object, Object> answer() throws Throwable {
+                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
                         // "Sleep" so time will progress
                         time.sleep(pollDelayMs);
-                        ConsumerRecords<Object, Object> records = new ConsumerRecords<>(
-                                Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), Arrays.asList(
-                                        new ConsumerRecord<Object, Object>(TOPIC, PARTITION,
-                                                FIRST_OFFSET + recordsReturned, KEY,
-                                                VALUE))));
+                        ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
+                                Collections.singletonMap(
+                                        new TopicPartition(TOPIC, PARTITION),
+                                        Arrays.asList(
+                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
+                                        )));
                         recordsReturned++;
                         return records;
                     }
                 });
-        EasyMock.expect(keyConverter.toCopycatData(KEY)).andReturn(KEY).anyTimes();
-        EasyMock.expect(valueConverter.toCopycatData(VALUE)).andReturn(VALUE).anyTimes();
+        EasyMock.expect(keyConverter.toCopycatData(RAW_KEY)).andReturn(KEY).anyTimes();
+        EasyMock.expect(valueConverter.toCopycatData(RAW_VALUE)).andReturn(VALUE).anyTimes();
         Capture<Collection<SinkRecord>> capturedRecords = EasyMock.newCapture(CaptureType.ALL);
         sinkTask.put(EasyMock.capture(capturedRecords));
         EasyMock.expectLastCall().anyTimes();

@@ -63,15 +63,16 @@ import java.util.concurrent.Future;
  * This class is not thread-safe. It should only be accessed from a Task's processing thread.
  * </p>
  */
-public class OffsetStorageWriter {
+public class OffsetStorageWriter<K, V> {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageWriter.class);
 
     private final OffsetBackingStore backingStore;
-    private final Converter keyConverter;
-    private final Converter valueConverter;
-    private final Serializer keySerializer;
-    private final Serializer valueSerializer;
+    private final Converter<K> keyConverter;
+    private final Converter<V> valueConverter;
+    private final Serializer<K> keySerializer;
+    private final Serializer<V> valueSerializer;
     private final String namespace;
+    // Offset data in Copycat format
     private Map<Object, Object> data = new HashMap<>();
 
     // Not synchronized, should only be accessed by flush thread
@@ -80,8 +81,8 @@ public class OffsetStorageWriter {
     private long currentFlushId = 0;
 
     public OffsetStorageWriter(OffsetBackingStore backingStore,
-                               String namespace, Converter keyConverter, Converter valueConverter,
-                               Serializer keySerializer, Serializer valueSerializer) {
+                               String namespace, Converter<K> keyConverter, Converter<V> valueConverter,
+                               Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this.backingStore = backingStore;
         this.namespace = namespace;
         this.keyConverter = keyConverter;
@@ -90,6 +91,11 @@ public class OffsetStorageWriter {
         this.valueSerializer = valueSerializer;
     }
 
+    /**
+     * Set an offset for a partition using Copycat data values
+     * @param partition the partition to store an offset for
+     * @param offset the offset
+     */
     public synchronized void setOffset(Object partition, Object offset) {
         data.put(partition, offset);
     }

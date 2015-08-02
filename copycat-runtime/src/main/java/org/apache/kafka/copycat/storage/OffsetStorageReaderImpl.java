@@ -34,20 +34,19 @@ import java.util.Map;
  * directly, the interface is only separate from this implementation because it needs to be
  * included in the public API package.
  */
-public class OffsetStorageReaderImpl implements OffsetStorageReader {
+public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageReaderImpl.class);
 
     private final OffsetBackingStore backingStore;
     private final String namespace;
-    private final Converter keyConverter;
-    private final Converter valueConverter;
-    private final Serializer keySerializer;
-    private final Deserializer valueDeserializer;
+    private final Converter<K> keyConverter;
+    private final Converter<V> valueConverter;
+    private final Serializer<K> keySerializer;
+    private final Deserializer<V> valueDeserializer;
 
     public OffsetStorageReaderImpl(OffsetBackingStore backingStore, String namespace,
-                                   Converter keyConverter, Converter valueConverter,
-                                   Serializer keySerializer,
-                                   Deserializer valueDeserializer) {
+                                   Converter<K> keyConverter, Converter<V> valueConverter,
+                                   Serializer<K> keySerializer, Deserializer<V> valueDeserializer) {
         this.backingStore = backingStore;
         this.namespace = namespace;
         this.keyConverter = keyConverter;

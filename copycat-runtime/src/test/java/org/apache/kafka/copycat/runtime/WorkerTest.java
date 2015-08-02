@@ -82,8 +82,7 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
 
         PowerMock.mockStatic(Worker.class);
-        PowerMock.expectPrivate(Worker.class, "instantiateTask", TestSourceTask.class.getName())
-                .andReturn(task);
+        PowerMock.expectPrivate(Worker.class, "instantiateTask", TestSourceTask.class.getName()).andReturn(task);
 
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(taskId), EasyMock.eq(task),
@@ -128,8 +127,7 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
 
         PowerMock.mockStatic(Worker.class);
-        PowerMock.expectPrivate(Worker.class, "instantiateTask", TestSourceTask.class.getName())
-                .andReturn(task);
+        PowerMock.expectPrivate(Worker.class, "instantiateTask", TestSourceTask.class.getName()).andReturn(task);
 
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(taskId), EasyMock.eq(task),
@@ -162,7 +160,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
 
-    private static class TestSourceTask extends SourceTask<Object, Object> {
+    private static class TestSourceTask extends SourceTask {
         public TestSourceTask() {
         }
 

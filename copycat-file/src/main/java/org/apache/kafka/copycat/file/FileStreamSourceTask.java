@@ -32,7 +32,7 @@ import java.util.Properties;
 /**
  * FileStreamSourceTask reads from stdin or a file.
  */
-public class FileStreamSourceTask extends SourceTask<Object, Object> {
+public class FileStreamSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(FileStreamSourceTask.class);
 
     private InputStream stream;

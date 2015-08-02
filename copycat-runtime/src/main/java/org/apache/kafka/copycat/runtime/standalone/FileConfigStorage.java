@@ -94,10 +94,14 @@ public class FileConfigStorage implements ConfigStorage {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void load() {
         try {
             ObjectInputStream is = new ObjectInputStream(new FileInputStream(filename));
-            connectorConfig = (Map<String, Properties>) is.readObject();
+            Object data = is.readObject();
+            if (!(data instanceof Map))
+                throw new CopycatRuntimeException("Expected Map but found " + data.getClass());
+            connectorConfig = (Map<String, Properties>) data;
         } catch (FileNotFoundException e) {
             // Expected on first run
         } catch (IOException | ClassNotFoundException e) {

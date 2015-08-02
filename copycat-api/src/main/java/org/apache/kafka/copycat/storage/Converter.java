@@ -24,19 +24,19 @@ package org.apache.kafka.copycat.storage;
  * component -- the producer or consumer serializer or deserializer for records or a Copycat
  * serializer or deserializer for offsets.
  */
-public interface Converter {
+public interface Converter<T> {
 
     /**
      * Convert a Copycat data object to a native object for serialization.
      * @param value
      * @return
      */
-    Object fromCopycatData(Object value);
+    T fromCopycatData(Object value);
 
     /**
      * Convert a native object to a Copycat data object.
      * @param value
      * @return
      */
-    Object toCopycatData(Object value);
+    Object toCopycatData(T value);
 }

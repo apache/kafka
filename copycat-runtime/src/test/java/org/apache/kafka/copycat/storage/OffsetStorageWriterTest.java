@@ -26,34 +26,43 @@ import org.easymock.IAnswer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.easymock.annotation.Mock;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(PowerMockRunner.class)
 public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
-    private static final String OFFSET_KEY = "key";
+    // Copycat format - any types should be accepted here
+    private static final List<String> OFFSET_KEY = Arrays.asList("key", "key");
     private static final String OFFSET_VALUE = "value";
-    private static final String OFFSET_KEY_CONVERTED = "key-converted";
+    // Native objects - must match serializer types
+    private static final int OFFSET_KEY_CONVERTED = 12;
     private static final String OFFSET_VALUE_CONVERTED = "value-converted";
+    // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
     private static final Map<ByteBuffer, ByteBuffer> OFFSETS_SERIALIZED
             = Collections.singletonMap(ByteBuffer.wrap(OFFSET_KEY_SERIALIZED),
             ByteBuffer.wrap(OFFSET_VALUE_SERIALIZED));
 
-    private OffsetBackingStore store;
-    private Converter keyConverter;
-    private Converter valueConverter;
-    private Serializer keySerializer;
-    private Serializer valueSerializer;
-    private OffsetStorageWriter writer;
+    @Mock private OffsetBackingStore store;
+    @Mock private Converter<Integer> keyConverter;
+    @Mock private Converter<String> valueConverter;
+    @Mock private Serializer<Integer> keySerializer;
+    @Mock private Serializer<String> valueSerializer;
+    private OffsetStorageWriter<Integer, String> writer;
 
     private static Exception exception = new RuntimeException("error");
 
@@ -61,13 +70,7 @@ public class OffsetStorageWriterTest {
 
     @Before
     public void setup() {
-        store = PowerMock.createMock(OffsetBackingStore.class);
-        keyConverter = PowerMock.createMock(Converter.class);
-        valueConverter = PowerMock.createMock(Converter.class);
-        keySerializer = PowerMock.createMock(Serializer.class);
-        valueSerializer = PowerMock.createMock(Serializer.class);
-        writer = new OffsetStorageWriter(store, NAMESPACE, keyConverter, valueConverter, keySerializer, valueSerializer);
-
+        writer = new OffsetStorageWriter<>(store, NAMESPACE, keyConverter, valueConverter, keySerializer, valueSerializer);
         service = Executors.newFixedThreadPool(1);
     }
 
@@ -78,6 +81,7 @@ public class OffsetStorageWriterTest {
 
     @Test
     public void testWriteFlush() throws Exception {
+        @SuppressWarnings("unchecked")
         Callback<Void> callback = PowerMock.createMock(Callback.class);
         expectStore(callback, false);
 
@@ -109,6 +113,7 @@ public class OffsetStorageWriterTest {
         // When a flush fails, we shouldn't just lose the offsets. Instead, they should be restored
         // such that a subsequent flush will write them.
 
+        @SuppressWarnings("unchecked")
         final Callback<Void> callback = PowerMock.createMock(Callback.class);
         // First time the write fails
         expectStore(callback, true);
@@ -130,6 +135,7 @@ public class OffsetStorageWriterTest {
 
     @Test(expected = CopycatRuntimeException.class)
     public void testAlreadyFlushing() throws Exception {
+        @SuppressWarnings("unchecked")
         final Callback<Void> callback = PowerMock.createMock(Callback.class);
         // Trigger the send, but don't invoke the callback so we'll still be mid-flush
         CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
@@ -158,6 +164,7 @@ public class OffsetStorageWriterTest {
 
     @Test
     public void testCancelAfterAwaitFlush() throws Exception {
+        @SuppressWarnings("unchecked")
         Callback<Void> callback = PowerMock.createMock(Callback.class);
         CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
         // In this test, the write should be cancelled so the callback will not be invoked and is not

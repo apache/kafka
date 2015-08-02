@@ -38,21 +38,21 @@ import java.util.concurrent.TimeUnit;
 /**
  * WorkerTask that uses a SinkTask to export data from Kafka.
  */
-public class WorkerSinkTask implements WorkerTask {
+public class WorkerSinkTask<K, V> implements WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);
 
     private final ConnectorTaskId id;
     private final SinkTask task;
     private final WorkerConfig workerConfig;
     private final Time time;
-    private final Converter keyConverter;
-    private final Converter valueConverter;
+    private final Converter<K> keyConverter;
+    private final Converter<V> valueConverter;
     private WorkerSinkTaskThread workThread;
-    private KafkaConsumer<Object, Object> consumer;
+    private KafkaConsumer<K, V> consumer;
     private final SinkTaskContext context;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
-                          Converter keyConverter, Converter valueConverter, Time time) {
+                          Converter<K> keyConverter, Converter<V> valueConverter, Time time) {
         this.id = id;
         this.task = task;
         this.workerConfig = workerConfig;
@@ -107,7 +107,7 @@ public class WorkerSinkTask implements WorkerTask {
     public void poll(long timeoutMs) {
         try {
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
-            ConsumerRecords<Object, Object> msgs = consumer.poll(timeoutMs);
+            ConsumerRecords<K, V> msgs = consumer.poll(timeoutMs);
             log.trace("{} polling returned {} messages", id, msgs.count());
             deliverMessages(msgs);
         } catch (ConsumerWakeupException we) {
@@ -153,7 +153,7 @@ public class WorkerSinkTask implements WorkerTask {
         return workerConfig;
     }
 
-    private KafkaConsumer<Object, Object> createConsumer(Properties taskProps) {
+    private KafkaConsumer<K, V> createConsumer(Properties taskProps) {
         String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
             throw new CopycatRuntimeException("Sink tasks require a list of topics.");
@@ -172,7 +172,7 @@ public class WorkerSinkTask implements WorkerTask {
         props.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
                 workerConfig.getClass(WorkerConfig.VALUE_DESERIALIZER_CLASS_CONFIG).getName());
 
-        KafkaConsumer<Object, Object> newConsumer;
+        KafkaConsumer<K, V> newConsumer;
         try {
             newConsumer = new KafkaConsumer<>(props);
         } catch (Throwable t) {
@@ -201,11 +201,11 @@ public class WorkerSinkTask implements WorkerTask {
         return new WorkerSinkTaskThread(this, "WorkerSinkTask-" + id, time, workerConfig);
     }
 
-    private void deliverMessages(ConsumerRecords<Object, Object> msgs) {
+    private void deliverMessages(ConsumerRecords<K, V> msgs) {
         // Finally, deliver this batch to the sink
         if (msgs.count() > 0) {
             List<SinkRecord> records = new ArrayList<>();
-            for (ConsumerRecord<Object, Object> msg : msgs) {
+            for (ConsumerRecord<K, V> msg : msgs) {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
                 records.add(
                         new SinkRecord(msg.topic(), msg.partition(),

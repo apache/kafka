@@ -30,6 +30,7 @@ import org.apache.kafka.copycat.util.Callback;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.easymock.EasyMock;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.easymock.annotation.Mock;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -40,9 +41,9 @@ public class StandaloneCoordinatorTestBase {
     protected static final String TOPICS_LIST_STR = "topic1,topic2";
 
     protected StandaloneCoordinator coordinator;
-    protected Worker worker;
+    @Mock protected Worker worker;
     protected Connector connector;
-    protected Callback<String> createCallback;
+    @Mock protected Callback<String> createCallback;
 
     protected Properties connectorProps;
     protected Properties taskProps;

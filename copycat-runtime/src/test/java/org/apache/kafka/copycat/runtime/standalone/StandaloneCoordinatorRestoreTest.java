@@ -18,9 +18,7 @@
 package org.apache.kafka.copycat.runtime.standalone;
 
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
-import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.sink.SinkConnector;
-import org.apache.kafka.copycat.util.Callback;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,7 +39,6 @@ public class StandaloneCoordinatorRestoreTest extends StandaloneCoordinatorTestB
 
     @Before
     public void setup() throws Exception {
-        worker = PowerMock.createMock(Worker.class);
         Properties coordinatorProps = new Properties();
         coordinatorProps.setProperty(StandaloneCoordinator.STORAGE_CONFIG,
                 FileConfigStorage.class.getName());
@@ -50,7 +47,6 @@ public class StandaloneCoordinatorRestoreTest extends StandaloneCoordinatorTestB
         coordinatorProps.setProperty(FileConfigStorage.FILE_CONFIG,
                 coordinatorConfigFile.getAbsolutePath());
         coordinator = new StandaloneCoordinator(worker, coordinatorProps);
-        createCallback = PowerMock.createMock(Callback.class);
 
         connectorProps = new Properties();
         connectorProps.setProperty(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
