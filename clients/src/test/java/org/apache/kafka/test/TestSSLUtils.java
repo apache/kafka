@@ -178,7 +178,7 @@ public class TestSSLUtils {
     }
 
     public static Map<String, Object> createSSLConfig(SSLFactory.Mode mode, File keyStoreFile, String password, String keyPassword,
-                                                      File trustStoreFile, String trustStorePassword, boolean useClientCert) {
+                                                      File trustStoreFile, String trustStorePassword) {
         Map<String, Object> sslConfigs = new HashMap<String, Object>();
         sslConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
         sslConfigs.put(SSLConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
@@ -236,7 +236,7 @@ public class TestSSLUtils {
         }
 
         Map<String, Object> sslConfig = createSSLConfig(mode, keyStoreFile, password,
-                                                        password, trustStoreFile, trustStorePassword, useClientCert);
+                                                        password, trustStoreFile, trustStorePassword);
         return sslConfig;
     }
 

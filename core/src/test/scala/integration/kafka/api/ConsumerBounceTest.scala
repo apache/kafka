@@ -96,7 +96,6 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   def testSeekAndCommitWithBrokerFailures() = seekAndCommitWithBrokerFailures(5)
 
   def seekAndCommitWithBrokerFailures(numIters: Int) {
-    println("testSeekAndCommitWithBrokerFailures")
     val numRecords = 1000
     sendRecords(numRecords)
     this.producers.foreach(_.close)

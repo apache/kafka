@@ -99,8 +99,4 @@ public class SSLConfigs {
         + "Default value is false";
     public static final Boolean DEFAULT_SSL_NEED_CLIENT_AUTH = false;
 
-    public static final String SSL_WANT_CLIENT_AUTH_CONFIG = "ssl.want.client.auth";
-    public static final String SSL_WANT_CLIENT_AUTH_DOC = "If set to true kafka broker requests for client authentication. Clients without any certificates can still be able to connect using SSL.";
-    public static final Boolean DEFAULT_SSL_WANT_CLIENT_AUTH = false;
-
 }

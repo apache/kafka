@@ -924,7 +924,7 @@ object TestUtils extends Logging {
     if (mode == SSLFactory.Mode.SERVER)
       sslConfigs = TestSSLUtils.createSSLConfig(true, true, mode, trustStoreFile.get, certAlias)
     else
-      sslConfigs = TestSSLUtils.createSSLConfig(false, false, mode, trustStoreFile.get, certAlias)
+      sslConfigs = TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStoreFile.get, certAlias)
 
     val sslProps = new Properties()
     sslConfigs.foreach(kv =>

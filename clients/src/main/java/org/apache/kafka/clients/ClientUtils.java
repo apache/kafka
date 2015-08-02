@@ -77,13 +77,12 @@ public class ClientUtils {
         ChannelBuilder channelBuilder = null;
         SecurityProtocol securityProtocol = SecurityProtocol.valueOf((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
 
-        if (securityProtocol == SecurityProtocol.SSL) {
+        if (securityProtocol == SecurityProtocol.SSL)
             channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
-        } else if (securityProtocol == SecurityProtocol.PLAINTEXT) {
+        else if (securityProtocol == SecurityProtocol.PLAINTEXT)
             channelBuilder = new PlainTextChannelBuilder();
-        } else {
+        else
             throw new ConfigException("Invalid SecurityProtocol " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG);
-        }
 
         channelBuilder.configure(configs);
         return channelBuilder;

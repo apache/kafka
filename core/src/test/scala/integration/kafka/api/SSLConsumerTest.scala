@@ -60,8 +60,8 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   overridingProps.put(KafkaConfig.ConsumerMinSessionTimeoutMsProp, "100") // set small enough session timeout
 
-  var consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-  var producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+  val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   def generateConfigs() =
     TestUtils.createBrokerConfigs(numServers, zkConnect, false, enableSSL=true, trustStoreFile=Some(trustStoreFile)).map(KafkaConfig.fromProps(_, overridingProps))
@@ -86,12 +86,12 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range")
 
-    for(i <- 0 until producerCount)
+    for (i <- 0 until producerCount)
       producers += TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers),
                                                acks = 1,
                                                enableSSL=true,
                                                trustStoreFile=Some(trustStoreFile))
-    for(i <- 0 until consumerCount)
+    for (i <- 0 until consumerCount)
       consumers += TestUtils.createNewConsumer(TestUtils.getSSLBrokerListStrFromServers(servers),
                                                groupId = "my-test",
                                                partitionAssignmentStrategy= "range",
@@ -210,12 +210,12 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
                                                 trustStoreFile=Some(trustStoreFile))
     consumer0.subscribe(topic)
     // the initial subscription should cause a callback execution
-    while(callback.callsToAssigned == 0)
+    while (callback.callsToAssigned == 0)
       consumer0.poll(50)
 
     // get metadata for the topic
     var parts = consumer0.partitionsFor(ConsumerCoordinator.OffsetsTopicName)
-    while(parts == null)
+    while (parts == null)
       parts = consumer0.partitionsFor(ConsumerCoordinator.OffsetsTopicName)
     assertEquals(1, parts.size)
     assertNotNull(parts(0).leader())
@@ -225,7 +225,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
     this.servers(coordinator).shutdown()
 
     // this should cause another callback execution
-    while(callback.callsToAssigned < 2)
+    while (callback.callsToAssigned < 2)
       consumer0.poll(50)
     assertEquals(2, callback.callsToAssigned)
     assertEquals(2, callback.callsToRevoked)
@@ -262,7 +262,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
       for (record <- consumer.poll(50)) {
         records.add(record)
       }
-      if(iters > maxIters)
+      if (iters > maxIters)
         throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
       iters += 1
     }

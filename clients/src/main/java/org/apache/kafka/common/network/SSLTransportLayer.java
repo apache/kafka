@@ -407,6 +407,7 @@ public class SSLTransportLayer implements TransportLayer {
             if (netReadBuffer.remaining() > 0) {
                 int netread = socketChannel.read(netReadBuffer);
                 if (netread == 0) return netread;
+                else if (netread < 0) throw new EOFException("EOF during read");
             }
             do {
                 netReadBuffer.flip();
@@ -479,9 +480,10 @@ public class SSLTransportLayer implements TransportLayer {
         while (i < length) {
             if (dsts[i].hasRemaining()) {
                 int read = read(dsts[i]);
-                if (read > 0) {
+                if (read > 0)
                     totalRead += read;
-                }
+                else
+                    break;
             }
             if (!dsts[i].hasRemaining()) {
                 i++;

@@ -203,7 +203,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
       }
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val fetchResponse1 = if(leader1.get == configs(0).brokerId) {
+      val fetchResponse1 = if (leader1.get == configs(0).brokerId) {
         consumer1.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
       } else {
         consumer2.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
@@ -267,7 +267,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
       val record1 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 1, null, "value".getBytes)
 
       // Test closing from caller thread.
-      for(i <- 0 until 50) {
+      for (i <- 0 until 50) {
         producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile), lingerMs = Long.MaxValue)
         val responses = (0 until numRecords) map (i => producer.send(record0))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
@@ -323,7 +323,7 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
         }
       }
 
-      for(i <- 0 until 50) {
+      for (i <- 0 until 50) {
         //producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
         producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile), lingerMs = Long.MaxValue)
         // send message to partition 0

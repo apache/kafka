@@ -498,11 +498,10 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
-  private def createChannelBuilder():ChannelBuilder = {
-    var channelBuilder:ChannelBuilder = new PlainTextChannelBuilder()
-    if (protocol == SecurityProtocol.SSL) {
-      channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.SERVER)
-    }
+  private def createChannelBuilder(): ChannelBuilder = {
+    val channelBuilder:ChannelBuilder = if (protocol == SecurityProtocol.SSL)  new SSLChannelBuilder(SSLFactory.Mode.SERVER)
+                                        else new PlainTextChannelBuilder()
+
     channelBuilder.configure(channelConfigs)
     channelBuilder
   }

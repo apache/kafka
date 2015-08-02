@@ -458,7 +458,7 @@ public class Selector implements Selectable {
      */
     @Override
     public boolean isChannelReady(String id) {
-        KafkaChannel channel = this.channels.get(id);
+        KafkaChannel channel = channelForId(id);
         return channel.ready();
     }
 
