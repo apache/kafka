@@ -64,6 +64,7 @@ class KStreamBranch<K, V> implements Receiver {
   @SuppressWarnings("unchecked")
   @Override
 <<<<<<< HEAD
+<<<<<<< HEAD
   public void receive(Object key, Object value, long timestamp) {
     for (int i = 0; i < predicates.length; i++) {
       Predicate<K, V> predicate = predicates[i];
@@ -80,10 +81,13 @@ class KStreamBranch<K, V> implements Receiver {
       branch.close();
 =======
   public void receive(Object key, Object value, long timestamp, long streamTime) {
+=======
+  public void receive(Object key, Object value, long timestamp) {
+>>>>>>> remove streamTime from Receiver
     for (int i = 0; i < predicates.length; i++) {
       Predicate<K, V> predicate = predicates[i];
       if (predicate.apply((K)key, (V)value)) {
-        branches[i].receive(key, value, timestamp, streamTime);
+        branches[i].receive(key, value, timestamp);
         return;
       }
 >>>>>>> new api model

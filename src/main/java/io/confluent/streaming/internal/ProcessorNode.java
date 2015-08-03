@@ -27,6 +27,7 @@ public class ProcessorNode<K, V> implements Receiver {
   @SuppressWarnings("unchecked")
   @Override
   public void receive(Object key, Object value, long timestamp) {
+<<<<<<< HEAD
 =======
     processor.init(new ProcessorContextImpl(context, context.getPunctuationScheduler(processor)));
 =======
@@ -37,6 +38,8 @@ public class ProcessorNode<K, V> implements Receiver {
   @Override
   public void receive(Object key, Object value, long timestamp, long streamTime) {
 >>>>>>> wip
+=======
+>>>>>>> remove streamTime from Receiver
     processor.process((K) key, (V) value);
   }
   @Override
