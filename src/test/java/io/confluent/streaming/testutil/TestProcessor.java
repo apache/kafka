@@ -1,13 +1,13 @@
 package io.confluent.streaming.testutil;
 
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
-import io.confluent.streaming.PunctuationScheduler;
 
 import java.util.ArrayList;
 
 public class TestProcessor<K, V> implements Processor<K, V> {
-  public final ArrayList<String> processed = new ArrayList<String>();
-  public final ArrayList<Long> punctuated = new ArrayList<Long>();
+  public final ArrayList<String> processed = new ArrayList<>();
+  public final ArrayList<Long> punctuated = new ArrayList<>();
 
   @Override
   public void process(K key, V value) {
@@ -15,7 +15,7 @@ public class TestProcessor<K, V> implements Processor<K, V> {
   }
 
   @Override
-  public void init(ProcessorContext context) {
+  public void init(KStreamContext context) {
   }
 
   @Override

@@ -1,5 +1,6 @@
 package io.confluent.streaming.examples;
 
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KafkaStreaming;
 import io.confluent.streaming.Processor;
 import io.confluent.streaming.SingleProcessorTopology;
@@ -17,15 +18,15 @@ import java.util.Properties;
 
 public class StatefulKStreamJob implements Processor<String, Integer> {
 
-  private ProcessorContext processorContext;
+  private KStreamContext context;
   private KeyValueStore<String, Integer> kvStore;
 
   @Override
-  public void init(ProcessorContext context) {
-    this.processorContext = context;
-    this.processorContext.schedule(1000);
+  public void init(KStreamContext context) {
+    this.context = context;
+    this.context.schedule(this, 1000);
 
-    this.kvStore = new InMemoryKeyValueStore<>("local-state", context.kstreamContext());
+    this.kvStore = new InMemoryKeyValueStore<>("local-state", context);
     this.kvStore.restore(); // call restore inside processor.init
   }
 
@@ -39,7 +40,7 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
       this.kvStore.put(key, newValue);
     }
 
-    processorContext.commit();
+    context.commit();
   }
 
   @Override

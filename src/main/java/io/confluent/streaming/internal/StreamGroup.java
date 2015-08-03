@@ -2,7 +2,6 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
-import io.confluent.streaming.PunctuationScheduler;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.MinTimestampTracker;
 import io.confluent.streaming.util.ParallelExecutor;
@@ -198,12 +197,12 @@ public class StreamGroup implements ParallelExecutor.Task {
   }
 
   /**
-   * Returns a PunctuationScheduler
+   * Schedules a punctuation for the processor
    * @param processor the processor requesting scheduler
-   * @return PunctuationScheduler
+   * @param interval the interval in milliseconds
    */
-  public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
-    return new PunctuationSchedulerImpl(punctuationQueue, processor);
+  public void schedule(Processor<?, ?> processor, long interval) {
+    punctuationQueue.schedule(new PunctuationSchedule(processor, interval));
   }
 
   /**

@@ -20,7 +20,7 @@ public class ProcessorNode<K, V> implements Receiver {
     if (this.context != null) throw new IllegalStateException("kstream topology is already bound");
 
     this.context = context;
-    processor.init(new ProcessorContextImpl(context, context.getPunctuationScheduler(processor)));
+    processor.init(context);
   }
   @SuppressWarnings("unchecked")
   @Override

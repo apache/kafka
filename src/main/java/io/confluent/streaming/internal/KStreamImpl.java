@@ -20,12 +20,12 @@ import java.util.ArrayList;
 abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   private final ArrayList<Receiver> nextReceivers = new ArrayList<>(1);
-  protected KStreamTopology initializer;
+  protected KStreamTopology topology;
   protected KStreamContext context;
   protected KStreamMetadata metadata;
 
-  protected KStreamImpl(KStreamTopology initializer) {
-    this.initializer = initializer;
+  protected KStreamImpl(KStreamTopology topology) {
+    this.topology = topology;
   }
 
   @Override
@@ -49,7 +49,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public KStream<K, V> filter(Predicate<K, V> predicate) {
-    return chain(new KStreamFilter<K, V>(predicate, initializer));
+    return chain(new KStreamFilter<K, V>(predicate, topology));
   }
 
   @Override
@@ -63,32 +63,32 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper) {
-    return chain(new KStreamMap<K1, V1, K, V>(mapper, initializer));
+    return chain(new KStreamMap<K1, V1, K, V>(mapper, topology));
   }
 
   @Override
   public <V1> KStream<K, V1> mapValues(ValueMapper<V1, V> mapper) {
-    return chain(new KStreamMapValues<K, V1, V>(mapper, initializer));
+    return chain(new KStreamMapValues<K, V1, V>(mapper, topology));
   }
 
   @Override
   public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K1, ? extends Iterable<V1>, K, V> mapper) {
-    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, initializer));
+    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, topology));
   }
 
   @Override
   public <V1> KStream<K, V1> flatMapValues(ValueMapper<? extends Iterable<V1>, V> mapper) {
-    return chain(new KStreamFlatMapValues<K, V1, V>(mapper, initializer));
+    return chain(new KStreamFlatMapValues<K, V1, V>(mapper, topology));
   }
 
   @Override
   public KStreamWindowed<K, V> with(Window<K, V> window) {
-    return (KStreamWindowed<K, V>)chain(new KStreamWindowedImpl<>(window, initializer));
+    return (KStreamWindowed<K, V>)chain(new KStreamWindowedImpl<>(window, topology));
   }
 
   @Override
   public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
-    KStreamBranch<K, V> branch = new KStreamBranch<>(predicates, initializer);
+    KStreamBranch<K, V> branch = new KStreamBranch<>(predicates, topology);
     registerReceiver(branch);
     return branch.branches;
   }
@@ -103,7 +103,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @Override
   public <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer) {
     process(this.getSendProcessor(topic, keySerializer, valSerializer));
-    return initializer.from(keyDeserializer, valDeserializer, topic);
+    return topology.from(keyDeserializer, valDeserializer, topic);
   }
 
   @Override
@@ -119,15 +119,15 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @SuppressWarnings("unchecked")
   private <K, V> Processor<K, V> getSendProcessor(final String sendTopic, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
     return new Processor<K, V>() {
-      private ProcessorContext processorContext;
+      private KStreamContext context;
 
       @Override
-      public void init(ProcessorContext processorContext) {
-        this.processorContext = processorContext;
+      public void init(KStreamContext context) {
+        this.context = context;
       }
       @Override
       public void process(K key, V value) {
-        this.processorContext.send(sendTopic, key, value, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer);
+        this.context.send(sendTopic, key, value, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer);
       }
       @Override
       public void punctuate(long streamTime) {}

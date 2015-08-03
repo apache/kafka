@@ -94,7 +94,7 @@ public interface KStreamContext {
 
   void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer);
 
-  PunctuationScheduler getPunctuationScheduler(Processor processor);
+  void schedule(Processor processor, long interval);
 
   void commit();
 

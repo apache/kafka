@@ -1,5 +1,6 @@
 package io.confluent.streaming.internal;
 
+import io.confluent.streaming.Processor;
 import io.confluent.streaming.util.Stamped;
 
 import java.util.PriorityQueue;
@@ -9,21 +10,12 @@ import java.util.PriorityQueue;
  */
 public class PunctuationQueue {
 
-  private PriorityQueue<Stamped<PunctuationSchedulerImpl>> pq = new PriorityQueue<Stamped<PunctuationSchedulerImpl>>();
+  private PriorityQueue<PunctuationSchedule> pq = new PriorityQueue<>();
 
-  public Stamped<PunctuationSchedulerImpl> schedule(PunctuationSchedulerImpl scheduler, long time) {
+  public void schedule(PunctuationSchedule sched) {
     synchronized (pq) {
-      Stamped<PunctuationSchedulerImpl> stamped = new Stamped<PunctuationSchedulerImpl>(scheduler, time);
-      pq.add(stamped);
-      return stamped;
+      pq.add(sched);
     }
-  }
-
-  public void cancel(Stamped<PunctuationSchedulerImpl> stamped) {
-    synchronized (pq) {
-      pq.remove(stamped);
-    }
-
   }
 
   public void close() {
@@ -34,12 +26,12 @@ public class PunctuationQueue {
 
   public void mayPunctuate(long streamTime) {
     synchronized (pq) {
-      Stamped<PunctuationSchedulerImpl> top = pq.peek();
+      PunctuationSchedule top = pq.peek();
       while (top != null && top.timestamp <= streamTime) {
-        PunctuationSchedulerImpl scheduler = top.value;
+        PunctuationSchedule sched = top;
         pq.poll();
-        scheduler.processor.punctuate(streamTime);
-        scheduler.processed();
+        sched.processor().punctuate(streamTime);
+        pq.add(sched.next());
 
         top = pq.peek();
       }
