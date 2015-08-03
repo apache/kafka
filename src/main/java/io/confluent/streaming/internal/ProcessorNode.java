@@ -24,7 +24,7 @@ public class ProcessorNode<K, V> implements Receiver {
   }
   @SuppressWarnings("unchecked")
   @Override
-  public void receive(Object key, Object value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp) {
     processor.process((K) key, (V) value);
   }
   @Override

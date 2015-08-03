@@ -44,7 +44,7 @@ public class KStreamFlatMapValuesTest {
     KStreamContext context = new MockKStreamContext(null, null);
     stream.bind(context, streamMetadata);
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
     }
 
     assertEquals(8, processor.processed.size());

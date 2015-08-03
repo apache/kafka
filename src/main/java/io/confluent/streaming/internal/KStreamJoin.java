@@ -70,11 +70,11 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void receive(Object key, Object value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp) {
     Iterator<V2> iter = finder2.find((K)key, timestamp);
     if (iter != null) {
       while (iter.hasNext()) {
-        doJoin((K)key, (V1)value, iter.next(), timestamp, streamTime);
+        doJoin((K)key, (V1)value, iter.next(), timestamp);
       }
     }
   }
@@ -88,11 +88,11 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
       }
       @SuppressWarnings("unchecked")
       @Override
-      public void receive(Object key, Object value2, long timestamp, long streamTime) {
+      public void receive(Object key, Object value2, long timestamp) {
         Iterator<V1> iter = finder1.find((K)key, timestamp);
         if (iter != null) {
           while (iter.hasNext()) {
-            doJoin((K)key, iter.next(), (V2)value2, timestamp, streamTime);
+            doJoin((K)key, iter.next(), (V2)value2, timestamp);
           }
         }
       }
@@ -104,8 +104,8 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
   }
 
   // TODO: use the "outer-stream" topic as the resulted join stream topic
-  private void doJoin(K key, V1 value1, V2 value2, long timestamp, long streamTime) {
-    forward(key, joiner.apply(value1, value2), timestamp, streamTime);
+  private void doJoin(K key, V1 value1, V2 value2, long timestamp) {
+    forward(key, joiner.apply(value1, value2), timestamp);
   }
 
 }

@@ -231,7 +231,7 @@ public class StreamGroup implements ParallelExecutor.Task {
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-      recordQueue.stream.receive(currRecord.key(), currRecord.value(), currRecord.timestamp, streamTime);
+      recordQueue.stream.receive(currRecord.key(), currRecord.value(), currRecord.timestamp);
       consumedOffsets.put(recordQueue.partition(), currRecord.offset());
 
       // TODO: local state flush and downstream producer flush

@@ -17,10 +17,10 @@ class KStreamMapValues<K, V, V1> extends KStreamImpl<K, V> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void receive(Object key, Object value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp) {
     synchronized (this) {
       V newValue = mapper.apply((V1)value);
-      forward(key, newValue, timestamp, streamTime);
+      forward(key, newValue, timestamp);
     }
   }
 

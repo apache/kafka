@@ -9,7 +9,7 @@ public interface Receiver {
 
   void bind(KStreamContext context, KStreamMetadata metadata);
 
-  void receive(Object key, Object value, long timestamp, long streamTime);
+  void receive(Object key, Object value, long timestamp);
 
   void close();
 

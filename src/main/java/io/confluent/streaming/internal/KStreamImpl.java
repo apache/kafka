@@ -146,10 +146,10 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     nextReceivers.add(receiver);
   }
 
-  protected void forward(Object key, Object value, long timestamp, long streamTime) {
+  protected void forward(Object key, Object value, long timestamp) {
     int numReceivers = nextReceivers.size();
     for (int i = 0; i < numReceivers; i++) {
-      nextReceivers.get(i).receive(key, value, timestamp, streamTime);
+      nextReceivers.get(i).receive(key, value, timestamp);
     }
   }
 

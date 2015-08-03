@@ -30,19 +30,17 @@ public class StreamGroupTest {
     public ArrayList<Object> keys = new ArrayList<>();
     public ArrayList<Object> values = new ArrayList<>();
     public ArrayList<Long> timestamps = new ArrayList<>();
-    public ArrayList<Long> streamTimes = new ArrayList<>();
 
     public MockKStreamSource() {
       super(null, deserializer, deserializer, new MockKStreamTopology());
     }
 
     @Override
-    public void receive(Object key, Object value, long timestamp, long streamTime) {
+    public void receive(Object key, Object value, long timestamp) {
       this.numReceived++;
       this.keys.add(key);
       this.values.add(value);
       this.timestamps.add(timestamp);
-      this.streamTimes.add(streamTime);
     }
 
   }

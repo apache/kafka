@@ -38,7 +38,7 @@ public class KStreamFilterTest {
     KStreamContext context = new MockKStreamContext(null, null);
     stream.bind(context, streamMetadata);
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
     }
 
     assertEquals(2, processor.processed.size());
@@ -59,7 +59,7 @@ public class KStreamFilterTest {
     KStreamContext context = new MockKStreamContext(null, null);
     stream.bind(context, streamMetadata);
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
     }
 
     assertEquals(5, processor.processed.size());

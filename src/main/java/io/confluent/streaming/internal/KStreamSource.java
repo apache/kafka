@@ -40,10 +40,10 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
   }
 
   @Override
-  public void receive(Object key, Object value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp) {
     synchronized(this) {
       // KStream needs to forward the topic name since it is directly from the Kafka source
-      forward(key, value, timestamp, streamTime);
+      forward(key, value, timestamp);
     }
   }
 

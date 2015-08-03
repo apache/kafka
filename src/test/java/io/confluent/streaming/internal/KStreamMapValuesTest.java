@@ -42,7 +42,7 @@ public class KStreamMapValuesTest {
     KStreamContext context = new MockKStreamContext(null, null);
     stream.bind(context, streamMetadata);
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], Integer.toString(expectedKeys[i]), 0L, 0L);
+      stream.receive(expectedKeys[i], Integer.toString(expectedKeys[i]), 0L);
     }
 
     assertEquals(4, processor.processed.size());
