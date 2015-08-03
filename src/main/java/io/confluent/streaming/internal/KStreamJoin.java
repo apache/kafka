@@ -34,6 +34,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   KStreamJoin(KStreamWindowedImpl<K, V1> stream1, KStreamWindowedImpl<K, V2> stream2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamTopology topology) {
     super(topology);
 =======
@@ -43,6 +44,10 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
 >>>>>>> wip
     super(initializer);
 >>>>>>> new api model
+=======
+  KStreamJoin(KStreamWindowedImpl<K, V1> stream1, KStreamWindowedImpl<K, V2> stream2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamTopology topology) {
+    super(topology);
+>>>>>>> fix parameter name
 
     final Window<K, V1> window1 = stream1.window;
     final Window<K, V2> window2 = stream2.window;

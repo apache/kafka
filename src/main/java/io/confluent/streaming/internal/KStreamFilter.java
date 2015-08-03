@@ -20,6 +20,7 @@ class KStreamFilter<K, V> extends KStreamImpl<K, V> {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   KStreamFilter(Predicate<K, V> predicate, KStreamTopology topology) {
     super(topology);
 =======
@@ -29,6 +30,10 @@ class KStreamFilter<K, V> extends KStreamImpl<K, V> {
 >>>>>>> wip
     super(initializer);
 >>>>>>> new api model
+=======
+  KStreamFilter(Predicate<K, V> predicate, KStreamTopology topology) {
+    super(topology);
+>>>>>>> fix parameter name
     this.predicate = predicate;
   }
 

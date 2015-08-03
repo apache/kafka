@@ -22,6 +22,7 @@ class KStreamMap<K, V, K1, V1> extends KStreamImpl<K, V> {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   KStreamMap(KeyValueMapper<K, V, K1, V1> mapper, KStreamTopology topology) {
     super(topology);
 =======
@@ -31,6 +32,10 @@ class KStreamMap<K, V, K1, V1> extends KStreamImpl<K, V> {
 >>>>>>> wip
     super(initializer);
 >>>>>>> new api model
+=======
+  KStreamMap(KeyValueMapper<K, V, K1, V1> mapper, KStreamTopology topology) {
+    super(topology);
+>>>>>>> fix parameter name
     this.mapper = mapper;
   }
 

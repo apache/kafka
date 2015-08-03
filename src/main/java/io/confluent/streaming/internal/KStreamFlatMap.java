@@ -22,6 +22,7 @@ class KStreamFlatMap<K, V, K1, V1> extends KStreamImpl<K, V> {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   KStreamFlatMap(KeyValueMapper<K, ? extends Iterable<V>, K1, V1> mapper, KStreamTopology topology) {
     super(topology);
 =======
@@ -31,6 +32,10 @@ class KStreamFlatMap<K, V, K1, V1> extends KStreamImpl<K, V> {
 >>>>>>> wip
     super(initializer);
 >>>>>>> new api model
+=======
+  KStreamFlatMap(KeyValueMapper<K, ? extends Iterable<V>, K1, V1> mapper, KStreamTopology topology) {
+    super(topology);
+>>>>>>> fix parameter name
     this.mapper = mapper;
   }
 

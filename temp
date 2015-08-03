@@ -1,8 +1,8 @@
-src/main/java/io/confluent/streaming/KStreamContext.java: needs merge
-src/main/java/io/confluent/streaming/Processor.java: needs merge
-src/main/java/io/confluent/streaming/examples/StatefulKStreamJob.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamContextImpl.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamImpl.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamWindowedImpl.java: needs merge
-src/main/java/io/confluent/streaming/internal/ProcessorNode.java: needs merge
-src/test/java/io/confluent/streaming/testutil/MockKStreamContext.java: needs merge
+src/main/java/io/confluent/streaming/internal/KStreamBranch.java: needs merge
+src/main/java/io/confluent/streaming/internal/KStreamFilter.java: needs merge
+src/main/java/io/confluent/streaming/internal/KStreamFlatMap.java: needs merge
+src/main/java/io/confluent/streaming/internal/KStreamFlatMapValues.java: needs merge
+src/main/java/io/confluent/streaming/internal/KStreamJoin.java: needs merge
+src/main/java/io/confluent/streaming/internal/KStreamMap.java: needs merge
+src/main/java/io/confluent/streaming/internal/KStreamMapValues.java: needs merge
+src/main/java/io/confluent/streaming/internal/KStreamSource.java: needs merge

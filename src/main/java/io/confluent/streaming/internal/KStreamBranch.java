@@ -26,6 +26,7 @@ class KStreamBranch<K, V> implements Receiver {
   @SuppressWarnings("unchecked")
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   KStreamBranch(Predicate<K, V>[] predicates, KStreamTopology topology) {
     this.predicates = Arrays.copyOf(predicates, predicates.length);
     this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
@@ -41,6 +42,13 @@ class KStreamBranch<K, V> implements Receiver {
     for (int i = 0; i < branches.length; i++) {
       branches[i] = new KStreamSource<>(null, initializer);
 >>>>>>> new api model
+=======
+  KStreamBranch(Predicate<K, V>[] predicates, KStreamTopology topology) {
+    this.predicates = Arrays.copyOf(predicates, predicates.length);
+    this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
+    for (int i = 0; i < branches.length; i++) {
+      branches[i] = new KStreamSource<>(null, topology);
+>>>>>>> fix parameter name
     }
   }
 
