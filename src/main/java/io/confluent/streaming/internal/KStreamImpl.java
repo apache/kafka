@@ -254,6 +254,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @SuppressWarnings("unchecked")
   @Override
 <<<<<<< HEAD
+<<<<<<< HEAD
   public void process(Processor<K, V> processor) {
     registerReceiver(new ProcessorNode<>(processor));
   }
@@ -276,8 +277,17 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     registerReceiver(receiver);
 >>>>>>> new api model
 =======
+=======
+  public void process(Processor<K, V> processor) {
+>>>>>>> KStream.tranform method for generalized transformation
     registerReceiver(new ProcessorNode<>(processor));
 >>>>>>> wip
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public <K1, V1> KStream<K1, V1> transform(Transformer<K1, V1, K, V> transformer) {
+    return chain(new KStreamTransform<>(transformer, topology));
   }
 
   void registerReceiver(Receiver receiver) {
