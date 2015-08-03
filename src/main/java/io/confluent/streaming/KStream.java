@@ -124,4 +124,10 @@ public interface KStream<K, V> {
    */
   void process(Processor<K, V> processor);
 
+  /**
+   * Transform all elements in this stream by applying a tranformer.
+   * @param transformer the instance of Transformer
+   */
+  <K1, V1> KStream<K1, V1> transform(Transformer<K1, V1, K, V> transformer);
+
 }

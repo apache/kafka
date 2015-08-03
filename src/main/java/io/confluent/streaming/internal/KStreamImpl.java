@@ -7,6 +7,7 @@ import io.confluent.streaming.KStreamWindowed;
 import io.confluent.streaming.KeyValueMapper;
 import io.confluent.streaming.Predicate;
 import io.confluent.streaming.Processor;
+import io.confluent.streaming.Transformer;
 import io.confluent.streaming.ValueMapper;
 import io.confluent.streaming.Window;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -138,8 +139,14 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void process(final Processor<K, V> processor) {
+  public void process(Processor<K, V> processor) {
     registerReceiver(new ProcessorNode<>(processor));
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public <K1, V1> KStream<K1, V1> transform(Transformer<K1, V1, K, V> transformer) {
+    return chain(new KStreamTransform<>(transformer, topology));
   }
 
   void registerReceiver(Receiver receiver) {
