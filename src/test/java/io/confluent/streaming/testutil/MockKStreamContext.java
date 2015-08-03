@@ -4,9 +4,12 @@ package io.confluent.streaming.testutil;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 import io.confluent.streaming.PunctuationScheduler;
 >>>>>>> new api model
+=======
+>>>>>>> removed ProcessorContext
 import io.confluent.streaming.RecordCollector;
 <<<<<<< HEAD
 import io.confluent.streaming.StorageEngine;
@@ -21,8 +24,11 @@ import io.confluent.streaming.internal.StreamGroup;
 import io.confluent.streaming.internal.PunctuationQueue;
 =======
 import io.confluent.streaming.internal.PunctuationQueue;
+<<<<<<< HEAD
 import io.confluent.streaming.internal.PunctuationSchedulerImpl;
 >>>>>>> new api model
+=======
+>>>>>>> removed ProcessorContext
 import io.confluent.streaming.kv.internals.RestoreFunc;
 >>>>>>> new api model
 import org.apache.kafka.common.metrics.Metrics;
@@ -102,12 +108,17 @@ public class MockKStreamContext implements KStreamContext {
 
   @Override
 <<<<<<< HEAD
+<<<<<<< HEAD
   public void schedule(Processor processor, long interval) {
     throw new UnsupportedOperationException("schedule() not supported");
 =======
   public PunctuationScheduler getPunctuationScheduler(Processor processor) {
     return new PunctuationSchedulerImpl(punctuationQueue, processor);
 >>>>>>> new api model
+=======
+  public void schedule(Processor processor, long interval) {
+    throw new UnsupportedOperationException("schedule() not supported");
+>>>>>>> removed ProcessorContext
   }
 
   @Override

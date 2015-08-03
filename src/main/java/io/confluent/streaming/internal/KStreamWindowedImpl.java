@@ -73,10 +73,14 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
     KStreamWindowedImpl<K, V1> otherImpl = (KStreamWindowedImpl<K, V1>) other;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamJoin<K, V2, V, V1> stream = new KStreamJoin<>(this, otherImpl, prior, processor, topology);
 =======
     KStreamJoin<K, V2, V, V1> stream = new KStreamJoin<>(this, otherImpl, prior, processor, initializer);
 >>>>>>> new api model
+=======
+    KStreamJoin<K, V2, V, V1> stream = new KStreamJoin<>(this, otherImpl, prior, processor, topology);
+>>>>>>> removed ProcessorContext
     otherImpl.registerReceiver(stream.receiverForOtherStream);
 
     return chain(stream);

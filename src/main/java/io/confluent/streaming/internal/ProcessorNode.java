@@ -21,6 +21,7 @@ public class ProcessorNode<K, V> implements Receiver {
 
     this.context = context;
 <<<<<<< HEAD
+<<<<<<< HEAD
     processor.init(context);
   }
   @SuppressWarnings("unchecked")
@@ -28,6 +29,9 @@ public class ProcessorNode<K, V> implements Receiver {
   public void receive(Object key, Object value, long timestamp) {
 =======
     processor.init(new ProcessorContextImpl(context, context.getPunctuationScheduler(processor)));
+=======
+    processor.init(context);
+>>>>>>> removed ProcessorContext
   }
   @SuppressWarnings("unchecked")
   @Override

@@ -3,9 +3,12 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.KStreamException;
 import io.confluent.streaming.Processor;
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 import io.confluent.streaming.PunctuationScheduler;
 >>>>>>> new api model
+=======
+>>>>>>> removed ProcessorContext
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StateStore;
 import io.confluent.streaming.StreamingConfig;
@@ -251,6 +254,7 @@ public class KStreamContextImpl implements KStreamContext {
   @Override
   public String topic() {
 <<<<<<< HEAD
+<<<<<<< HEAD
     if (streamGroup.record() == null)
       throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
 
@@ -261,10 +265,17 @@ public class KStreamContextImpl implements KStreamContext {
 
     return this.streamGroup.record().topic();
 >>>>>>> new api model
+=======
+    if (streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
+
+    return streamGroup.record().topic();
+>>>>>>> removed ProcessorContext
   }
 
   @Override
   public int partition() {
+<<<<<<< HEAD
 <<<<<<< HEAD
     if (streamGroup.record() == null)
       throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
@@ -274,9 +285,12 @@ public class KStreamContextImpl implements KStreamContext {
     stateMgr.restore(store, restoreFunc);
 =======
     if (this.streamGroup.record() == null)
+=======
+    if (streamGroup.record() == null)
+>>>>>>> removed ProcessorContext
       throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
 
-    return this.streamGroup.record().partition();
+    return streamGroup.record().partition();
   }
   
   @Override
@@ -290,9 +304,10 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
   public long timestamp() {
-    if (this.streamGroup.record() == null)
+    if (streamGroup.record() == null)
       throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     stateMgr.register(store);
 =======
@@ -327,6 +342,9 @@ public class KStreamContextImpl implements KStreamContext {
   @Override
 =======
     return this.streamGroup.record().timestamp;
+=======
+    return streamGroup.record().timestamp;
+>>>>>>> removed ProcessorContext
   }
 
   @Override
@@ -360,16 +378,20 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
   public void commit() {
-    this.streamGroup.commitOffset();
+    streamGroup.commitOffset();
   }
 
   @Override
-  public PunctuationScheduler getPunctuationScheduler(Processor processor) {
-    return streamGroup.getPunctuationScheduler(processor);
+  public void schedule(Processor processor, long interval) {
+    streamGroup.schedule(processor, interval);
   }
 
+<<<<<<< HEAD
   public void init(Collection<KStreamSource<?, ?>> streams) throws IOException {
 >>>>>>> new api model
+=======
+  void init(Collection<KStreamSource<?, ?>> streams) throws IOException {
+>>>>>>> removed ProcessorContext
     stateMgr.init();
 
     for (KStreamSource stream: streams) {

@@ -27,6 +27,7 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
     this.context.schedule(this, 1000);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     this.kvStore = new InMemoryKeyValueStore<>("local-state", context);
     this.kvStore.restore(); // call restore inside processor.init
 =======
@@ -35,6 +36,9 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
     this.kvStore.restore(); // call restore inside processor.bind
 >>>>>>> new api model
 =======
+=======
+    this.kvStore = new InMemoryKeyValueStore<>("local-state", context);
+>>>>>>> removed ProcessorContext
     this.kvStore.restore(); // call restore inside processor.init
 >>>>>>> fix examples
   }

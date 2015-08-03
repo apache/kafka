@@ -100,10 +100,14 @@ public interface KStreamContext {
   void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   void schedule(Processor processor, long interval);
 =======
   PunctuationScheduler getPunctuationScheduler(Processor processor);
 >>>>>>> new api model
+=======
+  void schedule(Processor processor, long interval);
+>>>>>>> removed ProcessorContext
 
   void commit();
 

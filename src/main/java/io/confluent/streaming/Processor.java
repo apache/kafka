@@ -6,6 +6,7 @@ package io.confluent.streaming;
 public interface Processor<K, V>  {
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   void init(KStreamContext context);
 =======
   public interface ProcessorContext {
@@ -32,6 +33,9 @@ public interface Processor<K, V>  {
 
   void init(ProcessorContext context);
 >>>>>>> new api model
+=======
+  void init(KStreamContext context);
+>>>>>>> removed ProcessorContext
 
   void process(K key, V value);
 
