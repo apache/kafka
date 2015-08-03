@@ -105,16 +105,31 @@ class ReplicaFetcherThread(name:String,
       leaderEndOffset
     } else {
       /**
-       * The follower could have been down for a long time and when it starts up, its end offset could be smaller than the leader's
+       * If the leader's log end offset is greater than follower's log end offset, there are two possibilities:
+       * 1. The follower could have been down for a long time and when it starts up, its end offset could be smaller than the leader's
        * start offset because the leader has deleted old logs (log.logEndOffset < leaderStartOffset).
+       * 2. When leader migration occurs, there is a slight chance that the old leader's high watermark is greater than
+       * the new leader's log end offset, so an OffsetOutOfRangeException was thrown. After that some more messages are
+       * produced to the leader. When the follower was trying to handle the exception and query the log end offset of
+       * broker, the leader's log end offset become higher than follower's log end offset.
        *
-       * Roll out a new log at the follower with the start offset equal to the current leader's start offset and continue fetching.
+       * In the first case, the follower's current log end offset is smaller than leader's log start offset. So the
+       * follower should truncate all its log, roll out a new segment and start to fetch from current leader's log
+       * start offset.
+       * In the second case, the follower should just keep the current log segments and retry fetch.
+       *
+       * Putting the two case together, the follower should fetch from the higher one of its replica log end offset
+       * and the current leader's log start offset.
+       *
        */
       val leaderStartOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.EarliestTime, brokerConfig.brokerId)
       warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's start offset %d"
         .format(brokerConfig.brokerId, topicAndPartition, replica.logEndOffset.messageOffset, sourceBroker.id, leaderStartOffset))
-      replicaMgr.logManager.truncateFullyAndStartAt(topicAndPartition, leaderStartOffset)
-      leaderStartOffset
+      val offsetToFetch = Math.max(leaderStartOffset, replica.logEndOffset.messageOffset)
+      // Only truncate log when current leader's log start offset is greater than follower's log end offset.
+      if (leaderStartOffset > replica.logEndOffset.messageOffset)
+        replicaMgr.logManager.truncateFullyAndStartAt(topicAndPartition, leaderStartOffset)
+      offsetToFetch
     }
   }
 
