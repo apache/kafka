@@ -12,8 +12,8 @@ class KStreamFlatMap<K, V, K1, V1> extends KStreamImpl<K, V> {
 
   private final KeyValueMapper<K, ? extends Iterable<V>, K1, V1> mapper;
 
-  KStreamFlatMap(KeyValueMapper<K, ? extends Iterable<V>, K1, V1> mapper, KStreamTopology initializer) {
-    super(initializer);
+  KStreamFlatMap(KeyValueMapper<K, ? extends Iterable<V>, K1, V1> mapper, KStreamTopology topology) {
+    super(topology);
     this.mapper = mapper;
   }
 

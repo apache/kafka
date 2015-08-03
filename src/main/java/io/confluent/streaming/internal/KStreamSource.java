@@ -19,12 +19,12 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
   String[] topics;
 
-  public KStreamSource(String[] topics, KStreamTopology initializer) {
-    this(topics, null, null, initializer);
+  public KStreamSource(String[] topics, KStreamTopology topology) {
+    this(topics, null, null, topology);
   }
 
-  public KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamTopology initializer) {
-    super(initializer);
+  public KStreamSource(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, KStreamTopology topology) {
+    super(topology);
     this.topics = topics;
     this.keyDeserializer = keyDeserializer;
     this.valueDeserializer = valueDeserializer;

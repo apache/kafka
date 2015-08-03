@@ -1,7 +1,5 @@
 package io.confluent.streaming;
 
-import org.apache.kafka.common.serialization.Serializer;
-
 /**
  * Created by yasuhiro on 6/17/15.
  */

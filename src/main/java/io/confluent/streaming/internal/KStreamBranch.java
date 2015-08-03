@@ -16,11 +16,11 @@ class KStreamBranch<K, V> implements Receiver {
   final KStreamSource<K, V>[] branches;
 
   @SuppressWarnings("unchecked")
-  KStreamBranch(Predicate<K, V>[] predicates, KStreamTopology initializer) {
+  KStreamBranch(Predicate<K, V>[] predicates, KStreamTopology topology) {
     this.predicates = Arrays.copyOf(predicates, predicates.length);
     this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
     for (int i = 0; i < branches.length; i++) {
-      branches[i] = new KStreamSource<>(null, initializer);
+      branches[i] = new KStreamSource<>(null, topology);
     }
   }
 

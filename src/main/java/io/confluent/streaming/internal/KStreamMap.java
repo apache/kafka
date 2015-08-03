@@ -12,8 +12,8 @@ class KStreamMap<K, V, K1, V1> extends KStreamImpl<K, V> {
 
   private final KeyValueMapper<K, V, K1, V1> mapper;
 
-  KStreamMap(KeyValueMapper<K, V, K1, V1> mapper, KStreamTopology initializer) {
-    super(initializer);
+  KStreamMap(KeyValueMapper<K, V, K1, V1> mapper, KStreamTopology topology) {
+    super(topology);
     this.mapper = mapper;
   }
 

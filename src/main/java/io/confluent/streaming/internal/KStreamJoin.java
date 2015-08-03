@@ -24,8 +24,8 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
   private KStreamMetadata thisMetadata;
   private KStreamMetadata otherMetadata;
 
-  KStreamJoin(KStreamWindowedImpl<K, V1> stream1, KStreamWindowedImpl<K, V2> stream2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamTopology initializer) {
-    super(initializer);
+  KStreamJoin(KStreamWindowedImpl<K, V1> stream1, KStreamWindowedImpl<K, V2> stream2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamTopology topology) {
+    super(topology);
 
     final Window<K, V1> window1 = stream1.window;
     final Window<K, V2> window2 = stream2.window;

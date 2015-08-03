@@ -10,8 +10,8 @@ class KStreamFilter<K, V> extends KStreamImpl<K, V> {
 
   private final Predicate<K, V> predicate;
 
-  KStreamFilter(Predicate<K, V> predicate, KStreamTopology initializer) {
-    super(initializer);
+  KStreamFilter(Predicate<K, V> predicate, KStreamTopology topology) {
+    super(topology);
     this.predicate = predicate;
   }
 
