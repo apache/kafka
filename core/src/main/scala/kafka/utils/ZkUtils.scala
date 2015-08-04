@@ -94,7 +94,7 @@ object ZkUtils extends Logging {
 
   def setupCommonPaths(zkClient: ZkClient) {
     for(path <- Seq(ConsumersPath, BrokerIdsPath, BrokerTopicsPath, TopicConfigChangesPath, TopicConfigPath,
-      DeleteTopicsPath, BrokerSequenceIdPath))
+      DeleteTopicsPath, BrokerSequenceIdPath, IsrChangeNotificationPath))
       makeSurePersistentPathExists(zkClient, path)
   }
 
