@@ -122,6 +122,10 @@ public class ProduceRequest extends AbstractRequest {
         return partitionRecords;
     }
 
+    public void emptyData() {
+        partitionRecords.clear();
+    }
+
     public static ProduceRequest parse(ByteBuffer buffer, int versionId) {
         return new ProduceRequest(ProtoUtils.parseRequest(ApiKeys.PRODUCE.id, versionId, buffer));
     }

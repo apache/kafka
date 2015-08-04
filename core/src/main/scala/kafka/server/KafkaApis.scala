@@ -27,7 +27,7 @@ import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
-import kafka.message.MessageSet
+import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
 import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
@@ -39,7 +39,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
 DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
 LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse,
-StopReplicaRequest, StopReplicaResponse}
+StopReplicaRequest, StopReplicaResponse, ProduceRequest, ProduceResponse}
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Node}
 
@@ -109,7 +110,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           error("Error when handling request %s".format(request.body), e)
         }
-
     } finally
       request.apiLocalCompleteTimeMs = SystemTime.milliseconds
   }
@@ -315,44 +315,43 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a produce request
    */
   def handleProducerRequest(request: RequestChannel.Request) {
-    val produceRequest = request.requestObj.asInstanceOf[ProducerRequest]
-    val numBytesAppended = produceRequest.sizeInBytes
+    val produceRequest = request.body.asInstanceOf[ProduceRequest]
+    val numBytesAppended = request.header.sizeOf() + produceRequest.sizeOf()
 
-    val (authorizedRequestInfo, unauthorizedRequestInfo) =  produceRequest.data.partition  {
-      case (topicAndPartition, _) => authorize(request.session, Write, new Resource(Topic, topicAndPartition.topic))
+    val (authorizedRequestInfo, unauthorizedRequestInfo) = produceRequest.partitionRecords.asScala.partition {
+      case (topicPartition, _) => authorize(request.session, Write, new Resource(Topic, topicPartition.topic))
     }
 
     // the callback for sending a produce response
-    def sendResponseCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
+    def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => ProducerResponseStatus(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1))
+      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1))
 
       var errorInResponse = false
 
-      mergedResponseStatus.foreach { case (topicAndPartition, status) =>
-        if (status.error != Errors.NONE.code) {
+      mergedResponseStatus.foreach { case (topicPartition, status) =>
+        if (status.errorCode != Errors.NONE.code) {
           errorInResponse = true
           debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
-            produceRequest.correlationId,
-            produceRequest.clientId,
-            topicAndPartition,
-            Errors.forCode(status.error).exceptionName))
+            request.header.correlationId,
+            request.header.clientId,
+            topicPartition,
+            Errors.forCode(status.errorCode).exceptionName))
         }
       }
 
       def produceResponseCallback(delayTimeMs: Int) {
-
-        if (produceRequest.requiredAcks == 0) {
+        if (produceRequest.acks() == 0) {
           // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
           // the request, since no response is expected by the producer, the server will close socket server so that
           // the producer client will know that some error has happened and will refresh its metadata
           if (errorInResponse) {
             val exceptionsSummary = mergedResponseStatus.map { case (topicAndPartition, status) =>
-              topicAndPartition -> Errors.forCode(status.error).exceptionName
+              topicAndPartition -> Errors.forCode(status.errorCode).exceptionName
             }.mkString(", ")
             info(
-              s"Closing connection due to error during produce request with correlation id ${produceRequest.correlationId} " +
-                s"from client id ${produceRequest.clientId} with ack=0\n" +
+              s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
+                s"from client id ${request.header.clientId} with ack=0\n" +
                 s"Topic and partition to exceptions: $exceptionsSummary"
             )
             requestChannel.closeConnection(request.processor, request)
@@ -360,35 +359,38 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestChannel.noOperation(request.processor, request)
           }
         } else {
-          val response = ProducerResponse(produceRequest.correlationId,
-                                          mergedResponseStatus,
-                                          produceRequest.versionId,
-                                          delayTimeMs)
-          requestChannel.sendResponse(new RequestChannel.Response(request,
-                                                                  new RequestOrResponseSend(request.connectionId,
-                                                                                            response)))
+          val respHeader = new ResponseHeader(request.header.correlationId())
+          val respBody = if (request.header.apiVersion() > 0)
+            new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs)
+          else
+            new ProduceResponse(mergedResponseStatus.asJava)
+          requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, respBody)))
         }
       }
 
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
-      quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(produceRequest.clientId,
-                                                                   numBytesAppended,
-                                                                   produceResponseCallback)
+      quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(
+        request.header.clientId,
+        numBytesAppended,
+        produceResponseCallback)
     }
 
     if (authorizedRequestInfo.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      val internalTopicsAllowed = produceRequest.clientId == AdminUtils.AdminClientId
+      val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
+
+      // Convert ByteBuffer to ByteBufferMessageSet
+      val authorizedMessagesPerPartition = authorizedRequestInfo.mapValues(new ByteBufferMessageSet(_))
 
       // call the replica manager to append messages to the replicas
       replicaManager.appendMessages(
-        produceRequest.ackTimeoutMs.toLong,
-        produceRequest.requiredAcks,
+        produceRequest.timeout.toLong,
+        produceRequest.acks,
         internalTopicsAllowed,
-        authorizedRequestInfo,
+        authorizedMessagesPerPartition,
         sendResponseCallback)
 
       // if the request is put into the purgatory, it will have a held reference

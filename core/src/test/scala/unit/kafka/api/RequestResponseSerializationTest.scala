@@ -65,7 +65,7 @@ object SerializationTestUtils {
       partitionDataProducerRequestArray.zipWithIndex.map
       {
         case(partitionDataMessage, partition) =>
-          (TopicAndPartition(topic, partition), partitionDataMessage)
+          (new TopicAndPartition(topic, partition), partitionDataMessage)
       })
     collection.mutable.Map(groupedData:_*)
   }

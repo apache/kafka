@@ -19,18 +19,17 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.security.Principal
+import java.util.HashMap
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
 import kafka.api._
-import kafka.common.TopicAndPartition
-import kafka.message.ByteBufferMessageSet
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, SystemTime}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader}
+import org.apache.kafka.common.requests.{ProduceRequest, AbstractRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.log4j.Logger
 
@@ -39,10 +38,11 @@ object RequestChannel extends Logging {
   val AllDone = new Request(processor = 1, connectionId = "2", new Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost()), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
 
   def getShutdownReceive() = {
-    val emptyProducerRequest = new ProducerRequest(0, 0, "", 0, 0, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
-    val byteBuffer = ByteBuffer.allocate(emptyProducerRequest.sizeInBytes + 2)
-    byteBuffer.putShort(ApiKeys.PRODUCE.id)
-    emptyProducerRequest.writeTo(byteBuffer)
+    val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, "", 0)
+    val emptyProduceRequest = new ProduceRequest(0, 0, new HashMap[TopicPartition, ByteBuffer]())
+    val byteBuffer = ByteBuffer.allocate(emptyRequestHeader.sizeOf() + emptyProduceRequest.sizeOf())
+    emptyRequestHeader.writeTo(byteBuffer)
+    emptyProduceRequest.writeTo(byteBuffer)
     byteBuffer.rewind()
     byteBuffer
   }
@@ -66,8 +66,7 @@ object RequestChannel extends Logging {
     // request types should only use the client-side versions which are parsed with
     // o.a.k.common.requests.AbstractRequest.getRequest()
     private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse]=
-      Map(ApiKeys.PRODUCE.id -> ProducerRequest.readFrom,
-        ApiKeys.FETCH.id -> FetchRequest.readFrom,
+      Map(ApiKeys.FETCH.id -> FetchRequest.readFrom,
         ApiKeys.METADATA.id -> TopicMetadataRequest.readFrom,
         ApiKeys.UPDATE_METADATA_KEY.id -> UpdateMetadataRequest.readFrom,
         ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom,
