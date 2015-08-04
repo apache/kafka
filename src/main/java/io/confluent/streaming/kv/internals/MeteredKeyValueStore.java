@@ -1,8 +1,11 @@
 package io.confluent.streaming.kv.internals;
 
+import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.kv.Entry;
 import io.confluent.streaming.kv.KeyValueIterator;
 import io.confluent.streaming.kv.KeyValueStore;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
@@ -11,15 +14,19 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K,V> inner;
+
     private final Time time;
-    private final Metrics metrics;
     private final String group;
     private final Sensor putTime;
     private final Sensor getTime;
@@ -29,11 +36,19 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final Sensor rangeTime;
     private final Sensor flushTime;
     private final Sensor restoreTime;
+    private final Metrics metrics;
 
-    public MeteredKeyValueStore(String name, String group, KeyValueStore<K,V> inner, Metrics metrics, Time time) {
+    private final String topic;
+    private final int partition;
+    private final Set<K> dirty;
+    private final int maxDirty;
+    private final KStreamContext context;
+
+    // always wrap the logged store with the metered store
+    public MeteredKeyValueStore(final String name, final KeyValueStore<K,V> inner, KStreamContext context, String group, Time time) {
         this.inner = inner;
+
         this.time = time;
-        this.metrics = metrics;
         this.group = group;
         this.putTime = createSensor(name, "put");
         this.getTime = createSensor(name, "get");
@@ -43,6 +58,32 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.rangeTime = createSensor(name, "range");
         this.flushTime = createSensor(name, "flush");
         this.restoreTime = createSensor(name, "restore");
+        this.metrics = context.metrics();
+
+        this.topic = name;
+        this.partition = context.id();
+
+        this.context = context;
+
+        this.dirty = new HashSet<K>();
+        this.maxDirty = 100;        // TODO: this needs to be configurable
+
+        // register and possibly restore the state from the logs
+        long startNs = time.nanoseconds();
+        try {
+            final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keySerializer();
+            final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueSerializer();
+
+            context.register(this, new RestoreFunc() {
+                @Override
+                public void apply(byte[] key, byte[] value) {
+                    inner.put(keyDeserializer.deserialize(topic, key),
+                        valDeserializer.deserialize(topic, value));
+                }
+            });
+        } finally {
+            recordLatency(this.restoreTime, startNs, time.nanoseconds());
+        }
     }
 
     private Sensor createSensor(String storeName, String operation) {
@@ -75,16 +116,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void restore() {
-        long startNs = time.nanoseconds();
-        try {
-            inner.restore();
-        } finally {
-            recordLatency(this.restoreTime, startNs, time.nanoseconds());
-        }
-    }
-
-    @Override
     public V get(K key) {
         long startNs = time.nanoseconds();
         try {
@@ -99,6 +130,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.put(key, value);
+
+            this.dirty.add(key);
+            if (this.dirty.size() > this.maxDirty)
+                logChange();
         } finally {
             recordLatency(this.putTime, startNs, time.nanoseconds());
         }
@@ -109,6 +144,13 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.putAll(entries);
+
+            for (Entry<K, V> entry : entries) {
+                this.dirty.add(entry.key());
+            }
+
+            if (this.dirty.size() > this.maxDirty)
+                logChange();
         } finally {
             recordLatency(this.putAllTime, startNs, time.nanoseconds());
         }
@@ -119,6 +161,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.delete(key);
+
+            this.dirty.add(key);
+            if (this.dirty.size() > this.maxDirty)
+                logChange();
         } finally {
             recordLatency(this.deleteTime, startNs, time.nanoseconds());
         }
@@ -142,8 +188,23 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         long startNs = time.nanoseconds();
         try {
             this.inner.flush();
+            logChange();
         } finally {
             recordLatency(this.flushTime, startNs, time.nanoseconds());
+        }
+    }
+
+    private void logChange() {
+        RecordCollector collector = context.recordCollector();
+        Serializer<K> keySerializer = (Serializer<K>) context.keySerializer();
+        Serializer<V> valueSerializer = (Serializer<V>) context.valueSerializer();
+
+        if(collector != null) {
+            for (K k : this.dirty) {
+                V v = this.inner.get(k);
+                collector.send(new ProducerRecord<>(this.topic, this.partition, k, v), keySerializer, valueSerializer);
+            }
+            this.dirty.clear();
         }
     }
 

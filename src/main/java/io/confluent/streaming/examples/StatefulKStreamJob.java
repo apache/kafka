@@ -29,6 +29,7 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
 <<<<<<< HEAD
 <<<<<<< HEAD
     this.kvStore = new InMemoryKeyValueStore<>("local-state", context);
+<<<<<<< HEAD
     this.kvStore.restore(); // call restore inside processor.init
 =======
     this.kvStore = new InMemoryKeyValueStore<>("local-state", context.kstreamContext());
@@ -41,6 +42,8 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
 >>>>>>> removed ProcessorContext
     this.kvStore.restore(); // call restore inside processor.init
 >>>>>>> fix examples
+=======
+>>>>>>> remove restore function
   }
 
   @Override

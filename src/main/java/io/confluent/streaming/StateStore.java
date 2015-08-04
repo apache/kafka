@@ -17,9 +17,6 @@
 
 package io.confluent.streaming;
 
-
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-
 /**
  * A storage engine for managing state maintained by a stream processor.
  *
@@ -47,11 +44,6 @@ public interface StateStore {
      * Close the storage engine
      */
     void close();
-
-    /**
-     * Restore the state of the storage
-     */
-    void restore();
 
     /**
      * If the storage is persistent

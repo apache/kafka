@@ -32,15 +32,7 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
     }
 
     public RocksDBKeyValueStore(String name, KStreamContext context, Time time) {
-        // always wrap the logged store with the metered store
-        // TODO: this may need to be relaxed in the future
-        super(name,
-            "kafka-streams",
-            new LoggedKeyValueStore<>(name, /* store name as topic name */
-                                      new RocksDBStore(name, context),
-                                      context),
-            context.metrics(),
-            time);
+        super(name, new RocksDBStore(name, context), context, "kafka-streams", time);
     }
 
     private static class RocksDBStore implements KeyValueStore<byte[], byte[]> {
@@ -56,7 +48,6 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
         private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
         private static final String DB_FILE_DIR = "rocksdb";
-        private static final String TMP_FILE_SUFFIX = ".tmp";
 
         private final String topic;
         private final int partition;
@@ -68,7 +59,6 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
 
         private final String dbName;
         private final String dirName;
-        private final File tmpFile;
 
         private RocksDB db;
 
@@ -101,15 +91,7 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
             dbName = this.topic + "." + this.partition;
             dirName = this.context.stateDir() + File.separator + DB_FILE_DIR;
 
-            // rename the file with a tmp suffix to make sure the db instance is created fresh at first
-            tmpFile = new File(dirName, dbName);
-            if (tmpFile.exists()) {
-                if (!tmpFile.renameTo(new File(dirName, dbName + TMP_FILE_SUFFIX)))
-                    throw new KafkaException("Failed to add the tmp suffix to the existing file " + tmpFile.getName());
-            }
             db = openDB(new File(dirName, dbName), this.options, TTL_SECONDS);
-
-            this.context.register(this);
         }
 
         private RocksDB openDB(File dir, Options options, int ttl) {
@@ -191,24 +173,6 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
                 throw new KafkaException("Error while executing flush from store " + this.topic, e);
-            }
-        }
-
-        @Override
-        public void restore() {
-            if (tmpFile.exists()) {
-                // close the db and delete its file
-                // TODO: this db should not take any writes yet
-                db.close();
-                File file = new File(dirName, dbName);
-                if (!file.delete())
-                    throw new KafkaException("Failed to delete the existing file " + file.getName());
-
-                // rename the tmp file by removing its tmp suffix and reopen the database
-                if (!tmpFile.renameTo(file))
-                    throw new KafkaException("Failed to remove the tmp suffix to the existing file " + tmpFile.getName());
-
-                db = openDB(tmpFile, this.options, TTL_SECONDS);
             }
         }
 

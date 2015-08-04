@@ -22,21 +22,31 @@ public class LoggedKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     private final String topic;
     private final int partition;
-    private final KStreamContext context;
-
     private final Set<K> dirty;
     private final int maxDirty;
+    private final KStreamContext context;
 
-
-    public LoggedKeyValueStore(String topic, KeyValueStore<K,V> inner, KStreamContext context) {
-        this.inner = inner;
-        this.context = context;
-
+    public LoggedKeyValueStore(final String topic, final KeyValueStore<K,V> inner, KStreamContext context) {
         this.topic = topic;
         this.partition = context.id();
+        this.context = context;
+        this.inner = inner;
 
         this.dirty = new HashSet<K>();
         this.maxDirty = 100;        // TODO: this needs to be configurable
+
+        // try to restore the state from the logs
+        final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keySerializer();
+        final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueSerializer();
+
+        context.register(this, new RestoreFunc () {
+            @Override
+            public void apply(byte[] key, byte[] value) {
+                inner.put(keyDeserializer.deserialize(topic, key),
+                    valDeserializer.deserialize(topic, value));
+            }
+        });
+
     }
 
     @Override
@@ -47,25 +57,6 @@ public class LoggedKeyValueStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public boolean persistent() {
         return inner.persistent();
-    }
-
-    @Override
-    public void restore() {
-        final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keySerializer();
-        final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueSerializer();
-
-        context.restore(this, new RestoreFunc () {
-            @Override
-            public void apply(byte[] key, byte[] value) {
-                inner.put(keyDeserializer.deserialize(topic, key),
-                    valDeserializer.deserialize(topic, value));
-            }
-
-            @Override
-            public void load() {
-                inner.restore();
-            }
-        });
     }
 
     @Override

@@ -25,15 +25,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
     }
 
     public InMemoryKeyValueStore(String name, KStreamContext context, Time time) {
-        // always wrap the logged store with the metered store
-        // TODO: this may need to be relaxed in the future
-        super(name,
-            "kafka-streams",
-            new LoggedKeyValueStore<>(name, /* store name as topic name */
-                                      new MemoryStore<K, V>(name, context),
-                                      context),
-            context.metrics(),
-            time);
+        super(name, new MemoryStore<K, V>(name, context), context, "kafka-streams", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
@@ -44,11 +36,10 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
         @SuppressWarnings("unchecked")
         public MemoryStore(String name, KStreamContext context) {
+            super();
             this.name = name;
             this.map = new TreeMap<>();
             this.context = context;
-
-            this.context.register(this);
         }
 
         @Override
@@ -95,7 +86,6 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
             // do-nothing since it is in-memory
         }
 
-        @Override
         public void restore() {
             // this should not happen since it is in-memory, hence no state to load from disk
             throw new IllegalStateException("This should not happen");
