@@ -16,6 +16,9 @@
  */
 package kafka.controller
 
+
+import kafka.server.ConfigType
+
 import collection.mutable
 import kafka.utils.{ShutdownableThread, Logging, ZkUtils}
 import kafka.utils.CoreUtils._
@@ -284,7 +287,7 @@ class TopicDeletionManager(controller: KafkaController,
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
     controllerContext.zkClient.deleteRecursive(ZkUtils.getTopicPath(topic))
-    controllerContext.zkClient.deleteRecursive(ZkUtils.getTopicConfigPath(topic))
+    controllerContext.zkClient.deleteRecursive(ZkUtils.getEntityConfigPath(ConfigType.Topic, topic))
     controllerContext.zkClient.delete(ZkUtils.getDeleteTopicPath(topic))
     controllerContext.removeTopic(topic)
   }
