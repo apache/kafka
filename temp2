@@ -1,8 +1,8 @@
-clients/src/main/java/org/apache/kafka/clients/processor/Processor.java
-clients/src/main/java/org/apache/kafka/common/utils/Utils.java
-stream/src/main/java/org/apache/kafka/stream/KafkaStreaming.java
-stream/src/main/java/org/apache/kafka/stream/examples/MapKStreamJob.java
-stream/src/main/java/org/apache/kafka/stream/internal/KStreamContextImpl.java
-stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamImpl.java
-stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamSource.java
-stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamThread.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamBranch.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamFilter.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamFlatMap.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamFlatMapValues.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamJoin.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamMap.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamMapValues.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamWindowedImpl.java

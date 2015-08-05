@@ -1,7 +1,8 @@
 package org.apache.kafka.stream.topology;
 
-import io.confluent.streaming.util.FilteredIterator;
-import io.confluent.streaming.util.Stamped;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.util.FilteredIterator;
+import org.apache.kafka.stream.util.Stamped;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -25,7 +26,7 @@ public class SlidingWindow<K, V> implements Window<K, V> {
   }
 
   @Override
-  public void init(KStreamContext context) {
+  public void init(ProcessorContext context) {
   }
 
   @Override

@@ -1,7 +1,5 @@
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.Processor;
-
 import java.util.PriorityQueue;
 
 /**

@@ -2,6 +2,7 @@ package org.apache.kafka.stream.topology.internal;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamTopology;
 =======
 import io.confluent.streaming.KStreamInitializer;
@@ -10,6 +11,9 @@ import io.confluent.streaming.KStreamInitializer;
 import io.confluent.streaming.KStreamTopology;
 >>>>>>> wip
 import io.confluent.streaming.ValueMapper;
+=======
+import org.apache.kafka.stream.topology.KStreamTopology;
+>>>>>>> removing io.confluent imports: wip
 import org.apache.kafka.stream.topology.ValueMapper;
 
 /**

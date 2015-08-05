@@ -1,5 +1,6 @@
 package org.apache.kafka.stream.topology.internal;
 
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -11,6 +12,11 @@ import io.confluent.streaming.KStreamInitializer;
 import io.confluent.streaming.KStreamTopology;
 >>>>>>> wip
 import io.confluent.streaming.Predicate;
+=======
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.internal.Receiver;
+import org.apache.kafka.stream.topology.KStreamTopology;
+>>>>>>> removing io.confluent imports: wip
 import org.apache.kafka.stream.topology.Predicate;
 
 import java.lang.reflect.Array;
@@ -54,6 +60,7 @@ class KStreamBranch<K, V> implements Receiver {
   }
 
   @Override
+<<<<<<< HEAD
   public void bind(KStreamContext context, KStreamMetadata metadata) {
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -64,6 +71,9 @@ class KStreamBranch<K, V> implements Receiver {
       stream.bind(context, metadata);
 >>>>>>> new api model
 =======
+=======
+  public void bind(ProcessorContext context, KStreamMetadata metadata) {
+>>>>>>> removing io.confluent imports: wip
     for (KStreamSource<K, V> branch : branches) {
       branch.bind(context, metadata);
 >>>>>>> wip
