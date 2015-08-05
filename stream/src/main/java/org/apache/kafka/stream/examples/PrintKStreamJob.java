@@ -1,10 +1,10 @@
 package org.apache.kafka.stream.examples;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KafkaStreaming;
-import io.confluent.streaming.Processor;
-import io.confluent.streaming.SingleProcessorTopology;
-import io.confluent.streaming.StreamingConfig;
+import org.apache.kafka.clients.processor.Processor;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KafkaStreaming;
+import org.apache.kafka.stream.StreamingConfig;
+import org.apache.kafka.stream.topology.SingleProcessorTopology;
 
 import java.util.Properties;
 
@@ -13,10 +13,10 @@ import java.util.Properties;
  */
 public class PrintKStreamJob<K, V> implements Processor<K, V> {
 
-  private KStreamContext context;
+  private ProcessorContext context;
 
   @Override
-  public void init(KStreamContext context) {
+  public void init(ProcessorContext context) {
     this.context = context;
   }
 

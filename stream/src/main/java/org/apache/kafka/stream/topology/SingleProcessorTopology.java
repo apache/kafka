@@ -1,5 +1,6 @@
 package org.apache.kafka.stream.topology;
 
+import org.apache.kafka.clients.processor.Processor;
 import org.apache.kafka.common.utils.Utils;
 
 /**

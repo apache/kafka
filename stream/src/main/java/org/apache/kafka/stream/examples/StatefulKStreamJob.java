@@ -1,14 +1,15 @@
 package org.apache.kafka.stream.examples;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KafkaStreaming;
-import io.confluent.streaming.Processor;
-import io.confluent.streaming.SingleProcessorTopology;
-import io.confluent.streaming.StreamingConfig;
-import io.confluent.streaming.kv.Entry;
-import io.confluent.streaming.kv.InMemoryKeyValueStore;
-import io.confluent.streaming.kv.KeyValueIterator;
-import io.confluent.streaming.kv.KeyValueStore;
+
+import org.apache.kafka.clients.processor.Processor;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KafkaStreaming;
+import org.apache.kafka.stream.StreamingConfig;
+import org.apache.kafka.stream.kv.Entry;
+import org.apache.kafka.stream.kv.InMemoryKeyValueStore;
+import org.apache.kafka.stream.kv.KeyValueIterator;
+import org.apache.kafka.stream.kv.KeyValueStore;
+import org.apache.kafka.stream.topology.SingleProcessorTopology;
 
 import java.util.Properties;
 
@@ -18,11 +19,11 @@ import java.util.Properties;
 
 public class StatefulKStreamJob implements Processor<String, Integer> {
 
-  private KStreamContext context;
+  private ProcessorContext context;
   private KeyValueStore<String, Integer> kvStore;
 
   @Override
-  public void init(KStreamContext context) {
+  public void init(ProcessorContext context) {
     this.context = context;
     this.context.schedule(this, 1000);
 
