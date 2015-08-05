@@ -107,7 +107,7 @@ object ZkUtils extends Logging {
   }
 
   def setupCommonPaths(zkClient: ZkClient) {
-    for(path <- )
+    for(path <- commonZkPaths)
     makeSurePersistentPathExists(zkClient, path)
   }
 
