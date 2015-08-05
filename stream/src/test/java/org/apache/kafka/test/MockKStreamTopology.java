@@ -1,6 +1,7 @@
 package org.apache.kafka.test;
 
-import io.confluent.streaming.KStreamTopology;
+
+import org.apache.kafka.stream.topology.KStreamTopology;
 
 /**
  * Created by yasuhiro on 7/31/15.

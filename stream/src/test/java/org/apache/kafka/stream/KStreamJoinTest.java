@@ -1,11 +1,19 @@
 package org.apache.kafka.stream;
 
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
-import io.confluent.streaming.testutil.TestProcessor;
-import io.confluent.streaming.testutil.UnlimitedWindow;
-import io.confluent.streaming.util.Util;
-import org.apache.kafka.clients.processor.KStreamContext;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.stream.internal.PartitioningInfo;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.KStreamWindowed;
+import org.apache.kafka.stream.topology.KeyValue;
+import org.apache.kafka.stream.topology.KeyValueMapper;
+import org.apache.kafka.stream.topology.ValueJoiner;
+import org.apache.kafka.stream.topology.ValueMapper;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.MockKStreamContext;
+import org.apache.kafka.test.UnlimitedWindow;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -37,7 +45,7 @@ public class KStreamJoinTest {
   private ValueMapper<Iterable<String>, String> valueMapper2 = new ValueMapper<Iterable<String>, String>() {
     @Override
     public Iterable<String> apply(String value) {
-      return (Iterable<String>) Util.mkSet(value);
+      return (Iterable<String>) Utils.mkSet(value);
     }
   };
 
@@ -53,7 +61,7 @@ public class KStreamJoinTest {
     new KeyValueMapper<Integer, Iterable<String>, Integer, String>() {
       @Override
       public KeyValue<Integer, Iterable<String>> apply(Integer key, String value) {
-        return KeyValue.pair(key, (Iterable<String>) Util.mkSet(value));
+        return KeyValue.pair(key, (Iterable<String>) Utils.mkSet(value));
       }
     };
 
@@ -66,13 +74,14 @@ public class KStreamJoinTest {
     KStreamSource<Integer, String> stream2;
     KStreamWindowed<Integer, String> windowed1;
     KStreamWindowed<Integer, String> windowed2;
-    TestProcessor<Integer, String> processor;
+    MockProcessor<Integer, String> processor;
     String[] expected;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
+<<<<<<< HEAD
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
@@ -83,6 +92,9 @@ public class KStreamJoinTest {
     KStreamTopology initializer = new MockKStreamTopology();
 >>>>>>> wip
     processor = new TestProcessor<>();
+=======
+    processor = new MockProcessor<>();
+>>>>>>> removing io.confluent imports: wip
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
     windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
@@ -168,7 +180,7 @@ public class KStreamJoinTest {
     KStreamSource<Integer, String> stream2;
     KStreamWindowed<Integer, String> windowed1;
     KStreamWindowed<Integer, String> windowed2;
-    TestProcessor<Integer, String> processor;
+    MockProcessor<Integer, String> processor;
     String[] expected;
 
 <<<<<<< HEAD
@@ -183,8 +195,12 @@ public class KStreamJoinTest {
 >>>>>>> wip
 =======
     KStreamTopology initializer = new MockKStreamTopology();
+<<<<<<< HEAD
 >>>>>>> wip
     processor = new TestProcessor<>();
+=======
+    processor = new MockProcessor<>();
+>>>>>>> removing io.confluent imports: wip
     stream1 = new KStreamSource<>(null, initializer);
     stream2 = new KStreamSource<>(null, initializer);
     windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
@@ -265,12 +281,13 @@ public class KStreamJoinTest {
     KStream<Integer, String> mapped2;
     KStreamWindowed<Integer, String> windowed1;
     KStreamWindowed<Integer, String> windowed2;
-    TestProcessor<Integer, String> processor;
+    MockProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
+<<<<<<< HEAD
     processor = new TestProcessor<>();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
@@ -287,6 +304,9 @@ public class KStreamJoinTest {
     KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
 >>>>>>> wip
+=======
+    processor = new MockProcessor<>();
+>>>>>>> removing io.confluent imports: wip
 
     boolean exceptionRaised;
 
@@ -365,7 +385,7 @@ public class KStreamJoinTest {
     KStream<Integer, String> mapped2;
     KStreamWindowed<Integer, String> windowed1;
     KStreamWindowed<Integer, String> windowed2;
-    TestProcessor<Integer, String> processor;
+    MockProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -385,8 +405,12 @@ public class KStreamJoinTest {
 >>>>>>> new api model
 =======
     KStreamTopology initializer = new MockKStreamTopology();
+<<<<<<< HEAD
     processor = new TestProcessor<>();
 >>>>>>> wip
+=======
+    processor = new MockProcessor<>();
+>>>>>>> removing io.confluent imports: wip
 
     boolean exceptionRaised;
 
@@ -465,7 +489,7 @@ public class KStreamJoinTest {
     KStream<Integer, String> mapped2;
     KStreamWindowed<Integer, String> windowed1;
     KStreamWindowed<Integer, String> windowed2;
-    TestProcessor<Integer, String> processor;
+    MockProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -485,8 +509,12 @@ public class KStreamJoinTest {
 >>>>>>> new api model
 =======
     KStreamTopology initializer = new MockKStreamTopology();
+<<<<<<< HEAD
     processor = new TestProcessor<>();
 >>>>>>> wip
+=======
+    processor = new MockProcessor<>();
+>>>>>>> removing io.confluent imports: wip
 
     boolean exceptionRaised;
 
@@ -565,7 +593,7 @@ public class KStreamJoinTest {
     KStream<Integer, String> mapped2;
     KStreamWindowed<Integer, String> windowed1;
     KStreamWindowed<Integer, String> windowed2;
-    TestProcessor<Integer, String> processor;
+    MockProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -585,8 +613,12 @@ public class KStreamJoinTest {
 >>>>>>> new api model
 =======
     KStreamTopology initializer = new MockKStreamTopology();
+<<<<<<< HEAD
     processor = new TestProcessor<>();
 >>>>>>> wip
+=======
+    processor = new MockProcessor<>();
+>>>>>>> removing io.confluent imports: wip
 
     boolean exceptionRaised;
 

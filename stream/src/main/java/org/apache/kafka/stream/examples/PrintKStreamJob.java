@@ -1,7 +1,7 @@
 package org.apache.kafka.stream.examples;
 
-import org.apache.kafka.clients.processor.Processor;
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.topology.Processor;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KafkaStreaming;
 import org.apache.kafka.stream.StreamingConfig;
 import org.apache.kafka.stream.topology.SingleProcessorTopology;
@@ -13,10 +13,10 @@ import java.util.Properties;
  */
 public class PrintKStreamJob<K, V> implements Processor<K, V> {
 
-  private ProcessorContext context;
+  private KStreamContext context;
 
   @Override
-  public void init(ProcessorContext context) {
+  public void init(KStreamContext context) {
     this.context = context;
   }
 

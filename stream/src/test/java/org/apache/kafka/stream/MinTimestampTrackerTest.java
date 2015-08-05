@@ -2,12 +2,14 @@ package org.apache.kafka.stream;
 
 import static org.junit.Assert.assertEquals;
 
+import org.apache.kafka.stream.util.MinTimestampTracker;
+import org.apache.kafka.stream.util.Stamped;
 import org.junit.Test;
 
 public class MinTimestampTrackerTest {
 
   private Stamped<String> elem(long timestamp) {
-    return new Stamped<String>("", timestamp);
+    return new Stamped<>("", timestamp);
   }
 
   @SuppressWarnings("unchecked")

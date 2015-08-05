@@ -1,9 +1,13 @@
 package org.apache.kafka.stream;
 
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
-import io.confluent.streaming.testutil.TestProcessor;
-import org.apache.kafka.clients.processor.KStreamContext;
+import org.apache.kafka.stream.internal.PartitioningInfo;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.Predicate;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockKStreamContext;
+import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.MockProcessor;
 import org.junit.Test;
 
 import java.lang.reflect.Array;
@@ -57,16 +61,16 @@ public class KStreamBranchTest {
 >>>>>>> wip
     KStreamSource<Integer, String> stream;
     KStream<Integer, String>[] branches;
-    TestProcessor<Integer, String>[] processors;
+    MockProcessor<Integer, String>[] processors;
 
     stream = new KStreamSource<>(null, initializer);
     branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
     assertEquals(3, branches.length);
 
-    processors = (TestProcessor<Integer, String>[]) Array.newInstance(TestProcessor.class, branches.length);
+    processors = (MockProcessor<Integer, String>[]) Array.newInstance(MockProcessor.class, branches.length);
     for (int i = 0; i < branches.length; i++) {
-      processors[i] = new TestProcessor<>();
+      processors[i] = new MockProcessor<>();
       branches[i].process(processors[i]);
     }
 
@@ -83,9 +87,9 @@ public class KStreamBranchTest {
 
     assertEquals(3, branches.length);
 
-    processors = (TestProcessor<Integer, String>[]) Array.newInstance(TestProcessor.class, branches.length);
+    processors = (MockProcessor<Integer, String>[]) Array.newInstance(MockProcessor.class, branches.length);
     for (int i = 0; i < branches.length; i++) {
-      processors[i] = new TestProcessor<>();
+      processors[i] = new MockProcessor<>();
       branches[i].process(processors[i]);
     }
 

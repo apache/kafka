@@ -1,15 +1,17 @@
 package org.apache.kafka.stream;
 
-import org.apache.kafka.stream.TimestampExtractor;
-import io.confluent.streaming.testutil.MockIngestor;
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.stream.internal.StreamGroup;
+import org.apache.kafka.stream.internal.TimeBasedChooser;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockIngestor;
+import org.apache.kafka.test.MockKStreamContext;
+import org.apache.kafka.test.MockKStreamTopology;
 import org.junit.Test;
 
 import java.util.ArrayList;

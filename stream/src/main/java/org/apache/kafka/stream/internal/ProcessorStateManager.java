@@ -18,8 +18,8 @@ package org.apache.kafka.stream.internal;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.processor.RestoreFunc;
-import org.apache.kafka.clients.processor.StateStore;
+import org.apache.kafka.stream.RestoreFunc;
+import org.apache.kafka.stream.StateStore;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.stream.util.OffsetCheckpoint;

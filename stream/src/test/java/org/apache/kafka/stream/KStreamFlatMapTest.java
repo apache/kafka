@@ -1,15 +1,20 @@
 package org.apache.kafka.stream;
 
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
-import io.confluent.streaming.testutil.TestProcessor;
-import org.apache.kafka.clients.processor.KStreamContext;
+import org.apache.kafka.stream.internal.PartitioningInfo;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.KeyValue;
+import org.apache.kafka.stream.topology.KeyValueMapper;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.MockKStreamContext;
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
 import java.util.Collections;
-
-import static org.junit.Assert.assertEquals;
 
 public class KStreamFlatMapTest {
 
@@ -50,8 +55,9 @@ public class KStreamFlatMapTest {
 
 >>>>>>> wip
     KStreamSource<Integer, String> stream;
-    TestProcessor<String, String> processor;
+    MockProcessor<String, String> processor;
 
+<<<<<<< HEAD
     processor = new TestProcessor<>();
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -60,6 +66,9 @@ public class KStreamFlatMapTest {
     stream = new KStreamSource<>(null, initializer);
 >>>>>>> new api model
 =======
+=======
+    processor = new MockProcessor<>();
+>>>>>>> removing io.confluent imports: wip
     stream = new KStreamSource<>(null, topology);
 >>>>>>> wip
     stream.flatMap(mapper).process(processor);

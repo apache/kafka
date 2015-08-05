@@ -1,14 +1,17 @@
 package org.apache.kafka.stream;
 
-import static org.junit.Assert.assertEquals;
-
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
-import io.confluent.streaming.testutil.TestProcessor;
-import org.apache.kafka.clients.processor.KStreamContext;
+import org.apache.kafka.stream.internal.PartitioningInfo;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.MockKStreamContext;
 import org.junit.Test;
 
 import java.util.Collections;
+
+import static org.junit.Assert.assertEquals;
 
 public class KStreamSourceTest {
 
@@ -23,6 +26,7 @@ public class KStreamSourceTest {
 <<<<<<< HEAD
 <<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
+<<<<<<< HEAD
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
@@ -33,6 +37,9 @@ public class KStreamSourceTest {
     KStreamTopology initializer = new MockKStreamTopology();
 >>>>>>> wip
     TestProcessor<String, String> processor = new TestProcessor<>();
+=======
+    MockProcessor<String, String> processor = new MockProcessor<>();
+>>>>>>> removing io.confluent imports: wip
 
     KStreamSource<String, String> stream = new KStreamSource<>(null, initializer);
     stream.process(processor);

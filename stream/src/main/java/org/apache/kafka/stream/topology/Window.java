@@ -1,7 +1,7 @@
 package org.apache.kafka.stream.topology;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.StateStore;
+import org.apache.kafka.stream.KStreamContext;
+import org.apache.kafka.stream.StateStore;
 
 import java.util.Iterator;
 
@@ -10,7 +10,7 @@ import java.util.Iterator;
  */
 public interface Window<K, V> extends StateStore {
 
-  void init(ProcessorContext context);
+  void init(KStreamContext context);
 
   Iterator<V> find(K key, long timestamp);
 

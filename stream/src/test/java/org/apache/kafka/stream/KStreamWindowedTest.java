@@ -1,9 +1,13 @@
 package org.apache.kafka.stream;
 
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
-import io.confluent.streaming.testutil.UnlimitedWindow;
-import org.apache.kafka.clients.processor.KStreamContext;
+import org.apache.kafka.stream.internal.PartitioningInfo;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.Window;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockKStreamContext;
+import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.UnlimitedWindow;
 import org.junit.Test;
 
 import java.util.Collections;

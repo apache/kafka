@@ -1,6 +1,6 @@
 package org.apache.kafka.stream.topology.internal;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.Transformer;
 
@@ -17,7 +17,7 @@ class KStreamTransform<K, V, K1, V1> extends KStreamImpl<K, V> implements Transf
   }
 
   @Override
-  public void bind(ProcessorContext context, KStreamMetadata metadata) {
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
     transformer.init(context);
     transformer.forwarder(this);
 

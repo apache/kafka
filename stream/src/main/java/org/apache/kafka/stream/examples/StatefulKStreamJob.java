@@ -1,8 +1,8 @@
 package org.apache.kafka.stream.examples;
 
 
-import org.apache.kafka.clients.processor.Processor;
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.topology.Processor;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KafkaStreaming;
 import org.apache.kafka.stream.StreamingConfig;
 import org.apache.kafka.stream.kv.Entry;
@@ -19,11 +19,11 @@ import java.util.Properties;
 
 public class StatefulKStreamJob implements Processor<String, Integer> {
 
-  private ProcessorContext context;
+  private KStreamContext context;
   private KeyValueStore<String, Integer> kvStore;
 
   @Override
-  public void init(ProcessorContext context) {
+  public void init(KStreamContext context) {
     this.context = context;
     this.context.schedule(this, 1000);
 

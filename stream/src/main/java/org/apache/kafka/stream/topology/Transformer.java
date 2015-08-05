@@ -1,7 +1,5 @@
 package org.apache.kafka.stream.topology;
 
-import org.apache.kafka.clients.processor.Processor;
-
 /**
  * Created by yasuhiro on 6/17/15.
  */

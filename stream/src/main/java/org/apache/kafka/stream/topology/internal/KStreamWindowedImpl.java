@@ -1,7 +1,7 @@
 package org.apache.kafka.stream.topology.internal;
 
 
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KStream;
 <<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
@@ -45,7 +45,7 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
   }
 
   @Override
-  public void bind(ProcessorContext context, KStreamMetadata metadata) {
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
     super.bind(context, metadata);
     window.init(context);
   }

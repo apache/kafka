@@ -1,17 +1,18 @@
 package org.apache.kafka.test;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KeyValue;
-import io.confluent.streaming.Window;
-import io.confluent.streaming.util.FilteredIterator;
-import io.confluent.streaming.util.Stamped;
+
+import org.apache.kafka.stream.KStreamContext;
+import org.apache.kafka.stream.topology.KeyValue;
+import org.apache.kafka.stream.topology.Window;
+import org.apache.kafka.stream.util.FilteredIterator;
+import org.apache.kafka.stream.util.Stamped;
 
 import java.util.Iterator;
 import java.util.LinkedList;
 
 public class UnlimitedWindow<K, V> implements Window<K, V> {
 
-  private LinkedList<Stamped<KeyValue<K, V>>> list = new LinkedList<Stamped<KeyValue<K, V>>>();
+  private LinkedList<Stamped<KeyValue<K, V>>> list = new LinkedList<>();
 
   @Override
   public void init(KStreamContext context) {
@@ -58,10 +59,6 @@ public class UnlimitedWindow<K, V> implements Window<K, V> {
 
   @Override
   public void close() {
-  }
-
-  @Override
-  public void restore() {
   }
 
   @Override

@@ -1,11 +1,11 @@
 package org.apache.kafka.stream;
 
-import org.apache.kafka.clients.processor.Processor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.stream.topology.KStreamWindowed;
 import org.apache.kafka.stream.topology.KeyValueMapper;
 import org.apache.kafka.stream.topology.Predicate;
+import org.apache.kafka.stream.topology.Processor;
 import org.apache.kafka.stream.topology.Transformer;
 import org.apache.kafka.stream.topology.ValueMapper;
 import org.apache.kafka.stream.topology.Window;

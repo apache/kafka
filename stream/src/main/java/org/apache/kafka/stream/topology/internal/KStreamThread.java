@@ -55,7 +55,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.stream.StreamingConfig;
 import org.apache.kafka.stream.internal.IngestorImpl;
-import org.apache.kafka.stream.internal.ProcessorContextImpl;
+import org.apache.kafka.stream.internal.KStreamContextImpl;
 import org.apache.kafka.stream.internal.ProcessorConfig;
 import org.apache.kafka.stream.internal.RecordCollectorImpl;
 import org.apache.kafka.stream.internal.StreamGroup;
@@ -79,7 +79,7 @@ public class KStreamThread extends Thread {
     private final KStreamTopology topology;
     private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
     private final ParallelExecutor parallelExecutor;
-    private final Map<Integer, ProcessorContextImpl> kstreamContexts = new HashMap<>();
+    private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<>();
     private final IngestorImpl ingestor;
     private final RecordCollectorImpl collector;
     private final StreamingConfig streamingConfig;
@@ -205,7 +205,7 @@ public class KStreamThread extends Thread {
 
     private void commitAll(long now) {
         Map<TopicPartition, Long> commit = new HashMap<>();
-        for (ProcessorContextImpl context : kstreamContexts.values()) {
+        for (KStreamContextImpl context : kstreamContexts.values()) {
             context.flush();
             commit.putAll(context.consumedOffsets());
         }
@@ -265,10 +265,10 @@ public class KStreamThread extends Thread {
 =======
         for (TopicPartition partition : partitions) {
             final Integer id = partition.partition(); // TODO: switch this to the group id
-            ProcessorContextImpl context = kstreamContexts.get(id);
+            KStreamContextImpl context = kstreamContexts.get(id);
             if (context == null) {
                 try {
-                    context = new ProcessorContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
+                    context = new KStreamContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
                     context.init(topology.sourceStreams());
 
 >>>>>>> new api model
@@ -286,7 +286,7 @@ public class KStreamThread extends Thread {
     }
 
     private void removePartitions() {
-        for (ProcessorContextImpl context : kstreamContexts.values()) {
+        for (KStreamContextImpl context : kstreamContexts.values()) {
             log.info("Removing task context {}", context.id());
             try {
                 context.close();

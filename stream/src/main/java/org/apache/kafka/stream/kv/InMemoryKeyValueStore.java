@@ -1,6 +1,6 @@
 package org.apache.kafka.stream.kv;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.stream.kv.internal.MeteredKeyValueStore;
@@ -19,11 +19,11 @@ import java.util.TreeMap;
  */
 public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
-    public InMemoryKeyValueStore(String name, ProcessorContext context) {
+    public InMemoryKeyValueStore(String name, KStreamContext context) {
         this(name, context, new SystemTime());
     }
 
-    public InMemoryKeyValueStore(String name, ProcessorContext context, Time time) {
+    public InMemoryKeyValueStore(String name, KStreamContext context, Time time) {
         super(name, new MemoryStore<K, V>(name, context), context, "kafka-streams", time);
     }
 
@@ -31,10 +31,10 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
         private final String name;
         private final NavigableMap<K, V> map;
-        private final ProcessorContext context;
+        private final KStreamContext context;
 
         @SuppressWarnings("unchecked")
-        public MemoryStore(String name, ProcessorContext context) {
+        public MemoryStore(String name, KStreamContext context) {
             super();
             this.name = name;
             this.map = new TreeMap<>();

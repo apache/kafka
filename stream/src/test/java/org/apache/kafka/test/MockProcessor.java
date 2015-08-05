@@ -1,7 +1,7 @@
 package org.apache.kafka.test;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.Processor;
+import org.apache.kafka.stream.topology.Processor;
+import org.apache.kafka.stream.KStreamContext;
 
 import java.util.ArrayList;
 

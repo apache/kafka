@@ -3,6 +3,7 @@ package org.apache.kafka.stream.topology.internal;
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamTopology;
 <<<<<<< HEAD
@@ -16,6 +17,9 @@ import io.confluent.streaming.KStreamInitializer;
 >>>>>>> wip
 =======
 import org.apache.kafka.clients.processor.ProcessorContext;
+>>>>>>> removing io.confluent imports: wip
+=======
+import org.apache.kafka.stream.KStreamContext;
 >>>>>>> removing io.confluent imports: wip
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.stream.topology.KStreamTopology;
@@ -87,7 +91,7 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
 >>>>>>> wip
   @Override
-  public void bind(ProcessorContext context, KStreamMetadata metadata) {
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
     if (keyDeserializer == null) keyDeserializer = (Deserializer<K>) context.keyDeserializer();
     if (valueDeserializer == null) valueDeserializer = (Deserializer<V>) context.valueDeserializer();
 

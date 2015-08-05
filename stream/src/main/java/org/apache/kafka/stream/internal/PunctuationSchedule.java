@@ -1,7 +1,7 @@
 package org.apache.kafka.stream.internal;
 
 
-import org.apache.kafka.clients.processor.Processor;
+import org.apache.kafka.stream.topology.Processor;
 import org.apache.kafka.stream.util.Stamped;
 
 public class PunctuationSchedule extends Stamped<Processor<?,? >> {

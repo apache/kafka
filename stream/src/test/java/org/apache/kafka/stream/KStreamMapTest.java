@@ -1,9 +1,14 @@
 package org.apache.kafka.stream;
 
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
-import io.confluent.streaming.testutil.TestProcessor;
-import org.apache.kafka.clients.processor.KStreamContext;
+import org.apache.kafka.stream.internal.PartitioningInfo;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.KeyValue;
+import org.apache.kafka.stream.topology.KeyValueMapper;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.MockKStreamContext;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -43,9 +48,9 @@ public class KStreamMapTest {
     KStreamTopology initializer = new MockKStreamTopology();
 >>>>>>> wip
     KStreamSource<Integer, String> stream;
-    TestProcessor<String, Integer> processor;
+    MockProcessor<String, Integer> processor;
 
-    processor = new TestProcessor<>();
+    processor = new MockProcessor<>();
     stream = new KStreamSource<>(null, initializer);
     stream.map(mapper).process(processor);
 

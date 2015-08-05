@@ -1,6 +1,6 @@
 package org.apache.kafka.stream.internal;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.topology.internal.KStreamMetadata;
 
 /**
@@ -8,7 +8,7 @@ import org.apache.kafka.stream.topology.internal.KStreamMetadata;
  */
 public interface Receiver {
 
-  void bind(ProcessorContext context, KStreamMetadata metadata);
+  void bind(KStreamContext context, KStreamMetadata metadata);
 
 <<<<<<< HEAD
 <<<<<<< HEAD

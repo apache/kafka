@@ -1,8 +1,8 @@
 package org.apache.kafka.stream.internal;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.processor.Processor;
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.topology.Processor;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.stream.Chooser;
@@ -35,7 +35,7 @@ public class StreamSynchronizer implements SyncGroup {
 public class StreamGroup implements ParallelExecutor.Task {
 >>>>>>> remove SyncGroup from user facing APIs:src/main/java/io/confluent/streaming/internal/StreamGroup.java
 
-  private final ProcessorContext context;
+  private final KStreamContext context;
   private final Ingestor ingestor;
   private final Chooser chooser;
   private final TimestampExtractor timestampExtractor;
@@ -61,7 +61,7 @@ public class StreamGroup implements ParallelExecutor.Task {
    * @param timestampExtractor the instance of {@link TimestampExtractor}
    * @param desiredUnprocessedPerPartition the target number of records kept in a queue for each topic
    */
-  StreamGroup(ProcessorContext context,
+  public StreamGroup(KStreamContext context,
               Ingestor ingestor,
               Chooser chooser,
               TimestampExtractor timestampExtractor,

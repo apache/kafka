@@ -1,8 +1,8 @@
 package org.apache.kafka.stream.kv.internal;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.RecordCollector;
-import org.apache.kafka.clients.processor.RestoreFunc;
+import org.apache.kafka.stream.KStreamContext;
+import org.apache.kafka.stream.RecordCollector;
+import org.apache.kafka.stream.RestoreFunc;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MeasurableStat;
@@ -43,10 +43,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final int partition;
     private final Set<K> dirty;
     private final int maxDirty;
-    private final ProcessorContext context;
+    private final KStreamContext context;
 
     // always wrap the logged store with the metered store
-    public MeteredKeyValueStore(final String name, final KeyValueStore<K,V> inner, ProcessorContext context, String group, Time time) {
+    public MeteredKeyValueStore(final String name, final KeyValueStore<K,V> inner, KStreamContext context, String group, Time time) {
         this.inner = inner;
 
         this.time = time;

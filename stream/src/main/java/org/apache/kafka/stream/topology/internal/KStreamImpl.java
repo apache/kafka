@@ -1,7 +1,7 @@
 package org.apache.kafka.stream.topology.internal;
 
-import org.apache.kafka.clients.processor.Processor;
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.topology.Processor;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KStream;
 <<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
@@ -47,7 +47,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 <<<<<<< HEAD
 <<<<<<< HEAD
   protected KStreamTopology topology;
-  protected ProcessorContext context;
+  protected KStreamContext context;
   protected KStreamMetadata metadata;
 
   protected KStreamImpl(KStreamTopology topology) {
@@ -55,7 +55,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   }
 
   @Override
-  public void bind(ProcessorContext context, KStreamMetadata metadata) {
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
     if (this.context != null) throw new IllegalStateException("kstream topology is already bound");
     this.context = context;
     this.metadata = metadata;
@@ -240,10 +240,10 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @SuppressWarnings("unchecked")
   private <K, V> Processor<K, V> getSendProcessor(final String sendTopic, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
     return new Processor<K, V>() {
-      private ProcessorContext context;
+      private KStreamContext context;
 
       @Override
-      public void init(ProcessorContext context) {
+      public void init(KStreamContext context) {
         this.context = context;
       }
       @Override

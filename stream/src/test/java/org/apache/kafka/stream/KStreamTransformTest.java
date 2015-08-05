@@ -1,12 +1,13 @@
 package org.apache.kafka.stream;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamTopology;
-import io.confluent.streaming.Transformer;
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
-import io.confluent.streaming.testutil.TestProcessor;
-import org.apache.kafka.clients.processor.KStreamContext;
+import org.apache.kafka.stream.internal.PartitioningInfo;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.Transformer;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockKStreamContext;
+import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.MockProcessor;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -25,10 +26,10 @@ public class KStreamTransformTest {
 
     KStreamTopology topology = new MockKStreamTopology();
     KStreamSource<String, String> stream;
-    TestProcessor<Integer, Integer> processor;
+    MockProcessor<Integer, Integer> processor;
     Transformer<Integer, Integer, String, String> transformer;
 
-    processor = new TestProcessor<>();
+    processor = new MockProcessor<>();
     transformer = new Transformer<Integer, Integer, String, String>() {
       KStreamContext context;
       Forwarder<Integer, Integer> forwarder;
@@ -67,10 +68,10 @@ public class KStreamTransformTest {
 
     KStreamTopology topology = new MockKStreamTopology();
     KStreamSource<Integer, String> stream;
-    TestProcessor<Integer, Integer> processor;
+    MockProcessor<Integer, Integer> processor;
     Transformer<Integer, Integer, Integer, String> transformer;
 
-    processor = new TestProcessor<>();
+    processor = new MockProcessor<>();
     transformer = new Transformer<Integer, Integer, Integer, String>() {
       KStreamContext context;
       Forwarder<Integer, Integer> forwarder;

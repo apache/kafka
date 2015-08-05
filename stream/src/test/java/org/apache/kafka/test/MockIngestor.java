@@ -1,9 +1,9 @@
 package org.apache.kafka.test;
 
-import io.confluent.streaming.internal.Ingestor;
-import io.confluent.streaming.internal.StreamGroup;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.stream.internal.Ingestor;
+import org.apache.kafka.stream.internal.StreamGroup;
 
 import java.util.HashMap;
 import java.util.HashSet;
