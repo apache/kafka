@@ -381,7 +381,7 @@ def main():
     url = pr["url"]
 
     pr_title = pr["title"]
-    commit_title = raw_input("Commit title [%s]: " % pr_title)
+    commit_title = raw_input("Commit title [%s]: " % pr_title.encode("utf-8")).decode("utf-8")
     if commit_title == "":
         commit_title = pr_title
 

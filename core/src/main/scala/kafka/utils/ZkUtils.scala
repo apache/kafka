@@ -19,6 +19,7 @@ package kafka.utils
 
 import kafka.cluster._
 import kafka.consumer.{ConsumerThreadId, TopicCount}
+import kafka.server.ConfigType
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException,
   ZkMarshallingError, ZkBadVersionException}
@@ -39,8 +40,6 @@ object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
-  val TopicConfigPath = "/config/topics"
-  val TopicConfigChangesPath = "/config/changes"
   val ControllerPath = "/controller"
   val ControllerEpochPath = "/controller_epoch"
   val ReassignPartitionsPath = "/admin/reassign_partitions"
@@ -48,6 +47,18 @@ object ZkUtils extends Logging {
   val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
   val BrokerSequenceIdPath = "/brokers/seqid"
   val IsrChangeNotificationPath = "/isr_change_notification"
+  val EntityConfigPath = "/config"
+  val EntityConfigChangesPath = "/config/changes"
+  // The following persistent zk path need to be created at server startup time.
+  val commonZkPaths = Seq(ConsumersPath,
+                          BrokerIdsPath,
+                          BrokerTopicsPath,
+                          EntityConfigChangesPath,
+                          ZkUtils.getEntityConfigRootPath(ConfigType.Topic),
+                          ZkUtils.getEntityConfigRootPath(ConfigType.Client),
+                          DeleteTopicsPath,
+                          BrokerSequenceIdPath,
+                          IsrChangeNotificationPath)
 
   def getTopicPath(topic: String): String = {
     BrokerTopicsPath + "/" + topic
@@ -57,8 +68,11 @@ object ZkUtils extends Logging {
     getTopicPath(topic) + "/partitions"
   }
 
-  def getTopicConfigPath(topic: String): String =
-    TopicConfigPath + "/" + topic
+  def getEntityConfigRootPath(entityType: String): String =
+    EntityConfigPath + "/" + entityType
+
+  def getEntityConfigPath(entityType: String, entity: String): String =
+    getEntityConfigRootPath(entityType) + "/" + entity
 
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
@@ -93,9 +107,8 @@ object ZkUtils extends Logging {
   }
 
   def setupCommonPaths(zkClient: ZkClient) {
-    for(path <- Seq(ConsumersPath, BrokerIdsPath, BrokerTopicsPath, TopicConfigChangesPath, TopicConfigPath,
-      DeleteTopicsPath, BrokerSequenceIdPath, IsrChangeNotificationPath))
-      makeSurePersistentPathExists(zkClient, path)
+    for(path <- )
+    makeSurePersistentPathExists(zkClient, path)
   }
 
   def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
@@ -751,6 +764,17 @@ object ZkUtils extends Logging {
       Seq.empty[String]
     else
       topics
+  }
+
+  /**
+   * Returns all the entities whose configs have been overridden.
+   */
+  def getAllEntitiesWithConfig(zkClient: ZkClient, entityType: String): Seq[String] = {
+    val entities = ZkUtils.getChildrenParentMayNotExist(zkClient, getEntityConfigRootPath(entityType))
+    if(entities == null)
+      Seq.empty[String]
+    else
+      entities
   }
 
   def getAllPartitions(zkClient: ZkClient): Set[TopicAndPartition] = {

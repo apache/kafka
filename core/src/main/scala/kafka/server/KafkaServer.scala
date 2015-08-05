@@ -31,8 +31,9 @@ import java.io.File
 import kafka.utils._
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.NetworkReceive
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 
-import scala.collection.{JavaConversions, mutable}
+import scala.collection.mutable
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
 import kafka.cluster.{EndPoint, Broker}
@@ -77,7 +78,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   var replicaManager: ReplicaManager = null
 
-  var topicConfigManager: TopicConfigManager = null
+  var dynamicConfigHandlers: Map[String, ConfigHandler] = null
+  var dynamicConfigManager: DynamicConfigManager = null
+  val metrics: Metrics = new Metrics()
 
   var consumerCoordinator: ConsumerCoordinator = null
 
@@ -171,9 +174,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
           Mx4jLoader.maybeLoad()
 
-          /* start topic config manager */
-          topicConfigManager = new TopicConfigManager(zkClient, logManager)
-          topicConfigManager.startup()
+          /* start dynamic config manager */
+          dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager),
+                                                             ConfigType.Client -> new ClientIdConfigHandler)
+          dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
+          dynamicConfigManager.startup()
 
           /* tell everyone we are alive */
           val listeners = config.advertisedListeners.map {case(protocol, endpoint) =>

@@ -1,0 +1,183 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package kafka.server
+
+import kafka.utils.Json
+import kafka.utils.Logging
+import kafka.utils.SystemTime
+import kafka.utils.Time
+import kafka.utils.ZkUtils
+
+import scala.collection._
+import kafka.admin.AdminUtils
+import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
+
+
+/**
+ * Represents all the entities that can be configured via ZK
+ */
+object ConfigType {
+  val Topic = "topic"
+  val Client = "client"
+}
+
+/**
+ * This class initiates and carries out config changes for all entities defined in ConfigType.
+ *
+ * It works as follows.
+ *
+ * Config is stored under the path: /config/entityType/entityName
+ *   E.g. /config/topics/<topic_name> and /config/clients/<clientId>
+ * This znode stores the overrides for this entity (but no defaults) in properties format.
+ *
+ * To avoid watching all topics for changes instead we have a notification path
+ *   /config/changes
+ * The DynamicConfigManager has a child watch on this path.
+ *
+ * To update a config we first update the config properties. Then we create a new sequential
+ * znode under the change path which contains the name of the entityType and entityName that was updated, say
+ *   /config/changes/config_change_13321
+ * The sequential znode contains data in this format: {"version" : 1, "entityType":"topic/client", "entityName" : "topic_name/client_id"}
+ * This is just a notification--the actual config change is stored only once under the /config/entityType/entityName path.
+ *
+ * This will fire a watcher on all brokers. This watcher works as follows. It reads all the config change notifications.
+ * It keeps track of the highest config change suffix number it has applied previously. For any previously applied change it finds
+ * it checks if this notification is larger than a static expiration time (say 10mins) and if so it deletes this notification.
+ * For any new changes it reads the new configuration, combines it with the defaults, and updates the existing config.
+ *
+ * Note that config is always read from the config path in zk, the notification is just a trigger to do so. So if a broker is
+ * down and misses a change that is fine--when it restarts it will be loading the full config anyway. Note also that
+ * if there are two consecutive config changes it is possible that only the last one will be applied (since by the time the
+ * broker reads the config the both changes may have been made). In this case the broker would needlessly refresh the config twice,
+ * but that is harmless.
+ *
+ * On restart the config manager re-processes all notifications. This will usually be wasted work, but avoids any race conditions
+ * on startup where a change might be missed between the initial config load and registering for change notifications.
+ *
+ */
+class DynamicConfigManager(private val zkClient: ZkClient,
+                           private val configHandler : Map[String, ConfigHandler],
+                           private val changeExpirationMs: Long = 15*60*1000,
+                           private val time: Time = SystemTime) extends Logging {
+  private var lastExecutedChange = -1L
+
+  /**
+   * Begin watching for config changes
+   */
+  def startup() {
+    ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.EntityConfigChangesPath)
+    zkClient.subscribeChildChanges(ZkUtils.EntityConfigChangesPath, ConfigChangeListener)
+    processAllConfigChanges()
+  }
+
+  /**
+   * Process all config changes
+   */
+  private def processAllConfigChanges() {
+    val configChanges = zkClient.getChildren(ZkUtils.EntityConfigChangesPath)
+    import JavaConversions._
+    processConfigChanges((configChanges: mutable.Buffer[String]).sorted)
+  }
+
+  /**
+   * Process the given list of config changes
+   */
+  private def processConfigChanges(notifications: Seq[String]) {
+    if (notifications.size > 0) {
+      info("Processing config change notification(s)...")
+      val now = time.milliseconds
+      for (notification <- notifications) {
+        val changeId = changeNumber(notification)
+
+        if (changeId > lastExecutedChange) {
+          val changeZnode = ZkUtils.EntityConfigChangesPath + "/" + notification
+
+          val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, changeZnode)
+          processNotification(jsonOpt)
+        }
+        lastExecutedChange = changeId
+      }
+      purgeObsoleteNotifications(now, notifications)
+    }
+  }
+
+  def processNotification(jsonOpt: Option[String]) = {
+    if(jsonOpt.isDefined) {
+      val json = jsonOpt.get
+      Json.parseFull(json) match {
+        case None => // There are no config overrides.
+          // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
+        case Some(mapAnon: Map[_, _]) =>
+          val map = mapAnon collect
+                  { case (k: String, v: Any) => k -> v }
+          require(map("version") == 1)
+
+          val entityType = map.get("entity_type") match {
+            case Some(ConfigType.Topic) => ConfigType.Topic
+            case Some(ConfigType.Client) => ConfigType.Client
+            case _ => throw new IllegalArgumentException("Config change notification must have 'entity_type' set to either 'client' or 'topic'." +
+                    " Received: " + json)
+          }
+
+          val entity = map.get("entity_name") match {
+            case Some(value: String) => value
+            case _ => throw new IllegalArgumentException("Config change notification does not specify 'entity_name'. Received: " + json)
+          }
+          configHandler(entityType).processConfigChanges(entity, AdminUtils.fetchEntityConfig(zkClient, entityType, entity))
+
+        case o => throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
+                                                             "{\"version\" : 1," +
+                                                             " \"entity_type\":\"topic/client\"," +
+                                                             " \"entity_name\" : \"topic_name/client_id\"}." +
+                                                             " Received: " + json)
+      }
+    }
+  }
+
+  private def purgeObsoleteNotifications(now: Long, notifications: Seq[String]) {
+    for(notification <- notifications.sorted) {
+      val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.EntityConfigChangesPath + "/" + notification)
+      if(jsonOpt.isDefined) {
+        val changeZnode = ZkUtils.EntityConfigChangesPath + "/" + notification
+        if (now - stat.getCtime > changeExpirationMs) {
+          debug("Purging config change notification " + notification)
+          ZkUtils.deletePath(zkClient, changeZnode)
+        } else {
+          return
+        }
+      }
+    }
+  }
+
+  /* get the change number from a change notification znode */
+  private def changeNumber(name: String): Long = name.substring(AdminUtils.EntityConfigChangeZnodePrefix.length).toLong
+
+  /**
+   * A listener that applies config changes to logs
+   */
+  object ConfigChangeListener extends IZkChildListener {
+    override def handleChildChange(path: String, chillins: java.util.List[String]) {
+      try {
+        import JavaConversions._
+        processConfigChanges(chillins: mutable.Buffer[String])
+      } catch {
+        case e: Exception => error("Error processing config change:", e)
+      }
+    }
+  }
+}

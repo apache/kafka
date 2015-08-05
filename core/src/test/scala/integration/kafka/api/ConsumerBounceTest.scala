@@ -104,6 +104,11 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     consumer.subscribe(tp)
     consumer.seek(tp, 0)
 
+    // wait until all the followers have synced the last HW with leader
+    TestUtils.waitUntilTrue(() => servers.forall(server =>
+      server.replicaManager.getReplica(tp.topic(), tp.partition()).get.highWatermark.messageOffset == numRecords
+    ), "Failed to update high watermark for followers after timeout")
+
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 

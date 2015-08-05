@@ -1037,8 +1037,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
             // if the replica to be removed from the ISR is the last surviving member of the ISR and unclean leader election
             // is disallowed for the corresponding topic, then we must preserve the ISR membership so that the replica can
             // eventually be restored as the leader.
-            if (newIsr.isEmpty && !LogConfig.fromProps(config.originals, AdminUtils.fetchTopicConfig(zkClient,
-              topicAndPartition.topic)).uncleanLeaderElectionEnable) {
+            if (newIsr.isEmpty && !LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(zkClient,
+              ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
               info("Retaining last ISR %d of partition %s since unclean leader election is disabled".format(replicaId, topicAndPartition))
               newIsr = leaderAndIsr.isr
             }
@@ -1138,7 +1138,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     }
 
     override def handleSessionEstablishmentError(error: Throwable): Unit = {
-      //no-op handleSessionEstablishmentError in KafkaHealthCheck should System.exit and log the error.
+      //no-op handleSessionEstablishmentError in KafkaHealthCheck should handle this error in its handleSessionEstablishmentError
     }
   }
 
@@ -1322,7 +1322,8 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
       processUpdateNotifications(topicAndPartitions)
 
       // delete processed children
-      childrenAsScala.map(x => ZkUtils.deletePath(controller.controllerContext.zkClient, ZkUtils.TopicConfigChangesPath + "/" + x))
+      childrenAsScala.map(x => ZkUtils.deletePath(controller.controllerContext.zkClient,
+                                                  ZkUtils.getEntityConfigPath(ConfigType.Topic, x)))
     }
   }
 
