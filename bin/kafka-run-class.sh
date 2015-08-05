@@ -97,7 +97,7 @@ if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/tools-log4j.properties"
 else
-  # create logs directory and set kafka.logs.dir
+  # create logs directory
   if [ ! -d "$LOG_DIR" ]; then
     mkdir -p "$LOG_DIR"
   fi
