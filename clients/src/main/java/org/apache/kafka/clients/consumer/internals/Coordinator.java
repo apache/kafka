@@ -84,6 +84,7 @@ public final class Coordinator {
     public Coordinator(ConsumerNetworkClient client,
                        String groupId,
                        int sessionTimeoutMs,
+                       int heartbeatIntervalMs,
                        String assignmentStrategy,
                        SubscriptionState subscriptions,
                        Metrics metrics,
@@ -103,7 +104,7 @@ public final class Coordinator {
         this.subscriptions = subscriptions;
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.assignmentStrategy = assignmentStrategy;
-        this.heartbeat = new Heartbeat(this.sessionTimeoutMs, time.milliseconds());
+        this.heartbeat = new Heartbeat(this.sessionTimeoutMs, heartbeatIntervalMs, time.milliseconds());
         this.heartbeatTask = new HeartbeatTask();
         this.sensors = new CoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
         this.requestTimeoutMs = requestTimeoutMs;

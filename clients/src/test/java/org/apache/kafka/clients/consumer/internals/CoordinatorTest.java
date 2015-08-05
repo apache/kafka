@@ -59,6 +59,7 @@ public class CoordinatorTest {
     private String groupId = "test-group";
     private TopicPartition tp = new TopicPartition(topicName, 0);
     private int sessionTimeoutMs = 10;
+    private int heartbeatIntervalMs = 2;
     private long retryBackoffMs = 100;
     private long requestTimeoutMs = 5000;
     private String rebalanceStrategy = "not-matter";
@@ -89,6 +90,7 @@ public class CoordinatorTest {
         this.coordinator = new Coordinator(consumerClient,
                 groupId,
                 sessionTimeoutMs,
+                heartbeatIntervalMs,
                 rebalanceStrategy,
                 subscriptions,
                 metrics,

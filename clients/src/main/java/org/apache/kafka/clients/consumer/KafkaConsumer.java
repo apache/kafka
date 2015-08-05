@@ -540,6 +540,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.coordinator = new Coordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
+                    config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
                     config.getString(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     this.subscriptions,
                     metrics,

@@ -27,20 +27,21 @@ import static org.junit.Assert.assertTrue;
 public class HeartbeatTest {
 
     private long timeout = 300L;
+    private long interval = 100L;
     private MockTime time = new MockTime();
-    private Heartbeat heartbeat = new Heartbeat(timeout, -1L);
+    private Heartbeat heartbeat = new Heartbeat(timeout, interval, -1L);
 
     @Test
     public void testShouldHeartbeat() {
         heartbeat.sentHeartbeat(time.milliseconds());
-        time.sleep((long) ((float) timeout / Heartbeat.HEARTBEATS_PER_SESSION_INTERVAL * 1.1));
+        time.sleep((long) ((float) interval * 1.1));
         assertTrue(heartbeat.shouldHeartbeat(time.milliseconds()));
     }
 
     @Test
     public void testShouldNotHeartbeat() {
         heartbeat.sentHeartbeat(time.milliseconds());
-        time.sleep(timeout / (2 * Heartbeat.HEARTBEATS_PER_SESSION_INTERVAL));
+        time.sleep(interval / 2);
         assertFalse(heartbeat.shouldHeartbeat(time.milliseconds()));
     }
 

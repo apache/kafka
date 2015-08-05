@@ -51,6 +51,12 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect failures when using Kafka's group management facilities.";
 
     /**
+     * <code>heartbeat.interval.ms</code>
+     */
+    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
+    private static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
+
+    /**
      * <code>bootstrap.servers</code>
      */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -171,6 +177,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         30000,
                                         Importance.HIGH,
                                         SESSION_TIMEOUT_MS_DOC)
+                                .define(HEARTBEAT_INTERVAL_MS_CONFIG,
+                                        Type.INT,
+                                        3000,
+                                        Importance.HIGH,
+                                        HEARTBEAT_INTERVAL_MS_DOC)
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.STRING,
                                         "range",
