@@ -135,6 +135,34 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue(partitionMetadata.head.leader.isDefined)
   }
 
+  def testAutoCreateTopicWithCollision {
+    // auto create topic
+    val topic1 = "testAutoCreate_Topic"
+    val topic2 = "testAutoCreate.Topic"
+    var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic1, topic2), brokerEndPoints, "TopicMetadataTest-testAutoCreateTopic",
+      2000,0).topicsMetadata
+    assertEquals("Expecting metadata for 2 topics", 2, topicsMetadata.size)
+    assertEquals("Expecting metadata for topic1", topic1, topicsMetadata.head.topic)
+    assertEquals(ErrorMapping.LeaderNotAvailableCode, topicsMetadata.head.errorCode)
+    assertEquals("Expecting metadata for topic2", topic2, topicsMetadata(1).topic)
+    assertEquals("Expecting InvalidTopicCode for topic2 metadata", ErrorMapping.InvalidTopicCode, topicsMetadata(1).errorCode)
+
+    // wait for leader to be elected
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic1, 0)
+
+    // retry the metadata for the first auto created topic
+    topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic1), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
+      2000,0).topicsMetadata
+    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
+    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    var partitionMetadata = topicsMetadata.head.partitionsMetadata
+    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
+    assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
+    assertEquals(1, partitionMetadata.head.replicas.size)
+    assertTrue(partitionMetadata.head.leader.isDefined)
+  }
+
   private def checkIsr(servers: Seq[KafkaServer]): Unit = {
     val activeBrokers: Seq[KafkaServer] = servers.filter(x => x.brokerState.currentState != NotRunning.state)
     val expectedIsr: Seq[BrokerEndPoint] = activeBrokers.map(
