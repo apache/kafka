@@ -13,6 +13,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
@@ -41,7 +42,7 @@ import java.util.regex.Pattern;
  * assignment is changed whether directly by the user or through a group rebalance.
  *
  * This class also maintains a cache of the latest commit position for each of the assigned
- * partitions. This is updated through {@link #committed(TopicPartition, long)} and can be used
+ * partitions. This is updated through {@link #committed(TopicPartition, OffsetAndMetadata)} and can be used
  * to set the initial fetch position (e.g. {@link Fetcher#resetOffset(TopicPartition)}.
  */
 public class SubscriptionState {
@@ -176,11 +177,11 @@ public class SubscriptionState {
         return state;
     }
 
-    public void committed(TopicPartition tp, long offset) {
+    public void committed(TopicPartition tp, OffsetAndMetadata offset) {
         assignedState(tp).committed(offset);
     }
 
-    public Long committed(TopicPartition tp) {
+    public OffsetAndMetadata committed(TopicPartition tp) {
         return assignedState(tp).committed;
     }
 
@@ -225,12 +226,12 @@ public class SubscriptionState {
         return assignedState(tp).consumed;
     }
 
-    public Map<TopicPartition, Long> allConsumed() {
-        Map<TopicPartition, Long> allConsumed = new HashMap<>();
+    public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
+        Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet()) {
             TopicPartitionState state = entry.getValue();
             if (state.hasValidPosition)
-                allConsumed.put(entry.getKey(), state.consumed);
+                allConsumed.put(entry.getKey(), new OffsetAndMetadata(state.consumed));
         }
         return allConsumed;
     }
@@ -311,7 +312,7 @@ public class SubscriptionState {
     private static class TopicPartitionState {
         private Long consumed;   // offset exposed to the user
         private Long fetched;    // current fetch position
-        private Long committed;  // last committed position
+        private OffsetAndMetadata committed;  // last committed position
 
         private boolean hasValidPosition; // whether we have valid consumed and fetched positions
         private boolean paused;  // whether this partition has been paused by the user
@@ -356,7 +357,7 @@ public class SubscriptionState {
             this.consumed = offset;
         }
 
-        private void committed(Long offset) {
+        private void committed(OffsetAndMetadata offset) {
             this.committed = offset;
         }
 

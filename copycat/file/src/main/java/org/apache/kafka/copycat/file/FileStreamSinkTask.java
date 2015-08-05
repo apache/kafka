@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.file;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkRecord;
@@ -69,7 +70,7 @@ public class FileStreamSinkTask extends SinkTask {
     }
 
     @Override
-    public void flush(Map<TopicPartition, Long> offsets) {
+    public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
         outputStream.flush();
     }
 
