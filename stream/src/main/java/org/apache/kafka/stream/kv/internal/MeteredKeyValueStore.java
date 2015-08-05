@@ -1,10 +1,8 @@
 package org.apache.kafka.stream.kv.internal;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.RecordCollector;
-import io.confluent.streaming.kv.Entry;
-import io.confluent.streaming.kv.KeyValueIterator;
-import io.confluent.streaming.kv.KeyValueStore;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.clients.processor.RecordCollector;
+import org.apache.kafka.clients.processor.RestoreFunc;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MeasurableStat;
@@ -17,6 +15,9 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.stream.kv.Entry;
+import org.apache.kafka.stream.kv.KeyValueIterator;
+import org.apache.kafka.stream.kv.KeyValueStore;
 
 import java.util.HashSet;
 import java.util.List;
@@ -42,10 +43,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final int partition;
     private final Set<K> dirty;
     private final int maxDirty;
-    private final KStreamContext context;
+    private final ProcessorContext context;
 
     // always wrap the logged store with the metered store
-    public MeteredKeyValueStore(final String name, final KeyValueStore<K,V> inner, KStreamContext context, String group, Time time) {
+    public MeteredKeyValueStore(final String name, final KeyValueStore<K,V> inner, ProcessorContext context, String group, Time time) {
         this.inner = inner;
 
         this.time = time;

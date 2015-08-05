@@ -6,6 +6,7 @@ import io.confluent.streaming.Transformer;
 import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
+import org.apache.kafka.clients.processor.KStreamContext;
 import org.junit.Test;
 
 import java.util.Collections;

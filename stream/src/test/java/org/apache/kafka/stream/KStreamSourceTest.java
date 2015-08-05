@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
+import org.apache.kafka.clients.processor.KStreamContext;
 import org.junit.Test;
 
 import java.util.Collections;

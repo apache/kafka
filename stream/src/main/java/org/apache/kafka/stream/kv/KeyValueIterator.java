@@ -19,9 +19,6 @@
 
 package org.apache.kafka.stream.kv;
 
-
-import org.apache.kafka.stream.kv.Entry;
-
 import java.io.Closeable;
 import java.util.Iterator;
 

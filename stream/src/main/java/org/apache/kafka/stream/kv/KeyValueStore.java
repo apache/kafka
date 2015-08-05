@@ -19,7 +19,7 @@
 
 package org.apache.kafka.stream.kv;
 
-import io.confluent.streaming.StateStore;
+import org.apache.kafka.clients.processor.StateStore;
 
 import java.util.List;
 

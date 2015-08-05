@@ -1,11 +1,11 @@
 package org.apache.kafka.stream.kv;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.kv.internals.MeteredKeyValueStore;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.SystemTime;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.stream.kv.internal.MeteredKeyValueStore;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -26,11 +26,11 @@ import java.util.NoSuchElementException;
  */
 public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
 
-    public RocksDBKeyValueStore(String name, KStreamContext context) {
+    public RocksDBKeyValueStore(String name, ProcessorContext context) {
         this(name, context, new SystemTime());
     }
 
-    public RocksDBKeyValueStore(String name, KStreamContext context, Time time) {
+    public RocksDBKeyValueStore(String name, ProcessorContext context, Time time) {
         super(name, new RocksDBStore(name, context), context, "kafka-streams", time);
     }
 
@@ -50,7 +50,7 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
 
         private final String topic;
         private final int partition;
-        private final KStreamContext context;
+        private final ProcessorContext context;
 
         private final Options options;
         private final WriteOptions wOptions;
@@ -62,7 +62,7 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         private RocksDB db;
 
         @SuppressWarnings("unchecked")
-        public RocksDBStore(String name, KStreamContext context) {
+        public RocksDBStore(String name, ProcessorContext context) {
             this.topic = name;
             this.partition = context.id();
             this.context = context;

@@ -3,7 +3,7 @@ package org.apache.kafka.stream;
 import io.confluent.streaming.testutil.MockKStreamContext;
 import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
-import org.apache.kafka.stream.KStream;
+import org.apache.kafka.clients.processor.KStreamContext;
 import org.junit.Test;
 
 import java.lang.reflect.Array;

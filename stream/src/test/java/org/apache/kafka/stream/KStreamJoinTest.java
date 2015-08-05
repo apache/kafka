@@ -5,7 +5,7 @@ import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import io.confluent.streaming.util.Util;
-import org.apache.kafka.stream.KStream;
+import org.apache.kafka.clients.processor.KStreamContext;
 import org.junit.Test;
 
 import java.util.Collections;
