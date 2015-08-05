@@ -160,7 +160,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     onControllerResignation, config.brokerId)
   // have a separate scheduler for the controller to be able to start and stop independently of the
   // kafka server
-  private val autoRebalanceScheduler = new KafkaScheduler(1)
+  private val controllerScheduler = new KafkaScheduler(2)
   var deleteTopicManager: TopicDeletionManager = null
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext, config)
   private val reassignedPartitionLeaderSelector = new ReassignedPartitionLeaderSelector(controllerContext)
@@ -324,10 +324,14 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       maybeTriggerPreferredReplicaElection()
       /* send partition leadership info to all live brokers */
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
+
+      info("Starting controller scheduler.")
+      controllerScheduler.startup()
+      info("Scheduling ISR propagation task")
+      controllerScheduler.schedule("isr-propagation-thread", propagateIsrChange, 5, 10, TimeUnit.SECONDS)
       if (config.autoLeaderRebalanceEnable) {
-        info("starting the partition rebalance scheduler")
-        autoRebalanceScheduler.startup()
-        autoRebalanceScheduler.schedule("partition-rebalance-thread", checkAndTriggerPartitionRebalance,
+        info("Scheduling auto partition leader rebalance task")
+        controllerScheduler.schedule("partition-rebalance-thread", checkAndTriggerPartitionRebalance,
           5, config.leaderImbalanceCheckIntervalSeconds.toLong, TimeUnit.SECONDS)
       }
       deleteTopicManager.start()
@@ -350,9 +354,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     if (deleteTopicManager != null)
       deleteTopicManager.shutdown()
 
-    // shutdown leader rebalance scheduler
-    if (config.autoLeaderRebalanceEnable)
-      autoRebalanceScheduler.shutdown()
+    // shutdown controller scheduler
+    controllerScheduler.shutdown()
 
     inLock(controllerContext.controllerLock) {
       // de-register partition ISR listener for on-going partition reassignment task
@@ -1142,6 +1145,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     }
   }
 
+  private def propagateIsrChange(): Unit = {
+    isrChangeNotificationListener.propagateIsrChanges()
+  }
+
   private def checkAndTriggerPartitionRebalance(): Unit = {
     if (isActive()) {
       trace("checking need to trigger partition rebalance")
@@ -1309,7 +1316,7 @@ class ReassignedPartitionsIsrChangeListener(controller: KafkaController, topic: 
  * @param controller
  */
 class IsrChangeNotificationListener(controller: KafkaController) extends IZkChildListener with Logging {
-  var topicAndPartitionSet: Set[TopicAndPartition] = Set()
+  var isrChangeTopicAndPartitionSet: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]
 
   override def handleChildChange(parentPath: String, currentChildren: util.List[String]): Unit = {
     import scala.collection.JavaConverters._
@@ -1327,10 +1334,23 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
     }
   }
 
-  private def processUpdateNotifications(topicAndPartitions: immutable.Set[TopicAndPartition]) {
+  def propagateIsrChanges(): Unit = {
+    var isrChanges: Set[TopicAndPartition] = null
+    isrChangeTopicAndPartitionSet synchronized {
+      if (isrChangeTopicAndPartitionSet.isEmpty)
+        returng
+      isrChanges = immutable.Set(isrChangeTopicAndPartitionSet.toArray:_*)
+      isrChangeTopicAndPartitionSet.clear()
+    }
     val liveBrokers: Seq[Int] = controller.controllerContext.liveOrShuttingDownBrokerIds.toSeq
-    controller.sendUpdateMetadataRequest(liveBrokers, topicAndPartitions)
-    debug("Sending MetadataRequest to Brokers:" + liveBrokers + " for TopicAndPartitions:" + topicAndPartitions)
+    debug("Sending MetadataRequest to Brokers:" + liveBrokers + " for TopicAndPartitions:" + isrChanges)
+    controller.sendUpdateMetadataRequest(liveBrokers, isrChanges)
+  }
+
+  private def processUpdateNotifications(topicAndPartitions: immutable.Set[TopicAndPartition]) {
+    isrChangeTopicAndPartitionSet synchronized {
+      isrChangeTopicAndPartitionSet ++= topicAndPartitions
+    }
   }
 
   private def getTopicAndPartition(child: String): Option[TopicAndPartition] = {
