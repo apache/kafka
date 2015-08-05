@@ -5,16 +5,17 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.stream.internal;
+
+package org.apache.kafka.stream.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -72,7 +73,7 @@ public class ProcessorStateManager {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
-        if(this.stores.containsKey(store.name()))
+        if (this.stores.containsKey(store.name()))
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
         // ---- register the store ---- //
@@ -121,7 +122,7 @@ public class ProcessorStateManager {
         // restore its state from changelog records; while restoring the log end offset
         // should not change since it is only written by this thread.
         while (true) {
-            for(ConsumerRecord<byte[], byte[]> record: restoreConsumer.poll(100)) {
+            for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100)) {
                 restoreFunc.apply(record.key(), record.value());
             }
 
@@ -142,8 +143,8 @@ public class ProcessorStateManager {
 
     public void cleanup() throws IOException {
         // clean up any unknown files in the state directory
-        for(File file: this.baseDir.listFiles()) {
-            if(!this.stores.containsKey(file.getName())) {
+        for (File file : this.baseDir.listFiles()) {
+            if (!this.stores.containsKey(file.getName())) {
                 log.info("Deleting state directory {}", file.getAbsolutePath());
                 file.delete();
             }
@@ -151,7 +152,7 @@ public class ProcessorStateManager {
     }
 
     public void flush() {
-        if(!this.stores.isEmpty()) {
+        if (!this.stores.isEmpty()) {
             log.debug("Flushing stores.");
             for (StateStore engine : this.stores.values())
                 engine.flush();
@@ -159,7 +160,7 @@ public class ProcessorStateManager {
     }
 
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
-        if(!stores.isEmpty()) {
+        if (!stores.isEmpty()) {
             log.debug("Closing stores.");
             for (Map.Entry<String, StateStore> entry : stores.entrySet()) {
                 log.debug("Closing storage engine {}", entry.getKey());
@@ -168,7 +169,7 @@ public class ProcessorStateManager {
             }
 
             Map<TopicPartition, Long> checkpointOffsets = new HashMap<TopicPartition, Long>(restoredOffsets);
-            for(String storeName: stores.keySet()) {
+            for (String storeName : stores.keySet()) {
                 TopicPartition part = new TopicPartition(storeName, id);
 
                 // only checkpoint the offset to the offsets file if it is persistent;

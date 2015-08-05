@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology.internal;
+package org.apache.kafka.stream.topology.internals;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -54,11 +54,11 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.stream.StreamingConfig;
-import org.apache.kafka.stream.internal.IngestorImpl;
-import org.apache.kafka.stream.internal.KStreamContextImpl;
-import org.apache.kafka.stream.internal.ProcessorConfig;
-import org.apache.kafka.stream.internal.RecordCollectorImpl;
-import org.apache.kafka.stream.internal.StreamGroup;
+import org.apache.kafka.stream.internals.IngestorImpl;
+import org.apache.kafka.stream.internals.KStreamContextImpl;
+import org.apache.kafka.stream.internals.ProcessorConfig;
+import org.apache.kafka.stream.internals.RecordCollectorImpl;
+import org.apache.kafka.stream.internals.StreamGroup;
 import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.util.ParallelExecutor;
 import org.slf4j.Logger;
@@ -120,7 +120,7 @@ public class KStreamThread extends Thread {
         this.ingestor = new IngestorImpl(consumer, topics);
 
         Producer<byte[], byte[]> producer = new KafkaProducer<>(streamingConfig.config(), new ByteArraySerializer(), new ByteArraySerializer());
-        this.collector = new RecordCollectorImpl(producer, (Serializer<Object>)streamingConfig.keySerializer(), (Serializer<Object>)streamingConfig.valueSerializer());
+        this.collector = new RecordCollectorImpl(producer, (Serializer<Object>) streamingConfig.keySerializer(), (Serializer<Object>) streamingConfig.valueSerializer());
 
         this.running = true;
         this.lastCommit = 0;
@@ -184,11 +184,11 @@ public class KStreamThread extends Thread {
     }
 
     private boolean stillRunning() {
-        if(!running) {
+        if (!running) {
             log.debug("Shutting down at user request.");
             return false;
         }
-        if(config.totalRecordsToProcess >= 0 && recordsProcessed >= config.totalRecordsToProcess) {
+        if (config.totalRecordsToProcess >= 0 && recordsProcessed >= config.totalRecordsToProcess) {
             log.debug("Shutting down as we've reached the user-configured limit of {} records to process.", config.totalRecordsToProcess);
             return false;
         }
@@ -223,17 +223,17 @@ public class KStreamThread extends Thread {
     /* delete any state dirs that aren't for active contexts */
     private void maybeCleanState() {
         long now = time.milliseconds();
-        if(now > nextStateCleaning) {
+        if (now > nextStateCleaning) {
             File[] stateDirs = config.stateDir.listFiles();
-            if(stateDirs != null) {
-                for(File dir: stateDirs) {
+            if (stateDirs != null) {
+                for (File dir : stateDirs) {
                     try {
                         Integer id = Integer.parseInt(dir.getName());
-                        if(!kstreamContexts.keySet().contains(id)) {
+                        if (!kstreamContexts.keySet().contains(id)) {
                             log.info("Deleting obsolete state directory {} after {} delay ms.", dir.getAbsolutePath(), config.stateCleanupDelay);
                             Utils.rm(dir);
                         }
-                    } catch(NumberFormatException e) {
+                    } catch (NumberFormatException e) {
                         log.warn("Deleting unknown directory in state directory {}.", dir.getAbsolutePath());
                         Utils.rm(dir);
                     }
@@ -273,8 +273,7 @@ public class KStreamThread extends Thread {
 
 >>>>>>> new api model
                     kstreamContexts.put(id, context);
-                }
-                catch (Exception e) {
+                } catch (Exception e) {
                     throw new KafkaException(e);
                 }
 
@@ -290,8 +289,7 @@ public class KStreamThread extends Thread {
             log.info("Removing task context {}", context.id());
             try {
                 context.close();
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 throw new KafkaException(e);
             }
             streamingMetrics.processorDestruction.record();

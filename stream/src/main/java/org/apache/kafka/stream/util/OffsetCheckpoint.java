@@ -5,15 +5,16 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.stream.util;
 
 import org.apache.kafka.common.TopicPartition;
@@ -79,8 +80,8 @@ public class OffsetCheckpoint {
                 file.delete();
                 if (!temp.renameTo(file))
                     throw new IOException(String.format("File rename from %s to %s failed.",
-                                                        temp.getAbsolutePath(),
-                                                        file.getAbsolutePath()));
+                        temp.getAbsolutePath(),
+                        file.getAbsolutePath()));
             }
         }
     }
@@ -104,7 +105,7 @@ public class OffsetCheckpoint {
             BufferedReader reader = null;
             try {
                 reader = new BufferedReader(new FileReader(file));
-            } catch(FileNotFoundException e) {
+            } catch (FileNotFoundException e) {
                 return Collections.emptyMap();
             }
 
@@ -119,7 +120,7 @@ public class OffsetCheckpoint {
                             String[] pieces = line.split("\\s+");
                             if (pieces.length != 3)
                                 throw new IOException(String.format("Malformed line in offset checkpoint file: '%s'.",
-                                                                    line));
+                                    line));
 
                             String topic = pieces[0];
                             int partition = Integer.parseInt(pieces[1]);
@@ -129,15 +130,15 @@ public class OffsetCheckpoint {
                         }
                         if (offsets.size() != expectedSize)
                             throw new IOException(String.format("Expected %d entries but found only %d",
-                                                                expectedSize,
-                                                                offsets.size()));
+                                expectedSize,
+                                offsets.size()));
                         return offsets;
 
                     default:
                         throw new IllegalArgumentException("Unknown offset checkpoint version: " + version);
                 }
             } finally {
-                if(reader != null)
+                if (reader != null)
                     reader.close();
             }
         }
