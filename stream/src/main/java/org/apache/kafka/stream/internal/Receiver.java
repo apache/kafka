@@ -1,13 +1,14 @@
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.KStreamContext;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
 
 /**
  * Created by yasuhiro on 6/17/15.
  */
 public interface Receiver {
 
-  void bind(KStreamContext context, KStreamMetadata metadata);
+  void bind(ProcessorContext context, KStreamMetadata metadata);
 
 <<<<<<< HEAD
 <<<<<<< HEAD

@@ -1,7 +1,8 @@
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.Processor;
+import org.apache.kafka.clients.processor.Processor;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
 
 /**
  * Created by yasuhiro on 7/31/15.
@@ -9,14 +10,14 @@ import io.confluent.streaming.Processor;
 public class ProcessorNode<K, V> implements Receiver {
 
   private final Processor<K, V> processor;
-  private KStreamContext context;
+  private ProcessorContext context;
 
-  ProcessorNode(Processor<K, V> processor) {
+  public ProcessorNode(Processor<K, V> processor) {
     this.processor = processor;
   }
 
   @Override
-  public void bind(KStreamContext context, KStreamMetadata metadata) {
+  public void bind(ProcessorContext context, KStreamMetadata metadata) {
     if (this.context != null) throw new IllegalStateException("kstream topology is already bound");
 
     this.context = context;

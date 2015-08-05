@@ -7,7 +7,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 
 public class IngestorImpl implements Ingestor {
 
@@ -96,7 +101,7 @@ public class IngestorImpl implements Ingestor {
     streamSynchronizers.clear();
   }
 
-  boolean commitNeeded(Map<TopicPartition, Long> offsets) {
+  public boolean commitNeeded(Map<TopicPartition, Long> offsets) {
     for (TopicPartition tp : offsets.keySet()) {
       if (consumer.committed(tp) != offsets.get(tp)) {
         return true;
@@ -105,7 +110,7 @@ public class IngestorImpl implements Ingestor {
     return false;
   }
 
-  void close() {
+  public void close() {
     consumer.close();
     clear();
   }

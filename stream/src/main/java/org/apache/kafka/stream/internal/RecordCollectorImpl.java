@@ -1,6 +1,6 @@
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.RecordCollector;
+import org.apache.kafka.clients.processor.RecordCollector;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -63,7 +63,7 @@ public class RecordCollectorImpl implements RecordCollector {
   /**
    * Closes this RecordCollector
    */
-  void close() {
+  public void close() {
     producer.close();
   }
 

@@ -1,6 +1,9 @@
 package org.apache.kafka.stream.topology.internal;
 
+import org.apache.kafka.clients.processor.Processor;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.KStream;
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -18,8 +21,14 @@ import io.confluent.streaming.Processor;
 import io.confluent.streaming.Transformer;
 import io.confluent.streaming.ValueMapper;
 import io.confluent.streaming.Window;
+=======
+>>>>>>> removing io.confluent imports: wip
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.stream.internal.ProcessorNode;
+import org.apache.kafka.stream.internal.Receiver;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.KStreamWindowed;
 import org.apache.kafka.stream.topology.KeyValueMapper;
 import org.apache.kafka.stream.topology.Predicate;
 import org.apache.kafka.stream.topology.Transformer;
@@ -38,7 +47,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 <<<<<<< HEAD
 <<<<<<< HEAD
   protected KStreamTopology topology;
-  protected KStreamContext context;
+  protected ProcessorContext context;
   protected KStreamMetadata metadata;
 
   protected KStreamImpl(KStreamTopology topology) {
@@ -46,7 +55,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   }
 
   @Override
-  public void bind(KStreamContext context, KStreamMetadata metadata) {
+  public void bind(ProcessorContext context, KStreamMetadata metadata) {
     if (this.context != null) throw new IllegalStateException("kstream topology is already bound");
     this.context = context;
     this.metadata = metadata;
@@ -231,10 +240,10 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @SuppressWarnings("unchecked")
   private <K, V> Processor<K, V> getSendProcessor(final String sendTopic, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
     return new Processor<K, V>() {
-      private KStreamContext context;
+      private ProcessorContext context;
 
       @Override
-      public void init(KStreamContext context) {
+      public void init(ProcessorContext context) {
         this.context = context;
       }
       @Override

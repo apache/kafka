@@ -6,6 +6,7 @@ import io.confluent.streaming.KStream;
 <<<<<<< HEAD
 =======
 import org.apache.kafka.stream.KStream;
+<<<<<<< HEAD
 >>>>>>> first re-org:stream/src/main/java/org/apache/kafka/stream/examples/MapKStreamJob.java
 import io.confluent.streaming.KStreamTopology;
 =======
@@ -20,7 +21,15 @@ import io.confluent.streaming.KeyValue;
 import io.confluent.streaming.KeyValueMapper;
 import io.confluent.streaming.Predicate;
 import io.confluent.streaming.StreamingConfig;
+=======
+>>>>>>> removing io.confluent imports: wip
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.stream.KafkaStreaming;
+import org.apache.kafka.stream.StreamingConfig;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.KeyValue;
+import org.apache.kafka.stream.topology.KeyValueMapper;
+import org.apache.kafka.stream.topology.Predicate;
 
 import java.util.Properties;
 

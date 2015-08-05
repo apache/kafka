@@ -1,14 +1,15 @@
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.Processor;
-import io.confluent.streaming.TimestampExtractor;
-import io.confluent.streaming.util.MinTimestampTracker;
-import io.confluent.streaming.util.ParallelExecutor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.processor.Processor;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.stream.Chooser;
+import org.apache.kafka.stream.TimestampExtractor;
 import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.stream.util.MinTimestampTracker;
+import org.apache.kafka.stream.util.ParallelExecutor;
 
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -34,7 +35,7 @@ public class StreamSynchronizer implements SyncGroup {
 public class StreamGroup implements ParallelExecutor.Task {
 >>>>>>> remove SyncGroup from user facing APIs:src/main/java/io/confluent/streaming/internal/StreamGroup.java
 
-  private final KStreamContext context;
+  private final ProcessorContext context;
   private final Ingestor ingestor;
   private final Chooser chooser;
   private final TimestampExtractor timestampExtractor;
@@ -60,7 +61,7 @@ public class StreamGroup implements ParallelExecutor.Task {
    * @param timestampExtractor the instance of {@link TimestampExtractor}
    * @param desiredUnprocessedPerPartition the target number of records kept in a queue for each topic
    */
-  StreamGroup(KStreamContext context,
+  StreamGroup(ProcessorContext context,
               Ingestor ingestor,
               Chooser chooser,
               TimestampExtractor timestampExtractor,
@@ -295,7 +296,7 @@ public class StreamGroup implements ParallelExecutor.Task {
   }
 
   protected RecordQueue createRecordQueue(TopicPartition partition, KStreamSource stream) {
-    return new RecordQueue(partition, stream, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
+    return new RecordQueue(partition, stream, new MinTimestampTracker<>());
   }
 
   private static class NewRecords {

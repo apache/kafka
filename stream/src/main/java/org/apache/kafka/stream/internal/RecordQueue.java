@@ -1,9 +1,9 @@
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.util.TimestampTracker;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.stream.util.TimestampTracker;
 
 import java.util.ArrayDeque;
 

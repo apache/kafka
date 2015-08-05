@@ -1,9 +1,10 @@
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.Processor;
-import io.confluent.streaming.util.Stamped;
 
-public class PunctuationSchedule extends Stamped<Processor<?,? >>{
+import org.apache.kafka.clients.processor.Processor;
+import org.apache.kafka.stream.util.Stamped;
+
+public class PunctuationSchedule extends Stamped<Processor<?,? >> {
 
   final long interval;
 

@@ -21,7 +21,7 @@ public class KStreamMetadata {
   public StreamGroup streamGroup;
   public final Map<String, PartitioningInfo> topicPartitionInfos;
 
-  KStreamMetadata(Map<String, PartitioningInfo> topicPartitionInfos) {
+  public KStreamMetadata(Map<String, PartitioningInfo> topicPartitionInfos) {
     this.topicPartitionInfos = topicPartitionInfos;
   }
 

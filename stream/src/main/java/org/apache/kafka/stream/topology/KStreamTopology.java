@@ -1,8 +1,8 @@
 package org.apache.kafka.stream.topology;
 
-import io.confluent.streaming.internal.KStreamSource;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.stream.KStream;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
 
 import java.util.ArrayList;
 import java.util.Collection;

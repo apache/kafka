@@ -17,6 +17,7 @@
 
 package org.apache.kafka.stream;
 
+<<<<<<< HEAD
 import io.confluent.streaming.internal.KStreamThread;
 import io.confluent.streaming.internal.ProcessorConfig;
 <<<<<<< HEAD
@@ -54,7 +55,12 @@ import io.confluent.streaming.internal.TopologyAnalyzer;
 >>>>>>> new api model
 =======
 >>>>>>> wip
+=======
+>>>>>>> removing io.confluent imports: wip
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.stream.internal.ProcessorConfig;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.internal.KStreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

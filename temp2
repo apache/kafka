@@ -1,8 +1,8 @@
-src/main/java/io/confluent/streaming/internal/KStreamBranch.java
-src/main/java/io/confluent/streaming/internal/KStreamFilter.java
-src/main/java/io/confluent/streaming/internal/KStreamFlatMap.java
-src/main/java/io/confluent/streaming/internal/KStreamFlatMapValues.java
-src/main/java/io/confluent/streaming/internal/KStreamJoin.java
-src/main/java/io/confluent/streaming/internal/KStreamMap.java
-src/main/java/io/confluent/streaming/internal/KStreamMapValues.java
-src/main/java/io/confluent/streaming/internal/KStreamSource.java
+clients/src/main/java/org/apache/kafka/clients/processor/Processor.java
+clients/src/main/java/org/apache/kafka/common/utils/Utils.java
+stream/src/main/java/org/apache/kafka/stream/KafkaStreaming.java
+stream/src/main/java/org/apache/kafka/stream/examples/MapKStreamJob.java
+stream/src/main/java/org/apache/kafka/stream/internal/KStreamContextImpl.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamImpl.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamSource.java
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamThread.java

@@ -1,5 +1,7 @@
 package org.apache.kafka.stream.internal;
 
+import org.apache.kafka.stream.Chooser;
+
 import java.util.Comparator;
 import java.util.PriorityQueue;
 

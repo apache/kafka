@@ -1,8 +1,8 @@
-src/main/java/io/confluent/streaming/internal/KStreamBranch.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamFilter.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamFlatMap.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamFlatMapValues.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamJoin.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamMap.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamMapValues.java: needs merge
-src/main/java/io/confluent/streaming/internal/KStreamSource.java: needs merge
+clients/src/main/java/org/apache/kafka/clients/processor/Processor.java: needs merge
+clients/src/main/java/org/apache/kafka/common/utils/Utils.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/KafkaStreaming.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/examples/MapKStreamJob.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/internal/KStreamContextImpl.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamImpl.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamSource.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamThread.java: needs merge

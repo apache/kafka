@@ -1,7 +1,7 @@
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.util.Stamped;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.stream.util.Stamped;
 
 
 // TODO: making this class exposed to user in the lower-level Processor

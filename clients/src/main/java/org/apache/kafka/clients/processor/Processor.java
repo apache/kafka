@@ -7,6 +7,7 @@ public interface Processor<K, V>  {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   void init(KStreamContext context);
 =======
   public interface ProcessorContext {
@@ -36,6 +37,9 @@ public interface Processor<K, V>  {
 =======
   void init(KStreamContext context);
 >>>>>>> removed ProcessorContext
+=======
+  void init(ProcessorContext context);
+>>>>>>> removing io.confluent imports: wip
 
   void process(K key, V value);
 

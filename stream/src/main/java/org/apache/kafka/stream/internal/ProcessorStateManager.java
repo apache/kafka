@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.stream.internal;
 
-import io.confluent.streaming.StateStore;
-import io.confluent.streaming.kv.internals.RestoreFunc;
-import io.confluent.streaming.util.OffsetCheckpoint;
-import kafka.cluster.Partition;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.processor.RestoreFunc;
+import org.apache.kafka.clients.processor.StateStore;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.stream.util.OffsetCheckpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
