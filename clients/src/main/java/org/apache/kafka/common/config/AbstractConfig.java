@@ -39,7 +39,7 @@ public class AbstractConfig {
     private final Map<String, Object> values;
 
     @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Boolean doLog) {
         /* check that all the keys are really strings */
         for (Object key : originals.keySet())
             if (!(key instanceof String))
@@ -47,7 +47,12 @@ public class AbstractConfig {
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
-        logAll();
+        if (doLog)
+            logAll();
+    }
+
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
+        this(definition, originals, true);
     }
 
     protected Object get(String key) {
@@ -167,4 +172,18 @@ public class AbstractConfig {
         return objects;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AbstractConfig that = (AbstractConfig) o;
+
+        return originals.equals(that.originals);
+    }
+
+    @Override
+    public int hashCode() {
+        return originals.hashCode();
+    }
 }
