@@ -17,7 +17,6 @@
 
 package org.apache.kafka.stream.examples;
 
-import org.apache.kafka.stream.topology.Processor;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KafkaStreaming;
 import org.apache.kafka.stream.StreamingConfig;
@@ -25,9 +24,13 @@ import org.apache.kafka.stream.topology.SingleProcessorTopology;
 
 import java.util.Properties;
 
-public class PrintKStreamJob<K, V> implements Processor<K, V> {
+public class PrintKStreamJob<K, V> extends SingleProcessorTopology<K, V> {
 
     private KStreamContext context;
+
+    public PrintKStreamJob(String... topics) {
+        super(topics);
+    }
 
     @Override
     public void init(KStreamContext context) {
@@ -79,7 +82,7 @@ public class PrintKStreamJob<K, V> implements Processor<K, V> {
 =======
     public static void main(String[] args) {
         KafkaStreaming streaming = new KafkaStreaming(
-            new SingleProcessorTopology(PrintKStreamJob.class, args),
+            new PrintKStreamJob(args),
             new StreamingConfig(new Properties())
         );
         streaming.run();

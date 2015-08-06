@@ -17,7 +17,6 @@
 
 package org.apache.kafka.stream.examples;
 
-import org.apache.kafka.stream.topology.Processor;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KafkaStreaming;
 import org.apache.kafka.stream.StreamingConfig;
@@ -29,11 +28,12 @@ import org.apache.kafka.stream.topology.SingleProcessorTopology;
 
 import java.util.Properties;
 
-public class StatefulKStreamJob implements Processor<String, Integer> {
+public class StatefulKStreamJob extends SingleProcessorTopology<String, Integer> {
 
     private KStreamContext context;
     private KeyValueStore<String, Integer> kvStore;
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -55,6 +55,12 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
 >>>>>>> remove restore function
   }
 =======
+=======
+    public StatefulKStreamJob(String... topics) {
+        super(topics);
+    }
+
+>>>>>>> SingleProcessorTopology implements Processor
     @Override
     public void init(KStreamContext context) {
         this.context = context;
@@ -117,7 +123,7 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
 =======
     public static void main(String[] args) {
         KafkaStreaming streaming = new KafkaStreaming(
-            new SingleProcessorTopology(StatefulKStreamJob.class, args),
+            new StatefulKStreamJob(args),
             new StreamingConfig(new Properties())
         );
         streaming.run();

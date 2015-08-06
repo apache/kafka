@@ -19,24 +19,17 @@ package org.apache.kafka.stream.topology;
 
 import org.apache.kafka.common.utils.Utils;
 
-public class SingleProcessorTopology extends KStreamTopology {
+abstract public class SingleProcessorTopology<K, V> extends KStreamTopology implements Processor<K, V> {
 
-    private final Class<? extends Processor> processorClass;
     private final String[] topics;
 
-    public SingleProcessorTopology(Class<? extends Processor> processorClass, String... topics) {
-        this.processorClass = processorClass;
+    public SingleProcessorTopology(String... topics) {
         this.topics = topics;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public void topology() {
-        from(topics).process(newProcessor());
-    }
-
-    @SuppressWarnings("unchecked")
-    private Processor newProcessor() {
-        return (Processor) Utils.newInstance(processorClass);
+        from(topics).process((Processor)this);
     }
 }
