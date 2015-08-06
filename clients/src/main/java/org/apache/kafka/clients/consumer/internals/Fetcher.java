@@ -61,8 +61,8 @@ import java.util.Set;
  * This class manage the fetching process with the brokers.
  */
 public class Fetcher<K, V> {
-    private static final long EARLIEST_OFFSET_TIMESTAMP = -2L;
-    private static final long LATEST_OFFSET_TIMESTAMP = -1L;
+    public static final long EARLIEST_OFFSET_TIMESTAMP = -2L;
+    public static final long LATEST_OFFSET_TIMESTAMP = -1L;
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 

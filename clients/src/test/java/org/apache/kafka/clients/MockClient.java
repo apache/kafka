@@ -34,15 +34,24 @@ import org.apache.kafka.common.utils.Time;
  * A mock network client for use testing code
  */
 public class MockClient implements KafkaClient {
+    public static final RequestMatcher ALWAYS_TRUE = new RequestMatcher() {
+        @Override
+        public boolean matches(ClientRequest request) {
+            return true;
+        }
+    };
 
     private class FutureResponse {
         public final Struct responseBody;
         public final boolean disconnected;
+        public final RequestMatcher requestMatcher;
 
-        public FutureResponse(Struct responseBody, boolean disconnected) {
+        public FutureResponse(Struct responseBody, boolean disconnected, RequestMatcher requestMatcher) {
             this.responseBody = responseBody;
             this.disconnected = disconnected;
+            this.requestMatcher = requestMatcher;
         }
+
     }
 
     private final Time time;
@@ -94,6 +103,9 @@ public class MockClient implements KafkaClient {
     public void send(ClientRequest request) {
         if (!futureResponses.isEmpty()) {
             FutureResponse futureResp = futureResponses.poll();
+            if (!futureResp.requestMatcher.matches(request))
+                throw new IllegalStateException("Next in line response did not match expected request");
+
             ClientResponse resp = new ClientResponse(request, time.milliseconds(), futureResp.disconnected, futureResp.responseBody);
             responses.add(resp);
         } else {
@@ -141,11 +153,32 @@ public class MockClient implements KafkaClient {
     }
 
     public void prepareResponse(Struct body) {
-        prepareResponse(body, false);
+        prepareResponse(ALWAYS_TRUE, body, false);
+    }
+
+    /**
+     * Prepare a response for a request matching the provided matcher. If the matcher does not
+     * match, {@link #send(ClientRequest)} will throw IllegalStateException
+     * @param matcher The matcher to apply
+     * @param body The response body
+     */
+    public void prepareResponse(RequestMatcher matcher, Struct body) {
+        prepareResponse(matcher, body, false);
     }
 
     public void prepareResponse(Struct body, boolean disconnected) {
-        futureResponses.add(new FutureResponse(body, disconnected));
+        prepareResponse(ALWAYS_TRUE, body, disconnected);
+    }
+
+    /**
+     * Prepare a response for a request matching the provided matcher. If the matcher does not
+     * match, {@link #send(ClientRequest)} will throw IllegalStateException
+     * @param matcher The matcher to apply
+     * @param body The response body
+     * @param disconnected Whether the request was disconnected
+     */
+    public void prepareResponse(RequestMatcher matcher, Struct body, boolean disconnected) {
+        futureResponses.add(new FutureResponse(body, disconnected, matcher));
     }
 
     public void setNode(Node node) {
@@ -178,6 +211,16 @@ public class MockClient implements KafkaClient {
     @Override
     public Node leastLoadedNode(long now) {
         return this.node;
+    }
+
+    /**
+     * The RequestMatcher provides a way to match a particular request to a response prepared
+     * through {@link #prepareResponse(RequestMatcher, Struct)}. Basically this allows testers
+     * to inspect the request body for the type of the request or for specific fields that should be set,
+     * and to fail the test if it doesn't match.
+     */
+    public interface RequestMatcher {
+        boolean matches(ClientRequest request);
     }
 
 }
