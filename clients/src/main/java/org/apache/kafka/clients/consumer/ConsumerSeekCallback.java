@@ -12,22 +12,18 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.TopicPartition;
-
-import java.util.Map;
-
 /**
  * A callback interface that the user can implement to trigger custom actions when a fetch request after a seek completes. The callback
  * may be executed in any thread calling {@link Consumer#poll(long) poll()}.
  */
 public interface ConsumerSeekCallback {
 
-  /**
-   * A callback method the user can implement to provide asynchronous handling of seek request completion.
-   * This method will be called when the fetch request sent to the server after a seek has been acknowledged.
-   *
-   * @param exception The exception thrown during processing of the request if the position to seek is out of range,
-   *                  or null if the seek completed successfully
-   */
-  void onComplete(Exception exception);
+    /**
+     * A callback method the user can implement to provide asynchronous handling of seek request completion.
+     * This method will be called when the fetch request sent to the server after a seek has been acknowledged.
+     *
+     * @param exception The exception thrown during processing of the request if the position to seek is out of range,
+     *                  or null if the seek completed successfully
+     */
+    void onComplete(Exception exception);
 }
