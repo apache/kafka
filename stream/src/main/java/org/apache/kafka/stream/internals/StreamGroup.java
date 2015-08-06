@@ -263,8 +263,9 @@ public class StreamGroup implements ParallelExecutor.Task {
     }
 
     public void close() {
-        chooser.close();
+        for (RecordQueue queue : stash.values()) queue.stream.close();
         stash.clear();
+        chooser.close();
     }
 
     protected RecordQueue createRecordQueue(TopicPartition partition, KStreamSource stream) {

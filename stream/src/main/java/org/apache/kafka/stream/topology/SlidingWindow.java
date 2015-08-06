@@ -17,30 +17,66 @@
 
 package org.apache.kafka.stream.topology;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.stream.KStreamContext;
+import org.apache.kafka.stream.RecordCollector;
+import org.apache.kafka.stream.RestoreFunc;
+import org.apache.kafka.stream.topology.internals.WindowSupport;
 import org.apache.kafka.stream.util.FilteredIterator;
 import org.apache.kafka.stream.util.Stamped;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map;
 
-public class SlidingWindow<K, V> implements Window<K, V> {
+public class SlidingWindow<K, V> extends WindowSupport implements Window<K, V> {
 
+    private final Object lock = new Object();
+    private final Serializer<K> keySerializer;
+    private final Serializer<V> valueSerializer;
+    private final Deserializer<K> keyDeserializer;
+    private final Deserializer<V> valueDeserializer;
+    private KStreamContext context;
+    private int slotNum;
     private String name;
     private final long duration;
     private final int maxCount;
     private LinkedList<K> list = new LinkedList<K>();
-    private HashMap<K, LinkedList<Stamped<V>>> map = new HashMap<K, LinkedList<Stamped<V>>>();
+    private HashMap<K, ValueList<V>> map = new HashMap<>();
 
-    public SlidingWindow(String name, long duration, int maxCount) {
+    public SlidingWindow(
+            String name,
+            long duration,
+            int maxCount,
+            Serializer<K> keySerializer,
+            Serializer<V> valueSerializer,
+            Deserializer<K> keyDeseriaizer,
+            Deserializer<V> valueDeserializer) {
         this.name = name;
         this.duration = duration;
         this.maxCount = maxCount;
+        this.keySerializer = keySerializer;
+        this.valueSerializer = valueSerializer;
+        this.keyDeserializer = keyDeseriaizer;
+        this.valueDeserializer = valueDeserializer;
     }
 
     @Override
     public void init(KStreamContext context) {
+        this.context = context;
+        RestoreFuncImpl restoreFunc = new RestoreFuncImpl();
+        context.register(this, restoreFunc);
+
+        for (ValueList<V> valueList : map.values()) {
+            valueList.clearDirtyValues();
+        }
+        this.slotNum = restoreFunc.slotNum;
     }
 
     @Override
@@ -62,14 +98,14 @@ public class SlidingWindow<K, V> implements Window<K, V> {
      * finds items in the window between startTime and endTime (both inclusive)
      */
     private Iterator<V> find(K key, final long startTime, final long endTime) {
-        final LinkedList<Stamped<V>> values = map.get(key);
+        final ValueList<V> values = map.get(key);
 
         if (values == null) {
             return null;
         } else {
-            return new FilteredIterator<V, Stamped<V>>(values.iterator()) {
+            return new FilteredIterator<V, Value<V>>(values.iterator()) {
                 @Override
-                protected V filter(Stamped<V> item) {
+                protected V filter(Value<V> item) {
                     if (startTime <= item.timestamp && item.timestamp <= endTime)
                         return item.value;
                     else
@@ -81,16 +117,19 @@ public class SlidingWindow<K, V> implements Window<K, V> {
 
     @Override
     public void put(K key, V value, long timestamp) {
-        list.offerLast(key);
+        synchronized (lock) {
+            slotNum++;
 
-        LinkedList<Stamped<V>> values = map.get(key);
-        if (values == null) {
-            values = new LinkedList<Stamped<V>>();
-            map.put(key, values);
+            list.offerLast(key);
+
+            ValueList<V> values = map.get(key);
+            if (values == null) {
+                values = new ValueList<>();
+                map.put(key, values);
+            }
+
+            values.add(slotNum, value, timestamp);
         }
-
-        values.offerLast(new Stamped<V>(value, timestamp));
-
         evictExcess();
         evictExpired(timestamp - duration);
     }
@@ -99,7 +138,7 @@ public class SlidingWindow<K, V> implements Window<K, V> {
         while (list.size() > maxCount) {
             K oldestKey = list.pollFirst();
 
-            LinkedList<Stamped<V>> values = map.get(oldestKey);
+            ValueList<V> values = map.get(oldestKey);
             values.removeFirst();
 
             if (values.isEmpty()) map.remove(oldestKey);
@@ -110,8 +149,8 @@ public class SlidingWindow<K, V> implements Window<K, V> {
         while (true) {
             K oldestKey = list.peekFirst();
 
-            LinkedList<Stamped<V>> values = map.get(oldestKey);
-            Stamped<V> oldestValue = values.peekFirst();
+            ValueList<V> values = map.get(oldestKey);
+            Stamped<V> oldestValue = values.first();
 
             if (oldestValue.timestamp < cutoffTime) {
                 list.pollFirst();
@@ -131,7 +170,38 @@ public class SlidingWindow<K, V> implements Window<K, V> {
 
     @Override
     public void flush() {
-        // TODO
+        IntegerSerializer intSerializer = new IntegerSerializer();
+        ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
+
+        RecordCollector collector = context.recordCollector();
+
+        for (Map.Entry<K, ValueList<V>> entry : map.entrySet()) {
+            ValueList<V> values = entry.getValue();
+            if (values.hasDirtyValues()) {
+                K key = entry.getKey();
+
+                byte[] keyBytes = keySerializer.serialize(name, key);
+
+                Iterator<Value<V>> iterator = values.dirtyValueIterator();
+                while (iterator.hasNext()) {
+                    Value<V> dirtyValue = iterator.next();
+                    byte[] slot = intSerializer.serialize("", dirtyValue.slotNum);
+                    byte[] valBytes = valueSerializer.serialize(name, dirtyValue.value);
+
+                    byte[] combined = new byte[8 + 4 + keyBytes.length + 4 + valBytes.length];
+
+                    int offset = 0;
+                    offset += putLong(combined, offset, dirtyValue.timestamp);
+                    offset += puts(combined, offset, keyBytes);
+                    offset += puts(combined, offset, valBytes);
+
+                    if (offset != combined.length) throw new IllegalStateException("serialized length does not match");
+
+                    collector.send(new ProducerRecord<>(name, context.id(), slot, combined), byteArraySerializer, byteArraySerializer);
+                }
+                values.clearDirtyValues();
+            }
+        }
     }
 
     @Override
@@ -144,4 +214,37 @@ public class SlidingWindow<K, V> implements Window<K, V> {
         // TODO: should not be persistent, right?
         return false;
     }
+
+    private class RestoreFuncImpl implements RestoreFunc {
+
+        final IntegerDeserializer intDeserializer;
+        int slotNum = 0;
+
+        RestoreFuncImpl() {
+            intDeserializer = new IntegerDeserializer();
+        }
+
+        @Override
+        public void apply(byte[] slot, byte[] bytes) {
+
+            slotNum = intDeserializer.deserialize("", slot);
+
+            int offset = 0;
+            // timestamp
+            long timestamp = getLong(bytes, offset);
+            offset += 8;
+            // key
+            int length = getInt(bytes, offset);
+            offset += 4;
+            K key = deserialize(bytes, offset, length, name, keyDeserializer);
+            offset += length;
+            // value
+            length = getInt(bytes, offset);
+            offset += 4;
+            V value = deserialize(bytes, offset, length, name, valueDeserializer);
+
+            put(key, value, timestamp);
+        }
+    }
+
 }
