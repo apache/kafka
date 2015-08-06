@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerSeekCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
@@ -159,7 +160,15 @@ public class SubscriptionState {
     }
 
     public void seek(TopicPartition tp, long offset) {
-        assignedState(tp).seek(offset);
+        seek(tp, offset, null);
+    }
+
+    public void seek(TopicPartition tp, long offset, ConsumerSeekCallback callback) {
+        assignedState(tp).seek(offset, callback);
+    }
+
+    public void invokeConsumerSeekCallback(TopicPartition tp, Exception exception) {
+        assignedState(tp).invokeConsumerSeekCallback(exception);
     }
 
     public Set<TopicPartition> assignedPartitions() {
@@ -276,6 +285,8 @@ public class SubscriptionState {
         private boolean awaitingReset; // whether we are awaiting reset
         private OffsetResetStrategy resetStrategy;  // the reset strategy if awaitingReset is set
 
+        private ConsumerSeekCallback consumerSeekCallback; // callback to be executed when the fetch request after the seek finishes
+
         public TopicPartitionState() {
             this.paused = false;
             this.consumed = null;
@@ -284,6 +295,7 @@ public class SubscriptionState {
             this.awaitingReset = false;
             this.hasValidPosition = false;
             this.resetStrategy = null;
+            this.consumerSeekCallback = null;
         }
 
         private void awaitReset(OffsetResetStrategy strategy) {
@@ -292,14 +304,16 @@ public class SubscriptionState {
             this.consumed = null;
             this.fetched = null;
             this.hasValidPosition = false;
+            this.consumerSeekCallback = null;
         }
 
-        private void seek(long offset) {
+        private void seek(long offset, ConsumerSeekCallback callback) {
             this.consumed = offset;
             this.fetched = offset;
             this.awaitingReset = false;
             this.resetStrategy = null;
             this.hasValidPosition = true;
+            this.consumerSeekCallback = callback;
         }
 
         private void fetched(long offset) {
@@ -312,6 +326,12 @@ public class SubscriptionState {
             if (!hasValidPosition)
                 throw new IllegalStateException("Cannot update consumed position without valid consumed/fetched positions");
             this.consumed = offset;
+        }
+
+        private void invokeConsumerSeekCallback(Exception exception) {
+            if (consumerSeekCallback != null)
+                consumerSeekCallback.onComplete(exception);
+            consumerSeekCallback = null;
         }
 
         private void committed(Long offset) {

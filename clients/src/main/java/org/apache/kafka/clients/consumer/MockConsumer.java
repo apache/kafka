@@ -140,8 +140,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void seek(TopicPartition partition, long offset) {
+        seek(partition, offset, null);
+    }
+
+    @Override
+    public synchronized void seek(TopicPartition partition, long offset, ConsumerSeekCallback callback) {
         ensureNotClosed();
-        subscriptions.seek(partition, offset);
+        subscriptions.seek(partition, offset, callback);
     }
 
     @Override
