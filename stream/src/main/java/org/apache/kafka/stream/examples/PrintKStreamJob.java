@@ -20,41 +20,44 @@ package org.apache.kafka.stream.examples;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KafkaStreaming;
 import org.apache.kafka.stream.StreamingConfig;
-import org.apache.kafka.stream.topology.SingleProcessorTopology;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.Processor;
 
 import java.util.Properties;
 
-public class PrintKStreamJob<K, V> extends SingleProcessorTopology<K, V> {
+public class PrintKStreamJob extends KStreamTopology {
 
-    private KStreamContext context;
+    private class MyProcessor<K, V> implements Processor<K, V> {
+        private KStreamContext context;
 
-    public PrintKStreamJob(String... topics) {
-        super(topics);
+        @Override
+        public void init(KStreamContext context) {
+            this.context = context;
+        }
+
+        @Override
+        public void process(K key, V value) {
+            System.out.println("[" + key + ", " + value + "]");
+
+            context.commit();
+
+            context.send("topic", key, value);
+        }
+
+        @Override
+        public void punctuate(long streamTime) {
+            // do nothing
+        }
+
+        @Override
+        public void close() {
+            // do nothing
+        }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void init(KStreamContext context) {
-        this.context = context;
-    }
-
-    @Override
-    public void process(K key, V value) {
-        System.out.println("[" + key + ", " + value + "]");
-
-        context.commit();
-
-        context.send("topic", key, value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        // do nothing
-    }
-
-    @Override
-    public void close() {
-        // do nothing
-    }
+    public void topology() { from("topic").process(new MyProcessor()); }
 
 <<<<<<< HEAD
   public static void main(String[] args) {
@@ -82,7 +85,7 @@ public class PrintKStreamJob<K, V> extends SingleProcessorTopology<K, V> {
 =======
     public static void main(String[] args) {
         KafkaStreaming streaming = new KafkaStreaming(
-            new PrintKStreamJob(args),
+            new PrintKStreamJob(),
             new StreamingConfig(new Properties())
         );
         streaming.run();

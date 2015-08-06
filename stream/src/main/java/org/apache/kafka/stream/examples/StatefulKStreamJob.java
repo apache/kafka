@@ -17,6 +17,7 @@
 
 package org.apache.kafka.stream.examples;
 
+import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KafkaStreaming;
 import org.apache.kafka.stream.StreamingConfig;
@@ -24,15 +25,18 @@ import org.apache.kafka.stream.state.Entry;
 import org.apache.kafka.stream.state.InMemoryKeyValueStore;
 import org.apache.kafka.stream.state.KeyValueIterator;
 import org.apache.kafka.stream.state.KeyValueStore;
-import org.apache.kafka.stream.topology.SingleProcessorTopology;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.Processor;
 
 import java.util.Properties;
 
-public class StatefulKStreamJob extends SingleProcessorTopology<String, Integer> {
+public class StatefulKStreamJob extends KStreamTopology {
 
-    private KStreamContext context;
-    private KeyValueStore<String, Integer> kvStore;
+    private class MyProcessor implements Processor<String, Integer> {
+        private KStreamContext context;
+        private KeyValueStore<String, Integer> kvStore;
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -66,36 +70,47 @@ public class StatefulKStreamJob extends SingleProcessorTopology<String, Integer>
         this.context = context;
         this.context.schedule(this, 1000);
 >>>>>>> compile and test passed
+=======
+        @Override
+        public void init(KStreamContext context) {
+            this.context = context;
+            this.context.schedule(this, 1000);
 
-        this.kvStore = new InMemoryKeyValueStore<>("local-state", context);
-    }
+            this.kvStore = new InMemoryKeyValueStore<>("local-state", context);
+        }
+>>>>>>> Address Yasu's comments
 
-    @Override
-    public void process(String key, Integer value) {
-        Integer oldValue = this.kvStore.get(key);
-        if (oldValue == null) {
-            this.kvStore.put(key, value);
-        } else {
-            int newValue = oldValue + value;
-            this.kvStore.put(key, newValue);
+        @Override
+        public void process(String key, Integer value) {
+            Integer oldValue = this.kvStore.get(key);
+            if (oldValue == null) {
+                this.kvStore.put(key, value);
+            } else {
+                int newValue = oldValue + value;
+                this.kvStore.put(key, newValue);
+            }
+
+            context.commit();
         }
 
-        context.commit();
-    }
+        @Override
+        public void punctuate(long streamTime) {
+            KeyValueIterator<String, Integer> iter = this.kvStore.all();
+            while (iter.hasNext()) {
+                Entry<String, Integer> entry = iter.next();
+                System.out.println("[" + entry.key() + ", " + entry.value() + "]");
+            }
+        }
 
-    @Override
-    public void punctuate(long streamTime) {
-        KeyValueIterator<String, Integer> iter = this.kvStore.all();
-        while (iter.hasNext()) {
-            Entry<String, Integer> entry = iter.next();
-            System.out.println("[" + entry.key() + ", " + entry.value() + "]");
+        @Override
+        public void close() {
+            // do nothing
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void close() {
-        // do nothing
-    }
+    public void topology() { ((KStream<String, Integer>) from("topic")).process(new MyProcessor()); }
 
 <<<<<<< HEAD
   public static void main(String[] args) {
@@ -123,7 +138,7 @@ public class StatefulKStreamJob extends SingleProcessorTopology<String, Integer>
 =======
     public static void main(String[] args) {
         KafkaStreaming streaming = new KafkaStreaming(
-            new StatefulKStreamJob(args),
+            new StatefulKStreamJob(),
             new StreamingConfig(new Properties())
         );
         streaming.run();
