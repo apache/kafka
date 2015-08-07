@@ -22,8 +22,8 @@ import org.apache.kafka.clients.processor.PTopology;
 import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.stream.KafkaStreaming;
-import org.apache.kafka.stream.StreamingConfig;
+import org.apache.kafka.clients.processor.KafkaStreaming;
+import org.apache.kafka.clients.processor.internals.StreamingConfig;
 
 import java.util.Properties;
 

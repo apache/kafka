@@ -19,6 +19,7 @@ package org.apache.kafka.stream;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -39,6 +40,9 @@ import org.apache.kafka.stream.internal.PartitioningInfo;
 =======
 import org.apache.kafka.stream.internals.PartitioningInfo;
 >>>>>>> compile and test passed
+=======
+import org.apache.kafka.clients.processor.internals.PartitioningInfo;
+>>>>>>> wip
 import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.ValueMapper;
 import org.apache.kafka.stream.topology.internals.KStreamMetadata;

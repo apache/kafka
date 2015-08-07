@@ -51,14 +51,20 @@ import io.confluent.streaming.kv.internals.RestoreFunc;
 =======
 import org.apache.kafka.stream.topology.Processor;
 import org.apache.kafka.stream.KStreamContext;
+<<<<<<< HEAD
 import org.apache.kafka.stream.RecordCollector;
 import org.apache.kafka.stream.RestoreFunc;
 import org.apache.kafka.stream.StateStore;
 >>>>>>> removing io.confluent imports: wip
+=======
+import org.apache.kafka.clients.processor.RecordCollector;
+import org.apache.kafka.clients.processor.RestoreFunc;
+import org.apache.kafka.clients.processor.StateStore;
+>>>>>>> wip
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.stream.internals.PunctuationQueue;
+import org.apache.kafka.clients.processor.internals.PunctuationQueue;
 
 import java.io.File;
 import java.util.Map;

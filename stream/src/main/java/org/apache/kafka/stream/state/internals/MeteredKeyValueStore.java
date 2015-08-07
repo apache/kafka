@@ -18,8 +18,8 @@
 package org.apache.kafka.stream.state.internals;
 
 import org.apache.kafka.stream.KStreamContext;
-import org.apache.kafka.stream.RecordCollector;
-import org.apache.kafka.stream.RestoreFunc;
+import org.apache.kafka.clients.processor.RecordCollector;
+import org.apache.kafka.clients.processor.RestoreFunc;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MeasurableStat;

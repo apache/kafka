@@ -25,6 +25,10 @@ import org.apache.kafka.common.serialization.Serializer;
 
 package org.apache.kafka.stream;
 
+import org.apache.kafka.clients.processor.RecordCollector;
+import org.apache.kafka.clients.processor.RestoreFunc;
+import org.apache.kafka.clients.processor.StateStore;
+import org.apache.kafka.clients.processor.internals.StreamingConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;

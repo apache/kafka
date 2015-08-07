@@ -18,9 +18,6 @@
 package org.apache.kafka.stream.topology.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.stream.KStreamContext;
-import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.KeyValue;
 import org.apache.kafka.stream.topology.KeyValueMapper;
 
@@ -37,21 +34,10 @@ class KStreamFlatMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
     }
 
     @Override
-    public void init(ProcessorContext context) {
-        // do nothing
-    }
-
-    @Override
     public void process(K1 key, V1 value) {
         KeyValue<K2, ? extends Iterable<V2>> newPair = mapper.apply(key, value);
         for (V2 v : newPair.value) {
             forward(newPair.key, v);
         }
     }
-
-    @Override
-    public void close() {
-        // do nothing
-    }
-
 }

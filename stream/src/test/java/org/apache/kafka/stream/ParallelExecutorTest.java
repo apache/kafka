@@ -17,7 +17,7 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.stream.util.ParallelExecutor;
+import org.apache.kafka.clients.processor.internals.ParallelExecutor;
 import org.junit.Test;
 
 import java.util.ArrayList;

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.stream.internals.PartitioningInfo;
+import org.apache.kafka.clients.processor.internals.PartitioningInfo;
 import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.KeyValue;
 import org.apache.kafka.stream.topology.KeyValueMapper;

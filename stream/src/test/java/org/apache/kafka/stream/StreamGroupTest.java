@@ -18,13 +18,14 @@
 package org.apache.kafka.stream;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.processor.TimestampExtractor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.stream.internals.StreamGroup;
-import org.apache.kafka.stream.internals.TimeBasedChooser;
+import org.apache.kafka.clients.processor.internals.StreamGroup;
+import org.apache.kafka.clients.processor.internals.TimeBasedChooser;
 import org.apache.kafka.stream.topology.internals.KStreamSource;
 import org.apache.kafka.test.MockIngestor;
 import org.apache.kafka.test.MockKStreamContext;

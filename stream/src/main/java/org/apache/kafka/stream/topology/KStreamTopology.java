@@ -17,9 +17,7 @@
 
 package org.apache.kafka.stream.topology;
 
-import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.topology.internals.KStreamSource;
@@ -73,11 +71,17 @@ public abstract class KStreamTopology {
      * @return KStream
      */
     public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
-        // TODO
+
         SourceProcessor<K, V> source = new SourceProcessor<>("KAFKA-SOURCE");
 
         topology.addProcessor(source, keyDeserializer, valDeserializer, topics);
 
         return new KStreamSource<>(topology, source);
+    }
+
+    public PTopology get() {
+        this.topology.build();
+
+        return this.topology;
     }
 }

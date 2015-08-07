@@ -18,7 +18,6 @@
 package org.apache.kafka.stream.topology.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
-import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.topology.Predicate;
 
 class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
@@ -40,20 +39,10 @@ class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
     }
 
     @Override
-    public void init(ProcessorContext context) {
-        // do nothing
-    }
-
-    @Override
     public void process(K key, V value) {
         if ((!filterOut && predicate.apply(key, value))
             || (filterOut && !predicate.apply(key, value))) {
             forward(key, value);
         }
-    }
-
-    @Override
-    public void close() {
-        // do nothing
     }
 }

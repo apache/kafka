@@ -20,7 +20,7 @@ package org.apache.kafka.stream;
 import static org.junit.Assert.assertEquals;
 
 import org.apache.kafka.stream.util.MinTimestampTracker;
-import org.apache.kafka.stream.util.Stamped;
+import org.apache.kafka.clients.processor.internals.Stamped;
 import org.junit.Test;
 
 public class MinTimestampTrackerTest {

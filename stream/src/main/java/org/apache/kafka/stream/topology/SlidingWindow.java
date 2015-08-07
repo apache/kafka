@@ -28,7 +28,7 @@ import org.apache.kafka.stream.RecordCollector;
 import org.apache.kafka.stream.RestoreFunc;
 import org.apache.kafka.stream.topology.internals.WindowSupport;
 import org.apache.kafka.stream.util.FilteredIterator;
-import org.apache.kafka.stream.util.Stamped;
+import org.apache.kafka.clients.processor.internals.Stamped;
 
 import java.util.HashMap;
 import java.util.Iterator;

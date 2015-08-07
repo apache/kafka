@@ -20,5 +20,4 @@ package org.apache.kafka.stream.topology;
 public interface KeyValueMapper<K1, V1, K2, V2> {
 
     KeyValue<K2, V2> apply(K1 key, V1 value);
-
 }

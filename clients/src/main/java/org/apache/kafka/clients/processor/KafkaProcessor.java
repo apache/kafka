@@ -20,9 +20,9 @@ package org.apache.kafka.clients.processor;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1> {
+public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1>, Receiver<K1, V1> {
 
-    private final List<KafkaProcessor<K2, V2, ?, ?>> children;
+    protected final List<KafkaProcessor<K2, V2, ?, ?>> children;
 
     private final String name;
 
@@ -33,6 +33,7 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
 
     public String name() { return name; }
 
+    @Override
     public final void receive(K1 key, V1 value) {
         this.process(key, value);
     }
@@ -45,6 +46,11 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
         for (KafkaProcessor<K2, V2, ?, ?> child : children) {
             child.receive(key, value);
         }
+    }
+
+    @Override
+    public void init(ProcessorContext context) {
+        // do nothing
     }
 
     @Override

@@ -26,13 +26,4 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
     public KStreamSource(PTopology topology, SourceProcessor<K, V> source) {
         super(topology, source);
     }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public void bind(KStreamContext context, KStreamMetadata metadata) {
-        if (keyDeserializer == null) keyDeserializer = (Deserializer<K>) context.keyDeserializer();
-        if (valueDeserializer == null) valueDeserializer = (Deserializer<V>) context.valueDeserializer();
-
-        super.bind(context, metadata);
-    }
 }

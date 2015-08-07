@@ -19,99 +19,90 @@ package org.apache.kafka.stream.topology.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.stream.topology.Processor;
+import org.apache.kafka.clients.processor.Processor;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.stream.internals.ProcessorNode;
-import org.apache.kafka.stream.internals.Receiver;
 import org.apache.kafka.stream.topology.KStreamWindowed;
 import org.apache.kafka.stream.topology.KeyValueMapper;
 import org.apache.kafka.stream.topology.Predicate;
-import org.apache.kafka.stream.topology.Transformer;
 import org.apache.kafka.stream.topology.ValueMapper;
 import org.apache.kafka.stream.topology.Window;
 
-abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
+public class KStreamImpl<K, V> implements KStream<K, V> {
+
+    private static final String PROCESSOR_NAME = "KAFKA-PROCESS";
 
     protected PTopology topology;
-    protected KafkaProcessor processor;
+    protected KafkaProcessor<?, ?, K, V> processor;
     protected KStreamContext context;
     protected KStreamMetadata metadata;
 
-    protected KStreamImpl(PTopology topology, KafkaProcessor processor) {
+    protected KStreamImpl(PTopology topology, KafkaProcessor<?, ?, K, V> processor) {
         this.topology = topology;
         this.processor = processor;
     }
 
-    @Override
-    public void bind(KStreamContext context, KStreamMetadata metadata) {
-        if (this.context != null) throw new IllegalStateException("kstream topology is already bound");
-        this.context = context;
-        this.metadata = metadata;
-        int numReceivers = nextReceivers.size();
-        for (int i = 0; i < numReceivers; i++) {
-            nextReceivers.get(i).bind(context, metadata);
-        }
-    }
-
-    @Override
-    public void close() {
-        int numReceivers = nextReceivers.size();
-        for (int i = 0; i < numReceivers; i++) {
-            nextReceivers.get(i).close();
-        }
-    }
-
+    @SuppressWarnings("unchecked")
     @Override
     public KStream<K, V> filter(Predicate<K, V> predicate) {
         KStreamFilter<K, V> filter = new KStreamFilter<>(predicate);
 
         topology.addProcessor(filter, processor);
 
-        return new KStreamImpl(topology, filter);
+        return new KStreamImpl<>(topology, filter);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public KStream<K, V> filterOut(final Predicate<K, V> predicate) {
         KStreamFilter<K, V> filter = new KStreamFilter<>(predicate, true);
 
         topology.addProcessor(filter, processor);
 
-        return new KStreamImpl(topology, filter);
+        return new KStreamImpl<>(topology, filter);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper) {
         KStreamMap<K, V, K1, V1> map = new KStreamMap<>(mapper);
 
         topology.addProcessor(map, processor);
 
-        return new KStreamImpl(topology, map);
+        return new KStreamImpl<>(topology, map);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper) {
         KStreamMapValues<K, V, V1> map = new KStreamMapValues<>(mapper);
 
         topology.addProcessor(map, processor);
 
-        return new KStreamImpl(topology, map);
+        return new KStreamImpl<>(topology, map);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public <K2, V2> KStream<K2, V2> flatMap(KeyValueMapper<K, V, K2, ? extends Iterable<V2>> mapper) {
-        KStreamFlatMap<K, V, K2, V2> map = new KStreamFlatMap<>(mapper);
+    public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, K1, ? extends Iterable<V1>> mapper) {
+        KStreamFlatMap<K, V, K1, V1> map = new KStreamFlatMap<>(mapper);
 
         topology.addProcessor(map, processor);
 
-        return new KStreamImpl(topology, map);
+        return new KStreamImpl<>(topology, map);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public <V1> KStream<K, V1> flatMapValues(ValueMapper<? extends Iterable<V1>, V> mapper) {
-        return chain(new KStreamFlatMapValues<K, V1, V>(mapper, topology));
+    public <V1> KStream<K, V1> flatMapValues(ValueMapper<V, ? extends Iterable<V1>> mapper) {
+        KStreamFlatMapValues<K, V, V1> map = new KStreamFlatMapValues<>(mapper);
+
+        topology.addProcessor(map, processor);
+
+        return new KStreamImpl<>(topology, map);
     }
 
     @Override
@@ -121,9 +112,8 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
     @Override
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
-        KStreamBranch<K, V> branch = new KStreamBranch<>(predicates, topology);
-        registerReceiver(branch);
-        return branch.branches;
+        KStreamBranch<K, V> branch = new KStreamBranch<>(predicates, topology, processor);
+        return branch.branches();
     }
 
     @SuppressWarnings("unchecked")
@@ -134,9 +124,18 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer) {
+    public <K1, V1> KStream<K1, V1> through(String topic,
+                                            Serializer<K> keySerializer,
+                                            Serializer<V> valSerializer,
+                                            Deserializer<K1> keyDeserializer,
+                                            Deserializer<V1> valDeserializer) {
         process(this.getSendProcessor(topic, keySerializer, valSerializer));
-        return topology.from(keyDeserializer, valDeserializer, topic);
+
+        SourceProcessor<K1, V1> source = new SourceProcessor<>("KAFKA-SOURCE");
+
+        topology.addProcessor(source, keyDeserializer, valDeserializer, topic);
+
+        return new KStreamSource<>(topology, source);
     }
 
     @Override
@@ -150,22 +149,18 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     }
 
     @SuppressWarnings("unchecked")
-    private <K, V> Processor<K, V> getSendProcessor(final String sendTopic, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
-        return new Processor<K, V>() {
-            private KStreamContext context;
+    private <K1, V1> Processor<K1, V1> getSendProcessor(final String sendTopic, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
+        return new Processor<K1, V1>() {
+            private ProcessorContext context;
 
             @Override
-            public void init(KStreamContext context) {
+            public void init(ProcessorContext context) {
                 this.context = context;
             }
 
             @Override
-            public void process(K key, V value) {
+            public void process(K1 key, V1 value) {
                 this.context.send(sendTopic, key, value, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer);
-            }
-
-            @Override
-            public void punctuate(long streamTime) {
             }
 
             @Override
@@ -176,32 +171,22 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void process(Processor<K, V> processor) {
-        registerReceiver(new ProcessorNode<>(processor));
+    public <K1, V1> KStream<K1, V1> process(final KafkaProcessor<K, V, K1, V1> current) {
+        topology.addProcessor(current, processor);
+
+        return new KStreamImpl(topology, current);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> transform(Transformer<K1, V1, K, V> transformer) {
-        return chain(new KStreamTransform<>(transformer, topology));
-    }
+    public void process(final Processor<K, V> current) {
+        KafkaProcessor<K, V, ?, ?> wrapper = new KafkaProcessor<K, V, Object, Object>(PROCESSOR_NAME) {
+            @Override
+            public void process(K key, V value) {
+                current.process(key, value);
+            }
+        };
 
-    void registerReceiver(Receiver receiver) {
-        nextReceivers.add(receiver);
+        topology.addProcessor(wrapper, processor);
     }
-
-    protected void forward(Object key, Object value, long timestamp) {
-        int numReceivers = nextReceivers.size();
-        for (int i = 0; i < numReceivers; i++) {
-            nextReceivers.get(i).receive(key, value, timestamp);
-        }
-    }
-
-    protected <K1, V1> KStream<K1, V1> chain(KStreamImpl<K1, V1> kstream) {
-        synchronized (this) {
-            nextReceivers.add(kstream);
-            return kstream;
-        }
-    }
-
 }

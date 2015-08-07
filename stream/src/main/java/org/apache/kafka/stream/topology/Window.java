@@ -18,7 +18,7 @@
 package org.apache.kafka.stream.topology;
 
 import org.apache.kafka.stream.KStreamContext;
-import org.apache.kafka.stream.StateStore;
+import org.apache.kafka.clients.processor.StateStore;
 
 import java.util.Iterator;
 

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.stream.util;
 
+import org.apache.kafka.clients.processor.internals.Stamped;
+
 import java.util.LinkedList;
 
 /**

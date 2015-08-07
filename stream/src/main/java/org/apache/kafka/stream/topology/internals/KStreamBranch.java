@@ -17,6 +17,10 @@
 
 package org.apache.kafka.stream.topology.internals;
 
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.PTopology;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.internals.Receiver;
 import org.apache.kafka.stream.topology.KStreamTopology;
@@ -24,45 +28,49 @@ import org.apache.kafka.stream.topology.Predicate;
 
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 
-class KStreamBranch<K, V> implements Receiver {
+class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
 
+    private static final String BRANCH_NAME = "KAFKA-BRANCH";
+    private static final AtomicInteger BRANCH_INDEX = new AtomicInteger(1);
+
+    private final PTopology topology;
     private final Predicate<K, V>[] predicates;
-    final KStreamSource<K, V>[] branches;
+    private final SourceProcessor<K, V>[] branches;
+    private final KafkaProcessor<?, ?, K, V> parent;
 
     @SuppressWarnings("unchecked")
-    KStreamBranch(Predicate<K, V>[] predicates, KStreamTopology topology) {
+    public KStreamBranch(Predicate<K, V>[] predicates, PTopology topology, KafkaProcessor<?, ?, K, V> parent) {
+        super(BRANCH_NAME);
+
+        this.parent = parent;
+        this.topology = topology;
         this.predicates = Arrays.copyOf(predicates, predicates.length);
-        this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
+        this.branches = (SourceProcessor<K, V>[]) Array.newInstance(SourceProcessor.class, predicates.length);
         for (int i = 0; i < branches.length; i++) {
-            branches[i] = new KStreamSource<>(null, topology);
+            branches[i] = new SourceProcessor<>(BRANCH_NAME + BRANCH_INDEX.getAndIncrement());
+            topology.addProcessor(branches[i], parent);
         }
     }
 
     @Override
-    public void bind(KStreamContext context, KStreamMetadata metadata) {
-        for (KStreamSource<K, V> branch : branches) {
-            branch.bind(context, metadata);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public void receive(Object key, Object value, long timestamp) {
+    public void process(K key, V value) {
         for (int i = 0; i < predicates.length; i++) {
             Predicate<K, V> predicate = predicates[i];
-            if (predicate.apply((K) key, (V) value)) {
-                branches[i].receive(key, value, timestamp);
+            if (predicate.apply( key, value)) {
+                branches[i].receive(key, value);
                 return;
             }
         }
     }
 
-    @Override
-    public void close() {
-        for (KStreamSource<K, V> branch : branches) {
-            branch.close();
+    @SuppressWarnings("unchecked")
+    public KStream<K, V>[] branches() {
+        KStream<K, V>[] streams = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
+        for (int i = 0; i < branches.length; i++) {
+            streams[i] = new KStreamSource<>(topology, branches[i]);
         }
+        return streams;
     }
-
 }

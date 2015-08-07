@@ -17,7 +17,7 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.stream.internals.RecordQueue;
+import org.apache.kafka.clients.processor.internals.RecordQueue;
 
 public interface Chooser {
 

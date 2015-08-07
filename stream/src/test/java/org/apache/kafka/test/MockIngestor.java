@@ -19,8 +19,8 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.stream.internals.Ingestor;
-import org.apache.kafka.stream.internals.StreamGroup;
+import org.apache.kafka.clients.processor.internals.Ingestor;
+import org.apache.kafka.clients.processor.internals.StreamGroup;
 
 import java.util.HashMap;
 import java.util.HashSet;

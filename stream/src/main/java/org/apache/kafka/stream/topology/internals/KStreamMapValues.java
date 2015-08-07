@@ -18,7 +18,6 @@
 package org.apache.kafka.stream.topology.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
-import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.topology.ValueMapper;
 
 class KStreamMapValues<K1, V1, V2> extends KafkaProcessor<K1, V1, K1, V2> {
@@ -34,18 +33,8 @@ class KStreamMapValues<K1, V1, V2> extends KafkaProcessor<K1, V1, K1, V2> {
     }
 
     @Override
-    public void init(ProcessorContext context) {
-        // do nothing
-    }
-
-    @Override
     public void process(K1 key, V1 value) {
         V2 newValue = mapper.apply(value);
         forward(key, newValue);
-    }
-
-    @Override
-    public void close() {
-        // do nothing
     }
 }

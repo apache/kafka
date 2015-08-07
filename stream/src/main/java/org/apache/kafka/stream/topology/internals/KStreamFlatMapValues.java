@@ -17,27 +17,25 @@
 
 package org.apache.kafka.stream.topology.internals;
 
-import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.stream.topology.ValueMapper;
 
-class KStreamFlatMapValues<K, V, V1> extends KStreamImpl<K, V> {
+class KStreamFlatMapValues<K1, V1, V2> extends KafkaProcessor<K1, V1, K1, V2> {
 
-    private final ValueMapper<? extends Iterable<V>, V1> mapper;
+    private static final String FLATMAPVALUES_NAME = "KAFKA-FLATMAPVALUES";
 
-    KStreamFlatMapValues(ValueMapper<? extends Iterable<V>, V1> mapper, KStreamTopology topology) {
-        super(topology);
+    private final ValueMapper<V1, ? extends Iterable<V2>> mapper;
+
+    KStreamFlatMapValues(ValueMapper<V1, ? extends Iterable<V2>> mapper) {
+        super(FLATMAPVALUES_NAME);
         this.mapper = mapper;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void receive(Object key, Object value, long timestamp) {
-        synchronized (this) {
-            Iterable<V> newValues = mapper.apply((V1) value);
-            for (V v : newValues) {
-                forward(key, v, timestamp);
-            }
+    public void process(K1 key, V1 value) {
+        Iterable<V2> newValues = mapper.apply(value);
+        for (V2 v : newValues) {
+            forward(key, v);
         }
     }
-
 }

@@ -17,8 +17,8 @@
 
 package org.apache.kafka.stream.topology.internals;
 
-import org.apache.kafka.stream.internals.PartitioningInfo;
-import org.apache.kafka.stream.internals.StreamGroup;
+import org.apache.kafka.clients.processor.internals.PartitioningInfo;
+import org.apache.kafka.clients.processor.internals.StreamGroup;
 
 import java.util.Collections;
 import java.util.Map;
