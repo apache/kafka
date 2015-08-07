@@ -210,6 +210,9 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     sendMessages(2)
     hw += 2
 
+    // allow some time for the follower to create replica
+    TestUtils.waitUntilTrue(() => server1.replicaManager.getReplica(topic, 0).nonEmpty,
+      "Failed to create replica in follower after timeout")
     // allow some time for the follower to get the leader HW
     TestUtils.waitUntilTrue(() =>
       server1.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == hw,
