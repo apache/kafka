@@ -12,8 +12,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# see kafka.server.KafkaConfig for additional details and defaults
-
-{% if consumer_timeout_ms is not none %}
-consumer.timeout.ms={{ consumer_timeout_ms }}
-{% endif %}
