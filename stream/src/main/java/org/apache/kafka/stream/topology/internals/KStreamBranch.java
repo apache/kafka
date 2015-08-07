@@ -30,43 +30,36 @@ import java.util.concurrent.atomic.AtomicInteger;
 class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
 
     private static final String BRANCH_NAME = "KAFKA-BRANCH";
-    private static final AtomicInteger BRANCH_INDEX = new AtomicInteger(1);
 
     private final PTopology topology;
     private final Predicate<K, V>[] predicates;
-    private final KafkaSource<K, V>[] branches;
-    private final KafkaProcessor<?, ?, K, V> parent;
+    private final KStreamFilter<K, V>[] branches;
 
     @SuppressWarnings("unchecked")
     public KStreamBranch(Predicate<K, V>[] predicates, PTopology topology, KafkaProcessor<?, ?, K, V> parent) {
         super(BRANCH_NAME);
 
-        this.parent = parent;
         this.topology = topology;
         this.predicates = Arrays.copyOf(predicates, predicates.length);
-        this.branches = (KafkaSource<K, V>[]) Array.newInstance(KafkaSource.class, predicates.length);
+        this.branches = (KStreamFilter<K, V>[]) Array.newInstance(KStreamFilter.class, predicates.length);
+
+        // NOTE that branches here is just a list of predicates, hence not necessarily mutual exclusive
         for (int i = 0; i < branches.length; i++) {
-            branches[i] = new KafkaSource<>(BRANCH_NAME + BRANCH_INDEX.getAndIncrement());
-            topology.addSource(branches[i], parent);
+            branches[i] = new KStreamFilter<>(predicates[i], false);
+            topology.addProcessor(branches[i], parent);
         }
     }
 
     @Override
     public void process(K key, V value) {
-        for (int i = 0; i < predicates.length; i++) {
-            Predicate<K, V> predicate = predicates[i];
-            if (predicate.apply( key, value)) {
-                branches[i].receive(key, value);
-                return;
-            }
-        }
+        forward(key, value);
     }
 
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branches() {
         KStream<K, V>[] streams = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
         for (int i = 0; i < branches.length; i++) {
-            streams[i] = new KStreamSource<>(topology, branches[i]);
+            streams[i] = new KStreamImpl<>(topology, branches[i]);
         }
         return streams;
     }

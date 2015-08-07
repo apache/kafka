@@ -29,8 +29,8 @@ import java.util.Set;
 
 abstract public class PTopology {
 
-    List<KafkaProcessor> processors = new ArrayList<>();
-    Map<String, KafkaSource> sources = new HashMap<>();
+    private List<KafkaProcessor> processors = new ArrayList<>();
+    private Map<String, KafkaSource> sources = new HashMap<>();
 
     public Set<KafkaSource> sources() {
         Set<KafkaSource> sources = new HashSet<>();
@@ -69,7 +69,13 @@ abstract public class PTopology {
         return source.valDeserializer;
     }
 
-    public final <K, V> KafkaProcessor<K, V, K, V> addSource(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+    public final void init(ProcessorContext context) {
+        for (KafkaProcessor processor : processors) {
+            processor.init(context);
+        }
+    }
+
+    public final <K, V> KafkaSource<K, V> addSource(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
         KafkaSource<K, V> source = new KafkaSource<>(keyDeserializer, valDeserializer);
 
         processors.add(source);
@@ -84,7 +90,7 @@ abstract public class PTopology {
         return source;
     }
 
-    public final <K, V> void addSource(KafkaProcessor<K, V, ?, ?> processor, KafkaProcessor<?, ?, K, V>... parents) {
+    public final <K, V> void addProcessor(KafkaProcessor<K, V, ?, ?> processor, KafkaProcessor<?, ?, K, V>... parents) {
         if (processors.contains(processor))
             throw new IllegalArgumentException("Processor " + processor.name() + " is already added.");
 

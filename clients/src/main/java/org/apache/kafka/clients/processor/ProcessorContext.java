@@ -98,7 +98,7 @@ public interface ProcessorContext {
 
     void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer);
 
-    void schedule(Processor processor, long interval);
+    void schedule(KafkaProcessor processor, long interval);
 
     void commit();
 

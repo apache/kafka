@@ -41,7 +41,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     protected KStreamContext context;
     protected KStreamMetadata metadata;
 
-    protected KStreamImpl(PTopology topology, KafkaProcessor<?, ?, K, V> processor) {
+    public KStreamImpl(PTopology topology, KafkaProcessor<?, ?, K, V> processor) {
         this.topology = topology;
         this.processor = processor;
     }
@@ -51,7 +51,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public KStream<K, V> filter(Predicate<K, V> predicate) {
         KStreamFilter<K, V> filter = new KStreamFilter<>(predicate);
 
-        topology.addSource(filter, processor);
+        topology.addProcessor(filter, processor);
 
         return new KStreamImpl<>(topology, filter);
     }
@@ -61,7 +61,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public KStream<K, V> filterOut(final Predicate<K, V> predicate) {
         KStreamFilter<K, V> filter = new KStreamFilter<>(predicate, true);
 
-        topology.addSource(filter, processor);
+        topology.addProcessor(filter, processor);
 
         return new KStreamImpl<>(topology, filter);
     }
@@ -71,7 +71,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper) {
         KStreamMap<K, V, K1, V1> map = new KStreamMap<>(mapper);
 
-        topology.addSource(map, processor);
+        topology.addProcessor(map, processor);
 
         return new KStreamImpl<>(topology, map);
     }
@@ -81,7 +81,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper) {
         KStreamMapValues<K, V, V1> map = new KStreamMapValues<>(mapper);
 
-        topology.addSource(map, processor);
+        topology.addProcessor(map, processor);
 
         return new KStreamImpl<>(topology, map);
     }
@@ -91,7 +91,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, K1, ? extends Iterable<V1>> mapper) {
         KStreamFlatMap<K, V, K1, V1> map = new KStreamFlatMap<>(mapper);
 
-        topology.addSource(map, processor);
+        topology.addProcessor(map, processor);
 
         return new KStreamImpl<>(topology, map);
     }
@@ -101,7 +101,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <V1> KStream<K, V1> flatMapValues(ValueMapper<V, ? extends Iterable<V1>> mapper) {
         KStreamFlatMapValues<K, V, V1> map = new KStreamFlatMapValues<>(mapper);
 
-        topology.addSource(map, processor);
+        topology.addProcessor(map, processor);
 
         return new KStreamImpl<>(topology, map);
     }
@@ -132,9 +132,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
                                             Deserializer<V1> valDeserializer) {
         process(this.getSendProcessor(topic, keySerializer, valSerializer));
 
-        KafkaSource<K1, V1> source = new KafkaSource<>("KAFKA-SOURCE");
-
-        topology.addProcessor(source, keyDeserializer, valDeserializer, topic);
+        KafkaSource<K1, V1> source = topology.addSource(keyDeserializer, valDeserializer, topic);
 
         return new KStreamSource<>(topology, source);
     }
@@ -173,7 +171,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public <K1, V1> KStream<K1, V1> process(final KafkaProcessor<K, V, K1, V1> current) {
-        topology.addSource(current, processor);
+        topology.addProcessor(current, processor);
 
         return new KStreamImpl(topology, current);
     }
@@ -188,6 +186,6 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
             }
         };
 
-        topology.addSource(wrapper, processor);
+        topology.addProcessor(wrapper, processor);
     }
 }

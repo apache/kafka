@@ -17,6 +17,7 @@
 
 package org.apache.kafka.stream.state.internals;
 
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.clients.processor.RecordCollector;
 import org.apache.kafka.clients.processor.RestoreFunc;
@@ -60,10 +61,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final int partition;
     private final Set<K> dirty;
     private final int maxDirty;
-    private final KStreamContext context;
+    private final ProcessorContext context;
 
     // always wrap the logged store with the metered store
-    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, KStreamContext context, String group, Time time) {
+    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, ProcessorContext context, String group, Time time) {
         this.inner = inner;
 
         this.time = time;

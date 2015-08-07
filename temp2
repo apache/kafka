@@ -1,4 +1,3 @@
-stream/src/main/java/org/apache/kafka/stream/internals/StreamGroup.java
-stream/src/main/java/org/apache/kafka/stream/topology/internals/KStreamThread.java
-stream/src/test/java/org/apache/kafka/stream/KStreamMapValuesTest.java
-stream/src/test/java/org/apache/kafka/test/MockKStreamContext.java
+stream/src/main/java/org/apache/kafka/stream/examples/MapKStreamJob.java
+stream/src/main/java/org/apache/kafka/stream/examples/PrintKStreamJob.java
+stream/src/main/java/org/apache/kafka/stream/examples/StatefulKStreamJob.java
