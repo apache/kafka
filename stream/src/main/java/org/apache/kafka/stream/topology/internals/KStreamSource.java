@@ -17,13 +17,13 @@
 
 package org.apache.kafka.stream.topology.internals;
 
+import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.stream.KStreamContext;
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.clients.processor.internals.KafkaSource;
 
 public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
-    public KStreamSource(PTopology topology, SourceProcessor<K, V> source) {
+    public KStreamSource(PTopology topology, KafkaProcessor<K, V, K, V> source) {
         super(topology, source);
     }
 }

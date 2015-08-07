@@ -17,7 +17,7 @@
 
 package org.apache.kafka.stream.topology;
 
-import org.apache.kafka.stream.KStreamException;
+import org.apache.kafka.clients.processor.KStreamException;
 
 public class NotCopartitionedException extends KStreamException {
 

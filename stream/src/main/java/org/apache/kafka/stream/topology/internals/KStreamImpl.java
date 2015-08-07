@@ -21,6 +21,7 @@ import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
 import org.apache.kafka.clients.processor.Processor;
 import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.clients.processor.internals.KafkaSource;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -131,7 +132,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
                                             Deserializer<V1> valDeserializer) {
         process(this.getSendProcessor(topic, keySerializer, valSerializer));
 
-        SourceProcessor<K1, V1> source = new SourceProcessor<>("KAFKA-SOURCE");
+        KafkaSource<K1, V1> source = new KafkaSource<>("KAFKA-SOURCE");
 
         topology.addProcessor(source, keyDeserializer, valDeserializer, topic);
 

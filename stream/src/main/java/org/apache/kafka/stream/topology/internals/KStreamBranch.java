@@ -19,11 +19,8 @@ package org.apache.kafka.stream.topology.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.clients.processor.internals.KafkaSource;
 import org.apache.kafka.stream.KStream;
-import org.apache.kafka.stream.KStreamContext;
-import org.apache.kafka.stream.internals.Receiver;
-import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.Predicate;
 
 import java.lang.reflect.Array;
@@ -37,7 +34,7 @@ class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
 
     private final PTopology topology;
     private final Predicate<K, V>[] predicates;
-    private final SourceProcessor<K, V>[] branches;
+    private final KafkaSource<K, V>[] branches;
     private final KafkaProcessor<?, ?, K, V> parent;
 
     @SuppressWarnings("unchecked")
@@ -47,9 +44,9 @@ class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
         this.parent = parent;
         this.topology = topology;
         this.predicates = Arrays.copyOf(predicates, predicates.length);
-        this.branches = (SourceProcessor<K, V>[]) Array.newInstance(SourceProcessor.class, predicates.length);
+        this.branches = (KafkaSource<K, V>[]) Array.newInstance(KafkaSource.class, predicates.length);
         for (int i = 0; i < branches.length; i++) {
-            branches[i] = new SourceProcessor<>(BRANCH_NAME + BRANCH_INDEX.getAndIncrement());
+            branches[i] = new KafkaSource<>(BRANCH_NAME + BRANCH_INDEX.getAndIncrement());
             topology.addProcessor(branches[i], parent);
         }
     }

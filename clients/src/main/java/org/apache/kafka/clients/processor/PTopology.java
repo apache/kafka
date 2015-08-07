@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.processor;
 
+import org.apache.kafka.clients.processor.internals.KafkaSource;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayList;
@@ -28,32 +29,18 @@ import java.util.Set;
 
 public class PTopology {
 
-    private class TopicDeserializers<K, V> {
-        public KafkaProcessor<K, V, ?, ?> processor;
-        public Deserializer<K> keyDeserializer;
-        public Deserializer<V> valDeserializer;
-
-        public TopicDeserializers(KafkaProcessor<K, V, ?, ?> processor,
-                                  Deserializer<K> keyDeserializer,
-                                  Deserializer<V> valDeserializer) {
-            this.processor = processor;
-            this.keyDeserializer = keyDeserializer;
-            this.valDeserializer = valDeserializer;
-        }
-    }
-
     List<KafkaProcessor> processors = new ArrayList<>();
-    Map<String, TopicDeserializers> topicDesers = new HashMap<>();
+    Map<String, KafkaSource> sources = new HashMap<>();
 
     boolean built = false;
 
-    public Set<KafkaProcessor> sources() {
+    public Set<KafkaSource> sources() {
         if (!built)
             throw new IllegalStateException("Topology has not been built.");
 
-        Set<KafkaProcessor> sources = new HashSet<>();
-        for (TopicDeserializers topicDeserializers : topicDesers.values()) {
-            sources.add(topicDeserializers.processor);
+        Set<KafkaSource> sources = new HashSet<>();
+        for (KafkaSource source : this.sources.values()) {
+            sources.add(source);
         }
 
         return sources;
@@ -63,45 +50,46 @@ public class PTopology {
         if (!built)
             throw new IllegalStateException("Topology has not been built.");
 
-        return topicDesers.keySet();
+        return sources.keySet();
     }
 
     public Deserializer keyDeser(String topic) {
         if (!built)
             throw new IllegalStateException("Topology has not been built.");
 
-        TopicDeserializers desers = topicDesers.get(topic);
+        KafkaSource source = sources.get(topic);
 
-        if (desers == null)
+        if (source == null)
             throw new IllegalStateException("The topic " + topic + " is unknown.");
 
-        return desers.keyDeserializer;
+        return source.keyDeserializer;
     }
 
     public Deserializer valueDeser(String topic) {
         if (!built)
             throw new IllegalStateException("Topology has not been built.");
 
-        TopicDeserializers desers = topicDesers.get(topic);
+        KafkaSource source = sources.get(topic);
 
-        if (desers == null)
+        if (source == null)
             throw new IllegalStateException("The topic " + topic + " is unknown.");
 
-        return desers.valDeserializer;
+        return source.valDeserializer;
     }
 
-    public final <K, V> void addProcessor(KafkaProcessor<K, V, ?, ?> processor, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
-        if (processors.contains(processor))
-            throw new IllegalArgumentException("Processor " + processor.name() + " is already added.");
+    public final <K, V> KafkaProcessor<K, V, K, V> addProcessor(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+        KafkaSource<K, V> source = new KafkaSource<>(keyDeserializer, valDeserializer);
 
-        processors.add(processor);
+        processors.add(source);
 
         for (String topic : topics) {
-            if (topicDesers.containsKey(topic))
+            if (sources.containsKey(topic))
                 throw new IllegalArgumentException("Topic " + topic + " has already been registered by another processor.");
 
-            topicDesers.put(topic, new TopicDeserializers<>(processor, keyDeserializer, valDeserializer));
+            sources.put(topic, source);
         }
+
+        return source;
     }
 
     public final <K, V> void addProcessor(KafkaProcessor<K, V, ?, ?> processor, KafkaProcessor<?, ?, K, V>... parents) {
