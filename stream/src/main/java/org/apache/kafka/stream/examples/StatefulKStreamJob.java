@@ -110,7 +110,7 @@ public class StatefulKStreamJob extends KStreamTopology {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void topology() { ((KStream<String, Integer>) from("topic")).process(new MyProcessor()); }
+    public void build() { ((KStream<String, Integer>) from("topic")).process(new MyProcessor()); }
 
 <<<<<<< HEAD
   public static void main(String[] args) {

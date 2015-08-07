@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public abstract class PTopology {
+public class PTopology {
 
     private class KeyValueDeserializers<K, V> {
         public Deserializer<K> keyDeserializer;
@@ -41,15 +41,26 @@ public abstract class PTopology {
     List<KafkaProcessor> processors = new ArrayList<>();
     Map<String, KeyValueDeserializers> topicDesers = new HashMap<>();
 
+    boolean built = false;
+
     public List<KafkaProcessor> sources() {
+        if (!built)
+            throw new IllegalStateException("Topology has not been built.");
+
         return sources;
     }
 
     public Set<String> topics() {
+        if (!built)
+            throw new IllegalStateException("Topology has not been built.");
+
         return topicDesers.keySet();
     }
 
     public Deserializer keyDeser(String topic) {
+        if (!built)
+            throw new IllegalStateException("Topology has not been built.");
+
         KeyValueDeserializers desers = topicDesers.get(topic);
 
         if (desers == null)
@@ -59,6 +70,9 @@ public abstract class PTopology {
     }
 
     public Deserializer valueDeser(String topic) {
+        if (!built)
+            throw new IllegalStateException("Topology has not been built.");
+
         KeyValueDeserializers desers = topicDesers.get(topic);
 
         if (desers == null)
@@ -99,5 +113,7 @@ public abstract class PTopology {
         }
     }
 
-    public abstract void build();
+    public void build() {
+        built = true;
+    }
 }

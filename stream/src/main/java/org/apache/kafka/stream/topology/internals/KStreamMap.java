@@ -17,32 +17,36 @@
 
 package org.apache.kafka.stream.topology.internals;
 
-import org.apache.kafka.stream.KStreamContext;
-import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.topology.KeyValue;
 import org.apache.kafka.stream.topology.KeyValueMapper;
 
-class KStreamMap<K, V, K1, V1> extends KStreamImpl<K, V> {
+class KStreamMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
 
-    private final KeyValueMapper<K, V, K1, V1> mapper;
+    private static final String MAP_NAME = "KAFKA-MAP";
 
-    KStreamMap(KeyValueMapper<K, V, K1, V1> mapper, KStreamTopology topology) {
-        super(topology);
+    private final KeyValueMapper<K1, V1, K2, V2> mapper;
+
+    public KStreamMap(KeyValueMapper<K1, V1, K2, V2> mapper) {
+        super(MAP_NAME);
+
         this.mapper = mapper;
     }
 
     @Override
-    public void bind(KStreamContext context, KStreamMetadata metadata) {
-        super.bind(context, KStreamMetadata.unjoinable());
+    public void init(ProcessorContext context) {
+        // do nothing
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void receive(Object key, Object value, long timestamp) {
-        synchronized (this) {
-            KeyValue<K, V> newPair = mapper.apply((K1) key, (V1) value);
-            forward(newPair.key, newPair.value, timestamp);
-        }
+    public void process(K1 key, V1 value) {
+        KeyValue<K2, V2> newPair = mapper.apply(key, value);
+        forward(newPair.key, newPair.value);
     }
 
+    @Override
+    public void close() {
+        // do nothing
+    }
 }

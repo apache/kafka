@@ -21,6 +21,6 @@ import org.apache.kafka.stream.topology.KStreamTopology;
 
 public class MockKStreamTopology extends KStreamTopology {
     @Override
-    public void topology() {
+    public void build() {
     }
 }

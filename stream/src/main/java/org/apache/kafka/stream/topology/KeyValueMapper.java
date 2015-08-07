@@ -17,8 +17,8 @@
 
 package org.apache.kafka.stream.topology;
 
-public interface KeyValueMapper<RK, RV, K, V> {
+public interface KeyValueMapper<K1, V1, K2, V2> {
 
-    KeyValue<RK, RV> apply(K key, V value);
+    KeyValue<K2, V2> apply(K1 key, V1 value);
 
 }

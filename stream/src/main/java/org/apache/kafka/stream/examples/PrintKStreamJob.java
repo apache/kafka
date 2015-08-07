@@ -17,36 +17,37 @@
 
 package org.apache.kafka.stream.examples;
 
-import org.apache.kafka.stream.KStreamContext;
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.PTopology;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.KafkaStreaming;
 import org.apache.kafka.stream.StreamingConfig;
-import org.apache.kafka.stream.topology.KStreamTopology;
-import org.apache.kafka.stream.topology.Processor;
 
 import java.util.Properties;
 
-public class PrintKStreamJob extends KStreamTopology {
+public class PrintKStreamJob {
 
-    private class MyProcessor<K, V> implements Processor<K, V> {
-        private KStreamContext context;
+    private static class MyProcessor extends KafkaProcessor<String, Integer, Object, Object> {
+        ProcessorContext context;
+
+        public MyProcessor(String name) {
+            super(name);
+        }
 
         @Override
-        public void init(KStreamContext context) {
+        public void init(ProcessorContext context) {
             this.context = context;
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(String key, Integer value) {
             System.out.println("[" + key + ", " + value + "]");
 
             context.commit();
 
-            context.send("topic", key, value);
-        }
-
-        @Override
-        public void punctuate(long streamTime) {
-            // do nothing
+            context.send("topic-dest", key, value);
         }
 
         @Override
@@ -55,6 +56,7 @@ public class PrintKStreamJob extends KStreamTopology {
         }
     }
 
+<<<<<<< HEAD
     @SuppressWarnings("unchecked")
     @Override
     public void topology() { from("topic").process(new MyProcessor()); }
@@ -83,7 +85,13 @@ public class PrintKStreamJob extends KStreamTopology {
 >>>>>>> fix examples
   }
 =======
+=======
+>>>>>>> wip
     public static void main(String[] args) {
+        PTopology topology = new PTopology();
+        topology.addProcessor(new MyProcessor("processor"), new StringDeserializer(), new IntegerDeserializer(), "topic-source");
+        topology.build();
+
         KafkaStreaming streaming = new KafkaStreaming(
             new PrintKStreamJob(),
             new StreamingConfig(new Properties())

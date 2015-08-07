@@ -67,8 +67,12 @@ public class MapKStreamJob extends KStreamTopology {
 =======
     @SuppressWarnings("unchecked")
     @Override
+<<<<<<< HEAD
     public void topology() {
 >>>>>>> compile and test passed
+=======
+    public void build() {
+>>>>>>> wip
 
         // With overridden de-serializer
         KStream stream1 = from(new StringDeserializer(), new StringDeserializer(), "topic1");

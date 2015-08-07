@@ -17,25 +17,35 @@
 
 package org.apache.kafka.stream.topology.internals;
 
-import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.topology.ValueMapper;
 
-class KStreamMapValues<K, V, V1> extends KStreamImpl<K, V> {
+class KStreamMapValues<K1, V1, V2> extends KafkaProcessor<K1, V1, K1, V2> {
 
-    private final ValueMapper<V, V1> mapper;
+    private static final String MAPVALUES_NAME = "KAFKA-MAPVALUES";
 
-    KStreamMapValues(ValueMapper<V, V1> mapper, KStreamTopology topology) {
-        super(topology);
+    private final ValueMapper<V1, V2> mapper;
+
+    public KStreamMapValues(ValueMapper<V1, V2> mapper) {
+        super(MAPVALUES_NAME);
+
         this.mapper = mapper;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void receive(Object key, Object value, long timestamp) {
-        synchronized (this) {
-            V newValue = mapper.apply((V1) value);
-            forward(key, newValue, timestamp);
-        }
+    public void init(ProcessorContext context) {
+        // do nothing
     }
 
+    @Override
+    public void process(K1 key, V1 value) {
+        V2 newValue = mapper.apply(value);
+        forward(key, newValue);
+    }
+
+    @Override
+    public void close() {
+        // do nothing
+    }
 }

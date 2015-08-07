@@ -17,8 +17,8 @@
 
 package org.apache.kafka.stream.topology;
 
-public interface ValueMapper<R, V> {
+public interface ValueMapper<V1, V2> {
 
-    R apply(V value);
+    V2 apply(V1 value);
 
 }

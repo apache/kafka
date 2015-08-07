@@ -70,7 +70,7 @@ import java.util.Set;
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
  * <p>
- * This processing is defined by extending the {@link KStreamTopology} abstract class to specify the transformation operator topology. The
+ * This processing is defined by extending the {@link KStreamTopology} abstract class to specify the transformation operator build. The
  * {@link KafkaStreaming} instance will be responsible for the lifecycle of these processors. It will instantiate and
  * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
  * <p>

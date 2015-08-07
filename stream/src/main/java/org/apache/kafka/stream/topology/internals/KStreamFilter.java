@@ -17,26 +17,43 @@
 
 package org.apache.kafka.stream.topology.internals;
 
-import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.topology.Predicate;
 
-class KStreamFilter<K, V> extends KStreamImpl<K, V> {
+class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
+
+    private static final String FILTER_NAME = "KAFKA-FILTER";
 
     private final Predicate<K, V> predicate;
+    private final boolean filterOut;
 
-    KStreamFilter(Predicate<K, V> predicate, KStreamTopology topology) {
-        super(topology);
-        this.predicate = predicate;
+    public KStreamFilter(Predicate<K, V> predicate) {
+        this(predicate, false);
     }
 
-    @SuppressWarnings("unchecked")
+    public KStreamFilter(Predicate<K, V> predicate, boolean filterOut) {
+        super(FILTER_NAME);
+
+        this.predicate = predicate;
+        this.filterOut = filterOut;
+    }
+
     @Override
-    public void receive(Object key, Object value, long timestamp) {
-        synchronized (this) {
-            if (predicate.apply((K) key, (V) value)) {
-                forward(key, value, timestamp);
-            }
+    public void init(ProcessorContext context) {
+        // do nothing
+    }
+
+    @Override
+    public void process(K key, V value) {
+        if ((!filterOut && predicate.apply(key, value))
+            || (filterOut && !predicate.apply(key, value))) {
+            forward(key, value);
         }
     }
 
+    @Override
+    public void close() {
+        // do nothing
+    }
 }

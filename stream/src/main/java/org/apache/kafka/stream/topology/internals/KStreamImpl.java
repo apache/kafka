@@ -17,6 +17,8 @@
 
 package org.apache.kafka.stream.topology.internals;
 
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.PTopology;
 import org.apache.kafka.stream.topology.Processor;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.KStream;
@@ -24,7 +26,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.stream.internals.ProcessorNode;
 import org.apache.kafka.stream.internals.Receiver;
-import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.KStreamWindowed;
 import org.apache.kafka.stream.topology.KeyValueMapper;
 import org.apache.kafka.stream.topology.Predicate;
@@ -32,17 +33,16 @@ import org.apache.kafka.stream.topology.Transformer;
 import org.apache.kafka.stream.topology.ValueMapper;
 import org.apache.kafka.stream.topology.Window;
 
-import java.util.ArrayList;
-
 abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
-    private final ArrayList<Receiver> nextReceivers = new ArrayList<>(1);
-    protected KStreamTopology topology;
+    protected PTopology topology;
+    protected KafkaProcessor processor;
     protected KStreamContext context;
     protected KStreamMetadata metadata;
 
-    protected KStreamImpl(KStreamTopology topology) {
+    protected KStreamImpl(PTopology topology, KafkaProcessor processor) {
         this.topology = topology;
+        this.processor = processor;
     }
 
     @Override
@@ -66,31 +66,47 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
     @Override
     public KStream<K, V> filter(Predicate<K, V> predicate) {
-        return chain(new KStreamFilter<K, V>(predicate, topology));
+        KStreamFilter<K, V> filter = new KStreamFilter<>(predicate);
+
+        topology.addProcessor(filter, processor);
+
+        return new KStreamImpl(topology, filter);
     }
 
     @Override
     public KStream<K, V> filterOut(final Predicate<K, V> predicate) {
-        return filter(new Predicate<K, V>() {
-            public boolean apply(K key, V value) {
-                return !predicate.apply(key, value);
-            }
-        });
+        KStreamFilter<K, V> filter = new KStreamFilter<>(predicate, true);
+
+        topology.addProcessor(filter, processor);
+
+        return new KStreamImpl(topology, filter);
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper) {
-        return chain(new KStreamMap<K1, V1, K, V>(mapper, topology));
+    public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper) {
+        KStreamMap<K, V, K1, V1> map = new KStreamMap<>(mapper);
+
+        topology.addProcessor(map, processor);
+
+        return new KStreamImpl(topology, map);
     }
 
     @Override
-    public <V1> KStream<K, V1> mapValues(ValueMapper<V1, V> mapper) {
-        return chain(new KStreamMapValues<K, V1, V>(mapper, topology));
+    public <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper) {
+        KStreamMapValues<K, V, V1> map = new KStreamMapValues<>(mapper);
+
+        topology.addProcessor(map, processor);
+
+        return new KStreamImpl(topology, map);
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K1, ? extends Iterable<V1>, K, V> mapper) {
-        return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, topology));
+    public <K2, V2> KStream<K2, V2> flatMap(KeyValueMapper<K, V, K2, ? extends Iterable<V2>> mapper) {
+        KStreamFlatMap<K, V, K2, V2> map = new KStreamFlatMap<>(mapper);
+
+        topology.addProcessor(map, processor);
+
+        return new KStreamImpl(topology, map);
     }
 
     @Override

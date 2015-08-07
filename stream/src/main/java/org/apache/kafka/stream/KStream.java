@@ -56,7 +56,7 @@ public interface KStream<K, V> {
      * @param <V1>   the value type of the new stream
      * @return KStream
      */
-    <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper);
+    <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper);
 
     /**
      * Creates a new stream by transforming valuesa by a mapper to all values of this stream
