@@ -326,7 +326,7 @@ class ConsumerCoordinator(val brokerId: Int,
   private def updateConsumer(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, topics: Set[String]) {
     val topicsToBind = topics -- group.topics
     group.remove(consumer.consumerId)
-    val topicsToUnbind = consumer.topics -- group.topics
+    val topicsToUnbind = consumer.topics -- (group.topics ++ topics)
     group.add(consumer.consumerId, consumer)
     consumer.topics = topics
     coordinatorMetadata.bindAndUnbindGroupFromTopics(group.groupId, topicsToBind, topicsToUnbind)
