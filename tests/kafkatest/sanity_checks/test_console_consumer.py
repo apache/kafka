@@ -56,13 +56,13 @@ class ConsoleConsumerTest(Test):
         self.logger.info("consumer started in %s seconds " % str(time.time() - t0))
 
         # Verify that log output is happening
-        if not wait_until(lambda: file_exists(node, ConsoleConsumer.log_file), timeout_sec=10):
+        if not wait_until(lambda: file_exists(node, ConsoleConsumer.LOG_FILE), timeout_sec=10):
             raise Exception("Timed out waiting for log file to exist")
-        consumer_log_lines = [line for line in node.account.ssh_capture("cat %s" % ConsoleConsumer.log_file)]
+        consumer_log_lines = [line for line in node.account.ssh_capture("cat %s" % ConsoleConsumer.LOG_FILE)]
         assert len(consumer_log_lines) > 0
 
         # Verify no consumed messages
-        consumed = [line for line in node.account.ssh_capture("cat %s" % ConsoleConsumer.stdout_capture)]
+        consumed = [line for line in node.account.ssh_capture("cat %s" % ConsoleConsumer.STDOUT_CAPTURE)]
         assert len(consumed) == 0
 
         self.consumer.stop_node(node)
