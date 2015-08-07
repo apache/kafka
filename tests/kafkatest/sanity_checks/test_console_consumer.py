@@ -22,6 +22,14 @@ from kafkatest.services.console_consumer import ConsoleConsumer
 import time
 
 
+def file_exists(node, file):
+    try:
+        node.account.ssh("cat " + file, allow_fail=False)
+        return True
+    except:
+        return False
+
+
 class ConsoleConsumerTest(Test):
     """Sanity checks on console consumer service class."""
     def __init__(self, test_context):
@@ -37,7 +45,7 @@ class ConsoleConsumerTest(Test):
         self.zk.start()
         self.kafka.start()
 
-    def test_start(self):
+    def test_lifecycle(self):
         t0 = time.time()
         self.consumer.start()
         node = self.consumer.nodes[0]
@@ -47,10 +55,17 @@ class ConsoleConsumerTest(Test):
         self.logger.info("consumer started in %s seconds " % str(time.time() - t0))
 
         # Verify that log output is happening
+        if not wait_until(lambda: file_exists(node, ConsoleConsumer.log_file), timeout_sec=10):
+            raise Exception("Timed out waiting for log file to exist")
         consumer_log_lines = [line for line in node.account.ssh_capture("cat %s" % ConsoleConsumer.log_file)]
         assert len(consumer_log_lines) > 0
 
         # Verify no consumed messages
         consumed = [line for line in node.account.ssh_capture("cat %s" % ConsoleConsumer.stdout_capture)]
         assert len(consumed) == 0
+
+        self.consumer.stop_node(node)
+        if not wait_until(lambda: not self.consumer.alive(node), timeout_sec=10, backoff_sec=.2):
+            raise Exception("Took too long for consumer to die.")
+
 
