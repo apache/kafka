@@ -19,13 +19,11 @@ package org.apache.kafka.stream.topology.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.clients.processor.internals.KafkaSource;
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.topology.Predicate;
 
 import java.lang.reflect.Array;
 import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicInteger;
 
 class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
 

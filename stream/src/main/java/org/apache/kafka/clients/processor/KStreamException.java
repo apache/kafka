@@ -15,9 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology;
+package org.apache.kafka.clients.processor;
 
-public interface ValueJoiner<V1, V2, R> {
+public class KStreamException extends RuntimeException {
 
-    R apply(V1 value1, V2 value2);
+    public KStreamException() {
+        super();
+    }
+
+    public KStreamException(String msg) {
+        super(msg);
+    }
+
+    public KStreamException(Throwable t) {
+        super(t);
+    }
+
+    public KStreamException(String msg, Throwable t) {
+        super(msg, t);
+    }
 }

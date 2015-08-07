@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology;
+package org.apache.kafka.clients.processor;
 
-public interface ValueJoiner<V1, V2, R> {
+public interface Punctuator {
 
-    R apply(V1 value1, V2 value2);
+    void punctuate(long streamTime);
 }

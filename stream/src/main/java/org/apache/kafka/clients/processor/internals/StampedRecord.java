@@ -15,9 +15,34 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology;
+package org.apache.kafka.clients.processor.internals;
 
-public interface ValueJoiner<V1, V2, R> {
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-    R apply(V1 value1, V2 value2);
+// TODO: making this class exposed to user in the lower-level Processor
+public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
+
+    StampedRecord(ConsumerRecord<Object, Object> record, long timestamp) {
+        super(record, timestamp);
+    }
+
+    public String topic() {
+        return value.topic();
+    }
+
+    public int partition() {
+        return value.partition();
+    }
+
+    public Object key() {
+        return value.key();
+    }
+
+    public Object value() {
+        return value.value();
+    }
+
+    public long offset() {
+        return value.offset();
+    }
 }

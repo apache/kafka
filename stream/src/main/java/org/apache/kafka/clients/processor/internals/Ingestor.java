@@ -15,9 +15,27 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology;
+package org.apache.kafka.clients.processor.internals;
 
-public interface ValueJoiner<V1, V2, R> {
+import org.apache.kafka.common.TopicPartition;
 
-    R apply(V1 value1, V2 value2);
+import java.util.Map;
+import java.util.Set;
+
+public interface Ingestor {
+
+    Set<String> topics();
+
+    void poll(long timeoutMs);
+
+    void pause(TopicPartition partition);
+
+    void unpause(TopicPartition partition, long offset);
+
+    void commit(Map<TopicPartition, Long> offsets);
+
+    int numPartitions(String topic);
+
+    void addPartitionStreamToGroup(StreamGroup streamGroup, TopicPartition partition);
+
 }

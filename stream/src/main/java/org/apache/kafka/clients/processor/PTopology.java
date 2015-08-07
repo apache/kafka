@@ -46,9 +46,7 @@ abstract public class PTopology {
     }
 
     public KafkaSource source(String topic) {
-        KafkaSource source = sources.get(topic);
-
-        return source;
+        return sources.get(topic);
     }
 
     public Deserializer keyDeser(String topic) {
@@ -104,6 +102,15 @@ abstract public class PTopology {
                 parent.chain(processor);
             }
         }
+    }
+
+    public final void close() {
+        for (KafkaProcessor processor : processors) {
+            processor.close();
+        }
+
+        processors.clear();
+        sources.clear();
     }
 
     abstract public void build();

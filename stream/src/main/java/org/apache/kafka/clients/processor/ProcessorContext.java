@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.File;
-import java.util.Map;
 
 public interface ProcessorContext {
 

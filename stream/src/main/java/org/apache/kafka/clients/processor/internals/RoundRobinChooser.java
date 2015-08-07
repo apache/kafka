@@ -15,9 +15,33 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology;
+package org.apache.kafka.clients.processor.internals;
 
-public interface ValueJoiner<V1, V2, R> {
+import org.apache.kafka.clients.processor.Chooser;
 
-    R apply(V1 value1, V2 value2);
+import java.util.ArrayDeque;
+
+public class RoundRobinChooser implements Chooser {
+
+    private final ArrayDeque<RecordQueue> deque;
+
+    public RoundRobinChooser() {
+        deque = new ArrayDeque<>();
+    }
+
+    @Override
+    public void add(RecordQueue queue) {
+        deque.offer(queue);
+    }
+
+    @Override
+    public RecordQueue next() {
+        return deque.poll();
+    }
+
+    @Override
+    public void close() {
+        deque.clear();
+    }
+
 }

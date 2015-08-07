@@ -15,9 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology;
+package org.apache.kafka.clients.processor;
 
-public interface ValueJoiner<V1, V2, R> {
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.Serializer;
 
-    R apply(V1 value1, V2 value2);
+public interface RecordCollector {
+
+    void send(ProducerRecord<Object, Object> record);
+
+    <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer);
+
+    void flush();
 }

@@ -15,14 +15,36 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology.internals;
+package org.apache.kafka.clients.processor.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
-import org.apache.kafka.clients.processor.PTopology;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.common.serialization.Deserializer;
 
-public class KStreamSource<K, V> extends KStreamImpl<K, V> {
+public class KafkaSource<K, V> extends KafkaProcessor<K, V, K, V> {
 
-    public KStreamSource(PTopology topology, KafkaProcessor<K, V, K, V> source) {
-        super(topology, source);
+    private static final String SOURCE_NAME = "KAFKA-SOURCE";
+
+    public Deserializer<K> keyDeserializer;
+    public Deserializer<V> valDeserializer;
+
+    public KafkaSource(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+        super(SOURCE_NAME);
+
+        this.keyDeserializer = keyDeserializer;
+        this.valDeserializer = valDeserializer;
+    }
+
+    @Override
+    public void init(ProcessorContext context) {
+        // do nothing
+    }
+
+    @Override
+    public void process(K key, V value) { forward(key, value); }
+
+    @Override
+    public void close() {
+        // do nothing
     }
 }

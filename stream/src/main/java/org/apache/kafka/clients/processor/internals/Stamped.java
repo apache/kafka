@@ -15,9 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology;
+package org.apache.kafka.clients.processor.internals;
 
-public interface ValueJoiner<V1, V2, R> {
+public class Stamped<V> implements Comparable {
 
-    R apply(V1 value1, V2 value2);
+    public final V value;
+    public final long timestamp;
+
+    public Stamped(V value, long timestamp) {
+        this.value = value;
+        this.timestamp = timestamp;
+    }
+
+    public int compareTo(Object other) {
+        long otherTimestamp = ((Stamped<?>) other).timestamp;
+
+        if (timestamp < otherTimestamp) return -1;
+        else if (timestamp > otherTimestamp) return 1;
+        return 0;
+    }
+
 }

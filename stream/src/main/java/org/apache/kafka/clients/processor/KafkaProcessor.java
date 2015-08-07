@@ -62,8 +62,6 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
 
     @Override
     public void close() {
-        for (KafkaProcessor child : children) {
-            child.close();
-        }
+        // do nothing
     }
 }

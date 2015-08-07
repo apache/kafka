@@ -108,7 +108,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @Override
     public KStreamWindowed<K, V> with(Window<K, V> window) {
-        return (KStreamWindowed<K, V>) chain(new KStreamWindowedImpl<>(window, topology));
+        return (KStreamWindowed<K, V>) chain(new KStreamWindow<>(window, topology));
     }
 
     @Override

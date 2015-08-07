@@ -15,9 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.topology;
+package org.apache.kafka.clients.processor.internals;
 
-public interface ValueJoiner<V1, V2, R> {
+import org.apache.kafka.clients.processor.Punctuator;
 
-    R apply(V1 value1, V2 value2);
+public class PunctuationSchedule extends Stamped<Punctuator> {
+
+    final long interval;
+
+    public PunctuationSchedule(Punctuator punctuator, long interval) {
+        super(punctuator, System.currentTimeMillis() + interval);
+        this.interval = interval;
+    }
+
+    public Punctuator punctuator() {
+        return value;
+    }
+
+    public PunctuationSchedule next() {
+        return new PunctuationSchedule(value, timestamp + interval);
+    }
+
 }

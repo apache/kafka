@@ -17,33 +17,38 @@
 
 package org.apache.kafka.stream.topology.internals;
 
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.internals.Receiver;
-import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.NotCopartitionedException;
 import org.apache.kafka.stream.topology.ValueJoiner;
 import org.apache.kafka.stream.topology.Window;
 
 import java.util.Iterator;
 
-class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
+class KStreamJoin<K, V, V1, V2> extends KafkaProcessor<K, V1, K, V> {
+
+    private static final String JOIN_NAME = "KAFKA-JOIN";
 
     private static abstract class Finder<K, T> {
         abstract Iterator<T> find(K key, long timestamp);
     }
 
-    private final Finder<K, V1> finder1;
-    private final Finder<K, V2> finder2;
-    private final ValueJoiner<V, V1, V2> joiner;
-    final Receiver receiverForOtherStream;
     private KStreamMetadata thisMetadata;
     private KStreamMetadata otherMetadata;
+    private final Finder<K, V1> finder1;
+    private final Finder<K, V2> finder2;
+    private final ValueJoiner<V1, V2, V> joiner;
+    final Receiver receiverForOtherStream;
 
-    KStreamJoin(KStreamWindowedImpl<K, V1> stream1, KStreamWindowedImpl<K, V2> stream2, boolean prior, ValueJoiner<V, V1, V2> joiner, KStreamTopology topology) {
-        super(topology);
+    private ProcessorContext context;
 
-        final Window<K, V1> window1 = stream1.window;
-        final Window<K, V2> window2 = stream2.window;
+    KStreamJoin(KStreamWindow<K, V1> stream1, KStreamWindow<K, V2> stream2, boolean prior, ValueJoiner<V1, V2, V> joiner) {
+        super(JOIN_NAME);
+
+        final Window<K, V1> window1 = stream1.window();
+        final Window<K, V2> window2 = stream2.window();
 
         if (prior) {
             this.finder1 = new Finder<K, V1>() {
@@ -83,13 +88,18 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
             throw new NotCopartitionedException();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void receive(Object key, Object value, long timestamp) {
-        Iterator<V2> iter = finder2.find((K) key, timestamp);
+    public void init(ProcessorContext context) {
+        this.context = context;
+    }
+
+    @Override
+    public void process(K key, V1 value) {
+        long timestamp = context.timestamp();
+        Iterator<V2> iter = finder2.find(key, timestamp);
         if (iter != null) {
             while (iter.hasNext()) {
-                doJoin((K) key, (V1) value, iter.next(), timestamp);
+                doJoin(key,value, iter.next());
             }
         }
     }
@@ -122,8 +132,8 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
     }
 
     // TODO: use the "outer-stream" topic as the resulted join stream topic
-    private void doJoin(K key, V1 value1, V2 value2, long timestamp) {
-        forward(key, joiner.apply(value1, value2), timestamp);
+    private void doJoin(K key, V1 value1, V2 value2) {
+        forward(key, joiner.apply(value1, value2));
     }
 
 }
