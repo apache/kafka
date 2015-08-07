@@ -27,7 +27,7 @@ import scala.collection._
 
 object ReplicationUtils extends Logging {
 
-  val IsrChangeNotificationPrefix = "isr_change_"
+  private val IsrChangeNotificationPrefix = "isr_change_"
 
   def updateLeaderAndIsr(zkClient: ZkClient, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
     zkVersion: Int): (Boolean,Int) = {
@@ -36,14 +36,14 @@ object ReplicationUtils extends Logging {
     val newLeaderData = ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
     val updatePersistentPath: (Boolean, Int) = ZkUtils.conditionalUpdatePersistentPath(zkClient, path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
-    if (updatePersistentPath._1) {
-      val topicAndPartition: TopicAndPartition = TopicAndPartition(topic, partitionId)
-      val isrChangeNotificationPath: String = ZkUtils.createSequentialPersistentPath(
-        zkClient, ZkUtils.IsrChangeNotificationPath + "/" + IsrChangeNotificationPrefix,
-        topicAndPartition.toJson)
-      debug("Added " + isrChangeNotificationPath + " for " + topicAndPartition)
-    }
     updatePersistentPath
+  }
+
+  def propagateIsrChanges(zkClient: ZkClient, isrChangeSet: Set[TopicAndPartition]): Unit = {
+    val isrChangeNotificationPath: String = ZkUtils.createSequentialPersistentPath(
+      zkClient, ZkUtils.IsrChangeNotificationPath + "/" + IsrChangeNotificationPrefix,
+      Json.encode(isrChangeSet.map(_.toMap).toArray))
+    debug("Added " + isrChangeNotificationPath + " for " + isrChangeSet)
   }
 
   def checkLeaderAndIsrZkData(zkClient: ZkClient, path: String, expectedLeaderAndIsrInfo: String): (Boolean,Int) = {

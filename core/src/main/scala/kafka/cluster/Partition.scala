@@ -233,6 +233,7 @@ class Partition(val topic: String,
         // check if we need to expand ISR to include this replica
         // if it is not in the ISR yet
         maybeExpandIsr(replicaId)
+        replicaManager.maybePropagateIsrChanges()
 
         debug("Recorded replica %d log end offset (LEO) position %d for partition %s."
           .format(replicaId,
@@ -428,7 +429,9 @@ class Partition(val topic: String,
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(r => r.brokerId).toList, zkVersion)
     val (updateSucceeded,newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topic, partitionId,
       newLeaderAndIsr, controllerEpoch, zkVersion)
+
     if(updateSucceeded) {
+      replicaManager.recordIsrChange(new TopicAndPartition(topic, partitionId))
       inSyncReplicas = newIsr
       zkVersion = newVersion
       trace("ISR updated to [%s] and zkVersion updated to [%d]".format(newIsr.mkString(","), zkVersion))

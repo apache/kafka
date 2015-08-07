@@ -38,4 +38,6 @@ case class TopicAndPartition(topic: String, partition: Int) {
   override def toString = "[%s,%d]".format(topic, partition)
 
   def toJson = Json.encode(Map("version" -> version, "topic" -> topic, "partition" -> partition))
+
+  def toMap = Map("version" -> version, "topic" -> topic, "partition" -> partition)
 }

@@ -160,7 +160,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     onControllerResignation, config.brokerId)
   // have a separate scheduler for the controller to be able to start and stop independently of the
   // kafka server
-  private val controllerScheduler = new KafkaScheduler(2)
+  private val autoRebalanceScheduler = new KafkaScheduler(1)
   var deleteTopicManager: TopicDeletionManager = null
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext, config)
   private val reassignedPartitionLeaderSelector = new ReassignedPartitionLeaderSelector(controllerContext)
@@ -324,14 +324,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       maybeTriggerPreferredReplicaElection()
       /* send partition leadership info to all live brokers */
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
-
-      info("Starting controller scheduler.")
-      controllerScheduler.startup()
-      info("Scheduling ISR propagation task")
-      controllerScheduler.schedule("isr-propagation-thread", propagateIsrChange, 5, 10, TimeUnit.SECONDS)
       if (config.autoLeaderRebalanceEnable) {
-        info("Scheduling auto partition leader rebalance task")
-        controllerScheduler.schedule("partition-rebalance-thread", checkAndTriggerPartitionRebalance,
+        info("starting the partition rebalance scheduler")
+        autoRebalanceScheduler.startup()
+        autoRebalanceScheduler.schedule("partition-rebalance-thread", checkAndTriggerPartitionRebalance,
           5, config.leaderImbalanceCheckIntervalSeconds.toLong, TimeUnit.SECONDS)
       }
       deleteTopicManager.start()
@@ -354,8 +350,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     if (deleteTopicManager != null)
       deleteTopicManager.shutdown()
 
-    // shutdown controller scheduler
-    controllerScheduler.shutdown()
+    // shutdown leader rebalance scheduler
+    if (config.autoLeaderRebalanceEnable)
+      autoRebalanceScheduler.shutdown()
 
     inLock(controllerContext.controllerLock) {
       // de-register partition ISR listener for on-going partition reassignment task
@@ -1145,10 +1142,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     }
   }
 
-  private def propagateIsrChange(): Unit = {
-    isrChangeNotificationListener.propagateIsrChanges()
-  }
-
   private def checkAndTriggerPartitionRebalance(): Unit = {
     if (isActive()) {
       trace("checking need to trigger partition rebalance")
@@ -1316,7 +1309,6 @@ class ReassignedPartitionsIsrChangeListener(controller: KafkaController, topic: 
  * @param controller
  */
 class IsrChangeNotificationListener(controller: KafkaController) extends IZkChildListener with Logging {
-  var isrChangeTopicAndPartitionSet: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]
 
   override def handleChildChange(parentPath: String, currentChildren: util.List[String]): Unit = {
     import scala.collection.JavaConverters._
@@ -1324,49 +1316,42 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
     inLock(controller.controllerContext.controllerLock) {
       debug("[IsrChangeNotificationListener] Fired!!!")
       val childrenAsScala: mutable.Buffer[String] = currentChildren.asScala
-      val topicAndPartitions: immutable.Set[TopicAndPartition] = childrenAsScala.map(x => getTopicAndPartition(x)).flatten.toSet
+      val topicAndPartitions: immutable.Set[TopicAndPartition] = childrenAsScala.flatMap(x => getTopicAndPartition(x)).flatten.toSet
       controller.updateLeaderAndIsrCache(topicAndPartitions)
       processUpdateNotifications(topicAndPartitions)
 
       // delete processed children
       childrenAsScala.map(x => ZkUtils.deletePath(controller.controllerContext.zkClient,
-                                                  ZkUtils.getEntityConfigPath(ConfigType.Topic, x)))
+                                                  ZkUtils.IsrChangeNotificationPath + "/" + x))
     }
-  }
-
-  def propagateIsrChanges(): Unit = {
-    var isrChanges: Set[TopicAndPartition] = null
-    isrChangeTopicAndPartitionSet synchronized {
-      if (isrChangeTopicAndPartitionSet.isEmpty)
-        return
-      isrChanges = immutable.Set(isrChangeTopicAndPartitionSet.toArray:_*)
-      isrChangeTopicAndPartitionSet.clear()
-    }
-    val liveBrokers: Seq[Int] = controller.controllerContext.liveOrShuttingDownBrokerIds.toSeq
-    debug("Sending MetadataRequest to Brokers:" + liveBrokers + " for TopicAndPartitions:" + isrChanges)
-    controller.sendUpdateMetadataRequest(liveBrokers, isrChanges)
   }
 
   private def processUpdateNotifications(topicAndPartitions: immutable.Set[TopicAndPartition]) {
-    isrChangeTopicAndPartitionSet synchronized {
-      isrChangeTopicAndPartitionSet ++= topicAndPartitions
-    }
+    val liveBrokers: Seq[Int] = controller.controllerContext.liveOrShuttingDownBrokerIds.toSeq
+    debug("Sending MetadataRequest to Brokers:" + liveBrokers + " for TopicAndPartitions:" + topicAndPartitions)
+    controller.sendUpdateMetadataRequest(liveBrokers, topicAndPartitions)
   }
 
-  private def getTopicAndPartition(child: String): Option[TopicAndPartition] = {
+  private def getTopicAndPartition(child: String): Option[Set[TopicAndPartition]] = {
+    val topicAndPartitions: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
     val changeZnode: String = ZkUtils.IsrChangeNotificationPath + "/" + child
     val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(controller.controllerContext.zkClient, changeZnode)
     if (jsonOpt.isDefined) {
       val json = Json.parseFull(jsonOpt.get)
 
       json match {
-        case Some(m) =>
-          val topicAndPartition = m.asInstanceOf[Map[String, Any]]
-          val topic = topicAndPartition("topic").asInstanceOf[String]
-          val partition = topicAndPartition("partition").asInstanceOf[Int]
-          Some(TopicAndPartition(topic, partition))
+        case Some(l) =>
+          val topicAndPartitionList = l.asInstanceOf[List[Any]]
+          topicAndPartitionList.foreach {
+            case m =>
+              val topicAndPartition = m.asInstanceOf[Map[String, Any]]
+              val topic = topicAndPartition("topic").asInstanceOf[String]
+              val partition = topicAndPartition("partition").asInstanceOf[Int]
+              topicAndPartitions += TopicAndPartition(topic, partition)
+          }
+          Some(topicAndPartitions)
         case None =>
-          error("Invalid topic and partition JSON: " + json + " in ZK: " + changeZnode)
+          error("Invalid topic and partition JSON: " + jsonOpt.get + " in ZK: " + changeZnode)
           None
       }
     } else {
