@@ -26,8 +26,6 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
 
     private final String name;
 
-    private long now;
-
     public KafkaProcessor(String name) {
         this.name = name;
         this.children  = new ArrayList<>();
@@ -36,8 +34,7 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
     public String name() { return name; }
 
     @Override
-    public final void receive(K1 key, V1 value, long timestamp) {
-        this.now = timestamp;
+    public final void receive(K1 key, V1 value) {
         this.process(key, value);
     }
 
@@ -47,7 +44,7 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
 
     public final void forward(K2 key, V2 value) {
         for (KafkaProcessor<K2, V2, ?, ?> child : children) {
-            child.receive(key, value, now);
+            child.receive(key, value);
         }
     }
 

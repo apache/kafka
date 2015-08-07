@@ -27,17 +27,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class PTopology {
+abstract public class PTopology {
 
     List<KafkaProcessor> processors = new ArrayList<>();
     Map<String, KafkaSource> sources = new HashMap<>();
 
-    boolean built = false;
-
     public Set<KafkaSource> sources() {
-        if (!built)
-            throw new IllegalStateException("Topology has not been built.");
-
         Set<KafkaSource> sources = new HashSet<>();
         for (KafkaSource source : this.sources.values()) {
             sources.add(source);
@@ -47,16 +42,16 @@ public class PTopology {
     }
 
     public Set<String> topics() {
-        if (!built)
-            throw new IllegalStateException("Topology has not been built.");
-
         return sources.keySet();
     }
 
-    public Deserializer keyDeser(String topic) {
-        if (!built)
-            throw new IllegalStateException("Topology has not been built.");
+    public KafkaSource source(String topic) {
+        KafkaSource source = sources.get(topic);
 
+        return source;
+    }
+
+    public Deserializer keyDeser(String topic) {
         KafkaSource source = sources.get(topic);
 
         if (source == null)
@@ -66,9 +61,6 @@ public class PTopology {
     }
 
     public Deserializer valueDeser(String topic) {
-        if (!built)
-            throw new IllegalStateException("Topology has not been built.");
-
         KafkaSource source = sources.get(topic);
 
         if (source == null)
@@ -77,7 +69,7 @@ public class PTopology {
         return source.valDeserializer;
     }
 
-    public final <K, V> KafkaProcessor<K, V, K, V> addProcessor(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+    public final <K, V> KafkaProcessor<K, V, K, V> addSource(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
         KafkaSource<K, V> source = new KafkaSource<>(keyDeserializer, valDeserializer);
 
         processors.add(source);
@@ -92,7 +84,7 @@ public class PTopology {
         return source;
     }
 
-    public final <K, V> void addProcessor(KafkaProcessor<K, V, ?, ?> processor, KafkaProcessor<?, ?, K, V>... parents) {
+    public final <K, V> void addSource(KafkaProcessor<K, V, ?, ?> processor, KafkaProcessor<?, ?, K, V>... parents) {
         if (processors.contains(processor))
             throw new IllegalArgumentException("Processor " + processor.name() + " is already added.");
 
@@ -108,7 +100,5 @@ public class PTopology {
         }
     }
 
-    public void build() {
-        built = true;
-    }
+    abstract public void build();
 }

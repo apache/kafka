@@ -47,7 +47,7 @@ class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
         this.branches = (KafkaSource<K, V>[]) Array.newInstance(KafkaSource.class, predicates.length);
         for (int i = 0; i < branches.length; i++) {
             branches[i] = new KafkaSource<>(BRANCH_NAME + BRANCH_INDEX.getAndIncrement());
-            topology.addProcessor(branches[i], parent);
+            topology.addSource(branches[i], parent);
         }
     }
 

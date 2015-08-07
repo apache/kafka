@@ -22,7 +22,6 @@ import org.apache.kafka.clients.processor.PTopology;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.topology.internals.KStreamSource;
-import org.apache.kafka.clients.processor.internals.KafkaSource;
 
 /**
  * KStreamTopology is the class that allows an implementation of {@link KStreamTopology#build()} to create KStream instances.
@@ -72,7 +71,7 @@ public abstract class KStreamTopology {
      * @return KStream
      */
     public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
-        KafkaProcessor<K, V, K, V> source = topology.addProcessor(keyDeserializer, valDeserializer, topics);
+        KafkaProcessor<K, V, K, V> source = topology.addSource(keyDeserializer, valDeserializer, topics);
         return new KStreamSource<>(topology, source);
     }
 
