@@ -19,18 +19,11 @@ package org.apache.kafka.stream;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.processor.internals.PartitioningInfo;
-import org.apache.kafka.stream.topology.KStreamTopology;
-import org.apache.kafka.stream.topology.KStreamWindowed;
-import org.apache.kafka.stream.topology.KeyValue;
-import org.apache.kafka.stream.topology.KeyValueMapper;
-import org.apache.kafka.stream.topology.ValueJoiner;
-import org.apache.kafka.stream.topology.ValueMapper;
-import org.apache.kafka.stream.topology.internals.KStreamMetadata;
-import org.apache.kafka.stream.topology.internals.KStreamSource;
+import org.apache.kafka.stream.internals.KStreamMetadata;
+import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockKStreamContext;
-import org.apache.kafka.stream.topology.NotCopartitionedException;
 import org.apache.kafka.test.UnlimitedWindow;
 import org.junit.Test;
 

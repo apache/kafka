@@ -18,10 +18,8 @@
 package org.apache.kafka.stream;
 
 import org.apache.kafka.clients.processor.internals.PartitioningInfo;
-import org.apache.kafka.stream.topology.KStreamTopology;
-import org.apache.kafka.stream.topology.Predicate;
-import org.apache.kafka.stream.topology.internals.KStreamMetadata;
-import org.apache.kafka.stream.topology.internals.KStreamSource;
+import org.apache.kafka.stream.internals.KStreamMetadata;
+import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamContext;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;

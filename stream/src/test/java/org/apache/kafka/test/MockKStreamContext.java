@@ -18,6 +18,7 @@
 package org.apache.kafka.test;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
 <<<<<<< HEAD
@@ -50,6 +51,9 @@ import io.confluent.streaming.kv.internals.RestoreFunc;
 >>>>>>> new api model
 =======
 import org.apache.kafka.stream.topology.Processor;
+=======
+import org.apache.kafka.stream.Processor;
+>>>>>>> wip
 import org.apache.kafka.stream.KStreamContext;
 <<<<<<< HEAD
 import org.apache.kafka.stream.RecordCollector;

@@ -78,6 +78,11 @@ public class ProcessorContextImpl implements ProcessorContext {
         this.processorConfig = processorConfig;
         this.timestampExtractor = this.streamingConfig.timestampExtractor();
 
+        for (String topic : this.topology.topics()) {
+            if (!ingestor.topics().contains(topic))
+                throw new IllegalArgumentException("topic not subscribed: " + topic);
+        }
+
         File stateFile = new File(processorConfig.stateDir, Integer.toString(id));
         Consumer restoreConsumer = new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
 
@@ -86,19 +91,16 @@ public class ProcessorContextImpl implements ProcessorContext {
 
         stateMgr.init();
 
-        // update the partition -> source stream map
-        for (String topic : this.topology.topics()) {
-            if (!ingestor.topics().contains(topic))
-                throw new IllegalArgumentException("topic not subscribed: " + topic);
-
-            TopicPartition partition = new TopicPartition(topic, id);
-            KafkaSource source = topology.source(topic);
-
-            this.streamGroup.addPartition(partition, source);
-            this.ingestor.addPartitionStreamToGroup(this.streamGroup, partition);
-        }
-
         initialized = false;
+    }
+
+    public void addPartition(TopicPartition partition) {
+
+        // update the partition -> source stream map
+        KafkaSource source = topology.source(partition.topic());
+
+        this.streamGroup.addPartition(partition, source);
+        this.ingestor.addPartitionStreamToGroup(this.streamGroup, partition);
     }
 
     @Override

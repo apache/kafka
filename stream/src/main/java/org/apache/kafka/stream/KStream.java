@@ -21,11 +21,6 @@ import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.Processor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.stream.topology.KStreamWindowed;
-import org.apache.kafka.stream.topology.KeyValueMapper;
-import org.apache.kafka.stream.topology.Predicate;
-import org.apache.kafka.stream.topology.ValueMapper;
-import org.apache.kafka.stream.topology.Window;
 
 /**
  * KStream is an abstraction of a stream of key-value pairs.

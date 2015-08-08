@@ -1,3 +1,4 @@
-stream/src/main/java/org/apache/kafka/stream/examples/MapKStreamJob.java: needs merge
-stream/src/main/java/org/apache/kafka/stream/examples/PrintKStreamJob.java: needs merge
-stream/src/main/java/org/apache/kafka/stream/examples/StatefulKStreamJob.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/KStreamContext.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/topology/SlidingWindow.java: needs merge
+stream/src/test/java/org/apache/kafka/stream/KStreamMapValuesTest.java: needs merge
+stream/src/test/java/org/apache/kafka/test/MockKStreamContext.java: needs merge

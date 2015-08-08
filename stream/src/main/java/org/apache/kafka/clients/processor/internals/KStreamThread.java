@@ -248,6 +248,8 @@ public class KStreamThread extends Thread {
 
                 streamGroups.add(context.streamGroup);
             }
+
+            context.addPartition(partition);
         }
 
         nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;

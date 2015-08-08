@@ -18,8 +18,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.stream.KStreamContext;
-import org.apache.kafka.stream.topology.KeyValue;
-import org.apache.kafka.stream.topology.Window;
+import org.apache.kafka.stream.KeyValue;
+import org.apache.kafka.stream.Window;
 import org.apache.kafka.stream.util.FilteredIterator;
 import org.apache.kafka.clients.processor.internals.Stamped;
 

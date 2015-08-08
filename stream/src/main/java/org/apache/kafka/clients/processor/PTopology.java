@@ -67,6 +67,7 @@ abstract public class PTopology {
         return source.valDeserializer;
     }
 
+    // TODO: init by the ordering of DAG
     public final void init(ProcessorContext context) {
         for (KafkaProcessor processor : processors) {
             processor.init(context);
@@ -104,6 +105,7 @@ abstract public class PTopology {
         }
     }
 
+    // TODO: close by the ordering of DAG
     public final void close() {
         for (KafkaProcessor processor : processors) {
             processor.close();

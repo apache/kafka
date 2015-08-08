@@ -42,11 +42,16 @@ import org.apache.kafka.stream.internals.PartitioningInfo;
 >>>>>>> compile and test passed
 =======
 import org.apache.kafka.clients.processor.internals.PartitioningInfo;
+<<<<<<< HEAD
 >>>>>>> wip
 import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.ValueMapper;
 import org.apache.kafka.stream.topology.internals.KStreamMetadata;
 import org.apache.kafka.stream.topology.internals.KStreamSource;
+=======
+import org.apache.kafka.stream.internals.KStreamMetadata;
+import org.apache.kafka.stream.internals.KStreamSource;
+>>>>>>> wip
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockKStreamContext;

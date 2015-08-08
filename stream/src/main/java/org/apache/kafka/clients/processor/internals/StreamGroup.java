@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A StreamGroup is composed of multiple streams from different topics that need to be synchronized.
@@ -78,6 +79,10 @@ public class StreamGroup {
 
     public StampedRecord record() {
         return currRecord;
+    }
+
+    public Set<TopicPartition> partitions() {
+        return stash.keySet();
     }
 
     /**
@@ -233,10 +238,6 @@ public class StreamGroup {
      */
     public void commitOffset() {
         this.commitRequested = true;
-    }
-
-    public int buffered() {
-        return buffered;
     }
 
     public void close() {

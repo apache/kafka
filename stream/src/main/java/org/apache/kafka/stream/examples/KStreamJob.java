@@ -21,10 +21,10 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.clients.processor.KafkaStreaming;
 import org.apache.kafka.clients.processor.internals.StreamingConfig;
 import org.apache.kafka.stream.KStream;
-import org.apache.kafka.stream.topology.KStreamTopology;
-import org.apache.kafka.stream.topology.KeyValue;
-import org.apache.kafka.stream.topology.KeyValueMapper;
-import org.apache.kafka.stream.topology.Predicate;
+import org.apache.kafka.stream.KStreamTopology;
+import org.apache.kafka.stream.KeyValue;
+import org.apache.kafka.stream.KeyValueMapper;
+import org.apache.kafka.stream.Predicate;
 
 import java.util.Properties;
 

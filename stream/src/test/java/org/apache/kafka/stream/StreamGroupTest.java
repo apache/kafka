@@ -26,7 +26,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.clients.processor.internals.StreamGroup;
 import org.apache.kafka.clients.processor.internals.TimeBasedChooser;
-import org.apache.kafka.stream.topology.internals.KStreamSource;
+import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockIngestor;
 import org.apache.kafka.test.MockKStreamContext;
 import org.apache.kafka.test.MockKStreamTopology;

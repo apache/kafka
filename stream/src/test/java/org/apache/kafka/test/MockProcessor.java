@@ -17,7 +17,7 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.stream.topology.Processor;
+import org.apache.kafka.stream.Processor;
 import org.apache.kafka.stream.KStreamContext;
 
 import java.util.ArrayList;
