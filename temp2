@@ -1,10 +1,2 @@
-stream/src/test/java/org/apache/kafka/stream/KStreamFilterTest.java
-stream/src/test/java/org/apache/kafka/stream/KStreamFlatMapTest.java
-stream/src/test/java/org/apache/kafka/stream/KStreamFlatMapValuesTest.java
+stream/src/main/java/org/apache/kafka/stream/KStreamContext.java
 stream/src/test/java/org/apache/kafka/stream/KStreamJoinTest.java
-stream/src/test/java/org/apache/kafka/stream/KStreamMapTest.java
-stream/src/test/java/org/apache/kafka/stream/KStreamMapValuesTest.java
-stream/src/test/java/org/apache/kafka/stream/KStreamSourceTest.java
-stream/src/test/java/org/apache/kafka/stream/KStreamWindowedTest.java
-stream/src/test/java/org/apache/kafka/stream/StreamGroupTest.java
-stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java

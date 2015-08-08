@@ -22,13 +22,12 @@ import org.apache.kafka.clients.processor.PTopology;
 import org.apache.kafka.clients.processor.Processor;
 import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.clients.processor.internals.KafkaSource;
-import org.apache.kafka.stream.KStreamContext;
-import org.apache.kafka.stream.KStream;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.stream.KStreamWindowed;
 import org.apache.kafka.stream.KeyValueMapper;
 import org.apache.kafka.stream.Predicate;
+import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.ValueMapper;
 import org.apache.kafka.stream.Window;
 

@@ -17,10 +17,10 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.stream.KStreamContext;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.stream.KeyValue;
 import org.apache.kafka.stream.Window;
-import org.apache.kafka.stream.util.FilteredIterator;
+import org.apache.kafka.stream.internals.FilteredIterator;
 import org.apache.kafka.clients.processor.internals.Stamped;
 
 import java.util.Iterator;
@@ -31,8 +31,8 @@ public class UnlimitedWindow<K, V> implements Window<K, V> {
     private LinkedList<Stamped<KeyValue<K, V>>> list = new LinkedList<>();
 
     @Override
-    public void init(KStreamContext context) {
-
+    public void init(ProcessorContext context) {
+        // do nothing
     }
 
     @Override
@@ -63,7 +63,7 @@ public class UnlimitedWindow<K, V> implements Window<K, V> {
 
     @Override
     public void put(K key, V value, long timestamp) {
-        list.add(new Stamped<KeyValue<K, V>>(KeyValue.pair(key, value), timestamp));
+        list.add(new Stamped<>(KeyValue.pair(key, value), timestamp));
     }
 
     @Override

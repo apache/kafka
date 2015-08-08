@@ -17,13 +17,14 @@
 
 package org.apache.kafka.stream;
 
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.clients.processor.StateStore;
 
 import java.util.Iterator;
 
 public interface Window<K, V> extends StateStore {
 
-    void init(KStreamContext context);
+    void init(ProcessorContext context);
 
     Iterator<V> find(K key, long timestamp);
 

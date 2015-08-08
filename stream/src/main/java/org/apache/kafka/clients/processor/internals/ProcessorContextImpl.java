@@ -23,11 +23,11 @@ import org.apache.kafka.clients.processor.PTopology;
 import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.clients.processor.RecordCollector;
 import org.apache.kafka.clients.processor.StateStore;
-import org.apache.kafka.clients.processor.KStreamException;
 import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.RestoreFunc;
 import org.apache.kafka.clients.processor.TimestampExtractor;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -146,7 +146,7 @@ public class ProcessorContextImpl implements ProcessorContext {
     @Override
     public void register(StateStore store, RestoreFunc restoreFunc) {
         if (initialized)
-            throw new KStreamException("Can only create state stores during initialization.");
+            throw new KafkaException("Can only create state stores during initialization.");
 
         stateMgr.register(store, restoreFunc);
     }

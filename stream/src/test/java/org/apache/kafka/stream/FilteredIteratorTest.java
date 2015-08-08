@@ -19,7 +19,7 @@ package org.apache.kafka.stream;
 
 import static org.junit.Assert.assertEquals;
 
-import org.apache.kafka.stream.util.FilteredIterator;
+import org.apache.kafka.stream.internals.FilteredIterator;
 import org.junit.Test;
 
 import java.util.ArrayList;

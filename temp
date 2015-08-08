@@ -1,10 +1,2 @@
-stream/src/test/java/org/apache/kafka/stream/KStreamFilterTest.java: needs merge
-stream/src/test/java/org/apache/kafka/stream/KStreamFlatMapTest.java: needs merge
-stream/src/test/java/org/apache/kafka/stream/KStreamFlatMapValuesTest.java: needs merge
+stream/src/main/java/org/apache/kafka/stream/KStreamContext.java: needs merge
 stream/src/test/java/org/apache/kafka/stream/KStreamJoinTest.java: needs merge
-stream/src/test/java/org/apache/kafka/stream/KStreamMapTest.java: needs merge
-stream/src/test/java/org/apache/kafka/stream/KStreamMapValuesTest.java: needs merge
-stream/src/test/java/org/apache/kafka/stream/KStreamSourceTest.java: needs merge
-stream/src/test/java/org/apache/kafka/stream/KStreamWindowedTest.java: needs merge
-stream/src/test/java/org/apache/kafka/stream/StreamGroupTest.java: needs merge
-stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java: needs merge

@@ -20,8 +20,6 @@ package org.apache.kafka.stream;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.clients.processor.internals.PartitioningInfo;
-import org.apache.kafka.stream.internals.KStreamMetadata;
 import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
@@ -32,8 +30,6 @@ import org.junit.Test;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class KStreamJoinTest {
 
@@ -42,8 +38,6 @@ public class KStreamJoinTest {
     private KStreamTopology topology = new MockKStreamTopology();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
-
-    private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -82,8 +76,6 @@ public class KStreamJoinTest {
             }
         };
 
-
-    // TODO: initialize with context
 
     @Test
     public void testJoin() {
@@ -253,10 +245,15 @@ public class KStreamJoinTest {
 
         windowed1.joinPrior(windowed2, joiner).process(processor);
 
+        MockProcessorContext context = new MockProcessorContext(null, null);
+        topology.init(context);
+
         // push two items to the main stream. the other stream's window is empty
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i], i);
+            context.setTime(i);
+
+            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -265,7 +262,9 @@ public class KStreamJoinTest {
         // no corresponding item in the main window has a newer timestamp
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i], i + 1);
+            context.setTime(i + 1);
+
+            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -275,7 +274,9 @@ public class KStreamJoinTest {
         // push all items with newer timestamps to the main stream. this should produce two items.
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i], i + 2);
+            context.setTime(i + 2);
+
+            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -292,7 +293,9 @@ public class KStreamJoinTest {
 
         // push all items with older timestamps to the other stream. this should produce six items
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i], i);
+            context.setTime(i);
+
+            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());
@@ -302,6 +305,7 @@ public class KStreamJoinTest {
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
         }
+<<<<<<< HEAD
 
     }
 
@@ -715,6 +719,9 @@ public class KStreamJoinTest {
         }
 
         assertFalse(exceptionRaised);
+=======
+>>>>>>> wip
     }
 
+    // TODO: test for joinability
 }

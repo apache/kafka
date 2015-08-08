@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.util;
+package org.apache.kafka.stream.internals;
 
 import java.util.Iterator;
 

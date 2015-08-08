@@ -103,7 +103,7 @@ public interface KStream<K, V> {
     /**
      * Sends key-value to a topic, also creates a new stream from the topic.
      * The created stream is added to the default synchronization group.
-     * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic).
+     * This is equivalent to calling sendTo(topic) and from(topic).
      *
      * @param topic the topic name
      * @return KStream
@@ -113,7 +113,7 @@ public interface KStream<K, V> {
     /**
      * Sends key-value to a topic, also creates a new stream from the topic.
      * The created stream is added to the default synchronization group.
-     * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic).
+     * This is equivalent to calling sendTo(topic) and from(topic).
      *
      * @param topic           the topic name
      * @param keySerializer   key serializer used to send key-value pairs,
