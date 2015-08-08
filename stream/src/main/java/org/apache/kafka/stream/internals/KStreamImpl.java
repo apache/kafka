@@ -149,7 +149,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    private <K1, V1> Processor<K1, V1> getSendProcessor(final String sendTopic, final Serializer<K> keySerializer, final Serializer<V> valSerializer) {
+    private <K1, V1> Processor<K1, V1> getSendProcessor(final String sendTopic, final Serializer<K1> keySerializer, final Serializer<V1> valSerializer) {
         return new Processor<K1, V1>() {
             private ProcessorContext context;
 

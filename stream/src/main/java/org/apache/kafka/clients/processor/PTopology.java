@@ -37,6 +37,8 @@ abstract public class PTopology {
 
     protected final StreamingConfig streamingConfig;
 
+    public PTopology() { this(null); }
+
     public PTopology(StreamingConfig streamingConfig) {
         this.streamingConfig = streamingConfig;
     }

@@ -246,7 +246,7 @@ public class StreamGroup {
     }
 
     protected RecordQueue createRecordQueue(TopicPartition partition, KafkaSource source) {
-        return new RecordQueue(partition, source, new MinTimestampTracker<>());
+        return new RecordQueue(partition, source, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
     }
 
     private static class NewRecords {

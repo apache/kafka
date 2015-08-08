@@ -20,6 +20,7 @@ package org.apache.kafka.stream;
 import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
 import org.apache.kafka.clients.processor.internals.StreamingConfig;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.stream.internals.KStreamSource;
 
@@ -27,6 +28,8 @@ import org.apache.kafka.stream.internals.KStreamSource;
  * KStreamTopology is the class that allows an implementation of {@link KStreamTopology#build()} to create KStream instances.
  */
 public abstract class KStreamTopology extends PTopology {
+
+    public KStreamTopology() { super(); }
 
     public KStreamTopology(StreamingConfig streamingConfig) {
         super(streamingConfig);
@@ -39,6 +42,9 @@ public abstract class KStreamTopology extends PTopology {
      * @return KStream
      */
     public <K, V> KStream<K, V> from(String... topics) {
+        if (streamingConfig == null)
+            throw new KafkaException("No default deserializers specified in the config.");
+
         KafkaProcessor<K, V, K, V> source = addSource(
             (Deserializer<K>) streamingConfig.keyDeserializer(),
             (Deserializer<V>) streamingConfig.valueDeserializer(), topics);
