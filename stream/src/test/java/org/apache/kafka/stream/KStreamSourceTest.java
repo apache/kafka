@@ -17,12 +17,10 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.clients.processor.internals.PartitioningInfo;
-import org.apache.kafka.stream.internals.KStreamMetadata;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockKStreamContext;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -33,11 +31,14 @@ public class KStreamSourceTest {
 
     private String topicName = "topic";
 
-    private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
+    private KStreamTopology topology = new MockKStreamTopology();
+    private StringDeserializer keyDeserializer = new StringDeserializer();
+    private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
     public void testKStreamSource() {
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -59,19 +60,19 @@ public class KStreamSourceTest {
 >>>>>>> removing io.confluent imports: wip
 =======
         KStreamTopology initializer = new MockKStreamTopology();
+=======
+>>>>>>> wip
         MockProcessor<String, String> processor = new MockProcessor<>();
 >>>>>>> compile and test passed
 
-        KStreamSource<String, String> stream = new KStreamSource<>(null, initializer);
+        KStream<String, String> stream = topology.<String, String>from(keyDeserializer, valDeserializer, topicName);
         stream.process(processor);
 
         final String[] expectedKeys = new String[]{"k1", "k2", "k3"};
         final String[] expectedValues = new String[]{"v1", "v2", "v3"};
 
-        KStreamContext context = new MockKStreamContext(null, null);
-        stream.bind(context, streamMetadata);
         for (int i = 0; i < expectedKeys.length; i++) {
-            stream.receive(expectedKeys[i], expectedValues[i], 0L);
+            ((KStreamSource<String, String>) stream).source().receive(expectedKeys[i], expectedValues[i]);
         }
 
         assertEquals(3, processor.processed.size());
@@ -80,5 +81,4 @@ public class KStreamSourceTest {
             assertEquals(expectedKeys[i] + ":" + expectedValues[i], processor.processed.get(i));
         }
     }
-
 }

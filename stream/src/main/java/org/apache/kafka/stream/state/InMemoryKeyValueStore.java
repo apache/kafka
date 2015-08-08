@@ -20,7 +20,6 @@ package org.apache.kafka.stream.state;
 import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.stream.state.internals.MeteredKeyValueStore;
 
 import java.util.Iterator;
 import java.util.List;

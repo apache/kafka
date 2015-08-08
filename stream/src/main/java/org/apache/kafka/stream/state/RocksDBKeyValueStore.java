@@ -22,7 +22,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.SystemTime;
 
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.stream.state.internals.MeteredKeyValueStore;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;

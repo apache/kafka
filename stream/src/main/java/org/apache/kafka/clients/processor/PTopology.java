@@ -18,9 +18,12 @@
 package org.apache.kafka.clients.processor;
 
 import org.apache.kafka.clients.processor.internals.KafkaSource;
+import org.apache.kafka.clients.processor.internals.StreamingConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -31,6 +34,12 @@ abstract public class PTopology {
 
     private List<KafkaProcessor> processors = new ArrayList<>();
     private Map<String, KafkaSource> sources = new HashMap<>();
+
+    protected final StreamingConfig streamingConfig;
+
+    public PTopology(StreamingConfig streamingConfig) {
+        this.streamingConfig = streamingConfig;
+    }
 
     public Set<KafkaSource> sources() {
         Set<KafkaSource> sources = new HashSet<>();
@@ -67,14 +76,37 @@ abstract public class PTopology {
         return source.valDeserializer;
     }
 
-    // TODO: init by the ordering of DAG
     public final void init(ProcessorContext context) {
-        for (KafkaProcessor processor : processors) {
-            processor.init(context);
+        // init the processors following the DAG ordering
+        // such that parents are always initialized before children
+        Deque<KafkaProcessor> deque = new ArrayDeque<>();
+        for (KafkaProcessor processor : sources.values()) {
+            deque.addLast(processor);
+        }
+
+        while(!deque.isEmpty()) {
+            KafkaProcessor processor = deque.pollFirst();
+
+            boolean parentsInitialized = true;
+            for (KafkaProcessor parent : (List<KafkaProcessor>) processor.parents()) {
+                if (!parent.initialized) {
+                    parentsInitialized = false;
+                    break;
+                }
+            }
+
+            if (parentsInitialized && !processor.initialized) {
+                processor.init(context);
+                processor.initialized = true;
+
+                for (KafkaProcessor child : (List<KafkaProcessor>) processor.children()) {
+                    deque.addLast(child);
+                }
+            }
         }
     }
 
-    public final <K, V> KafkaSource<K, V> addSource(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+    public final <K, V> KafkaSource<K, V> addSource(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer, String... topics) {
         KafkaSource<K, V> source = new KafkaSource<>(keyDeserializer, valDeserializer);
 
         processors.add(source);
@@ -105,10 +137,33 @@ abstract public class PTopology {
         }
     }
 
-    // TODO: close by the ordering of DAG
     public final void close() {
-        for (KafkaProcessor processor : processors) {
-            processor.close();
+        // close the processors following the DAG ordering
+        // such that parents are always initialized before children
+        Deque<KafkaProcessor> deque = new ArrayDeque<>();
+        for (KafkaProcessor processor : sources.values()) {
+            deque.addLast(processor);
+        }
+
+        while(!deque.isEmpty()) {
+            KafkaProcessor processor = deque.pollFirst();
+
+            boolean parentsClosed = true;
+            for (KafkaProcessor parent : (List<KafkaProcessor>) processor.parents()) {
+                if (!parent.closed) {
+                    parentsClosed = false;
+                    break;
+                }
+            }
+
+            if (parentsClosed && !processor.closed) {
+                processor.close();
+                processor.closed = true;
+
+                for (KafkaProcessor child : (List<KafkaProcessor>) processor.children()) {
+                    deque.addLast(child);
+                }
+            }
         }
 
         processors.clear();

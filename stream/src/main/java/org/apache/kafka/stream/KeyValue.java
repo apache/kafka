@@ -28,7 +28,7 @@ public class KeyValue<K, V> {
     }
 
     public static <K, V> KeyValue<K, V> pair(K key, V value) {
-        return new KeyValue<K, V>(key, value);
+        return new KeyValue<>(key, value);
     }
 
 }

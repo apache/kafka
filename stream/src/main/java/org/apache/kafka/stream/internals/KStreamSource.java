@@ -22,7 +22,14 @@ import org.apache.kafka.clients.processor.PTopology;
 
 public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
+    private KafkaProcessor<K, V, K, V> source;
+
     public KStreamSource(PTopology topology, KafkaProcessor<K, V, K, V> source) {
         super(topology, source);
+        this.source = source;
+    }
+
+    public KafkaProcessor<K, V, K, V> source() {
+        return source;
     }
 }

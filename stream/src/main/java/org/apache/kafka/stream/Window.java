@@ -17,7 +17,6 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.clients.processor.StateStore;
 
 import java.util.Iterator;

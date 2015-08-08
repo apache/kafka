@@ -22,18 +22,31 @@ import java.util.List;
 
 public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1>, Receiver<K1, V1>, Punctuator {
 
-    protected final List<KafkaProcessor<K2, V2, ?, ?>> children;
+    private final List<KafkaProcessor<K2, V2, ?, ?>> children;
+    private final List<KafkaProcessor<?, ?, K1, V1>> parents;
 
     private final String name;
+
+    public boolean initialized;
+    public boolean closed;
 
     public KafkaProcessor(String name) {
         this.name = name;
         this.children  = new ArrayList<>();
+        this.parents = new ArrayList<>();
+
+        this.initialized = false;
+        this.closed = false;
     }
 
     public String name() { return name; }
 
+    public List<KafkaProcessor<K2, V2, ?, ?>> children() { return children; }
+
+    public List<KafkaProcessor<?, ?, K1, V1>> parents() { return parents; }
+
     public final void chain(KafkaProcessor<K2, V2, ?, ?> child) {
+        child.parents.add(this);
         children.add(child);
     }
 

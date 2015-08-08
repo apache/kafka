@@ -17,30 +17,30 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.clients.processor.internals.PartitioningInfo;
-import org.apache.kafka.stream.internals.KStreamMetadata;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockKStreamContext;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
-import java.util.Collections;
 
 public class KStreamFlatMapTest {
 
     private String topicName = "topic";
 
-    private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
+    private KStreamTopology topology = new MockKStreamTopology();
+    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
+    private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
     public void testFlatMap() {
 
-        KeyValueMapper<String, Iterable<String>, Integer, String> mapper =
-            new KeyValueMapper<String, Iterable<String>, Integer, String>() {
+        KeyValueMapper<Integer, String, String, Iterable<String>> mapper =
+            new KeyValueMapper<Integer, String, String, Iterable<String>>() {
                 @Override
                 public KeyValue<String, Iterable<String>> apply(Integer key, String value) {
                     ArrayList<String> result = new ArrayList<String>();
@@ -53,6 +53,7 @@ public class KStreamFlatMapTest {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -91,17 +92,18 @@ public class KStreamFlatMapTest {
         KStreamTopology topology = new MockKStreamTopology();
 
         KStreamSource<Integer, String> stream;
+=======
+        KStream<Integer, String> stream;
+>>>>>>> wip
         MockProcessor<String, String> processor;
 
         processor = new MockProcessor<>();
-        stream = new KStreamSource<>(null, topology);
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
         stream.flatMap(mapper).process(processor);
 >>>>>>> compile and test passed
 
-        KStreamContext context = new MockKStreamContext(null, null);
-        stream.bind(context, streamMetadata);
         for (int i = 0; i < expectedKeys.length; i++) {
-            stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
+            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());

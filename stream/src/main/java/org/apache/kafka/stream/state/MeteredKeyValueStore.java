@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.state.internals;
+package org.apache.kafka.stream.state;
 
 import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.clients.processor.RecordCollector;
@@ -32,9 +32,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.stream.state.Entry;
-import org.apache.kafka.stream.state.KeyValueIterator;
-import org.apache.kafka.stream.state.KeyValueStore;
 
 import java.util.HashSet;
 import java.util.List;

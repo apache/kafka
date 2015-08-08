@@ -25,10 +25,10 @@ public class KafkaSource<K, V> extends KafkaProcessor<K, V, K, V> {
 
     private static final String SOURCE_NAME = "KAFKA-SOURCE";
 
-    public Deserializer<K> keyDeserializer;
-    public Deserializer<V> valDeserializer;
+    public Deserializer<? extends K> keyDeserializer;
+    public Deserializer<? extends V> valDeserializer;
 
-    public KafkaSource(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public KafkaSource(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer) {
         super(SOURCE_NAME);
 
         this.keyDeserializer = keyDeserializer;

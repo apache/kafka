@@ -38,7 +38,6 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     protected PTopology topology;
     protected KafkaProcessor<?, ?, K, V> processor;
-    protected KStreamContext context;
 
     public KStreamImpl(PTopology topology, KafkaProcessor<?, ?, K, V> processor) {
         this.topology = topology;

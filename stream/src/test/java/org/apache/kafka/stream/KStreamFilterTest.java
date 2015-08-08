@@ -17,16 +17,13 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.clients.processor.internals.PartitioningInfo;
-import org.apache.kafka.stream.internals.KStreamMetadata;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockKStreamContext;
 
 import org.junit.Test;
-
-import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 
@@ -34,7 +31,9 @@ public class KStreamFilterTest {
 
     private String topicName = "topic";
 
-    private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
+    private KStreamTopology topology = new MockKStreamTopology();
+    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
+    private StringDeserializer valDeserializer = new StringDeserializer();
 
     private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
         @Override
@@ -51,6 +50,7 @@ public class KStreamFilterTest {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
@@ -66,17 +66,18 @@ public class KStreamFilterTest {
 =======
         KStreamTopology initializer = new MockKStreamTopology();
         KStreamSource<Integer, String> stream;
+=======
+        KStream<Integer, String> stream;
+>>>>>>> wip
         MockProcessor<Integer, String> processor;
 >>>>>>> compile and test passed
 
         processor = new MockProcessor<>();
-        stream = new KStreamSource<>(null, initializer);
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
         stream.filter(isMultipleOfThree).process(processor);
 
-        KStreamContext context = new MockKStreamContext(null, null);
-        stream.bind(context, streamMetadata);
         for (int i = 0; i < expectedKeys.length; i++) {
-            stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
+            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -86,8 +87,7 @@ public class KStreamFilterTest {
     public void testFilterOut() {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
-        KStreamTopology initializer = new MockKStreamTopology();
-        KStreamSource<Integer, String> stream;
+        KStream<Integer, String> stream;
         MockProcessor<Integer, String> processor;
 
 <<<<<<< HEAD
@@ -108,14 +108,12 @@ public class KStreamFilterTest {
     MockProcessor<Integer, String> processor;
 =======
         processor = new MockProcessor<>();
-        stream = new KStreamSource<>(null, initializer);
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
         stream.filterOut(isMultipleOfThree).process(processor);
 >>>>>>> compile and test passed
 
-        KStreamContext context = new MockKStreamContext(null, null);
-        stream.bind(context, streamMetadata);
         for (int i = 0; i < expectedKeys.length; i++) {
-            stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
+            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(5, processor.processed.size());
