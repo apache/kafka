@@ -35,7 +35,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 
-
+import org.apache.kafka.stream.internals.KStreamConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +55,7 @@ public class ProcessorContextImpl implements ProcessorContext {
     private final PTopology topology;
     private final RecordCollectorImpl collector;
     private final ProcessorStateManager stateMgr;
-    private final StreamingConfig streamingConfig;
+    private final org.apache.kafka.stream.internals.KStreamConfig KStreamConfig;
     private final ProcessorConfig processorConfig;
     private final TimestampExtractor timestampExtractor;
 
@@ -66,7 +66,7 @@ public class ProcessorContextImpl implements ProcessorContext {
                                 Ingestor ingestor,
                                 PTopology topology,
                                 RecordCollectorImpl collector,
-                                StreamingConfig streamingConfig,
+                                KStreamConfig KStreamConfig,
                                 ProcessorConfig processorConfig,
                                 Metrics metrics) throws IOException {
         this.id = id;
@@ -74,9 +74,9 @@ public class ProcessorContextImpl implements ProcessorContext {
         this.ingestor = ingestor;
         this.topology = topology;
         this.collector = collector;
-        this.streamingConfig = streamingConfig;
+        this.KStreamConfig = KStreamConfig;
         this.processorConfig = processorConfig;
-        this.timestampExtractor = this.streamingConfig.timestampExtractor();
+        this.timestampExtractor = this.KStreamConfig.timestampExtractor();
 
         for (String topic : this.topology.topics()) {
             if (!ingestor.topics().contains(topic))
@@ -84,7 +84,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         }
 
         File stateFile = new File(processorConfig.stateDir, Integer.toString(id));
-        Consumer restoreConsumer = new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        Consumer restoreConsumer = new KafkaConsumer<>(KStreamConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
 
         this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
         this.streamGroup = new StreamGroup(this, this.ingestor, new TimeBasedChooser(), this.timestampExtractor, this.processorConfig.bufferedRecordsPerPartition);
@@ -110,22 +110,22 @@ public class ProcessorContextImpl implements ProcessorContext {
 
     @Override
     public Serializer<?> keySerializer() {
-        return streamingConfig.keySerializer();
+        return KStreamConfig.keySerializer();
     }
 
     @Override
     public Serializer<?> valueSerializer() {
-        return streamingConfig.valueSerializer();
+        return KStreamConfig.valueSerializer();
     }
 
     @Override
     public Deserializer<?> keyDeserializer() {
-        return streamingConfig.keyDeserializer();
+        return KStreamConfig.keyDeserializer();
     }
 
     @Override
     public Deserializer<?> valueDeserializer() {
-        return streamingConfig.valueDeserializer();
+        return KStreamConfig.valueDeserializer();
     }
 
     @Override

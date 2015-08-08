@@ -22,6 +22,13 @@ import org.apache.kafka.clients.processor.Chooser;
 import org.apache.kafka.clients.processor.Punctuator;
 import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.clients.processor.TimestampExtractor;
+import org.apache.kafka.clients.processor.internals.Ingestor;
+import org.apache.kafka.clients.processor.internals.KafkaSource;
+import org.apache.kafka.clients.processor.internals.MinTimestampTracker;
+import org.apache.kafka.clients.processor.internals.PunctuationQueue;
+import org.apache.kafka.clients.processor.internals.PunctuationSchedule;
+import org.apache.kafka.clients.processor.internals.RecordQueue;
+import org.apache.kafka.clients.processor.internals.StampedRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 

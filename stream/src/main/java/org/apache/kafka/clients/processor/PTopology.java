@@ -17,8 +17,8 @@
 
 package org.apache.kafka.clients.processor;
 
+import org.apache.kafka.stream.internals.KStreamConfig;
 import org.apache.kafka.clients.processor.internals.KafkaSource;
-import org.apache.kafka.clients.processor.internals.StreamingConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayDeque;
@@ -35,12 +35,12 @@ abstract public class PTopology {
     private List<KafkaProcessor> processors = new ArrayList<>();
     private Map<String, KafkaSource> sources = new HashMap<>();
 
-    protected final StreamingConfig streamingConfig;
+    protected final KStreamConfig KStreamConfig;
 
     public PTopology() { this(null); }
 
-    public PTopology(StreamingConfig streamingConfig) {
-        this.streamingConfig = streamingConfig;
+    public PTopology(KStreamConfig KStreamConfig) {
+        this.KStreamConfig = KStreamConfig;
     }
 
     public Set<KafkaSource> sources() {

@@ -17,9 +17,9 @@
 
 package org.apache.kafka.stream.examples;
 
+import org.apache.kafka.stream.internals.KStreamConfig;
+import org.apache.kafka.stream.KStreamProcess;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.clients.processor.KafkaStreaming;
-import org.apache.kafka.clients.processor.internals.StreamingConfig;
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.KStreamTopology;
 import org.apache.kafka.stream.KeyValue;
@@ -71,7 +71,7 @@ public class KStreamJob {
     }
 
     public static void main(String[] args) throws Exception {
-        KafkaStreaming kstream = new KafkaStreaming(MyKStreamTopology.class, new StreamingConfig(new Properties()));
+        KStreamProcess kstream = new KStreamProcess(MyKStreamTopology.class, new KStreamConfig(new Properties()));
         kstream.run();
     }
 }
