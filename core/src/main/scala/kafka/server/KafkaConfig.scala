@@ -233,7 +233,7 @@ object KafkaConfig {
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
-  val IsrChangePropagateIntervalMsProp = "isr.change.report.interval.ms"
+  val IsrChangePropagateIntervalMsProp = "isr.change.propagate.interval.ms"
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
   val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
@@ -403,10 +403,10 @@ object KafkaConfig {
 
 
   private val configDef = {
-    import org.apache.kafka.common.config.ConfigDef.Importance._
-    import org.apache.kafka.common.config.ConfigDef.Range._
-    import org.apache.kafka.common.config.ConfigDef.Type._
-    import org.apache.kafka.common.config.ConfigDef.ValidString._
+    import ConfigDef.Range._
+    import ConfigDef.ValidString._
+    import ConfigDef.Type._
+    import ConfigDef.Importance._
 
     new ConfigDef()
 

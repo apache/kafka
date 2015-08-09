@@ -233,7 +233,6 @@ class Partition(val topic: String,
         // check if we need to expand ISR to include this replica
         // if it is not in the ISR yet
         maybeExpandIsr(replicaId)
-        replicaManager.maybePropagateIsrChanges()
 
         debug("Recorded replica %d log end offset (LEO) position %d for partition %s."
           .format(replicaId,

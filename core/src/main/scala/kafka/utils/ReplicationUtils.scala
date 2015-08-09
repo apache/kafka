@@ -42,7 +42,7 @@ object ReplicationUtils extends Logging {
   def propagateIsrChanges(zkClient: ZkClient, isrChangeSet: Set[TopicAndPartition]): Unit = {
     val isrChangeNotificationPath: String = ZkUtils.createSequentialPersistentPath(
       zkClient, ZkUtils.IsrChangeNotificationPath + "/" + IsrChangeNotificationPrefix,
-      Json.encode(isrChangeSet.map(_.toMap).toArray))
+      generateIsrChangeJson(isrChangeSet))
     debug("Added " + isrChangeNotificationPath + " for " + isrChangeSet)
   }
 
@@ -87,6 +87,11 @@ object ReplicationUtils extends Logging {
       debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for leaderAndIsrPath %s".format(leader, epoch,
         isr.toString(), zkPathVersion, path))
       Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))}
+  }
+
+  private def generateIsrChangeJson(isrChanges: Set[TopicAndPartition]): String = {
+    val partitions = isrChanges.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition)).toArray
+    Json.encode(Map("version" -> TopicAndPartition.version, "partitions" -> partitions))
   }
 
 }

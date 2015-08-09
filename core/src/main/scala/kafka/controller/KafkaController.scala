@@ -903,7 +903,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
 
   private def registerIsrChangeNotificationListener() = {
     debug("Registering IsrChangeNotificationListener")
-    ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.IsrChangeNotificationPath)
     zkClient.subscribeChildChanges(ZkUtils.IsrChangeNotificationPath, isrChangeNotificationListener)
   }
 
@@ -1316,7 +1315,7 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
     inLock(controller.controllerContext.controllerLock) {
       debug("[IsrChangeNotificationListener] Fired!!!")
       val childrenAsScala: mutable.Buffer[String] = currentChildren.asScala
-      val topicAndPartitions: immutable.Set[TopicAndPartition] = childrenAsScala.flatMap(x => getTopicAndPartition(x)).flatten.toSet
+      val topicAndPartitions: immutable.Set[TopicAndPartition] = childrenAsScala.map(x => getTopicAndPartition(x)).flatten.toSet
       controller.updateLeaderAndIsrCache(topicAndPartitions)
       processUpdateNotifications(topicAndPartitions)
 
@@ -1332,30 +1331,31 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
     controller.sendUpdateMetadataRequest(liveBrokers, topicAndPartitions)
   }
 
-  private def getTopicAndPartition(child: String): Option[Set[TopicAndPartition]] = {
-    val topicAndPartitions: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
+  private def getTopicAndPartition(child: String): Set[TopicAndPartition] = {
     val changeZnode: String = ZkUtils.IsrChangeNotificationPath + "/" + child
     val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(controller.controllerContext.zkClient, changeZnode)
     if (jsonOpt.isDefined) {
       val json = Json.parseFull(jsonOpt.get)
 
       json match {
-        case Some(l) =>
-          val topicAndPartitionList = l.asInstanceOf[List[Any]]
+        case Some(m) =>
+          val topicAndPartitions: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
+          val isrChanges = m.asInstanceOf[Map[String, Any]]
+          val topicAndPartitionList = isrChanges("partitions").asInstanceOf[List[Any]]
           topicAndPartitionList.foreach {
-            case m =>
-              val topicAndPartition = m.asInstanceOf[Map[String, Any]]
+            case tp =>
+              val topicAndPartition = tp.asInstanceOf[Map[String, Any]]
               val topic = topicAndPartition("topic").asInstanceOf[String]
               val partition = topicAndPartition("partition").asInstanceOf[Int]
               topicAndPartitions += TopicAndPartition(topic, partition)
           }
-          Some(topicAndPartitions)
+          topicAndPartitions
         case None =>
           error("Invalid topic and partition JSON: " + jsonOpt.get + " in ZK: " + changeZnode)
-          None
+          Set.empty
       }
     } else {
-      None
+      Set.empty
     }
   }
 }
