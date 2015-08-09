@@ -73,7 +73,9 @@ public class KStreamWindow<K, V> extends KafkaProcessor<K, V, K, V> {
         return window;
     }
 
-    public ProcessorContext context() { return context; }
+    public ProcessorContext context() {
+        return context;
+    }
 
     @Override
     public void init(ProcessorContext context) {

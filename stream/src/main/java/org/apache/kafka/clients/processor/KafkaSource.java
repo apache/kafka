@@ -15,34 +15,36 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.processor.internals;
+package org.apache.kafka.clients.processor;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.serialization.Deserializer;
 
-// TODO: making this class exposed to user in the lower-level Processor
-public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
+public class KafkaSource<K, V> extends KafkaProcessor<K, V, K, V> {
 
-    StampedRecord(ConsumerRecord<Object, Object> record, long timestamp) {
-        super(record, timestamp);
+    private static final String SOURCE_NAME = "KAFKA-SOURCE";
+
+    public Deserializer<? extends K> keyDeserializer;
+    public Deserializer<? extends V> valDeserializer;
+
+    public KafkaSource(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer) {
+        super(SOURCE_NAME);
+
+        this.keyDeserializer = keyDeserializer;
+        this.valDeserializer = valDeserializer;
     }
 
-    public String topic() {
-        return value.topic();
+    @Override
+    public void init(ProcessorContext context) {
+        // do nothing
     }
 
-    public int partition() {
-        return value.partition();
+    @Override
+    public void process(K key, V value) {
+        forward(key, value);
     }
 
-    public Object key() {
-        return value.key();
-    }
-
-    public Object value() {
-        return value.value();
-    }
-
-    public long offset() {
-        return value.offset();
+    @Override
+    public void close() {
+        // do nothing
     }
 }

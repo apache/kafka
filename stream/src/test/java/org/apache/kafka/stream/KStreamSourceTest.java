@@ -23,8 +23,6 @@ import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
 import org.junit.Test;
 
-import java.util.Collections;
-
 import static org.junit.Assert.assertEquals;
 
 public class KStreamSourceTest {

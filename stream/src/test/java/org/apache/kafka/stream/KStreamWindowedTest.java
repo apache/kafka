@@ -21,10 +21,10 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.UnlimitedWindow;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.Iterator;
 
 import static org.junit.Assert.assertEquals;
@@ -73,6 +73,10 @@ public class KStreamWindowedTest {
         window = new UnlimitedWindow<>();
         stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
         stream.with(window);
+
+        MockProcessorContext context = new MockProcessorContext(null, null);
+        topology.init(context);
+        context.setTime(0L);
 
         // two items in the window
 

@@ -55,9 +55,9 @@ class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
 
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branches() {
-        KStream<K, V>[] streams = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
+        KStream<K, V>[] streams = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, branches.length);
         for (int i = 0; i < branches.length; i++) {
-            streams[i] = new KStreamImpl<>(topology, branches[i]);
+            streams[i] = new KStreamSource<>(topology, branches[i]);
         }
         return streams;
     }

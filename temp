@@ -1,2 +1,3 @@
-stream/src/main/java/org/apache/kafka/stream/KStreamContext.java: needs merge
+checkstyle/import-control.xml: needs merge
+stream/src/test/java/org/apache/kafka/stream/KStreamBranchTest.java: needs merge
 stream/src/test/java/org/apache/kafka/stream/KStreamJoinTest.java: needs merge

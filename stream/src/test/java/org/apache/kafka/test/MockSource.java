@@ -17,15 +17,12 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.internals.KafkaSource;
+import org.apache.kafka.clients.processor.KafkaSource;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayList;
 
 public class MockSource<K, V> extends KafkaSource<K, V> {
-
-    private ProcessorContext context;
 
     public Deserializer<? extends K> keyDeserializer;
     public Deserializer<? extends V> valDeserializer;
@@ -33,7 +30,6 @@ public class MockSource<K, V> extends KafkaSource<K, V> {
     public int numReceived = 0;
     public ArrayList<K> keys = new ArrayList<>();
     public ArrayList<V> values = new ArrayList<>();
-    public ArrayList<Long> timestamps = new ArrayList<>();
 
     public MockSource(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer) {
         super(keyDeserializer, valDeserializer);
@@ -43,20 +39,9 @@ public class MockSource<K, V> extends KafkaSource<K, V> {
     }
 
     @Override
-    public void init(ProcessorContext context) {
-        this.context = context;
-    }
-
-    @Override
     public void process(K key, V value) {
         this.numReceived++;
         this.keys.add(key);
         this.values.add(value);
-        this.timestamps.add(context.timestamp());
-    }
-
-    @Override
-    public void close() {
-        // do nothing
     }
 }

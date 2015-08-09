@@ -17,7 +17,7 @@
 
 package org.apache.kafka.stream.examples;
 
-import org.apache.kafka.stream.internals.KStreamConfig;
+import org.apache.kafka.clients.processor.ProcessorProperties;
 import org.apache.kafka.stream.KStreamProcess;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.KStream;
@@ -71,7 +71,7 @@ public class KStreamJob {
     }
 
     public static void main(String[] args) throws Exception {
-        KStreamProcess kstream = new KStreamProcess(MyKStreamTopology.class, new KStreamConfig(new Properties()));
+        KStreamProcess kstream = new KStreamProcess(MyKStreamTopology.class, new ProcessorProperties(new Properties()));
         kstream.run();
     }
 }

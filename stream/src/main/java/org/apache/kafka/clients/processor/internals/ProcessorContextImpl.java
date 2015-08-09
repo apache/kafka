@@ -19,8 +19,11 @@ package org.apache.kafka.clients.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.processor.KafkaSource;
 import org.apache.kafka.clients.processor.PTopology;
+import org.apache.kafka.clients.processor.ProcessorConfig;
 import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.clients.processor.ProcessorProperties;
 import org.apache.kafka.clients.processor.RecordCollector;
 import org.apache.kafka.clients.processor.StateStore;
 import org.apache.kafka.clients.processor.KafkaProcessor;
@@ -35,13 +38,16 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 
-import org.apache.kafka.stream.internals.KStreamConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ProcessorContextImpl implements ProcessorContext {
 
@@ -55,7 +61,7 @@ public class ProcessorContextImpl implements ProcessorContext {
     private final PTopology topology;
     private final RecordCollectorImpl collector;
     private final ProcessorStateManager stateMgr;
-    private final org.apache.kafka.stream.internals.KStreamConfig KStreamConfig;
+    private final ProcessorProperties processorProperties;
     private final ProcessorConfig processorConfig;
     private final TimestampExtractor timestampExtractor;
 
@@ -66,7 +72,7 @@ public class ProcessorContextImpl implements ProcessorContext {
                                 Ingestor ingestor,
                                 PTopology topology,
                                 RecordCollectorImpl collector,
-                                KStreamConfig KStreamConfig,
+                                ProcessorProperties processorProperties,
                                 ProcessorConfig processorConfig,
                                 Metrics metrics) throws IOException {
         this.id = id;
@@ -74,9 +80,9 @@ public class ProcessorContextImpl implements ProcessorContext {
         this.ingestor = ingestor;
         this.topology = topology;
         this.collector = collector;
-        this.KStreamConfig = KStreamConfig;
+        this.processorProperties = processorProperties;
         this.processorConfig = processorConfig;
-        this.timestampExtractor = this.KStreamConfig.timestampExtractor();
+        this.timestampExtractor = this.processorProperties.timestampExtractor();
 
         for (String topic : this.topology.topics()) {
             if (!ingestor.topics().contains(topic))
@@ -84,7 +90,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         }
 
         File stateFile = new File(processorConfig.stateDir, Integer.toString(id));
-        Consumer restoreConsumer = new KafkaConsumer<>(KStreamConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        Consumer restoreConsumer = new KafkaConsumer<>(processorProperties.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
 
         this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
         this.streamGroup = new StreamGroup(this, this.ingestor, new TimeBasedChooser(), this.timestampExtractor, this.processorConfig.bufferedRecordsPerPartition);
@@ -95,12 +101,46 @@ public class ProcessorContextImpl implements ProcessorContext {
     }
 
     public void addPartition(TopicPartition partition) {
-
         // update the partition -> source stream map
         KafkaSource source = topology.source(partition.topic());
 
         this.streamGroup.addPartition(partition, source);
         this.ingestor.addPartitionStreamToGroup(this.streamGroup, partition);
+    }
+
+    @Override
+    public boolean joinable(ProcessorContext o) {
+
+        ProcessorContextImpl other = (ProcessorContextImpl) o;
+
+        if (this.streamGroup != other.streamGroup)
+            return false;
+
+        Set<TopicPartition> partitions = this.streamGroup.partitions();
+        Map<Integer, List<String>> partitionsById = new HashMap<>();
+        int firstId = -1;
+        for (TopicPartition partition : partitions) {
+            if (!partitionsById.containsKey(partition.partition())) {
+                partitionsById.put(partition.partition(), new ArrayList<String>());
+            }
+            partitionsById.get(partition.partition()).add(partition.topic());
+
+            if (firstId < 0)
+                firstId = partition.partition();
+        }
+
+        List<String> topics = partitionsById.get(firstId);
+        for (List<String> topicsPerPartition : partitionsById.values()) {
+            if (topics.size() != topicsPerPartition.size())
+                return false;
+
+            for (String topic : topicsPerPartition) {
+                if (!topics.contains(topic))
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     @Override
@@ -110,22 +150,22 @@ public class ProcessorContextImpl implements ProcessorContext {
 
     @Override
     public Serializer<?> keySerializer() {
-        return KStreamConfig.keySerializer();
+        return processorProperties.keySerializer();
     }
 
     @Override
     public Serializer<?> valueSerializer() {
-        return KStreamConfig.valueSerializer();
+        return processorProperties.valueSerializer();
     }
 
     @Override
     public Deserializer<?> keyDeserializer() {
-        return KStreamConfig.keyDeserializer();
+        return processorProperties.keyDeserializer();
     }
 
     @Override
     public Deserializer<?> valueDeserializer() {
-        return KStreamConfig.valueDeserializer();
+        return processorProperties.valueDeserializer();
     }
 
     @Override

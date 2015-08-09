@@ -34,7 +34,9 @@ public class MockProcessor<K, V> implements Processor<K, V>, Receiver<K, V>, Pun
     }
 
     @Override
-    public void receive(K key, V value) { process(key, value); }
+    public void receive(K key, V value) {
+        process(key, value);
+    }
 
     @Override
     public void init(ProcessorContext context) {
@@ -47,6 +49,6 @@ public class MockProcessor<K, V> implements Processor<K, V>, Receiver<K, V>, Pun
 
     @Override
     public void close() {
-    }
 
+    }
 }

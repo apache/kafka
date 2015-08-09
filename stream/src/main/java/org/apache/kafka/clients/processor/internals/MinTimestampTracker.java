@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.processor.internals;
 
+import org.apache.kafka.clients.processor.Stamped;
 import org.apache.kafka.clients.processor.TimestampTracker;
 
 import java.util.LinkedList;

@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.processor.internals;
 
 import org.apache.kafka.clients.processor.Chooser;
+import org.apache.kafka.clients.processor.RecordQueue;
 
 import java.util.ArrayDeque;
 

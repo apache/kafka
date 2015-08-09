@@ -17,12 +17,22 @@
 
 package org.apache.kafka.clients.processor;
 
-public interface Chooser {
+public class Stamped<V> implements Comparable {
 
-    void add(RecordQueue queue);
+    public final V value;
+    public final long timestamp;
 
-    RecordQueue next();
+    public Stamped(V value, long timestamp) {
+        this.value = value;
+        this.timestamp = timestamp;
+    }
 
-    void close();
+    public int compareTo(Object other) {
+        long otherTimestamp = ((Stamped<?>) other).timestamp;
+
+        if (timestamp < otherTimestamp) return -1;
+        else if (timestamp > otherTimestamp) return 1;
+        return 0;
+    }
 
 }

@@ -27,13 +27,12 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.UnlimitedWindow;
 import org.junit.Test;
 
-import java.util.Collections;
-
 import static org.junit.Assert.assertEquals;
 
 public class KStreamJoinTest {
 
-    private String topicName = "topic";
+    private String topic1 = "topic1";
+    private String topic2 = "topic2";
 
     private KStreamTopology topology = new MockKStreamTopology();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
@@ -115,12 +114,16 @@ public class KStreamJoinTest {
         String[] expected;
 
         processor = new MockProcessor<>();
-        stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-        stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-        windowed1 = stream1.with(new UnlimitedWindow<>());
-        windowed2 = stream2.with(new UnlimitedWindow<>());
+        stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic1);
+        stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic2);
+        windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
+        windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
         windowed1.join(windowed2, joiner).process(processor);
+
+        MockProcessorContext context = new MockProcessorContext(null, null);
+        topology.init(context);
+        context.setTime(0L);
 
         // push two items to the main stream. the other stream's window is empty
 
@@ -237,11 +240,18 @@ public class KStreamJoinTest {
         }
 =======
         processor = new MockProcessor<>();
+<<<<<<< HEAD
         stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
         stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
         windowed1 = stream1.with(new UnlimitedWindow<>());
         windowed2 = stream2.with(new UnlimitedWindow<>());
 >>>>>>> wip
+=======
+        stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic1);
+        stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic2);
+        windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
+        windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
+>>>>>>> adding files
 
         windowed1.joinPrior(windowed2, joiner).process(processor);
 

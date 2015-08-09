@@ -15,11 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.internals;
+package org.apache.kafka.clients.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.stream.KStreamProcess;
-import org.apache.kafka.clients.processor.TimestampExtractor;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -30,12 +28,12 @@ import java.util.Properties;
 
 
 /**
- * Configuration information passed to the {@link KStreamProcess} instance for configuring the associated
+ * Configuration information passed to the process instance for configuring the associated
  * {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}, and
  * {@link org.apache.kafka.clients.consumer.KafkaConsumer KafkaConsumer}, as
  * well as the processor itself.
  */
-public class KStreamConfig {
+public class ProcessorProperties {
 
     /** <code>topics</code> */
     public static final String TOPICS_CONFIG = "topics";
@@ -72,7 +70,7 @@ public class KStreamConfig {
     private Deserializer<?> valDeserializer;
     private TimestampExtractor timestampExtractor;
 
-    public KStreamConfig(Properties config) {
+    public ProcessorProperties(Properties config) {
         this.config = config;
         this.config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         this.config.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range");
@@ -80,8 +78,8 @@ public class KStreamConfig {
     }
 
     @Override
-    public KStreamConfig clone() {
-        return new KStreamConfig(this.config);
+    public ProcessorProperties clone() {
+        return new ProcessorProperties(this.config);
     }
 
     public void addContextObject(String key, Object value) {

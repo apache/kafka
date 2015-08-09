@@ -19,17 +19,10 @@ package org.apache.kafka.stream.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.stream.ValueJoiner;
 import org.apache.kafka.stream.Window;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 class KStreamJoin<K, V, V1, V2> extends KafkaProcessor<K, V1, K, V> {
 
@@ -90,40 +83,10 @@ class KStreamJoin<K, V, V1, V2> extends KafkaProcessor<K, V1, K, V> {
     public void init(ProcessorContext context) {
         this.context = context;
 
-        // the two streams should only be joinable if they are inside the same group
-        // and that group's topics all have the same partitions
-        ProcessorContextImpl context1 = (ProcessorContextImpl) stream1.context();
-        ProcessorContextImpl context2 = (ProcessorContextImpl) stream2.context();
-
-        if (context1.streamGroup != context2.streamGroup)
-            throw new IllegalStateException("Stream " + stream1.name() + " and stream " + stream2.name() + " are not joinable" +
-                " since they belong to different stream groups.");
-
-        Set<TopicPartition> partitions = context1.streamGroup.partitions();
-        Map<Integer, List<String>> partitionsById = new HashMap<>();
-        int firstId = -1;
-        for (TopicPartition partition : partitions) {
-            if (!partitionsById.containsKey(partition.partition())) {
-                partitionsById.put(partition.partition(), new ArrayList<String>());
-            }
-            partitionsById.get(partition.partition()).add(partition.topic());
-
-            if (firstId < 0)
-                firstId = partition.partition();
-        }
-
-        List<String> topics = partitionsById.get(firstId);
-        for (List<String> topicsPerPartition : partitionsById.values()) {
-            if (topics.size() != topicsPerPartition.size())
-                throw new IllegalStateException("Stream " + stream1.name() + " and stream " + stream2.name() + " are not joinable" +
-                    " since their stream group have different partitions for some topics.");
-
-            for (String topic : topicsPerPartition) {
-                if (!topics.contains(topic))
-                    throw new IllegalStateException("Stream " + stream1.name() + " and stream " + stream2.name() + " are not joinable" +
-                        " since their stream group have different partitions for some topics.");
-            }
-        }
+        // check if these two streams are joinable
+        if (!stream1.context().joinable(stream2.context()))
+            throw new IllegalStateException("Stream " + stream1.name() + " and stream " +
+                stream2.name() + " are not joinable.");
     }
 
     @Override

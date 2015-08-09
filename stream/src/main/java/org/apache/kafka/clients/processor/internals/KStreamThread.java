@@ -15,17 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.stream.internals;
+package org.apache.kafka.clients.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.clients.processor.internals.IngestorImpl;
-import org.apache.kafka.clients.processor.internals.ProcessorConfig;
-import org.apache.kafka.clients.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.clients.processor.internals.RecordCollectorImpl;
-import org.apache.kafka.clients.processor.internals.StreamGroup;
+import org.apache.kafka.clients.processor.ProcessorConfig;
+import org.apache.kafka.clients.processor.ProcessorProperties;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
@@ -62,7 +59,7 @@ public class KStreamThread extends Thread {
     private final Map<Integer, ProcessorContextImpl> kstreamContexts = new HashMap<>();
     private final IngestorImpl ingestor;
     private final RecordCollectorImpl collector;
-    private final KStreamConfig KStreamConfig;
+    private final ProcessorProperties properties;
     private final ProcessorConfig config;
     private final Metrics metrics;
     private final KafkaStreamingMetrics streamingMetrics;
@@ -88,17 +85,17 @@ public class KStreamThread extends Thread {
     };
 
     @SuppressWarnings("unchecked")
-    public KStreamThread(Class<? extends PTopology> topologyClass, KStreamConfig KStreamConfig) throws Exception {
+    public KStreamThread(Class<? extends PTopology> topologyClass, ProcessorProperties properties) throws Exception {
         super();
 
-        if (KStreamConfig.timestampExtractor() == null)
+        if (properties.timestampExtractor() == null)
             throw new NullPointerException("timestamp extractor is missing");
 
         this.metrics = new Metrics();
-        this.config = new ProcessorConfig(KStreamConfig.config());
+        this.config = new ProcessorConfig(properties.config());
         this.topologyClass = topologyClass;
 
-        this.KStreamConfig = KStreamConfig;
+        this.properties = properties;
         this.streamingMetrics = new KafkaStreamingMetrics();
 
         // build the topology without initialization to get the topics for consumer
@@ -106,10 +103,10 @@ public class KStreamThread extends Thread {
         topology.build();
 
         // create the producer and consumer clients
-        Producer<byte[], byte[]> producer = new KafkaProducer<>(KStreamConfig.config(), new ByteArraySerializer(), new ByteArraySerializer());
-        this.collector = new RecordCollectorImpl(producer, (Serializer<Object>) KStreamConfig.keySerializer(), (Serializer<Object>) KStreamConfig.valueSerializer());
+        Producer<byte[], byte[]> producer = new KafkaProducer<>(properties.config(), new ByteArraySerializer(), new ByteArraySerializer());
+        this.collector = new RecordCollectorImpl(producer, (Serializer<Object>) properties.keySerializer(), (Serializer<Object>) properties.valueSerializer());
 
-        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(KStreamConfig.config(), rebalanceCallback, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(properties.config(), rebalanceCallback, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         this.ingestor = new IngestorImpl(consumer, topology.topics());
 
         this.running = true;
@@ -242,7 +239,7 @@ public class KStreamThread extends Thread {
                 try {
                     // build the topology and initialize with the context
                     PTopology topology = this.topologyClass.getConstructor().newInstance();
-                    context = new ProcessorContextImpl(id, ingestor, topology, collector, KStreamConfig, config, metrics);
+                    context = new ProcessorContextImpl(id, ingestor, topology, collector, properties, config, metrics);
                     topology.build();
                     topology.init(context);
                     context.initialized();

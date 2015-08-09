@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.processor;
 
-import org.apache.kafka.stream.internals.KStreamConfig;
-import org.apache.kafka.clients.processor.internals.KafkaSource;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayDeque;
@@ -35,12 +33,14 @@ abstract public class PTopology {
     private List<KafkaProcessor> processors = new ArrayList<>();
     private Map<String, KafkaSource> sources = new HashMap<>();
 
-    protected final KStreamConfig KStreamConfig;
+    protected final ProcessorProperties properties;
 
-    public PTopology() { this(null); }
+    public PTopology() {
+        this(null);
+    }
 
-    public PTopology(KStreamConfig KStreamConfig) {
-        this.KStreamConfig = KStreamConfig;
+    public PTopology(ProcessorProperties properties) {
+        this.properties = properties;
     }
 
     public Set<KafkaSource> sources() {
@@ -86,7 +86,7 @@ abstract public class PTopology {
             deque.addLast(processor);
         }
 
-        while(!deque.isEmpty()) {
+        while (!deque.isEmpty()) {
             KafkaProcessor processor = deque.pollFirst();
 
             boolean parentsInitialized = true;
@@ -147,7 +147,7 @@ abstract public class PTopology {
             deque.addLast(processor);
         }
 
-        while(!deque.isEmpty()) {
+        while (!deque.isEmpty()) {
             KafkaProcessor processor = deque.pollFirst();
 
             boolean parentsClosed = true;

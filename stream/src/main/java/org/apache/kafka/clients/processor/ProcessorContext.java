@@ -25,6 +25,9 @@ import java.io.File;
 
 public interface ProcessorContext {
 
+    // TODO: this is better moved to a KStreamContext
+    boolean joinable(ProcessorContext other);
+
     /**
      * Returns the partition group id
      *

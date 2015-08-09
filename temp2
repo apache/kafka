@@ -1,2 +1,3 @@
-stream/src/main/java/org/apache/kafka/stream/KStreamContext.java
+checkstyle/import-control.xml
+stream/src/test/java/org/apache/kafka/stream/KStreamBranchTest.java
 stream/src/test/java/org/apache/kafka/stream/KStreamJoinTest.java

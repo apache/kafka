@@ -31,6 +31,7 @@ import static org.junit.Assert.assertEquals;
 public class KStreamBranchTest {
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   private String topicName = "topic";
 
   private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
@@ -92,6 +93,9 @@ public class KStreamBranchTest {
       stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
 =======
     private String topicName = "topic";
+=======
+    private String topic1 = "topic";
+>>>>>>> adding files
 
     private KStreamTopology topology = new MockKStreamTopology();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
@@ -126,7 +130,7 @@ public class KStreamBranchTest {
         KStream<Integer, String>[] branches;
         MockProcessor<Integer, String>[] processors;
 
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic1);
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
@@ -142,6 +146,7 @@ public class KStreamBranchTest {
         }
 
         assertEquals(3, processors[0].processed.size());
+<<<<<<< HEAD
         assertEquals(1, processors[1].processed.size());
         assertEquals(3, processors[2].processed.size());
 
@@ -166,6 +171,9 @@ public class KStreamBranchTest {
         assertEquals(4, processors[1].processed.size());
         assertEquals(0, processors[2].processed.size());
 >>>>>>> compile and test passed
+=======
+        assertEquals(2, processors[1].processed.size());
+        assertEquals(4, processors[2].processed.size());
+>>>>>>> adding files
     }
-
 }

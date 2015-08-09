@@ -39,11 +39,17 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
         this.closed = false;
     }
 
-    public String name() { return name; }
+    public String name() {
+        return name;
+    }
 
-    public List<KafkaProcessor<K2, V2, ?, ?>> children() { return children; }
+    public List<KafkaProcessor<K2, V2, ?, ?>> children() {
+        return children;
+    }
 
-    public List<KafkaProcessor<?, ?, K1, V1>> parents() { return parents; }
+    public List<KafkaProcessor<?, ?, K1, V1>> parents() {
+        return parents;
+    }
 
     public final void chain(KafkaProcessor<K2, V2, ?, ?> child) {
         child.parents.add(this);

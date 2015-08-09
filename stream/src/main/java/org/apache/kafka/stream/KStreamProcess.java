@@ -18,9 +18,9 @@
 package org.apache.kafka.stream;
 
 import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.stream.internals.KStreamThread;
-import org.apache.kafka.clients.processor.internals.ProcessorConfig;
-import org.apache.kafka.stream.internals.KStreamConfig;
+import org.apache.kafka.clients.processor.internals.KStreamThread;
+import org.apache.kafka.clients.processor.ProcessorConfig;
+import org.apache.kafka.clients.processor.ProcessorProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * <pre>
  *    Properties props = new Properties();
  *    props.put("bootstrap.servers", "localhost:4242");
- *    KStreamConfig config = new KStreamConfig(props);
+ *    properties config = new properties(props);
  *    config.processor(ExampleStreamProcessor.class);
  *    config.serialization(new StringSerializer(), new StringDeserializer());
  *    KStreamProcess container = new KStreamProcess(new MyKStreamTopology(), config);
@@ -68,15 +68,15 @@ public class KStreamProcess implements Runnable {
     private final KStreamThread[] threads;
 
 
-    public KStreamProcess(Class<? extends PTopology> topologyClass, KStreamConfig KStreamConfig) throws Exception {
-        if (KStreamConfig.timestampExtractor() == null)
+    public KStreamProcess(Class<? extends PTopology> topologyClass, ProcessorProperties processorProperties) throws Exception {
+        if (processorProperties.timestampExtractor() == null)
             throw new NullPointerException("timestamp extractor is missing");
 
-        this.config = new ProcessorConfig(KStreamConfig.config());
+        this.config = new ProcessorConfig(processorProperties.config());
 
         this.threads = new KStreamThread[this.config.numStreamThreads];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new KStreamThread(topologyClass, KStreamConfig);
+            this.threads[i] = new KStreamThread(topologyClass, processorProperties);
         }
     }
 

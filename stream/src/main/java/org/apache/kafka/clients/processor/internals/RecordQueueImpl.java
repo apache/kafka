@@ -18,20 +18,20 @@
 package org.apache.kafka.clients.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.KafkaSource;
+import org.apache.kafka.clients.processor.RecordQueue;
+import org.apache.kafka.clients.processor.StampedRecord;
 import org.apache.kafka.clients.processor.TimestampTracker;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayDeque;
 
-/**
- * RecordQueue is a queue of {@link StampedRecord} (ConsumerRecord + timestamp). It is intended to be used in
- * {@link StreamGroup}.
- */
-public class RecordQueue {
-
-    private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
-    public final KafkaSource source;
+public class RecordQueueImpl implements RecordQueue {
+    private final KafkaSource source;
     private final TopicPartition partition;
+    private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
+
     private TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker;
     private long offset;
 
@@ -42,10 +42,15 @@ public class RecordQueue {
      * @param source           the instance of KStreamImpl that receives records
      * @param timestampTracker TimestampTracker
      */
-    public RecordQueue(TopicPartition partition, KafkaSource source, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
+    public RecordQueueImpl(TopicPartition partition, KafkaSource source, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
         this.partition = partition;
         this.source = source;
         this.timestampTracker = timestampTracker;
+    }
+
+    @Override
+    public KafkaProcessor source() {
+        return source;
     }
 
     /**
@@ -53,6 +58,7 @@ public class RecordQueue {
      *
      * @return TopicPartition
      */
+    @Override
     public TopicPartition partition() {
         return partition;
     }
@@ -62,10 +68,12 @@ public class RecordQueue {
      *
      * @param record StampedRecord
      */
+    @Override
     public void add(StampedRecord record) {
         queue.addLast(record);
-        timestampTracker.addStampedElement(record);
+
         offset = record.offset();
+        timestampTracker.addStampedElement(record);
     }
 
     /**
@@ -73,6 +81,7 @@ public class RecordQueue {
      *
      * @return StampedRecord
      */
+    @Override
     public StampedRecord next() {
         StampedRecord elem = queue.pollFirst();
 
@@ -88,6 +97,7 @@ public class RecordQueue {
      *
      * @return offset
      */
+    @Override
     public long offset() {
         return offset;
     }
@@ -97,6 +107,7 @@ public class RecordQueue {
      *
      * @return the number of records
      */
+    @Override
     public int size() {
         return queue.size();
     }
@@ -106,6 +117,7 @@ public class RecordQueue {
      *
      * @return true if the queue is empty, otherwise false
      */
+    @Override
     public boolean isEmpty() {
         return queue.isEmpty();
     }
@@ -115,8 +127,8 @@ public class RecordQueue {
      *
      * @return timestamp
      */
+    @Override
     public long trackedTimestamp() {
         return timestampTracker.get();
     }
-
 }

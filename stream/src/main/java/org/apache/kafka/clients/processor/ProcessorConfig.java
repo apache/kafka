@@ -15,13 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.processor.internals;
+package org.apache.kafka.clients.processor;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.stream.internals.KStreamConfig;
 
 import java.io.File;
 import java.util.Properties;
@@ -31,47 +30,47 @@ public class ProcessorConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
     static {
-        CONFIG = new ConfigDef().define(KStreamConfig.TOPICS_CONFIG,
+        CONFIG = new ConfigDef().define(ProcessorProperties.TOPICS_CONFIG,
             Type.STRING,
             "",
             Importance.HIGH,
             "All the possible topic names this job need to interact with")
-            .define(KStreamConfig.STATE_DIR_CONFIG,
+            .define(ProcessorProperties.STATE_DIR_CONFIG,
                 Type.STRING,
                 System.getProperty("java.io.tmpdir"),
                 Importance.MEDIUM,
                 "")
-            .define(KStreamConfig.POLL_TIME_MS_CONFIG,
+            .define(ProcessorProperties.POLL_TIME_MS_CONFIG,
                 Type.LONG,
                 100,
                 Importance.LOW,
                 "The amount of time to block waiting for input.")
-            .define(KStreamConfig.COMMIT_TIME_MS_CONFIG,
+            .define(ProcessorProperties.COMMIT_TIME_MS_CONFIG,
                 Type.LONG,
                 30000,
                 Importance.HIGH,
                 "The frequency with which to save the position of the processor.")
-            .define(KStreamConfig.WINDOW_TIME_MS_CONFIG,
+            .define(ProcessorProperties.WINDOW_TIME_MS_CONFIG,
                 Type.LONG,
                 -1L,
                 Importance.MEDIUM,
                 "Setting this to a non-negative value will cause the processor to get called with this frequency even if there is no message.")
-            .define(KStreamConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+            .define(ProcessorProperties.BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 Type.INT,
                 1000,
                 Importance.LOW,
                 "The maximum number of records to buffer per partition")
-            .define(KStreamConfig.STATE_CLEANUP_DELAY_CONFIG,
+            .define(ProcessorProperties.STATE_CLEANUP_DELAY_CONFIG,
                 Type.LONG,
                 60000,
                 Importance.LOW,
                 "The amount of time to wait before deleting state when a partition has migrated.")
-            .define(KStreamConfig.TOTAL_RECORDS_TO_PROCESS,
+            .define(ProcessorProperties.TOTAL_RECORDS_TO_PROCESS,
                 Type.LONG,
                 -1L,
                 Importance.LOW,
                 "Exit after processing this many records.")
-            .define(KStreamConfig.NUM_STREAM_THREADS,
+            .define(ProcessorProperties.NUM_STREAM_THREADS,
                 Type.INT,
                 1,
                 Importance.LOW,
@@ -90,15 +89,15 @@ public class ProcessorConfig extends AbstractConfig {
 
     public ProcessorConfig(Properties processor) {
         super(CONFIG, processor);
-        this.topics = this.getString(KStreamConfig.TOPICS_CONFIG);
-        this.stateDir = new File(this.getString(KStreamConfig.STATE_DIR_CONFIG));
-        this.pollTimeMs = this.getLong(KStreamConfig.POLL_TIME_MS_CONFIG);
-        this.commitTimeMs = this.getLong(KStreamConfig.COMMIT_TIME_MS_CONFIG);
-        this.windowTimeMs = this.getLong(KStreamConfig.WINDOW_TIME_MS_CONFIG);
-        this.bufferedRecordsPerPartition = this.getInt(KStreamConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        this.stateCleanupDelay = this.getLong(KStreamConfig.STATE_CLEANUP_DELAY_CONFIG);
-        this.totalRecordsToProcess = this.getLong(KStreamConfig.TOTAL_RECORDS_TO_PROCESS);
-        this.numStreamThreads = this.getInt(KStreamConfig.NUM_STREAM_THREADS);
+        this.topics = this.getString(ProcessorProperties.TOPICS_CONFIG);
+        this.stateDir = new File(this.getString(ProcessorProperties.STATE_DIR_CONFIG));
+        this.pollTimeMs = this.getLong(ProcessorProperties.POLL_TIME_MS_CONFIG);
+        this.commitTimeMs = this.getLong(ProcessorProperties.COMMIT_TIME_MS_CONFIG);
+        this.windowTimeMs = this.getLong(ProcessorProperties.WINDOW_TIME_MS_CONFIG);
+        this.bufferedRecordsPerPartition = this.getInt(ProcessorProperties.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        this.stateCleanupDelay = this.getLong(ProcessorProperties.STATE_CLEANUP_DELAY_CONFIG);
+        this.totalRecordsToProcess = this.getLong(ProcessorProperties.TOTAL_RECORDS_TO_PROCESS);
+        this.numStreamThreads = this.getInt(ProcessorProperties.NUM_STREAM_THREADS);
     }
 
 }

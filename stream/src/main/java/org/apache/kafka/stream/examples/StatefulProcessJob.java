@@ -21,10 +21,10 @@ import org.apache.kafka.stream.KStreamProcess;
 import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
 import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.internals.KafkaSource;
+import org.apache.kafka.clients.processor.KafkaSource;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.stream.internals.KStreamConfig;
+import org.apache.kafka.clients.processor.ProcessorProperties;
 import org.apache.kafka.stream.state.Entry;
 import org.apache.kafka.stream.state.InMemoryKeyValueStore;
 import org.apache.kafka.stream.state.KeyValueIterator;
@@ -89,7 +89,7 @@ public class StatefulProcessJob {
     }
 
     public static void main(String[] args) throws Exception {
-        KStreamProcess streaming = new KStreamProcess(MyPTopology.class, new KStreamConfig(new Properties()));
+        KStreamProcess streaming = new KStreamProcess(MyPTopology.class, new ProcessorProperties(new Properties()));
         streaming.run();
     }
 }

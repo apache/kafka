@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.processor;
 
-import org.apache.kafka.clients.processor.internals.Stamped;
-
 /**
  * TimestampTracker is a helper class for a sliding window implementation.
  * It is assumed that elements are added or removed in a FIFO manner.
