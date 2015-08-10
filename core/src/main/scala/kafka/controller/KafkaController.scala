@@ -1315,13 +1315,15 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
     inLock(controller.controllerContext.controllerLock) {
       debug("[IsrChangeNotificationListener] Fired!!!")
       val childrenAsScala: mutable.Buffer[String] = currentChildren.asScala
-      val topicAndPartitions: immutable.Set[TopicAndPartition] = childrenAsScala.map(x => getTopicAndPartition(x)).flatten.toSet
-      controller.updateLeaderAndIsrCache(topicAndPartitions)
-      processUpdateNotifications(topicAndPartitions)
-
-      // delete processed children
-      childrenAsScala.map(x => ZkUtils.deletePath(controller.controllerContext.zkClient,
-                                                  ZkUtils.IsrChangeNotificationPath + "/" + x))
+      try {
+        val topicAndPartitions: immutable.Set[TopicAndPartition] = childrenAsScala.map(x => getTopicAndPartition(x)).flatten.toSet
+        controller.updateLeaderAndIsrCache(topicAndPartitions)
+        processUpdateNotifications(topicAndPartitions)
+      } finally {
+        // delete processed children
+        childrenAsScala.map(x => ZkUtils.deletePath(controller.controllerContext.zkClient,
+          ZkUtils.IsrChangeNotificationPath + "/" + x))
+      }
     }
   }
 
@@ -1358,6 +1360,10 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
       Set.empty
     }
   }
+}
+
+object IsrChangeNotificationListener {
+  val version: Long = 1L
 }
 
 /**

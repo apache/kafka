@@ -111,7 +111,6 @@ class ReplicaManager(val config: KafkaConfig,
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
   val stateChangeLogger = KafkaController.stateChangeLogger
   private val isrChangeSet: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
-  private var lastIsrChangeReportMs = System.currentTimeMillis()
 
   val delayedProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
@@ -158,11 +157,9 @@ class ReplicaManager(val config: KafkaConfig,
 
   def maybePropagateIsrChanges() {
     isrChangeSet synchronized {
-      val now = System.currentTimeMillis()
-      if (isrChangeSet.nonEmpty && now > lastIsrChangeReportMs + config.isrChangePropagateIntervalMs) {
+      if (isrChangeSet.nonEmpty) {
         ReplicationUtils.propagateIsrChanges(zkClient, isrChangeSet)
         isrChangeSet.clear()
-        lastIsrChangeReportMs = now
       }
     }
   }

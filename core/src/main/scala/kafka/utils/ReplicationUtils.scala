@@ -19,7 +19,7 @@ package kafka.utils
 
 import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.controller.{IsrChangeNotificationListener, LeaderIsrAndControllerEpoch}
 import org.I0Itec.zkclient.ZkClient
 import org.apache.zookeeper.data.Stat
 
@@ -91,7 +91,7 @@ object ReplicationUtils extends Logging {
 
   private def generateIsrChangeJson(isrChanges: Set[TopicAndPartition]): String = {
     val partitions = isrChanges.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition)).toArray
-    Json.encode(Map("version" -> TopicAndPartition.version, "partitions" -> partitions))
+    Json.encode(Map("version" -> IsrChangeNotificationListener.version, "partitions" -> partitions))
   }
 
 }

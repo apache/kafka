@@ -34,10 +34,4 @@ case class TopicAndPartition(topic: String, partition: Int) {
   def asTuple = (topic, partition)
 
   override def toString = "[%s,%d]".format(topic, partition)
-
-  def toJson = Json.encode(Map("version" -> TopicAndPartition.version, "topic" -> topic, "partition" -> partition))
-}
-
-object TopicAndPartition {
-  val version: Long = 1L
 }
