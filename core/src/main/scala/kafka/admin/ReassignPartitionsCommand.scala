@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import joptsimple.OptionParser
 import kafka.utils._
 import collection._
 import org.I0Itec.zkclient.ZkClient
@@ -77,7 +76,7 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def generateAssignment(zkClient: ZkClient, opts: ReassignPartitionsCommandOptions) {
+  def generateAssignment(zkClient: ZkClient, opts: ReassignPartitionsCommandOptions): Map[TopicAndPartition, Seq[Int]] = {
     if(!(opts.options.has(opts.topicsToMoveJsonFileOpt) && opts.options.has(opts.brokerListOpt)))
       CommandLineUtils.printUsageAndDie(opts.parser, "If --generate option is used, command must include both --topics-to-move-json-file and --broker-list options")
     val topicsToMoveJsonFile = opts.options.valueOf(opts.topicsToMoveJsonFileOpt)
@@ -93,16 +92,18 @@ object ReassignPartitionsCommand extends Logging {
     val topicPartitionsToReassign = ZkUtils.getReplicaAssignmentForTopics(zkClient, topicsToReassign)
 
     var partitionsToBeReassigned : Map[TopicAndPartition, Seq[Int]] = new mutable.HashMap[TopicAndPartition, List[Int]]()
+    val brokerRackMapping = opts.getBrokerRackMap(zkClient)
     val groupedByTopic = topicPartitionsToReassign.groupBy(tp => tp._1.topic)
     groupedByTopic.foreach { topicInfo =>
       val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerListToReassign, topicInfo._2.size,
-        topicInfo._2.head._2.size)
+        topicInfo._2.head._2.size, rackInfo = brokerRackMapping)
       partitionsToBeReassigned ++= assignedReplicas.map(replicaInfo => (TopicAndPartition(topicInfo._1, replicaInfo._1) -> replicaInfo._2))
     }
     val currentPartitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, partitionsToBeReassigned.map(_._1.topic).toSeq)
     println("Current partition replica assignment\n\n%s"
       .format(ZkUtils.getPartitionReassignmentZkData(currentPartitionReplicaAssignment)))
     println("Proposed partition reassignment configuration\n\n%s".format(ZkUtils.getPartitionReassignmentZkData(partitionsToBeReassigned)))
+    partitionsToBeReassigned
   }
 
   def executeAssignment(zkClient: ZkClient, opts: ReassignPartitionsCommandOptions) {
@@ -166,9 +167,7 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  class ReassignPartitionsCommandOptions(args: Array[String]) {
-    val parser = new OptionParser
-
+  class ReassignPartitionsCommandOptions(args: Array[String]) extends RackLocatorCommandOptions {
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
                       "form host:port. Multiple URLS can be given to allow fail-over.")
                       .withRequiredArg

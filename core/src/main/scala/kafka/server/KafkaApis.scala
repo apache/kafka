@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.cluster.RackLocator
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.TopicPartition
 import kafka.api._
@@ -45,6 +46,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val metadataCache: MetadataCache) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
+  val rackLocator = RackLocator.create(zkClient, config)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -444,6 +446,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
         if (topic == ConsumerCoordinator.OffsetsTopicName || config.autoCreateTopicsEnable) {
           try {
+            val brokerRackMap = rackLocator.getRackInfo()
             if (topic == ConsumerCoordinator.OffsetsTopicName) {
               val aliveBrokers = metadataCache.getAliveBrokers
               val offsetsTopicReplicationFactor =
@@ -453,12 +456,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                   config.offsetsTopicReplicationFactor.toInt
               AdminUtils.createTopic(zkClient, topic, config.offsetsTopicPartitions,
                                      offsetsTopicReplicationFactor,
-                                     coordinator.offsetsTopicConfigs)
+                                     coordinator.offsetsTopicConfigs,
+                                     rackInfo = brokerRackMap)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
                 .format(topic, config.offsetsTopicPartitions, offsetsTopicReplicationFactor))
             }
             else {
-              AdminUtils.createTopic(zkClient, topic, config.numPartitions, config.defaultReplicationFactor)
+              AdminUtils.createTopic(zkClient, topic, config.numPartitions, config.defaultReplicationFactor, rackInfo = brokerRackMap)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
                    .format(topic, config.numPartitions, config.defaultReplicationFactor))
             }

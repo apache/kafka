@@ -480,7 +480,8 @@ class KafkaConfigTest extends JUnit3Suite {
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricReporterClassesProp => // ignore string
-
+        case KafkaConfig.RackLocatorClassProp => // ignore
+        case KafkaConfig.RackLocatorPropertiesProp => // ignore
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })

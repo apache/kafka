@@ -96,7 +96,8 @@ object TopicCommand extends Logging {
       CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
       val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
       val replicas = opts.options.valueOf(opts.replicationFactorOpt).intValue
-      AdminUtils.createTopic(zkClient, topic, partitions, replicas, configs)
+      val brokerRackMapping = opts.getBrokerRackMap(zkClient)
+      AdminUtils.createTopic(zkClient, topic, partitions, replicas, configs, brokerRackMapping)
     }
     println("Created topic \"%s\".".format(topic))
   }
@@ -116,7 +117,8 @@ object TopicCommand extends Logging {
           "logic or ordering of the messages will be affected")
         val nPartitions = opts.options.valueOf(opts.partitionsOpt).intValue
         val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
-        AdminUtils.addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr)
+        val brokerRackMapping = opts.getBrokerRackMap(zkClient)
+        AdminUtils.addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr, rackInfo = brokerRackMapping)
         println("Adding partitions succeeded!")
       }
     }
@@ -226,8 +228,7 @@ object TopicCommand extends Logging {
     ret.toMap
   }
   
-  class TopicCommandOptions(args: Array[String]) {
-    val parser = new OptionParser
+  class TopicCommandOptions(args: Array[String]) extends RackLocatorCommandOptions {
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
                                       "Multiple URLS can be given to allow fail-over.")
                            .withRequiredArg
@@ -271,7 +272,6 @@ object TopicCommand extends Logging {
                                                             "if set when describing topics, only show partitions whose leader is not available")
     val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
-
     val options = parser.parse(args : _*)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt)

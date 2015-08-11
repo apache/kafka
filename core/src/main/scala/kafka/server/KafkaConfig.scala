@@ -138,6 +138,8 @@ object Defaults {
   val MetricNumSamples = 2
   val MetricSampleWindowMs = 1000
   val MetricReporterClasses = ""
+  val RackLocatorClass = "kafka.cluster.NoRack"
+  val RackLocatorProperties = ""
 }
 
 object KafkaConfig {
@@ -256,6 +258,9 @@ object KafkaConfig {
   val MetricSampleWindowMsProp = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG
   val MetricNumSamplesProp: String = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG
   val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
+
+  val RackLocatorClassProp = "rack.locator.class"
+  val RackLocatorPropertiesProp = "rack.locator.properties"
 
 
   /* Documentation */
@@ -396,6 +401,8 @@ object KafkaConfig {
   val MetricNumSamplesDoc = CommonClientConfigs.METRICS_NUM_SAMPLES_DOC
   val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
 
+  val RackLocatorClassDoc = "RackLocator fully qualified implementation class name"
+  val RackLocatorPropertiesDoc = "RackLocator properties in comma delimited key=value pairs"
 
   private val configDef = {
     import ConfigDef.Range._
@@ -494,6 +501,8 @@ object KafkaConfig {
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable, HIGH, UncleanLeaderElectionEnableDoc)
       .define(InterBrokerSecurityProtocolProp, STRING, Defaults.InterBrokerSecurityProtocol, MEDIUM, InterBrokerSecurityProtocolDoc)
       .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, MEDIUM, InterBrokerProtocolVersionDoc)
+      .define(RackLocatorClassProp, STRING, Defaults.RackLocatorClass, MEDIUM, RackLocatorClassDoc)
+      .define(RackLocatorPropertiesProp, STRING, Defaults.RackLocatorProperties, MEDIUM, RackLocatorPropertiesDoc)
 
       /** ********* Controlled shutdown configuration ***********/
       .define(ControlledShutdownMaxRetriesProp, INT, Defaults.ControlledShutdownMaxRetries, MEDIUM, ControlledShutdownMaxRetriesDoc)
@@ -667,6 +676,10 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val listeners = getListeners
   val advertisedListeners = getAdvertisedListeners
   val logRetentionTimeMillis = getLogRetentionTimeMillis
+
+  val rackLocator = Option(getString(KafkaConfig.RackLocatorClassProp)).getOrElse("")
+
+  val rackLocatorProps = Option(getString(KafkaConfig.RackLocatorPropertiesProp)).getOrElse("")
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
