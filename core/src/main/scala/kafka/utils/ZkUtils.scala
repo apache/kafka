@@ -49,6 +49,16 @@ object ZkUtils extends Logging {
   val IsrChangeNotificationPath = "/isr_change_notification"
   val EntityConfigPath = "/config"
   val EntityConfigChangesPath = "/config/changes"
+  // The following persistent zk path need to be created at server startup time.
+  val commonZkPaths = Seq(ConsumersPath,
+                          BrokerIdsPath,
+                          BrokerTopicsPath,
+                          EntityConfigChangesPath,
+                          ZkUtils.getEntityConfigRootPath(ConfigType.Topic),
+                          ZkUtils.getEntityConfigRootPath(ConfigType.Client),
+                          DeleteTopicsPath,
+                          BrokerSequenceIdPath,
+                          IsrChangeNotificationPath)
 
   def getTopicPath(topic: String): String = {
     BrokerTopicsPath + "/" + topic
@@ -97,15 +107,8 @@ object ZkUtils extends Logging {
   }
 
   def setupCommonPaths(zkClient: ZkClient) {
-    for(path <- Seq(ConsumersPath,
-                    BrokerIdsPath,
-                    BrokerTopicsPath,
-                    EntityConfigChangesPath,
-                    ZkUtils.getEntityConfigRootPath(ConfigType.Topic),
-                    ZkUtils.getEntityConfigRootPath(ConfigType.Client),
-                    DeleteTopicsPath,
-                    BrokerSequenceIdPath))
-      makeSurePersistentPathExists(zkClient, path)
+    for(path <- commonZkPaths)
+    makeSurePersistentPathExists(zkClient, path)
   }
 
   def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
