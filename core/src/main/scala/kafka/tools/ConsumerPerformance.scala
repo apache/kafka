@@ -30,6 +30,7 @@ import kafka.consumer.ConsumerConnector
 import kafka.consumer.KafkaStream
 import kafka.consumer.ConsumerTimeoutException
 import java.text.SimpleDateFormat
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Performance test for the full zookeeper consumer
@@ -43,6 +44,7 @@ object ConsumerPerformance {
     logger.info("Starting consumer...")
     val totalMessagesRead = new AtomicLong(0)
     val totalBytesRead = new AtomicLong(0)
+    val consumerTimeout = new AtomicBoolean(false)
 
     if (!config.hideHeader) {
       if (!config.showDetailedStats)
@@ -67,7 +69,7 @@ object ConsumerPerformance {
       var threadList = List[ConsumerPerfThread]()
       for ((topic, streamList) <- topicMessageStreams)
         for (i <- 0 until streamList.length)
-          threadList ::= new ConsumerPerfThread(i, "kafka-zk-consumer-" + i, streamList(i), config, totalMessagesRead, totalBytesRead)
+          threadList ::= new ConsumerPerfThread(i, "kafka-zk-consumer-" + i, streamList(i), config, totalMessagesRead, totalBytesRead, consumerTimeout)
 
       logger.info("Sleeping for 1 second.")
       Thread.sleep(1000)
@@ -77,7 +79,10 @@ object ConsumerPerformance {
         thread.start
       for (thread <- threadList)
         thread.join
-      endMs = System.currentTimeMillis - consumerConfig.consumerTimeoutMs 
+      if(consumerTimeout.get())
+	endMs = System.currentTimeMillis - consumerConfig.consumerTimeoutMs
+      else
+	endMs = System.currentTimeMillis
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
@@ -209,7 +214,7 @@ object ConsumerPerformance {
   }
 
   class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Array[Byte], Array[Byte]],
-    config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong)
+    config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong, consumerTimeout: AtomicBoolean)
     extends Thread(name) {
 
     override def run() {
@@ -238,7 +243,9 @@ object ConsumerPerformance {
       } catch {
         case _: InterruptedException =>
         case _: ClosedByInterruptException =>
-        case _: ConsumerTimeoutException =>
+        case _: ConsumerTimeoutException => {
+          consumerTimeout.set(true);
+        }
         case e: Throwable => e.printStackTrace()
       }
       totalMessagesRead.addAndGet(messagesRead)
