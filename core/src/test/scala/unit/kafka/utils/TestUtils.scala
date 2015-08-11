@@ -159,7 +159,6 @@ object TestUtils extends Logging {
     props.put("delete.topic.enable", enableDeleteTopic.toString)
     props.put("controlled.shutdown.retry.backoff.ms", "100")
     props.put("port", port.toString)
-    props.put("isr.change.propagate.interval.ms","100")
     props
   }
 
