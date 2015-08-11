@@ -81,7 +81,7 @@ public class KStreamWindowedTest {
         // two items in the window
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "V" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(1, countItem(window.find(0, 0L)));
@@ -92,7 +92,7 @@ public class KStreamWindowedTest {
         // previous two items + all items, thus two are duplicates, in the window
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(2, countItem(window.find(0, 0L)));

@@ -67,11 +67,13 @@ public interface Processor<K, V>  {
 
 package org.apache.kafka.clients.processor;
 
-public interface Processor<K, V> {
+public interface Processor<K1, V1, K2, V2> {
 
     void init(ProcessorContext context);
 
-    void process(K key, V value);
+    void process(K1 key, V1 value);
+
+    void forward(K2 key, V2 value);
 
     void close();
 >>>>>>> wip

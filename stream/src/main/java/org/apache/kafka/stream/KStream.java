@@ -18,7 +18,6 @@
 package org.apache.kafka.stream;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
-import org.apache.kafka.clients.processor.Processor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -154,11 +153,4 @@ public interface KStream<K, V> {
      * @param processor the instance of Processor
      */
     <K1, V1> KStream<K1, V1> process(KafkaProcessor<K, V, K1, V1> processor);
-
-    /**
-     * Processes all elements in this stream by applying a processor.
-     *
-     * @param processor the instance of Processor
-     */
-    void process(Processor<K, V> processor);
 }

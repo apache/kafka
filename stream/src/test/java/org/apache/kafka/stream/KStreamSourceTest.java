@@ -70,7 +70,7 @@ public class KStreamSourceTest {
         final String[] expectedValues = new String[]{"v1", "v2", "v3"};
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<String, String>) stream).source().receive(expectedKeys[i], expectedValues[i]);
+            ((KStreamSource<String, String>) stream).source().process(expectedKeys[i], expectedValues[i]);
         }
 
         assertEquals(3, processor.processed.size());

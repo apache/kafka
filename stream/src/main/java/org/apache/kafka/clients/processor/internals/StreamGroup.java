@@ -193,7 +193,7 @@ public class StreamGroup {
 
             if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-            recordQueue.source().receive(currRecord.key(), currRecord.value());
+            recordQueue.source().process(currRecord.key(), currRecord.value());
             consumedOffsets.put(recordQueue.partition(), currRecord.offset());
 
             // TODO: local state flush and downstream producer flush

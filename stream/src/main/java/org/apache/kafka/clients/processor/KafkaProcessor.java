@@ -20,7 +20,7 @@ package org.apache.kafka.clients.processor;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1>, Receiver<K1, V1>, Punctuator {
+public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1, K2, V2>, Punctuator {
 
     private final List<KafkaProcessor<K2, V2, ?, ?>> children;
     private final List<KafkaProcessor<?, ?, K1, V1>> parents;
@@ -56,15 +56,11 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
         children.add(child);
     }
 
+    @Override
     public final void forward(K2 key, V2 value) {
         for (KafkaProcessor<K2, V2, ?, ?> child : children) {
-            child.receive(key, value);
+            child.process(key, value);
         }
-    }
-
-    @Override
-    public final void receive(K1 key, V1 value) {
-        this.process(key, value);
     }
 
     /* Following functions can be overridden by users */

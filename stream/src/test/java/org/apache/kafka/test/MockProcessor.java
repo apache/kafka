@@ -17,38 +17,25 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.processor.Processor;
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.Punctuator;
-import org.apache.kafka.clients.processor.Receiver;
+import org.apache.kafka.clients.processor.KafkaProcessor;
 
 import java.util.ArrayList;
 
-public class MockProcessor<K, V> implements Processor<K, V>, Receiver<K, V>, Punctuator {
+public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
     public final ArrayList<String> processed = new ArrayList<>();
     public final ArrayList<Long> punctuated = new ArrayList<>();
 
+    public MockProcessor() {
+        super("MOCK");
+    }
+
     @Override
-    public void process(K key, V value) {
+    public void process(K1 key, V1 value) {
         processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void receive(K key, V value) {
-        process(key, value);
-    }
-
-    @Override
-    public void init(ProcessorContext context) {
     }
 
     @Override
     public void punctuate(long streamTime) {
         punctuated.add(streamTime);
-    }
-
-    @Override
-    public void close() {
-
     }
 }

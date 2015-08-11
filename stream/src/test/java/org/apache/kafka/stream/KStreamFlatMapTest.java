@@ -103,7 +103,7 @@ public class KStreamFlatMapTest {
 >>>>>>> compile and test passed
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "V" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());

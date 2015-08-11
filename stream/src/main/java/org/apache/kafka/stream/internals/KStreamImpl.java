@@ -19,7 +19,6 @@ package org.apache.kafka.stream.internals;
 
 import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.clients.processor.Processor;
 import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.clients.processor.KafkaSource;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -149,8 +148,8 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    private <K1, V1> Processor<K1, V1> getSendProcessor(final String sendTopic, final Serializer<K1> keySerializer, final Serializer<V1> valSerializer) {
-        return new Processor<K1, V1>() {
+    private <K1, V1> KafkaProcessor<K1, V1, Object, Object> getSendProcessor(final String sendTopic, final Serializer<K1> keySerializer, final Serializer<V1> valSerializer) {
+        return new KafkaProcessor<K1, V1, Object, Object>("KAFKA-SEND") {
             private ProcessorContext context;
 
             @Override
@@ -175,18 +174,5 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
         topology.addProcessor(current, processor);
 
         return new KStreamImpl(topology, current);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public void process(final Processor<K, V> current) {
-        KafkaProcessor<K, V, ?, ?> wrapper = new KafkaProcessor<K, V, Object, Object>(PROCESSOR_NAME) {
-            @Override
-            public void process(K key, V value) {
-                current.process(key, value);
-            }
-        };
-
-        topology.addProcessor(wrapper, processor);
     }
 }
