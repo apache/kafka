@@ -22,8 +22,9 @@ public interface ConsumerSeekCallback {
      * A callback method the user can implement to provide asynchronous handling of seek request completion.
      * This method will be called when the fetch request sent to the server after a seek has been acknowledged.
      *
+     * @param offset The offset used in the seek request
      * @param exception The exception thrown during processing of the request if the position to seek is out of range,
      *                  or null if the seek completed successfully
      */
-    void onComplete(Exception exception);
+    void onComplete(Long offset, Exception exception);
 }

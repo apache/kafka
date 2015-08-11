@@ -407,7 +407,6 @@ public class Fetcher<K, V> {
                     log.debug("Ignoring fetched data for partition {} which is no longer assigned.", tp);
                 } else if (partition.errorCode == Errors.NONE.code()) {
                     long fetchOffset = request.fetchData().get(tp).offset;
-                    subscriptions.invokeConsumerSeekCallback(tp, null);
                     // we are interested in this fetch only if the beginning offset matches the
                     // current consumed position
                     Long consumed = subscriptions.consumed(tp);
@@ -421,6 +420,7 @@ public class Fetcher<K, V> {
                         continue;
                     }
 
+                    subscriptions.invokeConsumerSeekCallback(tp, null);
                     int bytes = 0;
                     ByteBuffer buffer = partition.recordSet;
                     MemoryRecords records = MemoryRecords.readableRecords(buffer);

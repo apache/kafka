@@ -112,10 +112,13 @@ public class SubscriptionState {
     }
     
     private void clearPartition(TopicPartition tp) {
+        invokeConsumerSeekCallback(tp, null);
         this.assignedPartitions.remove(tp);
     }
 
     public void clearAssignment() {
+        for (TopicPartition tp: this.assignedPartitions.keySet())
+            invokeConsumerSeekCallback(tp, null);
         this.assignedPartitions.clear();
         this.needsPartitionAssignment = !subscribedTopics().isEmpty();
     }
@@ -330,7 +333,7 @@ public class SubscriptionState {
 
         private void invokeConsumerSeekCallback(Exception exception) {
             if (consumerSeekCallback != null)
-                consumerSeekCallback.onComplete(exception);
+                consumerSeekCallback.onComplete(this.fetched, exception);
             consumerSeekCallback = null;
         }
 
