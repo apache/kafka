@@ -32,10 +32,25 @@ public abstract class SinkTaskContext {
         offsets = new HashMap<>();
     }
 
+    /**
+     * Reset the consumer offsets for the given topic partitions. SinkTasks should use this when they are started
+     * if they manage offsets in the sink data store rather than using Kafka consumer offsets. For example, an HDFS
+     * connector might record offsets in HDFS to provide exactly once delivery. When the SinkTask is started or
+     * a rebalance occurs, the task would reload offsets from HDFS and use this method to reset the consumer to those
+     * offsets.
+     *
+     * SinkTasks that do not manage their own offsets do not need to use this method.
+     *
+     * @param offsets map of offsets for topic partitions
+     */
     public void resetOffset(Map<TopicPartition, Long> offsets) {
         this.offsets = offsets;
     }
 
+    /**
+     * Get offsets that the SinkTask has submitted to be reset. Used by the Copycat framework.
+     * @return the map of offsets
+     */
     public Map<TopicPartition, Long> getOffsets() {
         return offsets;
     }

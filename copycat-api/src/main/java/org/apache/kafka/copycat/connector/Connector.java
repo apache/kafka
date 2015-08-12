@@ -59,10 +59,9 @@ public abstract class Connector {
      * This version is only used to recover from failures.
      * </p>
      * <p>
-     * The default implementation ignores the provided simply ignores the provided Task
-     * configurations. During recovery, Copycat will request an updated set of configurations and
-     * update the running Tasks appropriately. However, Connectors should implement special
-     * handling of this case if it will avoid unnecessary changes to running Tasks.
+     * The default implementation ignores the provided Task configurations. During recovery, Copycat will request
+     * an updated set of configurations and update the running Tasks appropriately. However, Connectors should
+     * implement special handling of this case if it will avoid unnecessary changes to running Tasks.
      * </p>
      *
      * @param ctx context object used to interact with the Copycat runtime

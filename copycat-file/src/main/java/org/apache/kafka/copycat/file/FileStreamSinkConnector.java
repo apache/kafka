@@ -58,6 +58,6 @@ public class FileStreamSinkConnector extends SinkConnector {
 
     @Override
     public void stop() throws CopycatException {
-        // Nothing to do since ConsoleConnector has no background monitoring.
+        // Nothing to do since FileStreamSinkConnector has no background monitoring.
     }
 }

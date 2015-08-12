@@ -25,7 +25,7 @@ import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
-public class ConnectorTest {
+public class ConnectorReconfigurationTest {
 
     @Test
     public void testDefaultReconfigure() throws Exception {

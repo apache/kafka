@@ -278,6 +278,8 @@ public class Utils {
             throw new KafkaException("Could not instantiate class " + c.getName(), e);
         } catch (InstantiationException e) {
             throw new KafkaException("Could not instantiate class " + c.getName() + " Does it have a public no-argument constructor?", e);
+        } catch (NullPointerException e) {
+            throw new KafkaException("Requested class was null", e);
         }
     }
 

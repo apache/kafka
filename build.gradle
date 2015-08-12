@@ -543,7 +543,7 @@ project(':copycat-data') {
     archives.extendsFrom (testCompile)
   }
 
-  /* FIXME
+  /* FIXME Re-enable this with KAFKA-2367 when the placeholder data API is replaced
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }

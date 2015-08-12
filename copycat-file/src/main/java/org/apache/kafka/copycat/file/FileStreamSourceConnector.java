@@ -41,9 +41,9 @@ public class FileStreamSourceConnector extends SourceConnector {
         filename = props.getProperty(FILE_CONFIG);
         topic = props.getProperty(TOPIC_CONFIG);
         if (topic == null || topic.isEmpty())
-            throw new CopycatException("ConsoleConnector configuration must include 'topic' setting");
+            throw new CopycatException("FileStreamSourceConnector configuration must include 'topic' setting");
         if (topic.contains(","))
-            throw new CopycatException("ConsoleConnector should only have a single topic when used as a source.");
+            throw new CopycatException("FileStreamSourceConnector should only have a single topic when used as a source.");
     }
 
     @Override
@@ -65,6 +65,6 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     @Override
     public void stop() throws CopycatException {
-        // Nothing to do since ConsoleConnector has no background monitoring.
+        // Nothing to do since FileStreamSourceConnector has no background monitoring.
     }
 }
