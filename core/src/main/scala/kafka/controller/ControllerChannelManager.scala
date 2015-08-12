@@ -328,15 +328,15 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
       case e : Throwable => {
         if(leaderAndIsrRequestMap.size > 0) {
           error(s"Haven't been able to send leader and isr requests, current state of " +
-              "the map is %leaderAndIsrRequestMap")
+              s"the map is $leaderAndIsrRequestMap")
         }
         if(updateMetadataRequestMap.size > 0) {
           error(s"Haven't been able to send metadata update requests, current state of " +
-              "the map is %updateMetadataRequestMap")
+              s"the map is $updateMetadataRequestMap")
         }
         if(stopReplicaRequestMap.size > 0) {
           error(s"Haven't been able to send stop replica requests, current state of " +
-              "the map is %stopReplicaRequestMap")
+              s"the map is $stopReplicaRequestMap")
         }
         throw new IllegalStateException(e)
       }
