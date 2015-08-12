@@ -21,11 +21,13 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * @see KafkaConsumer
  * @see MockConsumer
  */
+@InterfaceStability.Unstable
 public interface Consumer<K, V> extends Closeable {
     
     /**
