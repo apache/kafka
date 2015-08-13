@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.cli;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.runtime.Coordinator;
 import org.apache.kafka.copycat.runtime.Worker;
@@ -28,6 +27,7 @@ import org.apache.kafka.copycat.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Properties;
 
 /**
@@ -42,50 +42,29 @@ import java.util.Properties;
  * </p>
  */
 @InterfaceStability.Unstable
-public class Copycat {
-    private static final Logger log = LoggerFactory.getLogger(Copycat.class);
+public class CopycatStandalone {
+    private static final Logger log = LoggerFactory.getLogger(CopycatStandalone.class);
 
     public static void main(String[] args) throws Exception {
-        CopycatConfig config;
         Properties workerProps;
         Properties connectorProps;
 
-        try {
-            config = CopycatConfig.parseCommandLineArgs(args);
-        } catch (ConfigException e) {
-            log.error(e.getMessage());
-            log.info("Usage: copycat [--worker-config worker.properties]"
-                    + " [--create-connectors connector1.properties,connector2.properties,...]"
-                    + " [--delete-connectors connector1-name,connector2-name,...]");
+        if (args.length < 2) {
+            log.info("Usage: CopycatStandalone worker.properties connector1.properties [connector2.properties ...]");
             System.exit(1);
-            return;
         }
 
-        String workerPropsFile = config.getString(CopycatConfig.WORKER_PROPERTIES_CONFIG);
+        String workerPropsFile = args[0];
         workerProps = !workerPropsFile.isEmpty() ? Utils.loadProps(workerPropsFile) : new Properties();
 
         WorkerConfig workerConfig = new WorkerConfig(workerProps);
         Worker worker = new Worker(workerConfig);
-        Coordinator coordinator = new StandaloneCoordinator(worker, workerConfig.getUnusedProperties());
+        Coordinator coordinator = new StandaloneCoordinator(worker);
         final org.apache.kafka.copycat.runtime.Copycat copycat = new org.apache.kafka.copycat.runtime.Copycat(worker, coordinator);
         copycat.start();
 
         try {
-            // Destroy any requested connectors
-            for (final String connName : config.getList(CopycatConfig.DELETE_CONNECTORS_CONFIG)) {
-                FutureCallback<Void> cb = new FutureCallback<>(new Callback<Void>() {
-                    @Override
-                    public void onCompletion(Throwable error, Void result) {
-                        if (error != null)
-                            log.error("Failed to stop job {}", connName);
-                    }
-                });
-                coordinator.deleteConnector(connName, cb);
-                cb.get();
-            }
-
-            // Create any new connectors
-            for (final String connectorPropsFile : config.getList(CopycatConfig.CREATE_CONNECTORS_CONFIG)) {
+            for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
                 connectorProps = Utils.loadProps(connectorPropsFile);
                 FutureCallback<String> cb = new FutureCallback<>(new Callback<String>() {
                     @Override

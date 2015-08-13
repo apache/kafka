@@ -25,7 +25,6 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Implementation of OffsetBackingStore that saves data locally to a file. To ensure this behaves
@@ -42,9 +41,9 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
     }
 
     @Override
-    public void configure(Properties props) {
+    public void configure(Map<String, ?> props) {
         super.configure(props);
-        String filename = props.getProperty(OFFSET_STORAGE_FILE_FILENAME_CONFIG);
+        String filename = (String) props.get(OFFSET_STORAGE_FILE_FILENAME_CONFIG);
         file = new File(filename);
     }
 

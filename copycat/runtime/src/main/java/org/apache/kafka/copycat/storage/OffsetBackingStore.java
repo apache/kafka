@@ -17,8 +17,8 @@
 
 package org.apache.kafka.copycat.storage;
 
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.copycat.util.Callback;
-import org.apache.kafka.copycat.util.Configurable;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;

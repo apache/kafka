@@ -30,14 +30,13 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
 public class FileOffsetBackingStoreTest {
 
     FileOffsetBackingStore store;
-    Properties props;
+    Map<String, Object> props;
     File tempFile;
 
     private static Map<ByteBuffer, ByteBuffer> firstSet = new HashMap<>();
@@ -51,9 +50,8 @@ public class FileOffsetBackingStoreTest {
     public void setup() throws IOException {
         store = new FileOffsetBackingStore();
         tempFile = File.createTempFile("fileoffsetbackingstore", null);
-        props = new Properties();
-        props.setProperty(FileOffsetBackingStore.OFFSET_STORAGE_FILE_FILENAME_CONFIG,
-                tempFile.getAbsolutePath());
+        props = new HashMap<>();
+        props.put(FileOffsetBackingStore.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
         store.configure(props);
         store.start();
     }

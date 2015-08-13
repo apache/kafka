@@ -82,12 +82,6 @@ public class WorkerConfig extends AbstractConfig {
                     + " not per task. All task have shutdown triggered, then they are waited on sequentially.";
     private static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT = "5000";
 
-    public static final String OFFSET_STORAGE_CLASS_CONFIG = "offset.storage.class";
-    private static final String OFFSET_STORAGE_CLASS_DOC =
-            "OffsetBackingStore implementation to use for storing partition offset data";
-    public static final String OFFSET_STORAGE_CLASS_DEFAULT
-            = "org.apache.kafka.copycat.storage.MemoryOffsetBackingStore";
-
     public static final String OFFSET_COMMIT_INTERVAL_MS_CONFIG = "offset.flush.interval.ms";
     private static final String OFFSET_COMMIT_INTERVAL_MS_DOC
             = "Interval at which to try committing offsets for tasks.";
@@ -122,8 +116,6 @@ public class WorkerConfig extends AbstractConfig {
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)
-                .define(OFFSET_STORAGE_CLASS_CONFIG, Type.CLASS, OFFSET_STORAGE_CLASS_DEFAULT,
-                        Importance.LOW, OFFSET_STORAGE_CLASS_DOC)
                 .define(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Type.LONG, OFFSET_COMMIT_INTERVAL_MS_DEFAULT,
                         Importance.LOW, OFFSET_COMMIT_INTERVAL_MS_DOC)
                 .define(OFFSET_COMMIT_TIMEOUT_MS_CONFIG, Type.LONG, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT,

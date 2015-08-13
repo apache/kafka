@@ -65,9 +65,7 @@ public class Worker<K, V> {
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(WorkerConfig config) {
-        this(new SystemTime(), config,
-                config.getConfiguredInstance(WorkerConfig.OFFSET_STORAGE_CLASS_CONFIG, OffsetBackingStore.class),
-                null, null, null, null);
+        this(new SystemTime(), config, null, null, null, null, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -78,7 +76,13 @@ public class Worker<K, V> {
         this.config = config;
         this.keyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
         this.valueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.offsetBackingStore = offsetBackingStore;
+
+        if (offsetBackingStore != null) {
+            this.offsetBackingStore = offsetBackingStore;
+        } else {
+            this.offsetBackingStore = new FileOffsetBackingStore();
+            this.offsetBackingStore.configure(config.originals());
+        }
 
         if (offsetKeySerializer != null) {
             this.offsetKeySerializer = offsetKeySerializer;

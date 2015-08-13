@@ -38,35 +38,15 @@ import java.util.*;
 public class StandaloneCoordinator implements Coordinator {
     private static final Logger log = LoggerFactory.getLogger(StandaloneCoordinator.class);
 
-    public static final String STORAGE_CONFIG = "coordinator.standalone.storage";
-
     private Worker worker;
-    private Properties configs;
-    private ConfigStorage configStorage;
     private HashMap<String, ConnectorState> connectors = new HashMap<>();
 
-    public StandaloneCoordinator(Worker worker, Properties props) {
+    public StandaloneCoordinator(Worker worker) {
         this.worker = worker;
-        this.configs = props;
     }
 
     public synchronized void start() {
         log.info("Coordinator starting");
-
-        String storage = configs.getProperty(STORAGE_CONFIG);
-        if (storage != null && !storage.isEmpty()) {
-            try {
-                configStorage = Utils.newInstance(storage, ConfigStorage.class);
-            } catch (ClassNotFoundException e) {
-                throw new CopycatRuntimeException("Couldn't configure storage", e);
-            }
-            configStorage.configure(configs);
-        } else {
-            configStorage = null;
-        }
-
-        restoreConnectors();
-
         log.info("Coordinator started");
     }
 
@@ -81,11 +61,6 @@ public class StandaloneCoordinator implements Coordinator {
             stopConnector(state);
         }
         connectors.clear();
-
-        if (configStorage != null) {
-            configStorage.close();
-            configStorage = null;
-        }
 
         log.info("Coordinator stopped");
     }
@@ -148,8 +123,6 @@ public class StandaloneCoordinator implements Coordinator {
         }
         ConnectorState state = new ConnectorState(connName, connector, maxTasks, topics);
         connectors.put(connName, state);
-        if (configStorage != null)
-            configStorage.putConnectorConfig(connName, connectorProps);
 
         log.info("Finished creating connector {}", connName);
 
@@ -174,8 +147,6 @@ public class StandaloneCoordinator implements Coordinator {
 
         stopConnector(state);
         connectors.remove(state.name);
-        if (configStorage != null)
-            configStorage.putConnectorConfig(state.name, null);
 
         log.info("Finished destroying connector {}", connName);
     }
@@ -250,23 +221,6 @@ public class StandaloneCoordinator implements Coordinator {
     private void updateConnectorTasks(ConnectorState state) {
         removeConnectorTasks(state);
         createConnectorTasks(state);
-    }
-
-    private void restoreConnectors() {
-        if (configStorage == null)
-            return;
-
-        Collection<String> connNames = configStorage.getConnectors();
-        for (String connName : connNames) {
-            log.info("Restoring connector {}", connName);
-            Properties connProps = configStorage.getConnectorConfig(connName);
-            ConnectorState connState = createConnector(connProps);
-            // Because this coordinator is standalone, connectors are only restored when this process
-            // starts and we know there can't be any existing tasks. So in this special case we're able
-            // to just create the tasks rather than having to check for existing tasks and sort out
-            // whether they need to be reconfigured.
-            createConnectorTasks(connState);
-        }
     }
 
     /**
