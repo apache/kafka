@@ -26,7 +26,7 @@ import java.util.Properties;
  * used by {@link Worker} to manage the tasks. Implementations combine a user-specified Task with
  * Kafka to create a data flow.
  */
-public interface WorkerTask {
+interface WorkerTask {
     /**
      * Start the Task
      * @param props initial configuration

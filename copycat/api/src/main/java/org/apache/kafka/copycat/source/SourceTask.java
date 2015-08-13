@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.source;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.Task;
 
 import java.util.List;
@@ -24,6 +25,7 @@ import java.util.List;
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
  */
+@InterfaceStability.Unstable
 public abstract class SourceTask implements Task {
 
     protected SourceTaskContext context;

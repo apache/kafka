@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.cli;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.runtime.Coordinator;
@@ -40,6 +41,7 @@ import java.util.Properties;
  * fault tolerant by overriding the settings to use file storage for both.
  * </p>
  */
+@InterfaceStability.Unstable
 public class Copycat {
     private static final Logger log = LoggerFactory.getLogger(Copycat.class);
 

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.copycat.connector;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * <p>
  * Base class for records containing data to be copied to/from Kafka. This corresponds closely to
@@ -25,6 +27,7 @@ package org.apache.kafka.copycat.connector;
  * notion of offset, it is not included here because they differ in type.
  * </p>
  */
+@InterfaceStability.Unstable
 public abstract class CopycatRecord {
     private final String topic;
     private final Integer kafkaPartition;

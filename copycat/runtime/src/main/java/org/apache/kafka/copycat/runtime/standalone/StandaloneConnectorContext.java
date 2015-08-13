@@ -23,7 +23,7 @@ import org.apache.kafka.copycat.connector.ConnectorContext;
  * ConnectorContext for use with the StandaloneCoordinator, which maintains all connectors and tasks
  * in a single process.
  */
-public class StandaloneConnectorContext implements ConnectorContext {
+class StandaloneConnectorContext implements ConnectorContext {
 
     private StandaloneCoordinator coordinator;
     private String connectorName;

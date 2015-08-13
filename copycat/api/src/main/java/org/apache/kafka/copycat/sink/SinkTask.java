@@ -17,6 +17,7 @@
 package org.apache.kafka.copycat.sink;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.errors.CopycatException;
 
@@ -28,6 +29,7 @@ import java.util.Map;
  * addition to the basic {@link #put} interface, SinkTasks must also implement {@link #flush}
  * to support offset commits.
  */
+@InterfaceStability.Unstable
 public abstract class SinkTask implements Task {
 
     /**

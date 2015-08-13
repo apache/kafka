@@ -24,7 +24,7 @@ import java.util.Properties;
  * Interface used by StandaloneController to store configuration data for jobs. To be fault
  * tolerant, all data required to resume jobs is stored here.
  */
-public interface ConfigStorage {
+interface ConfigStorage {
 
     /**
      * Configure this storage engine.

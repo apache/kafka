@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * This class ties together all the components of a Copycat process (coordinator, worker,
  * storage, command interface), managing their lifecycle.
  */
+@InterfaceStability.Unstable
 public class Copycat {
     private static final Logger log = LoggerFactory.getLogger(Copycat.class);
 

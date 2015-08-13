@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.cli;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 
 import java.util.Properties;
 
+@InterfaceStability.Unstable
 public class CopycatConfig extends AbstractConfig {
 
     public static final String WORKER_PROPERTIES_CONFIG = "worker-config";
@@ -53,11 +55,8 @@ public class CopycatConfig extends AbstractConfig {
                         Importance.HIGH, DELETE_CONNECTORS_CONFIG_DOC);
     }
 
-    private Properties originalProperties;
-
     public CopycatConfig(Properties props) {
         super(config, props);
-        this.originalProperties = props;
     }
 
     /**

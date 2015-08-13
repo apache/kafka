@@ -109,6 +109,7 @@
 	</subpackage>
 
 	<subpackage name="copycat">
+		<allow pkg="org.apache.kafka.common" />
 		<allow pkg="org.apache.kafka.copycat.data" />
 		<allow pkg="org.apache.kafka.copycat.errors" />
 
@@ -124,7 +125,6 @@
 
 		<subpackage name="runtime">
 			<allow pkg="org.apache.kafka.copycat" />
-			<allow pkg="org.apache.kafka.common" />
 			<allow pkg="org.apache.kafka.clients" />
 			<!-- for tests -->
 			<allow pkg="org.easymock" />

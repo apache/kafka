@@ -38,7 +38,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * WorkerTask that uses a SinkTask to export data from Kafka.
  */
-public class WorkerSinkTask<K, V> implements WorkerTask {
+class WorkerSinkTask<K, V> implements WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);
 
     private final ConnectorTaskId id;

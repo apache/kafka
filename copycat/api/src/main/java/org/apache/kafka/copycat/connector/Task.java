@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.connector;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.errors.CopycatException;
 
 import java.util.Properties;
@@ -34,6 +35,7 @@ import java.util.Properties;
  * {@link org.apache.kafka.copycat.sink.SinkTask}.
  * </p>
  */
+@InterfaceStability.Unstable
 public interface Task {
     /**
      * Start the Task

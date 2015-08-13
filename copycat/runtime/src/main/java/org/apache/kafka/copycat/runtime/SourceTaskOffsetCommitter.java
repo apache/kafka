@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit;
  *   The current implementation uses a single thread to process commits and
  * </p>
  */
-public class SourceTaskOffsetCommitter {
+class SourceTaskOffsetCommitter {
     private static final Logger log = LoggerFactory.getLogger(SourceTaskOffsetCommitter.class);
 
     private Time time;

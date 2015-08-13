@@ -18,6 +18,7 @@
 package org.apache.kafka.copycat.sink;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Map;
 /**
  * Context passed to SinkTasks, allowing them to access utilities in the copycat runtime.
  */
+@InterfaceStability.Unstable
 public abstract class SinkTaskContext {
     private Map<TopicPartition, Long> offsets;
 

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.sink;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.CopycatRecord;
 
 /**
@@ -24,6 +25,7 @@ import org.apache.kafka.copycat.connector.CopycatRecord;
  * the record in the Kafka topic-partition in addition to the standard fields. This information
  * should be used by the SinkTask to coordinate kafkaOffset commits.
  */
+@InterfaceStability.Unstable
 public class SinkRecord extends CopycatRecord {
     private final long kafkaOffset;
 

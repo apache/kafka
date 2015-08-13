@@ -17,6 +17,8 @@
 
 package org.apache.kafka.copycat.storage;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * The Converter interface provides support for translating between Copycat's runtime data format
  * and the "native" runtime format used by the serialization layer. This is used to translate
@@ -24,6 +26,7 @@ package org.apache.kafka.copycat.storage;
  * component -- the producer or consumer serializer or deserializer for records or a Copycat
  * serializer or deserializer for offsets.
  */
+@InterfaceStability.Unstable
 public interface Converter<T> {
 
     /**

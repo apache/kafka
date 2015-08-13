@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.connector;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.errors.CopycatException;
 
 import java.util.List;
@@ -39,6 +40,7 @@ import java.util.Properties;
  * Tasks.
  * </p>
  */
+@InterfaceStability.Unstable
 public abstract class Connector {
 
     protected ConnectorContext context;

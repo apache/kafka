@@ -19,6 +19,6 @@ package org.apache.kafka.copycat.runtime;
 
 import org.apache.kafka.copycat.sink.SinkTaskContext;
 
-public class SinkTaskContextImpl extends SinkTaskContext {
+class SinkTaskContextImpl extends SinkTaskContext {
 
 }

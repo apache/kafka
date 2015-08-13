@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.source;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.CopycatRecord;
 
 /**
@@ -37,6 +38,7 @@ import org.apache.kafka.copycat.connector.CopycatRecord;
  * "table_name"} and the sourceOffset as a Long containing the timestamp of the row.
  * </p>
  */
+@InterfaceStability.Unstable
 public class SourceRecord extends CopycatRecord {
     private final Object sourcePartition;
     private final Object sourceOffset;

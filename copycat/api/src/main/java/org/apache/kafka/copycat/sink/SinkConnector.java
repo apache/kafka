@@ -17,11 +17,13 @@
 
 package org.apache.kafka.copycat.sink;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.Connector;
 
 /**
  * SinkConnectors implement the Connector interface to send Kafka data to another system.
  */
+@InterfaceStability.Unstable
 public abstract class SinkConnector extends Connector {
 
     /**

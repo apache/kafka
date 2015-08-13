@@ -46,7 +46,7 @@ import java.util.concurrent.TimeoutException;
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
  */
-public class WorkerSourceTask<K, V> implements WorkerTask {
+class WorkerSourceTask<K, V> implements WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);
 
     private ConnectorTaskId id;

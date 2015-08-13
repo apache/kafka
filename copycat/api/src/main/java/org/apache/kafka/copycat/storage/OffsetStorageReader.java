@@ -17,6 +17,8 @@
 
 package org.apache.kafka.copycat.storage;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Collection;
 import java.util.Map;
 
@@ -25,6 +27,7 @@ import java.util.Map;
  * connectors to determine offsets to start consuming data from. This is most commonly used during
  * initialization of a task, but can also be used during runtime, e.g. when reconfiguring a task.
  */
+@InterfaceStability.Unstable
 public interface OffsetStorageReader {
     /**
      * Get the offset for the specified partition. If the data isn't already available locally, this

@@ -16,12 +16,14 @@
  **/
 package org.apache.kafka.copycat.source;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.Connector;
 
 /**
  * SourceConnectors implement the connector interface to pull data from another system and send
  * it to Kafka.
  */
+@InterfaceStability.Unstable
 public abstract class SourceConnector extends Connector {
 
 }

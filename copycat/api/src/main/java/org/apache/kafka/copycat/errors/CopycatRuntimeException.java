@@ -17,6 +17,9 @@
 
 package org.apache.kafka.copycat.errors;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+@InterfaceStability.Unstable
 public class CopycatRuntimeException extends RuntimeException {
     public CopycatRuntimeException(String s) {
         super(s);
