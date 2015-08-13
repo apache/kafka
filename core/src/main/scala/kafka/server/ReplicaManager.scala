@@ -16,29 +16,23 @@
  */
 package kafka.server
 
-import kafka.api._
-import kafka.common._
-import kafka.utils._
-import kafka.cluster.{BrokerEndPoint, Partition, Replica}
-import kafka.log.{LogAppendInfo, LogManager}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.controller.KafkaController
-import kafka.message.{ByteBufferMessageSet, MessageSet}
-import kafka.api.ProducerResponseStatus
-import kafka.common.TopicAndPartition
-import kafka.api.PartitionFetchInfo
+import java.io.{File, IOException}
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
+import com.yammer.metrics.core.Gauge
+import kafka.api._
+import kafka.cluster.{BrokerEndPoint, Partition, Replica}
+import kafka.common._
+import kafka.controller.KafkaController
+import kafka.log.{LogAppendInfo, LogManager}
+import kafka.message.{ByteBufferMessageSet, MessageSet}
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils._
+import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.protocol.Errors
 
-import java.util.concurrent.atomic.AtomicBoolean
-import java.io.{IOException, File}
-import java.util.concurrent.TimeUnit
-
-import scala.Some
 import scala.collection._
-
-import org.I0Itec.zkclient.ZkClient
-import com.yammer.metrics.core.Gauge
 
 /*
  * Result metadata of a log append operation on the log
@@ -116,6 +110,7 @@ class ReplicaManager(val config: KafkaConfig,
   private var hwThreadInitialized = false
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
   val stateChangeLogger = KafkaController.stateChangeLogger
+  private val isrChangeSet: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
 
   val delayedProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
@@ -154,6 +149,21 @@ class ReplicaManager(val config: KafkaConfig,
       scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
   }
 
+  def recordIsrChange(topicAndPartition: TopicAndPartition) {
+    isrChangeSet synchronized {
+      isrChangeSet += topicAndPartition
+    }
+  }
+
+  def maybePropagateIsrChanges() {
+    isrChangeSet synchronized {
+      if (isrChangeSet.nonEmpty) {
+        ReplicationUtils.propagateIsrChanges(zkClient, isrChangeSet)
+        isrChangeSet.clear()
+      }
+    }
+  }
+
   /**
    * Try to complete some delayed produce requests with the request key;
    * this can be triggered when:
@@ -181,6 +191,7 @@ class ReplicaManager(val config: KafkaConfig,
   def startup() {
     // start ISR expiration thread
     scheduler.schedule("isr-expiration", maybeShrinkIsr, period = config.replicaLagTimeMaxMs, unit = TimeUnit.MILLISECONDS)
+    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = 5000, unit = TimeUnit.MILLISECONDS)
   }
 
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {

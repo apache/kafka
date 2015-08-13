@@ -195,7 +195,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
                                 metadata.topicsMetadata.head.partitionsMetadata.nonEmpty)
                               metadata.topicsMetadata.head.partitionsMetadata.head.isr
                             else
-                              ""))
+                              ""), 6000L)
     })
   }
 
