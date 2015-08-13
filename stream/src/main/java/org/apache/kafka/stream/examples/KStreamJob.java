@@ -17,11 +17,11 @@
 
 package org.apache.kafka.stream.examples;
 
-import org.apache.kafka.clients.processor.ProcessorProperties;
+import org.apache.kafka.stream.KStreamTopologyBuilder;
+import org.apache.kafka.stream.processor.ProcessorProperties;
 import org.apache.kafka.stream.KStreamProcess;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.KStream;
-import org.apache.kafka.stream.KStreamTopology;
 import org.apache.kafka.stream.KeyValue;
 import org.apache.kafka.stream.KeyValueMapper;
 import org.apache.kafka.stream.Predicate;
@@ -30,48 +30,44 @@ import java.util.Properties;
 
 public class KStreamJob {
 
-    private static class MyKStreamTopology extends KStreamTopology {
-
-        @Override
-        public void build() {
-            // With overridden de-serializer
-            KStream<String, String> stream1 = from(new StringDeserializer(), new StringDeserializer(), "topic1");
-
-            KStream<String, Integer> stream2 =
-                stream1.map(new KeyValueMapper<String, String, String, Integer>() {
-                    @Override
-                    public KeyValue<String, Integer> apply(String key, String value) {
-                        return new KeyValue<>(key, new Integer(value));
-                    }
-                }).filter(new Predicate<String, Integer>() {
-                    @Override
-                    public boolean apply(String key, Integer value) {
-                        return true;
-                    }
-                });
-
-            KStream<String, Integer>[] streams = stream2.branch(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean apply(String key, Integer value) {
-                        return true;
-                    }
-                },
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean apply(String key, Integer value) {
-                        return true;
-                    }
-                }
-            );
-
-            streams[0].sendTo("topic2");
-            streams[1].sendTo("topic3");
-        }
-    }
-
     public static void main(String[] args) throws Exception {
-        KStreamProcess kstream = new KStreamProcess(MyKStreamTopology.class, new ProcessorProperties(new Properties()));
+        ProcessorProperties properties = new ProcessorProperties(new Properties());
+        KStreamTopologyBuilder builder = new KStreamTopologyBuilder();
+
+        KStream<String, String> stream1 = builder.from(new StringDeserializer(), new StringDeserializer(), "topic1");
+
+        KStream<String, Integer> stream2 =
+            stream1.map(new KeyValueMapper<String, String, String, Integer>() {
+                @Override
+                public KeyValue<String, Integer> apply(String key, String value) {
+                    return new KeyValue<>(key, new Integer(value));
+                }
+            }).filter(new Predicate<String, Integer>() {
+                @Override
+                public boolean apply(String key, Integer value) {
+                    return true;
+                }
+            });
+
+        KStream<String, Integer>[] streams = stream2.branch(
+            new Predicate<String, Integer>() {
+                @Override
+                public boolean apply(String key, Integer value) {
+                    return true;
+                }
+            },
+            new Predicate<String, Integer>() {
+                @Override
+                public boolean apply(String key, Integer value) {
+                    return true;
+                }
+            }
+        );
+
+        streams[0].sendTo("topic2");
+        streams[1].sendTo("topic3");
+
+        KStreamProcess kstream = new KStreamProcess(builder, properties);
         kstream.run();
     }
 }

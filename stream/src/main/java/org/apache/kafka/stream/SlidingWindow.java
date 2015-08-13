@@ -17,9 +17,9 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.stream.internals.FilteredIterator;
-import org.apache.kafka.clients.processor.Stamped;
+import org.apache.kafka.stream.processor.ProcessorContext;
+import org.apache.kafka.stream.kstream.internals.FilteredIterator;
+import org.apache.kafka.stream.processor.Stamped;
 
 import java.util.HashMap;
 import java.util.Iterator;

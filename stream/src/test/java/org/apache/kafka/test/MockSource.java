@@ -17,7 +17,7 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.processor.KafkaSource;
+import org.apache.kafka.stream.processor.KafkaSource;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayList;

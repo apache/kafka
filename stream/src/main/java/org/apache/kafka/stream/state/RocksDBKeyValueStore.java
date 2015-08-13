@@ -17,7 +17,7 @@
 
 package org.apache.kafka.stream.state;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.processor.ProcessorContext;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.SystemTime;
 

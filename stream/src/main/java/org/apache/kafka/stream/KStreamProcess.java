@@ -17,10 +17,10 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.clients.processor.internals.KStreamThread;
-import org.apache.kafka.clients.processor.ProcessorConfig;
-import org.apache.kafka.clients.processor.ProcessorProperties;
+import org.apache.kafka.stream.processor.PTopologyBuilder;
+import org.apache.kafka.stream.processor.internals.KStreamThread;
+import org.apache.kafka.stream.processor.ProcessorConfig;
+import org.apache.kafka.stream.processor.ProcessorProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
  * <p>
- * This processing is defined by extending the {@link PTopology} abstract class to specify the transformation operator build. The
+ * This processing is defined by extending the {@link PTopologyBuilder} abstract class to specify the transformation operator build. The
  * {@link KStreamProcess} instance will be responsible for the lifecycle of these processors. It will instantiate and
  * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
  * <p>
@@ -68,7 +68,7 @@ public class KStreamProcess implements Runnable {
     private final KStreamThread[] threads;
 
 
-    public KStreamProcess(Class<? extends PTopology> topologyClass, ProcessorProperties processorProperties) throws Exception {
+    public KStreamProcess(PTopologyBuilder builder, ProcessorProperties processorProperties) throws Exception {
         if (processorProperties.timestampExtractor() == null)
             throw new NullPointerException("timestamp extractor is missing");
 
@@ -76,7 +76,7 @@ public class KStreamProcess implements Runnable {
 
         this.threads = new KStreamThread[this.config.numStreamThreads];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new KStreamThread(topologyClass, processorProperties);
+            this.threads[i] = new KStreamThread(builder, processorProperties);
         }
     }
 

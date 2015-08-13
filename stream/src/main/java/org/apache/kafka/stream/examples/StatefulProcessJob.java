@@ -18,13 +18,13 @@
 package org.apache.kafka.stream.examples;
 
 import org.apache.kafka.stream.KStreamProcess;
-import org.apache.kafka.clients.processor.KafkaProcessor;
-import org.apache.kafka.clients.processor.PTopology;
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.KafkaSource;
+import org.apache.kafka.stream.processor.KafkaProcessor;
+import org.apache.kafka.stream.processor.PTopologyBuilder;
+import org.apache.kafka.stream.processor.ProcessorContext;
+import org.apache.kafka.stream.processor.KafkaSource;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.clients.processor.ProcessorProperties;
+import org.apache.kafka.stream.processor.ProcessorProperties;
 import org.apache.kafka.stream.state.Entry;
 import org.apache.kafka.stream.state.InMemoryKeyValueStore;
 import org.apache.kafka.stream.state.KeyValueIterator;
@@ -78,18 +78,14 @@ public class StatefulProcessJob {
         }
     }
 
-    private static class MyPTopology extends PTopology {
-
-        @Override
-        public void build() {
-            KafkaSource<String, Integer> source = addSource(new StringDeserializer(), new IntegerDeserializer(), "topic-source");
-
-            addProcessor(new MyProcessor("processor"), source);
-        }
-    }
-
     public static void main(String[] args) throws Exception {
-        KStreamProcess streaming = new KStreamProcess(MyPTopology.class, new ProcessorProperties(new Properties()));
+        ProcessorProperties properties = new ProcessorProperties(new Properties());
+        PTopologyBuilder builder = new PTopologyBuilder();
+
+        builder.addSource("SOURCE", new StringDeserializer(), new IntegerDeserializer(), "topic-source");
+        builder.addProcessor("PROCESS", MyProcessor.class, null, "SOURCE");
+
+        KStreamProcess streaming = new KStreamProcess(builder, properties);
         streaming.run();
     }
 }

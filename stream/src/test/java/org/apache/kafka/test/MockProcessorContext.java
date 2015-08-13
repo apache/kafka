@@ -17,6 +17,7 @@
 
 package org.apache.kafka.test;
 
+<<<<<<< HEAD
 <<<<<<< HEAD:stream/src/test/java/org/apache/kafka/test/MockKStreamContext.java
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -70,6 +71,13 @@ import org.apache.kafka.clients.processor.RecordCollector;
 import org.apache.kafka.clients.processor.RestoreFunc;
 import org.apache.kafka.clients.processor.StateStore;
 >>>>>>> wip
+=======
+import org.apache.kafka.stream.processor.KafkaProcessor;
+import org.apache.kafka.stream.processor.ProcessorContext;
+import org.apache.kafka.stream.processor.RecordCollector;
+import org.apache.kafka.stream.processor.RestoreFunc;
+import org.apache.kafka.stream.processor.StateStore;
+>>>>>>> Refactor Processor and KStream APIs
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;

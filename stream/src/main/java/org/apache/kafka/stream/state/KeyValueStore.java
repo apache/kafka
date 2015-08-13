@@ -19,7 +19,7 @@
 
 package org.apache.kafka.stream.state;
 
-import org.apache.kafka.clients.processor.StateStore;
+import org.apache.kafka.stream.processor.StateStore;
 
 import java.util.List;
 

@@ -25,8 +25,10 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Properties;
@@ -574,5 +576,17 @@ public class Utils {
             file.delete();
         }
     }
+<<<<<<< HEAD
 >>>>>>> removing io.confluent imports: wip
+=======
+
+    /**
+     * Returns an empty collection if this list is empty
+     * @param other
+     * @return
+     */
+    public static <T> List<T> safe(List<T> other) {
+        return other == null ? Collections.EMPTY_LIST : other;
+    }
+>>>>>>> Refactor Processor and KStream APIs
 }

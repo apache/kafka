@@ -19,8 +19,8 @@ package org.apache.kafka.stream;
 
 import static org.junit.Assert.assertEquals;
 
-import org.apache.kafka.clients.processor.internals.MinTimestampTracker;
-import org.apache.kafka.clients.processor.Stamped;
+import org.apache.kafka.stream.processor.internals.MinTimestampTracker;
+import org.apache.kafka.stream.processor.Stamped;
 import org.junit.Test;
 
 public class MinTimestampTrackerTest {

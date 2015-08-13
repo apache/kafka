@@ -19,8 +19,8 @@ package org.apache.kafka.stream;
 
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.stream.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.stream.kstream.internals.KStreamSource;
+import org.apache.kafka.test.MockKStreamTopologyBuilder;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.UnlimitedWindow;
 import org.junit.Test;
@@ -33,7 +33,7 @@ public class KStreamWindowedTest {
 
     private String topicName = "topic";
 
-    private KStreamTopology topology = new MockKStreamTopology();
+    private KStreamTopologyBuilder topology = new MockKStreamTopologyBuilder();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 

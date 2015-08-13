@@ -17,8 +17,8 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.StateStore;
+import org.apache.kafka.stream.processor.ProcessorContext;
+import org.apache.kafka.stream.processor.StateStore;
 
 import java.util.Iterator;
 
