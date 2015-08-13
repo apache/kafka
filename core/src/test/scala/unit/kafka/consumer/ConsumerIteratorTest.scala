@@ -18,22 +18,20 @@
 
 package kafka.consumer
 
-import java.util.Properties
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import scala.collection._
-import junit.framework.Assert._
+import org.junit.Assert._
 
 import kafka.message._
 import kafka.server._
 import kafka.utils.TestUtils._
 import kafka.utils._
-import org.junit.Test
+import org.junit.{Before, Test}
 import kafka.serializer._
-import org.scalatest.junit.JUnit3Suite
 import kafka.integration.KafkaServerTestHarness
 
-class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
+class ConsumerIteratorTest extends KafkaServerTestHarness {
 
   val numNodes = 1
 
@@ -49,6 +47,7 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
 
   def consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
 
+  @Before
   override def setUp() {
     super.setUp()
     topicInfos = configs.map(c => new PartitionTopicInfo(topic,

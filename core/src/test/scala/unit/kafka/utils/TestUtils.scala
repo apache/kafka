@@ -43,8 +43,7 @@ import kafka.admin.AdminUtils
 import kafka.producer.ProducerConfig
 import kafka.log._
 
-import junit.framework.AssertionFailedError
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
 
 import scala.collection.Map
@@ -595,7 +594,7 @@ object TestUtils extends Logging {
         block
         return
       } catch {
-        case e: AssertionFailedError =>
+        case e: AssertionError =>
           val ellapsed = System.currentTimeMillis - startTime
           if(ellapsed > maxWaitMs) {
             throw e

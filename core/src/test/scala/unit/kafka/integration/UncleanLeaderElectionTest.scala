@@ -18,24 +18,22 @@
 package kafka.integration
 
 import org.apache.kafka.common.config.ConfigException
+import org.junit.{After, Before}
 
-import scala.collection.mutable.MutableList
 import scala.util.Random
 import org.apache.log4j.{Level, Logger}
-import org.scalatest.junit.JUnit3Suite
 import java.util.Properties
-import junit.framework.Assert._
 import kafka.admin.AdminUtils
 import kafka.common.FailedToSendMessageException
-import kafka.consumer.{Consumer, ConsumerConfig, ConsumerTimeoutException}
-import kafka.producer.{KeyedMessage, Producer}
+import kafka.consumer.{Consumer, ConsumerConfig}
 import kafka.serializer.StringDecoder
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
+import org.junit.Assert._
 
-class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
+class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
@@ -58,6 +56,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   val syncProducerLogger = Logger.getLogger(classOf[kafka.producer.SyncProducer])
   val eventHandlerLogger = Logger.getLogger(classOf[kafka.producer.async.DefaultEventHandler[Object, Object]])
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -77,6 +76,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     eventHandlerLogger.setLevel(Level.FATAL)
   }
 
+  @After
   override def tearDown() {
     servers.foreach(server => shutdownServer(server))
     servers.foreach(server => CoreUtils.rm(server.config.logDirs))

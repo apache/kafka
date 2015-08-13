@@ -22,13 +22,12 @@ import kafka.server.{ReplicaFetcherManager, KafkaConfig}
 import kafka.api.LeaderAndIsr
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common.TopicAndPartition
-import org.scalatest.junit.JUnit3Suite
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 import org.easymock.EasyMock
 
 
-class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
+class ReplicationUtilsTest extends ZooKeeperTestHarness {
   val topic = "my-topic-test"
   val partitionId = 0
   val brokerId = 1
@@ -45,7 +44,7 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(1,leaderEpoch,List(1,2),0), controllerEpoch)
 
-
+  @Before
   override def setUp() {
     super.setUp()
     ZkUtils.createPersistentPath(zkClient,topicPath,topicData)

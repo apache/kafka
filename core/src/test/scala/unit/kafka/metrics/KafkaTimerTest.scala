@@ -18,12 +18,11 @@ package kafka.metrics
  */
 
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 import java.util.concurrent.TimeUnit
-import junit.framework.Assert._
+import org.junit.Assert._
 import com.yammer.metrics.core.{MetricsRegistry, Clock}
 
-class KafkaTimerTest extends JUnit3Suite {
+class KafkaTimerTest {
 
   @Test
   def testKafkaTimer() {

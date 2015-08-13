@@ -19,7 +19,7 @@ package kafka.message
 
 import java.nio._
 import java.util.concurrent.atomic.AtomicLong
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.TestUtils
 

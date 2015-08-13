@@ -20,7 +20,7 @@ package kafka.message
 import java.nio._
 import java.util.HashMap
 import scala.collection._
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{Before, Test}
 import kafka.utils.TestUtils

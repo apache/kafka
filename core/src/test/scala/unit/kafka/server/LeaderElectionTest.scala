@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.api._
 import kafka.utils.{TestUtils, ZkUtils, CoreUtils}
 import kafka.cluster.Broker
@@ -26,9 +26,9 @@ import kafka.controller.{ControllerChannelManager, ControllerContext, LeaderIsrA
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{After, Before}
 
-class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
+class LeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
@@ -36,6 +36,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   var staleControllerEpochDetected = false
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -48,6 +49,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     servers ++= List(server1, server2)
   }
 
+  @After
   override def tearDown() {
     servers.foreach(_.shutdown())
     servers.foreach(server => CoreUtils.rm(server.config.logDirs))

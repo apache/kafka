@@ -16,7 +16,7 @@
  */
 package kafka.utils
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.scalatest.Assertions
 import org.junit.{Test, After, Before}
 
