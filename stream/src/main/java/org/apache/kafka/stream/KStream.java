@@ -20,6 +20,7 @@ package org.apache.kafka.stream;
 import org.apache.kafka.stream.processor.KafkaProcessor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.stream.processor.PConfig;
 
 /**
  * KStream is an abstraction of a stream of key-value pairs.
@@ -104,16 +105,6 @@ public interface KStream<K, V> {
      * The created stream is added to the default synchronization group.
      * This is equivalent to calling sendTo(topic) and from(topic).
      *
-     * @param topic the topic name
-     * @return KStream
-     */
-    KStream<K, V> through(String topic);
-
-    /**
-     * Sends key-value to a topic, also creates a new stream from the topic.
-     * The created stream is added to the default synchronization group.
-     * This is equivalent to calling sendTo(topic) and from(topic).
-     *
      * @param topic           the topic name
      * @param keySerializer   key serializer used to send key-value pairs,
      *                        if not specified the default serializer defined in the configs will be used
@@ -132,13 +123,6 @@ public interface KStream<K, V> {
     /**
      * Sends key-value to a topic.
      *
-     * @param topic the topic name
-     */
-    void sendTo(String topic);
-
-    /**
-     * Sends key-value to a topic.
-     *
      * @param topic         the topic name
      * @param keySerializer key serializer used to send key-value pairs,
      *                      if not specified the default serializer defined in the configs will be used
@@ -150,7 +134,7 @@ public interface KStream<K, V> {
     /**
      * Processes all elements in this stream by applying a processor.
      *
-     * @param processor the instance of Processor
+     * @param processorClass the class of Processor
      */
-    <K1, V1> KStream<K1, V1> process(KafkaProcessor<K, V, K1, V1> processor);
+    <K1, V1> KStream<K1, V1> process(Class<? extends KafkaProcessor<K, V, K1, V1>> processorClass, PConfig config);
 }

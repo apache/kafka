@@ -20,17 +20,20 @@ package org.apache.kafka.stream.kstream.internals;
 import org.apache.kafka.stream.processor.KafkaProcessor;
 import org.apache.kafka.stream.KeyValue;
 import org.apache.kafka.stream.KeyValueMapper;
+import org.apache.kafka.stream.processor.PConfig;
 
 class KStreamFlatMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
 
-    private static final String FLATMAP_NAME = "KAFKA-FLATMAP";
-
     private final KeyValueMapper<K1, V1, K2, ? extends Iterable<V2>> mapper;
 
-    KStreamFlatMap(KeyValueMapper<K1, V1, K2, ? extends Iterable<V2>> mapper) {
-        super(FLATMAP_NAME);
+    @SuppressWarnings("unchecked")
+    KStreamFlatMap(String name, PConfig config) {
+        super(name, config);
 
-        this.mapper = mapper;
+        if (this.config() == null)
+            throw new IllegalStateException("PConfig should be specified.");
+
+        this.mapper = (KeyValueMapper<K1, V1, K2, ? extends Iterable<V2>>) config.value();
     }
 
     @Override

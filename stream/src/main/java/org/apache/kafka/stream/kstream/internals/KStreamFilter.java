@@ -25,9 +25,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
 
-    public static final String FILTER_NAME = "KAFKA-FILTER-";
-    public static final AtomicInteger FILTER_INDEX = new AtomicInteger(1);
-
     private final PredicateOut<K, V> predicateOut;
 
     public static final class PredicateOut<K1, V1> {

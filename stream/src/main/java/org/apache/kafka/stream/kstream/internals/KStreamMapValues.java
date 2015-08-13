@@ -17,19 +17,23 @@
 
 package org.apache.kafka.stream.kstream.internals;
 
+import org.apache.kafka.stream.KeyValueMapper;
 import org.apache.kafka.stream.processor.KafkaProcessor;
 import org.apache.kafka.stream.ValueMapper;
+import org.apache.kafka.stream.processor.PConfig;
 
 class KStreamMapValues<K1, V1, V2> extends KafkaProcessor<K1, V1, K1, V2> {
 
-    private static final String MAPVALUES_NAME = "KAFKA-MAPVALUES";
-
     private final ValueMapper<V1, V2> mapper;
 
-    public KStreamMapValues(ValueMapper<V1, V2> mapper) {
-        super(MAPVALUES_NAME);
+    @SuppressWarnings("unchecked")
+    public KStreamMapValues(String name, PConfig config) {
+        super(name, config);
 
-        this.mapper = mapper;
+        if (this.config() == null)
+            throw new IllegalStateException("PConfig should be specified.");
+
+        this.mapper = (ValueMapper<V1, V2>) config.value();
     }
 
     @Override

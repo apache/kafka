@@ -20,17 +20,22 @@ package org.apache.kafka.stream.kstream.internals;
 import org.apache.kafka.stream.processor.KafkaProcessor;
 import org.apache.kafka.stream.KeyValue;
 import org.apache.kafka.stream.KeyValueMapper;
+import org.apache.kafka.stream.processor.PConfig;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 class KStreamMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
 
-    private static final String MAP_NAME = "KAFKA-MAP";
-
     private final KeyValueMapper<K1, V1, K2, V2> mapper;
 
-    public KStreamMap(KeyValueMapper<K1, V1, K2, V2> mapper) {
-        super(MAP_NAME);
+    @SuppressWarnings("unchecked")
+    public KStreamMap(String name, PConfig config) {
+        super(name, config);
 
-        this.mapper = mapper;
+        if (this.config() == null)
+            throw new IllegalStateException("PConfig should be specified.");
+
+        this.mapper = (KeyValueMapper<K1, V1, K2, V2>) config.value();
     }
 
     @Override

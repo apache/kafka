@@ -31,9 +31,28 @@ import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.ValueMapper;
 import org.apache.kafka.stream.Window;
 
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class KStreamImpl<K, V> implements KStream<K, V> {
 
-    private static final String PROCESSOR_NAME = "KAFKA-PROCESS";
+    private static final String FILTER_NAME = "KAFKA-FILTER-";
+
+    private static final String MAP_NAME = "KAFKA-MAP-";
+
+    private static final String MAPVALUES_NAME = "KAFKA-MAPVALUES-";
+
+    private static final String FLATMAP_NAME = "KAFKA-FLATMAP-";
+
+    private static final String FLATMAPVALUES_NAME = "KAFKA-FLATMAPVALUES-";
+
+    private static final String PROCESSOR_NAME = "KAFKA-PROCESSOR-";
+
+    private static final String BRANCH_NAME = "KAFKA-BRANCH-";
+
+    public static final String SOURCE_NAME = "KAFKA-SOURCE-";
+
+    public static final AtomicInteger INDEX = new AtomicInteger(1);
 
     protected PTopologyBuilder topology;
     protected String name;
@@ -43,64 +62,60 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
         this.name = name;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public KStream<K, V> filter(Predicate<K, V> predicate) {
-        String name = KStreamFilter.FILTER_NAME + KStreamFilter.FILTER_INDEX.getAndIncrement();
+        String name = FILTER_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamFilter.class, new PConfig("Predicate", new KStreamFilter.PredicateOut<>(predicate)), name);
+        topology.addProcessor(name, KStreamFilter.class, new PConfig("Predicate", new KStreamFilter.PredicateOut<>(predicate)), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public KStream<K, V> filterOut(final Predicate<K, V> predicate) {
-        String name = KStreamFilter.FILTER_NAME + KStreamFilter.FILTER_INDEX.getAndIncrement();
+        String name = FILTER_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamFilter.class, new PConfig("Predicate", new KStreamFilter.PredicateOut<>(predicate, true)), name);
+        topology.addProcessor(name, KStreamFilter.class, new PConfig("Predicate", new KStreamFilter.PredicateOut<>(predicate, true)), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper) {
-        KStreamMap<K, V, K1, V1> map = new KStreamMap<>(mapper);
+        String name = MAP_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(map, processor);
+        topology.addProcessor(name, KStreamMap.class, new PConfig("Mapper", mapper), this.name);
 
-        return new KStreamImpl<>(topology, map);
+        return new KStreamImpl<>(topology, name);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper) {
-        KStreamMapValues<K, V, V1> map = new KStreamMapValues<>(mapper);
+        String name = MAPVALUES_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(map, processor);
+        topology.addProcessor(name, KStreamMapValues.class, new PConfig("ValueMapper", mapper), this.name);
 
-        return new KStreamImpl<>(topology, map);
+        return new KStreamImpl<>(topology, name);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, K1, ? extends Iterable<V1>> mapper) {
-        KStreamFlatMap<K, V, K1, V1> map = new KStreamFlatMap<>(mapper);
+        String name = FLATMAP_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(map, processor);
+        topology.addProcessor(name, KStreamFlatMap.class, new PConfig("Mapper", mapper), this.name);
 
-        return new KStreamImpl<>(topology, map);
+        return new KStreamImpl<>(topology, name);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <V1> KStream<K, V1> flatMapValues(ValueMapper<V, ? extends Iterable<V1>> mapper) {
-        KStreamFlatMapValues<K, V, V1> map = new KStreamFlatMapValues<>(mapper);
+        String name = FLATMAPVALUES_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(map, processor);
+        topology.addProcessor(name, KStreamFlatMapValues.class, new PConfig("ValueMapper", mapper), this.name);
 
-        return new KStreamImpl<>(topology, map);
+        return new KStreamImpl<>(topology, name);
     }
 
     @Override
@@ -114,14 +129,14 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @Override
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
+        String name = BRANCH_NAME + INDEX.getAndIncrement();
+
+        topology.addProcessor(name, KStreamFlatMapValues.class, new PConfig("ValueMapper", mapper), this.name);
+
+        Arrays.copyOf(predicates, predicates.length)
+
         KStreamBranch<K, V> branch = new KStreamBranch<>(predicates, topology, processor);
         return branch.branches();
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public KStream<K, V> through(String topic) {
-        return through(topic, null, null, null, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -131,49 +146,28 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
                                             Serializer<V> valSerializer,
                                             Deserializer<K1> keyDeserializer,
                                             Deserializer<V1> valDeserializer) {
-        process(this.getSendProcessor(topic, keySerializer, valSerializer));
+        process(KStreamSend.class, new PConfig("Topic-Ser", new KStreamSend.TopicSer(topic, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer)));
 
-        KafkaSource<K1, V1> source = topology.addSource(keyDeserializer, valDeserializer, topic);
+        String name = SOURCE_NAME + INDEX.getAndIncrement();
+
+        KafkaSource<K1, V1> source = topology.addSource(name, keyDeserializer, valDeserializer, topic);
 
         return new KStreamSource<>(topology, source);
     }
 
     @Override
-    public void sendTo(String topic) {
-        process(this.<K, V>getSendProcessor(topic, null, null));
-    }
-
-    @Override
+    @SuppressWarnings("unchecked")
     public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
-        process(this.getSendProcessor(topic, keySerializer, valSerializer));
-    }
-
-    @SuppressWarnings("unchecked")
-    private <K1, V1> KafkaProcessor<K1, V1, Object, Object> getSendProcessor(final String sendTopic, final Serializer<K1> keySerializer, final Serializer<V1> valSerializer) {
-        return new KafkaProcessor<K1, V1, Object, Object>("KAFKA-SEND") {
-            private ProcessorContext context;
-
-            @Override
-            public void init(ProcessorContext context) {
-                this.context = context;
-            }
-
-            @Override
-            public void process(K1 key, V1 value) {
-                this.context.send(sendTopic, key, value, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer);
-            }
-
-            @Override
-            public void close() {
-            }
-        };
+        process(KStreamSend.class, new PConfig("Topic-Ser", new KStreamSend.TopicSer(topic, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer)));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> process(final KafkaProcessor<K, V, K1, V1> current) {
-        topology.addProcessor(current, processor);
+    public <K1, V1> KStream<K1, V1> process(final Class<? extends KafkaProcessor<K, V, K1, V1>> clazz, PConfig config) {
+        String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
-        return new KStreamImpl(topology, current);
+        topology.addProcessor(name, clazz, config, this.name);
+
+        return new KStreamImpl(topology, name);
     }
 }

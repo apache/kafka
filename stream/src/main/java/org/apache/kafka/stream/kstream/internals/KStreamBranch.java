@@ -17,7 +17,10 @@
 
 package org.apache.kafka.stream.kstream.internals;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.stream.KeyValueMapper;
 import org.apache.kafka.stream.processor.KafkaProcessor;
+import org.apache.kafka.stream.processor.PConfig;
 import org.apache.kafka.stream.processor.PTopologyBuilder;
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.Predicate;
@@ -28,39 +31,38 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
 
-    private static final String BRANCH_NAME = "KAFKA-BRANCH-";
-    private static final AtomicInteger BRANCH_INDEX = new AtomicInteger(1);
-
     private final PTopologyBuilder topology;
     private final Predicate<K, V>[] predicates;
-    private final KStreamFilter<K, V>[] branches;
 
     @SuppressWarnings("unchecked")
-    public KStreamBranch(Predicate<K, V>[] predicates, PTopologyBuilder topology, String parent) {
+    public KStreamBranch(String name, PConfig config) {
+        super(name, config);
+
+        if (this.config() == null)
+            throw new IllegalStateException("PConfig should be specified.");
+
+        Predicate<K, V>[] predicates = (Predicate<K, V>[]) config.value();
+    }
+
+    Predicate<K, V>[] predicates, PTopologyBuilder topology, String parent) {
         super(BRANCH_NAME);
 
         this.topology = topology;
         this.predicates = Arrays.copyOf(predicates, predicates.length);
-        this.branches = (KStreamFilter<K, V>[]) Array.newInstance(KStreamFilter.class, predicates.length);
-
-        // NOTE that branches here is just a list of predicates, hence not necessarily mutual exclusive
-        for (int i = 0; i < branches.length; i++) {
-            branches[i] = new KStreamFilter<>(predicates[i], false);
-            topology.addProcessor(BRANCH_NAME + BRANCH_INDEX.getAndIncrement(), branches[i], parent);
-        }
     }
 
     @Override
     public void process(K key, V value) {
-        forward(key, value);
-    }
+        if (this.children().size() != this.predicates.length)
+            throw new KafkaException("Number of branched streams does not match the length of predicates: this should not happen.");
 
-    @SuppressWarnings("unchecked")
-    public KStream<K, V>[] branches() {
-        KStream<K, V>[] streams = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, branches.length);
-        for (int i = 0; i < branches.length; i++) {
-            streams[i] = new KStreamSource<>(topology, branches[i]);
+        for (int i = 0; i < predicates.length; i++) {
+            if (predicates[i].apply(key, value)) {
+                // do not use forward here bu directly call process() and then break the loop
+                // so that no record is going to be piped to multiple streams
+                this.children().get(i).process(key, value);
+                break;
+            }
         }
-        return streams;
     }
 }

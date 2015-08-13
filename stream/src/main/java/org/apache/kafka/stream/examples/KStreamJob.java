@@ -17,6 +17,8 @@
 
 package org.apache.kafka.stream.examples;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.stream.KStreamTopologyBuilder;
 import org.apache.kafka.stream.processor.ProcessorProperties;
 import org.apache.kafka.stream.KStreamProcess;
@@ -33,6 +35,9 @@ public class KStreamJob {
     public static void main(String[] args) throws Exception {
         ProcessorProperties properties = new ProcessorProperties(new Properties());
         KStreamTopologyBuilder builder = new KStreamTopologyBuilder();
+
+        StringSerializer stringSerializer = new StringSerializer();
+        IntegerSerializer intSerializer = new IntegerSerializer();
 
         KStream<String, String> stream1 = builder.from(new StringDeserializer(), new StringDeserializer(), "topic1");
 
@@ -64,8 +69,8 @@ public class KStreamJob {
             }
         );
 
-        streams[0].sendTo("topic2");
-        streams[1].sendTo("topic3");
+        streams[0].sendTo("topic2", stringSerializer, intSerializer);
+        streams[1].sendTo("topic3", stringSerializer, intSerializer);
 
         KStreamProcess kstream = new KStreamProcess(builder, properties);
         kstream.run();
