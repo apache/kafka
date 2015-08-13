@@ -175,7 +175,7 @@ public class Fetcher<K, V> {
      * @param timeout time for which getting all topics is attempted
      * @return The map of topics and its partitions
      */
-    public Map<String, List<PartitionInfo>> getAllTopics(long timeout) {
+    public Map<String, List<PartitionInfo>> getTopicMetadata(List<String> topics, long timeout) {
         final HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
         long startTime = time.milliseconds();
 
@@ -448,8 +448,9 @@ public class Fetcher<K, V> {
                 long fetched = this.subscriptions.fetched(partition);
                 long consumed = this.subscriptions.consumed(partition);
                 // Only fetch data for partitions whose previously fetched data has been consumed
-                if (consumed == fetched)
+                if (consumed == fetched) {
                     fetch.put(partition, new FetchRequest.PartitionData(fetched, this.fetchSize));
+                }
             }
         }
 

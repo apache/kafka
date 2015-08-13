@@ -531,11 +531,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs);
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase());
             this.subscriptions = new SubscriptionState(offsetResetStrategy);
+            List<PartitionAssignor> assignors = Arrays.<PartitionAssignor>asList(
+                    config.getConfiguredInstance(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, PartitionAssignor.class));
             this.coordinator = new Coordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
                     config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
-                    config.getString(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    assignors,
+                    this.metadata,
                     this.subscriptions,
                     metrics,
                     metricGrpPrefix,
@@ -652,7 +655,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
             this.subscriptions.subscribe(topics, listener);
-            metadata.setTopics(topics);
+            metadata.setTopics(subscriptions.groupSubscription());
         } finally {
             release();
         }
@@ -1079,12 +1082,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Cluster cluster = this.metadata.fetch();
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
-            if (parts == null) {
-                metadata.add(topic);
-                client.awaitMetadataUpdate();
-                parts = metadata.fetch().partitionsForTopic(topic);
-            }
-            return parts;
+            if (parts != null)
+                return parts;
+
+            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Arrays.asList(topic), requestTimeoutMs);
+            return topicMetadata.get(topic);
         } finally {
             release();
         }
@@ -1101,7 +1103,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<String, List<PartitionInfo>> listTopics() {
         acquire();
         try {
-            return fetcher.getAllTopics(requestTimeoutMs);
+            return fetcher.getTopicMetadata(Collections.<String>emptyList(), requestTimeoutMs);
         } finally {
             release();
         }

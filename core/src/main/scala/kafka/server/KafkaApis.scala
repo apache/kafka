@@ -17,24 +17,26 @@
 
 package kafka.server
 
-import kafka.message.MessageSet
-import kafka.security.auth.Topic
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.TopicPartition
-import kafka.api._
+import java.nio.ByteBuffer
+
 import kafka.admin.AdminUtils
+import kafka.api._
 import kafka.common._
 import kafka.controller.KafkaController
-import kafka.coordinator.ConsumerCoordinator
+import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
 import kafka.log._
+import kafka.message.MessageSet
 import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
-import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse, HeartbeatRequest, HeartbeatResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend}
-import kafka.utils.{ZkUtils, ZKGroupTopicDirs, SystemTime, Logging}
-import scala.collection._
+import kafka.security.auth.{Authorizer, ClusterAction, ConsumerGroup, Create, Describe, Operation, Read, Resource, Topic, Write}
+import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
-import kafka.security.auth.{Authorizer, Read, Write, Create, ClusterAction, Describe, Resource, Topic, Operation, ConsumerGroup}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.utils.Utils
+
+import scala.collection._
 
 
 /**
@@ -42,7 +44,7 @@ import kafka.security.auth.{Authorizer, Read, Write, Create, ClusterAction, Desc
  */
 class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
-                val coordinator: ConsumerCoordinator,
+                val coordinator: GroupCoordinator,
                 val controller: KafkaController,
                 val zkUtils: ZkUtils,
                 val brokerId: Int,
@@ -77,6 +79,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.JoinGroupKey => handleJoinGroupRequest(request)
         case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
         case RequestKeys.LeaveGroupKey => handleLeaveGroupRequest(request)
+        case RequestKeys.SyncGroupKey => handleSyncGroupRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -114,12 +117,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       // for each new leader or follower, call coordinator to handle
       // consumer group migration
       result.updatedLeaders.foreach { case partition =>
-        if (partition.topic == ConsumerCoordinator.OffsetsTopicName)
+        if (partition.topic == GroupCoordinator.OffsetsTopicName)
           coordinator.handleGroupImmigration(partition.partitionId)
       }
       result.updatedFollowers.foreach { case partition =>
         partition.leaderReplicaIdOpt.foreach { leaderReplica =>
-          if (partition.topic == ConsumerCoordinator.OffsetsTopicName &&
+          if (partition.topic == GroupCoordinator.OffsetsTopicName &&
               leaderReplica == brokerId)
             coordinator.handleGroupEmigration(partition.partitionId)
         }
@@ -526,9 +529,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (topics.size > 0 && topicResponses.size != topics.size) {
       val nonExistentTopics = topics -- topicResponses.map(_.topic).toSet
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
-        if (topic == ConsumerCoordinator.OffsetsTopicName || config.autoCreateTopicsEnable) {
+        if (topic == GroupCoordinator.OffsetsTopicName || config.autoCreateTopicsEnable) {
           try {
-            if (topic == ConsumerCoordinator.OffsetsTopicName) {
+            if (topic == GroupCoordinator.OffsetsTopicName) {
               val aliveBrokers = metadataCache.getAliveBrokers
               val offsetsTopicReplicationFactor =
                 if (aliveBrokers.length > 0)
@@ -668,8 +671,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val partition = coordinator.partitionFor(consumerMetadataRequest.group)
 
-      //get metadata (and create the topic if necessary)
-      val offsetsTopicMetadata = getTopicMetadata(Set(ConsumerCoordinator.OffsetsTopicName), request.securityProtocol).head
+      // get metadata (and create the topic if necessary)
+      val offsetsTopicMetadata = getTopicMetadata(Set(GroupCoordinator.OffsetsTopicName), request.securityProtocol).head
 
       val errorResponse = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, consumerMetadataRequest.correlationId)
 
@@ -690,36 +693,61 @@ class KafkaApis(val requestChannel: RequestChannel,
     import JavaConversions._
 
     val joinGroupRequest = request.body.asInstanceOf[JoinGroupRequest]
-    val respHeader = new ResponseHeader(request.header.correlationId)
+    val responseHeader = new ResponseHeader(request.header.correlationId)
 
     // the callback for sending a join-group response
-    def sendResponseCallback(partitions: Set[TopicAndPartition], consumerId: String, generationId: Int, errorCode: Short) {
-      val partitionList = if (errorCode == ErrorMapping.NoError)
-        partitions.map(tp => new TopicPartition(tp.topic, tp.partition)).toBuffer
-      else
-        List.empty.toBuffer
-
-      val responseBody = new JoinGroupResponse(errorCode, generationId, consumerId, partitionList)
-
+    def sendResponseCallback(joinResult: JoinGroupResult) {
+      val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
+      val responseBody = new JoinGroupResponse(joinResult.errorCode, joinResult.generationId, joinResult.subProtocol,
+        joinResult.memberId, joinResult.leaderId, members)
       trace("Sending join group response %s for correlation id %d to client %s."
         .format(responseBody, request.header.correlationId, request.header.clientId))
-      requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
 
-    // ensure that the client is authorized to join the group and read from all subscribed topics
-    if (!authorize(request.session, Read, new Resource(ConsumerGroup, joinGroupRequest.groupId())) ||
-        joinGroupRequest.topics().exists(topic => !authorize(request.session, Read, new Resource(Topic, topic)))) {
-      val responseBody = new JoinGroupResponse(ErrorMapping.AuthorizationCode, 0, joinGroupRequest.consumerId(), List.empty[TopicPartition])
-      requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
+    if (!authorize(request.session, Read, new Resource(ConsumerGroup, joinGroupRequest.groupId()))) {
+      val responseBody = new JoinGroupResponse(
+        ErrorMapping.AuthorizationCode,
+        JoinGroupResponse.UNKNOWN_GENERATION_ID,
+        JoinGroupResponse.UNKNOWN_SUB_PROTOCOL,
+        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        Map.empty[String, ByteBuffer])
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
       // let the coordinator to handle join-group
       coordinator.handleJoinGroup(
         joinGroupRequest.groupId(),
-        joinGroupRequest.consumerId(),
-        joinGroupRequest.topics().toSet,
+        joinGroupRequest.memberId(),
         joinGroupRequest.sessionTimeout(),
-        joinGroupRequest.strategy(),
+        joinGroupRequest.groupProtocol(),
+        joinGroupRequest.subProtocols().toList,
+        Utils.toArray(joinGroupRequest.memberMetadata()),
         sendResponseCallback)
+    }
+  }
+
+  def handleSyncGroupRequest(request: RequestChannel.Request) {
+    import JavaConversions._
+
+    val syncGroupRequest = request.body.asInstanceOf[SyncGroupRequest]
+
+    def sendResponseCallback(memberState: Array[Byte], errorCode: Short) {
+      val responseBody = new SyncGroupResponse(errorCode, ByteBuffer.wrap(memberState))
+      val responseHeader = new ResponseHeader(request.header.correlationId)
+      requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
+    }
+
+    if (!authorize(request.session, Read, new Resource(ConsumerGroup, syncGroupRequest.groupId()))) {
+      sendResponseCallback(Array[Byte](), ErrorMapping.AuthorizationCode)
+    } else {
+      coordinator.handleSyncGroup(
+        syncGroupRequest.groupId(),
+        syncGroupRequest.generationId(),
+        syncGroupRequest.memberId(),
+        syncGroupRequest.groupAssignment().mapValues(Utils.toArray(_)),
+        sendResponseCallback
+      )
     }
   }
 

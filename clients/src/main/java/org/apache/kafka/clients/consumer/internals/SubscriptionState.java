@@ -54,6 +54,9 @@ public class SubscriptionState {
     /* the list of topics the user has requested */
     private final Set<String> subscription;
 
+    /* the list of topics the group has subscribed to (set on group join completion) */
+    private final Set<String> groupSubscription;
+
     /* the list of partitions the user has requested */
     private final Set<TopicPartition> userAssignment;
 
@@ -80,6 +83,7 @@ public class SubscriptionState {
         this.subscription = new HashSet<>();
         this.userAssignment = new HashSet<>();
         this.assignment = new HashMap<>();
+        this.groupSubscription = new HashSet<>();
         this.needsPartitionAssignment = false;
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
         this.subscribedPattern = null;
@@ -101,6 +105,7 @@ public class SubscriptionState {
         if (!this.subscription.equals(new HashSet<>(topicsToSubscribe))) {
             this.subscription.clear();
             this.subscription.addAll(topicsToSubscribe);
+            this.groupSubscription.addAll(topicsToSubscribe);
             this.needsPartitionAssignment = true;
 
             // Remove any assigned partitions which are no longer subscribed to
@@ -110,10 +115,16 @@ public class SubscriptionState {
                     it.remove();
             }
         }
+    }
 
+    public void groupSubscribe(Collection<String> topics) {
+        if (!this.userAssignment.isEmpty())
+            throw new IllegalStateException("Subscription to topics and partitions are mutually exclusive");
+        this.groupSubscription.addAll(topics);
     }
 
     public void needReassignment() {
+        this.groupSubscription.retainAll(subscription);
         this.needsPartitionAssignment = true;
     }
 
@@ -154,13 +165,12 @@ public class SubscriptionState {
         return this.subscribedPattern;
     }
 
-    public void clearAssignment() {
-        this.assignment.clear();
-        this.needsPartitionAssignment = !subscription().isEmpty();
-    }
-
     public Set<String> subscription() {
         return this.subscription;
+    }
+
+    public Set<String> groupSubscription() {
+        return this.groupSubscription;
     }
 
     public Long fetched(TopicPartition tp) {
@@ -280,7 +290,7 @@ public class SubscriptionState {
         for (TopicPartition tp : assignments)
             if (!this.subscription.contains(tp.topic()))
                 throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
-        this.clearAssignment();
+        this.assignment.clear();
         for (TopicPartition tp: assignments)
             addAssignedPartition(tp);
         this.needsPartitionAssignment = false;

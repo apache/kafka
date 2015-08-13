@@ -151,11 +151,11 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createConsumerMetadataRequest() {
-        return new ConsumerMetadataRequest("test-group");
+        return new GroupMetadataRequest("test-group");
     }
 
     private AbstractRequestResponse createConsumerMetadataResponse() {
-        return new ConsumerMetadataResponse((short) 1, new Node(10, "host1", 2014));
+        return new GroupMetadataResponse((short) 1, new Node(10, "host1", 2014));
     }
 
     private AbstractRequest createFetchRequest() {
@@ -180,11 +180,15 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createJoinGroupRequest() {
-        return new JoinGroupRequest("group1", 30000, Arrays.asList("topic1"), "consumer1", "strategy1");
+        ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
+        return new JoinGroupRequest("consumer", "group1", Arrays.asList("range"), 30000, "consumer1", metadata);
     }
 
     private AbstractRequestResponse createJoinGroupResponse() {
-        return new JoinGroupResponse(Errors.NONE.code(), 1, "consumer1", Arrays.asList(new TopicPartition("test11", 1), new TopicPartition("test2", 1)));
+        Map<String, ByteBuffer> members = new HashMap<>();
+        members.put("consumer1", ByteBuffer.wrap(new byte[]{}));
+        members.put("consumer2", ByteBuffer.wrap(new byte[]{}));
+        return new JoinGroupResponse(Errors.NONE.code(), 1, "range", "consumer1", "leader", members);
     }
 
     private AbstractRequest createLeaveGroupRequest() {

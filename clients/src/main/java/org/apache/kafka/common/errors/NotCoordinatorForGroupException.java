@@ -17,23 +17,23 @@ package org.apache.kafka.common.errors;
  * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
  * not a coordinator for.
  */
-public class NotCoordinatorForConsumerException extends RetriableException {
+public class NotCoordinatorForGroupException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public NotCoordinatorForConsumerException() {
+    public NotCoordinatorForGroupException() {
         super();
     }
 
-    public NotCoordinatorForConsumerException(String message) {
+    public NotCoordinatorForGroupException(String message) {
         super(message);
     }
 
-    public NotCoordinatorForConsumerException(String message, Throwable cause) {
+    public NotCoordinatorForGroupException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public NotCoordinatorForConsumerException(Throwable cause) {
+    public NotCoordinatorForGroupException(Throwable cause) {
         super(cause);
     }
 

@@ -360,7 +360,7 @@ public class KafkaBasedLogTest {
                 consumer.waitForPollThen(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.setException(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.exception());
+                        consumer.setException(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception());
                     }
                 }, 10000);
 

@@ -17,23 +17,23 @@ package org.apache.kafka.common.errors;
  * The broker returns this error code for consumer metadata requests or offset commit requests if the offsets topic has
  * not yet been created.
  */
-public class ConsumerCoordinatorNotAvailableException extends RetriableException {
+public class GroupCoordinatorNotAvailableException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public ConsumerCoordinatorNotAvailableException() {
+    public GroupCoordinatorNotAvailableException() {
         super();
     }
 
-    public ConsumerCoordinatorNotAvailableException(String message) {
+    public GroupCoordinatorNotAvailableException(String message) {
         super(message);
     }
 
-    public ConsumerCoordinatorNotAvailableException(String message, Throwable cause) {
+    public GroupCoordinatorNotAvailableException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public ConsumerCoordinatorNotAvailableException(Throwable cause) {
+    public GroupCoordinatorNotAvailableException(Throwable cause) {
         super(cause);
     }
 
