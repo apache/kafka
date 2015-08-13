@@ -19,7 +19,7 @@ package kafka.consumer
 
 import java.util.{Collections, Properties}
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.common.MessageStreamsExistException
 import kafka.integration.KafkaServerTestHarness
 import kafka.javaapi.consumer.ConsumerRebalanceListener
@@ -30,11 +30,11 @@ import kafka.utils.TestUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import org.apache.log4j.{Level, Logger}
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{After, Before}
 
 import scala.collection._
 
-class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
+class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging {
 
   val RebalanceBackoffMs = 5000
   var dirs : ZKGroupTopicDirs = null
@@ -54,11 +54,13 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   val consumer3 = "consumer3"
   val nMessages = 2
 
+  @Before
   override def setUp() {
     super.setUp()
     dirs = new ZKGroupTopicDirs(group, topic)
   }
 
+  @After
   override def tearDown() {
     super.tearDown()
   }

@@ -21,9 +21,8 @@ import java.util.Properties
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.scalatest.junit.JUnit3Suite
 
-class MinIsrConfigTest extends JUnit3Suite with KafkaServerTestHarness {
+class MinIsrConfigTest extends KafkaServerTestHarness {
 
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.MinInSyncReplicasProp, "5")

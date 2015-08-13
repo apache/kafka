@@ -17,11 +17,12 @@
 
 package kafka.zk
 
-import org.scalatest.junit.JUnit3Suite
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{ZkUtils, CoreUtils}
+import org.junit.{After, Before}
+import org.scalatest.junit.JUnitSuite
 
-trait ZooKeeperTestHarness extends JUnit3Suite {
+trait ZooKeeperTestHarness extends JUnitSuite {
   var zkPort: Int = -1
   var zookeeper: EmbeddedZookeeper = null
   var zkClient: ZkClient = null
@@ -30,17 +31,17 @@ trait ZooKeeperTestHarness extends JUnit3Suite {
 
   def zkConnect: String = "127.0.0.1:" + zkPort
 
-  override def setUp() {
-    super.setUp
+  @Before
+  def setUp() {
     zookeeper = new EmbeddedZookeeper()
     zkPort = zookeeper.port
     zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeout, zkConnectionTimeout)
   }
 
-  override def tearDown() {
+  @After
+  def tearDown() {
     CoreUtils.swallow(zkClient.close())
     CoreUtils.swallow(zookeeper.shutdown())
-    super.tearDown
   }
 
 }

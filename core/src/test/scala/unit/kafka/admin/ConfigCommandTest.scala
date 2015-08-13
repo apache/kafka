@@ -19,15 +19,10 @@ package kafka.admin
 import junit.framework.Assert._
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 import kafka.utils.Logging
-import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import kafka.server.{ConfigType, OffsetManager, KafkaConfig}
-import kafka.admin.TopicCommand.TopicCommandOptions
-import kafka.utils.ZkUtils
 
-class ConfigCommandTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
+class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testArgumentParse() {
     // Should parse correctly

@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util.Properties
 
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{Before, After}
 import collection.mutable.HashMap
 import collection.mutable.Map
 import kafka.cluster.{Partition, Replica}
@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.message.MessageSet
 
 
-class IsrExpirationTest extends JUnit3Suite {
+class IsrExpirationTest {
 
   var topicPartitionIsr: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
   val replicaLagTimeMaxMs = 100L
@@ -46,14 +46,14 @@ class IsrExpirationTest extends JUnit3Suite {
 
   var replicaManager: ReplicaManager = null
 
-  override def setUp() {
-    super.setUp()
+  @Before
+  def setUp() {
     replicaManager = new ReplicaManager(configs.head, time, null, null, null, new AtomicBoolean(false))
   }
 
-  override def tearDown() {
+  @After
+  def tearDown() {
     replicaManager.shutdown(false)
-    super.tearDown()
   }
 
   /*

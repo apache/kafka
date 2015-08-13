@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.{OffsetManager, KafkaConfig}
 import kafka.integration.KafkaServerTestHarness
+import org.junit.{After, Before}
 import scala.collection.mutable.Buffer
 import kafka.coordinator.ConsumerCoordinator
 
@@ -49,6 +50,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     cfgs.map(KafkaConfig.fromProps)
   }
 
+  @Before
   override def setUp() {
     super.setUp()
     producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.bootstrapUrl)
@@ -70,7 +72,8 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       servers,
       servers(0).consumerCoordinator.offsetsTopicConfigs)
   }
-  
+
+  @After
   override def tearDown() {
     producers.foreach(_.close())
     consumers.foreach(_.close())

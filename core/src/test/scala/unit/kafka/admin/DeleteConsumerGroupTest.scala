@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import org.scalatest.junit.JUnit3Suite
 import kafka.utils._
 import kafka.server.KafkaConfig
 import org.junit.Test
@@ -25,7 +24,7 @@ import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer}
 import kafka.integration.KafkaServerTestHarness
 
 
-class DeleteConsumerGroupTest extends JUnit3Suite with KafkaServerTestHarness {
+class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   def generateConfigs() = TestUtils.createBrokerConfigs(3, zkConnect, false, true).map(KafkaConfig.fromProps)
 
   @Test
