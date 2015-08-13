@@ -66,9 +66,9 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for pkg in "copycat-data" "copycat-api" "copycat-runtime" "copycat-file" "copycat-json"
+for cc_pkg in "data" "api" "runtime" "file" "json"
 do
-  for file in $base_dir/${pkg}/build/libs/${pkg}*.jar $base_dir/${pkg}/build/dependant-libs/*.jar;
+  for file in $base_dir/copycat/${cc_pkg}/build/libs/copycat-${cc_pkg}*.jar $base_dir/copycat/${cc_pkg}/build/dependant-libs/*.jar;
   do
     CLASSPATH=$CLASSPATH:$file
   done

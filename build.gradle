@@ -209,7 +209,7 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
   }
 }
 
-def copycatPkgs = ['copycat-data', 'copycat-api', 'copycat-runtime', 'copycat-json', 'copycat-file']
+def copycatPkgs = ['copycat:data', 'copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
 def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools'] + copycatPkgs
 
 tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
@@ -507,7 +507,7 @@ project(':log4j-appender') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat-data') {
+project(':copycat:data') {
   apply plugin: 'checkstyle'
   archivesBaseName = "copycat-data"
 
@@ -550,12 +550,12 @@ project(':copycat-data') {
   test.dependsOn('checkstyleMain', 'checkstyleTest') */
 }
 
-project(':copycat-api') {
+project(':copycat:api') {
   apply plugin: 'checkstyle'
   archivesBaseName = "copycat-api"
 
   dependencies {
-    compile project(':copycat-data')
+    compile project(':copycat:data')
     compile "$slf4japi"
 
     testCompile "$junit"
@@ -592,12 +592,12 @@ project(':copycat-api') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat-json') {
+project(':copycat:json') {
   apply plugin: 'checkstyle'
   archivesBaseName = "copycat-json"
 
   dependencies {
-    compile project(':copycat-api')
+    compile project(':copycat:api')
     compile "$slf4japi"
     compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
 
@@ -650,12 +650,12 @@ project(':copycat-json') {
   }
 }
 
-project(':copycat-runtime') {
+project(':copycat:runtime') {
   apply plugin: 'checkstyle'
   archivesBaseName = "copycat-runtime"
 
   dependencies {
-    compile project(':copycat-api')
+    compile project(':copycat:api')
     compile project(':clients')
     compile "$slf4japi"
 
@@ -664,7 +664,7 @@ project(':copycat-runtime') {
     testCompile "$powermock"
     testCompile "$powermock_easymock"
     testRuntime "$slf4jlog4j"
-    testRuntime project(":copycat-json")
+    testRuntime project(":copycat:json")
   }
 
   task testJar(type: Jar) {
@@ -697,12 +697,12 @@ project(':copycat-runtime') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat-file') {
+project(':copycat:file') {
   apply plugin: 'checkstyle'
   archivesBaseName = "copycat-file"
 
   dependencies {
-    compile project(':copycat-api')
+    compile project(':copycat:api')
     compile "$slf4japi"
 
     testCompile "$junit"
