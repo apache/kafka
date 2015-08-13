@@ -18,7 +18,7 @@
 package kafka.consumer
 
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 import kafka.server.OffsetManager

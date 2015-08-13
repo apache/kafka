@@ -22,11 +22,10 @@ import java.nio.ByteBuffer
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 
 import scala.collection.mutable
 
-class BrokerEndPointTest extends JUnit3Suite with Logging {
+class BrokerEndPointTest extends Logging {
 
   @Test
   def testSerDe() = {

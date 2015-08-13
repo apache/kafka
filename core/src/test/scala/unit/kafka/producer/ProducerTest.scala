@@ -17,26 +17,24 @@
 
 package kafka.producer
 
-import org.scalatest.TestFailedException
-import org.scalatest.junit.JUnit3Suite
+import java.util
+import java.util.Properties
+
+import kafka.admin.AdminUtils
+import kafka.api.FetchRequestBuilder
+import kafka.common.{ErrorMapping, FailedToSendMessageException}
 import kafka.consumer.SimpleConsumer
 import kafka.message.Message
+import kafka.serializer.StringEncoder
 import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
+import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.log4j.{Level, Logger}
-import org.junit.Test
-import kafka.utils._
-import java.util
-import kafka.admin.AdminUtils
-import util.Properties
-import kafka.api.FetchRequestBuilder
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertEquals
-import kafka.common.{ErrorMapping, FailedToSendMessageException}
-import kafka.serializer.StringEncoder
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
+import org.scalatest.exceptions.TestFailedException
 
-class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
+class ProducerTest extends ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
   private val brokerId2 = 1
   private var server1: KafkaServer = null
@@ -60,6 +58,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     consumer2
   }
 
+  @Before
   override def setUp() {
     super.setUp()
     // set up 2 brokers with 4 partitions each
@@ -81,6 +80,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     requestHandlerLogger.setLevel(Level.FATAL)
   }
 
+  @After
   override def tearDown() {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)

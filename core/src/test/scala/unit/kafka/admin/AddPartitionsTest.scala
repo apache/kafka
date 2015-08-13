@@ -17,17 +17,17 @@
 
 package kafka.admin
 
+import org.junit.Assert._
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
-import junit.framework.Assert._
 import kafka.utils.{ZkUtils, CoreUtils, TestUtils}
 import kafka.cluster.Broker
 import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
+import org.junit.{After, Before}
 
-class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
+class AddPartitionsTest extends ZooKeeperTestHarness {
   var configs: Seq[KafkaConfig] = null
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
   var brokers: Seq[Broker] = Seq.empty[Broker]
@@ -39,6 +39,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   val topic3 = "new-topic3"
   val topic4 = "new-topic4"
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -54,6 +55,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     createTopic(zkClient, topic4, partitionReplicaAssignment = Map(0->Seq(0,3)), servers = servers)
   }
 
+  @After
   override def tearDown() {
     servers.foreach(_.shutdown())
     servers.foreach(server => CoreUtils.rm(server.config.logDirs))

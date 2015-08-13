@@ -20,7 +20,6 @@ package kafka.javaapi.consumer
 import java.util.Properties
 
 import kafka.server._
-import kafka.message._
 import kafka.serializer._
 import kafka.integration.KafkaServerTestHarness
 import kafka.producer.KeyedMessage
@@ -33,12 +32,11 @@ import kafka.common.MessageStreamsExistException
 
 import scala.collection.JavaConversions
 
-import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.{Level, Logger}
-import junit.framework.Assert._
+import org.junit.Assert._
 
 
-class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
+class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
