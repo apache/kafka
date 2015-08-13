@@ -21,11 +21,13 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * @see KafkaConsumer
  * @see MockConsumer
  */
+@InterfaceStability.Unstable
 public interface Consumer<K, V> extends Closeable {
     
     /**
@@ -117,6 +119,16 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#listTopics()
      */
     public Map<String, List<PartitionInfo>> listTopics();
+
+    /**
+     * @see KafkaConsumer#pause(TopicPartition...)
+     */
+    public void pause(TopicPartition... partitions);
+
+    /**
+     * @see KafkaConsumer#resume(TopicPartition...)
+     */
+    public void resume(TopicPartition... partitions);
 
     /**
      * @see KafkaConsumer#close()

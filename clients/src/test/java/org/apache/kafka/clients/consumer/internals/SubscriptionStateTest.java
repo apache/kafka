@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static java.util.Arrays.asList;
 
@@ -37,12 +38,13 @@ public class SubscriptionStateTest {
         state.subscribe(tp0);
         assertEquals(Collections.singleton(tp0), state.assignedPartitions());
         state.committed(tp0, 1);
-        state.fetched(tp0, 1);
-        state.consumed(tp0, 1);
+        state.seek(tp0, 1);
+        assertTrue(state.isFetchable(tp0));
         assertAllPositions(tp0, 1L);
         state.unsubscribe(tp0);
         assertTrue(state.assignedPartitions().isEmpty());
-        assertAllPositions(tp0, null);
+        assertFalse(state.isAssigned(tp0));
+        assertFalse(state.isFetchable(tp0));
     }
 
     @Test
@@ -52,10 +54,15 @@ public class SubscriptionStateTest {
         assertEquals(5L, (long) state.fetched(tp0));
         assertEquals(5L, (long) state.consumed(tp0));
         state.needOffsetReset(tp0);
-        assertTrue(state.isOffsetResetNeeded());
+        assertFalse(state.isFetchable(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
         assertEquals(null, state.fetched(tp0));
         assertEquals(null, state.consumed(tp0));
+
+        // seek should clear the reset and make the partition fetchable
+        state.seek(tp0, 0);
+        assertTrue(state.isFetchable(tp0));
+        assertFalse(state.isOffsetResetNeeded(tp0));
     }
 
     @Test
@@ -65,13 +72,25 @@ public class SubscriptionStateTest {
         assertTrue(state.assignedPartitions().isEmpty());
         assertTrue(state.partitionsAutoAssigned());
         state.changePartitionAssignment(asList(tp0));
+        state.seek(tp0, 1);
         state.committed(tp0, 1);
-        state.fetched(tp0, 1);
-        state.consumed(tp0, 1);
         assertAllPositions(tp0, 1L);
         state.changePartitionAssignment(asList(tp1));
-        assertAllPositions(tp0, null);
+        assertTrue(state.isAssigned(tp1));
+        assertFalse(state.isAssigned(tp0));
+        assertFalse(state.isFetchable(tp1));
         assertEquals(Collections.singleton(tp1), state.assignedPartitions());
+    }
+
+    @Test
+    public void partitionPause() {
+        state.subscribe(tp0);
+        state.seek(tp0, 100);
+        assertTrue(state.isFetchable(tp0));
+        state.pause(tp0);
+        assertFalse(state.isFetchable(tp0));
+        state.resume(tp0);
+        assertTrue(state.isFetchable(tp0));
     }
 
     @Test
@@ -83,24 +102,37 @@ public class SubscriptionStateTest {
         assertTrue(state.partitionsAutoAssigned());
         state.changePartitionAssignment(asList(tp0));
         state.committed(tp0, 1);
-        state.fetched(tp0, 1);
-        state.consumed(tp0, 1);
+        state.seek(tp0, 1);
         assertAllPositions(tp0, 1L);
         state.changePartitionAssignment(asList(tp1));
-        assertAllPositions(tp0, null);
+        assertFalse(state.isAssigned(tp0));
         assertEquals(Collections.singleton(tp1), state.assignedPartitions());
 
         state.unsubscribe(topic);
         assertEquals(0, state.subscribedTopics().size());
         assertTrue(state.assignedPartitions().isEmpty());
     }
-    
-    @Test(expected = IllegalArgumentException.class)
+
+    @Test(expected = IllegalStateException.class)
+    public void invalidConsumedPositionUpdate() {
+        state.subscribe("test");
+        state.changePartitionAssignment(asList(tp0));
+        state.consumed(tp0, 0);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void invalidFetchPositionUpdate() {
+        state.subscribe("test");
+        state.changePartitionAssignment(asList(tp0));
+        state.fetched(tp0, 0);
+    }
+
+    @Test(expected = IllegalStateException.class)
     public void cantChangeFetchPositionForNonAssignedPartition() {
         state.fetched(tp0, 1);
     }
     
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = IllegalStateException.class)
     public void cantChangeConsumedPositionForNonAssignedPartition() {
         state.consumed(tp0, 1);
     }

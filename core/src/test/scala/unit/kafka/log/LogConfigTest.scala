@@ -33,28 +33,6 @@ class LogConfigTest extends JUnit3Suite {
   }
 
   @Test
-  def testFromPropsToProps() {
-    import scala.util.Random._
-    val expected = new Properties()
-    LogConfig.configNames().foreach((name) => {
-      name match {
-        case LogConfig.UncleanLeaderElectionEnableProp => expected.setProperty(name, randFrom("true", "false"))
-        case LogConfig.CompressionTypeProp => expected.setProperty(name, randFrom("producer", "uncompressed", "gzip"))
-        case LogConfig.CleanupPolicyProp => expected.setProperty(name, randFrom(LogConfig.Compact, LogConfig.Delete))
-        case LogConfig.MinCleanableDirtyRatioProp => expected.setProperty(name, "%.1f".format(nextDouble * .9 + .1))
-        case LogConfig.MinInSyncReplicasProp => expected.setProperty(name, (nextInt(Int.MaxValue - 1) + 1).toString)
-        case LogConfig.RetentionBytesProp => expected.setProperty(name, nextInt().toString)
-        case LogConfig.RetentionMsProp => expected.setProperty(name, nextLong().toString)
-        case LogConfig.PreAllocateEnableProp => expected.setProperty(name, randFrom("true", "false"))
-        case positiveIntProperty => expected.setProperty(name, nextInt(Int.MaxValue).toString)
-      }
-    })
-
-    val actual = LogConfig(expected).originals
-    Assert.assertEquals(expected, actual)
-  }
-
-  @Test
   def testFromPropsInvalid() {
     LogConfig.configNames().foreach((name) => {
       name match {

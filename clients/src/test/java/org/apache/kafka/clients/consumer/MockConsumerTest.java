@@ -29,7 +29,7 @@ public class MockConsumerTest {
 
     @Test
     public void testSimpleMock() {
-        consumer.subscribe("topic");
+        consumer.subscribe("test");
         assertEquals(0, consumer.poll(1000).count());
         ConsumerRecord<String, String> rec1 = new ConsumerRecord<String, String>("test", 0, 0, "key1", "value1");
         ConsumerRecord<String, String> rec2 = new ConsumerRecord<String, String>("test", 0, 1, "key2", "value2");

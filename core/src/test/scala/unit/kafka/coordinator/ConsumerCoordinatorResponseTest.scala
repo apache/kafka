@@ -43,8 +43,8 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   type HeartbeatCallback = Short => Unit
 
   val ConsumerMinSessionTimeout = 10
-  val ConsumerMaxSessionTimeout = 100
-  val DefaultSessionTimeout = 20
+  val ConsumerMaxSessionTimeout = 200
+  val DefaultSessionTimeout = 100
   var consumerCoordinator: ConsumerCoordinator = null
   var offsetManager : OffsetManager = null
 
@@ -238,7 +238,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
 
     // First start up a group (with a slightly larger timeout to give us time to heartbeat when the rebalance starts)
     val joinGroupResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_CONSUMER_ID, partitionAssignmentStrategy,
-      100, isCoordinatorForGroup = true)
+      DefaultSessionTimeout, isCoordinatorForGroup = true)
     val assignedConsumerId = joinGroupResult._2
     val initialGenerationId = joinGroupResult._3
     val joinGroupErrorCode = joinGroupResult._4
@@ -310,7 +310,8 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
                         sessionTimeout: Int,
                         isCoordinatorForGroup: Boolean): JoinGroupCallbackParams = {
     val responseFuture = sendJoinGroup(groupId, consumerId, partitionAssignmentStrategy, sessionTimeout, isCoordinatorForGroup)
-    Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
+    // should only have to wait as long as session timeout, but allow some extra time in case of an unexpected delay
+    Await.result(responseFuture, Duration(sessionTimeout+100, TimeUnit.MILLISECONDS))
   }
 
   private def heartbeat(groupId: String,
