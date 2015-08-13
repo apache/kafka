@@ -28,9 +28,10 @@ import kafka.coordinator.ConsumerCoordinator
 import kafka.log._
 import kafka.network._
 import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse, HeartbeatRequest, HeartbeatResponse, ResponseHeader, ResponseSend}
+import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse, HeartbeatRequest, HeartbeatResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse}
 import kafka.utils.{ZkUtils, ZKGroupTopicDirs, SystemTime, Logging}
 import scala.collection._
+import scala.collection.JavaConverters._
 import org.I0Itec.zkclient.ZkClient
 
 /**
@@ -127,10 +128,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
-    val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
+    val stopReplicaRequest = request.body.asInstanceOf[StopReplicaRequest]
+    val respHeader = new ResponseHeader(request.header.correlationId)
     val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
-    val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.correlationId, response.toMap, error)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, stopReplicaResponse)))
+    val stopReplicaResponse = new StopReplicaResponse(response.asInstanceOf[Map[TopicPartition, java.lang.Short]].asJava, error)
+
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, stopReplicaResponse)))
     replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads()
   }
 

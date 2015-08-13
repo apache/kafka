@@ -32,8 +32,11 @@ import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.StopReplicaRequest
 
 import scala.collection._
+import scala.collection.JavaConverters._
 
 /*
  * Result metadata of a log append operation on the log
@@ -224,21 +227,22 @@ class ReplicaManager(val config: KafkaConfig,
     errorCode
   }
 
-  def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[TopicAndPartition, Short], Short) = {
+  def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[TopicPartition, Short], Short) = {
     replicaStateChangeLock synchronized {
-      val responseMap = new collection.mutable.HashMap[TopicAndPartition, Short]
-      if(stopReplicaRequest.controllerEpoch < controllerEpoch) {
+      val responseMap = new collection.mutable.HashMap[TopicPartition, Short]
+      if(stopReplicaRequest.controllerEpoch() < controllerEpoch) {
         stateChangeLogger.warn("Broker %d received stop replica request from an old controller epoch %d."
-          .format(localBrokerId, stopReplicaRequest.controllerEpoch) +
+          .format(localBrokerId, stopReplicaRequest.controllerEpoch()) +
           " Latest known controller epoch is %d " + controllerEpoch)
         (responseMap, ErrorMapping.StaleControllerEpochCode)
       } else {
-        controllerEpoch = stopReplicaRequest.controllerEpoch
+        val partitions = stopReplicaRequest.partitions().asScala
+        controllerEpoch = stopReplicaRequest.controllerEpoch()
         // First stop fetchers for all partitions, then stop the corresponding replicas
-        replicaFetcherManager.removeFetcherForPartitions(stopReplicaRequest.partitions.map(r => TopicAndPartition(r.topic, r.partition)))
-        for(topicAndPartition <- stopReplicaRequest.partitions){
-          val errorCode = stopReplica(topicAndPartition.topic, topicAndPartition.partition, stopReplicaRequest.deletePartitions)
-          responseMap.put(topicAndPartition, errorCode)
+        replicaFetcherManager.removeFetcherForPartitions(partitions.map(r => TopicAndPartition(r.topic, r.partition)))
+        for(topicPartition <- partitions){
+          val errorCode = stopReplica(topicPartition.topic, topicPartition.partition, stopReplicaRequest.deletePartitions)
+          responseMap.put(topicPartition, errorCode)
         }
         (responseMap, ErrorMapping.NoError)
       }
