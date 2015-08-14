@@ -17,8 +17,6 @@
 
 package org.apache.kafka.copycat.runtime;
 
-import org.apache.kafka.copycat.errors.CopycatException;
-
 import java.util.Properties;
 
 /**
@@ -36,10 +34,8 @@ interface WorkerTask {
     /**
      * Stop this task from processing messages. This method does not block, it only triggers
      * shutdown. Use #{@link #awaitStop} to block until completion.
-     *
-     * @throws CopycatException
      */
-    void stop() throws CopycatException;
+    void stop();
 
     /**
      * Wait for this task to finish stopping.

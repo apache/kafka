@@ -18,7 +18,7 @@
 package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
+import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,7 +114,7 @@ public class OffsetStorageWriter<K, V> {
         if (flushing()) {
             log.error("Invalid call to OffsetStorageWriter flush() while already flushing, the "
                     + "framework should not allow this");
-            throw new CopycatRuntimeException("OffsetStorageWriter is already flushing");
+            throw new CopycatException("OffsetStorageWriter is already flushing");
         }
 
         if (data.isEmpty())

@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.connector;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.copycat.errors.CopycatException;
 
 import java.util.Properties;
 
@@ -45,8 +44,6 @@ public interface Task {
 
     /**
      * Stop this task.
-     *
-     * @throws CopycatException
      */
-    void stop() throws CopycatException;
+    void stop();
 }

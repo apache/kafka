@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.file;
 
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTaskContext;
 import org.apache.kafka.copycat.storage.OffsetStorageReader;
@@ -72,7 +71,7 @@ public class FileStreamSourceTaskTest {
     }
 
     @Test
-    public void testNormalLifecycle() throws InterruptedException, CopycatException, IOException {
+    public void testNormalLifecycle() throws InterruptedException, IOException {
         expectOffsetLookupReturnNone();
         replay();
 
@@ -117,7 +116,7 @@ public class FileStreamSourceTaskTest {
         task.stop();
     }
 
-    @Test(expected = CopycatRuntimeException.class)
+    @Test(expected = CopycatException.class)
     public void testMissingTopic() {
         expectOffsetLookupReturnNone();
         replay();
@@ -126,7 +125,7 @@ public class FileStreamSourceTaskTest {
         task.start(config);
     }
 
-    @Test(expected = CopycatRuntimeException.class)
+    @Test(expected = CopycatException.class)
     public void testInvalidFile() {
         config.setProperty(FileStreamSourceConnector.FILE_CONFIG, "bogusfilename");
         task.start(config);

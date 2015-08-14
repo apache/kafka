@@ -19,7 +19,6 @@ package org.apache.kafka.copycat.sink;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.Task;
-import org.apache.kafka.copycat.errors.CopycatException;
 
 import java.util.Collection;
 import java.util.Map;
@@ -52,7 +51,7 @@ public abstract class SinkTask implements Task {
      *
      * @param records the set of records to send
      */
-    public abstract void put(Collection<SinkRecord> records) throws CopycatException;
+    public abstract void put(Collection<SinkRecord> records);
 
     /**
      * Flush all records that have been {@link #put} for the specified topic-partitions. The

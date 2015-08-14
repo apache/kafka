@@ -52,7 +52,7 @@ public class ConnectorReconfigurationTest {
         }
 
         @Override
-        public void start(Properties props) throws CopycatException {
+        public void start(Properties props) {
             configureOrder = order++;
         }
 
@@ -67,7 +67,7 @@ public class ConnectorReconfigurationTest {
         }
 
         @Override
-        public void stop() throws CopycatException {
+        public void stop() {
             stopOrder = order++;
             if (stopException)
                 throw new CopycatException("error");

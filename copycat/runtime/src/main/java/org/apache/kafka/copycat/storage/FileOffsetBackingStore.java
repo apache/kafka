@@ -17,7 +17,7 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
+import org.apache.kafka.copycat.errors.CopycatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +67,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
             ObjectInputStream is = new ObjectInputStream(new FileInputStream(file));
             Object obj = is.readObject();
             if (!(obj instanceof HashMap))
-                throw new CopycatRuntimeException("Expected HashMap but found " + obj.getClass());
+                throw new CopycatException("Expected HashMap but found " + obj.getClass());
             HashMap<String, Map<byte[], byte[]>> raw = (HashMap<String, Map<byte[], byte[]>>) obj;
             data = new HashMap<>();
             for (Map.Entry<String, Map<byte[], byte[]>> entry : raw.entrySet()) {
@@ -85,7 +85,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
             // FileNotFoundException: Ignore, may be new.
             // EOFException: Ignore, this means the file was missing or corrupt
         } catch (IOException | ClassNotFoundException e) {
-            throw new CopycatRuntimeException(e);
+            throw new CopycatException(e);
         }
     }
 
@@ -105,7 +105,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
             os.writeObject(raw);
             os.close();
         } catch (IOException e) {
-            throw new CopycatRuntimeException(e);
+            throw new CopycatException(e);
         }
     }
 }

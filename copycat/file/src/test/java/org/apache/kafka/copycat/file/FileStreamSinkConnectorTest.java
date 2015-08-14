@@ -19,7 +19,6 @@ package org.apache.kafka.copycat.file;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.connector.ConnectorContext;
-import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkConnector;
 import org.junit.Before;
 import org.junit.Test;
@@ -57,7 +56,7 @@ public class FileStreamSinkConnectorTest {
     }
 
     @Test
-    public void testSinkTasks() throws CopycatException {
+    public void testSinkTasks() {
         PowerMock.replayAll();
 
         connector.start(sinkProperties);
@@ -75,7 +74,7 @@ public class FileStreamSinkConnectorTest {
     }
 
     @Test
-    public void testTaskClass() throws CopycatException {
+    public void testTaskClass() {
         PowerMock.replayAll();
 
         connector.start(sinkProperties);

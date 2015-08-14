@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.storage.*;
@@ -175,13 +174,12 @@ public class Worker<K, V> {
      *                      {@link org.apache.kafka.copycat.sink.SinkTask}.
      * @param props configuration options for the task
      */
-    public void addTask(ConnectorTaskId id, String taskClassName, Properties props)
-            throws CopycatException {
+    public void addTask(ConnectorTaskId id, String taskClassName, Properties props) {
         if (tasks.containsKey(id)) {
             String msg = "Task already exists in this worker; the herder should not have requested "
                     + "that this : " + id;
             log.error(msg);
-            throw new CopycatRuntimeException(msg);
+            throw new CopycatException(msg);
         }
 
         final Task task = instantiateTask(taskClassName);
@@ -213,11 +211,11 @@ public class Worker<K, V> {
         try {
             return Utils.newInstance(Class.forName(taskClassName).asSubclass(Task.class));
         } catch (ClassNotFoundException e) {
-            throw new CopycatRuntimeException("Task class not found", e);
+            throw new CopycatException("Task class not found", e);
         }
     }
 
-    public void stopTask(ConnectorTaskId id) throws CopycatException {
+    public void stopTask(ConnectorTaskId id) {
         WorkerTask task = getTask(id);
         task.stop();
         if (!task.awaitStop(config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG)))
@@ -230,7 +228,7 @@ public class Worker<K, V> {
         WorkerTask task = tasks.get(id);
         if (task == null) {
             log.error("Task not found: " + id);
-            throw new CopycatRuntimeException("Task not found: " + id);
+            throw new CopycatException("Task not found: " + id);
         }
         return task;
     }

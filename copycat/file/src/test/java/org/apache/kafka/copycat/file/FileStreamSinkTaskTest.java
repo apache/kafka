@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.file;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,7 +43,7 @@ public class FileStreamSinkTaskTest {
     }
 
     @Test
-    public void testPutFlush() throws CopycatException {
+    public void testPutFlush() {
         HashMap<TopicPartition, Long> offsets = new HashMap<>();
 
         // We do not call task.start() since it would override the output stream

@@ -19,7 +19,6 @@ package org.apache.kafka.copycat.runtime.standalone;
 
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.Task;
-import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.sink.SinkConnector;
@@ -160,14 +159,14 @@ public class StandaloneHerderTest {
         PowerMock.expectLastCall();
     }
 
-    private void expectStop() throws CopycatException {
+    private void expectStop() {
         worker.stopTask(new ConnectorTaskId(CONNECTOR_NAME, 0));
         EasyMock.expectLastCall();
         connector.stop();
         EasyMock.expectLastCall();
     }
 
-    private void expectDestroy() throws CopycatException {
+    private void expectDestroy() {
         expectStop();
     }
 

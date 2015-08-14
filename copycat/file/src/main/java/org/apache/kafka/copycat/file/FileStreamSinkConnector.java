@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.file;
 
 import org.apache.kafka.copycat.connector.Task;
-import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkConnector;
 
 import java.util.ArrayList;
@@ -35,7 +34,7 @@ public class FileStreamSinkConnector extends SinkConnector {
     private String filename;
 
     @Override
-    public void start(Properties props) throws CopycatException {
+    public void start(Properties props) {
         filename = props.getProperty(FILE_CONFIG);
     }
 
@@ -57,7 +56,7 @@ public class FileStreamSinkConnector extends SinkConnector {
     }
 
     @Override
-    public void stop() throws CopycatException {
+    public void stop() {
         // Nothing to do since FileStreamSinkConnector has no background monitoring.
     }
 }

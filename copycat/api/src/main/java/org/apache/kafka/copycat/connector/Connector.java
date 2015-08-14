@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.connector;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.copycat.errors.CopycatException;
 
 import java.util.List;
 import java.util.Properties;
@@ -81,9 +80,8 @@ public abstract class Connector {
      * either just been instantiated and initialized or {@link #stop()} has been invoked.
      *
      * @param props configuration settings
-     * @throws CopycatException
      */
-    public abstract void start(Properties props) throws CopycatException;
+    public abstract void start(Properties props);
 
     /**
      * Reconfigure this Connector. Most implementations will not override this, using the default
@@ -92,9 +90,8 @@ public abstract class Connector {
      * efficiently, e.g. without shutting down network connections to the external system.
      *
      * @param props new configuration settings
-     * @throws CopycatException
      */
-    public void reconfigure(Properties props) throws CopycatException {
+    public void reconfigure(Properties props) {
         stop();
         start(props);
     }
@@ -115,8 +112,6 @@ public abstract class Connector {
 
     /**
      * Stop this connector.
-     *
-     * @throws CopycatException
      */
-    public abstract void stop() throws CopycatException;
+    public abstract void stop();
 }

@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.file;
 
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.slf4j.Logger;
@@ -63,19 +62,19 @@ public class FileStreamSourceTask extends SourceTask {
                             skipLeft -= skipped;
                         } catch (IOException e) {
                             log.error("Error while trying to seek to previous offset in file: ", e);
-                            throw new CopycatRuntimeException(e);
+                            throw new CopycatException(e);
                         }
                     }
                     log.debug("Skipped to offset {}", lastRecordedOffset);
                 }
                 streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
             } catch (FileNotFoundException e) {
-                throw new CopycatRuntimeException("Couldn't find file for FileStreamSourceTask: {}", e);
+                throw new CopycatException("Couldn't find file for FileStreamSourceTask: {}", e);
             }
         }
         topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
         if (topic == null)
-            throw new CopycatRuntimeException("ConsoleSourceTask config missing topic setting");
+            throw new CopycatException("ConsoleSourceTask config missing topic setting");
         reader = new BufferedReader(new InputStreamReader(stream));
     }
 
@@ -161,7 +160,7 @@ public class FileStreamSourceTask extends SourceTask {
     }
 
     @Override
-    public void stop() throws CopycatException {
+    public void stop() {
         log.trace("Stopping");
         synchronized (this) {
             try {

@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.storage.*;
@@ -115,8 +114,8 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = CopycatRuntimeException.class)
-    public void testStopInvalidTask() throws CopycatException {
+    @Test(expected = CopycatException.class)
+    public void testStopInvalidTask() {
         worker.stopTask(taskId);
     }
 
@@ -174,7 +173,7 @@ public class WorkerTest extends ThreadedTest {
         }
 
         @Override
-        public void stop() throws CopycatException {
+        public void stop() {
         }
     }
 }

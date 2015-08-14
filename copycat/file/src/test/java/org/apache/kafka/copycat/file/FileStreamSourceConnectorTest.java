@@ -51,7 +51,7 @@ public class FileStreamSourceConnectorTest {
     }
 
     @Test
-    public void testSourceTasks() throws CopycatException {
+    public void testSourceTasks() {
         PowerMock.replayAll();
 
         connector.start(sourceProperties);
@@ -74,7 +74,7 @@ public class FileStreamSourceConnectorTest {
     }
 
     @Test
-    public void testSourceTasksStdin() throws CopycatException {
+    public void testSourceTasksStdin() {
         PowerMock.replayAll();
 
         sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
@@ -87,13 +87,13 @@ public class FileStreamSourceConnectorTest {
     }
 
     @Test(expected = CopycatException.class)
-    public void testMultipleSourcesInvalid() throws CopycatException {
+    public void testMultipleSourcesInvalid() {
         sourceProperties.setProperty(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
         connector.start(sourceProperties);
     }
 
     @Test
-    public void testTaskClass() throws CopycatException {
+    public void testTaskClass() {
         PowerMock.replayAll();
 
         connector.start(sourceProperties);

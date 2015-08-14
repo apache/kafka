@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -72,7 +71,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
     }
 
     @Override
-    public void stop() throws CopycatException {
+    public void stop() {
         // Offset commit is handled upon exit in work thread
         task.stop();
         if (workThread != null)
@@ -156,7 +155,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
     private KafkaConsumer<K, V> createConsumer(Properties taskProps) {
         String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
-            throw new CopycatRuntimeException("Sink tasks require a list of topics.");
+            throw new CopycatException("Sink tasks require a list of topics.");
         String[] topics = topicsStr.split(",");
 
         // Include any unknown worker configs so consumer configs can be set globally on the worker
@@ -176,7 +175,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         try {
             newConsumer = new KafkaConsumer<>(props);
         } catch (Throwable t) {
-            throw new CopycatRuntimeException("Failed to create consumer", t);
+            throw new CopycatException("Failed to create consumer", t);
         }
 
         log.debug("Task {} subscribing to topics {}", id, topics);

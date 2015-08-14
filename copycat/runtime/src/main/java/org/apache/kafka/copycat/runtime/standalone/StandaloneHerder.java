@@ -20,7 +20,6 @@ package org.apache.kafka.copycat.runtime.standalone;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.Worker;
@@ -74,7 +73,7 @@ public class StandaloneHerder implements Herder {
                 callback.onCompletion(null, connState.name);
             // This should always be a new job, create jobs from scratch
             createConnectorTasks(connState);
-        } catch (CopycatRuntimeException e) {
+        } catch (CopycatException e) {
             if (callback != null)
                 callback.onCompletion(e, null);
         }
@@ -86,7 +85,7 @@ public class StandaloneHerder implements Herder {
             destroyConnector(name);
             if (callback != null)
                 callback.onCompletion(null, null);
-        } catch (CopycatRuntimeException e) {
+        } catch (CopycatException e) {
             if (callback != null)
                 callback.onCompletion(e, null);
         }
@@ -104,7 +103,7 @@ public class StandaloneHerder implements Herder {
 
         if (connectors.containsKey(connName)) {
             log.error("Ignoring request to create connector due to conflicting connector name");
-            throw new CopycatRuntimeException("Connector with name " + connName + " already exists");
+            throw new CopycatException("Connector with name " + connName + " already exists");
         }
 
         final Connector connector;
@@ -113,13 +112,13 @@ public class StandaloneHerder implements Herder {
         } catch (Throwable t) {
             // Catches normal exceptions due to instantiation errors as well as any runtime errors that
             // may be caused by user code
-            throw new CopycatRuntimeException("Failed to create connector instance", t);
+            throw new CopycatException("Failed to create connector instance", t);
         }
         connector.initialize(new StandaloneConnectorContext(this, connName));
         try {
             connector.start(configs);
         } catch (CopycatException e) {
-            throw new CopycatRuntimeException("Connector threw an exception while starting", e);
+            throw new CopycatException("Connector threw an exception while starting", e);
         }
         ConnectorState state = new ConnectorState(connName, connector, maxTasks, topics);
         connectors.put(connName, state);
@@ -133,7 +132,7 @@ public class StandaloneHerder implements Herder {
         try {
             return Utils.newInstance(className, Connector.class);
         } catch (ClassNotFoundException e) {
-            throw new CopycatRuntimeException("Couldn't instantiate connector class", e);
+            throw new CopycatException("Couldn't instantiate connector class", e);
         }
     }
 
@@ -142,7 +141,7 @@ public class StandaloneHerder implements Herder {
         ConnectorState state = connectors.get(connName);
         if (state == null) {
             log.error("Failed to destroy connector {} because it does not exist", connName);
-            throw new CopycatRuntimeException("Connector does not exist");
+            throw new CopycatException("Connector does not exist");
         }
 
         stopConnector(state);

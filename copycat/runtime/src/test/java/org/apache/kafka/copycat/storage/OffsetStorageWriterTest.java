@@ -18,7 +18,7 @@
 package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
+import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -133,7 +133,7 @@ public class OffsetStorageWriterTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = CopycatRuntimeException.class)
+    @Test(expected = CopycatException.class)
     public void testAlreadyFlushing() throws Exception {
         @SuppressWarnings("unchecked")
         final Callback<Void> callback = PowerMock.createMock(Callback.class);

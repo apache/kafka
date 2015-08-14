@@ -23,7 +23,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.copycat.cli.WorkerConfig;
-import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -98,7 +97,7 @@ class WorkerSourceTask<K, V> implements WorkerTask {
     }
 
     @Override
-    public void stop() throws CopycatException {
+    public void stop() {
         task.stop();
         commitOffsets();
         if (workThread != null)

@@ -37,7 +37,7 @@ public class FileStreamSourceConnector extends SourceConnector {
     private String topic;
 
     @Override
-    public void start(Properties props) throws CopycatException {
+    public void start(Properties props) {
         filename = props.getProperty(FILE_CONFIG);
         topic = props.getProperty(TOPIC_CONFIG);
         if (topic == null || topic.isEmpty())
@@ -64,7 +64,7 @@ public class FileStreamSourceConnector extends SourceConnector {
     }
 
     @Override
-    public void stop() throws CopycatException {
+    public void stop() {
         // Nothing to do since FileStreamSourceConnector has no background monitoring.
     }
 }

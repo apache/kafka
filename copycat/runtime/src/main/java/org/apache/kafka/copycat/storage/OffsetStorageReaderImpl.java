@@ -19,7 +19,7 @@ package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
+import org.apache.kafka.copycat.errors.CopycatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +82,7 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
             raw = backingStore.get(namespace, serializedToOriginal.keySet(), null).get();
         } catch (Exception e) {
             log.error("Failed to fetch offsets from namespace {}: ", namespace, e);
-            throw new CopycatRuntimeException("Failed to fetch offsets.", e);
+            throw new CopycatException("Failed to fetch offsets.", e);
         }
 
         // Deserialize all the values and map back to the original keys

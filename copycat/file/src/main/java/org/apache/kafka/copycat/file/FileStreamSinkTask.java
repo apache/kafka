@@ -19,7 +19,6 @@ package org.apache.kafka.copycat.file;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.slf4j.Logger;
@@ -57,14 +56,13 @@ public class FileStreamSinkTask extends SinkTask {
             try {
                 outputStream = new PrintStream(new File(filename));
             } catch (FileNotFoundException e) {
-                throw new CopycatRuntimeException(
-                        "Couldn't find or create file for FileStreamSinkTask: {}", e);
+                throw new CopycatException("Couldn't find or create file for FileStreamSinkTask: {}", e);
             }
         }
     }
 
     @Override
-    public void put(Collection<SinkRecord> sinkRecords) throws CopycatException {
+    public void put(Collection<SinkRecord> sinkRecords) {
         for (SinkRecord record : sinkRecords) {
             outputStream.println(record.getValue());
         }
@@ -76,6 +74,6 @@ public class FileStreamSinkTask extends SinkTask {
     }
 
     @Override
-    public void stop() throws CopycatException {
+    public void stop() {
     }
 }
