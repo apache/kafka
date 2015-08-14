@@ -66,6 +66,14 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for cc_pkg in "data" "api" "runtime" "file" "json"
+do
+  for file in $base_dir/copycat/${cc_pkg}/build/libs/copycat-${cc_pkg}*.jar $base_dir/copycat/${cc_pkg}/build/dependant-libs/*.jar;
+  do
+    CLASSPATH=$CLASSPATH:$file
+  done
+done
+
 # classpath addition for release
 for file in $base_dir/libs/*.jar;
 do
