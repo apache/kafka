@@ -59,4 +59,14 @@ public class ByteBufferSend implements Send {
         remaining -= written;
         return written;
     }
+
+    // Used only by BlockingChannel, so we may be able to get rid of this when/if we get rid of BlockingChannel
+    public long writeCompletelyTo(GatheringByteChannel channel) throws IOException {
+        long totalWritten = 0L;
+        while (!completed()) {
+            long written = writeTo(channel);
+            totalWritten += written;
+        }
+        return totalWritten;
+    }
 }
