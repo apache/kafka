@@ -25,7 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * This class ties together all the components of a Copycat process (coordinator, worker,
+ * This class ties together all the components of a Copycat process (herder, worker,
  * storage, command interface), managing their lifecycle.
  */
 @InterfaceStability.Unstable
@@ -33,16 +33,16 @@ public class Copycat {
     private static final Logger log = LoggerFactory.getLogger(Copycat.class);
 
     private final Worker worker;
-    private final Coordinator coordinator;
+    private final Herder herder;
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
     private final ShutdownHook shutdownHook;
 
-    public Copycat(Worker worker, Coordinator coordinator) {
+    public Copycat(Worker worker, Herder herder) {
         log.debug("Copycat created");
         this.worker = worker;
-        this.coordinator = coordinator;
+        this.herder = herder;
         shutdownHook = new ShutdownHook();
     }
 
@@ -51,7 +51,7 @@ public class Copycat {
         Runtime.getRuntime().addShutdownHook(shutdownHook);
 
         worker.start();
-        coordinator.start();
+        herder.start();
 
         log.info("Copycat started");
 
@@ -63,7 +63,7 @@ public class Copycat {
         if (!wasShuttingDown) {
             log.info("Copycat stopping");
 
-            coordinator.stop();
+            herder.stop();
             worker.stop();
 
             log.info("Copycat stopped");

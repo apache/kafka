@@ -141,7 +141,7 @@ public class Worker<K, V> {
 
         for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
             WorkerTask task = entry.getValue();
-            log.warn("Shutting down task {} uncleanly; coordinator should have shut down "
+            log.warn("Shutting down task {} uncleanly; herder should have shut down "
                     + "tasks before the Worker is stopped.", task);
             try {
                 task.stop();
@@ -178,7 +178,7 @@ public class Worker<K, V> {
     public void addTask(ConnectorTaskId id, String taskClassName, Properties props)
             throws CopycatException {
         if (tasks.containsKey(id)) {
-            String msg = "Task already exists in this worker; the coordinator should not have requested "
+            String msg = "Task already exists in this worker; the herder should not have requested "
                     + "that this : " + id;
             log.error(msg);
             throw new CopycatRuntimeException(msg);

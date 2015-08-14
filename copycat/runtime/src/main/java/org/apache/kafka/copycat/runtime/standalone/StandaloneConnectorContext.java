@@ -20,23 +20,23 @@ package org.apache.kafka.copycat.runtime.standalone;
 import org.apache.kafka.copycat.connector.ConnectorContext;
 
 /**
- * ConnectorContext for use with the StandaloneCoordinator, which maintains all connectors and tasks
+ * ConnectorContext for use with the StandaloneHerder, which maintains all connectors and tasks
  * in a single process.
  */
 class StandaloneConnectorContext implements ConnectorContext {
 
-    private StandaloneCoordinator coordinator;
+    private StandaloneHerder herder;
     private String connectorName;
 
-    public StandaloneConnectorContext(StandaloneCoordinator coordinator, String connectorName) {
-        this.coordinator = coordinator;
+    public StandaloneConnectorContext(StandaloneHerder herder, String connectorName) {
+        this.herder = herder;
         this.connectorName = connectorName;
     }
 
     @Override
     public void requestTaskReconfiguration() {
-        // This is trivial to forward since there is only one coordinator and it's in memory in this
+        // This is trivial to forward since there is only one herder and it's in memory in this
         // process
-        coordinator.requestTaskReconfiguration(connectorName);
+        herder.requestTaskReconfiguration(connectorName);
     }
 }

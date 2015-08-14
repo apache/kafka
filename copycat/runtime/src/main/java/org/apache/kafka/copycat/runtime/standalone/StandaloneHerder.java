@@ -22,7 +22,7 @@ import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.errors.CopycatRuntimeException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
-import org.apache.kafka.copycat.runtime.Coordinator;
+import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.sink.SinkConnector;
 import org.apache.kafka.copycat.sink.SinkTask;
@@ -33,25 +33,25 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 
 /**
- * Single process, in-memory "coordinator". Useful for a standalone copycat process.
+ * Single process, in-memory "herder". Useful for a standalone copycat process.
  */
-public class StandaloneCoordinator implements Coordinator {
-    private static final Logger log = LoggerFactory.getLogger(StandaloneCoordinator.class);
+public class StandaloneHerder implements Herder {
+    private static final Logger log = LoggerFactory.getLogger(StandaloneHerder.class);
 
     private Worker worker;
     private HashMap<String, ConnectorState> connectors = new HashMap<>();
 
-    public StandaloneCoordinator(Worker worker) {
+    public StandaloneHerder(Worker worker) {
         this.worker = worker;
     }
 
     public synchronized void start() {
-        log.info("Coordinator starting");
-        log.info("Coordinator started");
+        log.info("Herder starting");
+        log.info("Herder started");
     }
 
     public synchronized void stop() {
-        log.info("Coordinator stopping");
+        log.info("Herder stopping");
 
         // There's no coordination/hand-off to do here since this is all standalone. Instead, we
         // should just clean up the stuff we normally would, i.e. cleanly checkpoint and shutdown all
@@ -62,7 +62,7 @@ public class StandaloneCoordinator implements Coordinator {
         }
         connectors.clear();
 
-        log.info("Coordinator stopped");
+        log.info("Herder stopped");
     }
 
     @Override
@@ -173,7 +173,7 @@ public class StandaloneCoordinator implements Coordinator {
         for (int i = 0; i < taskConfigs.size(); i++) {
             ConnectorTaskId taskId = new ConnectorTaskId(state.name, i);
             Properties config = taskConfigs.get(i);
-            // TODO: This probably shouldn't be in the Coordinator. It's nice to have Copycat ensure the list of topics
+            // TODO: This probably shouldn't be in the Herder. It's nice to have Copycat ensure the list of topics
             // is automatically provided to tasks since it is required by the framework, but this
             String subscriptionTopics = Utils.join(state.inputTopics, ",");
             if (state.connector instanceof SinkConnector) {

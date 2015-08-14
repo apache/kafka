@@ -44,13 +44,13 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({StandaloneCoordinator.class})
+@PrepareForTest({StandaloneHerder.class})
 @PowerMockIgnore("javax.management.*")
-public class StandaloneCoordinatorTest {
+public class StandaloneHerderTest {
     private static final String CONNECTOR_NAME = "test";
     private static final String TOPICS_LIST_STR = "topic1,topic2";
 
-    private StandaloneCoordinator coordinator;
+    private StandaloneHerder herder;
     @Mock protected Worker worker;
     private Connector connector;
     @Mock protected Callback<String> createCallback;
@@ -61,12 +61,12 @@ public class StandaloneCoordinatorTest {
     @Before
     public void setup() {
         worker = PowerMock.createMock(Worker.class);
-        coordinator = new StandaloneCoordinator(worker);
+        herder = new StandaloneHerder(worker);
 
         connectorProps = new Properties();
         connectorProps.setProperty(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
         connectorProps.setProperty(SinkConnector.TOPICS_CONFIG, TOPICS_LIST_STR);
-        PowerMock.mockStatic(StandaloneCoordinator.class);
+        PowerMock.mockStatic(StandaloneHerder.class);
 
         // These can be anything since connectors can pass along whatever they want.
         taskProps = new Properties();
@@ -79,7 +79,7 @@ public class StandaloneCoordinatorTest {
         expectAdd(BogusSourceClass.class, BogusSourceTask.class, false);
         PowerMock.replayAll();
 
-        coordinator.addConnector(connectorProps, createCallback);
+        herder.addConnector(connectorProps, createCallback);
 
         PowerMock.verifyAll();
     }
@@ -91,7 +91,7 @@ public class StandaloneCoordinatorTest {
 
         PowerMock.replayAll();
 
-        coordinator.addConnector(connectorProps, createCallback);
+        herder.addConnector(connectorProps, createCallback);
 
         PowerMock.verifyAll();
     }
@@ -103,14 +103,14 @@ public class StandaloneCoordinatorTest {
         expectDestroy();
         PowerMock.replayAll();
 
-        coordinator.addConnector(connectorProps, createCallback);
+        herder.addConnector(connectorProps, createCallback);
         FutureCallback<Void> futureCb = new FutureCallback<>(new Callback<Void>() {
             @Override
             public void onCompletion(Throwable error, Void result) {
 
             }
         });
-        coordinator.deleteConnector(CONNECTOR_NAME, futureCb);
+        herder.deleteConnector(CONNECTOR_NAME, futureCb);
         futureCb.get(1000L, TimeUnit.MILLISECONDS);
         PowerMock.verifyAll();
     }
@@ -133,7 +133,7 @@ public class StandaloneCoordinatorTest {
                                 boolean sink, boolean expectCallback) throws Exception {
         connectorProps.setProperty(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connClass.getName());
 
-        PowerMock.expectPrivate(StandaloneCoordinator.class, "instantiateConnector", connClass.getName())
+        PowerMock.expectPrivate(StandaloneHerder.class, "instantiateConnector", connClass.getName())
                 .andReturn(connector);
         if (expectCallback) {
             createCallback.onCompletion(null, CONNECTOR_NAME);

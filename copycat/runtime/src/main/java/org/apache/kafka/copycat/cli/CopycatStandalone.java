@@ -19,9 +19,9 @@ package org.apache.kafka.copycat.cli;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.copycat.runtime.Coordinator;
+import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.Worker;
-import org.apache.kafka.copycat.runtime.standalone.StandaloneCoordinator;
+import org.apache.kafka.copycat.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.copycat.util.Callback;
 import org.apache.kafka.copycat.util.FutureCallback;
 import org.slf4j.Logger;
@@ -59,8 +59,8 @@ public class CopycatStandalone {
 
         WorkerConfig workerConfig = new WorkerConfig(workerProps);
         Worker worker = new Worker(workerConfig);
-        Coordinator coordinator = new StandaloneCoordinator(worker);
-        final org.apache.kafka.copycat.runtime.Copycat copycat = new org.apache.kafka.copycat.runtime.Copycat(worker, coordinator);
+        Herder herder = new StandaloneHerder(worker);
+        final org.apache.kafka.copycat.runtime.Copycat copycat = new org.apache.kafka.copycat.runtime.Copycat(worker, herder);
         copycat.start();
 
         try {
@@ -73,7 +73,7 @@ public class CopycatStandalone {
                             log.error("Failed to create job for {}", connectorPropsFile);
                     }
                 });
-                coordinator.addConnector(connectorProps, cb);
+                herder.addConnector(connectorProps, cb);
                 cb.get();
             }
         } catch (Throwable t) {
