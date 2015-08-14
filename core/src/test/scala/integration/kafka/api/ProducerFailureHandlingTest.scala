@@ -17,22 +17,20 @@
 
 package kafka.api
 
-import org.junit.Test
-import org.junit.Assert._
-
+import java.util.concurrent.{ExecutionException, TimeUnit, TimeoutException}
 import java.util.{Properties, Random}
-import java.util.concurrent.{TimeoutException, TimeUnit, ExecutionException}
 
 import kafka.common.Topic
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
-
-import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.errors.{InvalidTopicException, NotEnoughReplicasException, NotEnoughReplicasAfterAppendException}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
+import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.errors.{InvalidTopicException, NotEnoughReplicasAfterAppendException, NotEnoughReplicasException}
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -61,6 +59,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val topic1 = "topic-1"
   private val topic2 = "topic-2"
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -69,6 +68,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     producer3 = TestUtils.createNewProducer(brokerList, acks = -1, blockOnBufferFull = false, bufferSize = producerBufferSize)
   }
 
+  @After
   override def tearDown() {
     if (producer1 != null) producer1.close
     if (producer2 != null) producer2.close

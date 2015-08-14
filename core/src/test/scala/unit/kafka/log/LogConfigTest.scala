@@ -21,9 +21,9 @@ import java.util.Properties
 
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
-import org.scalatest.junit.JUnit3Suite
+import org.scalatest.Assertions._
 
-class LogConfigTest extends JUnit3Suite {
+class LogConfigTest {
 
   @Test
   def testFromPropsEmpty() {

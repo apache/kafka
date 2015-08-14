@@ -17,19 +17,20 @@
 
 package kafka.log
 
-import java.util.Properties
-
-import junit.framework.Assert._
-import org.scalatest.junit.JUnitSuite
-import org.junit.{After, Test}
-import java.nio._
 import java.io.File
-import scala.collection._
-import kafka.common._
-import kafka.utils._
-import kafka.message._
+import java.nio._
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicLong
+
+import kafka.common._
+import kafka.message._
+import kafka.utils._
 import org.apache.kafka.common.utils.Utils
+import org.junit.Assert._
+import org.junit.{After, Test}
+import org.scalatest.junit.JUnitSuite
+
+import scala.collection._
 
 /**
  * Unit tests for the log cleaning logic

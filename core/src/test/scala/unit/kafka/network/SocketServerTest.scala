@@ -17,27 +17,26 @@
 
 package kafka.network;
 
-import java.net._
 import java.io._
+import java.net._
+import java.nio.ByteBuffer
+import java.util.Random
+
+import kafka.api.ProducerRequest
 import kafka.cluster.EndPoint
+import kafka.common.TopicAndPartition
+import kafka.message.ByteBufferMessageSet
+import kafka.producer.SyncProducerConfig
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.NetworkSend
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.SystemTime
+import org.junit.Assert._
 import org.junit._
-import org.scalatest.junit.JUnitSuite
-import java.util.Random
-import junit.framework.Assert._
-import kafka.producer.SyncProducerConfig
-import kafka.api.ProducerRequest
-import java.nio.ByteBuffer
-import kafka.common.TopicAndPartition
-import kafka.message.ByteBufferMessageSet
-import java.nio.channels.SelectionKey
-import kafka.utils.TestUtils
+
 import scala.collection.Map
 
-class SocketServerTest extends JUnitSuite {
+class SocketServerTest {
 
   val server: SocketServer = new SocketServer(0,
                                               Map(SecurityProtocol.PLAINTEXT -> EndPoint(null, 0, SecurityProtocol.PLAINTEXT),
@@ -84,11 +83,11 @@ class SocketServerTest extends JUnitSuite {
     new Socket("localhost", server.boundPort(protocol))
   }
 
-
   @After
   def cleanup() {
     server.shutdown()
   }
+
   @Test
   def simpleRequest() {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
@@ -175,7 +174,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testMaxConnectionsPerIPOverrides(): Unit = {
+  def testMaxConnectionsPerIPOverrides() {
     val overrideNum = 6
     val overrides: Map[String, Int] = Map("localhost" -> overrideNum)
     val overrideServer: SocketServer = new SocketServer(0,

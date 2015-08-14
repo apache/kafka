@@ -20,7 +20,7 @@ package kafka.producer
 import java.net.SocketTimeoutException
 import java.util.Properties
 
-import junit.framework.Assert
+import org.junit.Assert
 import kafka.admin.AdminUtils
 import kafka.api.ProducerResponseStatus
 import kafka.common.{ErrorMapping, TopicAndPartition}
@@ -30,9 +30,8 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 
-class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
+class SyncProducerTest extends KafkaServerTestHarness {
   private val messageBytes =  new Array[Byte](2)
   // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.
   def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnect, false).head))

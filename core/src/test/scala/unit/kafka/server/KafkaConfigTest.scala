@@ -26,9 +26,9 @@ import kafka.utils.{TestUtils, CoreUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{Assert, Test}
-import org.scalatest.junit.JUnit3Suite
+import org.scalatest.Assertions.intercept
 
-class KafkaConfigTest extends JUnit3Suite {
+class KafkaConfigTest {
 
   @Test
   def testLogRetentionTimeHoursProvided() {

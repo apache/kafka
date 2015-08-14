@@ -28,7 +28,7 @@ import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import scala.collection.Map
 
-class RackAwareTopicCreationTest extends JUnit3Suite with KafkaServerTestHarness with RackAwareTest {
+class RackAwareTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
   val numServers = 4
 
   val overridingProps = new Properties()

@@ -17,13 +17,12 @@
 
 package kafka.zk
 
-import junit.framework.Assert
 import kafka.consumer.ConsumerConfig
 import kafka.utils.{ZkPath, TestUtils, ZkUtils}
 import org.apache.kafka.common.config.ConfigException
-import org.scalatest.junit.JUnit3Suite
+import org.junit.Assert._
 
-class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
+class ZKPathTest extends ZooKeeperTestHarness {
 
   val path: String = "/some_dir"
   val zkSessionTimeoutMs = 1000
@@ -54,7 +53,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
+    assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
   }
 
   def testMakeSurePersistsPathExistsThrowsException {
@@ -82,7 +81,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
+    assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
   }
 
   def testCreateEphemeralPathThrowsException {
@@ -110,7 +109,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create ephemeral path")
     }
 
-    Assert.assertTrue("Failed to create ephemeral path", ZkUtils.pathExists(zkClient, path))
+    assertTrue("Failed to create ephemeral path", ZkUtils.pathExists(zkClient, path))
   }
 
   def testCreatePersistentSequentialThrowsException {
@@ -140,6 +139,6 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, actualPath))
+    assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, actualPath))
   }
 }

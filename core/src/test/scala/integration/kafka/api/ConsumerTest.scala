@@ -25,6 +25,7 @@ import kafka.server.KafkaConfig
 
 import java.util.ArrayList
 import org.junit.Assert._
+import org.junit.Before
 
 import scala.collection.JavaConverters._
 import kafka.coordinator.ConsumerCoordinator
@@ -56,6 +57,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
 
+  @Before
   override def setUp() {
     super.setUp()
 

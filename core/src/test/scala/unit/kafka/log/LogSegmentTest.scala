@@ -16,19 +16,15 @@
  */
  package kafka.log
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import java.util.concurrent.atomic._
-import java.io.File
-import java.io.RandomAccessFile
-import java.util.Random
 import org.junit.{Test, After}
-import org.scalatest.junit.JUnit3Suite
 import kafka.utils.TestUtils
 import kafka.message._
 import kafka.utils.SystemTime
 import scala.collection._
 
-class LogSegmentTest extends JUnit3Suite {
+class LogSegmentTest {
   
   val segments = mutable.ArrayBuffer[LogSegment]()
   

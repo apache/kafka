@@ -20,10 +20,10 @@ package kafka.coordinator
 
 import java.util.concurrent.TimeUnit
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.common.TopicAndPartition
-import kafka.server.{OffsetManager, ReplicaManager, KafkaConfig}
-import kafka.utils.{KafkaScheduler, TestUtils}
+import kafka.server.{OffsetManager, KafkaConfig}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.JoinGroupRequest
 import org.easymock.EasyMock

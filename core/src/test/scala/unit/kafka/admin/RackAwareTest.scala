@@ -30,7 +30,7 @@ import scala.collection.JavaConverters._
 
 import scala.collection.{mutable, Map, Seq}
 
-trait RackAwareTest extends JUnit3Suite {
+trait RackAwareTest {
   def ensureRackAwareAndEvenDistribution(assignment: scala.collection.Map[Int, Seq[Int]], brokerRackMapping: Map[Int, String], numBrokers: Int,
                                          numPartitions: Int, replicationFactor: Int): Unit = {
     checkDistribution(assignment, brokerRackMapping, numBrokers, numPartitions, replicationFactor, true, true, true)

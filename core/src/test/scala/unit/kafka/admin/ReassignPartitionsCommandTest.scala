@@ -21,17 +21,19 @@ import java.io.{FileOutputStream, OutputStreamWriter, BufferedWriter, File}
 import kafka.admin.ReassignPartitionsCommand.ReassignPartitionsCommandOptions
 import kafka.utils.{TestUtils, ZkUtils, Logging}
 import kafka.zk.ZooKeeperTestHarness
-import org.junit.Test
+import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnit3Suite
 
-class ReassignPartitionsCommandTest extends JUnit3Suite with ZooKeeperTestHarness with Logging with RackAwareTest {
+class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   var file: File = null;
 
+  @Before
   override def setUp(): Unit = {
     super.setUp()
     file = createTmpFile()
   }
 
+  @After
   override def tearDown(): Unit = {
     super.tearDown()
     if (file != null) {

@@ -27,12 +27,11 @@ import java.io.File
 import org.apache.kafka.common.protocol.Errors
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
-import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 
 import scala.collection.Map
 
-class ReplicaManagerTest extends JUnit3Suite {
+class ReplicaManagerTest {
 
   val topic = "test-topic"
 
@@ -84,7 +83,7 @@ class ReplicaManagerTest extends JUnit3Suite {
 
     rm.appendMessages(timeout = 0, requiredAcks = 3, internalTopicsAllowed = false, messagesPerPartition = produceRequest.data, responseCallback = callback)
 
-    rm.shutdown(false);
+    rm.shutdown(false)
 
     TestUtils.verifyNonDaemonThreadsStatus
 

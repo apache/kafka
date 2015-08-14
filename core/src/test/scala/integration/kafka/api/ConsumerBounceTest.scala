@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
+import org.junit.Before
 
 import scala.collection.JavaConversions._
 
@@ -52,6 +53,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       .map(KafkaConfig.fromProps(_, serverConfig))
   }
 
+  @Before
   override def setUp() {
     super.setUp()
 

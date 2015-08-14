@@ -21,11 +21,10 @@ import java.util.Properties
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricPredicate
-import org.junit.Test
-import junit.framework.Assert._
+import org.junit.{After, Test}
+import org.junit.Assert._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
-import kafka.message._
 import kafka.serializer._
 import kafka.utils._
 import kafka.admin.AdminUtils
@@ -33,9 +32,8 @@ import kafka.utils.TestUtils._
 import scala.collection._
 import scala.collection.JavaConversions._
 import scala.util.matching.Regex
-import org.scalatest.junit.JUnit3Suite
 
-class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
+class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
@@ -48,6 +46,7 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
   val nMessages = 2
 
+  @After
   override def tearDown() {
     super.tearDown()
   }
