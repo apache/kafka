@@ -34,6 +34,7 @@ import java.util.Properties;
 public class FileStreamSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(FileStreamSourceTask.class);
 
+    private String filename;
     private InputStream stream;
     private BufferedReader reader = null;
     private char[] buffer = new char[1024];
@@ -44,17 +45,26 @@ public class FileStreamSourceTask extends SourceTask {
 
     @Override
     public void start(Properties props) {
-        String filename = props.getProperty(FileStreamSourceConnector.FILE_CONFIG);
-        if (filename == null) {
+        filename = props.getProperty(FileStreamSourceConnector.FILE_CONFIG);
+        if (filename == null || filename.isEmpty()) {
             stream = System.in;
             // Tracking offset for stdin doesn't make sense
             streamOffset = null;
-        } else {
+        }
+        topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
+        if (topic == null)
+            throw new CopycatException("ConsoleSourceTask config missing topic setting");
+    }
+
+    @Override
+    public List<SourceRecord> poll() throws InterruptedException {
+        if (stream == null) {
             try {
                 stream = new FileInputStream(filename);
-                Long lastRecordedOffset = (Long) context.getOffsetStorageReader().getOffset(null);
+                log.info("Opened file " + filename);
+                Long lastRecordedOffset = (Long) context.getOffsetStorageReader().getOffset(filename);
                 if (lastRecordedOffset != null) {
-                    log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
+                    log.debug("Found previous offset, trying to skip to file offset: " + lastRecordedOffset);
                     long skipLeft = lastRecordedOffset;
                     while (skipLeft > 0) {
                         try {
@@ -65,21 +75,17 @@ public class FileStreamSourceTask extends SourceTask {
                             throw new CopycatException(e);
                         }
                     }
-                    log.debug("Skipped to offset {}", lastRecordedOffset);
+                    log.debug("Skipped to offset", lastRecordedOffset);
                 }
                 streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
+                reader = new BufferedReader(new InputStreamReader(stream));
             } catch (FileNotFoundException e) {
-                throw new CopycatException("Couldn't find file for FileStreamSourceTask: {}", e);
+                log.warn("Couldn't find file for FileStreamSourceTask, sleeping to wait for it to be created");
+                Thread.sleep(1000);
+                return null;
             }
         }
-        topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
-        if (topic == null)
-            throw new CopycatException("ConsoleSourceTask config missing topic setting");
-        reader = new BufferedReader(new InputStreamReader(stream));
-    }
 
-    @Override
-    public List<SourceRecord> poll() throws InterruptedException {
         // Unfortunately we can't just use readLine() because it blocks in an uninterruptible way.
         // Instead we have to manage splitting lines ourselves, using simple backoff when no new data
         // is available.
@@ -111,7 +117,7 @@ public class FileStreamSourceTask extends SourceTask {
                         if (line != null) {
                             if (records == null)
                                 records = new ArrayList<>();
-                            records.add(new SourceRecord(null, streamOffset, topic, line));
+                            records.add(new SourceRecord(filename, streamOffset, topic, line));
                         }
                         new ArrayList<SourceRecord>();
                     } while (line != null);
@@ -169,8 +175,6 @@ public class FileStreamSourceTask extends SourceTask {
             } catch (IOException e) {
                 log.error("Failed to close ConsoleSourceTask stream: ", e);
             }
-            reader = null;
-            stream = null;
         }
     }
 }

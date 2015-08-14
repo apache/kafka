@@ -80,8 +80,7 @@ class ReplicationTest(Test):
 
         # Produce in a background thread while driving broker failures
         self.producer.start()
-        if not wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5):
-            raise RuntimeError("Producer failed to start in a reasonable amount of time.")
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5, err_msg="Producer failed to start in a reasonable amount of time.")
         failure()
         self.producer.stop()
 
@@ -160,6 +159,3 @@ class ReplicationTest(Test):
 
     def test_hard_bounce(self):
         self.run_with_failure(self.hard_bounce)
-
-
-
