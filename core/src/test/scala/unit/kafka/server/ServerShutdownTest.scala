@@ -159,6 +159,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
+  @Test
   def testConsecutiveShutdown(){
     val server = new KafkaServer(config)
     try {

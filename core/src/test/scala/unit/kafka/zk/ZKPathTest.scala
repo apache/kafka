@@ -21,6 +21,7 @@ import kafka.consumer.ConsumerConfig
 import kafka.utils.{ZkPath, TestUtils, ZkUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.junit.Assert._
+import org.junit.Test
 
 class ZKPathTest extends ZooKeeperTestHarness {
 
@@ -28,6 +29,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
   val zkSessionTimeoutMs = 1000
   def zkConnectWithInvalidRoot: String = zkConnect + "/ghost"
 
+  @Test
   def testCreatePersistentPathThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
@@ -43,6 +45,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testCreatePersistentPath {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
@@ -56,6 +59,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
   }
 
+  @Test
   def testMakeSurePersistsPathExistsThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
@@ -71,6 +75,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testMakeSurePersistsPathExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
@@ -84,6 +89,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
   }
 
+  @Test
   def testCreateEphemeralPathThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
@@ -99,6 +105,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testCreateEphemeralPathExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
@@ -112,6 +119,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     assertTrue("Failed to create ephemeral path", ZkUtils.pathExists(zkClient, path))
   }
 
+  @Test
   def testCreatePersistentSequentialThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
@@ -127,6 +135,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testCreatePersistentSequentialExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)

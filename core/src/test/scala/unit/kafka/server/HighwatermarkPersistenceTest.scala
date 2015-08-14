@@ -43,6 +43,7 @@ class HighwatermarkPersistenceTest {
       CoreUtils.rm(dir)
   }
 
+  @Test
   def testHighWatermarkPersistenceSinglePartition() {
     // mock zkclient
     val zkClient = EasyMock.createMock(classOf[ZkClient])
@@ -78,6 +79,7 @@ class HighwatermarkPersistenceTest {
     replicaManager.shutdown(false)
   }
 
+  @Test
   def testHighWatermarkPersistenceMultiplePartitions() {
     val topic1 = "foo1"
     val topic2 = "foo2"

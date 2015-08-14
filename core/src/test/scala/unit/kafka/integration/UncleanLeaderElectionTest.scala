@@ -18,7 +18,7 @@
 package kafka.integration
 
 import org.apache.kafka.common.config.ConfigException
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 
 import scala.util.Random
 import org.apache.log4j.{Level, Logger}
@@ -99,6 +99,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testUncleanLeaderElectionEnabled {
     // unclean leader election is enabled by default
     startBrokers(Seq(configProps1, configProps2))
@@ -109,6 +110,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     verifyUncleanLeaderElectionEnabled
   }
 
+  @Test
   def testUncleanLeaderElectionDisabled {
 	// disable unclean leader election
 	configProps1.put("unclean.leader.election.enable", String.valueOf(false))
@@ -121,6 +123,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     verifyUncleanLeaderElectionDisabled
   }
 
+  @Test
   def testUncleanLeaderElectionEnabledByTopicOverride {
     // disable unclean leader election globally, but enable for our specific test topic
     configProps1.put("unclean.leader.election.enable", String.valueOf(false))
@@ -136,6 +139,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     verifyUncleanLeaderElectionEnabled
   }
 
+  @Test
   def testCleanLeaderElectionDisabledByTopicOverride {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", String.valueOf(true))
@@ -151,6 +155,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     verifyUncleanLeaderElectionDisabled
   }
 
+  @Test
   def testUncleanLeaderElectionInvalidTopicOverride {
     startBrokers(Seq(configProps1))
 

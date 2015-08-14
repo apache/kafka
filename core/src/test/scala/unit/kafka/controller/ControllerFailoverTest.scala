@@ -66,6 +66,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
    * See @link{https://issues.apache.org/jira/browse/KAFKA-2300}
    * for the background of this test case
    */
+  @Test
   def testMetadataUpdate() {
     log.setLevel(Level.INFO)
     var controller: KafkaServer = this.servers.head;

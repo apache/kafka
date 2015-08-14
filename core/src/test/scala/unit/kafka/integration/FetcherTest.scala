@@ -19,7 +19,7 @@ package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 
 import scala.collection._
 import org.junit.Assert._
@@ -65,6 +65,7 @@ class FetcherTest extends KafkaServerTestHarness {
     super.tearDown
   }
 
+  @Test
   def testFetcher() {
     val perNode = 2
     var count = TestUtils.sendMessages(servers, topic, perNode).size
