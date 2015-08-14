@@ -18,6 +18,8 @@ package kafka.controller
 
 import java.util
 
+import org.apache.kafka.common.requests.{AbstractRequestResponse, ResponseHeader, AbstractRequest, RequestHeader}
+
 import scala.collection._
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.TimeUnit
@@ -688,6 +690,13 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       isRunning = false
     }
     onControllerResignation()
+  }
+
+  def sendRequest(brokerId: Int,
+                  header: RequestHeader,
+                  body: AbstractRequest,
+                  callback: (ResponseHeader, AbstractRequestResponse) => Unit) = {
+    controllerContext.controllerChannelManager.sendRequest(brokerId, header, body, callback)
   }
 
   def sendRequest(brokerId : Int, request : RequestOrResponse, callback: (RequestOrResponse) => Unit = null) = {

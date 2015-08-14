@@ -18,16 +18,29 @@ package kafka.controller
 
 import kafka.network.BlockingChannel
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.NetworkReceive
+import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.requests.{ResponseHeader, RequestHeader, AbstractRequestResponse, AbstractRequest, StopReplicaRequest, StopReplicaResponse}
 import collection.mutable.HashMap
 import kafka.cluster.Broker
 import java.util.concurrent.{LinkedBlockingQueue, BlockingQueue}
 import kafka.server.KafkaConfig
 import collection.mutable
 import kafka.api._
-import kafka.common.TopicAndPartition
+import kafka.common.{KafkaException, TopicAndPartition}
 import kafka.api.RequestOrResponse
 import collection.Set
+import scala.collection.JavaConverters._
+
+sealed trait RequestQueued
+
+case class ScalaRequestQueued(request: RequestOrResponse,
+                              callback: (RequestOrResponse) => Unit) extends RequestQueued
+
+case class JavaRequestQueued(header: RequestHeader,
+                             body: AbstractRequest,
+                             callback: (ResponseHeader, AbstractRequestResponse) => Unit) extends RequestQueued
 
 class ControllerChannelManager (private val controllerContext: ControllerContext, config: KafkaConfig) extends Logging {
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
@@ -48,12 +61,25 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
     }
   }
 
+  def sendRequest(brokerId: Int, header: RequestHeader, body: AbstractRequest, callback: (ResponseHeader, AbstractRequestResponse) => Unit): Unit = {
+    brokerLock synchronized {
+      val stateInfoOpt = brokerStateInfo.get(brokerId)
+      stateInfoOpt match {
+        case Some(stateInfo) =>
+          stateInfo.messageQueue.put(JavaRequestQueued(header, body, callback))
+        case None =>
+          warn("Not sending request %s to broker %d, since it is offline.".format(body, brokerId))
+      }
+    }
+  }
+
+  // TODO Remove this one when migration of all requests / responses to org.apache.kafka.common.requests is done.
   def sendRequest(brokerId : Int, request : RequestOrResponse, callback: (RequestOrResponse) => Unit = null) {
     brokerLock synchronized {
       val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
-          stateInfo.messageQueue.put((request, callback))
+          stateInfo.messageQueue.put(ScalaRequestQueued(request, callback))
         case None =>
           warn("Not sending request %s to broker %d, since it is offline.".format(request, brokerId))
       }
@@ -77,7 +103,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
   }
 
   private def addNewBroker(broker: Broker) {
-    val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)]()
+    val messageQueue = new LinkedBlockingQueue[RequestQueued]()
     debug("Controller %d trying to connect to broker %d".format(config.brokerId,broker.id))
     val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
     val channel = new BlockingChannel(brokerEndPoint.host, brokerEndPoint.port,
@@ -110,7 +136,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
 class RequestSendThread(val controllerId: Int,
                         val controllerContext: ControllerContext,
                         val toBroker: Broker,
-                        val queue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],
+                        val queue: BlockingQueue[RequestQueued],
                         val channel: BlockingChannel)
   extends ShutdownableThread("Controller-%d-to-broker-%d-send-thread".format(controllerId, toBroker.id)) {
   private val lock = new Object()
@@ -119,47 +145,11 @@ class RequestSendThread(val controllerId: Int,
 
   override def doWork(): Unit = {
     val queueItem = queue.take()
-    val request = queueItem._1
-    val callback = queueItem._2
-    var receive: NetworkReceive = null
     try {
       lock synchronized {
-        var isSendSuccessful = false
-        while (isRunning.get() && !isSendSuccessful) {
-          // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
-          // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
-          try {
-            channel.send(request)
-            receive = channel.receive()
-            isSendSuccessful = true
-          } catch {
-            case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
-              warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
-                "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
-                  request.toString, toBroker.toString()), e)
-              channel.disconnect()
-              connectToBroker(toBroker, channel)
-              isSendSuccessful = false
-              // backoff before retrying the connection and send
-              CoreUtils.swallowTrace(Thread.sleep(300))
-          }
-        }
-        if (receive != null) {
-          var response: RequestOrResponse = null
-          request.requestId.get match {
-            case RequestKeys.LeaderAndIsrKey =>
-              response = LeaderAndIsrResponse.readFrom(receive.payload())
-            case RequestKeys.StopReplicaKey =>
-              response = StopReplicaResponse.readFrom(receive.payload())
-            case RequestKeys.UpdateMetadataKey =>
-              response = UpdateMetadataResponse.readFrom(receive.payload())
-          }
-          stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
-            .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))
-
-          if (callback != null) {
-            callback(response)
-          }
+        queueItem match {
+          case ScalaRequestQueued(request, callback) => sendScalaRequest(request, callback)
+          case JavaRequestQueued(header, body, callback) => sendJavaRequest(header, body, callback)
         }
       }
     } catch {
@@ -167,6 +157,89 @@ class RequestSendThread(val controllerId: Int,
         error("Controller %d fails to send a request to broker %s".format(controllerId, toBroker.toString()), e)
         // If there is any socket error (eg, socket timeout), the channel is no longer usable and needs to be recreated.
         channel.disconnect()
+    }
+  }
+
+  private def sendJavaRequest(header: RequestHeader, body: AbstractRequest,
+                              callback: (ResponseHeader, AbstractRequestResponse) => Unit): Unit = {
+    var receive: NetworkReceive = null
+    var isSendSuccessful = false
+
+    while (isRunning.get() && !isSendSuccessful) {
+      // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
+      // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
+      try {
+        channel.send(header, body)
+        receive = channel.receive()
+        isSendSuccessful = true
+      } catch {
+        case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
+          warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
+            "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
+              body.toString, toBroker.toString()), e)
+          channel.disconnect()
+          connectToBroker(toBroker, channel)
+          isSendSuccessful = false
+          // backoff before retrying the connection and send
+          CoreUtils.swallowTrace(Thread.sleep(300))
+      }
+    }
+
+    if (receive != null) {
+      val rspHeader = ResponseHeader.parse(receive.payload())
+      val apiKey = ApiKeys.forId(header.apiKey())
+      val rspBody = apiKey match {
+        case ApiKeys.STOP_REPLICA => StopReplicaResponse.parse(receive.payload())
+        case _ => throw new KafkaException("Unknown api code " + apiKey.id)
+      }
+      stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
+        .format(controllerId, controllerContext.epoch, rspBody.toString, toBroker.toString))
+
+      if (callback != null) {
+        callback(rspHeader, rspBody)
+      }
+    }
+  }
+
+  // TODO Remove this one when migration of all requests / responses to org.apache.kafka.common.requests is done.
+  private def sendScalaRequest(request: RequestOrResponse, callback: (RequestOrResponse) => Unit): Unit = {
+    var receive: NetworkReceive = null
+    var isSendSuccessful = false
+
+    while (isRunning.get() && !isSendSuccessful) {
+      // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
+      // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
+      try {
+        channel.send(request)
+        receive = channel.receive()
+        isSendSuccessful = true
+      } catch {
+        case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
+          warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
+            "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
+              request.toString, toBroker.toString()), e)
+          channel.disconnect()
+          connectToBroker(toBroker, channel)
+          isSendSuccessful = false
+          // backoff before retrying the connection and send
+          CoreUtils.swallowTrace(Thread.sleep(300))
+      }
+    }
+
+    if (receive != null) {
+      var response: RequestOrResponse = null
+      request.requestId.get match {
+        case RequestKeys.LeaderAndIsrKey =>
+          response = LeaderAndIsrResponse.readFrom(receive.payload())
+        case RequestKeys.UpdateMetadataKey =>
+          response = UpdateMetadataResponse.readFrom(receive.payload())
+      }
+      stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
+        .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))
+
+      if (callback != null) {
+        callback(response)
+      }
     }
   }
 
@@ -222,13 +295,13 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
   }
 
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, deletePartition: Boolean,
-                                      callback: (RequestOrResponse, Int) => Unit = null) {
+                                      callback: (ResponseHeader, StopReplicaResponse, Int) => Unit = null) {
     brokerIds.filter(b => b >= 0).foreach { brokerId =>
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[StopReplicaRequestInfo])
       val v = stopReplicaRequestMap(brokerId)
       if(callback != null)
         stopReplicaRequestMap(brokerId) = v :+ StopReplicaRequestInfo(PartitionAndReplica(topic, partition, brokerId),
-          deletePartition, (r: RequestOrResponse) => { callback(r, brokerId) })
+          deletePartition, (header, body) => { callback(header, body.asInstanceOf[StopReplicaResponse], brokerId) })
       else
         stopReplicaRequestMap(brokerId) = v :+ StopReplicaRequestInfo(PartitionAndReplica(topic, partition, brokerId),
           deletePartition)
@@ -318,9 +391,10 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         debug("The stop replica request (delete = false) sent to broker %d is %s"
           .format(broker, stopReplicaWithoutDelete.mkString(",")))
         replicaInfoList.foreach { r =>
-          val stopReplicaRequest = new StopReplicaRequest(r.deletePartition,
-            Set(TopicAndPartition(r.replica.topic, r.replica.partition)), controllerId, controllerEpoch, correlationId)
-          controller.sendRequest(broker, stopReplicaRequest, r.callback)
+          val stopReplicaHeader = new RequestHeader(ApiKeys.STOP_REPLICA.id, "", correlationId)
+          val stopReplicaRequest = new StopReplicaRequest(controllerId, controllerEpoch, r.deletePartition,
+            Set(new TopicPartition(r.replica.topic, r.replica.partition)).asJava)
+          controller.sendRequest(broker, stopReplicaHeader, stopReplicaRequest, r.callback)
         }
       }
       stopReplicaRequestMap.clear()
@@ -346,20 +420,22 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
 case class ControllerBrokerStateInfo(channel: BlockingChannel,
                                      broker: Broker,
-                                     messageQueue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],
+                                     messageQueue: BlockingQueue[RequestQueued],
                                      requestSendThread: RequestSendThread)
 
-case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean, callback: (RequestOrResponse) => Unit = null)
+case class StopReplicaRequestInfo(replica: PartitionAndReplica,
+                                  deletePartition: Boolean,
+                                  callback: (ResponseHeader, AbstractRequestResponse) => Unit = null)
 
 class Callbacks private (var leaderAndIsrResponseCallback:(RequestOrResponse) => Unit = null,
                          var updateMetadataResponseCallback:(RequestOrResponse) => Unit = null,
-                         var stopReplicaResponseCallback:(RequestOrResponse, Int) => Unit = null)
+                         var stopReplicaResponseCallback:(ResponseHeader, StopReplicaResponse, Int) => Unit = null)
 
 object Callbacks {
   class CallbackBuilder {
     var leaderAndIsrResponseCbk:(RequestOrResponse) => Unit = null
     var updateMetadataResponseCbk:(RequestOrResponse) => Unit = null
-    var stopReplicaResponseCbk:(RequestOrResponse, Int) => Unit = null
+    var stopReplicaResponseCbk:(ResponseHeader, StopReplicaResponse, Int) => Unit = null
 
     def leaderAndIsrCallback(cbk: (RequestOrResponse) => Unit): CallbackBuilder = {
       leaderAndIsrResponseCbk = cbk
@@ -371,7 +447,7 @@ object Callbacks {
       this
     }
 
-    def stopReplicaCallback(cbk: (RequestOrResponse, Int) => Unit): CallbackBuilder = {
+    def stopReplicaCallback(cbk: (ResponseHeader, StopReplicaResponse, Int) => Unit): CallbackBuilder = {
       stopReplicaResponseCbk = cbk
       this
     }
