@@ -16,10 +16,10 @@ package org.apache.kafka.clients.consumer.internals;
 import java.util.Collection;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 
-public class NoOpConsumerRebalanceCallback implements ConsumerRebalanceCallback {
+public class NoOpConsumerRebalanceListener implements ConsumerRebalanceListener {
 
     @Override
     public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {}

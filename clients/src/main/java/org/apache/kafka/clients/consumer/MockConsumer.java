@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -48,34 +49,30 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
     
     @Override
-    public synchronized Set<TopicPartition> subscriptions() {
+    public synchronized Set<TopicPartition> assignment() {
         return this.subscriptions.assignedPartitions();
     }
 
     @Override
-    public synchronized void subscribe(String... topics) {
-        ensureNotClosed();
-        for (String topic : topics)
-            this.subscriptions.subscribe(topic);
+    public synchronized Set<String> subscription() {
+        return this.subscriptions.subscription();
     }
 
     @Override
-    public synchronized void subscribe(TopicPartition... partitions) {
-        ensureNotClosed();
-        for (TopicPartition partition : partitions)
-            this.subscriptions.subscribe(partition);
+    public synchronized void subscribe(List<String> topics) {
+        subscribe(topics, new NoOpConsumerRebalanceListener());
     }
 
-    public synchronized void unsubscribe(String... topics) {
+    @Override
+    public synchronized void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
-        for (String topic : topics)
-            this.subscriptions.unsubscribe(topic);
+        this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
     }
 
-    public synchronized void unsubscribe(TopicPartition... partitions) {
+    @Override
+    public synchronized void assign(List<TopicPartition> partitions) {
         ensureNotClosed();
-        for (TopicPartition partition : partitions)
-            this.subscriptions.unsubscribe(partition);
+        this.subscriptions.assign(partitions);
     }
 
     @Override

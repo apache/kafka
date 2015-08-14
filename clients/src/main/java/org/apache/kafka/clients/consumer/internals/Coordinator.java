@@ -46,7 +46,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -72,7 +71,6 @@ public final class Coordinator {
     private final CoordinatorMetrics sensors;
     private final long requestTimeoutMs;
     private final long retryBackoffMs;
-    private final RebalanceCallback rebalanceCallback;
     private Node consumerCoordinator;
     private String consumerId;
     private int generation;
@@ -92,8 +90,7 @@ public final class Coordinator {
                        Map<String, String> metricTags,
                        Time time,
                        long requestTimeoutMs,
-                       long retryBackoffMs,
-                       RebalanceCallback rebalanceCallback) {
+                       long retryBackoffMs) {
 
         this.client = client;
         this.time = time;
@@ -109,7 +106,6 @@ public final class Coordinator {
         this.sensors = new CoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
-        this.rebalanceCallback = rebalanceCallback;
     }
 
     /**
@@ -159,25 +155,27 @@ public final class Coordinator {
         if (!subscriptions.partitionAssignmentNeeded())
             return;
 
-        // execute the user's callback before rebalance
+        SubscriptionState.RebalanceListener listener = subscriptions.listener();
+
+        // execute the user's listener before rebalance
         log.debug("Revoking previously assigned partitions {}", this.subscriptions.assignedPartitions());
         try {
-            Set<TopicPartition> revoked = new HashSet<TopicPartition>(subscriptions.assignedPartitions());
-            rebalanceCallback.onPartitionsRevoked(revoked);
+            Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
+            listener.onPartitionsRevoked(revoked);
         } catch (Exception e) {
-            log.error("User provided callback " + this.rebalanceCallback.getClass().getName()
+            log.error("User provided listener " + listener.underlying().getClass().getName()
                     + " failed on partition revocation: ", e);
         }
 
         reassignPartitions();
 
-        // execute the user's callback after rebalance
+        // execute the user's listener after rebalance
         log.debug("Setting newly assigned partitions {}", this.subscriptions.assignedPartitions());
         try {
-            Set<TopicPartition> assigned = new HashSet<TopicPartition>(subscriptions.assignedPartitions());
-            rebalanceCallback.onPartitionsAssigned(assigned);
+            Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
+            listener.onPartitionsAssigned(assigned);
         } catch (Exception e) {
-            log.error("User provided callback " + this.rebalanceCallback.getClass().getName()
+            log.error("User provided listener " + listener.underlying().getClass().getName()
                     + " failed on partition assignment: ", e);
         }
     }
@@ -293,7 +291,7 @@ public final class Coordinator {
             return RequestFuture.coordinatorNotAvailable();
 
         // send a join group request to the coordinator
-        List<String> subscribedTopics = new ArrayList<String>(subscriptions.subscribedTopics());
+        List<String> subscribedTopics = new ArrayList<String>(subscriptions.subscription());
         log.debug("(Re-)joining group {} with subscribed topics {}", groupId, subscribedTopics);
 
         JoinGroupRequest request = new JoinGroupRequest(groupId,
@@ -713,10 +711,6 @@ public final class Coordinator {
         }
     }
 
-    public interface RebalanceCallback {
-        void onPartitionsAssigned(Collection<TopicPartition> partitions);
-        void onPartitionsRevoked(Collection<TopicPartition> partitions);
-    }
 
     private class CoordinatorMetrics {
         public final Metrics metrics;
