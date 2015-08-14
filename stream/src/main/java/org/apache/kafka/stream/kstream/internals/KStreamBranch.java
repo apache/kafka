@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
 
-    private final PTopologyBuilder topology;
     private final Predicate<K, V>[] predicates;
 
     @SuppressWarnings("unchecked")
@@ -41,14 +40,7 @@ class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
         if (this.config() == null)
             throw new IllegalStateException("PConfig should be specified.");
 
-        Predicate<K, V>[] predicates = (Predicate<K, V>[]) config.value();
-    }
-
-    Predicate<K, V>[] predicates, PTopologyBuilder topology, String parent) {
-        super(BRANCH_NAME);
-
-        this.topology = topology;
-        this.predicates = Arrays.copyOf(predicates, predicates.length);
+        this.predicates = (Predicate<K, V>[]) config.value();
     }
 
     @Override

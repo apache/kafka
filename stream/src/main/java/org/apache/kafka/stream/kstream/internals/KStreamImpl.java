@@ -31,7 +31,9 @@ import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.ValueMapper;
 import org.apache.kafka.stream.Window;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class KStreamImpl<K, V> implements KStream<K, V> {
@@ -128,15 +130,19 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
         String name = BRANCH_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamFlatMapValues.class, new PConfig("ValueMapper", mapper), this.name);
+        topology.addProcessor(name, KStreamBranch.class, new PConfig("Predicates", Arrays.copyOf(predicates, predicates.length)), this.name);
 
-        Arrays.copyOf(predicates, predicates.length)
+        KStreamImpl branch = new KStreamImpl<>(topology, name);
+        List<KStream<K, V>> avatars = new ArrayList<>();
+        for (int i = 0; i < predicates.length; i++) {
+            avatars.add(branch);
+        }
 
-        KStreamBranch<K, V> branch = new KStreamBranch<>(predicates, topology, processor);
-        return branch.branches();
+        return (KStream<K, V>[]) avatars.toArray();
     }
 
     @SuppressWarnings("unchecked")
