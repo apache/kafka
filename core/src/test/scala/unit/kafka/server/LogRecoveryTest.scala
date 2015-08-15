@@ -27,7 +27,7 @@ import kafka.serializer.StringEncoder
 
 import java.io.File
 
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 import org.junit.Assert._
 
 class LogRecoveryTest extends ZooKeeperTestHarness {
@@ -97,6 +97,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
+  @Test
   def testHWCheckpointNoFailuresSingleLogSegment {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
@@ -113,6 +114,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     assertEquals(numMessages, followerHW)
   }
 
+  @Test
   def testHWCheckpointWithFailuresSingleLogSegment {
     var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 
@@ -163,6 +165,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
   }
 
+  @Test
   def testHWCheckpointNoFailuresMultipleLogSegments {
     sendMessages(20)
     val hw = 20L
@@ -178,6 +181,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     assertEquals(hw, followerHW)
   }
 
+  @Test
   def testHWCheckpointWithFailuresMultipleLogSegments {
     var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 

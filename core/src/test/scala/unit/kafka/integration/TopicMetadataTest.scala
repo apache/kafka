@@ -30,7 +30,7 @@ import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert._
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 
 class TopicMetadataTest extends ZooKeeperTestHarness {
   private var server1: KafkaServer = null
@@ -54,6 +54,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
+  @Test
   def testTopicMetadataRequest {
     // create topic
     val topic = "test"
@@ -70,6 +71,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     assertEquals(topicMetadataRequest, deserializedMetadataRequest)
   }
 
+  @Test
   def testBasicTopicMetadata {
     // create topic
     val topic = "test"
@@ -87,6 +89,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     assertEquals(1, partitionMetadata.head.replicas.size)
   }
 
+  @Test
   def testGetAllTopicMetadata {
     // create topic
     val topic1 = "testGetAllTopicMetadata1"
@@ -111,6 +114,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     assertEquals(1, partitionMetadataTopic2.head.replicas.size)
   }
 
+  @Test
   def testAutoCreateTopic {
     // auto create topic
     val topic = "testAutoCreateTopic"
@@ -137,6 +141,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     assertTrue(partitionMetadata.head.leader.isDefined)
   }
 
+  @Test
   def testAutoCreateTopicWithCollision {
     // auto create topic
     val topic1 = "testAutoCreate_Topic"
@@ -199,7 +204,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     })
   }
 
-
+  @Test
   def testIsrAfterBrokerShutDownAndJoinsBack {
     val numBrokers = 2 //just 2 brokers are enough for the test
 
@@ -250,10 +255,12 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
 
+  @Test
   def testAliveBrokerListWithNoTopics {
     checkMetadata(Seq(server1), 1)
   }
 
+  @Test
   def testAliveBrokersListWithNoTopicsAfterNewBrokerStartup {
     var adHocServers = adHocConfigs.takeRight(adHocConfigs.size - 1).map(p => createServer(p))
 
@@ -267,6 +274,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
 
+  @Test
   def testAliveBrokersListWithNoTopicsAfterABrokerShutdown {
     val adHocServers = adHocConfigs.map(p => createServer(p))
 

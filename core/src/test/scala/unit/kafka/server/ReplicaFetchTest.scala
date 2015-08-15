@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
 import kafka.producer.KeyedMessage
@@ -44,6 +44,7 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
     super.tearDown()
   }
 
+  @Test
   def testReplicaFetcherThread() {
     val partition = 0
     val testMessageList1 = List("test1", "test2", "test3", "test4")

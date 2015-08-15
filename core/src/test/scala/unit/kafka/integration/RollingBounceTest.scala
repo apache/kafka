@@ -17,7 +17,7 @@
 
 package kafka.integration
 
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
 import org.junit.Assert._
@@ -47,6 +47,7 @@ class RollingBounceTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
+  @Test
   def testRollingBounce {
     // start all the brokers
     val topic1 = "new-topic1"

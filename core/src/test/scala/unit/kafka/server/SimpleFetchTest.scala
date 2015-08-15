@@ -22,7 +22,7 @@ import kafka.cluster.Replica
 import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.message.{MessageSet, ByteBufferMessageSet, Message}
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 
 import java.util.{Properties, Collections}
 import java.util.concurrent.atomic.AtomicBoolean
@@ -136,6 +136,7 @@ class SimpleFetchTest {
    *
    * This test also verifies counts of fetch requests recorded by the ReplicaManager
    */
+  @Test
   def testReadFromLog() {
     val initialTopicCount = BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count();
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count();

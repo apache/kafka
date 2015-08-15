@@ -25,7 +25,7 @@ import kafka.utils.{ZkUtils, CoreUtils, TestUtils}
 import kafka.cluster.Broker
 import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 
 class AddPartitionsTest extends ZooKeeperTestHarness {
   var configs: Seq[KafkaConfig] = null
@@ -62,6 +62,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
+  @Test
   def testTopicDoesNotExist {
     try {
       AdminUtils.addPartitions(zkClient, "Blah", 1)
@@ -72,6 +73,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testWrongReplicaCount {
     try {
       AdminUtils.addPartitions(zkClient, topic1, 2, "0:1,0:1:2")
@@ -82,6 +84,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testIncrementPartitions {
     AdminUtils.addPartitions(zkClient, topic1, 3)
     // wait until leader is elected
@@ -107,6 +110,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     assert(replicas.contains(partitionDataForTopic1(1).leader.get))
   }
 
+  @Test
   def testManualAssignmentOfReplicas {
     AdminUtils.addPartitions(zkClient, topic2, 3, "1:2,0:1,2:3")
     // wait until leader is elected
@@ -133,6 +137,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     assert(replicas(1).id == 0 || replicas(1).id == 1)
   }
 
+  @Test
   def testReplicaPlacement {
     AdminUtils.addPartitions(zkClient, topic3, 7)
 
