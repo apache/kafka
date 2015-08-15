@@ -253,6 +253,7 @@ project(':core') {
     testCompile "$easymock"
     testCompile 'org.objenesis:objenesis:1.2'
     testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
+    testCompile project(path: ':clients', configuration: 'archives')
 
     testRuntime "$slf4jlog4j"
 

@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util
-import java.util.Properties
 
 import kafka.admin._
 import kafka.log.LogConfig
@@ -62,11 +61,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   private val reporters: java.util.List[MetricsReporter] =  config.metricReporterClasses
   reporters.add(new JmxReporter(jmxPrefix))
 
-
-
-  // This exists so SocketServer (which uses Client libraries) can use the client Time objects without having to convert all of Kafka to use them
-  // Once we get rid of kafka.utils.time, we can get rid of this too
-  private val socketServerTime: org.apache.kafka.common.utils.Time = new org.apache.kafka.common.utils.SystemTime()
+  // This exists because the Metrics package from clients has its own Time implementation.
+  // SocketServer/Quotas (which uses client libraries) have to use the client Time objects without having to convert all of Kafka to use them
+  // Eventually, we want to merge the Time objects in core and clients
+  private val kafkaMetricsTime: org.apache.kafka.common.utils.Time = new org.apache.kafka.common.utils.SystemTime()
+  var metrics: Metrics = null
 
   val brokerState: BrokerState = new BrokerState
 
@@ -80,7 +79,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
   var dynamicConfigManager: DynamicConfigManager = null
-  val metrics: Metrics = new Metrics()
 
   var consumerCoordinator: ConsumerCoordinator = null
 
@@ -90,7 +88,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   var kafkaHealthcheck: KafkaHealthcheck = null
   val metadataCache: MetadataCache = new MetadataCache(config.brokerId)
-
 
 
   var zkClient: ZkClient = null
@@ -121,6 +118,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
+        metrics = new Metrics(metricConfig, reporters, kafkaMetricsTime)
+
         brokerState.newState(Starting)
 
         /* start scheduler */
@@ -137,9 +136,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         config.brokerId =  getBrokerId
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
-        val metrics = new Metrics(metricConfig, reporters, socketServerTime)
-
-
         socketServer = new SocketServer(config.brokerId,
                                         config.listeners,
                                         config.numNetworkThreads,
@@ -150,7 +146,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                         config.maxConnectionsPerIp,
                                         config.connectionsMaxIdleMs,
                                         config.maxConnectionsPerIpOverrides,
-                                        socketServerTime,
+                                        kafkaMetricsTime,
                                         metrics)
           socketServer.startup()
 
@@ -168,7 +164,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
           /* start processing requests */
           apis = new KafkaApis(socketServer.requestChannel, replicaManager, consumerCoordinator,
-            kafkaController, zkClient, config.brokerId, config, metadataCache)
+            kafkaController, zkClient, config.brokerId, config, metadataCache, metrics)
           requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
           brokerState.newState(RunningAsBroker)
 
@@ -362,6 +358,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           CoreUtils.swallow(kafkaController.shutdown())
         if(zkClient != null)
           CoreUtils.swallow(zkClient.close())
+        if (metrics != null)
+          CoreUtils.swallow(metrics.close())
 
         brokerState.newState(NotRunning)
 
