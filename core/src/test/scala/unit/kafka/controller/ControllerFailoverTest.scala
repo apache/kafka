@@ -54,10 +54,12 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   override def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
+  @Before
   override def setUp() {
     super.setUp()
   }
 
+  @After
   override def tearDown() {
     super.tearDown()
   }
