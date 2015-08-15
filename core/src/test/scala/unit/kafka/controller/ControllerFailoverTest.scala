@@ -168,7 +168,7 @@ class MockChannelManager(private val controllerContext: ControllerContext,
   }
 
   def shrinkBlockingQueue(brokerId: Int) {
-    val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, RequestOrResponse => Unit)](1)
+    val messageQueue = new LinkedBlockingQueue[RequestQueued](1)
     val brokerInfo = this.brokerStateInfo(brokerId)
     this.brokerStateInfo.put(brokerId, new ControllerBrokerStateInfo(brokerInfo.channel,
                                                                       brokerInfo.broker,
