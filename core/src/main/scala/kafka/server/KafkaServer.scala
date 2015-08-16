@@ -387,7 +387,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   def boundPort(): Int = socketServer.boundPort()
 
   private def createLogManager(zkClient: ZkClient, brokerState: BrokerState): LogManager = {
-    val defaultProps = copyKafkaConfigToLog(config.originals)
+    val defaultProps = copyKafkaConfigToLog(config)
     val defaultLogConfig = LogConfig(defaultProps)
 
     val configs = AdminUtils.fetchAllTopicConfigs(zkClient).mapValues(LogConfig.fromProps(defaultProps, _))
@@ -415,10 +415,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   // Copy the subset of properties that are relevant to Logs
   // I'm listing out individual properties here since the names are slightly different in each Config class...
-  private def copyKafkaConfigToLog(serverProps: java.util.Map[String, Object]): java.util.Map[String, Object] = {
+  private def copyKafkaConfigToLog(kafkaConfig: KafkaConfig): java.util.Map[String, Object] = {
 
     val logProps = new util.HashMap[String, Object]()
-    val entryset = serverProps.entrySet.iterator
+    val entryset = kafkaConfig.originals.entrySet.iterator
     while (entryset.hasNext) {
       val entry = entryset.next
       entry.getKey match {
@@ -429,7 +429,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         case KafkaConfig.LogFlushIntervalMessagesProp => logProps.put(LogConfig.FlushMessagesProp, entry.getValue)
         case KafkaConfig.LogFlushIntervalMsProp => logProps.put(LogConfig.FlushMsProp, entry.getValue)
         case KafkaConfig.LogRetentionBytesProp => logProps.put(LogConfig.RetentionBytesProp, entry.getValue)
-        case KafkaConfig.LogRetentionTimeMillisProp => logProps.put(LogConfig.RetentionMsProp, entry.getValue)
         case KafkaConfig.MessageMaxBytesProp => logProps.put(LogConfig.MaxMessageBytesProp, entry.getValue)
         case KafkaConfig.LogIndexIntervalBytesProp => logProps.put(LogConfig.IndexIntervalBytesProp, entry.getValue)
         case KafkaConfig.LogCleanerDeleteRetentionMsProp => logProps.put(LogConfig.DeleteRetentionMsProp, entry.getValue)
@@ -443,6 +442,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         case _ => // we just leave those out
       }
     }
+    logProps.put(LogConfig.RetentionMsProp, kafkaConfig.logRetentionTimeMillis.asInstanceOf[Object])
     logProps
   }
 
