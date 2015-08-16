@@ -22,9 +22,13 @@ public interface ConsumerSeekCallback {
      * A callback method the user can implement to provide asynchronous handling of seek request completion.
      * This method will be called when the fetch request sent to the server after a seek has been acknowledged.
      *
+     * Upon KafkaConsumer#seek(TopicPartition, long, ConsumerSeekCallback) the offset of the topicParition will be updated
+     * immediately for use in the next fetch request. But we can only find out whether the offset is valid when we receive
+     * response from server corresponding to the fetch request after the seek. Therefore this callback will be called asynchronously.
+     *
      * @param offset The offset used in the seek request
      * @param exception The exception thrown during processing of the request if the position to seek is out of range,
      *                  or null if the seek completed successfully
      */
-    void onComplete(Long offset, Exception exception);
+    void onResponse(Long offset, Exception exception);
 }
