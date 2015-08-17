@@ -423,11 +423,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       val entry = entryset.next
       entry.getKey match {
         case KafkaConfig.LogSegmentBytesProp => logProps.put(LogConfig.SegmentBytesProp, entry.getValue)
-        case KafkaConfig.LogRollTimeMillisProp => logProps.put(LogConfig.SegmentMsProp, entry.getValue)
-        case KafkaConfig.LogRollTimeJitterMillisProp => logProps.put(LogConfig.SegmentJitterMsProp, entry.getValue)
         case KafkaConfig.LogIndexSizeMaxBytesProp => logProps.put(LogConfig.SegmentIndexBytesProp, entry.getValue)
         case KafkaConfig.LogFlushIntervalMessagesProp => logProps.put(LogConfig.FlushMessagesProp, entry.getValue)
-        case KafkaConfig.LogFlushIntervalMsProp => logProps.put(LogConfig.FlushMsProp, entry.getValue)
         case KafkaConfig.LogRetentionBytesProp => logProps.put(LogConfig.RetentionBytesProp, entry.getValue)
         case KafkaConfig.MessageMaxBytesProp => logProps.put(LogConfig.MaxMessageBytesProp, entry.getValue)
         case KafkaConfig.LogIndexIntervalBytesProp => logProps.put(LogConfig.IndexIntervalBytesProp, entry.getValue)
@@ -442,6 +439,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         case _ => // we just leave those out
       }
     }
+    logProps.put(LogConfig.SegmentMsProp, kafkaConfig.logRollTimeMillis.asInstanceOf[Object])
+    logProps.put(LogConfig.SegmentJitterMsProp, kafkaConfig.logRollTimeJitterMillis.asInstanceOf[Object])
+    logProps.put(LogConfig.FlushMsProp, kafkaConfig.logFlushIntervalMs.asInstanceOf[Object])
     logProps.put(LogConfig.RetentionMsProp, kafkaConfig.logRetentionTimeMillis.asInstanceOf[Object])
     logProps
   }
