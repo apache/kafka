@@ -333,7 +333,7 @@ public class SubscriptionState {
 
         private void invokeConsumerSeekCallback(Exception exception) {
             if (consumerSeekCallback != null)
-                consumerSeekCallback.onResponse(this.fetched, exception);
+                consumerSeekCallback.onFirstFetchResponse(this.fetched, exception);
             consumerSeekCallback = null;
         }
 

@@ -30,5 +30,5 @@ public interface ConsumerSeekCallback {
      * @param exception The exception thrown during processing of the request if the position to seek is out of range,
      *                  or null if the seek completed successfully
      */
-    void onResponse(Long offset, Exception exception);
+    void onFirstFetchResponse(Long offset, Exception exception);
 }
