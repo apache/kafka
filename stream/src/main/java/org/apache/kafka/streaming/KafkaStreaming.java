@@ -19,7 +19,6 @@ package org.apache.kafka.streaming;
 
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.apache.kafka.streaming.processor.internals.KStreamThread;
-import org.apache.kafka.streaming.processor.ProcessorConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +29,7 @@ import java.io.File;
  * sends output to zero or more output topics.
  * <p>
  * This processing is defined by extending the {@link TopologyBuilder} abstract class to specify the transformation operator build. The
- * {@link KStreamProcess} instance will be responsible for the lifecycle of these processors. It will instantiate and
+ * {@link KafkaStreaming} instance will be responsible for the lifecycle of these processors. It will instantiate and
  * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
  * <p>
  * This streaming instance will co-ordinate with any other instances (whether in this same process, on other processes
@@ -38,7 +37,7 @@ import java.io.File;
  * consumed. If instances are added or die, the corresponding {@link KStreamThread} instances will be shutdown or
  * started in the appropriate processes to balance processing load.
  * <p>
- * Internally the {@link KStreamProcess} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
+ * Internally the {@link KafkaStreaming} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
  * and {@link org.apache.kafka.clients.consumer.KafkaConsumer KafkaConsumer} instance that is used for reading input and writing output.
  * <p>
  * A simple example might look like this:
@@ -48,14 +47,14 @@ import java.io.File;
  *    properties config = new properties(props);
  *    config.processor(ExampleStreamProcessor.class);
  *    config.serialization(new StringSerializer(), new StringDeserializer());
- *    KStreamProcess container = new KStreamProcess(new MyKStreamTopology(), config);
+ *    KafkaStreaming container = new KafkaStreaming(new MyKStreamTopology(), config);
  *    container.run();
  * </pre>
  *
  */
-public class KStreamProcess implements Runnable {
+public class KafkaStreaming implements Runnable {
 
-    private static final Logger log = LoggerFactory.getLogger(KStreamProcess.class);
+    private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
 
     // Container States
     private static final int CREATED = 0;
@@ -69,16 +68,16 @@ public class KStreamProcess implements Runnable {
     private final File stateDir;
 
 
-    public KStreamProcess(TopologyBuilder builder, ProcessorConfig config) throws Exception {
-        if (config.getClass(ProcessorConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG) == null)
+    public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
+        if (config.getClass(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG) == null)
             throw new NullPointerException("timestamp extractor is missing");
 
-        this.threads = new KStreamThread[config.getInt(ProcessorConfig.NUM_STREAM_THREADS_CONFIG)];
+        this.threads = new KStreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new KStreamThread(builder, config);
         }
 
-        this.stateDir = new File(config.getString(ProcessorConfig.STATE_DIR_CONFIG));
+        this.stateDir = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG));
     }
 
     /**

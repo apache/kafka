@@ -18,7 +18,6 @@
 package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.streaming.processor.Punctuator;
-import org.apache.kafka.streaming.processor.Stamped;
 
 public class PunctuationSchedule extends Stamped<Punctuator> {
 

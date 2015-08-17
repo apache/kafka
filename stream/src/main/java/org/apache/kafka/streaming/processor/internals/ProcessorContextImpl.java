@@ -19,14 +19,6 @@ package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.streaming.processor.KafkaSource;
-import org.apache.kafka.streaming.processor.ProcessorConfig;
-import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.RecordCollector;
-import org.apache.kafka.streaming.processor.StateStore;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
-import org.apache.kafka.streaming.processor.RestoreFunc;
-import org.apache.kafka.streaming.processor.TimestampExtractor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -34,6 +26,14 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streaming.processor.KafkaSource;
+import org.apache.kafka.streaming.StreamingConfig;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.RecordCollector;
+import org.apache.kafka.streaming.processor.StateStore;
+import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.RestoreFunc;
+import org.apache.kafka.streaming.processor.TimestampExtractor;
 
 
 import org.slf4j.Logger;
@@ -72,7 +72,7 @@ public class ProcessorContextImpl implements ProcessorContext {
                                 Ingestor ingestor,
                                 ProcessorTopology topology,
                                 RecordCollectorImpl collector,
-                                ProcessorConfig config,
+                                StreamingConfig config,
                                 Metrics metrics) throws IOException {
         this.id = id;
         this.metrics = metrics;
@@ -85,15 +85,15 @@ public class ProcessorContextImpl implements ProcessorContext {
                 throw new IllegalArgumentException("topic not subscribed: " + topic);
         }
 
-        this.keySerializer = config.getConfiguredInstance(ProcessorConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
-        this.valSerializer = config.getConfiguredInstance(ProcessorConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
-        this.keyDeserializer = config.getConfiguredInstance(ProcessorConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-        this.valDeserializer = config.getConfiguredInstance(ProcessorConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        this.keySerializer = config.getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
+        this.valSerializer = config.getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
+        this.keyDeserializer = config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        this.valDeserializer = config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
 
-        TimestampExtractor extractor = config.getConfiguredInstance(ProcessorConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
-        int bufferedRecordsPerPartition = config.getInt(ProcessorConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        TimestampExtractor extractor = config.getConfiguredInstance(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+        int bufferedRecordsPerPartition = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
-        File stateFile = new File(config.getString(ProcessorConfig.STATE_DIR_CONFIG), Integer.toString(id));
+        File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(id));
         Consumer restoreConsumer = new KafkaConsumer<>(config.getConsumerProperties(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
 
         this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);

@@ -17,9 +17,6 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.Chooser;
-import org.apache.kafka.streaming.processor.RecordQueue;
-
 import java.util.ArrayDeque;
 
 public class RoundRobinChooser implements Chooser {

@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.kstream.Window;
 import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.kstream.internals.FilteredIterator;
-import org.apache.kafka.streaming.processor.Stamped;
+import org.apache.kafka.streaming.processor.internals.Stamped;
 
 import java.util.HashMap;
 import java.util.Iterator;

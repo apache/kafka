@@ -21,7 +21,7 @@ import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.kstream.KeyValue;
 import org.apache.kafka.streaming.kstream.Window;
 import org.apache.kafka.streaming.kstream.internals.FilteredIterator;
-import org.apache.kafka.streaming.processor.Stamped;
+import org.apache.kafka.streaming.processor.internals.Stamped;
 
 import java.util.Iterator;
 import java.util.LinkedList;

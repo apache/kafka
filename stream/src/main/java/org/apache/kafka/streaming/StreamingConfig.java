@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.processor;
+package org.apache.kafka.streaming;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import java.util.Map;
 import java.util.Properties;
 
-public class ProcessorConfig extends AbstractConfig {
+public class StreamingConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
@@ -148,7 +148,7 @@ public class ProcessorConfig extends AbstractConfig {
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC);
     }
 
-    public ProcessorConfig(Map<?, ?> props) {
+    public StreamingConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 

@@ -18,12 +18,9 @@
 package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streaming.processor.Chooser;
 import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.streaming.processor.Punctuator;
 import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.RecordQueue;
-import org.apache.kafka.streaming.processor.StampedRecord;
 import org.apache.kafka.streaming.processor.TimestampExtractor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;

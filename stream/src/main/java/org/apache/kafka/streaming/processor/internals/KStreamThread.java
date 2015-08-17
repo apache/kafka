@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
-import org.apache.kafka.streaming.processor.ProcessorConfig;
+import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
@@ -61,7 +61,7 @@ public class KStreamThread extends Thread {
     private final Metrics metrics;
     private final Time time;
 
-    private final ProcessorConfig config;
+    private final StreamingConfig config;
     private final File stateDir;
     private final long pollTimeMs;
     private final long commitTimeMs;
@@ -90,7 +90,7 @@ public class KStreamThread extends Thread {
     };
 
     @SuppressWarnings("unchecked")
-    public KStreamThread(TopologyBuilder builder, ProcessorConfig config) throws Exception {
+    public KStreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
         super();
 
         this.metrics = new Metrics();
@@ -107,8 +107,8 @@ public class KStreamThread extends Thread {
             new ByteArraySerializer(),
             new ByteArraySerializer());
         this.collector = new RecordCollectorImpl(producer,
-            (Serializer<Object>) config.getConfiguredInstance(ProcessorConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
-            (Serializer<Object>) config.getConfiguredInstance(ProcessorConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
+            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
+            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
 
         Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(config.getConsumerProperties(),
             rebalanceCallback,
@@ -116,11 +116,11 @@ public class KStreamThread extends Thread {
             new ByteArrayDeserializer());
         this.ingestor = new IngestorImpl(consumer, topology.topics());
 
-        this.stateDir = new File(this.config.getString(ProcessorConfig.STATE_DIR_CONFIG));
-        this.pollTimeMs = config.getLong(ProcessorConfig.POLL_MS_CONFIG);
-        this.commitTimeMs = config.getLong(ProcessorConfig.COMMIT_INTERVAL_MS_CONFIG);
-        this.stateCleanupDelayMs = config.getLong(ProcessorConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        this.totalRecordsToProcess = config.getLong(ProcessorConfig.TOTAL_RECORDS_TO_PROCESS);
+        this.stateDir = new File(this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
+        this.pollTimeMs = config.getLong(StreamingConfig.POLL_MS_CONFIG);
+        this.commitTimeMs = config.getLong(StreamingConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.stateCleanupDelayMs = config.getLong(StreamingConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+        this.totalRecordsToProcess = config.getLong(StreamingConfig.TOTAL_RECORDS_TO_PROCESS);
 
         this.running = true;
         this.lastCommit = 0;

@@ -15,24 +15,34 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.processor;
+package org.apache.kafka.streaming.processor.internals;
 
-public class Stamped<V> implements Comparable {
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-    public final V value;
-    public final long timestamp;
+// TODO: making this class exposed to user in the lower-level Processor
+public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
-    public Stamped(V value, long timestamp) {
-        this.value = value;
-        this.timestamp = timestamp;
+    public StampedRecord(ConsumerRecord<Object, Object> record, long timestamp) {
+        super(record, timestamp);
     }
 
-    public int compareTo(Object other) {
-        long otherTimestamp = ((Stamped<?>) other).timestamp;
-
-        if (timestamp < otherTimestamp) return -1;
-        else if (timestamp > otherTimestamp) return 1;
-        return 0;
+    public String topic() {
+        return value.topic();
     }
 
+    public int partition() {
+        return value.partition();
+    }
+
+    public Object key() {
+        return value.key();
+    }
+
+    public Object value() {
+        return value.value();
+    }
+
+    public long offset() {
+        return value.offset();
+    }
 }

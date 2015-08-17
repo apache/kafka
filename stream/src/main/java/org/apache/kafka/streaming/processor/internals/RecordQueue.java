@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.processor;
+package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.internals.StampedRecord;
 
 /**
  * RecordQueue is a queue of {@link StampedRecord} (ConsumerRecord + timestamp).

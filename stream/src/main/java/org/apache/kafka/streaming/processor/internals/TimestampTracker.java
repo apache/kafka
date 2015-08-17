@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.processor;
+package org.apache.kafka.streaming.processor.internals;
 
 /**
  * TimestampTracker is a helper class for a sliding window implementation.

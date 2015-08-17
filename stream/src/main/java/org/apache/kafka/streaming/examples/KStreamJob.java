@@ -21,8 +21,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
-import org.apache.kafka.streaming.processor.ProcessorConfig;
-import org.apache.kafka.streaming.KStreamProcess;
+import org.apache.kafka.streaming.StreamingConfig;
+import org.apache.kafka.streaming.KafkaStreaming;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KeyValue;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
@@ -33,7 +33,7 @@ import java.util.Properties;
 public class KStreamJob {
 
     public static void main(String[] args) throws Exception {
-        ProcessorConfig config = new ProcessorConfig(new Properties());
+        StreamingConfig config = new StreamingConfig(new Properties());
         KStreamBuilder builder = new KStreamBuilder();
 
         StringSerializer stringSerializer = new StringSerializer();
@@ -72,7 +72,7 @@ public class KStreamJob {
         streams[0].sendTo("topic2", stringSerializer, intSerializer);
         streams[1].sendTo("topic3", stringSerializer, intSerializer);
 
-        KStreamProcess kstream = new KStreamProcess(builder, config);
+        KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.run();
     }
 }

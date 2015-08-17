@@ -20,9 +20,6 @@ package org.apache.kafka.streaming.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streaming.processor.KafkaProcessor;
 import org.apache.kafka.streaming.processor.KafkaSource;
-import org.apache.kafka.streaming.processor.RecordQueue;
-import org.apache.kafka.streaming.processor.StampedRecord;
-import org.apache.kafka.streaming.processor.TimestampTracker;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayDeque;

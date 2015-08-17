@@ -17,9 +17,6 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.Stamped;
-import org.apache.kafka.streaming.processor.TimestampTracker;
-
 import java.util.LinkedList;
 
 /**

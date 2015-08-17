@@ -19,10 +19,10 @@ package org.apache.kafka.streaming.examples;
 
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.streaming.KStreamProcess;
+import org.apache.kafka.streaming.KafkaStreaming;
 import org.apache.kafka.streaming.processor.KafkaProcessor;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
-import org.apache.kafka.streaming.processor.ProcessorConfig;
+import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.state.Entry;
 import org.apache.kafka.streaming.state.InMemoryKeyValueStore;
@@ -78,13 +78,13 @@ public class StatefulProcessJob {
     }
 
     public static void main(String[] args) throws Exception {
-        ProcessorConfig config = new ProcessorConfig(new Properties());
+        StreamingConfig config = new StreamingConfig(new Properties());
         TopologyBuilder builder = new TopologyBuilder();
 
         builder.addSource("SOURCE", new StringDeserializer(), new IntegerDeserializer(), "topic-source");
         builder.addProcessor("PROCESS", MyProcessor.class, null, "SOURCE");
 
-        KStreamProcess streaming = new KStreamProcess(builder, config);
+        KafkaStreaming streaming = new KafkaStreaming(builder, config);
         streaming.run();
     }
 }
