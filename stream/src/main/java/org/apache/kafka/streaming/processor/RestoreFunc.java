@@ -15,27 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+// TODO: this should be removed once we move to Java 8
+public interface RestoreFunc {
 
-import java.util.ArrayList;
-
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
-
-    public MockProcessor() {
-        super("MOCK");
-    }
-
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
-    }
+    void apply(byte[] key, byte[] value);
 }

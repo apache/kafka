@@ -15,27 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+/**
+ * An interface that allows the KStream framework to extract a timestamp from a key-value pair
+ */
+public interface TimestampExtractor {
 
-import java.util.ArrayList;
-
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
-
-    public MockProcessor() {
-        super("MOCK");
-    }
-
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
-    }
+    /**
+     * Extracts a timestamp from a key-value pair from a topic
+     *
+     * @param topic the topic name
+     * @param key   the key object
+     * @param value the value object
+     * @return timestamp
+     */
+    long extract(String topic, Object key, Object value);
 }

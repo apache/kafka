@@ -15,27 +15,26 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Punctuator;
+import org.apache.kafka.streaming.processor.Stamped;
 
-import java.util.ArrayList;
+public class PunctuationSchedule extends Stamped<Punctuator> {
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    final long interval;
 
-    public MockProcessor() {
-        super("MOCK");
+    public PunctuationSchedule(Punctuator punctuator, long interval) {
+        super(punctuator, System.currentTimeMillis() + interval);
+        this.interval = interval;
     }
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
+    public Punctuator punctuator() {
+        return value;
     }
 
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+    public PunctuationSchedule next() {
+        return new PunctuationSchedule(value, timestamp + interval);
     }
+
 }

@@ -18,6 +18,7 @@
 package org.apache.kafka.test;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 <<<<<<< HEAD:stream/src/test/java/org/apache/kafka/test/MockKStreamContext.java
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -78,6 +79,13 @@ import org.apache.kafka.stream.processor.RecordCollector;
 import org.apache.kafka.stream.processor.RestoreFunc;
 import org.apache.kafka.stream.processor.StateStore;
 >>>>>>> Refactor Processor and KStream APIs
+=======
+import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.RecordCollector;
+import org.apache.kafka.streaming.processor.RestoreFunc;
+import org.apache.kafka.streaming.processor.StateStore;
+>>>>>>> Some package and class renaming, fix KafkaSource constrcution at builder
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;

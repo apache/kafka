@@ -15,27 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.kstream;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+public class KeyValue<K, V> {
 
-import java.util.ArrayList;
+    public final K key;
+    public final V value;
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
-
-    public MockProcessor() {
-        super("MOCK");
+    public KeyValue(K key, V value) {
+        this.key = key;
+        this.value = value;
     }
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
+    public static <K, V> KeyValue<K, V> pair(K key, V value) {
+        return new KeyValue<>(key, value);
     }
 
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
-    }
 }

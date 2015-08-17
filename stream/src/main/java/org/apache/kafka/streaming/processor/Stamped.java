@@ -15,27 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+public class Stamped<V> implements Comparable {
 
-import java.util.ArrayList;
+    public final V value;
+    public final long timestamp;
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
-
-    public MockProcessor() {
-        super("MOCK");
+    public Stamped(V value, long timestamp) {
+        this.value = value;
+        this.timestamp = timestamp;
     }
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
+    public int compareTo(Object other) {
+        long otherTimestamp = ((Stamped<?>) other).timestamp;
+
+        if (timestamp < otherTimestamp) return -1;
+        else if (timestamp > otherTimestamp) return 1;
+        return 0;
     }
 
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
-    }
 }

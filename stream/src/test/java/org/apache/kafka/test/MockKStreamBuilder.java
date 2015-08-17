@@ -17,25 +17,10 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.kstream.KStreamBuilder;
 
-import java.util.ArrayList;
-
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
-
-    public MockProcessor() {
-        super("MOCK");
-    }
-
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+public class MockKStreamBuilder extends KStreamBuilder {
+    public MockKStreamBuilder() {
+        super();
     }
 }

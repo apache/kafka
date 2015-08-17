@@ -15,27 +15,38 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import java.util.PriorityQueue;
 
-import java.util.ArrayList;
+public class PunctuationQueue {
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    private PriorityQueue<PunctuationSchedule> pq = new PriorityQueue<>();
 
-    public MockProcessor() {
-        super("MOCK");
+    public void schedule(PunctuationSchedule sched) {
+        synchronized (pq) {
+            pq.add(sched);
+        }
     }
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
+    public void close() {
+        synchronized (pq) {
+            pq.clear();
+        }
     }
 
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+    public void mayPunctuate(long streamTime) {
+        synchronized (pq) {
+            PunctuationSchedule top = pq.peek();
+            while (top != null && top.timestamp <= streamTime) {
+                PunctuationSchedule sched = top;
+                pq.poll();
+                sched.punctuator().punctuate(streamTime);
+                pq.add(sched.next());
+
+                top = pq.peek();
+            }
+        }
     }
+
 }

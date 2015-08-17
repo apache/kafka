@@ -115,7 +115,7 @@
 		<allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
 		<allow pkg="org.apache.kafka.clients.processor"/>
 
-		<allow pkg="org.apache.kafka.stream"/>
+		<allow pkg="org.apache.kafka.streaming"/>
 
 		<subpackage name="state">
 			<allow pkg="org.rocksdb" />

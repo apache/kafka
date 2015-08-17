@@ -15,33 +15,34 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor;
 
-import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.common.serialization.Deserializer;
 
-import java.util.ArrayList;
-
-public class MockSource<K, V> extends KafkaSource<K, V> {
+public class KafkaSource<K, V> extends KafkaProcessor<K, V, K, V> {
 
     public Deserializer<? extends K> keyDeserializer;
     public Deserializer<? extends V> valDeserializer;
 
-    public int numReceived = 0;
-    public ArrayList<K> keys = new ArrayList<>();
-    public ArrayList<V> values = new ArrayList<>();
-
-    public MockSource(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer) {
-        super(keyDeserializer, valDeserializer);
+    public KafkaSource(String name, Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer) {
+        super(name);
 
         this.keyDeserializer = keyDeserializer;
         this.valDeserializer = valDeserializer;
     }
 
     @Override
+    public void init(ProcessorContext context) {
+        // do nothing
+    }
+
+    @Override
     public void process(K key, V value) {
-        this.numReceived++;
-        this.keys.add(key);
-        this.values.add(value);
+        forward(key, value);
+    }
+
+    @Override
+    public void close() {
+        // do nothing
     }
 }

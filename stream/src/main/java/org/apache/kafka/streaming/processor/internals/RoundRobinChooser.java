@@ -15,27 +15,34 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Chooser;
+import org.apache.kafka.streaming.processor.RecordQueue;
 
-import java.util.ArrayList;
+import java.util.ArrayDeque;
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+public class RoundRobinChooser implements Chooser {
 
-    public MockProcessor() {
-        super("MOCK");
+    private final ArrayDeque<RecordQueue> deque;
+
+    public RoundRobinChooser() {
+        deque = new ArrayDeque<>();
     }
 
     @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
+    public void add(RecordQueue queue) {
+        deque.offer(queue);
     }
 
     @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+    public RecordQueue next() {
+        return deque.poll();
     }
+
+    @Override
+    public void close() {
+        deque.clear();
+    }
+
 }

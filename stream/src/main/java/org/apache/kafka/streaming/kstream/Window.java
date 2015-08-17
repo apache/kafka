@@ -15,27 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.kstream;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.StateStore;
 
-import java.util.ArrayList;
+import java.util.Iterator;
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+public interface Window<K, V> extends StateStore {
 
-    public MockProcessor() {
-        super("MOCK");
-    }
+    void init(ProcessorContext context);
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
+    Iterator<V> find(K key, long timestamp);
 
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
-    }
+    Iterator<V> findAfter(K key, long timestamp);
+
+    Iterator<V> findBefore(K key, long timestamp);
+
+    void put(K key, V value, long timestamp);
+
 }

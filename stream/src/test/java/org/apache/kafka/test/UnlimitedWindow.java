@@ -17,11 +17,11 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.stream.processor.ProcessorContext;
-import org.apache.kafka.stream.KeyValue;
-import org.apache.kafka.stream.Window;
-import org.apache.kafka.stream.kstream.internals.FilteredIterator;
-import org.apache.kafka.stream.processor.Stamped;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.kstream.KeyValue;
+import org.apache.kafka.streaming.kstream.Window;
+import org.apache.kafka.streaming.kstream.internals.FilteredIterator;
+import org.apache.kafka.streaming.processor.Stamped;
 
 import java.util.Iterator;
 import java.util.LinkedList;

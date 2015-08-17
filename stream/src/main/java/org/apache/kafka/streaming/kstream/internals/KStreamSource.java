@@ -15,27 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.TopologyBuilder;
 
-import java.util.ArrayList;
+public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    private KafkaProcessor<K, V, K, V> source;
 
-    public MockProcessor() {
-        super("MOCK");
+    public KStreamSource(TopologyBuilder topology, KafkaProcessor<K, V, K, V> source) {
+        super(topology, source.name());
+        this.source = source;
     }
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+    public KafkaProcessor<K, V, K, V> source() {
+        return source;
     }
 }

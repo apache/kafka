@@ -15,27 +15,27 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.common.TopicPartition;
 
-import java.util.ArrayList;
+import java.util.Map;
+import java.util.Set;
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+public interface Ingestor {
 
-    public MockProcessor() {
-        super("MOCK");
-    }
+    Set<String> topics();
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
+    void poll(long timeoutMs);
 
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
-    }
+    void pause(TopicPartition partition);
+
+    void unpause(TopicPartition partition, long offset);
+
+    void commit(Map<TopicPartition, Long> offsets);
+
+    int numPartitions(String topic);
+
+    void addPartitionStreamToGroup(StreamGroup streamGroup, TopicPartition partition);
+
 }

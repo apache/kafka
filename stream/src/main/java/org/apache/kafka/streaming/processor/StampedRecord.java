@@ -15,27 +15,34 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import java.util.ArrayList;
+// TODO: making this class exposed to user in the lower-level Processor
+public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
-
-    public MockProcessor() {
-        super("MOCK");
+    public StampedRecord(ConsumerRecord<Object, Object> record, long timestamp) {
+        super(record, timestamp);
     }
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
+    public String topic() {
+        return value.topic();
     }
 
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+    public int partition() {
+        return value.partition();
+    }
+
+    public Object key() {
+        return value.key();
+    }
+
+    public Object value() {
+        return value.value();
+    }
+
+    public long offset() {
+        return value.offset();
     }
 }

@@ -15,27 +15,31 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.kstream.ValueMapper;
+import org.apache.kafka.streaming.processor.ProcessorMetadata;
 
-import java.util.ArrayList;
+class KStreamFlatMapValues<K1, V1, V2> extends KafkaProcessor<K1, V1, K1, V2> {
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    private final ValueMapper<V1, ? extends Iterable<V2>> mapper;
 
-    public MockProcessor() {
-        super("MOCK");
+    @SuppressWarnings("unchecked")
+    KStreamFlatMapValues(String name, ProcessorMetadata config) {
+        super(name, config);
+
+        if (this.config() == null)
+            throw new IllegalStateException("ProcessorMetadata should be specified.");
+
+        this.mapper = (ValueMapper<V1, ? extends Iterable<V2>>) config.value();
     }
 
     @Override
     public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+        Iterable<V2> newValues = mapper.apply(value);
+        for (V2 v : newValues) {
+            forward(key, v);
+        }
     }
 }
