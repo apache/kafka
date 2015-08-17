@@ -439,10 +439,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         case _ => // we just leave those out
       }
     }
-    logProps.put(LogConfig.SegmentMsProp, kafkaConfig.logRollTimeMillis.asInstanceOf[Object])
-    logProps.put(LogConfig.SegmentJitterMsProp, kafkaConfig.logRollTimeJitterMillis.asInstanceOf[Object])
-    logProps.put(LogConfig.FlushMsProp, kafkaConfig.logFlushIntervalMs.asInstanceOf[Object])
-    logProps.put(LogConfig.RetentionMsProp, kafkaConfig.logRetentionTimeMillis.asInstanceOf[Object])
+    logProps.put(LogConfig.SegmentMsProp, kafkaConfig.logRollTimeMillis)
+    logProps.put(LogConfig.SegmentJitterMsProp, kafkaConfig.logRollTimeJitterMillis)
+    logProps.put(LogConfig.FlushMsProp, kafkaConfig.logFlushIntervalMs)
+    logProps.put(LogConfig.RetentionMsProp, kafkaConfig.logRetentionTimeMillis)
     logProps
   }
 

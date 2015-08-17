@@ -713,7 +713,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
 
   val listeners = getListeners
   val advertisedListeners = getAdvertisedListeners
-  val logRetentionTimeMillis = getLogRetentionTimeMillis
+  val logRetentionTimeMillis: java.lang.Long = getLogRetentionTimeMillis
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
