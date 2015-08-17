@@ -16,14 +16,14 @@
  */
 package kafka.producer
 
-import async.{DefaultEventHandler, ProducerSendThread, EventHandler}
-import kafka.utils._
-import java.util.Random
-import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
-import kafka.serializer.Encoder
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.QueueFullException
+import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
+
+import kafka.common.{AppInfo, QueueFullException}
 import kafka.metrics._
+import kafka.producer.async.{DefaultEventHandler, EventHandler, ProducerSendThread}
+import kafka.serializer.Encoder
+import kafka.utils._
 
 
 class Producer[K,V](val config: ProducerConfig,
@@ -53,13 +53,14 @@ class Producer[K,V](val config: ProducerConfig,
   private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
 
   KafkaMetricsReporter.startReporters(config.props)
+  AppInfo.registerInfo()
 
   def this(config: ProducerConfig) =
     this(config,
          new DefaultEventHandler[K,V](config,
-                                      Utils.createObject[Partitioner](config.partitionerClass, config.props),
-                                      Utils.createObject[Encoder[V]](config.serializerClass, config.props),
-                                      Utils.createObject[Encoder[K]](config.keySerializerClass, config.props),
+                                      CoreUtils.createObject[Partitioner](config.partitionerClass, config.props),
+                                      CoreUtils.createObject[Encoder[V]](config.serializerClass, config.props),
+                                      CoreUtils.createObject[Encoder[K]](config.keySerializerClass, config.props),
                                       new ProducerPool(config)))
 
   /**
@@ -126,9 +127,12 @@ class Producer[K,V](val config: ProducerConfig,
       val canShutdown = hasShutdown.compareAndSet(false, true)
       if(canShutdown) {
         info("Shutting down producer")
+        val startTime = System.nanoTime()
+        KafkaMetricsGroup.removeAllProducerMetrics(config.clientId)
         if (producerSendThread != null)
           producerSendThread.shutdown
         eventHandler.close
+        info("Producer shutdown completed in " + (System.nanoTime() - startTime) / 1000000 + " ms")
       }
     }
   }

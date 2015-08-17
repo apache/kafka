@@ -17,17 +17,44 @@
 
 package kafka.cluster
 
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 import kafka.utils.Json
 import kafka.api.ApiUtils._
 import java.nio.ByteBuffer
-import kafka.common.{KafkaException, BrokerNotAvailableException}
+
+import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
+import kafka.utils.Json
+import org.apache.kafka.common.protocol.SecurityProtocol
 
 /**
- * A Kafka broker
+ * A Kafka broker.
+ * A broker has an id and a collection of end-points.
+ * Each end-point is (host, port,protocolType).
+ * Currently the only protocol type is PlainText but we will add SSL and Kerberos in the future.
  */
-private[kafka] object Broker {
+object Broker {
 
+  /**
+   * Create a broker object from id and JSON string.
+   * @param id
+   * @param brokerInfoString
+   *
+   * Version 1 JSON schema for a broker is:
+   * {"version":1,
+   *  "host":"localhost",
+   *  "port":9092
+   *  "jmx_port":9999,
+   *  "timestamp":"2233345666" }
+   *
+   * The current JSON schema for a broker is:
+   * {"version":2,
+   *  "host","localhost",
+   *  "port",9092
+   *  "jmx_port":9999,
+   *  "timestamp":"2233345666",
+   *  "endpoints": ["PLAINTEXT://host1:9092",
+   *                "SSL://host1:9093"]
+   */
   def createBroker(id: Int, brokerInfoString: String): Broker = {
     if(brokerInfoString == null)
       throw new BrokerNotAvailableException("Broker id %s does not exist".format(id))
@@ -35,9 +62,21 @@ private[kafka] object Broker {
       Json.parseFull(brokerInfoString) match {
         case Some(m) =>
           val brokerInfo = m.asInstanceOf[Map[String, Any]]
-          val host = brokerInfo.get("host").get.asInstanceOf[String]
-          val port = brokerInfo.get("port").get.asInstanceOf[Int]
-          new Broker(id, host, port)
+          val version = brokerInfo("version").asInstanceOf[Int]
+          val endpoints = version match {
+            case 1 =>
+              val host = brokerInfo("host").asInstanceOf[String]
+              val port = brokerInfo("port").asInstanceOf[Int]
+              Map(SecurityProtocol.PLAINTEXT -> new EndPoint(host, port, SecurityProtocol.PLAINTEXT))
+            case 2 =>
+              val listeners = brokerInfo("endpoints").asInstanceOf[List[String]]
+              listeners.map(listener => {
+                val ep = EndPoint.createEndPoint(listener)
+                (ep.protocolType, ep)
+              }).toMap
+            case _ => throw new KafkaException("Unknown version of broker registration. Only versions 1 and 2 are supported." + brokerInfoString)
+          }
+          new Broker(id, endpoints)
         case None =>
           throw new BrokerNotAvailableException("Broker id %d does not exist".format(id))
       }
@@ -46,36 +85,60 @@ private[kafka] object Broker {
     }
   }
 
+  /**
+   *
+   * @param buffer Containing serialized broker.
+   *               Current serialization is:
+   *               id (int), number of endpoints (int), serialized endpoints
+   * @return broker object
+   */
   def readFrom(buffer: ByteBuffer): Broker = {
     val id = buffer.getInt
-    val host = readShortString(buffer)
-    val port = buffer.getInt
-    new Broker(id, host, port)
+    val numEndpoints = buffer.getInt
+
+    val endpoints = List.range(0, numEndpoints).map(i => EndPoint.readFrom(buffer))
+            .map(ep => ep.protocolType -> ep).toMap
+    new Broker(id, endpoints)
   }
 }
 
-private[kafka] case class Broker(val id: Int, val host: String, val port: Int) {
-  
-  override def toString(): String = new String("id:" + id + ",host:" + host + ",port:" + port)
+case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
 
-  def getConnectionString(): String = host + ":" + port
+  override def toString: String = id + " : " + endPoints.values.mkString("(",",",")")
+
+  def this(id: Int, host: String, port: Int, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
+    this(id, Map(protocol -> EndPoint(host, port, protocol)))
+  }
+
+  def this(bep: BrokerEndPoint, protocol: SecurityProtocol) = {
+    this(bep.id, bep.host, bep.port, protocol)
+  }
+
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(id)
-    writeShortString(buffer, host)
-    buffer.putInt(port)
-  }
-
-  def sizeInBytes: Int = shortStringLength(host) /* host name */ + 4 /* port */ + 4 /* broker id*/
-
-  override def equals(obj: Any): Boolean = {
-    obj match {
-      case null => false
-      case n: Broker => id == n.id && host == n.host && port == n.port
-      case _ => false
+    buffer.putInt(endPoints.size)
+    for(endpoint <- endPoints.values) {
+      endpoint.writeTo(buffer)
     }
   }
-  
-  override def hashCode(): Int = hashcode(id, host, port)
-  
+
+  def sizeInBytes: Int =
+    4 + /* broker id*/
+    4 + /* number of endPoints */
+    endPoints.values.map(_.sizeInBytes).sum /* end points */
+
+  def supportsChannel(protocolType: SecurityProtocol): Unit = {
+    endPoints.contains(protocolType)
+  }
+
+  def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {
+    val endpoint = endPoints.get(protocolType)
+    endpoint match {
+      case Some(endpoint) => new BrokerEndPoint(id, endpoint.host, endpoint.port)
+      case None =>
+        throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id))
+    }
+  }
+
 }

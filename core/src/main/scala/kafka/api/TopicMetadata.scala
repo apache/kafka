@@ -17,25 +17,24 @@
 
 package kafka.api
 
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndPoint
 import java.nio.ByteBuffer
 import kafka.api.ApiUtils._
 import kafka.utils.Logging
-import collection.mutable.ArrayBuffer
 import kafka.common._
 
 object TopicMetadata {
   
   val NoLeaderNodeId = -1
 
-  def readFrom(buffer: ByteBuffer, brokers: Map[Int, Broker]): TopicMetadata = {
+  def readFrom(buffer: ByteBuffer, brokers: Map[Int, BrokerEndPoint]): TopicMetadata = {
     val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val topic = readShortString(buffer)
     val numPartitions = readIntInRange(buffer, "number of partitions", (0, Int.MaxValue))
     val partitionsMetadata: Array[PartitionMetadata] = new Array[PartitionMetadata](numPartitions)
     for(i <- 0 until numPartitions) {
       val partitionMetadata = PartitionMetadata.readFrom(buffer, brokers)
-      partitionsMetadata(partitionMetadata.partitionId) = partitionMetadata
+      partitionsMetadata(i) = partitionMetadata
     }
     new TopicMetadata(topic, partitionsMetadata, errorCode)
   }
@@ -89,7 +88,7 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
 
 object PartitionMetadata {
 
-  def readFrom(buffer: ByteBuffer, brokers: Map[Int, Broker]): PartitionMetadata = {
+  def readFrom(buffer: ByteBuffer, brokers: Map[Int, BrokerEndPoint]): PartitionMetadata = {
     val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val partitionId = readIntInRange(buffer, "partition id", (0, Int.MaxValue)) /* partition id */
     val leaderId = buffer.getInt
@@ -110,9 +109,9 @@ object PartitionMetadata {
 }
 
 case class PartitionMetadata(partitionId: Int, 
-                             val leader: Option[Broker], 
-                             replicas: Seq[Broker], 
-                             isr: Seq[Broker] = Seq.empty,
+                             leader: Option[BrokerEndPoint],
+                             replicas: Seq[BrokerEndPoint],
+                             isr: Seq[BrokerEndPoint] = Seq.empty,
                              errorCode: Short = ErrorMapping.NoError) extends Logging {
   def sizeInBytes: Int = {
     2 /* error code */ + 
@@ -142,14 +141,13 @@ case class PartitionMetadata(partitionId: Int,
   override def toString(): String = {
     val partitionMetadataString = new StringBuilder
     partitionMetadataString.append("\tpartition " + partitionId)
-    partitionMetadataString.append("\tleader: " + (if(leader.isDefined) formatBroker(leader.get) else "none"))
-    partitionMetadataString.append("\treplicas: " + replicas.map(formatBroker).mkString(","))
-    partitionMetadataString.append("\tisr: " + isr.map(formatBroker).mkString(","))
+    partitionMetadataString.append("\tleader: " + (if(leader.isDefined) leader.get.toString else "none"))
+    partitionMetadataString.append("\treplicas: " + replicas.mkString(","))
+    partitionMetadataString.append("\tisr: " + isr.mkString(","))
     partitionMetadataString.append("\tisUnderReplicated: %s".format(if(isr.size < replicas.size) "true" else "false"))
     partitionMetadataString.toString()
   }
 
-  private def formatBroker(broker: Broker) = broker.id + " (" + broker.host + ":" + broker.port + ")"
 }
 
 

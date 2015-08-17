@@ -19,10 +19,17 @@ package org.apache.kafka.clients.producer.internals;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.kafka.clients.producer.BufferExhaustedException;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.utils.Time;
 
 
 /**
@@ -44,6 +51,9 @@ public final class BufferPool {
     private final Deque<ByteBuffer> free;
     private final Deque<Condition> waiters;
     private long availableMemory;
+    private final Metrics metrics;
+    private final Time time;
+    private final Sensor waitTime;
 
     /**
      * Create a new buffer pool
@@ -53,8 +63,12 @@ public final class BufferPool {
      * @param blockOnExhaustion This controls the behavior when the buffer pool is out of memory. If true the
      *        {@link #allocate(int)} call will block and wait for memory to be returned to the pool. If false
      *        {@link #allocate(int)} will throw an exception if the buffer is out of memory.
+     * @param metrics instance of Metrics
+     * @param time time instance
+     * @param metricGrpName logical group name for metrics
+     * @param metricTags additional key/val attributes for metrics
      */
-    public BufferPool(long memory, int poolableSize, boolean blockOnExhaustion) {
+    public BufferPool(long memory, int poolableSize, boolean blockOnExhaustion, Metrics metrics, Time time , String metricGrpName , Map<String, String> metricTags) {
         this.poolableSize = poolableSize;
         this.blockOnExhaustion = blockOnExhaustion;
         this.lock = new ReentrantLock();
@@ -62,6 +76,14 @@ public final class BufferPool {
         this.waiters = new ArrayDeque<Condition>();
         this.totalMemory = memory;
         this.availableMemory = memory;
+        this.metrics = metrics;
+        this.time = time;
+        this.waitTime = this.metrics.sensor("bufferpool-wait-time");
+        MetricName metricName = new MetricName("bufferpool-wait-ratio",
+                                               metricGrpName,
+                                               "The fraction of time an appender waits for space allocation.",
+                                               metricTags);
+        this.waitTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
     }
 
     /**
@@ -111,7 +133,11 @@ public final class BufferPool {
                 // loop over and over until we have a buffer or have reserved
                 // enough memory to allocate one
                 while (accumulated < size) {
+                    long startWait = time.nanoseconds();
                     moreMemory.await();
+                    long endWait = time.nanoseconds();
+                    this.waitTime.record(endWait - startWait, time.milliseconds());
+
                     // check if we can satisfy this request from the free list,
                     // otherwise allocate memory
                     if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {

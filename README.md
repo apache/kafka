@@ -2,6 +2,14 @@ Apache Kafka
 =================
 See our [web site](http://kafka.apache.org) for details on the project.
 
+You need to have [gradle](http://www.gradle.org/installation) installed.
+
+### First bootstrap and download the wrapper ###
+    cd kafka_source_dir
+    gradle
+
+Now everything else will work
+
 ### Building a jar and running it ###
     ./gradlew jar  
 
@@ -26,6 +34,11 @@ Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
 ### Running a particular unit test ###
     ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
+### Running a particular test method within a unit test ###
+    ./gradlew core:test --tests kafka.api.test.ProducerFailureHandlingTest.testCannotSendToInternalTopic
+    ./gradlew clients:test --tests org.apache.kafka.clients.producer.MetadataTest.testMetadataUpdateWaitTime
+    
+
 ### Running a particular unit test with log4j output ###
     change the log4j setting in either clients/src/test/resources/log4j.properties or core/src/test/resources/log4j.properties
     ./gradlew -i -Dtest.single=RequestResponseSerializationTest core:test
@@ -41,14 +54,14 @@ The release file can be found inside ./core/build/distributions/.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task on a particular version of Scala (either 2.8.0, 2.8.2, 2.9.1, 2.9.2 or 2.10.1) ###
-#### (If building a jar with a version other than 2.8.0, the scala version variable in bin/kafka-run-class.sh needs to be changed to run quick start.) ####
-    ./gradlew -PscalaVersion=2.9.1 jar
-    ./gradlew -PscalaVersion=2.9.1 test
-    ./gradlew -PscalaVersion=2.9.1 releaseTarGz
+### Running a task on a particular version of Scala (either 2.10.5 or 2.11.7) ###
+#### (If building a jar with a version other than 2.10, need to set SCALA_BINARY_VERSION variable or change it in bin/kafka-run-class.sh to run quick start.) ####
+    ./gradlew -PscalaVersion=2.11.7 jar
+    ./gradlew -PscalaVersion=2.11.7 test
+    ./gradlew -PscalaVersion=2.11.7 releaseTarGz
 
 ### Running a task for a specific project ###
-This is for 'core', 'perf', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'examples' and 'clients'
+This is for 'core', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'examples' and 'clients'
     ./gradlew core:jar
     ./gradlew core:test
 
@@ -80,15 +93,25 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
     signing.password=
     signing.secretKeyRingFile=
 
+### Publishing the jars without signing to a local repository ###
+    ./gradlew -Dorg.gradle.project.skipSigning=true -Dorg.gradle.project.mavenUrl=file://path/to/repo uploadArchivesAll
+
 ### Building the test jar ###
     ./gradlew testJar
 
 ### Determining how transitive dependencies are added ###
     ./gradlew core:dependencies --configuration runtime
+	
+### Running checkstyle on the java code ###
+    ./gradlew checkstyleMain checkstyleTest
+
+### Running in Vagrant ###
+
+See [vagrant/README.md](vagrant/README.md).
 
 ### Contribution ###
 
-Apache Kafka interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
+Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
 
 To contribute follow the instructions here:
  * http://kafka.apache.org/contributing.html

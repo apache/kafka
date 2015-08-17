@@ -18,9 +18,10 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
-import kafka.network.RequestChannel.Response
+
 import kafka.common.ErrorMapping
+import kafka.network.{RequestOrResponseSend, RequestChannel}
+import kafka.network.RequestChannel.Response
 
 object ConsumerMetadataRequest {
   val CurrentVersion = 0.shortValue
@@ -41,9 +42,9 @@ object ConsumerMetadataRequest {
 
 case class ConsumerMetadataRequest(group: String,
                                    versionId: Short = ConsumerMetadataRequest.CurrentVersion,
-                                   override val correlationId: Int = 0,
+                                   correlationId: Int = 0,
                                    clientId: String = ConsumerMetadataRequest.DefaultClientId)
-  extends RequestOrResponse(Some(RequestKeys.ConsumerMetadataKey), correlationId) {
+  extends RequestOrResponse(Some(RequestKeys.ConsumerMetadataKey)) {
 
   def sizeInBytes =
     2 + /* versionId */
@@ -63,8 +64,8 @@ case class ConsumerMetadataRequest(group: String,
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     // return ConsumerCoordinatorNotAvailable for all uncaught errors
-    val errorResponse = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    val errorResponse = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, correlationId)
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   def describe(details: Boolean) = {

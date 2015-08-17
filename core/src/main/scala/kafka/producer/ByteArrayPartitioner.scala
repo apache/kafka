@@ -19,6 +19,7 @@ package kafka.producer
 
 
 import kafka.utils._
+import org.apache.kafka.common.utils.Utils
 
 class ByteArrayPartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(key: Any, numPartitions: Int): Int = {

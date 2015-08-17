@@ -78,7 +78,7 @@ public class RecordSendTest {
     /* create a new request result that will be completed after the given timeout */
     public ProduceRequestResult asyncRequest(final long baseOffset, final RuntimeException error, final long timeout) {
         final ProduceRequestResult request = new ProduceRequestResult();
-        new Thread() {
+        Thread thread = new Thread() {
             public void run() {
                 try {
                     sleep(timeout);
@@ -87,7 +87,8 @@ public class RecordSendTest {
                     e.printStackTrace();
                 }
             }
-        }.start();
+        };
+        thread.start();
         return request;
     }
 

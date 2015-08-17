@@ -22,7 +22,7 @@ import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 import collection._
-import mutable.ListBuffer
+import org.apache.kafka.common.utils.Utils
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
@@ -40,6 +40,10 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
+      
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," + 
+                                                " it can be used to balance leadership among the servers.")
 
     val options = parser.parse(args : _*)
 
@@ -49,7 +53,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     var zkClient: ZkClient = null
 
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
       val partitionsForPreferredReplicaElection =
         if (!options.has(jsonFileOpt))
           ZkUtils.getAllPartitions(zkClient)
@@ -74,12 +78,17 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       case Some(m) =>
         m.asInstanceOf[Map[String, Any]].get("partitions") match {
           case Some(partitionsList) =>
-            val partitions = partitionsList.asInstanceOf[List[Map[String, Any]]]
-            partitions.map { p =>
+            val partitionsRaw = partitionsList.asInstanceOf[List[Map[String, Any]]]
+            val partitions = partitionsRaw.map { p =>
               val topic = p.get("topic").get.asInstanceOf[String]
               val partition = p.get("partition").get.asInstanceOf[Int]
               TopicAndPartition(topic, partition)
-            }.toSet
+            }
+            val duplicatePartitions = CoreUtils.duplicates(partitions)
+            val partitionsSet = partitions.toSet
+            if (duplicatePartitions.nonEmpty)
+              throw new AdminOperationException("Preferred replica election data contains duplicate partitions: %s".format(duplicatePartitions.mkString(",")))
+            partitionsSet
           case None => throw new AdminOperationException("Preferred replica election data is empty")
         }
       case None => throw new AdminOperationException("Preferred replica election data is empty")

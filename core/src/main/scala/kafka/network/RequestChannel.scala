@@ -17,20 +17,23 @@
 
 package kafka.network
 
-import java.util.concurrent._
-import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
 import java.nio.ByteBuffer
+import java.util.concurrent._
+
+import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.common.TopicAndPartition
-import kafka.utils.{Logging, SystemTime}
 import kafka.message.ByteBufferMessageSet
-import java.net._
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.{Logging, SystemTime}
+import org.apache.kafka.common.network.Send
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader}
 import org.apache.log4j.Logger
 
 
 object RequestChannel extends Logging {
-  val AllDone = new Request(1, 2, getShutdownReceive(), 0)
+  val AllDone = new Request(processor = 1, connectionId = "2", buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
 
   def getShutdownReceive() = {
     val emptyProducerRequest = new ProducerRequest(0, 0, "", 0, 0, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
@@ -41,16 +44,43 @@ object RequestChannel extends Logging {
     byteBuffer
   }
 
-  case class Request(processor: Int, requestKey: Any, private var buffer: ByteBuffer, startTimeMs: Long, remoteAddress: SocketAddress = new InetSocketAddress(0)) {
+  case class Request(processor: Int, connectionId: String, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
     @volatile var requestDequeueTimeMs = -1L
     @volatile var apiLocalCompleteTimeMs = -1L
     @volatile var responseCompleteTimeMs = -1L
     @volatile var responseDequeueTimeMs = -1L
     val requestId = buffer.getShort()
-    val requestObj: RequestOrResponse = RequestKeys.deserializerForKey(requestId)(buffer)
+    // for server-side request / response format
+    // TODO: this will be removed once we migrated to client-side format
+    val requestObj =
+      if ( RequestKeys.keyToNameAndDeserializerMap.contains(requestId))
+        RequestKeys.deserializerForKey(requestId)(buffer)
+      else
+        null
+    // for client-side request / response format
+    val header: RequestHeader =
+      if (requestObj == null) {
+        buffer.rewind
+        RequestHeader.parse(buffer)
+      } else
+        null
+    val body: AbstractRequest =
+      if (requestObj == null)
+        AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+      else
+        null
+
     buffer = null
     private val requestLogger = Logger.getLogger("kafka.request.logger")
-    trace("Processor %d received request : %s".format(processor, requestObj))
+
+    private def requestDesc: String = {
+      if (requestObj != null)
+        requestObj.describe(false)
+      else
+        header.toString + " -- " + body.toString
+    }
+
+    trace("Processor %d received request : %s".format(processor, requestDesc))
 
     def updateRequestMetrics() {
       val endTimeMs = SystemTime.milliseconds
@@ -64,7 +94,7 @@ object RequestChannel extends Logging {
       val responseQueueTime = (responseDequeueTimeMs - responseCompleteTimeMs).max(0L)
       val responseSendTime = (endTimeMs - responseDequeueTimeMs).max(0L)
       val totalTime = endTimeMs - startTimeMs
-      var metricsList = List(RequestMetrics.metricsMap(RequestKeys.nameForKey(requestId)))
+      var metricsList = List(RequestMetrics.metricsMap(ApiKeys.forId(requestId).name))
       if (requestId == RequestKeys.FetchKey) {
         val isFromFollower = requestObj.asInstanceOf[FetchRequest].isFromFollower
         metricsList ::= ( if (isFromFollower)
@@ -81,13 +111,13 @@ object RequestChannel extends Logging {
              m.responseSendTimeHist.update(responseSendTime)
              m.totalTimeHist.update(totalTime)
       }
+
       if(requestLogger.isTraceEnabled)
-        requestLogger.trace("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
-          .format(requestObj.describe(true), remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
-      else if(requestLogger.isDebugEnabled) {
-        requestLogger.debug("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
-          .format(requestObj.describe(false), remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
-      }
+        requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
+                .format(requestDesc, connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
+      else if(requestLogger.isDebugEnabled)
+        requestLogger.debug("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
+          .format(requestDesc, connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
     }
   }
   
@@ -121,12 +151,16 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     }
   )
 
-  for(i <- 0 until numProcessors) {
-    newGauge(
-      "Processor-" + i + "-ResponseQueueSize",
+  newGauge("ResponseQueueSize", new Gauge[Int]{
+    def value = responseQueues.foldLeft(0) {(total, q) => total + q.size()}
+  })
+
+  for (i <- 0 until numProcessors) {
+    newGauge("ResponseQueueSize",
       new Gauge[Int] {
         def value = responseQueues(i).size()
-      }
+      },
+      Map("processor" -> i.toString)
     )
   }
 
@@ -183,24 +217,25 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
 object RequestMetrics {
   val metricsMap = new scala.collection.mutable.HashMap[String, RequestMetrics]
-  val consumerFetchMetricName = RequestKeys.nameForKey(RequestKeys.FetchKey) + "-Consumer"
-  val followFetchMetricName = RequestKeys.nameForKey(RequestKeys.FetchKey) + "-Follower"
-  (RequestKeys.keyToNameAndDeserializerMap.values.map(e => e._1)
+  val consumerFetchMetricName = RequestKeys.nameForKey(RequestKeys.FetchKey) + "Consumer"
+  val followFetchMetricName = RequestKeys.nameForKey(RequestKeys.FetchKey) + "Follower"
+  (ApiKeys.values().toList.map(e => e.name)
     ++ List(consumerFetchMetricName, followFetchMetricName)).foreach(name => metricsMap.put(name, new RequestMetrics(name)))
 }
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
-  val requestRate = newMeter(name + "-RequestsPerSec",  "requests", TimeUnit.SECONDS)
+  val tags = Map("request" -> name)
+  val requestRate = newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags)
   // time a request spent in a request queue
-  val requestQueueTimeHist = newHistogram(name + "-RequestQueueTimeMs")
+  val requestQueueTimeHist = newHistogram("RequestQueueTimeMs", biased = true, tags)
   // time a request takes to be processed at the local broker
-  val localTimeHist = newHistogram(name + "-LocalTimeMs")
+  val localTimeHist = newHistogram("LocalTimeMs", biased = true, tags)
   // time a request takes to wait on remote brokers (only relevant to fetch and produce requests)
-  val remoteTimeHist = newHistogram(name + "-RemoteTimeMs")
+  val remoteTimeHist = newHistogram("RemoteTimeMs", biased = true, tags)
   // time a response spent in a response queue
-  val responseQueueTimeHist = newHistogram(name + "-ResponseQueueTimeMs")
+  val responseQueueTimeHist = newHistogram("ResponseQueueTimeMs", biased = true, tags)
   // time to send the response to the requester
-  val responseSendTimeHist = newHistogram(name + "-ResponseSendTimeMs")
-  val totalTimeHist = newHistogram(name + "-TotalTimeMs")
+  val responseSendTimeHist = newHistogram("ResponseSendTimeMs", biased = true, tags)
+  val totalTimeHist = newHistogram("TotalTimeMs", biased = true, tags)
 }
 

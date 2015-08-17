@@ -20,7 +20,7 @@ package kafka.tools
 import java.io.BufferedReader
 import java.io.FileReader
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils,ZKStringSerializer}
+import kafka.utils.{Logging, ZkUtils, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
 
 
@@ -52,6 +52,9 @@ object ImportZkOffsets extends Logging {
                             .withRequiredArg()
                             .ofType(classOf[String])
     parser.accepts("help", "Print this message.")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Import offsets to zookeeper from files.")
             
     val options = parser.parse(args : _*)
     
@@ -60,18 +63,12 @@ object ImportZkOffsets extends Logging {
        System.exit(0)
     }
     
-    for (opt <- List(inFileOpt)) {
-      if (!options.has(opt)) {
-        System.err.println("Missing required argument: %s".format(opt))
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, inFileOpt)
     
     val zkConnect           = options.valueOf(zkConnectOpt)
     val partitionOffsetFile = options.valueOf(inFileOpt)
 
-    val zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+    val zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
     val partitionOffsets: Map[String,String] = getPartitionOffsetsFromFile(partitionOffsetFile)
 
     updateZkOffsets(zkClient, partitionOffsets)
@@ -92,7 +89,7 @@ object ImportZkOffsets extends Logging {
       s = br.readLine()
     }
     
-    return partOffsetsMap
+    partOffsetsMap
   }
   
   private def updateZkOffsets(zkClient: ZkClient, partitionOffsets: Map[String,String]): Unit = {

@@ -21,9 +21,10 @@ import java.util.concurrent.TimeUnit
 import kafka.utils.Pool
 
 class ProducerStats(clientId: String) extends KafkaMetricsGroup {
-  val serializationErrorRate = newMeter(clientId + "-SerializationErrorsPerSec",  "errors", TimeUnit.SECONDS)
-  val resendRate = newMeter(clientId + "-ResendsPerSec",  "resends", TimeUnit.SECONDS)
-  val failedSendRate = newMeter(clientId + "-FailedSendsPerSec",  "failed sends", TimeUnit.SECONDS)
+  val tags: Map[String, String] = Map("clientId" -> clientId)
+  val serializationErrorRate = newMeter("SerializationErrorsPerSec", "errors", TimeUnit.SECONDS, tags)
+  val resendRate = newMeter("ResendsPerSec", "resends", TimeUnit.SECONDS, tags)
+  val failedSendRate = newMeter("FailedSendsPerSec", "failed sends", TimeUnit.SECONDS, tags)
 }
 
 /**
@@ -35,5 +36,9 @@ object ProducerStatsRegistry {
 
   def getProducerStats(clientId: String) = {
     statsRegistry.getAndMaybePut(clientId)
+  }
+
+  def removeProducerStats(clientId: String) {
+    statsRegistry.remove(clientId)
   }
 }

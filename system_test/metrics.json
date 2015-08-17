@@ -78,13 +78,13 @@
                {
                   "graph_name": "ProducePurgatoryQueueSize",
                   "y_label": "size",
-                  "bean_name": "kafka.server:type=ProducerRequestPurgatory,name=NumDelayedRequests",
+                  "bean_name": "kafka.server:type=ProducerRequestPurgatory,name=NumDelayedOperations",
                   "attributes": "Value"
                },
                {
                   "graph_name": "FetchPurgatoryQueueSize",
                   "y_label": "size",
-                  "bean_name": "kafka.server:type=FetchRequestPurgatory,name=NumDelayedRequests",
+                  "bean_name": "kafka.server:type=FetchRequestPurgatory,name=NumDelayedOperations",
                   "attributes": "Value"
                },
                {

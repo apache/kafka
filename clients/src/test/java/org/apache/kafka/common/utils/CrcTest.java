@@ -25,7 +25,7 @@ public class CrcTest {
 
     @Test
     public void testUpdate() {
-        final byte bytes[] = "Any String you want".getBytes();
+        final byte[] bytes = "Any String you want".getBytes();
         final int len = bytes.length;
 
         Crc32 crc1 = new Crc32();
@@ -33,10 +33,10 @@ public class CrcTest {
         Crc32 crc3 = new Crc32();
 
         crc1.update(bytes, 0, len);
-        for(int i = 0; i < len; i++)
+        for (int i = 0; i < len; i++)
             crc2.update(bytes[i]);
-        crc3.update(bytes, 0, len/2);
-        crc3.update(bytes, len/2, len-len/2);
+        crc3.update(bytes, 0, len / 2);
+        crc3.update(bytes, len / 2, len - len / 2);
 
         assertEquals("Crc values should be the same", crc1.getValue(), crc2.getValue());
         assertEquals("Crc values should be the same", crc1.getValue(), crc3.getValue());

@@ -43,9 +43,8 @@ object ProducerResponse {
 
 case class ProducerResponseStatus(var error: Short, offset: Long)
 
-case class ProducerResponse(override val correlationId: Int,
-                            status: Map[TopicAndPartition, ProducerResponseStatus])
-    extends RequestOrResponse(correlationId = correlationId) {
+case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, ProducerResponseStatus])
+    extends RequestOrResponse() {
 
   /**
    * Partitions the status map into a map of maps (one for each topic).

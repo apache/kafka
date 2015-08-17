@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.io.FileWriter
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils, ZKStringSerializer,ZKGroupTopicDirs}
+import kafka.utils.{Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
 
 
@@ -55,6 +55,9 @@ object ExportZkOffsets extends Logging {
                             .withRequiredArg()
                             .ofType(classOf[String])
     parser.accepts("help", "Print this message.")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Export consumer offsets to an output file.")
             
     val options = parser.parse(args : _*)
     
@@ -63,13 +66,7 @@ object ExportZkOffsets extends Logging {
        System.exit(0)
     }
     
-    for (opt <- List(zkConnectOpt, outFileOpt)) {
-      if (!options.has(opt)) {
-        System.err.println("Missing required argument: %s".format(opt))
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, outFileOpt)
     
     val zkConnect  = options.valueOf(zkConnectOpt)
     val groups     = options.valuesOf(groupOpt)
@@ -79,7 +76,7 @@ object ExportZkOffsets extends Logging {
     val fileWriter : FileWriter  = new FileWriter(outfile)
     
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
       
       var consumerGroups: Seq[String] = null
 
@@ -117,11 +114,10 @@ object ExportZkOffsets extends Logging {
     }
   }
 
-  private def getBrokeridPartition(zkClient: ZkClient, consumerGroup: String, topic: String): List[String] = {
-    return ZkUtils.getChildrenParentMayNotExist(zkClient, "/consumers/%s/offsets/%s".format(consumerGroup, topic)).toList
-  }
+  private def getBrokeridPartition(zkClient: ZkClient, consumerGroup: String, topic: String): List[String] =
+    ZkUtils.getChildrenParentMayNotExist(zkClient, "/consumers/%s/offsets/%s".format(consumerGroup, topic)).toList
   
-  private def getTopicsList(zkClient: ZkClient, consumerGroup: String): List[String] = {
-    return ZkUtils.getChildren(zkClient, "/consumers/%s/offsets".format(consumerGroup)).toList
-  }
+  private def getTopicsList(zkClient: ZkClient, consumerGroup: String): List[String] =
+    ZkUtils.getChildren(zkClient, "/consumers/%s/offsets".format(consumerGroup)).toList
+
 }

@@ -19,6 +19,7 @@ package kafka.producer
 
 
 import kafka.utils._
+import org.apache.kafka.common.utils.Utils
 
 class DefaultPartitioner(props: VerifiableProperties = null) extends Partitioner {
   private val random = new java.util.Random

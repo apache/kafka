@@ -26,7 +26,7 @@ object Log4jController {
 
   private val controller = new Log4jController
 
-  Utils.registerMBean(controller, "kafka:type=kafka.Log4jController")
+  CoreUtils.registerMBean(controller, "kafka:type=kafka.Log4jController")
 
 }
 

@@ -18,10 +18,11 @@
 package kafka.consumer
 
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 import kafka.server.OffsetManager
+import kafka.coordinator.ConsumerCoordinator
 
 
 class TopicFilterTest extends JUnitSuite {
@@ -37,12 +38,16 @@ class TopicFilterTest extends JUnitSuite {
 
     val topicFilter2 = new Whitelist(".+")
     assertTrue(topicFilter2.isTopicAllowed("alltopics", excludeInternalTopics = true))
-    assertFalse(topicFilter2.isTopicAllowed(OffsetManager.OffsetsTopicName, excludeInternalTopics = true))
-    assertTrue(topicFilter2.isTopicAllowed(OffsetManager.OffsetsTopicName, excludeInternalTopics = false))
+    assertFalse(topicFilter2.isTopicAllowed(ConsumerCoordinator.OffsetsTopicName, excludeInternalTopics = true))
+    assertTrue(topicFilter2.isTopicAllowed(ConsumerCoordinator.OffsetsTopicName, excludeInternalTopics = false))
 
     val topicFilter3 = new Whitelist("white_listed-topic.+")
     assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1", excludeInternalTopics = true))
     assertFalse(topicFilter3.isTopicAllowed("black1", excludeInternalTopics = true))
+
+    val topicFilter4 = new Whitelist("test-(?!bad\\b)[\\w]+")
+    assertTrue(topicFilter4.isTopicAllowed("test-good", excludeInternalTopics = true))
+    assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))    
   }
 
   @Test
@@ -53,7 +58,29 @@ class TopicFilterTest extends JUnitSuite {
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
 
-    assertFalse(topicFilter1.isTopicAllowed(OffsetManager.OffsetsTopicName, excludeInternalTopics = true))
-    assertTrue(topicFilter1.isTopicAllowed(OffsetManager.OffsetsTopicName, excludeInternalTopics = false))
+    assertFalse(topicFilter1.isTopicAllowed(ConsumerCoordinator.OffsetsTopicName, excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed(ConsumerCoordinator.OffsetsTopicName, excludeInternalTopics = false))
   }
+
+  @Test
+  def testWildcardTopicCountGetTopicCountMapEscapeJson() {
+    def getTopicCountMapKey(regex: String): String = {
+      val topicCount = new WildcardTopicCount(null, "consumerId", new Whitelist(regex), 1, true)
+      topicCount.getTopicCountMap.head._1
+    }
+    //lets make sure that the JSON strings are escaping as we expect
+    //if they are not then when they get saved to zookeeper and read back out they will be broken on parse
+    assertEquals("-\\\"-", getTopicCountMapKey("-\"-"))
+    assertEquals("-\\\\-", getTopicCountMapKey("-\\-"))
+    assertEquals("-\\/-", getTopicCountMapKey("-/-"))
+    assertEquals("-\\\\b-", getTopicCountMapKey("-\\b-"))
+    assertEquals("-\\\\f-", getTopicCountMapKey("-\\f-"))
+    assertEquals("-\\\\n-", getTopicCountMapKey("-\\n-"))
+    assertEquals("-\\\\r-", getTopicCountMapKey("-\\r-"))
+    assertEquals("-\\\\t-", getTopicCountMapKey("-\\t-"))
+    assertEquals("-\\\\u0000-", getTopicCountMapKey("-\\u0000-"))
+    assertEquals("-\\\\u001f-", getTopicCountMapKey("-\\u001f-"))
+    assertEquals("-\\\\u007f-", getTopicCountMapKey("-\\u007f-"))
+    assertEquals("-\\\\u009f-", getTopicCountMapKey("-\\u009f-"))
+  }    
 }

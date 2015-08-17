@@ -17,6 +17,7 @@
 
 package kafka
 
+import java.util.Properties
 import java.util.concurrent.atomic._
 import kafka.common._
 import kafka.message._
@@ -33,10 +34,13 @@ object StressTestLog {
   def main(args: Array[String]) {
     val dir = TestUtils.tempDir()
     val time = new MockTime
+    val logProprties = new Properties()
+    logProprties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)
+    logProprties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
+    logProprties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
+
     val log = new Log(dir = dir,
-                      config = LogConfig(segmentSize = 64*1024*1024,
-                                         maxMessageSize = Int.MaxValue,
-                                         maxIndexSize = 1024*1024),
+                      config = LogConfig(logProprties),
                       recoveryPoint = 0L,
                       scheduler = time.scheduler,
                       time = time)
@@ -50,7 +54,7 @@ object StressTestLog {
         running.set(false)
         writer.join()
         reader.join()
-        Utils.rm(dir)
+        CoreUtils.rm(dir)
       }
     })
     
@@ -91,7 +95,7 @@ object StressTestLog {
     @volatile var offset = 0
     override def work() {
       try {
-        log.read(offset, 1024, Some(offset+1)) match {
+        log.read(offset, 1024, Some(offset+1)).messageSet match {
           case read: FileMessageSet if read.sizeInBytes > 0 => {
             val first = read.head
             require(first.offset == offset, "We should either read nothing or the message we asked for.")

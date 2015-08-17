@@ -18,9 +18,10 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.common.{ErrorMapping, TopicAndPartition}
+
 import kafka.api.ApiUtils._
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 
 
@@ -57,10 +58,10 @@ case class PartitionOffsetRequestInfo(time: Long, maxNumOffsets: Int)
 
 case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo],
                          versionId: Short = OffsetRequest.CurrentVersion,
-                         override val correlationId: Int = 0,
+                         correlationId: Int = 0,
                          clientId: String = OffsetRequest.DefaultClientId,
                          replicaId: Int = Request.OrdinaryConsumerId)
-    extends RequestOrResponse(Some(RequestKeys.OffsetsKey), correlationId) {
+    extends RequestOrResponse(Some(RequestKeys.OffsetsKey)) {
 
   def this(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo], correlationId: Int, replicaId: Int) = this(requestInfo, OffsetRequest.CurrentVersion, correlationId, OffsetRequest.DefaultClientId, replicaId)
 
@@ -117,7 +118,7 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
         (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), null))
     }
     val errorResponse = OffsetResponse(correlationId, partitionOffsetResponseMap)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

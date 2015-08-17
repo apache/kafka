@@ -115,11 +115,11 @@ public class Props extends Properties {
 	}
 
 	/**
-	 * build props from a list of strings and interprate them as
+	 * build props from a list of strings and interpret them as
 	 * key, value, key, value,....
 	 * 
 	 * @param args
-	 * @return
+	 * @return props
 	 */
 	@SuppressWarnings("unchecked")
 	public static Props of(String... args) {
@@ -148,7 +148,7 @@ public class Props extends Properties {
 	/**
 	 * get property of "key" and split the value by " ," 
 	 * @param key		
-	 * @return
+	 * @return list of values
 	 */
 	public List<String> getStringList(String key) {
 		return getStringList(key, "\\s*,\\s*");
@@ -158,7 +158,7 @@ public class Props extends Properties {
 	 * get property of "key" and split the value by "sep"
 	 * @param key
 	 * @param sep
-	 * @return
+	 * @return string list of values
 	 */
 	public List<String> getStringList(String key, String sep) {
 		String val =  super.getProperty(key);
@@ -176,7 +176,7 @@ public class Props extends Properties {
 	 * get string list with default value. default delimiter is ","
 	 * @param key
 	 * @param defaultValue
-	 * @return
+	 * @return string list of values
 	 */
 	public List<String> getStringList(String key, List<String> defaultValue) {
 		if (containsKey(key))
@@ -189,7 +189,7 @@ public class Props extends Properties {
 	 * get string list with default value
 	 * @param key
 	 * @param defaultValue
-	 * @return
+	 * @return string list of values
 	 */
 	public List<String> getStringList(String key, List<String> defaultValue,
 			String sep) {
@@ -251,10 +251,10 @@ public class Props extends Properties {
 	}
 
 	/**
-	 * get boolean value
+	 * get boolean value with default value
 	 * @param key
 	 * @param defaultValue
-	 * @return
+	 * @return boolean value
 	 * @throws Exception 	if value is not of type boolean or string
 	 */
 	public Boolean getBoolean(String key, Boolean defaultValue) 
@@ -265,8 +265,7 @@ public class Props extends Properties {
 	/**
 	 * get boolean value
 	 * @param key
-	 * @param defaultValue
-	 * @return
+	 * @return boolean value
 	 * @throws Exception 	if value is not of type boolean or string or 
 	 * 										if value doesn't exist
 	 */
@@ -275,10 +274,10 @@ public class Props extends Properties {
 	}
 
 	/**
-	 * get long value
-	 * @param key
+	 * get long value with default value
+	 * @param name
 	 * @param defaultValue
-	 * @return
+	 * @return long value
 	 * @throws Exception 	if value is not of type long or string
 	 */
 	public Long getLong(String name, Long defaultValue) 
@@ -288,9 +287,8 @@ public class Props extends Properties {
 
 	/**
 	 * get long value
-	 * @param key
-	 * @param defaultValue
-	 * @return
+	 * @param name
+	 * @return long value
 	 * @throws Exception 	if value is not of type long or string or 
 	 * 										if value doesn't exist
 	 */
@@ -299,10 +297,10 @@ public class Props extends Properties {
 	}
 
 	/**
-	 * get integer value
-	 * @param key
+	 * get integer value with default value
+	 * @param name
 	 * @param defaultValue
-	 * @return
+	 * @return integer value
 	 * @throws Exception 	if value is not of type integer or string
 	 */
 	public Integer getInt(String name, Integer defaultValue) 
@@ -312,9 +310,8 @@ public class Props extends Properties {
 
 	/**
 	 * get integer value
-	 * @param key
-	 * @param defaultValue
-	 * @return
+	 * @param name
+	 * @return integer value
 	 * @throws Exception 	if value is not of type integer or string or 
 	 * 										if value doesn't exist
 	 */
@@ -323,10 +320,10 @@ public class Props extends Properties {
 	}
 
 	/**
-	 * get double value
-	 * @param key
+	 * get double value with default value
+	 * @param name
 	 * @param defaultValue
-	 * @return
+	 * @return double value
 	 * @throws Exception 	if value is not of type double or string
 	 */
 	public Double getDouble(String name, double defaultValue) 
@@ -336,9 +333,8 @@ public class Props extends Properties {
 
 	/**
 	 * get double value
-	 * @param key
-	 * @param defaultValue
-	 * @return
+	 * @param name
+	 * @return double value
 	 * @throws Exception 	if value is not of type double or string or 
 	 * 										if value doesn't exist
 	 */
@@ -347,10 +343,10 @@ public class Props extends Properties {
 	}
 
 	/**
-	 * get URI value
-	 * @param key
+	 * get URI value with default value
+	 * @param name
 	 * @param defaultValue
-	 * @return
+	 * @return URI value
 	 * @throws Exception 	if value is not of type URI or string 
 	 */
 	public URI getUri(String name, URI defaultValue) throws Exception {
@@ -359,9 +355,9 @@ public class Props extends Properties {
 
 	/**
 	 * get URI value
-	 * @param key
+	 * @param name
 	 * @param defaultValue
-	 * @return
+	 * @return URI value
 	 * @throws Exception 	if value is not of type URI or string 
 	 */
 	public URI getUri(String name, String defaultValue) 
@@ -372,9 +368,8 @@ public class Props extends Properties {
 
 	/**
 	 * get URI value
-	 * @param key
-	 * @param defaultValue
-	 * @return
+	 * @param name
+	 * @return URI value
 	 * @throws Exception 	if value is not of type URI or string or 
 	 * 										if value doesn't exist
 	 */
@@ -385,7 +380,7 @@ public class Props extends Properties {
 	/**
 	 * compare two props 
 	 * @param p
-	 * @return
+	 * @return true or false
 	 */
 	public boolean equalsProps(Props p) {
 		if (p == null) {
@@ -432,7 +427,7 @@ public class Props extends Properties {
     
     /**
      * get all property names
-     * @return
+     * @return set of property names
      */
 	public Set<String> getKeySet() {
 		return super.stringPropertyNames();
@@ -453,7 +448,7 @@ public class Props extends Properties {
 	/**
 	 * clone a Props
 	 * @param p
-	 * @return
+	 * @return props
 	 */
 	public static Props clone(Props p) {
 		return new Props(p);

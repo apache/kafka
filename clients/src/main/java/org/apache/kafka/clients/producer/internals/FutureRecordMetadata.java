@@ -51,13 +51,17 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         return valueOrError();
     }
 
-    private RecordMetadata valueOrError() throws ExecutionException {
+    RecordMetadata valueOrError() throws ExecutionException {
         if (this.result.error() != null)
             throw new ExecutionException(this.result.error());
         else
-            return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset);
+            return value();
     }
-
+    
+    RecordMetadata value() {
+        return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset);
+    }
+    
     public long relativeOffset() {
         return this.relativeOffset;
     }

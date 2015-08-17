@@ -19,11 +19,16 @@ package kafka.producer
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 import java.util.concurrent.TimeUnit
 import kafka.utils.Pool
-import kafka.common.ClientIdAndBroker
+import kafka.common.{ClientIdAllBrokers, ClientIdBroker, ClientIdAndBroker}
 
-class ProducerRequestMetrics(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
-  val requestTimer = new KafkaTimer(newTimer(metricId + "ProducerRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-  val requestSizeHist = newHistogram(metricId + "ProducerRequestSize")
+class ProducerRequestMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup {
+  val tags = metricId match {
+    case ClientIdAndBroker(clientId, brokerHost, brokerPort) => Map("clientId" -> clientId, "brokerHost" -> brokerHost, "brokerPort" -> brokerPort.toString)
+    case ClientIdAllBrokers(clientId) => Map("clientId" -> clientId)
+  }
+
+  val requestTimer = new KafkaTimer(newTimer("ProducerRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags))
+  val requestSizeHist = newHistogram("ProducerRequestSize", biased = true, tags)
 }
 
 /**
@@ -31,14 +36,14 @@ class ProducerRequestMetrics(metricId: ClientIdAndBroker) extends KafkaMetricsGr
  * @param clientId ClientId of the given producer
  */
 class ProducerRequestStats(clientId: String) {
-  private val valueFactory = (k: ClientIdAndBroker) => new ProducerRequestMetrics(k)
-  private val stats = new Pool[ClientIdAndBroker, ProducerRequestMetrics](Some(valueFactory))
-  private val allBrokersStats = new ProducerRequestMetrics(new ClientIdAndBroker(clientId, "AllBrokers"))
+  private val valueFactory = (k: ClientIdBroker) => new ProducerRequestMetrics(k)
+  private val stats = new Pool[ClientIdBroker, ProducerRequestMetrics](Some(valueFactory))
+  private val allBrokersStats = new ProducerRequestMetrics(new ClientIdAllBrokers(clientId))
 
   def getProducerRequestAllBrokersStats(): ProducerRequestMetrics = allBrokersStats
 
-  def getProducerRequestStats(brokerInfo: String): ProducerRequestMetrics = {
-    stats.getAndMaybePut(new ClientIdAndBroker(clientId, brokerInfo + "-"))
+  def getProducerRequestStats(brokerHost: String, brokerPort: Int): ProducerRequestMetrics = {
+    stats.getAndMaybePut(new ClientIdAndBroker(clientId, brokerHost, brokerPort))
   }
 }
 
@@ -51,6 +56,10 @@ object ProducerRequestStatsRegistry {
 
   def getProducerRequestStats(clientId: String) = {
     globalStats.getAndMaybePut(clientId)
+  }
+
+  def removeProducerRequestStats(clientId: String) {
+    globalStats.remove(clientId)
   }
 }
 

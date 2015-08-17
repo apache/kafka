@@ -80,7 +80,7 @@ class SimpleConsumer(val host: String,
   }
 
   /**
-   * Commit offsets for a topic
+   * Commit offsets for a topic to Zookeeper
    * @param request a [[kafka.javaapi.OffsetCommitRequest]] object.
    * @return a [[kafka.javaapi.OffsetCommitResponse]] object.
    */
@@ -90,7 +90,7 @@ class SimpleConsumer(val host: String,
   }
 
   /**
-   * Fetch offsets for a topic
+   * Fetch offsets for a topic from Zookeeper
    * @param request a [[kafka.javaapi.OffsetFetchRequest]] object.
    * @return a [[kafka.javaapi.OffsetFetchResponse]] object.
    */

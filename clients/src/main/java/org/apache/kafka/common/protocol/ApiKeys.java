@@ -16,34 +16,37 @@
  */
 package org.apache.kafka.common.protocol;
 
-
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Identifiers for all the Kafka APIs
  */
 public enum ApiKeys {
-    PRODUCE(0, "produce"),
-    FETCH(1, "fetch"),
-    LIST_OFFSETS(2, "list_offsets"),
-    METADATA(3, "metadata"),
-    LEADER_AND_ISR(4, "leader_and_isr"),
-    STOP_REPLICA(5, "stop_replica"),
-    OFFSET_COMMIT(6, "offset_commit"),
-    OFFSET_FETCH(7, "offset_fetch");
+    PRODUCE(0, "Produce"),
+    FETCH(1, "Fetch"),
+    LIST_OFFSETS(2, "Offsets"),
+    METADATA(3, "Metadata"),
+    LEADER_AND_ISR(4, "LeaderAndIsr"),
+    STOP_REPLICA(5, "StopReplica"),
+    UPDATE_METADATA_KEY(6, "UpdateMetadata"),
+    CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown"),
+    OFFSET_COMMIT(8, "OffsetCommit"),
+    OFFSET_FETCH(9, "OffsetFetch"),
+    CONSUMER_METADATA(10, "ConsumerMetadata"),
+    JOIN_GROUP(11, "JoinGroup"),
+    HEARTBEAT(12, "Heartbeat");
 
     private static ApiKeys[] codeToType;
-    public static int MAX_API_KEY = -1;
+    public static final int MAX_API_KEY;
 
     static {
+        int maxKey = -1;
         for (ApiKeys key : ApiKeys.values()) {
-            MAX_API_KEY = Math.max(MAX_API_KEY, key.id);
+            maxKey = Math.max(maxKey, key.id);
         }
-        codeToType = new ApiKeys[MAX_API_KEY+1];
+        codeToType = new ApiKeys[maxKey + 1];
         for (ApiKeys key : ApiKeys.values()) {
             codeToType[key.id] = key;
         }
+        MAX_API_KEY = maxKey;
     }
 
     /** the perminant and immutable id of an API--this can't change ever */

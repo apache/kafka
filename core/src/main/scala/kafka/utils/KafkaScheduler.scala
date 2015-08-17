@@ -19,7 +19,7 @@ package kafka.utils
 
 import java.util.concurrent._
 import atomic._
-import collection.mutable.HashMap
+import org.apache.kafka.common.utils.Utils
 
 /**
  * A scheduler for running jobs
@@ -39,6 +39,11 @@ trait Scheduler {
    * This includes tasks scheduled with a delayed execution.
    */
   def shutdown()
+  
+  /**
+   * Check if the scheduler has been started
+   */
+  def isStarted: Boolean
   
   /**
    * Schedule a task
@@ -63,13 +68,13 @@ trait Scheduler {
 class KafkaScheduler(val threads: Int, 
                      val threadNamePrefix: String = "kafka-scheduler-", 
                      daemon: Boolean = true) extends Scheduler with Logging {
-  @volatile private var executor: ScheduledThreadPoolExecutor = null
+  private var executor: ScheduledThreadPoolExecutor = null
   private val schedulerThreadId = new AtomicInteger(0)
   
   override def startup() {
     debug("Initializing task scheduler.")
     this synchronized {
-      if(executor != null)
+      if(isStarted)
         throw new IllegalStateException("This scheduler has already been started!")
       executor = new ScheduledThreadPoolExecutor(threads)
       executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
@@ -83,18 +88,21 @@ class KafkaScheduler(val threads: Int,
   
   override def shutdown() {
     debug("Shutting down task scheduler.")
-    ensureStarted
-    executor.shutdown()
-    executor.awaitTermination(1, TimeUnit.DAYS)
-    this.executor = null
+    this synchronized {
+      if(isStarted) {
+        executor.shutdown()
+        executor.awaitTermination(1, TimeUnit.DAYS)
+        this.executor = null
+      }
+    }
   }
 
   def schedule(name: String, fun: ()=>Unit, delay: Long, period: Long, unit: TimeUnit) = {
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
-    ensureStarted
-    val runnable = new Runnable {
-      def run() = {
+    this synchronized {
+      ensureStarted
+      val runnable = CoreUtils.runnable {
         try {
           trace("Begining execution of scheduled task '%s'.".format(name))
           fun()
@@ -104,15 +112,21 @@ class KafkaScheduler(val threads: Int,
           trace("Completed execution of scheduled task '%s'.".format(name))
         }
       }
+      if(period >= 0)
+        executor.scheduleAtFixedRate(runnable, delay, period, unit)
+      else
+        executor.schedule(runnable, delay, unit)
     }
-    if(period >= 0)
-      executor.scheduleAtFixedRate(runnable, delay, period, unit)
-    else
-      executor.schedule(runnable, delay, unit)
+  }
+  
+  def isStarted: Boolean = {
+    this synchronized {
+      executor != null
+    }
   }
   
   private def ensureStarted = {
-    if(executor == null)
+    if(!isStarted)
       throw new IllegalStateException("Kafka scheduler has not been started")
   }
 }

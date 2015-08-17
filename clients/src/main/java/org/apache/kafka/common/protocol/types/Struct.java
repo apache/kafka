@@ -1,18 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.protocol.types;
 
@@ -56,7 +52,7 @@ public class Struct {
         else if (field.defaultValue != Field.NO_DEFAULT)
             return field.defaultValue;
         else
-            throw new SchemaException("Missing value for field '" + field.name + " which has no default value.");
+            throw new SchemaException("Missing value for field '" + field.name + "' which has no default value.");
     }
 
     /**
@@ -64,6 +60,7 @@ public class Struct {
      * 
      * @param field The field to look up
      * @return The value for that field.
+     * @throws SchemaException if the field has no value and has no default.
      */
     public Object get(Field field) {
         validateField(field);
@@ -75,12 +72,22 @@ public class Struct {
      * 
      * @param name The name of the field
      * @return The value in the record
+     * @throws SchemaException If no such field exists
      */
     public Object get(String name) {
         Field field = schema.get(name);
         if (field == null)
             throw new SchemaException("No such field: " + name);
         return getFieldOrDefault(field);
+    }
+
+    /**
+     * Check if the struct contains a field.
+     * @param name
+     * @return Whether a field exists.
+     */
+    public boolean hasField(String name) {
+        return schema.get(name) != null;
     }
 
     public Struct getStruct(Field field) {
@@ -107,6 +114,14 @@ public class Struct {
         return (Integer) get(name);
     }
 
+    public Long getLong(Field field) {
+        return (Long) get(field);
+    }
+
+    public Long getLong(String name) {
+        return (Long) get(name);
+    }
+
     public Object[] getArray(Field field) {
         return (Object[]) get(field);
     }
@@ -123,11 +138,20 @@ public class Struct {
         return (String) get(name);
     }
 
+    public ByteBuffer getBytes(Field field) {
+        return (ByteBuffer) get(field);
+    }
+
+    public ByteBuffer getBytes(String name) {
+        return (ByteBuffer) get(name);
+    }
+
     /**
      * Set the given field to the specified value
      * 
      * @param field The field
      * @param value The value
+     * @throws SchemaException If the validation of the field failed
      */
     public Struct set(Field field, Object value) {
         validateField(field);
@@ -140,6 +164,7 @@ public class Struct {
      * 
      * @param name The name of the field
      * @param value The value to set
+     * @throws SchemaException If the field is not known
      */
     public Struct set(String name, Object value) {
         Field field = this.schema.get(name);
@@ -150,12 +175,13 @@ public class Struct {
     }
 
     /**
-     * Create a struct for the schema of a container type (struct or array).
-     * Note that for array type, this method assumes that the type is an array of schema and creates a struct
-     * of that schema. Arrays of other types can't be instantiated with this method.
+     * Create a struct for the schema of a container type (struct or array). Note that for array type, this method
+     * assumes that the type is an array of schema and creates a struct of that schema. Arrays of other types can't be
+     * instantiated with this method.
      * 
      * @param field The field to create an instance of
      * @return The struct
+     * @throws SchemaException If the given field is not a container type
      */
     public Struct instance(Field field) {
         validateField(field);
@@ -165,7 +191,7 @@ public class Struct {
             ArrayOf array = (ArrayOf) field.type();
             return new Struct((Schema) array.type());
         } else {
-            throw new SchemaException("Field " + field.name + " is not a container type, it is of type " + field.type());
+            throw new SchemaException("Field '" + field.name + "' is not a container type, it is of type " + field.type());
         }
     }
 
@@ -174,6 +200,7 @@ public class Struct {
      * 
      * @param field The name of the field to create (field must be a schema type)
      * @return The struct
+     * @throws SchemaException If the given field is not a container type
      */
     public Struct instance(String field) {
         return instance(schema.get(field));
@@ -202,16 +229,20 @@ public class Struct {
 
     /**
      * Ensure the user doesn't try to access fields from the wrong schema
+     *
+     * @throws SchemaException If validation fails
      */
     private void validateField(Field field) {
         if (this.schema != field.schema)
-            throw new SchemaException("Attempt to access field '" + field.name + " from a different schema instance.");
+            throw new SchemaException("Attempt to access field '" + field.name + "' from a different schema instance.");
         if (field.index > values.length)
             throw new SchemaException("Invalid field index: " + field.index);
     }
 
     /**
      * Validate the contents of this struct against its schema
+     *
+     * @throws SchemaException If validation fails
      */
     public void validate() {
         this.schema.validate(this);
@@ -224,7 +255,7 @@ public class Struct {
     public ByteBuffer[] toBytes() {
         ByteBuffer buffer = ByteBuffer.allocate(sizeOf());
         writeTo(buffer);
-        return new ByteBuffer[] { buffer };
+        return new ByteBuffer[] {buffer};
     }
 
     @Override
@@ -251,6 +282,48 @@ public class Struct {
         }
         b.append('}');
         return b.toString();
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        for (int i = 0; i < this.values.length; i++) {
+            Field f = this.schema.get(i);
+            if (f.type() instanceof ArrayOf) {
+                Object[] arrayObject = (Object []) this.get(f);
+                for (Object arrayItem: arrayObject)
+                    result = prime * result + arrayItem.hashCode();
+            } else {
+                result = prime * result + this.get(f).hashCode();
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        Struct other = (Struct) obj;
+        if (schema != other.schema)
+            return false;
+        for (int i = 0; i < this.values.length; i++) {
+            Field f = this.schema.get(i);
+            Boolean result;
+            if (f.type() instanceof ArrayOf) {
+                result = Arrays.equals((Object []) this.get(f), (Object []) other.get(f));
+            } else {
+                result = this.get(f).equals(other.get(f));
+            }
+            if (!result)
+                return false;
+        }
+        return true;
     }
 
 }

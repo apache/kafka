@@ -16,22 +16,16 @@
  */
 package kafka.admin
 
-import org.scalatest.junit.JUnit3Suite
+import kafka.log.Log
 import kafka.zk.ZooKeeperTestHarness
 import junit.framework.Assert._
 import kafka.utils.{ZkUtils, TestUtils}
 import kafka.server.{KafkaServer, KafkaConfig}
 import org.junit.Test
-import kafka.common._
-import kafka.producer.{ProducerConfig, Producer}
 import java.util.Properties
-import kafka.api._
-import kafka.consumer.SimpleConsumer
-import kafka.producer.KeyedMessage
-import kafka.common.TopicAndPartition
-import kafka.api.PartitionOffsetRequestInfo
+import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
 
-class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
+class DeleteTopicTest extends ZooKeeperTestHarness {
 
   @Test
   def testDeleteTopicWithAllAliveReplicas() {
@@ -40,7 +34,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val servers = createTestTopicAndCluster(topic)
     // start topic deletion
     AdminUtils.deleteTopic(zkClient, topic)
-    verifyTopicDeletion(topic, servers)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     servers.foreach(_.shutdown())
   }
 
@@ -59,13 +53,13 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     // check if all replicas but the one that is shut down has deleted the log
     TestUtils.waitUntilTrue(() =>
       servers.filter(s => s.config.brokerId != follower.config.brokerId)
-        .foldLeft(true)((res, server) => res && server.getLogManager().getLog(topicAndPartition).isEmpty), "Replicas 0,1 have not deleted log.")
+        .forall(_.getLogManager().getLog(topicAndPartition).isEmpty), "Replicas 0,1 have not deleted log.")
     // ensure topic deletion is halted
     TestUtils.waitUntilTrue(() => ZkUtils.pathExists(zkClient, ZkUtils.getDeleteTopicPath(topic)),
       "Admin path /admin/delete_topic/test path deleted even when a follower replica is down")
     // restart follower replica
     follower.startup()
-    verifyTopicDeletion(topic, servers)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     servers.foreach(_.shutdown())
   }
 
@@ -92,7 +86,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     controller.startup()
     follower.startup()
 
-    verifyTopicDeletion(topic, servers)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     servers.foreach(_.shutdown())
   }
 
@@ -101,16 +95,15 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topic = "test"
     val topicAndPartition = TopicAndPartition(topic, 0)
-    val brokerConfigs = TestUtils.createBrokerConfigs(4)
+    val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
-    val allServers = brokerConfigs.map(b => TestUtils.createServer(new KafkaConfig(b)))
+    val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     // wait until replica log is created on every broker
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) =>
-      res && server.getLogManager().getLog(topicAndPartition).isDefined),
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created.")
     val leaderIdOpt = ZkUtils.getLeaderForPartition(zkClient, topic, 0)
     assertTrue("Leader should exist for partition [test,0]", leaderIdOpt.isDefined)
@@ -138,7 +131,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, 0)
     assertEquals("Partition should not be reassigned to 0, 1, 2", oldAssignedReplicas, assignedReplicas)
     follower.startup()
-    verifyTopicDeletion(topic, servers)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     allServers.foreach(_.shutdown())
   }
 
@@ -157,10 +150,10 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.deleteTopic(zkClient, topic)
     follower.startup()
     // test if topic deletion is resumed
-    verifyTopicDeletion(topic, servers)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // verify that new partition doesn't exist on any broker either
     TestUtils.waitUntilTrue(() =>
-      servers.foldLeft(true)((res, server) => res && server.getLogManager().getLog(newPartition).isEmpty),
+      servers.forall(_.getLogManager().getLog(newPartition).isEmpty),
       "Replica logs not for new partition [test,1] not deleted after delete topic is complete.")
     servers.foreach(_.shutdown())
   }
@@ -175,10 +168,10 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     // add partitions to topic
     val newPartition = TopicAndPartition(topic, 1)
     AdminUtils.addPartitions(zkClient, topic, 2, "0:1:2,0:1:2")
-    verifyTopicDeletion(topic, servers)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // verify that new partition doesn't exist on any broker either
     assertTrue("Replica logs not deleted after delete topic is complete",
-      servers.foldLeft(true)((res, server) => res && server.getLogManager().getLog(newPartition).isEmpty))
+      servers.forall(_.getLogManager().getLog(newPartition).isEmpty))
     servers.foreach(_.shutdown())
   }
 
@@ -190,46 +183,15 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val servers = createTestTopicAndCluster(topic)
     // start topic deletion
     AdminUtils.deleteTopic(zkClient, topic)
-    verifyTopicDeletion(topic, servers)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // re-create topic on same replicas
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     // wait until leader is elected
     val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
     assertTrue("New leader should be elected after re-creating topic test", leaderIdOpt.isDefined)
     // check if all replica logs are created
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) => res && server.getLogManager().getLog(topicAndPartition).isDefined),
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created.")
-    servers.foreach(_.shutdown())
-  }
-
-  @Test
-  def testAutoCreateAfterDeleteTopic() {
-    val topicAndPartition = TopicAndPartition("test", 0)
-    val topic = topicAndPartition.topic
-    val servers = createTestTopicAndCluster(topic)
-    // start topic deletion
-    AdminUtils.deleteTopic(zkClient, topic)
-    verifyTopicDeletion(topic, servers)
-    // test if first produce request after topic deletion auto creates the topic
-    val props = new Properties()
-    props.put("metadata.broker.list", servers.map(s => s.config.hostName + ":" + s.config.port).mkString(","))
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("producer.type", "sync")
-    props.put("request.required.acks", "1")
-    props.put("message.send.max.retries", "1")
-    val producerConfig = new ProducerConfig(props)
-    val producer = new Producer[String, String](producerConfig)
-    try {
-      producer.send(new KeyedMessage[String, String](topic, "test", "test1"))
-    } catch {
-      case e: FailedToSendMessageException => fail("Topic should have been auto created")
-      case oe: Throwable => fail("fails with exception", oe)
-    }
-    // test the topic path exists
-    assertTrue("Topic not auto created", ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic)))
-    // wait until leader is elected
-    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
-    assertTrue("New leader should be elected after re-creating topic test", leaderIdOpt.isDefined)
     servers.foreach(_.shutdown())
   }
 
@@ -241,10 +203,9 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     // start topic deletion
     AdminUtils.deleteTopic(zkClient, "test2")
     // verify delete topic path for test2 is removed from zookeeper
-    verifyTopicDeletion("test2", servers)
+    TestUtils.verifyTopicDeletion(zkClient, "test2", 1, servers)
     // verify that topic test is untouched
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) =>
-      res && server.getLogManager().getLog(topicAndPartition).isDefined),
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created")
     // test the topic path exists
     assertTrue("Topic test mistakenly deleted", ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic)))
@@ -252,37 +213,90 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
     assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
     servers.foreach(_.shutdown())
+  }
 
+  @Test
+  def testDeleteTopicWithCleaner() {
+    val topicName = "test"
+    val topicAndPartition = TopicAndPartition(topicName, 0)
+    val topic = topicAndPartition.topic
+
+    val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
+    brokerConfigs(0).setProperty("delete.topic.enable", "true")
+    brokerConfigs(0).setProperty("log.cleaner.enable","true")
+    brokerConfigs(0).setProperty("log.cleanup.policy","compact")
+    brokerConfigs(0).setProperty("log.segment.bytes","100")
+    brokerConfigs(0).setProperty("log.segment.delete.delay.ms","1000")
+    brokerConfigs(0).setProperty("log.cleaner.dedupe.buffer.size","1048577")
+
+    val servers = createTestTopicAndCluster(topic,brokerConfigs)
+
+    // for simplicity, we are validating cleaner offsets on a single broker
+    val server = servers(0)
+    val log = server.logManager.getLog(topicAndPartition).get
+
+    // write to the topic to activate cleaner
+    writeDups(numKeys = 100, numDups = 3,log)
+
+    // wait for cleaner to clean
+   server.logManager.cleaner.awaitCleaned(topicName,0,0)
+
+    // delete topic
+    AdminUtils.deleteTopic(zkClient, "test")
+    TestUtils.verifyTopicDeletion(zkClient, "test", 1, servers)
+
+    servers.foreach(_.shutdown())
+  }
+
+  @Test
+  def testDeleteTopicAlreadyMarkedAsDeleted() {
+    val topicAndPartition = TopicAndPartition("test", 0)
+    val topic = topicAndPartition.topic
+    val servers = createTestTopicAndCluster(topic)
+
+    try {
+      // start topic deletion
+      AdminUtils.deleteTopic(zkClient, topic)
+      // try to delete topic marked as deleted
+      AdminUtils.deleteTopic(zkClient, topic)
+      fail("Expected TopicAlreadyMarkedForDeletionException")
+    }
+    catch {
+      case e: TopicAlreadyMarkedForDeletionException => // expected exception
+    }
+
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
+    servers.foreach(_.shutdown())
   }
 
   private def createTestTopicAndCluster(topic: String): Seq[KafkaServer] = {
+
+    val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true")
+    )
+    createTestTopicAndCluster(topic,brokerConfigs)
+  }
+
+  private def createTestTopicAndCluster(topic: String, brokerConfigs: Seq[Properties]): Seq[KafkaServer] = {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topicAndPartition = TopicAndPartition(topic, 0)
-    val brokerConfigs = TestUtils.createBrokerConfigs(3)
-    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
-    val servers = brokerConfigs.map(b => TestUtils.createServer(new KafkaConfig(b)))
+    val servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     // wait until replica log is created on every broker
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) =>
-      res && server.getLogManager().getLog(topicAndPartition).isDefined),
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created")
     servers
   }
 
-  private def verifyTopicDeletion(topic: String, servers: Seq[KafkaServer]) {
-    val topicAndPartition = TopicAndPartition(topic, 0)
-    // wait until admin path for delete topic is deleted, signaling completion of topic deletion
-    TestUtils.waitUntilTrue(() => !ZkUtils.pathExists(zkClient, ZkUtils.getDeleteTopicPath(topic)),
-      "Admin path /admin/delete_topic/test path not deleted even after a replica is restarted")
-    TestUtils.waitUntilTrue(() => !ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic)),
-      "Topic path /brokers/topics/test not deleted after /admin/delete_topic/test path is deleted")
-    // ensure that the topic-partition has been deleted from all brokers' replica managers
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) => res && server.replicaManager.getPartition(topic, 0) == None),
-      "Replica manager's should have deleted all of this topic's partitions")
-    // ensure that logs from all replicas are deleted if delete topic is marked successful in zookeeper
-    assertTrue("Replica logs not deleted after delete topic is complete",
-      servers.foldLeft(true)((res, server) => res && server.getLogManager().getLog(topicAndPartition).isEmpty))
+  private def writeDups(numKeys: Int, numDups: Int, log: Log): Seq[(Int, Int)] = {
+    var counter = 0
+    for(dup <- 0 until numDups; key <- 0 until numKeys) yield {
+      val count = counter
+      log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, key = key.toString.getBytes), assignOffsets = true)
+      counter += 1
+      (key, count)
+    }
   }
 }

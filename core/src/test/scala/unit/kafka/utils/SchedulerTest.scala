@@ -16,7 +16,7 @@
  */
 package kafka.utils
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import java.util.concurrent.atomic._
 import org.junit.{Test, After, Before}
 import kafka.utils.TestUtils.retry
@@ -89,5 +89,22 @@ class SchedulerTest {
     retry(30000){
       assertTrue("Should count to 20", counter1.get >= 20)
     }
+  }
+  
+  @Test
+  def testRestart() {
+    // schedule a task to increment a counter
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement, delay=1)
+    mockTime.sleep(1)
+    assertEquals(1, counter1.get())
+    
+    // restart the scheduler
+    mockTime.scheduler.shutdown()
+    mockTime.scheduler.startup()
+    
+    // schedule another task to increment the counter
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement, delay=1)
+    mockTime.sleep(1)
+    assertEquals(2, counter1.get())
   }
 }

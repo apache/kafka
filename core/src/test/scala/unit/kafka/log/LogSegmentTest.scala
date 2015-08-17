@@ -16,19 +16,15 @@
  */
  package kafka.log
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import java.util.concurrent.atomic._
-import java.io.File
-import java.io.RandomAccessFile
-import java.util.Random
 import org.junit.{Test, After}
-import org.scalatest.junit.JUnit3Suite
 import kafka.utils.TestUtils
 import kafka.message._
 import kafka.utils.SystemTime
 import scala.collection._
 
-class LogSegmentTest extends JUnit3Suite {
+class LogSegmentTest {
   
   val segments = mutable.ArrayBuffer[LogSegment]()
   
@@ -39,7 +35,7 @@ class LogSegmentTest extends JUnit3Suite {
     val idxFile = TestUtils.tempFile()
     idxFile.delete()
     val idx = new OffsetIndex(idxFile, offset, 1000)
-    val seg = new LogSegment(ms, idx, offset, 10, SystemTime)
+    val seg = new LogSegment(ms, idx, offset, 10, 0, SystemTime)
     segments += seg
     seg
   }
@@ -78,7 +74,7 @@ class LogSegmentTest extends JUnit3Suite {
     val seg = createSegment(40)
     val ms = messages(50, "hello", "there", "little", "bee")
     seg.append(50, ms)
-    val read = seg.read(startOffset = 41, maxSize = 300, maxOffset = None)
+    val read = seg.read(startOffset = 41, maxSize = 300, maxOffset = None).messageSet
     assertEquals(ms.toList, read.toList)
   }
   
@@ -94,7 +90,7 @@ class LogSegmentTest extends JUnit3Suite {
     seg.append(baseOffset, ms)
     def validate(offset: Long) = 
       assertEquals(ms.filter(_.offset == offset).toList, 
-                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).toList)
+                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).messageSet.toList)
     validate(50)
     validate(51)
     validate(52)
@@ -109,7 +105,7 @@ class LogSegmentTest extends JUnit3Suite {
     val ms = messages(50, "hello", "there")
     seg.append(50, ms)
     val read = seg.read(startOffset = 52, maxSize = 200, maxOffset = None)
-    assertNull("Read beyond the last offset in the segment should give null", null)
+    assertNull("Read beyond the last offset in the segment should give null", read)
   }
   
   /**
@@ -124,7 +120,7 @@ class LogSegmentTest extends JUnit3Suite {
     val ms2 = messages(60, "alpha", "beta")
     seg.append(60, ms2)
     val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.toList, read.toList)
+    assertEquals(ms2.toList, read.messageSet.toList)
   }
   
   /**
@@ -142,12 +138,12 @@ class LogSegmentTest extends JUnit3Suite {
       seg.append(offset+1, ms2)
       // check that we can read back both messages
       val read = seg.read(offset, None, 10000)
-      assertEquals(List(ms1.head, ms2.head), read.toList)
+      assertEquals(List(ms1.head, ms2.head), read.messageSet.toList)
       // now truncate off the last message
       seg.truncateTo(offset + 1)
       val read2 = seg.read(offset, None, 10000)
-      assertEquals(1, read2.size)
-      assertEquals(ms1.head, read2.head)
+      assertEquals(1, read2.messageSet.size)
+      assertEquals(ms1.head, read2.messageSet.head)
       offset += 1
     }
   }
@@ -204,7 +200,7 @@ class LogSegmentTest extends JUnit3Suite {
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(64*1024)
     for(i <- 0 until 100)
-      assertEquals(i, seg.read(i, Some(i+1), 1024).head.offset)
+      assertEquals(i, seg.read(i, Some(i+1), 1024).messageSet.head.offset)
   }
   
   /**
@@ -226,5 +222,57 @@ class LogSegmentTest extends JUnit3Suite {
       seg.delete()
     }
   }
-  
+
+  /* create a segment with   pre allocate */
+  def createSegment(offset: Long, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false): LogSegment = {
+    val tempDir = TestUtils.tempDir()
+    val seg = new LogSegment(tempDir, offset, 10, 1000, 0, SystemTime, fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate)
+    segments += seg
+    seg
+  }
+
+  /* create a segment with   pre allocate, put message to it and verify */
+  @Test
+  def testCreateWithInitFileSizeAppendMessage() {
+    val seg = createSegment(40, false, 512*1024*1024, true)
+    val ms = messages(50, "hello", "there")
+    seg.append(50, ms)
+    val ms2 = messages(60, "alpha", "beta")
+    seg.append(60, ms2)
+    val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
+    assertEquals(ms2.toList, read.messageSet.toList)
+  }
+
+  /* create a segment with   pre allocate and clearly shut down*/
+  @Test
+  def testCreateWithInitFileSizeClearShutdown() {
+    val tempDir = TestUtils.tempDir()
+    val seg = new LogSegment(tempDir, 40, 10, 1000, 0, SystemTime, false, 512*1024*1024, true)
+
+    val ms = messages(50, "hello", "there")
+    seg.append(50, ms)
+    val ms2 = messages(60, "alpha", "beta")
+    seg.append(60, ms2)
+    val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
+    assertEquals(ms2.toList, read.messageSet.toList)
+    val oldSize = seg.log.sizeInBytes()
+    val oldPosition = seg.log.channel.position
+    val oldFileSize = seg.log.file.length
+    assertEquals(512*1024*1024, oldFileSize)
+    seg.close()
+    //After close, file should be trimed
+    assertEquals(oldSize, seg.log.file.length)
+
+    val segReopen = new LogSegment(tempDir, 40, 10, 1000, 0, SystemTime, true,  512*1024*1024, true)
+    segments += segReopen
+
+    val readAgain = segReopen.read(startOffset = 55, maxSize = 200, maxOffset = None)
+    assertEquals(ms2.toList, readAgain.messageSet.toList)
+    val size = segReopen.log.sizeInBytes()
+    val position = segReopen.log.channel.position
+    val fileSize = segReopen.log.file.length
+    assertEquals(oldPosition, position)
+    assertEquals(oldSize, size)
+    assertEquals(size, fileSize)
+  }
 }

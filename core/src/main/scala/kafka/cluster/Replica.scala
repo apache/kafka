@@ -19,8 +19,9 @@ package kafka.cluster
 
 import kafka.log.Log
 import kafka.utils.{SystemTime, Time, Logging}
+import kafka.server.{LogReadResult, LogOffsetMetadata}
 import kafka.common.KafkaException
-import kafka.server.ReplicaManager
+
 import java.util.concurrent.atomic.AtomicLong
 
 class Replica(val brokerId: Int,
@@ -28,33 +29,15 @@ class Replica(val brokerId: Int,
               time: Time = SystemTime,
               initialHighWatermarkValue: Long = 0L,
               val log: Option[Log] = None) extends Logging {
-  //only defined in local replica
-  private[this] var highWatermarkValue: AtomicLong = new AtomicLong(initialHighWatermarkValue)
-  // only used for remote replica; logEndOffsetValue for local replica is kept in log
-  private[this] var logEndOffsetValue = new AtomicLong(ReplicaManager.UnknownLogEndOffset)
-  private[this] var logEndOffsetUpdateTimeMsValue: AtomicLong = new AtomicLong(time.milliseconds)
+  // the high watermark offset value, in non-leader replicas only its message offsets are kept
+  @volatile private[this] var highWatermarkMetadata: LogOffsetMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
+  // the log end offset value, kept in all replicas;
+  // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
+  @volatile private[this] var logEndOffsetMetadata: LogOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
+
   val topic = partition.topic
   val partitionId = partition.partitionId
 
-  def logEndOffset_=(newLogEndOffset: Long) {
-    if (!isLocal) {
-      logEndOffsetValue.set(newLogEndOffset)
-      logEndOffsetUpdateTimeMsValue.set(time.milliseconds)
-      trace("Setting log end offset for replica %d for partition [%s,%d] to %d"
-            .format(brokerId, topic, partitionId, logEndOffsetValue.get()))
-    } else
-      throw new KafkaException("Shouldn't set logEndOffset for replica %d partition [%s,%d] since it's local"
-          .format(brokerId, topic, partitionId))
-
-  }
-
-  def logEndOffset = {
-    if (isLocal)
-      log.get.logEndOffset
-    else
-      logEndOffsetValue.get()
-  }
-  
   def isLocal: Boolean = {
     log match {
       case Some(l) => true
@@ -62,24 +45,56 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def logEndOffsetUpdateTimeMs = logEndOffsetUpdateTimeMsValue.get()
+  private[this] val lastCaughtUpTimeMsUnderlying = new AtomicLong(time.milliseconds)
 
-  def highWatermark_=(newHighWatermark: Long) {
-    if (isLocal) {
-      trace("Setting hw for replica %d partition [%s,%d] on broker %d to %d"
-              .format(brokerId, topic, partitionId, brokerId, newHighWatermark))
-      highWatermarkValue.set(newHighWatermark)
-    } else
-      throw new KafkaException("Unable to set highwatermark for replica %d partition [%s,%d] since it's not local"
-              .format(brokerId, topic, partitionId))
+  def lastCaughtUpTimeMs = lastCaughtUpTimeMsUnderlying.get()
+
+  def updateLogReadResult(logReadResult : LogReadResult) {
+    logEndOffset = logReadResult.info.fetchOffsetMetadata
+
+    /* If the request read up to the log end offset snapshot when the read was initiated,
+     * set the lastCaughtUpTimeMsUnderlying to the current time.
+     * This means that the replica is fully caught up.
+     */
+    if(logReadResult.isReadFromLogEnd) {
+      lastCaughtUpTimeMsUnderlying.set(time.milliseconds)
+    }
   }
 
-  def highWatermark = {
+  private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
+    if (isLocal) {
+      throw new KafkaException("Should not set log end offset on partition [%s,%d]'s local replica %d".format(topic, partitionId, brokerId))
+    } else {
+      logEndOffsetMetadata = newLogEndOffset
+      trace("Setting log end offset for replica %d for partition [%s,%d] to [%s]"
+        .format(brokerId, topic, partitionId, logEndOffsetMetadata))
+    }
+  }
+
+  def logEndOffset =
     if (isLocal)
-      highWatermarkValue.get()
+      log.get.logEndOffsetMetadata
     else
-      throw new KafkaException("Unable to get highwatermark for replica %d partition [%s,%d] since it's not local"
-              .format(brokerId, topic, partitionId))
+      logEndOffsetMetadata
+
+  def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
+    if (isLocal) {
+      highWatermarkMetadata = newHighWatermark
+      trace("Setting high watermark for replica %d partition [%s,%d] on broker %d to [%s]"
+        .format(brokerId, topic, partitionId, brokerId, newHighWatermark))
+    } else {
+      throw new KafkaException("Should not set high watermark on partition [%s,%d]'s non-local replica %d".format(topic, partitionId, brokerId))
+    }
+  }
+
+  def highWatermark = highWatermarkMetadata
+
+  def convertHWToLocalOffsetMetadata() = {
+    if (isLocal) {
+      highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermarkMetadata.messageOffset)
+    } else {
+      throw new KafkaException("Should not construct complete high watermark on partition [%s,%d]'s non-local replica %d".format(topic, partitionId, brokerId))
+    }
   }
 
   override def equals(that: Any): Boolean = {

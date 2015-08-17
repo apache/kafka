@@ -16,7 +16,7 @@
  */
 package kafka.javaapi
 
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndPoint
 import scala.collection.JavaConversions
 
 private[javaapi] object MetadataListImplicits {
@@ -52,17 +52,17 @@ class TopicMetadata(private val underlying: kafka.api.TopicMetadata) {
 class PartitionMetadata(private val underlying: kafka.api.PartitionMetadata) {
   def partitionId: Int = underlying.partitionId
 
-  def leader: Broker = {
+  def leader: BrokerEndPoint = {
     import kafka.javaapi.Implicits._
     underlying.leader
   }
 
-  def replicas: java.util.List[Broker] = {
+  def replicas: java.util.List[BrokerEndPoint] = {
     import JavaConversions._
     underlying.replicas
   }
 
-  def isr: java.util.List[Broker] = {
+  def isr: java.util.List[BrokerEndPoint] = {
     import JavaConversions._
     underlying.isr
   }

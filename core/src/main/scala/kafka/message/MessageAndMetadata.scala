@@ -18,7 +18,7 @@
 package kafka.message
 
 import kafka.serializer.Decoder
-import kafka.utils.Utils
+import org.apache.kafka.common.utils.Utils
 
 case class MessageAndMetadata[K, V](topic: String, partition: Int,
                                     private val rawMessage: Message, offset: Long,

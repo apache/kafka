@@ -19,14 +19,16 @@
 package kafka.api
 
 import java.nio._
-import kafka.utils._
+
 import kafka.api.ApiUtils._
-import kafka.cluster.Broker
-import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.cluster.BrokerEndPoint
 import kafka.common.ErrorMapping
+import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
-import collection.Set
+import kafka.utils._
+
+import scala.collection.Set
 
 
 object LeaderAndIsr {
@@ -59,8 +61,8 @@ object PartitionStateInfo {
   }
 }
 
-case class PartitionStateInfo(val leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                              val allReplicas: Set[Int]) {
+case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
+                              allReplicas: Set[Int]) {
   def replicationFactor = allReplicas.size
 
   def writeTo(buffer: ByteBuffer) {
@@ -120,24 +122,24 @@ object LeaderAndIsrRequest {
     }
 
     val leadersCount = buffer.getInt
-    var leaders = Set[Broker]()
+    var leaders = Set[BrokerEndPoint]()
     for (i <- 0 until leadersCount)
-      leaders += Broker.readFrom(buffer)
+      leaders += BrokerEndPoint.readFrom(buffer)
 
     new LeaderAndIsrRequest(versionId, correlationId, clientId, controllerId, controllerEpoch, partitionStateInfos.toMap, leaders)
   }
 }
 
 case class LeaderAndIsrRequest (versionId: Short,
-                                override val correlationId: Int,
+                                correlationId: Int,
                                 clientId: String,
                                 controllerId: Int,
                                 controllerEpoch: Int,
                                 partitionStateInfos: Map[(String, Int), PartitionStateInfo],
-                                leaders: Set[Broker])
-    extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey), correlationId) {
+                                leaders: Set[BrokerEndPoint])
+    extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey)) {
 
-  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], leaders: Set[Broker], controllerId: Int,
+  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], leaders: Set[BrokerEndPoint], controllerId: Int,
            controllerEpoch: Int, correlationId: Int, clientId: String) = {
     this(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId,
          controllerId, controllerEpoch, partitionStateInfos, leaders)
@@ -184,7 +186,7 @@ case class LeaderAndIsrRequest (versionId: Short,
       case (topicAndPartition, partitionAndState) => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
     }
     val errorResponse = LeaderAndIsrResponse(correlationId, responseMap)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

@@ -1,8 +1,26 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package other.kafka
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.api._
-import kafka.utils.{ShutdownableThread, ZKStringSerializer}
+import kafka.utils.{ZkUtils, ShutdownableThread}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import kafka.client.ClientUtils
 import joptsimple.OptionParser
@@ -12,7 +30,6 @@ import scala.util.Random
 import java.io.IOException
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 import java.util.concurrent.TimeUnit
-import com.yammer.metrics.core.Gauge
 import java.util.concurrent.atomic.AtomicInteger
 import java.nio.channels.ClosedByInterruptException
 
@@ -50,9 +67,9 @@ object TestOffsetManager {
         extends ShutdownableThread("commit-thread")
         with KafkaMetricsGroup {
 
-    private val group = "group-" + id
+    private val groupId = "group-" + id
     private val metadata = "Metadata from commit thread " + id
-    private var offsetsChannel = ClientUtils.channelToOffsetManager(group, zkClient, SocketTimeoutMs)
+    private var offsetsChannel = ClientUtils.channelToOffsetManager(groupId, zkClient, SocketTimeoutMs)
     private var offset = 0L
     val numErrors = new AtomicInteger(0)
     val numCommits = new AtomicInteger(0)
@@ -62,17 +79,17 @@ object TestOffsetManager {
 
     private def ensureConnected() {
       if (!offsetsChannel.isConnected)
-        offsetsChannel = ClientUtils.channelToOffsetManager(group, zkClient, SocketTimeoutMs)
+        offsetsChannel = ClientUtils.channelToOffsetManager(groupId, zkClient, SocketTimeoutMs)
     }
 
     override def doWork() {
-      val commitRequest = OffsetCommitRequest(group, immutable.Map((1 to partitionCount).map(TopicAndPartition("topic-" + id, _) -> OffsetAndMetadata(offset, metadata)):_*))
+      val commitRequest = OffsetCommitRequest(groupId, immutable.Map((1 to partitionCount).map(TopicAndPartition("topic-" + id, _) -> OffsetAndMetadata(offset, metadata)):_*))
       try {
         ensureConnected()
         offsetsChannel.send(commitRequest)
         numCommits.getAndIncrement
         commitTimer.time {
-          val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().buffer)
+          val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().payload())
           if (response.commitStatus.exists(_._2 != ErrorMapping.NoError)) numErrors.getAndIncrement
         }
         offset += 1
@@ -81,7 +98,7 @@ object TestOffsetManager {
         case e1: ClosedByInterruptException =>
           offsetsChannel.disconnect()
         case e2: IOException =>
-          println("Commit thread %d: Error while committing offsets to %s:%d for group %s due to %s.".format(id, offsetsChannel.host, offsetsChannel.port, group, e2))
+          println("Commit thread %d: Error while committing offsets to %s:%d for group %s due to %s.".format(id, offsetsChannel.host, offsetsChannel.port, groupId, e2))
           offsetsChannel.disconnect()
       }
       finally {
@@ -119,7 +136,7 @@ object TestOffsetManager {
       val group = "group-" + id
       try {
         metadataChannel.send(ConsumerMetadataRequest(group))
-        val coordinatorId = ConsumerMetadataResponse.readFrom(metadataChannel.receive().buffer).coordinatorOpt.map(_.id).getOrElse(-1)
+        val coordinatorId = ConsumerMetadataResponse.readFrom(metadataChannel.receive().payload()).coordinatorOpt.map(_.id).getOrElse(-1)
 
         val channel = if (channels.contains(coordinatorId))
           channels(coordinatorId)
@@ -135,7 +152,7 @@ object TestOffsetManager {
           channel.send(fetchRequest)
 
           fetchTimer.time {
-            val response = OffsetFetchResponse.readFrom(channel.receive().buffer)
+            val response = OffsetFetchResponse.readFrom(channel.receive().payload())
             if (response.requestInfo.exists(_._2.error != ErrorMapping.NoError)) {
               numErrors.getAndIncrement
             }
@@ -238,7 +255,7 @@ object TestOffsetManager {
     var fetchThread: FetchThread = null
     var statsThread: StatsThread = null
     try {
-      zkClient = new ZkClient(zookeeper, 6000, 2000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zookeeper, 6000, 2000)
       commitThreads = (0 to (threadCount-1)).map { threadId =>
         new CommitThread(threadId, partitionCount, commitIntervalMs, zkClient)
       }

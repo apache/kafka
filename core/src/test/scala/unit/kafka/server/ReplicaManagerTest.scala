@@ -17,60 +17,75 @@
 
 package kafka.server
 
+import kafka.api.{ProducerResponseStatus, SerializationTestUtils, ProducerRequest}
+import kafka.common.TopicAndPartition
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
-import kafka.log.{CleanerConfig, LogManager, LogConfig}
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 
+import org.apache.kafka.common.protocol.Errors
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
-import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 
-class ReplicaManagerTest extends JUnit3Suite {
+import scala.collection.Map
+
+class ReplicaManagerTest {
 
   val topic = "test-topic"
 
   @Test
   def testHighWaterMarkDirectoryMapping() {
-    val props = TestUtils.createBrokerConfig(1)
-    val config = new KafkaConfig(props)
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val mockLogMgr = createLogManager(config.logDirs.map(new File(_)).toArray)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
-    val partition = rm.getOrCreatePartition(topic, 1, 1)
+    val partition = rm.getOrCreatePartition(topic, 1)
     partition.getOrCreateReplica(1)
     rm.checkpointHighWatermarks()
+
+    // shutdown the replica manager upon test completion
+    rm.shutdown(false)
   }
 
   @Test
   def testHighwaterMarkRelativeDirectoryMapping() {
-    val props = TestUtils.createBrokerConfig(1)
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
-    val config = new KafkaConfig(props)
+    val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val mockLogMgr = createLogManager(config.logDirs.map(new File(_)).toArray)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
-    val partition = rm.getOrCreatePartition(topic, 1, 1)
+    val partition = rm.getOrCreatePartition(topic, 1)
     partition.getOrCreateReplica(1)
     rm.checkpointHighWatermarks()
+
+    // shutdown the replica manager upon test completion
+    rm.shutdown(false)
   }
 
-  private def createLogManager(logDirs: Array[File]): LogManager = {
-    val time = new MockTime()
-    return new LogManager(logDirs,
-      topicConfigs = Map(),
-      defaultConfig = new LogConfig(),
-      cleanerConfig = CleanerConfig(enableCleaner = false),
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 100000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      brokerState = new BrokerState(),
-      time = time)
-  }
+  @Test
+  def testIllegalRequiredAcks() {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    val config = KafkaConfig.fromProps(props)
+    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
+    val time: MockTime = new MockTime()
+    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
+    val produceRequest = new ProducerRequest(1, "client 1", 3, 1000, SerializationTestUtils.topicDataProducerRequest)
+    def callback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) = {
+      assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS.code)
+    }
 
+    rm.appendMessages(timeout = 0, requiredAcks = 3, internalTopicsAllowed = false, messagesPerPartition = produceRequest.data, responseCallback = callback)
+
+    rm.shutdown(false)
+
+    TestUtils.verifyNonDaemonThreadsStatus
+
+  }
 }

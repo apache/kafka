@@ -17,30 +17,80 @@
 
 package kafka.integration
 
-import kafka.server._
-import kafka.utils.{Utils, TestUtils}
-import org.scalatest.junit.JUnit3Suite
-import kafka.zk.ZooKeeperTestHarness
+import java.util.Arrays
+
 import kafka.common.KafkaException
+import kafka.server._
+import kafka.utils.{CoreUtils, TestUtils}
+import kafka.zk.ZooKeeperTestHarness
+import org.junit.{After, Before}
+
+import scala.collection.mutable.Buffer
 
 /**
  * A test harness that brings up some number of broker nodes
  */
-trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
+trait KafkaServerTestHarness extends ZooKeeperTestHarness {
+  var instanceConfigs: Seq[KafkaConfig] = null
+  var servers: Buffer[KafkaServer] = null
+  var brokerList: String = null
+  var alive: Array[Boolean] = null
 
-  val configs: List[KafkaConfig]
-  var servers: List[KafkaServer] = null
+  /**
+   * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
+   * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
+   */
+  def generateConfigs(): Seq[KafkaConfig]
 
+  def configs: Seq[KafkaConfig] = {
+    if (instanceConfigs == null)
+      instanceConfigs = generateConfigs()
+    instanceConfigs
+  }
+
+  def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
+
+  def bootstrapUrl = servers.map(s => s.config.hostName + ":" + s.boundPort()).mkString(",")
+
+  @Before
   override def setUp() {
     super.setUp
     if(configs.size <= 0)
-      throw new KafkaException("Must suply at least one server config.")
-    servers = configs.map(TestUtils.createServer(_))
+      throw new KafkaException("Must supply at least one server config.")
+    servers = configs.map(TestUtils.createServer(_)).toBuffer
+    brokerList = TestUtils.getBrokerListStrFromServers(servers)
+    alive = new Array[Boolean](servers.length)
+    Arrays.fill(alive, true)
   }
 
+  @After
   override def tearDown() {
-    servers.map(server => server.shutdown())
-    servers.map(server => server.config.logDirs.map(Utils.rm(_)))
+    servers.foreach(_.shutdown())
+    servers.foreach(_.config.logDirs.foreach(CoreUtils.rm(_)))
     super.tearDown
+  }
+  
+  /**
+   * Pick a broker at random and kill it if it isn't already dead
+   * Return the id of the broker killed
+   */
+  def killRandomBroker(): Int = {
+    val index = TestUtils.random.nextInt(servers.length)
+    if(alive(index)) {
+      servers(index).shutdown()
+      servers(index).awaitShutdown()
+      alive(index) = false
+    }
+    index
+  }
+  
+  /**
+   * Restart any dead brokers
+   */
+  def restartDeadBrokers() {
+    for(i <- 0 until servers.length if !alive(i)) {
+      servers(i).startup()
+      alive(i) = true
+    }
   }
 }

@@ -27,7 +27,6 @@ import kafka.etl.KafkaETLKey;
 import kafka.etl.KafkaETLRequest;
 import kafka.etl.Props;
 import kafka.javaapi.producer.Producer;
-import kafka.message.Message;
 import kafka.producer.ProducerConfig;
 import kafka.producer.KeyedMessage;
 import org.apache.hadoop.fs.FileSystem;
@@ -35,6 +34,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.mapred.JobConf;
+
+import static org.apache.kafka.common.utils.Utils.formatAddress;
 
 /**
  * Use this class to produce test events to Kafka server. Each event contains a
@@ -70,7 +71,7 @@ public class DataGenerator {
 		
 		System.out.println("server uri:" + _uri.toString());
         Properties producerProps = new Properties();
-        producerProps.put("metadata.broker.list", String.format("%s:%d", _uri.getHost(), _uri.getPort()));
+        producerProps.put("metadata.broker.list", formatAddress(_uri.getHost(), _uri.getPort()));
         producerProps.put("send.buffer.bytes", String.valueOf(TCP_BUFFER_SIZE));
         producerProps.put("connect.timeout.ms", String.valueOf(CONNECT_TIMEOUT));
         producerProps.put("reconnect.interval", String.valueOf(RECONNECT_INTERVAL));
@@ -108,7 +109,7 @@ public class DataGenerator {
         if (fs.exists(outPath)) fs.delete(outPath);
         
         KafkaETLRequest request =
-            new KafkaETLRequest(_topic, "tcp://" + _uri.getHost() + ":" + _uri.getPort(), 0);
+            new KafkaETLRequest(_topic, "tcp://" + formatAddress(_uri.getHost(), _uri.getPort()), 0);
 
         System.out.println("Dump " + request.toString() + " to " + outPath.toUri().toString());
         byte[] bytes = request.toString().getBytes("UTF-8");

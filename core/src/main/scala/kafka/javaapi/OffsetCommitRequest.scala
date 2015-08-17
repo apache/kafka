@@ -21,9 +21,9 @@ import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 
 class OffsetCommitRequest(groupId: String,
                           requestInfo: java.util.Map[TopicAndPartition, OffsetAndMetadata],
-                          versionId: Short,
                           correlationId: Int,
-                          clientId: String) {
+                          clientId: String,
+                          versionId: Short) {
   val underlying = {
     val scalaMap: collection.immutable.Map[TopicAndPartition, OffsetAndMetadata] = {
       import collection.JavaConversions._
@@ -37,6 +37,15 @@ class OffsetCommitRequest(groupId: String,
       correlationId = correlationId,
       clientId = clientId
     )
+  }
+
+  def this(groupId: String,
+           requestInfo: java.util.Map[TopicAndPartition, OffsetAndMetadata],
+           correlationId: Int,
+           clientId: String) {
+
+    // by default bind to version 0 so that it commits to Zookeeper
+    this(groupId, requestInfo, correlationId, clientId, 0)
   }
 
 

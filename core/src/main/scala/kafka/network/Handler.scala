@@ -17,17 +17,19 @@
 
 package kafka.network
 
+import org.apache.kafka.common.network.{NetworkReceive, Send}
+
 private[kafka] object Handler {
   
   /**
    * A request handler is a function that turns an incoming 
    * transmission into an outgoing transmission
    */
-  type Handler = Receive => Option[Send]
+  type Handler = NetworkReceive => Option[Send]
   
   /**
    * A handler mapping finds the right Handler function for a given request
    */
-  type HandlerMapping = (Short, Receive) => Handler
+  type HandlerMapping = (Short, NetworkReceive) => Handler
 
 }

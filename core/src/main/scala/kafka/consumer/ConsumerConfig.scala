@@ -49,6 +49,7 @@ object ConsumerConfig extends Config {
   val MirrorTopicsWhitelistProp = "mirror.topics.whitelist"
   val MirrorTopicsBlacklistProp = "mirror.topics.blacklist"
   val ExcludeInternalTopics = true
+  val DefaultPartitionAssignmentStrategy = "range" /* select between "range", and "roundrobin" */
   val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
   val DefaultClientId = ""
 
@@ -57,6 +58,7 @@ object ConsumerConfig extends Config {
     validateGroupId(config.groupId)
     validateAutoOffsetReset(config.autoOffsetReset)
     validateOffsetsStorage(config.offsetsStorage)
+    validatePartitionAssignmentStrategy(config.partitionAssignmentStrategy)
   }
 
   def validateClientId(clientId: String) {
@@ -84,6 +86,15 @@ object ConsumerConfig extends Config {
                                                  "Valid values are 'zookeeper' and 'kafka'")
     }
   }
+
+  def validatePartitionAssignmentStrategy(strategy: String) {
+    strategy match {
+      case "range" =>
+      case "roundrobin" =>
+      case _ => throw new InvalidConfigException("Wrong value " + strategy + " of partition.assignment.strategy in consumer config; " +
+        "Valid values are 'range' and 'roundrobin'")
+    }
+  }
 }
 
 class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(props) {
@@ -101,7 +112,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
    *  Set this explicitly for only testing purpose. */
   val consumerId: Option[String] = Option(props.getString("consumer.id", null))
 
-  /** the socket timeout for network requests. The actual timeout set will be max.fetch.wait + socket.timeout.ms. */
+  /** the socket timeout for network requests. Its value should be at least fetch.wait.max.ms. */
   val socketTimeoutMs = props.getInt("socket.timeout.ms", SocketTimeout)
   
   /** the socket receive buffer for network requests */
@@ -130,6 +141,8 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   
   /** the maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediately satisfy fetch.min.bytes */
   val fetchWaitMaxMs = props.getInt("fetch.wait.max.ms", MaxFetchWaitMs)
+  require(fetchWaitMaxMs <= socketTimeoutMs, "socket.timeout.ms should always be at least fetch.wait.max.ms" +
+    " to prevent unnecessary socket timeouts")
   
   /** backoff time between retries during rebalance */
   val rebalanceBackoffMs = props.getInt("rebalance.backoff.ms", zkSyncTimeMs)
@@ -175,6 +188,9 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   /** Whether messages from internal topics (such as offsets) should be exposed to the consumer. */
   val excludeInternalTopics = props.getBoolean("exclude.internal.topics", ExcludeInternalTopics)
 
+  /** Select a strategy for assigning partitions to consumer streams. Possible values: range, roundrobin */
+  val partitionAssignmentStrategy = props.getString("partition.assignment.strategy", DefaultPartitionAssignmentStrategy)
+  
   validate(this)
 }
 

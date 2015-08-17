@@ -18,48 +18,43 @@
 package kafka.log
 
 import java.io._
-import junit.framework.Assert._
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
-import kafka.server.{BrokerState, OffsetCheckpoint}
-import kafka.common._
-import kafka.utils._
+import java.util.Properties
 
-class LogManagerTest extends JUnit3Suite {
+import kafka.common._
+import kafka.server.OffsetCheckpoint
+import kafka.utils._
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
+
+class LogManagerTest {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
   val maxLogAgeMs = 10*60*60*1000
-  val logConfig = LogConfig(segmentSize = 1024, maxIndexSize = 4096, retentionMs = maxLogAgeMs)
+  val logProps = new Properties()
+  logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+  logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
+  logProps.put(LogConfig.RetentionMsProp, maxLogAgeMs: java.lang.Integer)
+  val logConfig = LogConfig(logProps)
   var logDir: File = null
   var logManager: LogManager = null
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
-  val cleanerConfig = CleanerConfig(enableCleaner = false)
 
-  override def setUp() {
-    super.setUp()
+  @Before
+  def setUp() {
     logDir = TestUtils.tempDir()
-    logManager = new LogManager(logDirs = Array(logDir), 
-                                topicConfigs = Map(), 
-                                defaultConfig = logConfig, 
-                                cleanerConfig = cleanerConfig, 
-                                flushCheckMs = 1000L, 
-                                flushCheckpointMs = 100000L, 
-                                retentionCheckMs = 1000L, 
-                                scheduler = time.scheduler, 
-                                time = time,
-                                brokerState = new BrokerState())
+    logManager = createLogManager()
     logManager.startup
     logDir = logManager.logDirs(0)
   }
 
-  override def tearDown() {
+  @After
+  def tearDown() {
     if(logManager != null)
       logManager.shutdown()
-    Utils.rm(logDir)
-    logManager.logDirs.map(Utils.rm(_))
-    super.tearDown()
+    CoreUtils.rm(logDir)
+    logManager.logDirs.foreach(CoreUtils.rm(_))
   }
   
   /**
@@ -104,7 +99,7 @@ class LogManagerTest extends JUnit3Suite {
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
     assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).messageSet.sizeInBytes)
 
     try {
       log.read(0, 1024)
@@ -123,20 +118,12 @@ class LogManagerTest extends JUnit3Suite {
   def testCleanupSegmentsToMaintainSize() {
     val setSize = TestUtils.singleMessageSet("test".getBytes()).sizeInBytes
     logManager.shutdown()
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 10 * setSize: java.lang.Integer)
+    logProps.put(LogConfig.RetentionBytesProp, 5L * 10L * setSize + 10L: java.lang.Long)
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
 
-    val config = logConfig.copy(segmentSize = 10 * (setSize - 1), retentionSize = 5L * 10L * setSize + 10L)
-    logManager = new LogManager(
-      logDirs = Array(logDir),
-      topicConfigs = Map(),
-      defaultConfig = config,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 100000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      brokerState = new BrokerState(),
-      time = time
-    )
+    logManager = createLogManager()
     logManager.startup
 
     // create a log
@@ -158,7 +145,7 @@ class LogManagerTest extends JUnit3Suite {
     assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
     assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).messageSet.sizeInBytes)
     try {
       log.read(0, 1024)
       fail("Should get exception from fetching earlier.")
@@ -175,19 +162,11 @@ class LogManagerTest extends JUnit3Suite {
   @Test
   def testTimeBasedFlush() {
     logManager.shutdown()
-    val config = logConfig.copy(flushMs = 1000)
-    logManager = new LogManager(
-      logDirs = Array(logDir),
-      topicConfigs = Map(),
-      defaultConfig = config,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 10000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      brokerState = new BrokerState(),
-      time = time
-    )
+    val logProps = new Properties()
+    logProps.put(LogConfig.FlushMsProp, 1000: java.lang.Integer)
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+
+    logManager = createLogManager()
     logManager.startup
     val log = logManager.createLog(TopicAndPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
@@ -209,19 +188,8 @@ class LogManagerTest extends JUnit3Suite {
                      TestUtils.tempDir(), 
                      TestUtils.tempDir())
     logManager.shutdown()
-    logManager = new LogManager(
-      logDirs = dirs,
-      topicConfigs = Map(),
-      defaultConfig = logConfig,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 10000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      brokerState = new BrokerState(),
-      time = time
-    )
-    
+    logManager = createLogManager()
+
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
       logManager.createLog(TopicAndPartition("test", partition), logConfig)
@@ -237,18 +205,7 @@ class LogManagerTest extends JUnit3Suite {
   @Test
   def testTwoLogManagersUsingSameDirFails() {
     try {
-      new LogManager(
-        logDirs = Array(logDir),
-        topicConfigs = Map(),
-        defaultConfig = logConfig,
-        cleanerConfig = cleanerConfig,
-        flushCheckMs = 1000L,
-        flushCheckpointMs = 10000L,
-        retentionCheckMs = 1000L,
-        scheduler = time.scheduler,
-        brokerState = new BrokerState(),
-        time = time
-      )
+      createLogManager()
       fail("Should not be able to create a second log manager instance with the same data directory")
     } catch {
       case e: KafkaException => // this is good 
@@ -270,16 +227,8 @@ class LogManagerTest extends JUnit3Suite {
   def testRecoveryDirectoryMappingWithTrailingSlash() {
     logManager.shutdown()
     logDir = TestUtils.tempDir()
-    logManager = new LogManager(logDirs = Array(new File(logDir.getAbsolutePath + File.separator)),
-      topicConfigs = Map(),
-      defaultConfig = logConfig,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 100000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerState = new BrokerState())
+    logManager = TestUtils.createLogManager(
+      logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
     logManager.startup
     verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
   }
@@ -293,16 +242,7 @@ class LogManagerTest extends JUnit3Suite {
     logDir = new File("data" + File.separator + logDir.getName)
     logDir.mkdirs()
     logDir.deleteOnExit()
-    logManager = new LogManager(logDirs = Array(logDir),
-      topicConfigs = Map(),
-      defaultConfig = logConfig,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 100000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerState = new BrokerState())
+    logManager = createLogManager()
     logManager.startup
     verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
   }
@@ -326,5 +266,13 @@ class LogManagerTest extends JUnit3Suite {
         assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
       }
     }
+  }
+
+
+  private def createLogManager(logDirs: Array[File] = Array(this.logDir)): LogManager = {
+    TestUtils.createLogManager(
+      defaultConfig = logConfig,
+      logDirs = logDirs,
+      time = this.time)
   }
 }

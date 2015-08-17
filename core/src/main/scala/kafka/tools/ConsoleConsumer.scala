@@ -28,6 +28,7 @@ import kafka.serializer._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.consumer.{Blacklist,Whitelist,ConsumerConfig,Consumer}
+import org.apache.kafka.common.utils.Utils
 
 /**
  * Consumer that dumps messages out to standard out.
@@ -68,7 +69,7 @@ object ConsoleConsumer extends Logging {
             .withRequiredArg
             .describedAs("prop")
             .ofType(classOf[String])
-    val deleteConsumerOffsetsOpt = parser.accepts("delete-consumer-offsets", "If specified, the consumer path in zookeeper is deleted when starting up");
+    val deleteConsumerOffsetsOpt = parser.accepts("delete-consumer-offsets", "If specified, the consumer path in zookeeper is deleted when starting up")
     val resetBeginningOpt = parser.accepts("from-beginning", "If the consumer does not already have an established offset to consume from, " +
             "start with the earliest message present in the log rather than the latest message.")
     val maxMessagesOpt = parser.accepts("max-messages", "The maximum number of messages to consume before exiting. If not set, consumption is continual.")
@@ -84,15 +85,15 @@ object ConsoleConsumer extends Logging {
       .describedAs("metrics dictory")
       .ofType(classOf[java.lang.String])
 
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
+      
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
     val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
-    if (topicOrFilterOpt.size != 1) {
-      error("Exactly one of whitelist/blacklist/topic is required.")
-      parser.printHelpOn(System.err)
-      System.exit(1)
-    }
+    if (topicOrFilterOpt.size != 1)
+      CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
     val topicArg = options.valueOf(topicOrFilterOpt.head)
     val filterSpec = if (options.has(blacklistOpt))
       new Blacklist(topicArg)
@@ -113,8 +114,6 @@ object ConsoleConsumer extends Logging {
       KafkaMetricsReporter.startReporters(verifiableProps)
     }
 
-
-
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
@@ -126,10 +125,11 @@ object ConsoleConsumer extends Logging {
     }
     consumerProps.put("auto.offset.reset", if(options.has(resetBeginningOpt)) "smallest" else "largest")
     consumerProps.put("zookeeper.connect", options.valueOf(zkConnectOpt))
-    if(!consumerProps.containsKey("dual.commit.enabled"))
-      consumerProps.put("dual.commit.enabled","false")
-    if(!consumerProps.containsKey("offsets.storage"))
-      consumerProps.put("offsets.storage","zookeeper")
+
+    if (!checkZkPathExists(options.valueOf(zkConnectOpt),"/brokers/ids")) {
+      System.err.println("No brokers found.")
+      System.exit(1)
+    }
 
     if (!options.has(deleteConsumerOffsetsOpt) && options.has(resetBeginningOpt) &&
        checkZkPathExists(options.valueOf(zkConnectOpt),"/consumers/" + consumerProps.getProperty("group.id")+ "/offsets")) {
@@ -144,7 +144,7 @@ object ConsoleConsumer extends Logging {
     val config = new ConsumerConfig(consumerProps)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = MessageFormatter.tryParseFormatterArgs(options.valuesOf(messageFormatterArgOpt))
+    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if(options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val connector = Consumer.create(config)
 
@@ -209,25 +209,11 @@ object ConsoleConsumer extends Logging {
 
   def checkZkPathExists(zkUrl: String, path: String): Boolean = {
     try {
-      val zk = new ZkClient(zkUrl, 30*1000,30*1000, ZKStringSerializer);
+      val zk = ZkUtils.createZkClient(zkUrl, 30*1000,30*1000);
       zk.exists(path)
     } catch {
       case _: Throwable => false
     }
-  }
-}
-
-object MessageFormatter {
-  def tryParseFormatterArgs(args: Iterable[String]): Properties = {
-    val splits = args.map(_ split "=").filterNot(_ == null).filterNot(_.length == 0)
-    if(!splits.forall(_.length == 2)) {
-      System.err.println("Invalid parser arguments: " + args.mkString(" "))
-      System.exit(1)
-    }
-    val props = new Properties
-    for(a <- splits)
-      props.put(a(0), a(1))
-    props
   }
 }
 

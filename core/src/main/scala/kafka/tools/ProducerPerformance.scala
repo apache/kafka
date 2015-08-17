@@ -19,7 +19,7 @@ package kafka.tools
 
 import kafka.metrics.KafkaMetricsReporter
 import kafka.producer.{OldProducer, NewShinyProducer}
-import kafka.utils.{VerifiableProperties, Logging}
+import kafka.utils.{ToolsUtils, VerifiableProperties, Logging, CommandLineUtils}
 import kafka.message.CompressionCodec
 import kafka.serializer._
 
@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util._
 import java.text.SimpleDateFormat
 import java.math.BigInteger
-import scala.collection.immutable.List
 
 import org.apache.log4j.Logger
 
@@ -71,7 +70,7 @@ object ProducerPerformance extends Logging {
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info (the list of broker host and port for bootstrap.")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info the list of broker host and port for bootstrap.")
       .withRequiredArg
       .describedAs("hostname:port,..,hostname:port")
       .ofType(classOf[String])
@@ -79,7 +78,7 @@ object ProducerPerformance extends Logging {
       .withRequiredArg
       .describedAs("topic1,topic2..")
       .ofType(classOf[String])
-    val producerRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The produce request timeout in ms")
+    val producerRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The producer request timeout in ms")
       .withRequiredArg()
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3000)
@@ -116,20 +115,15 @@ object ProducerPerformance extends Logging {
       .defaultsTo(0)
     val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
     val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
-      "set, the csv metrics will be outputed here")
+      "set, the csv metrics will be output here")
       .withRequiredArg
-      .describedAs("metrics dictory")
+      .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
     val useNewProducerOpt = parser.accepts("new-producer", "Use the new producer implementation.")
 
     val options = parser.parse(args: _*)
-    for (arg <- List(topicsOpt, brokerListOpt, numMessagesOpt)) {
-      if (!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
+
     val topicsStr = options.valueOf(topicsOpt)
     val topics = topicsStr.split(",")
     val numMessages = options.valueOf(numMessagesOpt).longValue
@@ -137,6 +131,7 @@ object ProducerPerformance extends Logging {
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
     val brokerList = options.valueOf(brokerListOpt)
+    ToolsUtils.validatePortOrDie(parser,brokerList)
     val messageSize = options.valueOf(messageSizeOpt).intValue
     var isFixedSize = !options.has(varyMessageSizeOpt)
     var isSync = options.has(syncOpt)
@@ -193,6 +188,8 @@ object ProducerPerformance extends Logging {
         props.put(ProducerConfig.RETRIES_CONFIG, config.producerNumRetries.toString)
         props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.producerRetryBackoffMs.toString)
         props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec.name)
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
         new NewShinyProducer(props)
       } else {
         props.put("metadata.broker.list", config.brokerList)
@@ -238,7 +235,7 @@ object ProducerPerformance extends Logging {
 
       val seqMsgString = String.format("%1$-" + msgSize + "s", msgHeader).replace(' ', 'x')
       debug(seqMsgString)
-      return seqMsgString.getBytes()
+      seqMsgString.getBytes()
     }
 
     private def generateProducerData(topic: String, messageId: Long): Array[Byte] = {

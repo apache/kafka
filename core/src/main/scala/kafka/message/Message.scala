@@ -20,6 +20,7 @@ package kafka.message
 import java.nio._
 import scala.math._
 import kafka.utils._
+import org.apache.kafka.common.utils.Utils
 
 /**
  * Constants related to messages
@@ -70,7 +71,7 @@ object Message {
  * A message. The format of an N byte message is the following:
  *
  * 1. 4 byte CRC32 of the message
- * 2. 1 byte "magic" identifier to allow format changes, value is 2 currently
+ * 2. 1 byte "magic" identifier to allow format changes, value is 0 currently
  * 3. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used)
  * 4. 4 byte key length, containing length K
  * 5. K byte key
@@ -86,7 +87,7 @@ class Message(val buffer: ByteBuffer) {
   /**
    * A constructor to create a Message
    * @param bytes The payload of the message
-   * @param compressionCodec The compression codec used on the contents of the message (if any)
+   * @param codec The compression codec used on the contents of the message (if any)
    * @param key The key of the message (null, if none)
    * @param payloadOffset The offset into the payload array used to extract payload
    * @param payloadSize The size of the payload to use
@@ -146,7 +147,7 @@ class Message(val buffer: ByteBuffer) {
    * Compute the checksum of the message from the message contents
    */
   def computeChecksum(): Long = 
-    Utils.crc32(buffer.array, buffer.arrayOffset + MagicOffset,  buffer.limit - MagicOffset)
+    CoreUtils.crc32(buffer.array, buffer.arrayOffset + MagicOffset,  buffer.limit - MagicOffset)
   
   /**
    * Retrieve the previously computed CRC for this message

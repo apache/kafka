@@ -18,7 +18,7 @@
 package kafka.consumer
 
 import scala.collection.JavaConversions._
-import kafka.utils.{ZkUtils, ZKStringSerializer, Logging}
+import kafka.utils.{ZkUtils, Logging}
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
@@ -92,6 +92,10 @@ class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
           zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener)
         }
       }
+    }
+
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      //no-op ZookeeperConsumerConnector should log error.
     }
   }
 }

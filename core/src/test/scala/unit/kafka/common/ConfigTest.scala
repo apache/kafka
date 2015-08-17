@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package unit.kafka.common
+package kafka.common
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import collection.mutable.ArrayBuffer
 import org.junit.Test
-import kafka.common.InvalidConfigException
 import kafka.producer.ProducerConfig
 import kafka.consumer.ConsumerConfig
 
@@ -29,7 +28,7 @@ class ConfigTest {
   @Test
   def testInvalidClientIds() {
     val invalidClientIds = new ArrayBuffer[String]()
-    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
+    val badChars = Array('/', '\\', ',', '\u0000', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {
       invalidClientIds += "Is" + weirdChar + "illegal"
     }
@@ -59,7 +58,7 @@ class ConfigTest {
   @Test
   def testInvalidGroupIds() {
     val invalidGroupIds = new ArrayBuffer[String]()
-    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
+    val badChars = Array('/', '\\', ',', '\u0000', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {
       invalidGroupIds += "Is" + weirdChar + "illegal"
     }

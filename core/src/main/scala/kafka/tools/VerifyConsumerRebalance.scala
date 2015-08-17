@@ -19,7 +19,7 @@ package kafka.tools
 
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, ZKStringSerializer}
+import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
 
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
@@ -30,6 +30,9 @@ object VerifyConsumerRebalance extends Logging {
     val groupOpt = parser.accepts("group", "Consumer group.").
       withRequiredArg().ofType(classOf[String])
     parser.accepts("help", "Print this message.")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Validate that all partitions have a consumer for a given consumer group.")
 
     val options = parser.parse(args : _*)
 
@@ -38,19 +41,14 @@ object VerifyConsumerRebalance extends Logging {
       System.exit(0)
     }
 
-    for (opt <- List(groupOpt))
-      if (!options.has(opt)) {
-        System.err.println("Missing required argument: %s".format(opt))
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
+    CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
 
     val zkConnect = options.valueOf(zkConnectOpt)
     val group = options.valueOf(groupOpt)
 
     var zkClient: ZkClient = null
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
 
       debug("zkConnect = %s; group = %s".format(zkConnect, group))
 
@@ -81,9 +79,7 @@ object VerifyConsumerRebalance extends Logging {
     val consumersPerTopicMap = ZkUtils.getConsumersPerTopic(zkClient, group, excludeInternalTopics = false)
     val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, consumersPerTopicMap.keySet.toSeq)
 
-    partitionsPerTopicMap.foreach { partitionsForTopic =>
-      val topic = partitionsForTopic._1
-      val partitions = partitionsForTopic._2
+    partitionsPerTopicMap.foreach { case (topic, partitions) =>
       val topicDirs = new ZKGroupTopicDirs(group, topic)
       info("Alive partitions for topic %s are %s ".format(topic, partitions.toString))
       info("Alive consumers for topic %s => %s ".format(topic, consumersPerTopicMap.get(topic)))
@@ -97,8 +93,8 @@ object VerifyConsumerRebalance extends Logging {
 
       // for each available partition for topic, check if an owner exists
       partitions.foreach { partition =>
-      // check if there is a node for [partition]
-        if(!partitionsWithOwners.exists(p => p.equals(partition))) {
+        // check if there is a node for [partition]
+        if(!partitionsWithOwners.contains(partition.toString)) {
           error("No owner for partition [%s,%d]".format(topic, partition))
           rebalanceSucceeded = false
         }

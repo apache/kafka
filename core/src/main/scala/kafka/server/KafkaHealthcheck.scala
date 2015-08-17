@@ -17,7 +17,9 @@
 
 package kafka.server
 
+import kafka.cluster.EndPoint
 import kafka.utils._
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
 import java.net.InetAddress
@@ -31,36 +33,36 @@ import java.net.InetAddress
  * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
  * we are dead.
  */
-class KafkaHealthcheck(private val brokerId: Int, 
-                       private val advertisedHost: String, 
-                       private val advertisedPort: Int,
+class KafkaHealthcheck(private val brokerId: Int,
+                       private val advertisedEndpoints: Map[SecurityProtocol, EndPoint],
                        private val zkSessionTimeoutMs: Int,
                        private val zkClient: ZkClient) extends Logging {
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
   val sessionExpireListener = new SessionExpireListener
-  
+
   def startup() {
     zkClient.subscribeStateChanges(sessionExpireListener)
     register()
-  }
-
-  def shutdown() {
-    zkClient.unsubscribeStateChanges(sessionExpireListener)
-    ZkUtils.deregisterBrokerInZk(zkClient, brokerId)
   }
 
   /**
    * Register this broker as "alive" in zookeeper
    */
   def register() {
-    val advertisedHostName = 
-      if(advertisedHost == null || advertisedHost.trim.isEmpty) 
-        InetAddress.getLocalHost.getCanonicalHostName 
-      else
-        advertisedHost
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    ZkUtils.registerBrokerInZk(zkClient, brokerId, advertisedHostName, advertisedPort, zkSessionTimeoutMs, jmxPort)
+    val updatedEndpoints = advertisedEndpoints.mapValues(endpoint =>
+      if (endpoint.host == null || endpoint.host.trim.isEmpty)
+        EndPoint(InetAddress.getLocalHost.getCanonicalHostName, endpoint.port, endpoint.protocolType)
+      else
+        endpoint
+    )
+
+    // the default host and port are here for compatibility with older client
+    // only PLAINTEXT is supported as default
+    // if the broker doesn't listen on PLAINTEXT protocol, an empty endpoint will be registered and older clients will be unable to connect
+    val plaintextEndpoint = updatedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
+    ZkUtils.registerBrokerInZk(zkClient, brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, zkSessionTimeoutMs, jmxPort)
   }
 
   /**
@@ -86,6 +88,10 @@ class KafkaHealthcheck(private val brokerId: Int,
       register()
       info("done re-registering broker")
       info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
+    }
+
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      fatal("Could not establish session with zookeeper", error)
     }
   }
 

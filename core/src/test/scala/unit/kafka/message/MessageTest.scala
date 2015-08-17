@@ -20,11 +20,12 @@ package kafka.message
 import java.nio._
 import java.util.HashMap
 import scala.collection._
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{Before, Test}
 import kafka.utils.TestUtils
-import kafka.utils.Utils
+import kafka.utils.CoreUtils
+import org.apache.kafka.common.utils.Utils
 
 case class MessageTestVal(val key: Array[Byte], 
                           val payload: Array[Byte], 
@@ -39,7 +40,7 @@ class MessageTest extends JUnitSuite {
   def setUp(): Unit = {
     val keys = Array(null, "key".getBytes, "".getBytes)
     val vals = Array("value".getBytes, "".getBytes, null)
-    val codecs = Array(NoCompressionCodec, GZIPCompressionCodec)
+    val codecs = Array(NoCompressionCodec, GZIPCompressionCodec, SnappyCompressionCodec, LZ4CompressionCodec)
     for(k <- keys; v <- vals; codec <- codecs)
       messages += new MessageTestVal(k, v, codec, new Message(v, k, codec))
   }

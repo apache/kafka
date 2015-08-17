@@ -24,7 +24,7 @@ import kafka.utils.{Logging, Pool}
 import kafka.server.OffsetCheckpoint
 import collection.mutable
 import java.util.concurrent.locks.ReentrantLock
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 import java.util.concurrent.TimeUnit
 import kafka.common.{LogCleaningAbortedException, TopicAndPartition}
 
@@ -44,9 +44,12 @@ private[log] case object LogCleaningPaused extends LogCleaningState
 private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[TopicAndPartition, Log]) extends Logging with KafkaMetricsGroup {
   
   override val loggerName = classOf[LogCleaner].getName
+
+  // package-private for testing
+  private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
   
   /* the offset checkpoints holding the last cleaned point for each log */
-  private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, "cleaner-offset-checkpoint")))).toMap
+  private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, offsetCheckpointFile)))).toMap
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicAndPartition, LogCleaningState]()
@@ -75,13 +78,31 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   def grabFilthiestLog(): Option[LogToClean] = {
     inLock(lock) {
       val lastClean = allCleanerCheckpoints()
-      val dirtyLogs = logs.filter(l => l._2.config.compact)          // skip any logs marked for delete rather than dedupe
-                          .filterNot(l => inProgress.contains(l._1)) // skip any logs already in-progress
-                          .map(l => LogToClean(l._1, l._2,           // create a LogToClean instance for each
-                                               lastClean.getOrElse(l._1, l._2.logSegments.head.baseOffset)))
-                          .filter(l => l.totalBytes > 0)             // skip any empty logs
+      val dirtyLogs = logs.filter {
+        case (topicAndPartition, log) => log.config.compact  // skip any logs marked for delete rather than dedupe
+      }.filterNot {
+        case (topicAndPartition, log) => inProgress.contains(topicAndPartition) // skip any logs already in-progress
+      }.map {
+        case (topicAndPartition, log) => // create a LogToClean instance for each
+          // if the log segments are abnormally truncated and hence the checkpointed offset
+          // is no longer valid, reset to the log starting offset and log the error event
+          val logStartOffset = log.logSegments.head.baseOffset
+          val firstDirtyOffset = {
+            val offset = lastClean.getOrElse(topicAndPartition, logStartOffset)
+            if (offset < logStartOffset) {
+              error("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
+                    .format(logStartOffset, offset))
+              logStartOffset
+            } else {
+              offset
+            }
+          }
+          LogToClean(topicAndPartition, log, firstDirtyOffset)
+      }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs
+
       this.dirtiestLogCleanableRatio = if (!dirtyLogs.isEmpty) dirtyLogs.max.cleanableRatio else 0
-      val cleanableLogs = dirtyLogs.filter(l => l.cleanableRatio > l.log.config.minCleanableRatio) // and must meet the minimum threshold for dirty byte ratio
+      // and must meet the minimum threshold for dirty byte ratio
+      val cleanableLogs = dirtyLogs.filter(ltc => ltc.cleanableRatio > ltc.log.config.minCleanableRatio)
       if(cleanableLogs.isEmpty) {
         None
       } else {
@@ -101,8 +122,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       abortAndPauseCleaning(topicAndPartition)
       resumeCleaning(topicAndPartition)
-      info("The cleaning for partition %s is aborted".format(topicAndPartition))
     }
+    info("The cleaning for partition %s is aborted".format(topicAndPartition))
   }
 
   /**
@@ -131,8 +152,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
       }
       while (!isCleaningInState(topicAndPartition, LogCleaningPaused))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
-      info("The cleaning for partition %s is aborted and paused".format(topicAndPartition))
     }
+    info("The cleaning for partition %s is aborted and paused".format(topicAndPartition))
   }
 
   /**
@@ -160,14 +181,14 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   /**
    *  Check if the cleaning for a partition is in a particular state. The caller is expected to hold lock while making the call.
    */
-  def isCleaningInState(topicAndPartition: TopicAndPartition, expectedState: LogCleaningState): Boolean = {
+  private def isCleaningInState(topicAndPartition: TopicAndPartition, expectedState: LogCleaningState): Boolean = {
     inProgress.get(topicAndPartition) match {
-      case None => return false
+      case None => false
       case Some(state) =>
         if (state == expectedState)
-          return true
+          true
         else
-          return false
+          false
     }
   }
 
@@ -181,6 +202,14 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     }
   }
 
+  def updateCheckpoints(dataDir: File, update: Option[(TopicAndPartition,Long)]) {
+    inLock(lock) {
+      val checkpoint = checkpoints(dataDir)
+      val existing = checkpoint.read().filterKeys(logs.keys) ++ update
+      checkpoint.write(existing)
+    }
+  }
+
   /**
    * Save out the endOffset and remove the given log from the in-progress set, if not aborted.
    */
@@ -188,9 +217,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       inProgress(topicAndPartition) match {
         case LogCleaningInProgress =>
-          val checkpoint = checkpoints(dataDir)
-          val offsets = checkpoint.read() + ((topicAndPartition, endOffset))
-          checkpoint.write(offsets)
+          updateCheckpoints(dataDir,Option(topicAndPartition, endOffset))
           inProgress.remove(topicAndPartition)
         case LogCleaningAborted =>
           inProgress.put(topicAndPartition, LogCleaningPaused)

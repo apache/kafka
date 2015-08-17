@@ -20,13 +20,14 @@ package kafka.server
 import scala.collection.mutable
 import scala.collection.Set
 import scala.collection.Map
-import kafka.utils.{Utils, Logging}
-import kafka.cluster.Broker
+import kafka.utils.Logging
+import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.utils.Utils
 
-abstract class AbstractFetcherManager(protected val name: String, metricPrefix: String, numFetchers: Int = 1)
+abstract class AbstractFetcherManager(protected val name: String, clientId: String, numFetchers: Int = 1)
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher
   private val fetcherThreadMap = new mutable.HashMap[BrokerAndFetcherId, AbstractFetcherThread]
@@ -34,7 +35,7 @@ abstract class AbstractFetcherManager(protected val name: String, metricPrefix: 
   this.logIdent = "[" + name + "] "
 
   newGauge(
-    metricPrefix + "-MaxLag",
+    "MaxLag",
     new Gauge[Long] {
       // current max lag across all fetchers/topics/partitions
       def value = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
@@ -42,24 +43,25 @@ abstract class AbstractFetcherManager(protected val name: String, metricPrefix: 
           curMaxThread.max(fetcherLagStatsEntry._2.lag)
         }).max(curMaxAll)
       })
-    }
+    },
+    Map("clientId" -> clientId)
   )
 
   newGauge(
-    metricPrefix + "-MinFetchRate",
-    {
-      new Gauge[Double] {
-        // current min fetch rate across all fetchers/topics/partitions
-        def value = {
-          val headRate: Double =
-            fetcherThreadMap.headOption.map(_._2.fetcherStats.requestRate.oneMinuteRate).getOrElse(0)
+  "MinFetchRate", {
+    new Gauge[Double] {
+      // current min fetch rate across all fetchers/topics/partitions
+      def value = {
+        val headRate: Double =
+          fetcherThreadMap.headOption.map(_._2.fetcherStats.requestRate.oneMinuteRate).getOrElse(0)
 
-          fetcherThreadMap.foldLeft(headRate)((curMinAll, fetcherThreadMapEntry) => {
-            fetcherThreadMapEntry._2.fetcherStats.requestRate.oneMinuteRate.min(curMinAll)
-          })
-        }
+        fetcherThreadMap.foldLeft(headRate)((curMinAll, fetcherThreadMapEntry) => {
+          fetcherThreadMapEntry._2.fetcherStats.requestRate.oneMinuteRate.min(curMinAll)
+        })
       }
     }
+  },
+  Map("clientId" -> clientId)
   )
 
   private def getFetcherId(topic: String, partitionId: Int) : Int = {
@@ -67,7 +69,7 @@ abstract class AbstractFetcherManager(protected val name: String, metricPrefix: 
   }
 
   // to be defined in subclass to create a specific fetcher
-  def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread
+  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread
 
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicAndPartition, BrokerAndInitialOffset]) {
     mapLock synchronized {
@@ -125,6 +127,6 @@ abstract class AbstractFetcherManager(protected val name: String, metricPrefix: 
   }
 }
 
-case class BrokerAndFetcherId(broker: Broker, fetcherId: Int)
+case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
 
-case class BrokerAndInitialOffset(broker: Broker, initOffset: Long)
+case class BrokerAndInitialOffset(broker: BrokerEndPoint, initOffset: Long)

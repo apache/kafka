@@ -25,13 +25,31 @@ import org.apache.kafka.common.utils.Utils;
  */
 public abstract class Type {
 
+    /**
+     * Write the typed object to the buffer
+     *
+     * @throws SchemaException If the object is not valid for its type
+     */
     public abstract void write(ByteBuffer buffer, Object o);
 
+    /**
+     * Read the typed object from the buffer
+     *
+     * @throws SchemaException If the object is not valid for its type
+     */
     public abstract Object read(ByteBuffer buffer);
 
-    public abstract int sizeOf(Object o);
-
+    /**
+     * Validate the object. If succeeded return its typed object.
+     *
+     * @throws SchemaException If validation failed
+     */
     public abstract Object validate(Object o);
+
+    /**
+     * Return the size of the object in bytes
+     */
+    public abstract int sizeOf(Object o);
 
     public static final Type INT8 = new Type() {
         @Override

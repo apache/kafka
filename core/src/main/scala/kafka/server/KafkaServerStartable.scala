@@ -17,26 +17,22 @@
 
 package kafka.server
 
+import kafka.common.AppInfo
 import kafka.utils.Logging
 
 
 class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
-  private var server : KafkaServer = null
-
-  init
-
-  private def init() {
-    server = new KafkaServer(serverConfig)
-  }
+  private val server = new KafkaServer(serverConfig)
 
   def startup() {
     try {
       server.startup()
+      AppInfo.registerInfo()
     }
     catch {
       case e: Throwable =>
-        fatal("Fatal error during KafkaServerStable startup. Prepare to shutdown", e)
-        shutdown()
+        fatal("Fatal error during KafkaServerStartable startup. Prepare to shutdown", e)
+        // KafkaServer already calls shutdown() internally, so this is purely for logging & the exit code
         System.exit(1)
     }
   }

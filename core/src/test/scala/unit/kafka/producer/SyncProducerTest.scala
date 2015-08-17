@@ -18,26 +18,30 @@
 package kafka.producer
 
 import java.net.SocketTimeoutException
-import junit.framework.Assert
+import java.util.Properties
+
+import org.junit.Assert
 import kafka.admin.AdminUtils
+import kafka.api.ProducerResponseStatus
+import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.integration.KafkaServerTestHarness
 import kafka.message._
 import kafka.server.KafkaConfig
 import kafka.utils._
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
-import kafka.api.ProducerResponseStatus
-import kafka.common.{TopicAndPartition, ErrorMapping}
 
-class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
-  private var messageBytes =  new Array[Byte](2);
-  val configs = List(new KafkaConfig(TestUtils.createBrokerConfigs(1).head))
-  val zookeeperConnect = TestZKUtils.zookeeperConnect
+class SyncProducerTest extends KafkaServerTestHarness {
+  private val messageBytes =  new Array[Byte](2)
+  // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.
+  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnect, false).head))
 
   @Test
   def testReachableServer() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val firstStart = SystemTime.milliseconds
@@ -72,7 +76,8 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   @Test
   def testEmptyProduceRequest() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+
 
     val correlationId = 0
     val clientId = SyncProducerConfig.DefaultClientId
@@ -89,7 +94,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   @Test
   def testMessageSizeTooLarge() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     TestUtils.createTopic(zkClient, "test", numPartitions = 1, replicationFactor = 1, servers = servers)
@@ -112,11 +117,12 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
   }
 
+
   @Test
   def testMessageSizeTooLargeWithAckZero() {
     val server = servers.head
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
 
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
     props.put("request.required.acks", "0")
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
@@ -142,7 +148,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   @Test
   def testProduceCorrectlyReceivesResponse() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
@@ -188,7 +194,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val timeoutMs = 500
 
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
     val producer = new SyncProducer(new SyncProducerConfig(props))
 
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
@@ -214,7 +220,9 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   @Test
   def testProduceRequestWithNoResponse() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+
+    val port = server.socketServer.boundPort(SecurityProtocol.PLAINTEXT)
+    val props = TestUtils.getSyncProducerConfig(port)
     val correlationId = 0
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
@@ -223,5 +231,25 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val response = producer.send(emptyRequest)
     Assert.assertTrue(response == null)
+  }
+
+  @Test
+  def testNotEnoughReplicas()  {
+    val topicName = "minisrtest"
+    val server = servers.head
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+
+    props.put("request.required.acks", "-1")
+
+    val producer = new SyncProducer(new SyncProducerConfig(props))
+    val topicProps = new Properties()
+    topicProps.put("min.insync.replicas","2")
+    AdminUtils.createTopic(zkClient, topicName, 1, 1,topicProps)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicName, 0)
+
+    val response = producer.send(TestUtils.produceRequest(topicName, 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)),-1))
+
+    Assert.assertEquals(ErrorMapping.NotEnoughReplicasCode, response.status(TopicAndPartition(topicName, 0)).error)
   }
 }

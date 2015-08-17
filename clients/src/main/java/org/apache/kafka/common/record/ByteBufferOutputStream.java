@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
  */
 public class ByteBufferOutputStream extends OutputStream {
 
-    private static float REALLOCATION_FACTOR = 1.1f;
+    private static final float REALLOCATION_FACTOR = 1.1f;
 
     private ByteBuffer buffer;
 

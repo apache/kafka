@@ -4,23 +4,35 @@
 // The ASF licenses this file to You under the Apache License, Version 2.0
 // (the "License"); you may not use this file except in compliance with
 // the License.  You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import org.ajoberstar.grgit.Grgit
+
 buildscript {
   repositories {
     mavenCentral()
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
+
+  dependencies {
+    // For Apache Rat plugin to ignore non-Git files, need ancient version for Java 6 compatibility
+    classpath group: 'org.ajoberstar', name: 'grgit', version: '0.2.3'
+  }
 }
 
 def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
+def slf4japi="org.slf4j:slf4j-api:1.7.6"
+def junit='junit:junit:4.6'
+def easymock='org.easymock:easymock:3.3.1'
+def powermock='org.powermock:powermock-module-junit4:1.6.2'
+def powermock_easymock='org.powermock:powermock-api-easymock:1.6.2'
 
 allprojects {
   apply plugin: 'idea'
@@ -29,8 +41,38 @@ allprojects {
   }
 }
 
-apply from: file('gradle/license.gradle')
+ext {
+    gradleVersion = "2.4"
+
+    skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
+    shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
+
+    mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
+    mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
+    mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+}
+
+apply from: file('wrapper.gradle')
 apply from: file('scala.gradle')
+apply from: file('gradle/rat.gradle')
+
+rat {
+  // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
+  // restrict us only to files that are checked in or are staged.
+  def repo = Grgit.open(project.file('.'))
+  excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
+  // And some of the files that we have checked in should also be excluded from this check
+  excludes.addAll([
+    '**/.git/**',
+    '**/build/**',
+    'CONTRIBUTING.md',
+    'gradlew',
+    'gradlew.bat',
+    '**/README.md',
+    '.reviewboardrc',
+    'system_test/**',
+  ])
+}
 
 subprojects {
   apply plugin: 'java'
@@ -38,35 +80,42 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
 
+  sourceCompatibility = 1.7
+
   uploadArchives {
     repositories {
       signing {
-        sign configurations.archives
+          required { shouldSign }
+          sign configurations.archives
 
-        // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
-        mavenDeployer {
-          beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-          repository(url: "${mavenUrl}") {
-            authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
-          }
-          afterEvaluate {
-            pom.artifactId = "${archivesBaseName}"
-            pom.project {
-              name 'Apache Kafka'
-              packaging 'jar'
-              url 'http://kafka.apache.org'
-              licenses {
-                license {
-                  name 'The Apache Software License, Version 2.0'
-                  url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                  distribution 'repo'
-                }
+          // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
+          mavenDeployer {
+              beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+              repository(url: "${mavenUrl}") {
+                  authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
               }
-            }
+              afterEvaluate {
+                  pom.artifactId = "${archivesBaseName}"
+                  pom.project {
+                      name 'Apache Kafka'
+                      packaging 'jar'
+                      url 'http://kafka.apache.org'
+                      licenses {
+                          license {
+                              name 'The Apache Software License, Version 2.0'
+                              url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                              distribution 'repo'
+                          }
+                      }
+                  }
+              }
           }
-        }
       }
     }
+  }
+
+  tasks.withType(Test) {
+    maxParallelForks = Runtime.runtime.availableProcessors()
   }
 
   jar {
@@ -74,47 +123,31 @@ subprojects {
     from '../NOTICE'
   }
 
-  tasks.withType(Javadoc) {
-    task srcJar(type:Jar) {
-      classifier = 'sources'
-      from '../LICENSE'
-      from '../NOTICE'
-      from sourceSets.main.java
-    }
-
-    task javadocJar(type: Jar, dependsOn: javadoc) {
-      classifier 'javadoc'
-      from '../LICENSE'
-      from '../NOTICE'
-      from javadoc.destinationDir
-    }
-
-    task docsJar(type: Jar, dependsOn: javadocJar) { }
-
-    artifacts {
-      archives srcJar
-      archives javadocJar
-    }
+  task srcJar(type:Jar) {
+    classifier = 'sources'
+    from '../LICENSE'
+    from '../NOTICE'
+    from sourceSets.main.java
   }
 
-  tasks.withType(ScalaCompile) {
-    task srcJar(type:Jar, overwrite: true) {
-      classifier = 'sources'
-      from '../LICENSE'
-      from '../NOTICE'
-      from sourceSets.main.scala
-      from sourceSets.main.java
-    }
-
-    scalaCompileOptions.useAnt = false
-
-    configure(scalaCompileOptions.forkOptions) {
-      memoryMaximumSize = '1g'
-      jvmArgs = ['-XX:MaxPermSize=512m']
-    }
+  task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier 'javadoc'
+    from '../LICENSE'
+    from '../NOTICE'
+    from javadoc.destinationDir
   }
 
-  tasks.withType(ScalaDoc) {
+  task docsJar(dependsOn: javadocJar)
+
+  artifacts {
+    archives srcJar
+    archives javadocJar
+  }
+
+  plugins.withType(ScalaPlugin) {
+    //source jar should also contain scala source:
+    srcJar.from sourceSets.main.scala
+
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
       from '../LICENSE'
@@ -122,15 +155,25 @@ subprojects {
       from scaladoc
     }
 
-    task docsJar(type: Jar, dependsOn: ['javadocJar', 'scaladocJar'], overwrite: true) { }
+    //documentation task should also trigger building scala doc jar
+    docsJar.dependsOn scaladocJar
 
     artifacts {
       archives scaladocJar
     }
   }
+
+  tasks.withType(ScalaCompile) {
+    scalaCompileOptions.useAnt = false
+
+    configure(scalaCompileOptions.forkOptions) {
+      memoryMaximumSize = '1g'
+      jvmArgs = ['-XX:MaxPermSize=512m']
+    }
+  }
 }
 
-for ( sv in ['2_8_0', '2_9_1', '2_9_2', '2_10_1'] ) {
+for ( sv in ['2_10_5', '2_11_7'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
@@ -170,20 +213,25 @@ for ( sv in ['2_8_0', '2_9_1', '2_9_2', '2_10_1'] ) {
   }
 }
 
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_8_0', 'jar_core_2_9_1', 'jar_core_2_9_2', 'jar_core_2_10_1', 'clients:jar', 'perf:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar']) {
+def copycatPkgs = ['copycat:data', 'copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
+def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools'] + copycatPkgs
+
+tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) {
 }
 
-tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_8_0', 'srcJar_2_9_1', 'srcJar_2_9_2', 'srcJar_2_10_1', 'clients:srcJar', 'perf:srcJar', 'examples:srcJar', 'contrib:hadoop-consumer:srcJar', 'contrib:hadoop-producer:srcJar']) { }
+tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10_5', 'srcJar_2_11_7'] + pkgs.collect { it + ":srcJar" }) { }
 
-tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_8_0', 'docsJar_2_9_1', 'docsJar_2_9_2', 'docsJar_2_10_1', 'clients:docsJar', 'perf:docsJar', 'examples:docsJar', 'contrib:hadoop-consumer:docsJar', 'contrib:hadoop-producer:docsJar']) { }
+tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10_5', 'docsJar_2_11_7'] + pkgs.collect { it + ":docsJar" }) { }
 
-tasks.create(name: "testAll", dependsOn: ['test_core_2_8_0', 'test_core_2_9_1', 'test_core_2_9_2', 'test_core_2_10_1', 'clients:test']) {
+tasks.create(name: "testCopycat", dependsOn: copycatPkgs.collect { it + ":test" }) {}
+tasks.create(name: "testAll", dependsOn: ['test_core_2_10_5', 'test_core_2_11_7'] + pkgs.collect { it + ":test" }) {
 }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_8_0', 'releaseTarGz_2_9_1', 'releaseTarGz_2_9_2', 'releaseTarGz_2_10_1']) {
+tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10_5', 'releaseTarGz_2_11_7']) {
 }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_8_0', 'uploadCoreArchives_2_9_1', 'uploadCoreArchives_2_9_2', 'uploadCoreArchives_2_10_1', 'perf:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives']) {
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10_5', 'uploadCoreArchives_2_11_7'] + pkgs.collect { it + ":uploadArchives" }) {
 }
 
 project(':core') {
@@ -192,48 +240,28 @@ project(':core') {
   apply plugin: 'scala'
   archivesBaseName = "kafka_${baseScalaVersion}"
 
-  def (major, minor, trivial) = scalaVersion.tokenize('.')
-
-  if(major.toInteger() >= 2 && minor.toInteger() >= 9) {
-     sourceSets {
-       main {
-         scala {
-           exclude 'kafka/utils/Annotations_2.8.scala'
-         }
-       }
-     }
-  } else {
-     sourceSets {
-       main {
-         scala {
-           exclude 'kafka/utils/Annotations_2.9+.scala'
-         }
-       }
-     }
-  }
-
   dependencies {
     compile project(':clients')
+    compile project(':log4j-appender')
     compile "org.scala-lang:scala-library:$scalaVersion"
-    compile 'org.apache.zookeeper:zookeeper:3.3.4'
-    compile 'com.101tec:zkclient:0.3'
+    compile 'org.apache.zookeeper:zookeeper:3.4.6'
+    compile 'com.101tec:zkclient:0.5'
     compile 'com.yammer.metrics:metrics-core:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
+    if (scalaVersion.startsWith('2.11')) {
+      compile 'org.scala-lang.modules:scala-xml_2.11:1.0.4'
+      compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.4'
+    }
 
-    testCompile 'junit:junit:4.1'
-    testCompile 'org.easymock:easymock:3.0'
+    testCompile "$junit"
+    testCompile "$easymock"
     testCompile 'org.objenesis:objenesis:1.2'
-    testCompile project(':clients')
-    if (scalaVersion.startsWith('2.8')) {
-      testCompile 'org.scalatest:scalatest:1.2'
-    } else if (scalaVersion.startsWith('2.10')) {
-      testCompile 'org.scalatest:scalatest_2.10:1.9.1'
-    } else {
-      testCompile "org.scalatest:scalatest_$scalaVersion:1.8"
-    }   
+    testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
+    testCompile project(path: ':clients', configuration: 'archives')
+
     testRuntime "$slf4jlog4j"
 
-    zinc 'com.typesafe.zinc:zinc:0.2.5'
+    zinc 'com.typesafe.zinc:zinc:0.3.7'
   }
 
   configurations {
@@ -244,6 +272,7 @@ project(':core') {
     compile.exclude module: 'jmxri'
     compile.exclude module: 'jmxtools'
     compile.exclude module: 'mail'
+    compile.exclude module: 'netty'
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -256,9 +285,9 @@ project(':core') {
     into "$buildDir/dependant-libs-${scalaVersion}"
   }
 
-  tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) { 
+  tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${baseScalaVersion}-${version}"
-    compression = Compression.GZIP 
+    compression = Compression.GZIP
     from(project.file("../bin")) { into "bin/" }
     from(project.file("../config")) { into "config/" }
     from '../LICENSE'
@@ -271,8 +300,14 @@ project(':core') {
     dependsOn 'copyDependantLibs'
   }
 
+  jar.manifest {
+    attributes(
+      'Version': "${version}"
+    )
+  }
+
   task testJar(type: Jar) {
-    appendix = 'test'
+    classifier = 'test'
     from sourceSets.test.output
   }
 
@@ -283,20 +318,8 @@ project(':core') {
     }
   }
 
-}
-
-project(':perf') {
-  println "Building project 'perf' with Scala version $scalaVersion"
-
-  apply plugin: 'scala'
-  archivesBaseName = "kafka-perf_${baseScalaVersion}"
-
-  dependencies {
-    compile project(':core')
-    compile "org.scala-lang:scala-library:$scalaVersion"
-    compile 'net.sf.jopt-simple:jopt-simple:3.2'
-
-    zinc 'com.typesafe.zinc:zinc:0.2.5'
+  artifacts {
+    archives testJar
   }
 }
 
@@ -311,7 +334,6 @@ project(':contrib:hadoop-consumer') {
     compile "org.codehaus.jackson:jackson-core-asl:1.5.5"
     compile "org.codehaus.jackson:jackson-mapper-asl:1.5.5"
     compile "org.apache.hadoop:hadoop-core:0.20.2"
-    compile files('lib/piggybank.jar')
   }
 
   configurations {
@@ -330,13 +352,13 @@ project(':contrib:hadoop-producer') {
 
   dependencies {
     compile project(':core')
-    compile "org.apache.avro:avro:1.4.0"
+    compile("org.apache.avro:avro:1.4.0") { force = true }
     compile "org.apache.pig:pig:0.8.0"
     compile "commons-logging:commons-logging:1.0.4"
     compile "org.codehaus.jackson:jackson-core-asl:1.5.5"
     compile "org.codehaus.jackson:jackson-mapper-asl:1.5.5"
     compile "org.apache.hadoop:hadoop-core:0.20.2"
-    compile files('lib/piggybank.jar')
+    compile "org.apache.pig:piggybank:0.12.0"
   }
 
   configurations {
@@ -360,19 +382,20 @@ project(':examples') {
 }
 
 project(':clients') {
+  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-clients"
 
   dependencies {
-    compile "org.slf4j:slf4j-api:1.7.6"
-    compile 'org.xerial.snappy:snappy-java:1.0.5'
+    compile "$slf4japi"
+    compile 'org.xerial.snappy:snappy-java:1.1.1.7'
     compile 'net.jpountz.lz4:lz4:1.2.0'
 
-    testCompile 'com.novocode:junit-interface:0.9'
+    testCompile "$junit"
     testRuntime "$slf4jlog4j"
   }
 
   task testJar(type: Jar) {
-    appendix = 'test'
+    classifier = 'test'
     from sourceSets.test.output
   }
 
@@ -382,4 +405,344 @@ project(':clients') {
         exceptionFormat = 'full'
     }
   }
+
+  javadoc {
+    include "**/org/apache/kafka/clients/consumer/*"
+    include "**/org/apache/kafka/clients/producer/*"
+    include "**/org/apache/kafka/common/*"
+    include "**/org/apache/kafka/common/errors/*"
+    include "**/org/apache/kafka/common/serialization/*"
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom (testCompile)
+  }
+
+  checkstyle {
+     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':tools') {
+    apply plugin: 'checkstyle'
+    archivesBaseName = "kafka-tools"
+
+    dependencies {
+        compile project(':clients')
+        compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
+        compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
+        compile "$slf4jlog4j"
+
+        testCompile "$junit"
+        testCompile project(path: ':clients', configuration: 'archives')
+    }
+
+    task testJar(type: Jar) {
+        classifier = 'test'
+        from sourceSets.test.output
+    }
+
+    test {
+        testLogging {
+            events "passed", "skipped", "failed"
+            exceptionFormat = 'full'
+        }
+    }
+
+    javadoc {
+        include "**/org/apache/kafka/tools/*"
+    }
+
+    tasks.create(name: "copyDependantLibs", type: Copy) {
+        from (configurations.testRuntime) {
+            include('slf4j-log4j12*')
+        }
+        from (configurations.runtime) {
+            exclude('kafka-clients*')
+        }
+        into "$buildDir/dependant-libs-${scalaVersion}"
+    }
+
+    jar {
+        dependsOn 'copyDependantLibs'
+    }
+
+    checkstyle {
+        configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    }
+    test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':log4j-appender') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "kafka-log4j-appender"
+
+  dependencies {
+    compile project(':clients')
+    compile "$slf4jlog4j"
+
+    testCompile "$junit"
+    testCompile project(path: ':clients', configuration: 'archives')
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/log4jappender/*"
+  }
+
+  checkstyle {
+     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':copycat:data') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "copycat-data"
+
+  dependencies {
+    compile project(':clients')
+    compile "$slf4japi"
+
+    testCompile "$junit"
+    testRuntime "$slf4jlog4j"
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/copycat/data/*"
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom (testCompile)
+  }
+
+  /* FIXME Re-enable this with KAFKA-2367 when the placeholder data API is replaced
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest') */
+}
+
+project(':copycat:api') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "copycat-api"
+
+  dependencies {
+    compile project(':copycat:data')
+    compile "$slf4japi"
+
+    testCompile "$junit"
+    testRuntime "$slf4jlog4j"
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/copycat/*"
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom (testCompile)
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':copycat:json') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "copycat-json"
+
+  dependencies {
+    compile project(':copycat:api')
+    compile "$slf4japi"
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
+
+    testCompile "$junit"
+    testCompile "$easymock"
+    testCompile "$powermock"
+    testCompile "$powermock_easymock"
+    testRuntime "$slf4jlog4j"
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/copycat/*"
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom(testCompile)
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('copycat-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
+project(':copycat:runtime') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "copycat-runtime"
+
+  dependencies {
+    compile project(':copycat:api')
+    compile project(':clients')
+    compile "$slf4japi"
+
+    testCompile "$junit"
+    testCompile "$easymock"
+    testCompile "$powermock"
+    testCompile "$powermock_easymock"
+    testRuntime "$slf4jlog4j"
+    testRuntime project(":copycat:json")
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/copycat/*"
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom(testCompile)
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':copycat:file') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "copycat-file"
+
+  dependencies {
+    compile project(':copycat:api')
+    compile "$slf4japi"
+
+    testCompile "$junit"
+    testCompile "$easymock"
+    testCompile "$powermock"
+    testCompile "$powermock_easymock"
+    testRuntime "$slf4jlog4j"
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/copycat/*"
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom(testCompile)
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }

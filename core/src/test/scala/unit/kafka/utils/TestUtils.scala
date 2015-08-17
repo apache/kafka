@@ -18,13 +18,15 @@
 package kafka.utils
 
 import java.io._
-import java.net._
 import java.nio._
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
+import charset.Charset
 
-import collection.mutable.Map
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.utils.Utils._
+
 import collection.mutable.ListBuffer
 
 import org.I0Itec.zkclient.ZkClient
@@ -34,21 +36,24 @@ import kafka.producer._
 import kafka.message._
 import kafka.api._
 import kafka.cluster.Broker
-import kafka.consumer.ConsumerConfig
+import kafka.consumer.{ConsumerTimeoutException, KafkaStream, ConsumerConfig}
 import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 import kafka.common.TopicAndPartition
 import kafka.admin.AdminUtils
 import kafka.producer.ProducerConfig
+import kafka.log._
 
-import junit.framework.AssertionFailedError
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
+
+import scala.collection.Map
+import org.apache.kafka.clients.consumer.KafkaConsumer
 
 /**
  * Utility functions to help with testing
  */
 object TestUtils extends Logging {
-  
+
   val IoTmpDir = System.getProperty("java.io.tmpdir")
 
   val Letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -59,23 +64,13 @@ object TestUtils extends Logging {
   val seededRandom = new Random(192348092834L)
   val random = new Random()
 
-  /**
-   * Choose a number of random available ports
-   */
-  def choosePorts(count: Int): List[Int] = {
-    val sockets =
-      for(i <- 0 until count)
-      yield new ServerSocket(0)
-    val socketList = sockets.toList
-    val ports = socketList.map(_.getLocalPort)
-    socketList.map(_.close)
-    ports
-  }
+  /* 0 gives a random port; you can then retrieve the assigned port from the Socket object. */
+  val RandomPort = 0
 
-  /**
-   * Choose an available port
-   */
-  def choosePort(): Int = choosePorts(1).head
+  /** Port to use for unit tests that mock/don't require a real ZK server. */
+  val MockZkPort = 1
+  /** Zookeeper connection string to use for unit tests that mock/don't require a real ZK server. */
+  val MockZkConnect = "127.0.0.1:" + MockZkPort
 
   /**
    * Create a temporary directory
@@ -84,6 +79,13 @@ object TestUtils extends Logging {
     val f = new File(IoTmpDir, "kafka-" + random.nextInt(1000000))
     f.mkdirs()
     f.deleteOnExit()
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      override def run() = {
+        CoreUtils.rm(f)
+      }
+    })
+
     f
   }
 
@@ -127,26 +129,35 @@ object TestUtils extends Logging {
   /**
    * Create a test config for the given node id
    */
-  def createBrokerConfigs(numConfigs: Int): List[Properties] = {
-    for((port, node) <- choosePorts(numConfigs).zipWithIndex)
-    yield createBrokerConfig(node, port)
+  def createBrokerConfigs(numConfigs: Int,
+    zkConnect: String,
+    enableControlledShutdown: Boolean = true,
+    enableDeleteTopic: Boolean = false): Seq[Properties] = {
+    (0 until numConfigs).map(node => createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic))
   }
 
-  def getBrokerListStrFromConfigs(configs: Seq[KafkaConfig]): String = {
-    configs.map(c => c.hostName + ":" + c.port).mkString(",")
+  def getBrokerListStrFromServers(servers: Seq[KafkaServer]): String = {
+    servers.map(s => formatAddress(s.config.hostName, s.boundPort())).mkString(",")
   }
 
   /**
    * Create a test config for the given node id
    */
-  def createBrokerConfig(nodeId: Int, port: Int = choosePort()): Properties = {
+  def createBrokerConfig(nodeId: Int, zkConnect: String,
+    enableControlledShutdown: Boolean = true,
+    enableDeleteTopic: Boolean = false,
+    port: Int = RandomPort): Properties = {
     val props = new Properties
-    props.put("broker.id", nodeId.toString)
-    props.put("host.name", "localhost")
-    props.put("port", port.toString)
+    if (nodeId >= 0) props.put("broker.id", nodeId.toString)
+    props.put("listeners", "PLAINTEXT://localhost:"+port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
-    props.put("zookeeper.connect", TestZKUtils.zookeeperConnect)
+    props.put("zookeeper.connect", zkConnect)
     props.put("replica.socket.timeout.ms", "1500")
+    props.put("controller.socket.timeout.ms", "1500")
+    props.put("controlled.shutdown.enable", enableControlledShutdown.toString)
+    props.put("delete.topic.enable", enableDeleteTopic.toString)
+    props.put("controlled.shutdown.retry.backoff.ms", "100")
+    props.put("port", port.toString)
     props
   }
 
@@ -155,10 +166,14 @@ object TestUtils extends Logging {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
-                  servers: Seq[KafkaServer]) : scala.collection.immutable.Map[Int, Option[Int]] = {
+  def createTopic(zkClient: ZkClient,
+                  topic: String,
+                  numPartitions: Int = 1,
+                  replicationFactor: Int = 1,
+                  servers: Seq[KafkaServer],
+                  topicConfig: Properties = new Properties) : scala.collection.immutable.Map[Int, Option[Int]] = {
     // create topic
-    AdminUtils.createTopic(zkClient, topic, numPartitions, replicationFactor)
+    AdminUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
     (0 until numPartitions).map { case i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
@@ -340,7 +355,7 @@ object TestUtils extends Logging {
    * Create a producer with a few pre-configured properties.
    * If certain properties need to be overridden, they can be provided in producerProps.
    */
-  def createProducer[K, V](brokerList: String, 
+  def createProducer[K, V](brokerList: String,
                            encoder: String = classOf[DefaultEncoder].getName,
                            keyEncoder: String = classOf[DefaultEncoder].getName,
                            partitioner: String = classOf[DefaultPartitioner].getName,
@@ -365,7 +380,8 @@ object TestUtils extends Logging {
                         metadataFetchTimeout: Long = 3000L,
                         blockOnBufferFull: Boolean = true,
                         bufferSize: Long = 1024L * 1024L,
-                        retries: Int = 0) : KafkaProducer = {
+                        retries: Int = 0,
+                        lingerMs: Long = 0) : KafkaProducer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.producer.ProducerConfig
 
     val producerProps = new Properties()
@@ -375,8 +391,33 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, blockOnBufferFull.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
-    producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "1000")
-    return new KafkaProducer(producerProps)
+    producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
+    producerProps.put(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
+    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+  }
+
+  /**
+   * Create a new consumer with a few pre-configured properties.
+   */
+  def createNewConsumer(brokerList: String,
+                        groupId: String,
+                        autoOffsetReset: String = "earliest",
+                        partitionFetchSize: Long = 4096L) : KafkaConsumer[Array[Byte],Array[Byte]] = {
+    import org.apache.kafka.clients.consumer.ConsumerConfig
+
+    val consumerProps= new Properties()
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
+    consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, partitionFetchSize.toString)
+    consumerProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
+    consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
+    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
 
   /**
@@ -407,7 +448,7 @@ object TestUtils extends Logging {
   }
 
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
-    val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
+    val zkClient = ZkUtils.createZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
     ZkUtils.updatePersistentPath(zkClient, path, offset.toString)
 
   }
@@ -416,21 +457,21 @@ object TestUtils extends Logging {
     new IteratorTemplate[Message] {
       override def makeNext(): Message = {
         if (iter.hasNext)
-          return iter.next.message
+          iter.next.message
         else
-          return allDone()
+          allDone()
       }
     }
   }
 
   def createBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667))
-    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.port, 6000, jmxPort = -1))
+    val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
+    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, "localhost", 6667, b.endPoints, 6000, jmxPort = -1))
     brokers
   }
 
   def deleteBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667))
+    val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
     brokers.foreach(b => ZkUtils.deletePath(zkClient, ZkUtils.BrokerIdsPath + "/" + b))
     brokers
   }
@@ -445,9 +486,9 @@ object TestUtils extends Logging {
   /**
    * Create a wired format request based on simple basic information
    */
-  def produceRequest(topic: String, 
-                     partition: Int, 
-                     message: ByteBufferMessageSet, 
+  def produceRequest(topic: String,
+                     partition: Int,
+                     message: ByteBufferMessageSet,
                      acks: Int = SyncProducerConfig.DefaultRequiredAcks,
                      timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
                      correlationId: Int = 0,
@@ -455,17 +496,17 @@ object TestUtils extends Logging {
     produceRequestWithAcks(Seq(topic), Seq(partition), message, acks, timeout, correlationId, clientId)
   }
 
-  def produceRequestWithAcks(topics: Seq[String], 
-                             partitions: Seq[Int], 
-                             message: ByteBufferMessageSet, 
-                             acks: Int = SyncProducerConfig.DefaultRequiredAcks, 
+  def produceRequestWithAcks(topics: Seq[String],
+                             partitions: Seq[Int],
+                             message: ByteBufferMessageSet,
+                             acks: Int = SyncProducerConfig.DefaultRequiredAcks,
                              timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
                              correlationId: Int = 0,
                              clientId: String = SyncProducerConfig.DefaultClientId): ProducerRequest = {
     val data = topics.flatMap(topic =>
       partitions.map(partition => (TopicAndPartition(topic,  partition), message))
     )
-    new ProducerRequest(correlationId, clientId, acks.toShort, timeout, Map(data:_*))
+    new ProducerRequest(correlationId, clientId, acks.toShort, timeout, collection.mutable.Map(data:_*))
   }
 
   def makeLeaderForPartition(zkClient: ZkClient, topic: String,
@@ -538,9 +579,9 @@ object TestUtils extends Logging {
       fail("Timing out after %d ms since leader is not elected or changed for partition [%s,%d]"
            .format(timeoutMs, topic, partition))
 
-    return leader
+    leader
   }
-  
+
   /**
    * Execute the given block. If it throws an assert error, retry. Repeat
    * until no error is thrown or the time limit ellapses
@@ -553,8 +594,8 @@ object TestUtils extends Logging {
         block
         return
       } catch {
-        case e: AssertionFailedError =>
-          val ellapsed = System.currentTimeMillis - startTime 
+        case e: AssertionError =>
+          val ellapsed = System.currentTimeMillis - startTime
           if(ellapsed > maxWaitMs) {
             throw e
           } else {
@@ -631,7 +672,7 @@ object TestUtils extends Logging {
 
     leader
   }
-  
+
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
     val file = new RandomAccessFile(fileName, "rw")
     file.seek(position)
@@ -639,7 +680,7 @@ object TestUtils extends Logging {
       file.writeByte(random.nextInt(255))
     file.close()
   }
-  
+
   def appendNonsenseToFile(fileName: File, size: Int) {
     val file = new FileOutputStream(fileName, true)
     for(i <- 0 until size)
@@ -678,10 +719,160 @@ object TestUtils extends Logging {
   def checkIfReassignPartitionPathExists(zkClient: ZkClient): Boolean = {
     ZkUtils.pathExists(zkClient, ZkUtils.ReassignPartitionsPath)
   }
-}
 
-object TestZKUtils {
-  val zookeeperConnect = "127.0.0.1:" + TestUtils.choosePort()
+  def verifyNonDaemonThreadsStatus() {
+    assertEquals(0, Thread.getAllStackTraces.keySet().toArray
+      .map(_.asInstanceOf[Thread])
+      .count(t => !t.isDaemon && t.isAlive && t.getClass.getCanonicalName.toLowerCase.startsWith("kafka")))
+  }
+
+  /**
+   * Create new LogManager instance with default configuration for testing
+   */
+  def createLogManager(logDirs: Array[File] = Array.empty[File],
+                       defaultConfig: LogConfig = LogConfig(),
+                       cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
+                       time: MockTime = new MockTime()): LogManager = {
+    new LogManager(logDirs = logDirs,
+                   topicConfigs = Map(),
+                   defaultConfig = defaultConfig,
+                   cleanerConfig = cleanerConfig,
+                   ioThreads = 4,
+                   flushCheckMs = 1000L,
+                   flushCheckpointMs = 10000L,
+                   retentionCheckMs = 1000L,
+                   scheduler = time.scheduler,
+                   time = time,
+                   brokerState = new BrokerState())
+  }
+  def sendMessages(servers: Seq[KafkaServer],
+                   topic: String,
+                   numMessages: Int,
+                   partition: Int = -1,
+                   compression: CompressionCodec = NoCompressionCodec): List[String] = {
+    val header = "test-%d".format(partition)
+    val props = new Properties()
+    props.put("compression.codec", compression.codec.toString)
+    val ms = 0.until(numMessages).map(x => header + "-" + x)
+
+    // Specific Partition
+    if (partition >= 0) {
+      val producer: Producer[Int, String] =
+        createProducer(TestUtils.getBrokerListStrFromServers(servers),
+          encoder = classOf[StringEncoder].getName,
+          keyEncoder = classOf[IntEncoder].getName,
+          partitioner = classOf[FixedValuePartitioner].getName,
+          producerProps = props)
+
+      producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
+      debug("Sent %d messages for partition [%s,%d]".format(ms.size, topic, partition))
+      producer.close()
+      ms.toList
+    } else {
+      // Use topic as the key to determine partition
+      val producer: Producer[String, String] = createProducer(
+        TestUtils.getBrokerListStrFromServers(servers),
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[StringEncoder].getName,
+        partitioner = classOf[DefaultPartitioner].getName,
+        producerProps = props)
+      producer.send(ms.map(m => new KeyedMessage[String, String](topic, topic, m)):_*)
+      producer.close()
+      debug("Sent %d messages for topic [%s]".format(ms.size, topic))
+      ms.toList
+    }
+
+  }
+
+  def sendMessage(servers: Seq[KafkaServer],
+                  topic: String,
+                  message: String) = {
+
+    val producer: Producer[String, String] =
+      createProducer(TestUtils.getBrokerListStrFromServers(servers),
+        encoder = classOf[StringEncoder].getName(),
+        keyEncoder = classOf[StringEncoder].getName())
+
+    producer.send(new KeyedMessage[String, String](topic, topic, message))
+    producer.close()
+  }
+
+  /**
+   * Consume all messages (or a specific number of messages)
+   * @param topicMessageStreams the Topic Message Streams
+   * @param nMessagesPerThread an optional field to specify the exact number of messages to be returned.
+   *                           ConsumerTimeoutException will be thrown if there are no messages to be consumed.
+   *                           If not specified, then all available messages will be consumed, and no exception is thrown.
+   *
+   *
+   * @return the list of messages consumed.
+   */
+  def getMessages(topicMessageStreams: Map[String, List[KafkaStream[String, String]]],
+                     nMessagesPerThread: Int = -1): List[String] = {
+
+    var messages: List[String] = Nil
+    val shouldGetAllMessages = nMessagesPerThread < 0
+    for ((topic, messageStreams) <- topicMessageStreams) {
+      for (messageStream <- messageStreams) {
+        val iterator = messageStream.iterator()
+        try {
+          var i = 0
+          while ((shouldGetAllMessages && iterator.hasNext()) || (i < nMessagesPerThread)) {
+            assertTrue(iterator.hasNext)
+            val message = iterator.next.message // will throw a timeout exception if the message isn't there
+            messages ::= message
+            debug("received message: " + message)
+            i += 1
+          }
+        } catch {
+          case e: ConsumerTimeoutException =>
+            if (shouldGetAllMessages) {
+              // swallow the exception
+              debug("consumer timed out after receiving " + messages.length + " message(s).")
+            } else {
+              throw e
+            }
+        }
+      }
+    }
+
+    messages.reverse
+  }
+
+  def verifyTopicDeletion(zkClient: ZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
+    val topicAndPartitions = (0 until numPartitions).map(TopicAndPartition(topic, _))
+    // wait until admin path for delete topic is deleted, signaling completion of topic deletion
+    TestUtils.waitUntilTrue(() => !ZkUtils.pathExists(zkClient, ZkUtils.getDeleteTopicPath(topic)),
+      "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic))
+    TestUtils.waitUntilTrue(() => !ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic)),
+      "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
+    // ensure that the topic-partition has been deleted from all brokers' replica managers
+    TestUtils.waitUntilTrue(() =>
+      servers.forall(server => topicAndPartitions.forall(tp => server.replicaManager.getPartition(tp.topic, tp.partition) == None)),
+      "Replica manager's should have deleted all of this topic's partitions")
+    // ensure that logs from all replicas are deleted if delete topic is marked successful in zookeeper
+    assertTrue("Replica logs not deleted after delete topic is complete",
+      servers.forall(server => topicAndPartitions.forall(tp => server.getLogManager().getLog(tp).isEmpty)))
+    // ensure that topic is removed from all cleaner offsets
+    TestUtils.waitUntilTrue(() => servers.forall(server => topicAndPartitions.forall { tp =>
+      val checkpoints = server.getLogManager().logDirs.map { logDir =>
+        new OffsetCheckpoint(new File(logDir, "cleaner-offset-checkpoint")).read()
+      }
+      checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
+    }), "Cleaner offset for deleted partition should have been removed")
+  }
+
+  /**
+   * Translate the given buffer into a string
+   * @param buffer The buffer to translate
+   * @param encoding The encoding to use in translating bytes to characters
+   */
+  def readString(buffer: ByteBuffer, encoding: String = Charset.defaultCharset.toString): String = {
+    val bytes = new Array[Byte](buffer.remaining)
+    buffer.get(bytes)
+    new String(bytes, encoding)
+  }
+
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

@@ -1,4 +1,21 @@
 #!/usr/bin/env python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 
 import argparse
 import sys
@@ -7,17 +24,31 @@ import time
 import datetime
 import tempfile
 import commands
+import getpass
 from jira.client import JIRA
 
-def get_jira():
-  options = {
-    'server': 'https://issues.apache.org/jira'
-  }
+def get_jira_config():
   # read the config file
   home=jira_home=os.getenv('HOME')
   home=home.rstrip('/')
-  jira_config = dict(line.strip().split('=') for line in open(home + '/jira.ini'))
-  jira = JIRA(options,basic_auth=(jira_config['user'], jira_config['password']))
+  if not (os.path.isfile(home + '/jira.ini')):
+    jira_user=raw_input('JIRA user :')
+    jira_pass=getpass.getpass('JIRA password :')
+    jira_config = {'user':jira_user, 'password':jira_pass}
+    return jira_config
+  else:
+    jira_config = dict(line.strip().split('=') for line in open(home + '/jira.ini'))
+    return jira_config
+
+def get_jira(jira_config):
+  options = {
+    'server': 'https://issues.apache.org/jira'
+  }
+  jira = JIRA(options=options,basic_auth=(jira_config['user'], jira_config['password']))
+  # (Force) verify the auth was really done
+  jira_session=jira.session()
+  if (jira_session is None):
+    raise Exception("Failed to login to the JIRA instance")
   return jira
 
 def cmd_exists(cmd):
@@ -76,6 +107,46 @@ def main():
   p=os.popen(git_remote_update)
   p.close()
 
+  # Get JIRA configuration and login to JIRA to ensure the credentials work, before publishing the patch to the review board
+  print "Verifying JIRA connection configurations"
+  try:
+    jira_config=get_jira_config()
+    jira=get_jira(jira_config)
+  except:
+    print "Failed to login to the JIRA instance", sys.exc_info()[0], sys.exc_info()[1]
+    sys.exit(1)
+
+  git_command="git format-patch " + opt.branch + " --stdout > " + patch_file
+  if opt.debug:
+    print git_command
+  p=os.popen(git_command)
+  p.close()
+
+  print 'Getting latest patch attached to the JIRA'
+  tmp_dir = tempfile.mkdtemp()
+  get_latest_patch_command="python ./dev-utils/test-patch.py --get-latest-patch --defect " + opt.jira + " --output " + tmp_dir + " > /dev/null 2>&1"
+  p=os.popen(get_latest_patch_command)
+  p.close()
+
+  previous_patch=tmp_dir + "/" + opt.jira + ".patch"
+  diff_file=tmp_dir + "/" + opt.jira + ".diff"
+  if os.path.isfile(previous_patch) and os.stat(previous_patch).st_size > 0:
+    print 'Creating diff with previous version of patch uploaded to JIRA'
+    diff_command = "diff " + previous_patch+ " " + patch_file + " > " + diff_file
+    try:
+      p=os.popen(diff_command)
+      sys.stdout.flush()
+      p.close()
+    except:
+      pass
+    print 'Diff with previous version of patch uploaded to JIRA is saved to ' + diff_file
+
+    print 'Checking if the there are changes that need to be pushed'
+    if os.stat(diff_file).st_size == 0:
+      print 'No changes found on top of changes uploaded to JIRA'
+      print 'Aborting'
+      sys.exit(1)
+
   rb_command= post_review_tool + " --publish --tracking-branch " + opt.branch + " --target-groups=kafka --bugs-closed=" + opt.jira
   if opt.debug:
     rb_command=rb_command + " --debug"
@@ -105,18 +176,13 @@ def main():
       print 'ERROR: Your reviewboard was not created/updated. Please run the script with the --debug option to troubleshoot the problem'
       p.close()
       sys.exit(1)
-  p.close()
+  if p.close() != None:
+    print 'ERROR: reviewboard update failed. Exiting.'
+    sys.exit(1)
   if opt.debug:
     print 'rb url=',rb_url
 
-  git_command="git diff " + opt.branch + " > " + patch_file
-  if opt.debug:
-    print git_command
-  p=os.popen(git_command)
-  p.close()
-
   print 'Creating diff against', opt.branch, 'and uploading patch to JIRA',opt.jira
-  jira=get_jira()
   issue = jira.issue(opt.jira)
   attachment=open(patch_file)
   jira.add_attachment(issue,attachment)
@@ -131,6 +197,17 @@ def main():
 
   comment = comment + rb_url + ' against branch ' + opt.branch
   jira.add_comment(opt.jira, comment)
+
+  #update the JIRA status to PATCH AVAILABLE
+  transitions = jira.transitions(issue)
+  transitionsMap ={}
+  
+  for t in transitions:
+    transitionsMap[t['name']] = t['id']
+
+  if('Submit Patch' in transitionsMap):
+     jira.transition_issue(issue, transitionsMap['Submit Patch'] , assignee={'name': jira_config['user']} )
+
 
 if __name__ == '__main__':
   sys.exit(main())

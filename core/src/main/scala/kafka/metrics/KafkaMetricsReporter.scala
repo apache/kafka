@@ -20,7 +20,7 @@
 
 package kafka.metrics
 
-import kafka.utils.{Utils, VerifiableProperties}
+import kafka.utils.{CoreUtils, VerifiableProperties}
 import java.util.concurrent.atomic.AtomicBoolean
 
 
@@ -52,14 +52,14 @@ object KafkaMetricsReporter {
 
   def startReporters (verifiableProps: VerifiableProperties) {
     ReporterStarted synchronized {
-      if (ReporterStarted.get() == false) {
+      if (!ReporterStarted.get()) {
         val metricsConfig = new KafkaMetricsConfig(verifiableProps)
         if(metricsConfig.reporters.size > 0) {
           metricsConfig.reporters.foreach(reporterType => {
-            val reporter = Utils.createObject[KafkaMetricsReporter](reporterType)
+            val reporter = CoreUtils.createObject[KafkaMetricsReporter](reporterType)
             reporter.init(verifiableProps)
             if (reporter.isInstanceOf[KafkaMetricsReporterMBean])
-              Utils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)
+              CoreUtils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)
           })
           ReporterStarted.set(true)
         }

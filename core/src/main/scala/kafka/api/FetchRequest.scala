@@ -17,19 +17,18 @@
 
 package kafka.api
 
-import java.nio.ByteBuffer
 import kafka.utils.nonthreadsafe
 import kafka.api.ApiUtils._
-import scala.collection.immutable.Map
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.consumer.ConsumerConfig
-import java.util.concurrent.atomic.AtomicInteger
 import kafka.network.RequestChannel
 import kafka.message.MessageSet
 
+import java.util.concurrent.atomic.AtomicInteger
+import java.nio.ByteBuffer
+import scala.collection.immutable.Map
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
-
 
 object FetchRequest {
   val CurrentVersion = 0.shortValue
@@ -59,14 +58,14 @@ object FetchRequest {
   }
 }
 
-case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentVersion,
-                                        override val correlationId: Int = FetchRequest.DefaultCorrelationId,
-                                        clientId: String = ConsumerConfig.DefaultClientId,
-                                        replicaId: Int = Request.OrdinaryConsumerId,
-                                        maxWait: Int = FetchRequest.DefaultMaxWait,
-                                        minBytes: Int = FetchRequest.DefaultMinBytes,
-                                        requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
-        extends RequestOrResponse(Some(RequestKeys.FetchKey), correlationId) {
+case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
+                        correlationId: Int = FetchRequest.DefaultCorrelationId,
+                        clientId: String = ConsumerConfig.DefaultClientId,
+                        replicaId: Int = Request.OrdinaryConsumerId,
+                        maxWait: Int = FetchRequest.DefaultMaxWait,
+                        minBytes: Int = FetchRequest.DefaultMinBytes,
+                        requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
+        extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
 
   /**
    * Partitions the request info into a map of maps (one for each topic).
@@ -150,7 +149,7 @@ case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentV
         (topicAndPartition, FetchResponsePartitionData(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1, MessageSet.Empty))
     }
     val errorResponse = FetchResponse(correlationId, fetchResponsePartitionData)
-    requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(errorResponse)))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

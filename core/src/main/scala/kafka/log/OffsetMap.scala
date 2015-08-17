@@ -21,6 +21,7 @@ import java.util.Arrays
 import java.security.MessageDigest
 import java.nio.ByteBuffer
 import kafka.utils._
+import org.apache.kafka.common.utils.Utils
 
 trait OffsetMap {
   def slots: Int
@@ -68,7 +69,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   /**
    * The maximum number of entries this map can contain
    */
-  val slots: Int = (memory / bytesPerEntry).toInt
+  val slots: Int = memory / bytesPerEntry
   
   /**
    * Associate this offset to the given key.
@@ -158,7 +159,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * @return The byte offset in the buffer at which the ith probing for the given hash would reside
    */
   private def positionOf(hash: Array[Byte], attempt: Int): Int = {
-    val probe = Utils.readInt(hash, math.min(attempt, hashSize - 4)) + math.max(0, attempt - hashSize + 4)
+    val probe = CoreUtils.readInt(hash, math.min(attempt, hashSize - 4)) + math.max(0, attempt - hashSize + 4)
     val slot = Utils.abs(probe) % slots
     this.probes += 1
     slot * bytesPerEntry

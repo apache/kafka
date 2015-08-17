@@ -360,19 +360,23 @@ def setup_remote_hosts(systemTestEnv):
     clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
 
     localKafkaHome = os.path.abspath(systemTestEnv.SYSTEM_TEST_BASE_DIR + "/..")
-    localJavaBin   = ""
-    localJavaHome  = ""
 
-    subproc = sys_call_return_subproc("which java")
-    for line in subproc.stdout.readlines():
-        if line.startswith("which: no "):
-            logger.error("No Java binary found in local host", extra=d)
-            return False
-        else:
-            line = line.rstrip('\n')
-            localJavaBin = line
-            matchObj = re.match("(.*)\/bin\/java$", line)
-            localJavaHome = matchObj.group(1)
+    # when configuring "default" java_home, use JAVA_HOME environment variable, if exists
+    # otherwise, use the directory with the java binary
+    localJavaHome  = os.environ.get('JAVA_HOME')
+    if localJavaHome is not None:
+        localJavaBin   = localJavaHome + '/bin/java'
+    else:
+        subproc = sys_call_return_subproc("which java")
+        for line in subproc.stdout.readlines():
+            if line.startswith("which: no "):
+                logger.error("No Java binary found in local host", extra=d)
+                return False
+            else:
+                line = line.rstrip('\n')
+                localJavaBin = line
+                matchObj = re.match("(.*)\/bin\/java$", line)
+                localJavaHome = matchObj.group(1)
 
     listIndex = -1
     for clusterEntityConfigDict in clusterEntityConfigDictList:

@@ -41,4 +41,8 @@ public final class LogEntry {
     public String toString() {
         return "LogEntry(" + offset + ", " + record + ")";
     }
+    
+    public int size() {
+        return record.size() + Records.LOG_OVERHEAD;
+    }
 }

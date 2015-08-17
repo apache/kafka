@@ -28,6 +28,14 @@ class OffsetFetchRequest(groupId: String,
                          correlationId: Int,
                          clientId: String) {
 
+  def this(groupId: String,
+           requestInfo: java.util.List[TopicAndPartition],
+           correlationId: Int,
+           clientId: String) {
+    // by default bind to version 0 so that it fetches from ZooKeeper
+    this(groupId, requestInfo, 0, correlationId, clientId)
+  }
+
   val underlying = {
     val scalaSeq = {
       import JavaConversions._

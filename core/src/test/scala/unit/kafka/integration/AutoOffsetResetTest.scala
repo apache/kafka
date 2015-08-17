@@ -24,14 +24,13 @@ import kafka.utils.TestUtils
 import kafka.serializer._
 import kafka.producer.{Producer, KeyedMessage}
 
-import org.junit.Test
+import org.junit.{After, Before, Test}
 import org.apache.log4j.{Level, Logger}
-import org.scalatest.junit.JUnit3Suite
-import junit.framework.Assert._
+import org.junit.Assert._
 
-class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
+class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
 
-  val configs = List(new KafkaConfig(TestUtils.createBrokerConfig(0)))
+  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   val topic = "test_topic"
   val group = "default_group"
@@ -42,12 +41,14 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
   
   val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
 
+  @Before
   override def setUp() {
     super.setUp()
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
   }
 
+  @After
   override def tearDown() {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
@@ -78,7 +79,7 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
     TestUtils.createTopic(zkClient, topic, 1, 1, servers)
 
     val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(
-      TestUtils.getBrokerListStrFromConfigs(configs),
+      TestUtils.getBrokerListStrFromServers(servers),
       keyEncoder = classOf[StringEncoder].getName)
 
     for(i <- 0 until numMessages)

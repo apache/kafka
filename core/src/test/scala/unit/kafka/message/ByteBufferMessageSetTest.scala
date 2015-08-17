@@ -19,7 +19,7 @@ package kafka.message
 
 import java.nio._
 import java.util.concurrent.atomic.AtomicLong
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.TestUtils
 
@@ -147,11 +147,11 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     // check uncompressed offsets 
     checkOffsets(messages, 0)
     var offset = 1234567
-    checkOffsets(messages.assignOffsets(new AtomicLong(offset), NoCompressionCodec), offset)
-    
+    checkOffsets(messages.validateMessagesAndAssignOffsets(new AtomicLong(offset), NoCompressionCodec, NoCompressionCodec), offset)
+
     // check compressed messages
     checkOffsets(compressedMessages, 0)
-    checkOffsets(compressedMessages.assignOffsets(new AtomicLong(offset), DefaultCompressionCodec), offset)
+    checkOffsets(compressedMessages.validateMessagesAndAssignOffsets(new AtomicLong(offset), DefaultCompressionCodec, DefaultCompressionCodec), offset)
   }
   
   /* check that offsets are assigned based on byte offset from the given base offset */

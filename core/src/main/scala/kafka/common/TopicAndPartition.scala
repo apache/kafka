@@ -1,6 +1,7 @@
 package kafka.common
 
 import kafka.cluster.{Replica, Partition}
+import kafka.utils.Json
 
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -34,4 +35,3 @@ case class TopicAndPartition(topic: String, partition: Int) {
 
   override def toString = "[%s,%d]".format(topic, partition)
 }
-

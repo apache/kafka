@@ -19,7 +19,7 @@ package kafka.api
 
 import java.nio._
 import kafka.api.ApiUtils._
-import kafka.network.{BoundedByteBufferSend, RequestChannel, InvalidRequestException}
+import kafka.network.{RequestOrResponseSend, RequestChannel, InvalidRequestException}
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
@@ -54,13 +54,13 @@ object StopReplicaRequest extends Logging {
 }
 
 case class StopReplicaRequest(versionId: Short,
-                              override val correlationId: Int,
+                              correlationId: Int,
                               clientId: String,
                               controllerId: Int,
                               controllerEpoch: Int,
                               deletePartitions: Boolean,
                               partitions: Set[TopicAndPartition])
-        extends RequestOrResponse(Some(RequestKeys.StopReplicaKey), correlationId) {
+        extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
 
   def this(deletePartitions: Boolean, partitions: Set[TopicAndPartition], controllerId: Int, controllerEpoch: Int, correlationId: Int) = {
     this(StopReplicaRequest.CurrentVersion, correlationId, StopReplicaRequest.DefaultClientId,
@@ -106,7 +106,7 @@ case class StopReplicaRequest(versionId: Short,
       case topicAndPartition => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
     }.toMap
     val errorResponse = StopReplicaResponse(correlationId, responseMap)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

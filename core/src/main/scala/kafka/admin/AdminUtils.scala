@@ -17,26 +17,32 @@
 
 package kafka.admin
 
+import kafka.common._
+import kafka.cluster.{BrokerEndPoint, Broker}
+
+import kafka.log.LogConfig
+import kafka.server.ConfigType
+import kafka.utils._
+import kafka.api.{TopicMetadata, PartitionMetadata}
+
 import java.util.Random
 import java.util.Properties
-import kafka.api.{TopicMetadata, PartitionMetadata}
-import kafka.cluster.Broker
-import kafka.log.LogConfig
-import kafka.utils.{Logging, ZkUtils, Json}
-import org.I0Itec.zkclient.ZkClient
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import org.apache.kafka.common.protocol.SecurityProtocol
+
+import scala.Predef._
 import scala.collection._
 import mutable.ListBuffer
 import scala.collection.mutable
-import kafka.common._
-import scala.Predef._
 import collection.Map
-import scala.Some
 import collection.Set
+
+import org.I0Itec.zkclient.ZkClient
+import org.I0Itec.zkclient.exception.ZkNodeExistsException
 
 object AdminUtils extends Logging {
   val rand = new Random
-  val TopicConfigChangeZnodePrefix = "config_change_"
+  val AdminClientId = "__admin_client"
+  val EntityConfigChangeZnodePrefix = "config_change_"
 
   /**
    * There are 2 goals of replica assignment:
@@ -97,7 +103,11 @@ object AdminUtils extends Logging {
   * @param replicaAssignmentStr Manual replica assignment
   * @param checkBrokerAvailable Ignore checking if assigned replica broker is available. Only used for testing
   */
-  def addPartitions(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicaAssignmentStr: String = "", checkBrokerAvailable: Boolean = true) {
+  def addPartitions(zkClient: ZkClient,
+                    topic: String,
+                    numPartitions: Int = 1,
+                    replicaAssignmentStr: String = "",
+                    checkBrokerAvailable: Boolean = true) {
     val existingPartitionsReplicaList = ZkUtils.getReplicaAssignmentForTopics(zkClient, List(topic))
     if (existingPartitionsReplicaList.size == 0)
       throw new AdminOperationException("The topic %s does not exist".format(topic))
@@ -150,9 +160,69 @@ object AdminUtils extends Logging {
   }
   
   def deleteTopic(zkClient: ZkClient, topic: String) {
-    ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
+    try {
+      ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
+    } catch {
+      case e1: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+        "topic %s is already marked for deletion".format(topic))
+      case e2: Throwable => throw new AdminOperationException(e2.toString)
+    }
   }
   
+  def isConsumerGroupActive(zkClient: ZkClient, group: String) = {
+    ZkUtils.getConsumersInGroup(zkClient, group).nonEmpty
+  }
+
+  /**
+   * Delete the whole directory of the given consumer group if the group is inactive.
+   *
+   * @param zkClient Zookeeper client
+   * @param group Consumer group
+   * @return whether or not we deleted the consumer group information
+   */
+  def deleteConsumerGroupInZK(zkClient: ZkClient, group: String) = {
+    if (!isConsumerGroupActive(zkClient, group)) {
+      val dir = new ZKGroupDirs(group)
+      ZkUtils.deletePathRecursive(zkClient, dir.consumerGroupDir)
+      true
+    }
+    else false
+  }
+
+  /**
+   * Delete the given consumer group's information for the given topic in Zookeeper if the group is inactive.
+   * If the consumer group consumes no other topics, delete the whole consumer group directory.
+   *
+   * @param zkClient Zookeeper client
+   * @param group Consumer group
+   * @param topic Topic of the consumer group information we wish to delete
+   * @return whether or not we deleted the consumer group information for the given topic
+   */
+  def deleteConsumerGroupInfoForTopicInZK(zkClient: ZkClient, group: String, topic: String) = {
+    val topics = ZkUtils.getTopicsByConsumerGroup(zkClient, group)
+    if (topics == Seq(topic)) {
+      deleteConsumerGroupInZK(zkClient, group)
+    }
+    else if (!isConsumerGroupActive(zkClient, group)) {
+      val dir = new ZKGroupTopicDirs(group, topic)
+      ZkUtils.deletePathRecursive(zkClient, dir.consumerOwnerDir)
+      ZkUtils.deletePathRecursive(zkClient, dir.consumerOffsetDir)
+      true
+    }
+    else false
+  }
+
+  /**
+   * Delete every inactive consumer group's information about the given topic in Zookeeper.
+   *
+   * @param zkClient Zookeeper client
+   * @param topic Topic of the consumer group information we wish to delete
+   */
+  def deleteAllConsumerGroupInfoForTopicInZK(zkClient: ZkClient, topic: String) {
+    val groups = ZkUtils.getAllConsumerGroupsForTopic(zkClient, topic)
+    groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkClient, group, topic))
+  }
+
   def topicExists(zkClient: ZkClient, topic: String): Boolean = 
     zkClient.exists(ZkUtils.getTopicPath(topic))
     
@@ -165,7 +235,7 @@ object AdminUtils extends Logging {
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor)
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, replicaAssignment, topicConfig)
   }
-                  
+
   def createOrUpdateTopicPartitionAssignmentPathInZK(zkClient: ZkClient,
                                                      topic: String,
                                                      partitionReplicaAssignment: Map[Int, Seq[Int]],
@@ -173,21 +243,35 @@ object AdminUtils extends Logging {
                                                      update: Boolean = false) {
     // validate arguments
     Topic.validate(topic)
-    LogConfig.validate(config)
     require(partitionReplicaAssignment.values.map(_.size).toSet.size == 1, "All partitions should have the same number of replicas.")
 
     val topicPath = ZkUtils.getTopicPath(topic)
-    if(!update && zkClient.exists(topicPath))
-      throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
+
+    if (!update) {
+      if (zkClient.exists(topicPath))
+        throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
+      else if (Topic.hasCollisionChars(topic)) {
+        val allTopics = ZkUtils.getAllTopics(zkClient)
+        val collidingTopics = allTopics.filter(t => Topic.hasCollision(topic, t))
+        if (collidingTopics.nonEmpty) {
+          throw new InvalidTopicException("Topic \"%s\" collides with existing topics: %s".format(topic, collidingTopics.mkString(", ")))
+        }
+      }
+    }
+
     partitionReplicaAssignment.values.foreach(reps => require(reps.size == reps.toSet.size, "Duplicate replica assignment found: "  + partitionReplicaAssignment))
-    
-    // write out the config if there is any, this isn't transactional with the partition assignments
-    writeTopicConfig(zkClient, topic, config)
-    
+
+    // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
+    if (!update) {
+      // write out the config if there is any, this isn't transactional with the partition assignments
+      LogConfig.validate(config)
+      writeEntityConfig(zkClient, ConfigType.Topic, topic, config)
+    }
+
     // create the partition assignment
     writeTopicPartitionAssignment(zkClient, topic, partitionReplicaAssignment, update)
   }
-  
+
   private def writeTopicPartitionAssignment(zkClient: ZkClient, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
       val zkPath = ZkUtils.getTopicPath(topic)
@@ -206,7 +290,19 @@ object AdminUtils extends Logging {
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
-  
+
+  /**
+   * Update the config for a client and create a change notification so the change will propagate to other brokers
+   * @param zkClient: The ZkClient handle used to write the new config to zookeeper
+   * @param clientId: The clientId for which configs are being changed
+   * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
+   *                 existing configs need to be deleted, it should be done prior to invoking this API
+   *
+   */
+  def changeClientIdConfig(zkClient: ZkClient, clientId: String, configs: Properties) {
+    changeEntityConfig(zkClient, ConfigType.Client, clientId, configs)
+  }
+
   /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
    * @param zkClient: The ZkClient handle used to write the new config to zookeeper
@@ -218,55 +314,69 @@ object AdminUtils extends Logging {
   def changeTopicConfig(zkClient: ZkClient, topic: String, configs: Properties) {
     if(!topicExists(zkClient, topic))
       throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
-
     // remove the topic overrides
     LogConfig.validate(configs)
-
-    // write the new config--may not exist if there were previously no overrides
-    writeTopicConfig(zkClient, topic, configs)
-    
-    // create the change notification
-    zkClient.createPersistentSequential(ZkUtils.TopicConfigChangesPath + "/" + TopicConfigChangeZnodePrefix, Json.encode(topic))
+    changeEntityConfig(zkClient, ConfigType.Topic, topic, configs)
   }
-  
+
+  private def changeEntityConfig(zkClient: ZkClient, entityType: String, entityName: String, configs: Properties) {
+    // write the new config--may not exist if there were previously no overrides
+    writeEntityConfig(zkClient, entityType, entityName, configs)
+
+    // create the change notification
+    val seqNode = ZkUtils.EntityConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
+    val content = Json.encode(getConfigChangeZnodeData(entityType, entityName))
+    zkClient.createPersistentSequential(seqNode, content)
+  }
+
+  def getConfigChangeZnodeData(entityType: String, entityName: String) : Map[String, Any] = {
+    Map("version" -> 1, "entity_type" -> entityType, "entity_name" -> entityName)
+  }
+
   /**
    * Write out the topic config to zk, if there is any
    */
-  private def writeTopicConfig(zkClient: ZkClient, topic: String, config: Properties) {
+  private def writeEntityConfig(zkClient: ZkClient, entityType: String, entityName: String, config: Properties) {
     val configMap: mutable.Map[String, String] = {
       import JavaConversions._
       config
     }
     val map = Map("version" -> 1, "config" -> configMap)
-    ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicConfigPath(topic), Json.encode(map))
+    ZkUtils.updatePersistentPath(zkClient, ZkUtils.getEntityConfigPath(entityType, entityName), Json.encode(map))
   }
   
   /**
-   * Read the topic config (if any) from zk
+   * Read the entity (topic or client) config (if any) from zk
    */
-  def fetchTopicConfig(zkClient: ZkClient, topic: String): Properties = {
-    val str: String = zkClient.readData(ZkUtils.getTopicConfigPath(topic), true)
+  def fetchEntityConfig(zkClient: ZkClient, entityType: String, entity: String): Properties = {
+    val str: String = zkClient.readData(ZkUtils.getEntityConfigPath(entityType, entity), true)
     val props = new Properties()
     if(str != null) {
       Json.parseFull(str) match {
         case None => // there are no config overrides
-        case Some(map: Map[String, _]) => 
+        case Some(mapAnon: Map[_, _]) =>
+          val map = mapAnon collect { case (k: String, v: Any) => k -> v }
           require(map("version") == 1)
           map.get("config") match {
-            case Some(config: Map[String, String]) =>
-              for((k,v) <- config)
-                props.setProperty(k, v)
-            case _ => throw new IllegalArgumentException("Invalid topic config: " + str)
+            case Some(config: Map[_, _]) =>
+              for(configTup <- config)
+                configTup match {
+                  case (k: String, v: String) =>
+                    props.setProperty(k, v)
+                  case _ => throw new IllegalArgumentException("Invalid " + entityType + " config: " + str)
+                }
+            case _ => throw new IllegalArgumentException("Invalid " + entityType + " config: " + str)
           }
 
-        case o => throw new IllegalArgumentException("Unexpected value in config: "  + str)
+        case o => throw new IllegalArgumentException("Unexpected value in config:(%s), entity_type: (%s), entity: (%s)"
+                                                             .format(str, entityType, entity))
       }
     }
     props
   }
 
   def fetchAllTopicConfigs(zkClient: ZkClient): Map[String, Properties] =
-    ZkUtils.getAllTopics(zkClient).map(topic => (topic, fetchTopicConfig(zkClient, topic))).toMap
+    ZkUtils.getAllTopics(zkClient).map(topic => (topic, fetchEntityConfig(zkClient, ConfigType.Topic, topic))).toMap
 
   def fetchTopicMetadataFromZk(topic: String, zkClient: ZkClient): TopicMetadata =
     fetchTopicMetadataFromZk(topic, zkClient, new mutable.HashMap[Int, Broker])
@@ -276,7 +386,9 @@ object AdminUtils extends Logging {
     topics.map(topic => fetchTopicMetadataFromZk(topic, zkClient, cachedBrokerInfo))
   }
 
-  private def fetchTopicMetadataFromZk(topic: String, zkClient: ZkClient, cachedBrokerInfo: mutable.HashMap[Int, Broker]): TopicMetadata = {
+
+
+  private def fetchTopicMetadataFromZk(topic: String, zkClient: ZkClient, cachedBrokerInfo: mutable.HashMap[Int, Broker], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): TopicMetadata = {
     if(ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic))) {
       val topicPartitionAssignment = ZkUtils.getPartitionAssignmentForTopics(zkClient, List(topic)).get(topic).get
       val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
@@ -287,22 +399,22 @@ object AdminUtils extends Logging {
         val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
         debug("replicas = " + replicas + ", in sync replicas = " + inSyncReplicas + ", leader = " + leader)
 
-        var leaderInfo: Option[Broker] = None
-        var replicaInfo: Seq[Broker] = Nil
-        var isrInfo: Seq[Broker] = Nil
+        var leaderInfo: Option[BrokerEndPoint] = None
+        var replicaInfo: Seq[BrokerEndPoint] = Nil
+        var isrInfo: Seq[BrokerEndPoint] = Nil
         try {
           leaderInfo = leader match {
             case Some(l) =>
               try {
-                Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head)
+                Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head.getBrokerEndPoint(protocol))
               } catch {
                 case e: Throwable => throw new LeaderNotAvailableException("Leader not available for partition [%s,%d]".format(topic, partition), e)
               }
             case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
           }
           try {
-            replicaInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas.map(id => id.toInt))
-            isrInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas)
+            replicaInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas).map(_.getBrokerEndPoint(protocol))
+            isrInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas).map(_.getBrokerEndPoint(protocol))
           } catch {
             case e: Throwable => throw new ReplicaNotAvailableException(e)
           }

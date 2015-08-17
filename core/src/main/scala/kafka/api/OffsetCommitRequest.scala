@@ -18,27 +18,51 @@
 package kafka.api
 
 import java.nio.ByteBuffer
+
 import kafka.api.ApiUtils._
-import kafka.utils.{SystemTime, Logging}
-import kafka.network.{RequestChannel, BoundedByteBufferSend}
-import kafka.common.{OffsetAndMetadata, ErrorMapping, TopicAndPartition}
+import kafka.common.{ErrorMapping, OffsetAndMetadata, TopicAndPartition}
+import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
+import kafka.utils.Logging
+
 import scala.collection._
 
 object OffsetCommitRequest extends Logging {
-  val CurrentVersion: Short = 0
+  val CurrentVersion: Short = 2
   val DefaultClientId = ""
 
   def readFrom(buffer: ByteBuffer): OffsetCommitRequest = {
-    val now = SystemTime.milliseconds
-
     // Read values from the envelope
     val versionId = buffer.getShort
+    assert(versionId == 0 || versionId == 1 || versionId == 2,
+           "Version " + versionId + " is invalid for OffsetCommitRequest. Valid versions are 0, 1 or 2.")
+
     val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
 
     // Read the OffsetRequest 
     val consumerGroupId = readShortString(buffer)
+
+    // version 1 and 2 specific fields
+    val groupGenerationId: Int =
+      if (versionId >= 1)
+        buffer.getInt
+      else
+        org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID
+
+    val consumerId: String =
+      if (versionId >= 1)
+        readShortString(buffer)
+      else
+        org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_CONSUMER_ID
+
+    // version 2 specific fields
+    val retentionMs: Long =
+      if (versionId >= 2)
+        buffer.getLong
+      else
+        org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME
+
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
       val topic = readShortString(buffer)
@@ -47,43 +71,36 @@ object OffsetCommitRequest extends Logging {
         val partitionId = buffer.getInt
         val offset = buffer.getLong
         val timestamp = {
-          val given = buffer.getLong
-          if (given == -1L) now else given
+          // version 1 specific field
+          if (versionId == 1)
+            buffer.getLong
+          else
+            org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP
         }
         val metadata = readShortString(buffer)
+
         (TopicAndPartition(topic, partitionId), OffsetAndMetadata(offset, metadata, timestamp))
       })
     })
-    OffsetCommitRequest(consumerGroupId, immutable.Map(pairs:_*), versionId, correlationId, clientId)
+
+    OffsetCommitRequest(consumerGroupId, immutable.Map(pairs:_*), versionId, correlationId, clientId, groupGenerationId, consumerId, retentionMs)
   }
 }
 
 case class OffsetCommitRequest(groupId: String,
                                requestInfo: immutable.Map[TopicAndPartition, OffsetAndMetadata],
                                versionId: Short = OffsetCommitRequest.CurrentVersion,
-                               override val correlationId: Int = 0,
-                               clientId: String = OffsetCommitRequest.DefaultClientId)
-    extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey), correlationId) {
+                               correlationId: Int = 0,
+                               clientId: String = OffsetCommitRequest.DefaultClientId,
+                               groupGenerationId: Int = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID,
+                               consumerId: String =  org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_CONSUMER_ID,
+                               retentionMs: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME)
+    extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey)) {
+
+  assert(versionId == 0 || versionId == 1 || versionId == 2,
+         "Version " + versionId + " is invalid for OffsetCommitRequest. Valid versions are 0, 1 or 2.")
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
-
-  def filterLargeMetadata(maxMetadataSize: Int) =
-    requestInfo.filter(info => info._2.metadata == null || info._2.metadata.length <= maxMetadataSize)
-
-  def responseFor(errorCode: Short, offsetMetadataMaxSize: Int) = {
-    val commitStatus = requestInfo.map {info =>
-      (info._1, if (info._2.metadata != null && info._2.metadata.length > offsetMetadataMaxSize)
-                  ErrorMapping.OffsetMetadataTooLargeCode
-                else if (errorCode == ErrorMapping.UnknownTopicOrPartitionCode)
-                  ErrorMapping.ConsumerCoordinatorNotAvailableCode
-                else if (errorCode == ErrorMapping.NotLeaderForPartitionCode)
-                  ErrorMapping.NotCoordinatorForConsumerCode
-                else
-                  errorCode)
-    }.toMap
-    OffsetCommitResponse(commitStatus, correlationId)
-  }
-
 
   def writeTo(buffer: ByteBuffer) {
     // Write envelope
@@ -93,6 +110,18 @@ case class OffsetCommitRequest(groupId: String,
 
     // Write OffsetCommitRequest
     writeShortString(buffer, groupId)             // consumer group
+
+    // version 1 and 2 specific data
+    if (versionId >= 1) {
+      buffer.putInt(groupGenerationId)
+      writeShortString(buffer, consumerId)
+    }
+
+    // version 2 or above specific data
+    if (versionId >= 2) {
+      buffer.putLong(retentionMs)
+    }
+
     buffer.putInt(requestInfoGroupedByTopic.size) // number of topics
     requestInfoGroupedByTopic.foreach( t1 => { // topic -> Map[TopicAndPartition, OffsetMetadataAndError]
       writeShortString(buffer, t1._1) // topic
@@ -100,7 +129,9 @@ case class OffsetCommitRequest(groupId: String,
       t1._2.foreach( t2 => {
         buffer.putInt(t2._1.partition)
         buffer.putLong(t2._2.offset)
-        buffer.putLong(t2._2.timestamp)
+        // version 1 specific data
+        if (versionId == 1)
+          buffer.putLong(t2._2.commitTimestamp)
         writeShortString(buffer, t2._2.metadata)
       })
     })
@@ -110,7 +141,9 @@ case class OffsetCommitRequest(groupId: String,
     2 + /* versionId */
     4 + /* correlationId */
     shortStringLength(clientId) +
-    shortStringLength(groupId) + 
+    shortStringLength(groupId) +
+    (if (versionId >= 1) 4 /* group generation id */ + shortStringLength(consumerId) else 0) +
+    (if (versionId >= 2) 8 /* retention time */ else 0) +
     4 + /* topic count */
     requestInfoGroupedByTopic.foldLeft(0)((count, topicAndOffsets) => {
       val (topic, offsets) = topicAndOffsets
@@ -121,15 +154,17 @@ case class OffsetCommitRequest(groupId: String,
         innerCount +
         4 /* partition */ +
         8 /* offset */ +
-        8 /* timestamp */ +
+        (if (versionId == 1) 8 else 0) /* timestamp */ +
         shortStringLength(offsetAndMetadata._2.metadata)
       })
     })
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
-    val errorResponse = responseFor(errorCode, Int.MaxValue)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    val commitStatus = requestInfo.mapValues(_ => errorCode)
+    val commitResponse = OffsetCommitResponse(commitStatus, correlationId)
+
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, commitResponse)))
   }
 
   override def describe(details: Boolean): String = {
@@ -139,6 +174,9 @@ case class OffsetCommitRequest(groupId: String,
     offsetCommitRequest.append("; CorrelationId: " + correlationId)
     offsetCommitRequest.append("; ClientId: " + clientId)
     offsetCommitRequest.append("; GroupId: " + groupId)
+    offsetCommitRequest.append("; GroupGenerationId: " + groupGenerationId)
+    offsetCommitRequest.append("; ConsumerId: " + consumerId)
+    offsetCommitRequest.append("; RetentionMs: " + retentionMs)
     if(details)
       offsetCommitRequest.append("; RequestInfo: " + requestInfo.mkString(","))
     offsetCommitRequest.toString()

@@ -12,12 +12,7 @@
  */
 package org.apache.kafka.common.config;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
@@ -44,7 +39,7 @@ public class AbstractConfig {
     private final Map<String, Object> values;
 
     @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Boolean doLog) {
         /* check that all the keys are really strings */
         for (Object key : originals.keySet())
             if (!(key instanceof String))
@@ -52,7 +47,12 @@ public class AbstractConfig {
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
-        logAll();
+        if (doLog)
+            logAll();
+    }
+
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
+        this(definition, originals, true);
     }
 
     protected Object get(String key) {
@@ -62,15 +62,19 @@ public class AbstractConfig {
         return values.get(key);
     }
 
-    public int getInt(String key) {
+    public Short getShort(String key) {
+        return (Short) get(key);
+    }
+
+    public Integer getInt(String key) {
         return (Integer) get(key);
     }
 
-    public long getLong(String key) {
+    public Long getLong(String key) {
         return (Long) get(key);
     }
 
-    public double getDouble(String key) {
+    public Double getDouble(String key) {
         return (Double) get(key);
     }
 
@@ -97,6 +101,12 @@ public class AbstractConfig {
         return keys;
     }
 
+    public Map<String, Object> originals() {
+        Map<String, Object> copy = new HashMap<String, Object>();
+        copy.putAll(originals);
+        return copy;
+    }
+
     private void logAll() {
         StringBuilder b = new StringBuilder();
         b.append(getClass().getSimpleName());
@@ -117,7 +127,7 @@ public class AbstractConfig {
      */
     public void logUnused() {
         for (String key : unused())
-            log.warn("The configuration {} = {} was supplied but isn't a known config.", key, this.values.get(key));
+            log.warn("The configuration {} = {} was supplied but isn't a known config.", key, this.originals.get(key));
     }
 
     /**
@@ -144,7 +154,12 @@ public class AbstractConfig {
         List<String> klasses = getList(key);
         List<T> objects = new ArrayList<T>();
         for (String klass : klasses) {
-            Class<?> c = getClass(klass);
+            Class<?> c;
+            try {
+                c = Class.forName(klass);
+            } catch (ClassNotFoundException e) {
+                throw new ConfigException(key, klass, "Class " + klass + " could not be found.");
+            }
             if (c == null)
                 return null;
             Object o = Utils.newInstance(c);
@@ -157,4 +172,18 @@ public class AbstractConfig {
         return objects;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AbstractConfig that = (AbstractConfig) o;
+
+        return originals.equals(that.originals);
+    }
+
+    @Override
+    public int hashCode() {
+        return originals.hashCode();
+    }
 }

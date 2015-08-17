@@ -28,35 +28,29 @@ import org.apache.kafka.common.protocol.types.Struct;
 /**
  * A response header in the kafka protocol.
  */
-public class ResponseHeader {
+public class ResponseHeader extends AbstractRequestResponse {
 
-    private static Field CORRELATION_KEY_FIELD = RESPONSE_HEADER.get("correlation_id");
+    private static final Field CORRELATION_KEY_FIELD = RESPONSE_HEADER.get("correlation_id");
 
-    private final Struct header;
+    private final int correlationId;
 
     public ResponseHeader(Struct header) {
-        this.header = header;
+        super(header);
+        correlationId = struct.getInt(CORRELATION_KEY_FIELD);
     }
 
     public ResponseHeader(int correlationId) {
-        this(new Struct(Protocol.RESPONSE_HEADER));
-        this.header.set(CORRELATION_KEY_FIELD, correlationId);
+        super(new Struct(Protocol.RESPONSE_HEADER));
+        struct.set(CORRELATION_KEY_FIELD, correlationId);
+        this.correlationId = correlationId;
     }
 
     public int correlationId() {
-        return (Integer) header.get(CORRELATION_KEY_FIELD);
-    }
-
-    public void writeTo(ByteBuffer buffer) {
-        header.writeTo(buffer);
-    }
-
-    public int sizeOf() {
-        return header.sizeOf();
+        return correlationId;
     }
 
     public static ResponseHeader parse(ByteBuffer buffer) {
-        return new ResponseHeader(((Struct) Protocol.RESPONSE_HEADER.read(buffer)));
+        return new ResponseHeader((Struct) Protocol.RESPONSE_HEADER.read(buffer));
     }
 
 }

@@ -12,26 +12,69 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
-public class MetadataRequest {
+public class MetadataRequest extends AbstractRequest {
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
+    private static final String TOPICS_KEY_NAME = "topics";
 
     private final List<String> topics;
 
     public MetadataRequest(List<String> topics) {
+        super(new Struct(CURRENT_SCHEMA));
+        struct.set(TOPICS_KEY_NAME, topics.toArray());
         this.topics = topics;
     }
 
-    public Struct toStruct() {
-        String[] ts = new String[topics.size()];
-        topics.toArray(ts);
-        Struct body = new Struct(ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id));
-        body.set("topics", topics.toArray());
-        return body;
+    public MetadataRequest(Struct struct) {
+        super(struct);
+        Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
+        topics = new ArrayList<String>();
+        for (Object topicObj: topicArray) {
+            topics.add((String) topicObj);
+        }
     }
 
+    @Override
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+        Map<String, Errors> topicErrors = new HashMap<String, Errors>();
+        for (String topic : topics) {
+            topicErrors.put(topic, Errors.forException(e));
+        }
+
+        Cluster cluster = new Cluster(new ArrayList<Node>(), new ArrayList<PartitionInfo>());
+        switch (versionId) {
+            case 0:
+                return new MetadataResponse(cluster, topicErrors);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
+        }
+    }
+
+    public List<String> topics() {
+        return topics;
+    }
+
+    public static MetadataRequest parse(ByteBuffer buffer, int versionId) {
+        return new MetadataRequest(ProtoUtils.parseRequest(ApiKeys.METADATA.id, versionId, buffer));
+    }
+
+    public static MetadataRequest parse(ByteBuffer buffer) {
+        return new MetadataRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    }
 }

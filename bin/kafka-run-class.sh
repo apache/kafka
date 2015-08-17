@@ -22,21 +22,16 @@ fi
 
 base_dir=$(dirname $0)/..
 
-# create logs directory
-if [ "x$LOG_DIR" = "x" ]; then
-    LOG_DIR="$base_dir/logs"
-fi
-
-if [ ! -d "$LOG_DIR" ]; then
-    mkdir -p "$LOG_DIR"
-fi
-
 if [ -z "$SCALA_VERSION" ]; then
-	SCALA_VERSION=2.8.0
+	SCALA_VERSION=2.10.5
+fi
+
+if [ -z "$SCALA_BINARY_VERSION" ]; then
+	SCALA_BINARY_VERSION=2.10
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
-for file in $base_dir/core/build/dependant-libs-${SCALA_VERSION}/*.jar;
+for file in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
@@ -61,13 +56,31 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for file in $base_dir/tools/build/libs/kafka-tools*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for cc_pkg in "data" "api" "runtime" "file" "json"
+do
+  for file in $base_dir/copycat/${cc_pkg}/build/libs/copycat-${cc_pkg}*.jar $base_dir/copycat/${cc_pkg}/build/dependant-libs/*.jar;
+  do
+    CLASSPATH=$CLASSPATH:$file
+  done
+done
+
 # classpath addition for release
 for file in $base_dir/libs/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/core/build/libs/kafka_${SCALA_VERSION}*.jar;
+for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
@@ -82,9 +95,20 @@ if [  $JMX_PORT ]; then
   KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
 fi
 
+# Log directory to use
+if [ "x$LOG_DIR" = "x" ]; then
+    LOG_DIR="$base_dir/logs"
+fi
+
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
+  # Log to console. This is a tool.
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/tools-log4j.properties"
+else
+  # create logs directory
+  if [ ! -d "$LOG_DIR" ]; then
+    mkdir -p "$LOG_DIR"
+  fi
 fi
 
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
@@ -108,7 +132,7 @@ fi
 
 # JVM performance options
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseCompressedOops -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
 fi
 
 
@@ -121,7 +145,7 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     -loggc)
-      if [ -z "$KAFKA_GC_LOG_OPTS"] ; then
+      if [ -z "$KAFKA_GC_LOG_OPTS" ]; then
         GC_LOG_ENABLED="true"
       fi
       shift

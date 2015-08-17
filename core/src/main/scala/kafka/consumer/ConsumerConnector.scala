@@ -17,6 +17,9 @@
 
 package kafka.consumer
 
+import kafka.common.{OffsetAndMetadata, TopicAndPartition}
+import kafka.javaapi.consumer.ConsumerRebalanceListener
+
 import scala.collection._
 import kafka.utils.Logging
 import kafka.serializer._
@@ -70,7 +73,24 @@ trait ConsumerConnector {
   /**
    *  Commit the offsets of all broker partitions connected by this connector.
    */
-  def commitOffsets(retryOnFailure: Boolean = true)
+  def commitOffsets(retryOnFailure: Boolean)
+  
+  /**
+   * KAFKA-1743: This method added for backward compatibility.
+   */
+  def commitOffsets
+
+  /**
+   * Commit offsets from an external offsets map.
+   * @param offsetsToCommit the offsets to be committed.
+   */
+  def commitOffsets(offsetsToCommit: immutable.Map[TopicAndPartition, OffsetAndMetadata], retryOnFailure: Boolean)
+
+  /**
+   * Wire in a consumer rebalance listener to be executed when consumer rebalance occurs.
+   * @param listener The consumer rebalance listener to wire in
+   */
+  def setConsumerRebalanceListener(listener: ConsumerRebalanceListener)
   
   /**
    *  Shut down the connector

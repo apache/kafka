@@ -45,8 +45,8 @@ object OffsetFetchResponse extends Logging {
 }
 
 case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadataAndError],
-                               override val correlationId: Int = 0)
-    extends RequestOrResponse(correlationId = correlationId) {
+                               correlationId: Int = 0)
+    extends RequestOrResponse() {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 

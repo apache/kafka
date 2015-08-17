@@ -31,9 +31,11 @@ import kafka.common.TopicAndPartition
  */
 object SimpleConsumerPerformance {
 
+  private val logger = Logger.getLogger(getClass())
+
   def main(args: Array[String]) {
-    val logger = Logger.getLogger(getClass)
     val config = new ConsumerPerfConfig(args)
+    logger.info("Starting SimpleConsumer...")
 
     if(!config.hideHeader) {
       if(!config.showDetailedStats)
@@ -79,7 +81,7 @@ object SimpleConsumerPerformance {
         done = true
       else
         // we only did one fetch so we find the offset for the first (head) messageset
-        offset += messageSet.validBytes
+        offset = messageSet.last.nextOffset
 
       totalBytesRead += bytesRead
       totalMessagesRead += messagesRead
@@ -141,13 +143,8 @@ object SimpleConsumerPerformance {
 
     val options = parser.parse(args : _*)
 
-    for(arg <- List(topicOpt, urlOpt)) {
-      if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, urlOpt, numMessagesOpt)
+
     val url = new URI(options.valueOf(urlOpt))
     val fetchSize = options.valueOf(fetchSizeOpt).intValue
     val fromLatest = options.has(resetBeginningOffsetOpt)

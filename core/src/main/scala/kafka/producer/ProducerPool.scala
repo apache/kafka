@@ -17,20 +17,21 @@
 
 package kafka.producer
 
-import kafka.cluster.Broker
 import java.util.Properties
-import collection.mutable.HashMap
-import java.lang.Object
-import kafka.utils.Logging
+
 import kafka.api.TopicMetadata
+import kafka.cluster.BrokerEndPoint
 import kafka.common.UnavailableProducerException
+import kafka.utils.Logging
+
+import scala.collection.mutable.HashMap
 
 
 object ProducerPool {
   /**
    * Used in ProducerPool to initiate a SyncProducer connection with a broker.
    */
-  def createSyncProducer(config: ProducerConfig, broker: Broker): SyncProducer = {
+  def createSyncProducer(config: ProducerConfig, broker: BrokerEndPoint): SyncProducer = {
     val props = new Properties()
     props.put("host", broker.host)
     props.put("port", broker.port.toString)
@@ -44,11 +45,12 @@ class ProducerPool(val config: ProducerConfig) extends Logging {
   private val lock = new Object()
 
   def updateProducer(topicMetadata: Seq[TopicMetadata]) {
-    val newBrokers = new collection.mutable.HashSet[Broker]
+    val newBrokers = new collection.mutable.HashSet[BrokerEndPoint]
     topicMetadata.foreach(tmd => {
       tmd.partitionsMetadata.foreach(pmd => {
-        if(pmd.leader.isDefined)
-          newBrokers+=(pmd.leader.get)
+        if(pmd.leader.isDefined) {
+          newBrokers += pmd.leader.get
+        }
       })
     })
     lock synchronized {

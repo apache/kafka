@@ -436,6 +436,7 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                     addedCSVConfig["kafka.metrics.polling.interval.secs"] = "5"
                     addedCSVConfig["kafka.metrics.reporters"] = "kafka.metrics.KafkaCSVMetricsReporter"
                     addedCSVConfig["kafka.csv.metrics.reporter.enabled"] = "true"
+                    addedCSVConfig["listeners"] = "PLAINTEXT://localhost:"+tcCfg["port"]
 
                     if brokerVersion == "0.7":
                         addedCSVConfig["brokerid"] = tcCfg["brokerid"]
@@ -792,19 +793,19 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
         except:
             pass
 
-	# 4. consumer config
-	consumerProperties = {}
-	consumerProperties["consumer.timeout.ms"] = timeoutMs
-	try:
+        # 4. consumer config
+        consumerProperties = {}
+        consumerProperties["consumer.timeout.ms"] = timeoutMs
+        try:
             groupOption = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "group.id")
             consumerProperties["group.id"] = groupOption
         except:
             pass
 
-	props_file_path=write_consumer_properties(consumerProperties)
-	scpCmdStr = "scp "+ props_file_path +" "+ hostname + ":/tmp/"
-	logger.debug("executing command [" + scpCmdStr + "]", extra=d)
-	system_test_utils.sys_call(scpCmdStr)
+        props_file_path=write_consumer_properties(consumerProperties)
+        scpCmdStr = "scp "+ props_file_path +" "+ hostname + ":/tmp/"
+        logger.debug("executing command [" + scpCmdStr + "]", extra=d)
+        system_test_utils.sys_call(scpCmdStr)
 
         if len(formatterOption) > 0:
             formatterOption = " --formatter " + formatterOption + " "
@@ -930,12 +931,12 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
             logger.error("Invalid cluster name : " + clusterName, extra=d)
             sys.exit(1)
 
-	consumerProperties = {}
-	consumerProperties["consumer.timeout.ms"] = timeoutMs
-	props_file_path=write_consumer_properties(consumerProperties)
-	scpCmdStr = "scp "+ props_file_path +" "+ host + ":/tmp/"
-	logger.debug("executing command [" + scpCmdStr + "]", extra=d)
-	system_test_utils.sys_call(scpCmdStr)
+        consumerProperties = {}
+        consumerProperties["consumer.timeout.ms"] = timeoutMs
+        props_file_path=write_consumer_properties(consumerProperties)
+        scpCmdStr = "scp "+ props_file_path +" "+ host + ":/tmp/"
+        logger.debug("executing command [" + scpCmdStr + "]", extra=d)
+        system_test_utils.sys_call(scpCmdStr)
 
         cmdList = ["ssh " + host,
                    "'JAVA_HOME=" + javaHome,
@@ -1136,7 +1137,8 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
                        "--metrics-dir " + metricsDir,
                        boolArgumentsStr,
                        " >> " + producerLogPathName,
-                       " & echo $! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
+                       " & echo $! > " + producerLogPath + "/entity_" + entityId + "_pid",
+                       " & wait'"]
 
             if kafka07Client:
                 cmdList[:] = []
@@ -1167,7 +1169,8 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
                        "--message-size " + messageSize,
                        "--vary-message-size --async",
                        " >> " + producerLogPathName,
-                       " & echo $! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
+                       " & echo $! > " + producerLogPath + "/entity_" + entityId + "_pid",
+                       " & wait'"]
 
             cmdStr = " ".join(cmdList)
             logger.debug("executing command: [" + cmdStr + "]", extra=d)
@@ -2053,7 +2056,7 @@ def get_controller_attributes(systemTestEnv, testcaseEnv):
 
     cmdStrList = ["ssh " + hostname,
                   "\"JAVA_HOME=" + javaHome,
-                  kafkaRunClassBin + " org.apache.zookeeper.ZooKeeperMain",
+                  kafkaRunClassBin + " kafka.tools.ZooKeeperMainWrapper ",
                   "-server " + testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"],
                   "get /controller 2> /dev/null | tail -1\""]
 
@@ -2398,6 +2401,9 @@ def validate_index_log(systemTestEnv, testcaseEnv, clusterName="source"):
                                 logger.debug("#### error found [" + line + "]", extra=d)
                                 failureCount += 1
                                 showMismatchedIndexOffset = True
+                        if subproc.wait() != 0:
+                            logger.debug("#### error found [DumpLogSegments exited abnormally]", extra=d)
+                            failureCount += 1
 
     if failureCount == 0:
         validationStatusDict["Validate index log in cluster [" + clusterName + "]"] = "PASSED"
@@ -2424,7 +2430,7 @@ def get_leader_for(systemTestEnv, testcaseEnv, topic, partition):
 
     cmdStrList = ["ssh " + hostname,
                   "\"JAVA_HOME=" + javaHome,
-                  kafkaRunClassBin + " org.apache.zookeeper.ZooKeeperMain",
+                  kafkaRunClassBin + " kafka.tools.ZooKeeperMainWrapper ",
                   "-server " + testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"],
                   zkQueryStr + " 2> /dev/null | tail -1\""]
     cmdStr = " ".join(cmdStrList)
@@ -2468,7 +2474,7 @@ def get_leader_attributes(systemTestEnv, testcaseEnv):
 
     cmdStrList = ["ssh " + hostname,
                   "\"JAVA_HOME=" + javaHome,
-                  kafkaRunClassBin + " org.apache.zookeeper.ZooKeeperMain",
+                  kafkaRunClassBin + " kafka.tools.ZooKeeperMainWrapper ",
                   "-server " + testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"],
                   zkQueryStr + " 2> /dev/null | tail -1\""]
     cmdStr = " ".join(cmdStrList)

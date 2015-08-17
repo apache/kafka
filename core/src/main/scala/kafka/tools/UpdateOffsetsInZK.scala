@@ -21,8 +21,9 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{SimpleConsumer, ConsumerConfig}
 import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
 import kafka.common.{TopicAndPartition, KafkaException}
-import kafka.utils.{ZKGroupTopicDirs, ZkUtils, ZKStringSerializer, Utils}
-
+import kafka.utils.{ZKGroupTopicDirs, ZkUtils, CoreUtils}
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.utils.Utils
 
 /**
  *  A utility that updates the offset of every broker partition to the offset of earliest or latest log segment file, in ZK.
@@ -35,8 +36,8 @@ object UpdateOffsetsInZK {
     if(args.length < 3)
       usage
     val config = new ConsumerConfig(Utils.loadProps(args(1)))
-    val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs,
-        config.zkConnectionTimeoutMs, ZKStringSerializer)
+    val zkClient = ZkUtils.createZkClient(config.zkConnect, config.zkSessionTimeoutMs,
+        config.zkConnectionTimeoutMs)
     args(0) match {
       case Earliest => getAndSetOffsets(zkClient, OffsetRequest.EarliestTime, config, args(2))
       case Latest => getAndSetOffsets(zkClient, OffsetRequest.LatestTime, config, args(2))
@@ -65,7 +66,9 @@ object UpdateOffsetsInZK {
 
       ZkUtils.getBrokerInfo(zkClient, broker) match {
         case Some(brokerInfo) =>
-          val consumer = new SimpleConsumer(brokerInfo.host, brokerInfo.port, 10000, 100 * 1024, "UpdateOffsetsInZk")
+          val consumer = new SimpleConsumer(brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).host,
+                                            brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).port,
+                                            10000, 100 * 1024, "UpdateOffsetsInZk")
           val topicAndPartition = TopicAndPartition(topic, partition)
           val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(offsetOption, 1)))
           val offset = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head

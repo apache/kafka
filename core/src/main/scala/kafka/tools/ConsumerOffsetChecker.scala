@@ -24,11 +24,11 @@ import kafka.utils._
 import kafka.consumer.SimpleConsumer
 import kafka.api.{OffsetFetchResponse, OffsetFetchRequest, OffsetRequest}
 import kafka.common.{OffsetMetadataAndError, ErrorMapping, BrokerNotAvailableException, TopicAndPartition}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import kafka.client.ClientUtils
 import kafka.network.BlockingChannel
 import kafka.api.PartitionOffsetRequestInfo
-import scala.Some
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 
 object ConsumerOffsetChecker extends Logging {
@@ -107,6 +107,8 @@ object ConsumerOffsetChecker extends Logging {
   }
 
   def main(args: Array[String]) {
+    warn("WARNING: ConsumerOffsetChecker is deprecated and will be dropped in releases following 0.9.0. Use ConsumerGroupCommand instead.")
+
     val parser = new OptionParser()
 
     val zkConnectOpt = parser.accepts("zookeeper", "ZooKeeper connect string.").
@@ -123,6 +125,9 @@ object ConsumerOffsetChecker extends Logging {
 
     parser.accepts("broker-info", "Print broker info")
     parser.accepts("help", "Print this message.")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Check the offset of your consumers.")
 
     val options = parser.parse(args : _*)
 
@@ -131,12 +136,7 @@ object ConsumerOffsetChecker extends Logging {
        System.exit(0)
     }
 
-    for (opt <- List(groupOpt, zkConnectOpt))
-      if (!options.has(opt)) {
-        System.err.println("Missing required argument: %s".format(opt))
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
+    CommandLineUtils.checkRequiredArgs(parser, options, groupOpt, zkConnectOpt)
 
     val zkConnect = options.valueOf(zkConnectOpt)
 
@@ -151,7 +151,7 @@ object ConsumerOffsetChecker extends Logging {
     var zkClient: ZkClient = null
     var channel: BlockingChannel = null
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
 
       val topicList = topics match {
         case Some(x) => x.split(",").view.toList
@@ -164,7 +164,7 @@ object ConsumerOffsetChecker extends Logging {
 
       debug("Sending offset fetch request to coordinator %s:%d.".format(channel.host, channel.port))
       channel.send(OffsetFetchRequest(group, topicPartitions))
-      val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().buffer)
+      val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
       debug("Received offset fetch response %s.".format(offsetFetchResponse))
 
       offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>

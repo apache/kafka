@@ -18,7 +18,7 @@
 package kafka.message
 
 import java.io.RandomAccessFile
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.utils.TestUtils._
 import kafka.log.FileMessageSet
 import org.scalatest.junit.JUnitSuite
@@ -31,7 +31,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   def createMessageSet(messages: Seq[Message]): MessageSet
 
   @Test
-  def testWrittenEqualsRead {
+  def testWrittenEqualsRead() {
     val messageSet = createMessageSet(messages)
     checkEquals(messages.iterator, messageSet.map(m => m.message).iterator)
   }

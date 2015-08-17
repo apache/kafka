@@ -17,7 +17,7 @@
 
 package kafka.consumer
 
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{Request, OffsetRequest, FetchResponsePartitionData}
@@ -26,11 +26,11 @@ import kafka.common.TopicAndPartition
 
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
-                            sourceBroker: Broker,
+                            sourceBroker: BrokerEndPoint,
                             partitionMap: Map[TopicAndPartition, PartitionTopicInfo],
                             val consumerFetcherManager: ConsumerFetcherManager)
-        extends AbstractFetcherThread(name = name, 
-                                      clientId = config.clientId + "-" + name,
+        extends AbstractFetcherThread(name = name,
+                                      clientId = config.clientId,
                                       sourceBroker = sourceBroker,
                                       socketTimeout = config.socketTimeoutMs,
                                       socketBufferSize = config.socketReceiveBufferBytes,
@@ -38,6 +38,7 @@ class ConsumerFetcherThread(name: String,
                                       fetcherBrokerId = Request.OrdinaryConsumerId,
                                       maxWait = config.fetchWaitMaxMs,
                                       minBytes = config.fetchMinBytes,
+                                      fetchBackOffMs = config.refreshLeaderBackoffMs,
                                       isInterruptible = true) {
 
   // process fetched data

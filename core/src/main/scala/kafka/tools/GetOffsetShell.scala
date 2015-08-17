@@ -23,7 +23,7 @@ import joptsimple._
 import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
-import kafka.utils.CommandLineUtils
+import kafka.utils.{ToolsUtils, CommandLineUtils}
 
 
 object GetOffsetShell {
@@ -57,13 +57,18 @@ object GetOffsetShell {
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000)
+                           
+   if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
 
     val options = parser.parse(args : _*)
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt, timeOpt)
 
     val clientId = "GetOffsetShell"
-    val metadataTargetBrokers = ClientUtils.parseBrokerList(options.valueOf(brokerListOpt))
+    val brokerList = options.valueOf(brokerListOpt)
+    ToolsUtils.validatePortOrDie(parser, brokerList)
+    val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topic = options.valueOf(topicOpt)
     var partitionList = options.valueOf(partitionOpt)
     var time = options.valueOf(timeOpt).longValue

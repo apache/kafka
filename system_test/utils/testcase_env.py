@@ -28,68 +28,67 @@ import thread
 import system_test_utils
 
 class TestcaseEnv():
-
-    # ================================
-    # Generic testcase environment
-    # ================================
-
-    # dictionary of entity_id to ppid for Zookeeper entities
-    # key: entity_id
-    # val: ppid of Zookeeper associated to that entity_id
-    # { 0: 12345, 1: 12389, ... }
-    entityZkParentPidDict = {}
-
-    # dictionary of entity_id to ppid for broker entities
-    # key: entity_id
-    # val: ppid of broker associated to that entity_id
-    # { 0: 12345, 1: 12389, ... }
-    entityBrokerParentPidDict = {}
-
-    # dictionary of entity_id to ppid for mirror-maker entities
-    # key: entity_id
-    # val: ppid of broker associated to that entity_id
-    # { 0: 12345, 1: 12389, ... }
-    entityMirrorMakerParentPidDict = {}
-
-    # dictionary of entity_id to ppid for console-consumer entities
-    # key: entity_id
-    # val: ppid of console consumer associated to that entity_id
-    # { 0: 12345, 1: 12389, ... }
-    entityConsoleConsumerParentPidDict = {}
-
-    # dictionary of entity_id to ppid for migration tool entities
-    # key: entity_id
-    # val: ppid of broker associated to that entity_id
-    # { 0: 12345, 1: 12389, ... }
-    entityMigrationToolParentPidDict = {}
-
-    # dictionary of entity_id to list of JMX ppid
-    # key: entity_id
-    # val: list of JMX ppid associated to that entity_id
-    # { 1: [1234, 1235, 1236], 2: [2234, 2235, 2236], ... }
-    entityJmxParentPidDict = {}
-
-    # dictionary of hostname-topic-ppid for consumer
-    # key: hostname
-    # val: dict of topic-ppid
-    # { host1: { test1 : 12345 }, host1: { test2 : 12389 }, ... }
-    consumerHostParentPidDict = {}
-
-    # dictionary of hostname-topic-ppid for producer
-    # key: hostname
-    # val: dict of topic-ppid
-    # { host1: { test1 : 12345 }, host1: { test2 : 12389 }, ... }
-    producerHostParentPidDict = {}
-
-    # list of testcase configs
-    testcaseConfigsList = []
-
-    # dictionary to keep track of testcase arguments such as replica_factor, num_partition
-    testcaseArgumentsDict = {}
-
-
     def __init__(self, systemTestEnv, classInstance):
         self.systemTestEnv    = systemTestEnv
+
+        # ================================
+        # Generic testcase environment
+        # ================================
+
+        # dictionary of entity_id to ppid for Zookeeper entities
+        # key: entity_id
+        # val: ppid of Zookeeper associated to that entity_id
+        # { 0: 12345, 1: 12389, ... }
+        self.entityZkParentPidDict = {}
+
+        # dictionary of entity_id to ppid for broker entities
+        # key: entity_id
+        # val: ppid of broker associated to that entity_id
+        # { 0: 12345, 1: 12389, ... }
+        self.entityBrokerParentPidDict = {}
+
+        # dictionary of entity_id to ppid for mirror-maker entities
+        # key: entity_id
+        # val: ppid of broker associated to that entity_id
+        # { 0: 12345, 1: 12389, ... }
+        self.entityMirrorMakerParentPidDict = {}
+
+        # dictionary of entity_id to ppid for console-consumer entities
+        # key: entity_id
+        # val: ppid of console consumer associated to that entity_id
+        # { 0: 12345, 1: 12389, ... }
+        self.entityConsoleConsumerParentPidDict = {}
+
+        # dictionary of entity_id to ppid for migration tool entities
+        # key: entity_id
+        # val: ppid of broker associated to that entity_id
+        # { 0: 12345, 1: 12389, ... }
+        self.entityMigrationToolParentPidDict = {}
+
+        # dictionary of entity_id to list of JMX ppid
+        # key: entity_id
+        # val: list of JMX ppid associated to that entity_id
+        # { 1: [1234, 1235, 1236], 2: [2234, 2235, 2236], ... }
+        self.entityJmxParentPidDict = {}
+
+        # dictionary of hostname-topic-ppid for consumer
+        # key: hostname
+        # val: dict of topic-ppid
+        # { host1: { test1 : 12345 }, host1: { test2 : 12389 }, ... }
+        self.consumerHostParentPidDict = {}
+
+        # dictionary of hostname-topic-ppid for producer
+        # key: hostname
+        # val: dict of topic-ppid
+        # { host1: { test1 : 12345 }, host1: { test2 : 12389 }, ... }
+        self.producerHostParentPidDict = {}
+
+        # list of testcase configs
+        self.testcaseConfigsList = []
+
+        # dictionary to keep track of testcase arguments such as replica_factor, num_partition
+        self.testcaseArgumentsDict = {}
+
 
         # gather the test case related info and add to an SystemTestEnv object
         self.testcaseResultsDict = {}

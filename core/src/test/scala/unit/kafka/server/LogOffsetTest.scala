@@ -19,12 +19,11 @@ package kafka.server
 
 import java.io.File
 import kafka.utils._
-import junit.framework.Assert._
+import org.junit.Assert._
 import java.util.{Random, Properties}
 import kafka.consumer.SimpleConsumer
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.zk.ZooKeeperTestHarness
-import org.scalatest.junit.JUnit3Suite
 import kafka.admin.AdminUtils
 import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.utils.TestUtils._
@@ -33,32 +32,31 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
-class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
+class LogOffsetTest extends ZooKeeperTestHarness {
   val random = new Random() 
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
   var logSize: Int = 100
-  val brokerPort: Int = 9099
   var simpleConsumer: SimpleConsumer = null
   var time: Time = new MockTime()
 
   @Before
   override def setUp() {
     super.setUp()
-    val config: Properties = createBrokerConfig(1, brokerPort)
+    val config: Properties = createBrokerConfig(1)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()
-    server = TestUtils.createServer(new KafkaConfig(config), time)
-    simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024, "")
+    server = TestUtils.createServer(KafkaConfig.fromProps(config), time)
+    simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "")
   }
 
   @After
   override def tearDown() {
     simpleConsumer.close
     server.shutdown
-    Utils.rm(logDir)
+    CoreUtils.rm(logDir)
     super.tearDown()
   }
 
@@ -92,7 +90,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     log.flush()
 
     val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), OffsetRequest.LatestTime, 10)
-    assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), offsets)
+    assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), "Leader should be elected")
     val topicAndPartition = TopicAndPartition(topic, part)
@@ -101,7 +99,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       replicaId = 0)
     val consumerOffsets =
       simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
-    assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), consumerOffsets)
+    assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0), consumerOffsets)
 
     // try to fetch using latest offset
     val fetchResponse = simpleConsumer.fetch(
@@ -155,14 +153,14 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
 
     val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), now, 10)
-    assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), offsets)
+    assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), "Leader should be elected")
     val topicAndPartition = TopicAndPartition(topic, part)
     val offsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(now, 10)), replicaId = 0)
     val consumerOffsets =
       simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
-    assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), consumerOffsets)
+    assertEquals(Seq(20L, 18L, 15L, 12L, 9L, 6L, 3L, 0L), consumerOffsets)
   }
 
   @Test
@@ -194,10 +192,10 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(Seq(0L), consumerOffsets)
   }
 
-  private def createBrokerConfig(nodeId: Int, port: Int): Properties = {
+  private def createBrokerConfig(nodeId: Int): Properties = {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
-    props.put("port", port.toString)
+    props.put("port", TestUtils.RandomPort.toString())
     props.put("log.dir", getLogDir.getAbsolutePath)
     props.put("log.flush.interval.messages", "1")
     props.put("enable.zookeeper", "false")

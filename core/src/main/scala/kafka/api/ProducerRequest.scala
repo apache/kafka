@@ -18,11 +18,12 @@
 package kafka.api
 
 import java.nio._
-import kafka.message._
+
 import kafka.api.ApiUtils._
 import kafka.common._
+import kafka.message._
+import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
-import kafka.network.{RequestChannel, BoundedByteBufferSend}
 
 object ProducerRequest {
   val CurrentVersion = 0.shortValue
@@ -53,12 +54,12 @@ object ProducerRequest {
 }
 
 case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
-                           override val correlationId: Int,
+                           correlationId: Int,
                            clientId: String,
                            requiredAcks: Short,
                            ackTimeoutMs: Int,
                            data: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet])
-    extends RequestOrResponse(Some(RequestKeys.ProduceKey), correlationId) {
+    extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
 
   /**
    * Partitions the data into a map of maps (one for each topic).
@@ -136,7 +137,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
           (topicAndPartition, ProducerResponseStatus(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1l))
       }
       val errorResponse = ProducerResponse(correlationId, producerResponseStatus)
-      requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
     }
   }
 
@@ -152,7 +153,6 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
       producerRequest.append("; TopicAndPartition: " + topicPartitionMessageSizeMap.mkString(","))
     producerRequest.toString()
   }
-
 
   def emptyData(){
     data.clear()

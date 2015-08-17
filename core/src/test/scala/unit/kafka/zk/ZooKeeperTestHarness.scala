@@ -17,27 +17,31 @@
 
 package kafka.zk
 
-import org.scalatest.junit.JUnit3Suite
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZKStringSerializer, TestZKUtils, Utils}
+import kafka.utils.{ZkUtils, CoreUtils}
+import org.junit.{After, Before}
+import org.scalatest.junit.JUnitSuite
 
-trait ZooKeeperTestHarness extends JUnit3Suite {
-  val zkConnect: String = TestZKUtils.zookeeperConnect
+trait ZooKeeperTestHarness extends JUnitSuite {
+  var zkPort: Int = -1
   var zookeeper: EmbeddedZookeeper = null
   var zkClient: ZkClient = null
   val zkConnectionTimeout = 6000
   val zkSessionTimeout = 6000
 
-  override def setUp() {
-    super.setUp
-    zookeeper = new EmbeddedZookeeper(zkConnect)
-    zkClient = new ZkClient(zookeeper.connectString, zkSessionTimeout, zkConnectionTimeout, ZKStringSerializer)
+  def zkConnect: String = "127.0.0.1:" + zkPort
+
+  @Before
+  def setUp() {
+    zookeeper = new EmbeddedZookeeper()
+    zkPort = zookeeper.port
+    zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeout, zkConnectionTimeout)
   }
 
-  override def tearDown() {
-    Utils.swallow(zkClient.close())
-    Utils.swallow(zookeeper.shutdown())
-    super.tearDown
+  @After
+  def tearDown() {
+    CoreUtils.swallow(zkClient.close())
+    CoreUtils.swallow(zookeeper.shutdown())
   }
 
 }

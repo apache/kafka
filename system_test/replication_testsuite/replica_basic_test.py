@@ -451,6 +451,8 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
             except Exception as e:
                 self.log_message("Exception while running test {0}".format(e))
                 traceback.print_exc()
+                self.testcaseEnv.validationStatusDict["Test completed"] = "FAILED"
+
 
             finally:
                 if not skipThisTestCase and not self.systemTestEnv.printTestDescriptionsOnly:

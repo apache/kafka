@@ -34,7 +34,8 @@ class OffsetCheckpoint(val file: File) extends Logging {
       // write to temp file and then swap with the existing file
       val temp = new File(file.getAbsolutePath + ".tmp")
 
-      val writer = new BufferedWriter(new FileWriter(temp))
+      val fileOutputStream = new FileOutputStream(temp)
+      val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream))
       try {
         // write the current version
         writer.write(0.toString)
@@ -50,8 +51,9 @@ class OffsetCheckpoint(val file: File) extends Logging {
           writer.newLine()
         }
       
-        // flush and overwrite old file
+        // flush the buffer and then fsync the underlying file
         writer.flush()
+        fileOutputStream.getFD().sync()
       } finally {
         writer.close()
       }

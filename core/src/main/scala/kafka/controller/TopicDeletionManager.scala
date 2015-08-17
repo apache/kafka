@@ -16,9 +16,12 @@
  */
 package kafka.controller
 
+
+import kafka.server.ConfigType
+
 import collection.mutable
 import kafka.utils.{ShutdownableThread, Logging, ZkUtils}
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 import collection.Set
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.api.{StopReplicaResponse, RequestOrResponse}
@@ -89,7 +92,8 @@ class TopicDeletionManager(controller: KafkaController,
   def start() {
     if (isDeleteTopicEnabled) {
       deleteTopicsThread = new DeleteTopicsThread()
-      deleteTopicStateChanged.set(true)
+      if (topicsToBeDeleted.size > 0)
+        deleteTopicStateChanged.set(true)
       deleteTopicsThread.start()
     }
   }
@@ -214,7 +218,7 @@ class TopicDeletionManager(controller: KafkaController,
    */
   private def awaitTopicDeletionNotification() {
     inLock(deleteLock) {
-      while(!deleteTopicsThread.isRunning.get() && !deleteTopicStateChanged.compareAndSet(true, false)) {
+      while(deleteTopicsThread.isRunning.get() && !deleteTopicStateChanged.compareAndSet(true, false)) {
         debug("Waiting for signal to start or continue topic deletion")
         deleteTopicsCond.await()
       }
@@ -283,7 +287,7 @@ class TopicDeletionManager(controller: KafkaController,
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
     controllerContext.zkClient.deleteRecursive(ZkUtils.getTopicPath(topic))
-    controllerContext.zkClient.deleteRecursive(ZkUtils.getTopicConfigPath(topic))
+    controllerContext.zkClient.deleteRecursive(ZkUtils.getEntityConfigPath(ConfigType.Topic, topic))
     controllerContext.zkClient.delete(ZkUtils.getDeleteTopicPath(topic))
     controllerContext.removeTopic(topic)
   }
@@ -429,4 +433,3 @@ class TopicDeletionManager(controller: KafkaController,
     }
   }
 }
-

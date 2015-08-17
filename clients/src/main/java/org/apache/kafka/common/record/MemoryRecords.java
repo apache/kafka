@@ -1,18 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.record;
 
@@ -33,13 +29,15 @@ public class MemoryRecords implements Records {
 
     private final Compressor compressor;
     private final int capacity;
+    private final int sizeLimit;
     private ByteBuffer buffer;
     private boolean writable;
 
     // Construct a writable memory records
-    private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable) {
+    private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int sizeLimit) {
         this.writable = writable;
         this.capacity = buffer.capacity();
+        this.sizeLimit = sizeLimit;
         if (this.writable) {
             this.buffer = null;
             this.compressor = new Compressor(buffer, type);
@@ -49,12 +47,16 @@ public class MemoryRecords implements Records {
         }
     }
 
-    public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type) {
-        return new MemoryRecords(buffer, type, true);
+    public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type, int capacity) {
+        return new MemoryRecords(buffer, type, true, capacity);
     }
 
-    public static MemoryRecords iterableRecords(ByteBuffer buffer) {
-        return new MemoryRecords(buffer, CompressionType.NONE, false);
+    public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type) {
+        return emptyRecords(buffer, type, buffer.capacity());
+    }
+
+    public static MemoryRecords readableRecords(ByteBuffer buffer) {
+        return new MemoryRecords(buffer, CompressionType.NONE, false, buffer.capacity());
     }
 
     /**
@@ -88,27 +90,36 @@ public class MemoryRecords implements Records {
 
     /**
      * Check if we have room for a new record containing the given key/value pair
-     *
-     * Note that the return value is based on the estimate of the bytes written to the compressor,
-     * which may not be accurate if compression is really used. When this happens, the following
-     * append may cause dynamic buffer re-allocation in the underlying byte buffer stream.
+     * 
+     * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
+     * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
+     * re-allocation in the underlying byte buffer stream.
+     * 
+     * Also note that besides the records' capacity, there is also a size limit for the batch. This size limit may be
+     * smaller than the capacity (e.g. when appending a single message whose size is larger than the batch size, the
+     * capacity will be the message size, but the size limit will still be the batch size), and when the records' size
+     * has exceed this limit we also mark this record as full.
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
-        return this.writable &&
-            this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value);
+        return this.writable && this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD +
+                                                 Record.recordSize(key, value) &&
+               this.sizeLimit >= this.compressor.estimatedBytesWritten();
     }
 
     public boolean isFull() {
-        return !this.writable || this.capacity <= this.compressor.estimatedBytesWritten();
+        return !this.writable || this.capacity <= this.compressor.estimatedBytesWritten() ||
+               this.sizeLimit <= this.compressor.estimatedBytesWritten();
     }
 
     /**
      * Close this batch for no more appends
      */
     public void close() {
-        compressor.close();
-        writable = false;
-        buffer = compressor.buffer();
+        if (writable) {
+            compressor.close();
+            writable = false;
+            buffer = compressor.buffer();
+        }
     }
 
     /** Write the records in this set to the given channel */
@@ -121,6 +132,16 @@ public class MemoryRecords implements Records {
      */
     public int sizeInBytes() {
         return compressor.buffer().position();
+    }
+
+    /**
+     * The compression rate of this record set
+     */
+    public double compressionRate() {
+        if (compressor == null)
+            return 1.0;
+        else
+            return compressor.compressionRate();
     }
 
     /**
@@ -137,10 +158,39 @@ public class MemoryRecords implements Records {
         return buffer.duplicate();
     }
 
+    /**
+     * Return a flipped duplicate of the closed buffer to reading records
+     */
+    public ByteBuffer flip() {
+        if (writable)
+            throw new IllegalStateException("The memory records need to be closed for write before rewinding for read");
+
+        return (ByteBuffer) buffer.flip();
+    }
+
     @Override
     public Iterator<LogEntry> iterator() {
-        ByteBuffer copy = (ByteBuffer) this.buffer.duplicate().flip();
+        ByteBuffer copy = this.buffer.duplicate();
         return new RecordsIterator(copy, CompressionType.NONE, false);
+    }
+    
+    @Override
+    public String toString() {
+        Iterator<LogEntry> iter = iterator();
+        StringBuilder builder = new StringBuilder();
+        builder.append('[');
+        while (iter.hasNext()) {
+            LogEntry entry = iter.next();
+            builder.append('(');
+            builder.append("offset=");
+            builder.append(entry.offset());
+            builder.append(",");
+            builder.append("record=");
+            builder.append(entry.record());
+            builder.append(")");
+        }
+        builder.append(']');
+        return builder.toString();
     }
 
     public static class RecordsIterator extends AbstractIterator<LogEntry> {
@@ -154,15 +204,15 @@ public class MemoryRecords implements Records {
             this.type = type;
             this.buffer = buffer;
             this.shallow = shallow;
-            stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
+            this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
         }
 
         /*
          * Read the next record from the buffer.
-         *
-         * Note that in the compressed message set, each message value size is set as the size
-         * of the un-compressed version of the message value, so when we do de-compression
-         * allocating an array of the specified size for reading compressed value data is sufficient.
+         * 
+         * Note that in the compressed message set, each message value size is set as the size of the un-compressed
+         * version of the message value, so when we do de-compression allocating an array of the specified size for
+         * reading compressed value data is sufficient.
          */
         @Override
         protected LogEntry makeNext() {
@@ -179,15 +229,17 @@ public class MemoryRecords implements Records {
                     ByteBuffer rec;
                     if (type == CompressionType.NONE) {
                         rec = buffer.slice();
-                        buffer.position(buffer.position() + size);
+                        int newPos = buffer.position() + size;
+                        if (newPos > buffer.limit())
+                            return allDone();
+                        buffer.position(newPos);
                         rec.limit(size);
                     } else {
                         byte[] recordBuffer = new byte[size];
-                        stream.read(recordBuffer, 0, size);
+                        stream.readFully(recordBuffer, 0, size);
                         rec = ByteBuffer.wrap(recordBuffer);
                     }
                     LogEntry entry = new LogEntry(offset, new Record(rec));
-                    entry.record().ensureValid();
 
                     // decide whether to go shallow or deep iteration if it is compressed
                     CompressionType compression = entry.record().compressionType();
@@ -195,7 +247,9 @@ public class MemoryRecords implements Records {
                         return entry;
                     } else {
                         // init the inner iterator with the value payload of the message,
-                        // which will de-compress the payload to a set of messages
+                        // which will de-compress the payload to a set of messages;
+                        // since we assume nested compression is not allowed, the deep iterator
+                        // would not try to further decompress underlying messages
                         ByteBuffer value = entry.record().value();
                         innerIter = new RecordsIterator(value, compression, true);
                         return innerIter.next();
@@ -211,7 +265,7 @@ public class MemoryRecords implements Records {
         }
 
         private boolean innerDone() {
-            return (innerIter == null || !innerIter.hasNext());
+            return innerIter == null || !innerIter.hasNext();
         }
     }
 }

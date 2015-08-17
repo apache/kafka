@@ -19,10 +19,15 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
+
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.message.{MessageSet, ByteBufferMessageSet}
-import kafka.network.{MultiSend, Send}
 import kafka.api.ApiUtils._
+import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.network.Send
+import org.apache.kafka.common.network.MultiSend
+
+import scala.collection._
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
@@ -59,10 +64,12 @@ class PartitionDataSend(val partitionId: Int,
   buffer.putInt(partitionData.messages.sizeInBytes)
   buffer.rewind()
 
-  override def complete = !buffer.hasRemaining && messagesSentSize >= messageSize
+  override def completed = !buffer.hasRemaining && messagesSentSize >= messageSize
 
-  override def writeTo(channel: GatheringByteChannel): Int = {
-    var written = 0
+  override def destination: String = ""
+
+  override def writeTo(channel: GatheringByteChannel): Long = {
+    var written = 0L
     if(buffer.hasRemaining)
       written += channel.write(buffer)
     if(!buffer.hasRemaining && messagesSentSize < messageSize) {
@@ -72,6 +79,8 @@ class PartitionDataSend(val partitionId: Int,
     }
     written
   }
+
+  override def size = buffer.capacity() + messageSize
 }
 
 object TopicData {
@@ -98,29 +107,32 @@ case class TopicData(topic: String, partitionData: Map[Int, FetchResponsePartiti
   val headerSize = TopicData.headerSize(topic)
 }
 
-class TopicDataSend(val topicData: TopicData) extends Send {
-  private val size = topicData.sizeInBytes
+class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
 
-  private var sent = 0
+  private var sent = 0L
 
-  override def complete = sent >= size
+  override def completed: Boolean = sent >= size
+
+  override def destination: String = dest
+
+  override def size = topicData.headerSize + sends.size()
 
   private val buffer = ByteBuffer.allocate(topicData.headerSize)
   writeShortString(buffer, topicData.topic)
   buffer.putInt(topicData.partitionData.size)
   buffer.rewind()
 
-  val sends = new MultiSend(topicData.partitionData.toList
-                                    .map(d => new PartitionDataSend(d._1, d._2))) {
-    val expectedBytesToWrite = topicData.sizeInBytes - topicData.headerSize
-  }
+  private val sends = new MultiSend(dest,
+                            JavaConversions.seqAsJavaList(topicData.partitionData.toList.map(d => new PartitionDataSend(d._1, d._2))))
 
-  def writeTo(channel: GatheringByteChannel): Int = {
-    expectIncomplete()
-    var written = 0
+  override def writeTo(channel: GatheringByteChannel): Long = {
+    if (completed)
+      throw new KafkaException("This operation cannot be completed on a complete request.")
+
+    var written = 0L
     if(buffer.hasRemaining)
       written += channel.write(buffer)
-    if(!buffer.hasRemaining && !sends.complete) {
+    if(!buffer.hasRemaining && !sends.completed) {
       written += sends.writeTo(channel)
     }
     sent += written
@@ -149,9 +161,8 @@ object FetchResponse {
   }
 }
 
-
-case class FetchResponse(correlationId: Int,
-                         data: Map[TopicAndPartition, FetchResponsePartitionData])  {
+case class FetchResponse(correlationId: Int, data: Map[TopicAndPartition, FetchResponsePartitionData])
+  extends RequestOrResponse() {
 
   /**
    * Partitions the data into a map of maps (one for each topic).
@@ -166,6 +177,16 @@ case class FetchResponse(correlationId: Int,
       })
       folded + topicData.sizeInBytes
     })
+
+  /*
+   * FetchResponse uses [sendfile](http://man7.org/linux/man-pages/man2/sendfile.2.html)
+   * api for data transfer through the FetchResponseSend, so `writeTo` aren't actually being used.
+   * It is implemented as an empty function to conform to `RequestOrResponse.writeTo`
+   * abstract method signature.
+   */
+  def writeTo(buffer: ByteBuffer): Unit = throw new UnsupportedOperationException
+
+  override def describe(details: Boolean): String = toString
 
   private def partitionDataFor(topic: String, partition: Int): FetchResponsePartitionData = {
     val topicAndPartition = TopicAndPartition(topic, partition)
@@ -188,34 +209,36 @@ case class FetchResponse(correlationId: Int,
 }
 
 
-class FetchResponseSend(val fetchResponse: FetchResponse) extends Send {
-  private val size = fetchResponse.sizeInBytes
+class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) extends Send {
+  private val payloadSize = fetchResponse.sizeInBytes
 
-  private var sent = 0
+  private var sent = 0L
 
-  private val sendSize = 4 /* for size */ + size
+  override def size = 4 /* for size byte */ + payloadSize
 
-  override def complete = sent >= sendSize
+  override def completed = sent >= size
+
+  override def destination = dest
 
   private val buffer = ByteBuffer.allocate(4 /* for size */ + FetchResponse.headerSize)
-  buffer.putInt(size)
+  buffer.putInt(payloadSize)
   buffer.putInt(fetchResponse.correlationId)
   buffer.putInt(fetchResponse.dataGroupedByTopic.size) // topic count
   buffer.rewind()
 
-  val sends = new MultiSend(fetchResponse.dataGroupedByTopic.toList.map {
-    case(topic, data) => new TopicDataSend(TopicData(topic,
+  private val sends = new MultiSend(dest, JavaConversions.seqAsJavaList(fetchResponse.dataGroupedByTopic.toList.map {
+    case(topic, data) => new TopicDataSend(dest, TopicData(topic,
                                                      data.map{case(topicAndPartition, message) => (topicAndPartition.partition, message)}))
-  }) {
-    val expectedBytesToWrite = fetchResponse.sizeInBytes - FetchResponse.headerSize
-  }
+    }))
 
-  def writeTo(channel: GatheringByteChannel):Int = {
-    expectIncomplete()
-    var written = 0
+  override def writeTo(channel: GatheringByteChannel): Long = {
+    if (completed)
+      throw new KafkaException("This operation cannot be completed on a complete request.")
+
+    var written = 0L
     if(buffer.hasRemaining)
       written += channel.write(buffer)
-    if(!buffer.hasRemaining && !sends.complete) {
+    if(!buffer.hasRemaining && !sends.completed) {
       written += sends.writeTo(channel)
     }
     sent += written

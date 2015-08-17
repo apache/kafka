@@ -19,8 +19,10 @@ package kafka.network
 
 import java.net.InetSocketAddress
 import java.nio.channels._
-import kafka.utils.{nonthreadsafe, Logging}
+
 import kafka.api.RequestOrResponse
+import kafka.utils.{Logging, nonthreadsafe}
+import org.apache.kafka.common.network.NetworkReceive
 
 
 object BlockingChannel{
@@ -42,7 +44,9 @@ class BlockingChannel( val host: String,
   private var readChannel: ReadableByteChannel = null
   private var writeChannel: GatheringByteChannel = null
   private val lock = new Object()
-  
+  private val connectTimeoutMs = readTimeoutMs
+  private var connectionId: String = ""
+
   def connect() = lock synchronized  {
     if(!connected) {
       try {
@@ -55,19 +59,28 @@ class BlockingChannel( val host: String,
         channel.socket.setSoTimeout(readTimeoutMs)
         channel.socket.setKeepAlive(true)
         channel.socket.setTcpNoDelay(true)
-        channel.connect(new InetSocketAddress(host, port))
+        channel.socket.connect(new InetSocketAddress(host, port), connectTimeoutMs)
 
         writeChannel = channel
+        // Need to create a new ReadableByteChannel from input stream because SocketChannel doesn't implement read with timeout
+        // See: http://stackoverflow.com/questions/2866557/timeout-for-socketchannel-doesnt-work
         readChannel = Channels.newChannel(channel.socket().getInputStream)
         connected = true
+        val localHost = channel.socket.getLocalAddress.getHostAddress
+        val localPort = channel.socket.getLocalPort
+        val remoteHost = channel.socket.getInetAddress.getHostAddress
+        val remotePort = channel.socket.getPort
+        connectionId = localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort
         // settings may not match what we requested above
-        val msg = "Created socket with SO_TIMEOUT = %d (requested %d), SO_RCVBUF = %d (requested %d), SO_SNDBUF = %d (requested %d)."
+        val msg = "Created socket with SO_TIMEOUT = %d (requested %d), SO_RCVBUF = %d (requested %d), SO_SNDBUF = %d (requested %d), connectTimeoutMs = %d."
         debug(msg.format(channel.socket.getSoTimeout,
                          readTimeoutMs,
                          channel.socket.getReceiveBufferSize, 
                          readBufferSize,
                          channel.socket.getSendBufferSize,
-                         writeBufferSize))
+                         writeBufferSize,
+                         connectTimeoutMs))
+
       } catch {
         case e: Throwable => disconnect()
       }
@@ -92,20 +105,21 @@ class BlockingChannel( val host: String,
 
   def isConnected = connected
 
-  def send(request: RequestOrResponse):Int = {
+  def send(request: RequestOrResponse): Long = {
     if(!connected)
       throw new ClosedChannelException()
 
-    val send = new BoundedByteBufferSend(request)
+    val send = new RequestOrResponseSend(connectionId, request)
     send.writeCompletely(writeChannel)
   }
   
-  def receive(): Receive = {
+  def receive(): NetworkReceive = {
     if(!connected)
       throw new ClosedChannelException()
 
-    val response = new BoundedByteBufferReceive()
+    val response = new NetworkReceive()
     response.readCompletely(readChannel)
+    response.payload().rewind()
 
     response
   }

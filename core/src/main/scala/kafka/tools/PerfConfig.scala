@@ -22,11 +22,10 @@ import joptsimple.OptionParser
 
 class PerfConfig(args: Array[String]) {
   val parser = new OptionParser
-  val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume")
+  val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
     .withRequiredArg
     .describedAs("count")
     .ofType(classOf[java.lang.Long])
-    .defaultsTo(Long.MaxValue)
   val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval at which to print progress info.")
     .withRequiredArg
     .describedAs("size")
@@ -53,7 +52,7 @@ class PerfConfig(args: Array[String]) {
     .defaultsTo(200)
   val compressionCodecOpt = parser.accepts("compression-codec", "If set, messages are sent compressed")
     .withRequiredArg
-    .describedAs("supported codec: NoCompressionCodec as 0, GZIPCompressionCodec as 1, SnappyCompressionCodec as 2")
+    .describedAs("supported codec: NoCompressionCodec as 0, GZIPCompressionCodec as 1, SnappyCompressionCodec as 2, LZ4CompressionCodec as 3")
     .ofType(classOf[java.lang.Integer])
     .defaultsTo(0)
   val helpOpt = parser.accepts("help", "Print usage.")

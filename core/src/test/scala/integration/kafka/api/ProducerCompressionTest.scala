@@ -19,7 +19,6 @@ package kafka.api.test
 
 import java.util.{Properties, Collection, ArrayList}
 
-import org.scalatest.junit.JUnit3Suite
 import org.junit.runners.Parameterized
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized.Parameters
@@ -32,33 +31,31 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.consumer.SimpleConsumer
 import kafka.message.Message
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{Utils, TestUtils}
-
-import scala.Array
+import kafka.utils.{CoreUtils, TestUtils}
 
 
 @RunWith(value = classOf[Parameterized])
-class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooKeeperTestHarness {
+class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness {
   private val brokerId = 0
-  private val port = TestUtils.choosePort
   private var server: KafkaServer = null
 
-  private val props = TestUtils.createBrokerConfig(brokerId, port)
-  private val config = new KafkaConfig(props)
-
   private val topic = "topic"
-  private val numRecords = 100
+  private val numRecords = 2000
 
   @Before
   override def setUp() {
     super.setUp()
+
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    val config = KafkaConfig.fromProps(props)
+
     server = TestUtils.createServer(config)
   }
 
   @After
   override def tearDown() {
     server.shutdown
-    Utils.rm(server.config.logDirs)
+    CoreUtils.rm(server.config.logDirs)
     super.tearDown()
   }
 
@@ -71,10 +68,14 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
   def testCompression() {
 
     val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config)))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(Seq(server)))
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
-    var producer = new KafkaProducer(props)
-    val consumer = new SimpleConsumer("localhost", port, 100, 1024*1024, "")
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")
+    props.put(ProducerConfig.LINGER_MS_CONFIG, "200")
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    var producer = new KafkaProducer[Array[Byte],Array[Byte]](props)
+    val consumer = new SimpleConsumer("localhost", server.boundPort(), 100, 1024*1024, "")
 
     try {
       // create topic
@@ -87,7 +88,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
 
       // make sure the returned messages are correct
       val responses = for (message <- messages)
-        yield producer.send(new ProducerRecord(topic, null, null, message))
+        yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, null, null, message))
       val futures = responses.toList
       for ((future, offset) <- futures zip (0 until numRecords)) {
         assertEquals(offset.toLong, future.get.offset)
@@ -121,8 +122,10 @@ object ProducerCompressionTest {
   @Parameters
   def parameters: Collection[Array[String]] = {
     val list = new ArrayList[Array[String]]()
+    list.add(Array("none"))
     list.add(Array("gzip"))
     list.add(Array("snappy"))
+    list.add(Array("lz4"))
     list
   }
 }

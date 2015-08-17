@@ -32,9 +32,9 @@ object UpdateMetadataResponse {
   }
 }
 
-case class UpdateMetadataResponse(override val correlationId: Int,
+case class UpdateMetadataResponse(correlationId: Int,
                                   errorCode: Short = ErrorMapping.NoError)
-  extends RequestOrResponse(correlationId = correlationId) {
+  extends RequestOrResponse() {
   def sizeInBytes(): Int = 4 /* correlation id */ + 2 /* error code */
 
   def writeTo(buffer: ByteBuffer) {

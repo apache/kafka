@@ -16,13 +16,13 @@
  */
 package kafka.utils
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.scalatest.Assertions
 import org.junit.{Test, After, Before}
 
 class IteratorTemplateTest extends Assertions {
   
-  val lst = (0 until 10).toSeq
+  val lst = (0 until 10)
   val iterator = new IteratorTemplate[Int]() {
     var i = 0
     override def makeNext() = {

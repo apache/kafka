@@ -15,71 +15,53 @@
  * limitations under the License.
  */
 
-package kafka.api.test
+package kafka.api
 
 import java.util.Properties
-import java.lang.{Integer, IllegalArgumentException}
+import java.util.concurrent.TimeUnit
 
-import org.apache.kafka.clients.producer._
-import org.scalatest.junit.JUnit3Suite
-import org.junit.Test
-import org.junit.Assert._
-
-import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{Utils, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
 import kafka.consumer.SimpleConsumer
-import kafka.api.FetchRequestBuilder
+import kafka.integration.KafkaServerTestHarness
 import kafka.message.Message
+import kafka.server.KafkaConfig
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.errors.SerializationException
+import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
+class ProducerSendTest extends KafkaServerTestHarness {
+  val numServers = 2
 
-class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
-  private val brokerId1 = 0
-  private val brokerId2 = 1
-  private val ports = TestUtils.choosePorts(2)
-  private val (port1, port2) = (ports(0), ports(1))
-  private var server1: KafkaServer = null
-  private var server2: KafkaServer = null
-  private var servers = List.empty[KafkaServer]
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
+
+  def generateConfigs() =
+    TestUtils.createBrokerConfigs(numServers, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
 
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
-  props1.put("num.partitions", "4")
-  props2.put("num.partitions", "4")
-  private val config1 = new KafkaConfig(props1)
-  private val config2 = new KafkaConfig(props2)
-
   private val topic = "topic"
   private val numRecords = 100
 
+  @Before
   override def setUp() {
     super.setUp()
-    // set up 2 brokers with 4 partitions each
-    server1 = TestUtils.createServer(config1)
-    server2 = TestUtils.createServer(config2)
-    servers = List(server1,server2)
 
     // TODO: we need to migrate to new consumers when 0.9 is final
-    consumer1 = new SimpleConsumer("localhost", port1, 100, 1024*1024, "")
-    consumer2 = new SimpleConsumer("localhost", port2, 100, 1024*1024, "")
+    consumer1 = new SimpleConsumer("localhost", servers(0).boundPort(), 100, 1024*1024, "")
+    consumer2 = new SimpleConsumer("localhost", servers(1).boundPort(), 100, 1024*1024, "")
   }
 
+  @After
   override def tearDown() {
-    server1.shutdown
-    server2.shutdown
-    Utils.rm(server1.config.logDirs)
-    Utils.rm(server2.config.logDirs)
-    super.tearDown()
-  }
+    consumer1.close()
+    consumer2.close()
 
-  class CheckErrorCallback extends Callback {
-    def onCompletion(metadata: RecordMetadata, exception: Exception) {
-      if (exception != null)
-        fail("Send callback returns the following exception", exception)
-    }
+    super.tearDown()
   }
 
   /**
@@ -90,33 +72,46 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testSendOffset() {
-    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-
-    val callback = new CheckErrorCallback
+    var producer = TestUtils.createNewProducer(brokerList)
+    val partition = new Integer(0)
+    
+    object callback extends Callback {
+      var offset = 0L
+      def onCompletion(metadata: RecordMetadata, exception: Exception) {
+        if (exception == null) {
+          assertEquals(offset, metadata.offset())
+          assertEquals(topic, metadata.topic())
+          assertEquals(partition, metadata.partition())
+          offset += 1
+        } else {
+          fail("Send callback returns the following exception", exception)
+        }
+      }
+    }
 
     try {
       // create topic
       TestUtils.createTopic(zkClient, topic, 1, 2, servers)
 
       // send a normal record
-      val record0 = new ProducerRecord(topic, new Integer(0), "key".getBytes, "value".getBytes)
+      val record0 = new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, "key".getBytes, "value".getBytes)
       assertEquals("Should have offset 0", 0L, producer.send(record0, callback).get.offset)
 
       // send a record with null value should be ok
-      val record1 = new ProducerRecord(topic, new Integer(0), "key".getBytes, null)
+      val record1 = new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, "key".getBytes, null)
       assertEquals("Should have offset 1", 1L, producer.send(record1, callback).get.offset)
 
       // send a record with null key should be ok
-      val record2 = new ProducerRecord(topic, new Integer(0), null, "value".getBytes)
+      val record2 = new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, null, "value".getBytes)
       assertEquals("Should have offset 2", 2L, producer.send(record2, callback).get.offset)
 
       // send a record with null part id should be ok
-      val record3 = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
+      val record3 = new ProducerRecord[Array[Byte],Array[Byte]](topic, null, "key".getBytes, "value".getBytes)
       assertEquals("Should have offset 3", 3L, producer.send(record3, callback).get.offset)
 
       // send a record with null topic should fail
       try {
-        val record4 = new ProducerRecord(null, new Integer(0), "key".getBytes, "value".getBytes)
+        val record4 = new ProducerRecord[Array[Byte],Array[Byte]](null, partition, "key".getBytes, "value".getBytes)
         producer.send(record4, callback)
         fail("Should not allow sending a record without topic")
       } catch {
@@ -126,7 +121,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
 
       // non-blocking send a list of records
       for (i <- 1 to numRecords)
-        producer.send(record0)
+        producer.send(record0, callback)
 
       // check that all messages have been acked via offset
       assertEquals("Should have offset " + (numRecords + 4), numRecords + 4L, producer.send(record0, callback).get.offset)
@@ -139,6 +134,55 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  @Test
+  def testSerializer() {
+    // send a record with a wrong type should receive a serialization exception
+    try {
+      val producer = createNewProducerWithWrongSerializer(brokerList)
+      val record5 = new ProducerRecord[Array[Byte],Array[Byte]](topic, new Integer(0), "key".getBytes, "value".getBytes)
+      producer.send(record5)
+      fail("Should have gotten a SerializationException")
+    } catch {
+      case se: SerializationException => // this is ok
+    }
+
+    try {
+      createNewProducerWithNoSerializer(brokerList)
+      fail("Instantiating a producer without specifying a serializer should cause a ConfigException")
+    } catch {
+      case ce : ConfigException => // this is ok
+    }
+
+    // create a producer with explicit serializers should succeed
+    createNewProducerWithExplicitSerializer(brokerList)
+  }
+
+  private def createNewProducerWithWrongSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
+    import org.apache.kafka.clients.producer.ProducerConfig
+
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
+    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+  }
+
+  private def createNewProducerWithNoSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
+    import org.apache.kafka.clients.producer.ProducerConfig
+
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+  }
+
+  private def createNewProducerWithExplicitSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
+    import org.apache.kafka.clients.producer.ProducerConfig
+
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps, new ByteArraySerializer, new ByteArraySerializer)
+  }
+
   /**
    * testClose checks the closing behavior
    *
@@ -146,14 +190,14 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testClose() {
-    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    var producer = TestUtils.createNewProducer(brokerList)
 
     try {
       // create topic
       TestUtils.createTopic(zkClient, topic, 1, 2, servers)
 
       // non-blocking send a list of records
-      val record0 = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
+      val record0 = new ProducerRecord[Array[Byte],Array[Byte]](topic, null, "key".getBytes, "value".getBytes)
       for (i <- 1 to numRecords)
         producer.send(record0)
       val response0 = producer.send(record0)
@@ -182,7 +226,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testSendToPartition() {
-    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    var producer = TestUtils.createNewProducer(brokerList)
 
     try {
       // create topic
@@ -195,7 +239,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
 
       val responses =
         for (i <- 1 to numRecords)
-        yield producer.send(new ProducerRecord(topic, partition, null, ("value" + i).getBytes))
+          yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, null, ("value" + i).getBytes))
       val futures = responses.toList
       futures.map(_.get)
       for (future <- futures)
@@ -209,7 +253,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
       }
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val fetchResponse1 = if(leader1.get == server1.config.brokerId) {
+      val fetchResponse1 = if(leader1.get == configs(0).brokerId) {
         consumer1.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
       } else {
         consumer2.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
@@ -237,12 +281,11 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testAutoCreateTopic() {
-    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
-                                            retries = 5)
+    var producer = TestUtils.createNewProducer(brokerList, retries = 5)
 
     try {
       // Send a message to auto-create the topic
-      val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
+      val record = new ProducerRecord[Array[Byte],Array[Byte]](topic, null, "key".getBytes, "value".getBytes)
       assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
 
       // double check that the topic is created with leader elected
@@ -253,6 +296,121 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
         producer.close()
         producer = null
       }
+    }
+  }
+  
+  /**
+   * Test that flush immediately sends all accumulated requests.
+   */
+  @Test
+  def testFlush() {
+    var producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+    try {
+      TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "value".getBytes)
+      for(i <- 0 until 50) {
+        val responses = (0 until numRecords) map (i => producer.send(record))
+        assertTrue("No request is complete.", responses.forall(!_.isDone()))
+        producer.flush()
+        assertTrue("All requests are complete.", responses.forall(_.isDone()))
+      }
+    } finally {
+      if (producer != null)
+        producer.close()
+    }
+  }
+
+  /**
+   * Test close with zero timeout from caller thread
+   */
+  @Test
+  def testCloseWithZeroTimeoutFromCallerThread() {
+    var producer: KafkaProducer[Array[Byte],Array[Byte]] = null
+    try {
+      // create topic
+      val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val leader0 = leaders(0)
+      val leader1 = leaders(1)
+
+      // create record
+      val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
+      val record1 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 1, null, "value".getBytes)
+
+      // Test closing from caller thread.
+      for(i <- 0 until 50) {
+        producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        val responses = (0 until numRecords) map (i => producer.send(record0))
+        assertTrue("No request is complete.", responses.forall(!_.isDone()))
+        producer.close(0, TimeUnit.MILLISECONDS)
+        responses.foreach { future =>
+          try {
+            future.get()
+            fail("No message should be sent successfully.")
+          } catch {
+            case e: Exception =>
+              assertEquals("java.lang.IllegalStateException: Producer is closed forcefully.", e.getMessage)
+          }
+        }
+        val fetchResponse = if (leader0.get == configs(0).brokerId) {
+          consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        } else {
+          consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        }
+        assertEquals("Fetch response should have no message returned.", 0, fetchResponse.messageSet(topic, 0).size)
+      }
+    } finally {
+      if (producer != null)
+        producer.close()
+    }
+  }
+
+  /**
+   * Test close with zero and non-zero timeout from sender thread
+   */
+  @Test
+  def testCloseWithZeroTimeoutFromSenderThread() {
+    var producer: KafkaProducer[Array[Byte],Array[Byte]] = null
+    try {
+      // create topic
+      val leaders = TestUtils.createTopic(zkClient, topic, 1, 2, servers)
+      val leader = leaders(0)
+
+      // create record
+      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
+
+      // Test closing from sender thread.
+      class CloseCallback(producer: KafkaProducer[Array[Byte], Array[Byte]]) extends Callback {
+        override def onCompletion(metadata: RecordMetadata, exception: Exception) {
+          // Trigger another batch in accumulator before close the producer. These messages should
+          // not be sent.
+          (0 until numRecords) map (i => producer.send(record))
+          // The close call will be called by all the message callbacks. This tests idempotence of the close call.
+          producer.close(0, TimeUnit.MILLISECONDS)
+          // Test close with non zero timeout. Should not block at all.
+          producer.close(Long.MaxValue, TimeUnit.MICROSECONDS)
+        }
+      }
+      for(i <- 0 until 50) {
+        producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        // send message to partition 0
+        val responses = ((0 until numRecords) map (i => producer.send(record, new CloseCallback(producer))))
+        assertTrue("No request is complete.", responses.forall(!_.isDone()))
+        // flush the messages.
+        producer.flush()
+        assertTrue("All request are complete.", responses.forall(_.isDone()))
+        // Check the messages received by broker.
+        val fetchResponse = if (leader.get == configs(0).brokerId) {
+          consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        } else {
+          consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        }
+        val expectedNumRecords = (i + 1) * numRecords
+        assertEquals("Fetch response to partition 0 should have %d messages.".format(expectedNumRecords),
+          expectedNumRecords, fetchResponse.messageSet(topic, 0).size)
+      }
+    } finally {
+      if (producer != null)
+        producer.close()
     }
   }
 }
