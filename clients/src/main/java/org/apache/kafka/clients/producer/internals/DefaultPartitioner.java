@@ -69,9 +69,9 @@ public class DefaultPartitioner implements Partitioner {
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
         int numPartitions = partitions.size();
         if (keyBytes == null)
-          return partitionWithoutKey(topic, cluster, numPartitions);
+            return partitionWithoutKey(topic, cluster, numPartitions);
         else
-          return partitionWithKey(keyBytes, numPartitions, topic, cluster);
+            return partitionWithKey(keyBytes, numPartitions, topic, cluster);
     }
 
     protected int partitionWithoutKey(String topic, Cluster cluster, int numPartitions) {

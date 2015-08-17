@@ -287,7 +287,7 @@ public class Utils {
      * @return 32 bit hash of the given array
      */
     public static int murmur2(final byte[] data) {
-      return murmur2(data, 0x9747b28c);
+        return murmur2(data, 0x9747b28c);
     }
 
     /**
