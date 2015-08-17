@@ -17,87 +17,161 @@
 
 package org.apache.kafka.stream.processor;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
-import java.io.File;
+import java.util.Map;
 import java.util.Properties;
 
 public class ProcessorConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
+    /** <code>state.dir</code> */
+    public static final String STATE_DIR_CONFIG = "state.dir";
+    private static final String STATE_DIR_DOC = "Directory location for state store.";
+
+    /** <code>commit.interval.ms</code> */
+    public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
+    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor.";
+
+    /** <code>poll.ms</code> */
+    public static final String POLL_MS_CONFIG = "poll.ms";
+    private static final String POLL_MS_DOC = "The amount of time in milliseconds to block waiting for input.";
+
+    /** <code>num.stream.threads</code> */
+    public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
+    private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
+
+    /** <code>buffered.records.per.partition</code> */
+    public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
+    private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "The maximum number of records to buffer per partition.";
+
+    /** <code>state.cleanup.delay</code> */
+    public static final String STATE_CLEANUP_DELAY_MS_CONFIG = "state.cleanup.delay.ms";
+    private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated.";
+
+    /** <code>total.records.to.process</code> */
+    public static final String TOTAL_RECORDS_TO_PROCESS = "total.records.to.process";
+    private static final String TOTAL_RECORDS_TO_DOC = "Exit after processing this many records.";
+
+    /** <code>window.time.ms</code> */
+    public static final String WINDOW_TIME_MS_CONFIG = "window.time.ms";
+    private static final String WINDOW_TIME_MS_DOC = "Setting this to a non-negative value will cause the processor to get called "
+                                                     + "with this frequency even if there is no message.";
+
+    /** <code>timestamp.extractor</code> */
+    public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
+    private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface.";
+
+    /** <code>key.serializer</code> */
+    public static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+
+    /** <code>value.serializer</code> */
+    public static final String VALUE_SERIALIZER_CLASS_CONFIG = ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+
+    /** <code>key.deserializer</code> */
+    public static final String KEY_DESERIALIZER_CLASS_CONFIG = ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+
+    /** <code>value.deserializer</code> */
+    public static final String VALUE_DESERIALIZER_CLASS_CONFIG = ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+
+
+
+
+    private static final String SYSTEM_TEMP_DIRECTORY = System.getProperty("java.io.tmpdir");
+
     static {
-        CONFIG = new ConfigDef().define(ProcessorProperties.TOPICS_CONFIG,
-            Type.STRING,
-            "",
-            Importance.HIGH,
-            "All the possible topic names this job need to interact with")
-            .define(ProcessorProperties.STATE_DIR_CONFIG,
-                Type.STRING,
-                System.getProperty("java.io.tmpdir"),
-                Importance.MEDIUM,
-                "")
-            .define(ProcessorProperties.POLL_TIME_MS_CONFIG,
-                Type.LONG,
-                100,
-                Importance.LOW,
-                "The amount of time to block waiting for input.")
-            .define(ProcessorProperties.COMMIT_TIME_MS_CONFIG,
-                Type.LONG,
-                30000,
-                Importance.HIGH,
-                "The frequency with which to save the position of the processor.")
-            .define(ProcessorProperties.WINDOW_TIME_MS_CONFIG,
-                Type.LONG,
-                -1L,
-                Importance.MEDIUM,
-                "Setting this to a non-negative value will cause the processor to get called with this frequency even if there is no message.")
-            .define(ProcessorProperties.BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                Type.INT,
-                1000,
-                Importance.LOW,
-                "The maximum number of records to buffer per partition")
-            .define(ProcessorProperties.STATE_CLEANUP_DELAY_CONFIG,
-                Type.LONG,
-                60000,
-                Importance.LOW,
-                "The amount of time to wait before deleting state when a partition has migrated.")
-            .define(ProcessorProperties.TOTAL_RECORDS_TO_PROCESS,
-                Type.LONG,
-                -1L,
-                Importance.LOW,
-                "Exit after processing this many records.")
-            .define(ProcessorProperties.NUM_STREAM_THREADS,
-                Type.INT,
-                1,
-                Importance.LOW,
-                "The number of threads to execute stream processing.");
+        CONFIG = new ConfigDef().define(STATE_DIR_CONFIG,
+                                        Type.STRING,
+                                        SYSTEM_TEMP_DIRECTORY,
+                                        Importance.MEDIUM,
+                                        STATE_DIR_DOC)
+                                .define(COMMIT_INTERVAL_MS_CONFIG,
+                                        Type.LONG,
+                                        30000,
+                                        Importance.HIGH,
+                                        COMMIT_INTERVAL_MS_DOC)
+                                .define(POLL_MS_CONFIG,
+                                        Type.LONG,
+                                        100,
+                                        Importance.LOW,
+                                    POLL_MS_DOC)
+                                .define(NUM_STREAM_THREADS_CONFIG,
+                                    Type.INT,
+                                    1,
+                                    Importance.LOW,
+                                    NUM_STREAM_THREADS_DOC)
+                                .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                                        Type.INT,
+                                        1000,
+                                        Importance.LOW,
+                                        BUFFERED_RECORDS_PER_PARTITION_DOC)
+                                .define(STATE_CLEANUP_DELAY_MS_CONFIG,
+                                        Type.LONG,
+                                        60000,
+                                        Importance.LOW,
+                                    STATE_CLEANUP_DELAY_MS_DOC)
+                                .define(TOTAL_RECORDS_TO_PROCESS,
+                                        Type.LONG,
+                                        -1L,
+                                        Importance.LOW,
+                                        TOTAL_RECORDS_TO_DOC)
+                                .define(WINDOW_TIME_MS_CONFIG,
+                                        Type.LONG,
+                                        -1L,
+                                        Importance.MEDIUM,
+                                        WINDOW_TIME_MS_DOC)
+                                .define(KEY_SERIALIZER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ProducerConfig.KEY_SERIALIZER_CLASS_DOC)
+                                .define(VALUE_SERIALIZER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ProducerConfig.VALUE_SERIALIZER_CLASS_DOC)
+                                .define(KEY_DESERIALIZER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ConsumerConfig.KEY_DESERIALIZER_CLASS_DOC)
+                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        ConsumerConfig.VALUE_DESERIALIZER_CLASS_DOC)
+                                .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.HIGH,
+                                        TIMESTAMP_EXTRACTOR_CLASS_DOC);
     }
 
-    public final String topics;
-    public final File stateDir;
-    public final long pollTimeMs;
-    public final long commitTimeMs;
-    public final long windowTimeMs;
-    public final int bufferedRecordsPerPartition;
-    public final long stateCleanupDelay;
-    public final long totalRecordsToProcess;
-    public final int numStreamThreads;
-
-    public ProcessorConfig(Properties processor) {
-        super(CONFIG, processor);
-        this.topics = this.getString(ProcessorProperties.TOPICS_CONFIG);
-        this.stateDir = new File(this.getString(ProcessorProperties.STATE_DIR_CONFIG));
-        this.pollTimeMs = this.getLong(ProcessorProperties.POLL_TIME_MS_CONFIG);
-        this.commitTimeMs = this.getLong(ProcessorProperties.COMMIT_TIME_MS_CONFIG);
-        this.windowTimeMs = this.getLong(ProcessorProperties.WINDOW_TIME_MS_CONFIG);
-        this.bufferedRecordsPerPartition = this.getInt(ProcessorProperties.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        this.stateCleanupDelay = this.getLong(ProcessorProperties.STATE_CLEANUP_DELAY_CONFIG);
-        this.totalRecordsToProcess = this.getLong(ProcessorProperties.TOTAL_RECORDS_TO_PROCESS);
-        this.numStreamThreads = this.getInt(ProcessorProperties.NUM_STREAM_THREADS);
+    public ProcessorConfig(Map<?, ?> props) {
+        super(CONFIG, props);
     }
 
+    public Properties getConsumerProperties() {
+        Properties props = new Properties();
+
+        // set consumer default property values
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range");
+
+        return props;
+    }
+
+    public Properties getProducerProperties() {
+        Properties props = new Properties();
+
+        // set producer default property values
+        props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "100");
+
+        return props;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(CONFIG.toHtmlTable());
+    }
 }

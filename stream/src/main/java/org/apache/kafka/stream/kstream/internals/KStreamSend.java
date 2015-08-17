@@ -19,7 +19,7 @@ package org.apache.kafka.stream.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.stream.processor.KafkaProcessor;
-import org.apache.kafka.stream.processor.PConfig;
+import org.apache.kafka.stream.processor.ProcessorMetadata;
 import org.apache.kafka.stream.processor.ProcessorContext;
 
 class KStreamSend<K, V> extends KafkaProcessor<K, V, Object, Object> {
@@ -41,11 +41,11 @@ class KStreamSend<K, V> extends KafkaProcessor<K, V, Object, Object> {
     }
 
     @SuppressWarnings("unchecked")
-    public KStreamSend(String name, PConfig config) {
+    public KStreamSend(String name, ProcessorMetadata config) {
         super(name, config);
 
         if (this.config() == null)
-            throw new IllegalStateException("PConfig should be specified.");
+            throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.topicSerializers = (TopicSer) config.value();
     }

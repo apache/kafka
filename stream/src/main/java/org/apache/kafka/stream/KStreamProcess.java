@@ -20,9 +20,10 @@ package org.apache.kafka.stream;
 import org.apache.kafka.stream.processor.PTopologyBuilder;
 import org.apache.kafka.stream.processor.internals.KStreamThread;
 import org.apache.kafka.stream.processor.ProcessorConfig;
-import org.apache.kafka.stream.processor.ProcessorProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
 
 /**
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
@@ -63,21 +64,21 @@ public class KStreamProcess implements Runnable {
     private static final int STOPPED = 3;
     private int state = CREATED;
 
-    private final ProcessorConfig config;
     private final Object lock = new Object();
     private final KStreamThread[] threads;
+    private final File stateDir;
 
 
-    public KStreamProcess(PTopologyBuilder builder, ProcessorProperties processorProperties) throws Exception {
-        if (processorProperties.timestampExtractor() == null)
+    public KStreamProcess(PTopologyBuilder builder, ProcessorConfig config) throws Exception {
+        if (config.getClass(ProcessorConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG) == null)
             throw new NullPointerException("timestamp extractor is missing");
 
-        this.config = new ProcessorConfig(processorProperties.config());
-
-        this.threads = new KStreamThread[this.config.numStreamThreads];
+        this.threads = new KStreamThread[config.getInt(ProcessorConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new KStreamThread(builder, processorProperties);
+            this.threads[i] = new KStreamThread(builder, config);
         }
+
+        this.stateDir = new File(config.getString(ProcessorConfig.STATE_DIR_CONFIG));
     }
 
     /**
@@ -87,8 +88,8 @@ public class KStreamProcess implements Runnable {
         synchronized (lock) {
             log.info("Starting container");
             if (state == CREATED) {
-                if (!config.stateDir.exists() && !config.stateDir.mkdirs())
-                    throw new IllegalArgumentException("Failed to create state directory: " + config.stateDir.getAbsolutePath());
+                if (!stateDir.exists() && !stateDir.mkdirs())
+                    throw new IllegalArgumentException("Failed to create state directory: " + stateDir.getAbsolutePath());
 
                 for (KStreamThread thread : threads) thread.start();
                 log.info("Start-up complete");

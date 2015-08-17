@@ -18,27 +18,20 @@
 package org.apache.kafka.stream.kstream.internals;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.stream.KeyValueMapper;
 import org.apache.kafka.stream.processor.KafkaProcessor;
-import org.apache.kafka.stream.processor.PConfig;
-import org.apache.kafka.stream.processor.PTopologyBuilder;
-import org.apache.kafka.stream.KStream;
+import org.apache.kafka.stream.processor.ProcessorMetadata;
 import org.apache.kafka.stream.Predicate;
-
-import java.lang.reflect.Array;
-import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicInteger;
 
 class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
 
     private final Predicate<K, V>[] predicates;
 
     @SuppressWarnings("unchecked")
-    public KStreamBranch(String name, PConfig config) {
+    public KStreamBranch(String name, ProcessorMetadata config) {
         super(name, config);
 
         if (this.config() == null)
-            throw new IllegalStateException("PConfig should be specified.");
+            throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.predicates = (Predicate<K, V>[]) config.value();
     }

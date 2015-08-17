@@ -19,10 +19,10 @@ package org.apache.kafka.stream.examples;
 
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.stream.KStreamTopologyBuilder;
-import org.apache.kafka.stream.processor.ProcessorProperties;
-import org.apache.kafka.stream.KStreamProcess;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.stream.KStreamTopologyBuilder;
+import org.apache.kafka.stream.processor.ProcessorConfig;
+import org.apache.kafka.stream.KStreamProcess;
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.stream.KeyValue;
 import org.apache.kafka.stream.KeyValueMapper;
@@ -33,7 +33,7 @@ import java.util.Properties;
 public class KStreamJob {
 
     public static void main(String[] args) throws Exception {
-        ProcessorProperties properties = new ProcessorProperties(new Properties());
+        ProcessorConfig config = new ProcessorConfig(new Properties());
         KStreamTopologyBuilder builder = new KStreamTopologyBuilder();
 
         StringSerializer stringSerializer = new StringSerializer();
@@ -72,7 +72,7 @@ public class KStreamJob {
         streams[0].sendTo("topic2", stringSerializer, intSerializer);
         streams[1].sendTo("topic3", stringSerializer, intSerializer);
 
-        KStreamProcess kstream = new KStreamProcess(builder, properties);
+        KStreamProcess kstream = new KStreamProcess(builder, config);
         kstream.run();
     }
 }

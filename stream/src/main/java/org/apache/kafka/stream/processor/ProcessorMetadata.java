@@ -17,12 +17,12 @@
 
 package org.apache.kafka.stream.processor;
 
-public class PConfig {
+public class ProcessorMetadata {
 
     private String name;
     private Object value;
 
-    public PConfig(String name, Object value) {
+    public ProcessorMetadata(String name, Object value) {
         this.name = name;
         this.value = value;
     }

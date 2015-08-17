@@ -17,14 +17,13 @@
 
 package org.apache.kafka.stream.examples;
 
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.KStreamProcess;
 import org.apache.kafka.stream.processor.KafkaProcessor;
 import org.apache.kafka.stream.processor.PTopologyBuilder;
+import org.apache.kafka.stream.processor.ProcessorConfig;
 import org.apache.kafka.stream.processor.ProcessorContext;
-import org.apache.kafka.stream.processor.KafkaSource;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.stream.processor.ProcessorProperties;
 import org.apache.kafka.stream.state.Entry;
 import org.apache.kafka.stream.state.InMemoryKeyValueStore;
 import org.apache.kafka.stream.state.KeyValueIterator;
@@ -79,13 +78,13 @@ public class StatefulProcessJob {
     }
 
     public static void main(String[] args) throws Exception {
-        ProcessorProperties properties = new ProcessorProperties(new Properties());
+        ProcessorConfig config = new ProcessorConfig(new Properties());
         PTopologyBuilder builder = new PTopologyBuilder();
 
         builder.addSource("SOURCE", new StringDeserializer(), new IntegerDeserializer(), "topic-source");
         builder.addProcessor("PROCESS", MyProcessor.class, null, "SOURCE");
 
-        KStreamProcess streaming = new KStreamProcess(builder, properties);
+        KStreamProcess streaming = new KStreamProcess(builder, config);
         streaming.run();
     }
 }

@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.stream.processor.PTopologyBuilder;
 import org.apache.kafka.stream.processor.ProcessorConfig;
-import org.apache.kafka.stream.processor.ProcessorProperties;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
@@ -55,15 +54,21 @@ public class KStreamThread extends Thread {
     private static final Logger log = LoggerFactory.getLogger(KStreamThread.class);
 
     private final PTopologyBuilder builder;
-    private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
-    private final Map<Integer, ProcessorContextImpl> kstreamContexts = new HashMap<>();
     private final IngestorImpl ingestor;
     private final RecordCollectorImpl collector;
-    private final ProcessorProperties properties;
-    private final ProcessorConfig config;
+    private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
+    private final Map<Integer, ProcessorContextImpl> kstreamContexts = new HashMap<>();
     private final Metrics metrics;
-    private final KafkaStreamingMetrics streamingMetrics;
     private final Time time;
+
+    private final ProcessorConfig config;
+    private final File stateDir;
+    private final long pollTimeMs;
+    private final long commitTimeMs;
+    private final long stateCleanupDelayMs;
+    private final long totalRecordsToProcess;
+    private final KafkaStreamingMetrics streamingMetrics;
+
     private volatile boolean running;
     private long lastCommit;
     private long nextStateCleaning;
@@ -85,28 +90,37 @@ public class KStreamThread extends Thread {
     };
 
     @SuppressWarnings("unchecked")
-    public KStreamThread(PTopologyBuilder builder, ProcessorProperties properties) throws Exception {
+    public KStreamThread(PTopologyBuilder builder, ProcessorConfig config) throws Exception {
         super();
 
-        if (properties.timestampExtractor() == null)
-            throw new NullPointerException("timestamp extractor is missing");
-
         this.metrics = new Metrics();
-        this.config = new ProcessorConfig(properties.config());
+        this.config = config;
         this.builder = builder;
 
-        this.properties = properties;
         this.streamingMetrics = new KafkaStreamingMetrics();
 
         // build the topology without initialization to get the topics for consumer
         PTopology topology = builder.build();
 
         // create the producer and consumer clients
-        Producer<byte[], byte[]> producer = new KafkaProducer<>(properties.config(), new ByteArraySerializer(), new ByteArraySerializer());
-        this.collector = new RecordCollectorImpl(producer, (Serializer<Object>) properties.keySerializer(), (Serializer<Object>) properties.valueSerializer());
+        Producer<byte[], byte[]> producer = new KafkaProducer<>(config.getProducerProperties(),
+            new ByteArraySerializer(),
+            new ByteArraySerializer());
+        this.collector = new RecordCollectorImpl(producer,
+            (Serializer<Object>) config.getConfiguredInstance(ProcessorConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
+            (Serializer<Object>) config.getConfiguredInstance(ProcessorConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
 
-        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(properties.config(), rebalanceCallback, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(config.getConsumerProperties(),
+            rebalanceCallback,
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer());
         this.ingestor = new IngestorImpl(consumer, topology.topics());
+
+        this.stateDir = new File(this.config.getString(ProcessorConfig.STATE_DIR_CONFIG));
+        this.pollTimeMs = config.getLong(ProcessorConfig.POLL_MS_CONFIG);
+        this.commitTimeMs = config.getLong(ProcessorConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.stateCleanupDelayMs = config.getLong(ProcessorConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+        this.totalRecordsToProcess = config.getLong(ProcessorConfig.TOTAL_RECORDS_TO_PROCESS);
 
         this.running = true;
         this.lastCommit = 0;
@@ -154,7 +168,7 @@ public class KStreamThread extends Thread {
             boolean readyForNextExecution = false;
 
             while (stillRunning()) {
-                ingestor.poll(readyForNextExecution ? 0 : this.config.pollTimeMs);
+                ingestor.poll(readyForNextExecution ? 0 : this.pollTimeMs);
 
                 for (StreamGroup group : this.streamGroups) {
                     readyForNextExecution = group.process();
@@ -173,8 +187,8 @@ public class KStreamThread extends Thread {
             log.debug("Shutting down at user request.");
             return false;
         }
-        if (config.totalRecordsToProcess >= 0 && recordsProcessed >= config.totalRecordsToProcess) {
-            log.debug("Shutting down as we've reached the user-configured limit of {} records to process.", config.totalRecordsToProcess);
+        if (totalRecordsToProcess >= 0 && recordsProcessed >= totalRecordsToProcess) {
+            log.debug("Shutting down as we've reached the user-configured limit of {} records to process.", totalRecordsToProcess);
             return false;
         }
         return true;
@@ -182,7 +196,7 @@ public class KStreamThread extends Thread {
 
     private void maybeCommit() {
         long now = time.milliseconds();
-        if (config.commitTimeMs >= 0 && lastCommit + config.commitTimeMs < now) {
+        if (commitTimeMs >= 0 && lastCommit + commitTimeMs < now) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
             commitAll(now);
         }
@@ -209,13 +223,13 @@ public class KStreamThread extends Thread {
     private void maybeCleanState() {
         long now = time.milliseconds();
         if (now > nextStateCleaning) {
-            File[] stateDirs = config.stateDir.listFiles();
+            File[] stateDirs = stateDir.listFiles();
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
                         Integer id = Integer.parseInt(dir.getName());
                         if (!kstreamContexts.keySet().contains(id)) {
-                            log.info("Deleting obsolete state directory {} after {} delay ms.", dir.getAbsolutePath(), config.stateCleanupDelay);
+                            log.info("Deleting obsolete state directory {} after {} delay ms.", dir.getAbsolutePath(), stateCleanupDelayMs);
                             Utils.rm(dir);
                         }
                     } catch (NumberFormatException e) {
@@ -239,7 +253,7 @@ public class KStreamThread extends Thread {
                     // build the topology and initialize with the context
                     PTopology topology = builder.build();
 
-                    context = new ProcessorContextImpl(id, ingestor, topology, collector, properties, config, metrics);
+                    context = new ProcessorContextImpl(id, ingestor, topology, collector, config, metrics);
 
                     topology.init(context);
 
@@ -256,7 +270,7 @@ public class KStreamThread extends Thread {
             context.addPartition(partition);
         }
 
-        nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;
+        nextStateCleaning = time.milliseconds() + stateCleanupDelayMs;
     }
 
     private void removePartitions() {

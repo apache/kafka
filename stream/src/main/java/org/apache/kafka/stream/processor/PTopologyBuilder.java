@@ -36,9 +36,9 @@ public class PTopologyBuilder {
 
     private class ProcessorClazz {
         public Class<? extends KafkaProcessor> clazz;
-        public PConfig config;
+        public ProcessorMetadata config;
 
-        public ProcessorClazz(Class<? extends KafkaProcessor> clazz, PConfig config) {
+        public ProcessorClazz(Class<? extends KafkaProcessor> clazz, ProcessorMetadata config) {
             this.clazz = clazz;
             this.config = config;
         }
@@ -60,7 +60,7 @@ public class PTopologyBuilder {
         return source;
     }
 
-    public final void addProcessor(String name, Class<? extends KafkaProcessor> processorClass, PConfig config, String... parentNames) {
+    public final void addProcessor(String name, Class<? extends KafkaProcessor> processorClass, ProcessorMetadata config, String... parentNames) {
         if (processorClasses.containsKey(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
 
@@ -94,9 +94,9 @@ public class PTopologyBuilder {
         // create processors
         try {
             for (String name : processorClasses.keySet()) {
-                PConfig config = processorClasses.get(name).config;
+                ProcessorMetadata config = processorClasses.get(name).config;
                 Class<? extends KafkaProcessor> processorClass = processorClasses.get(name).clazz;
-                KafkaProcessor processor = processorClass.getConstructor(String.class, PConfig.class).newInstance(name, config);
+                KafkaProcessor processor = processorClass.getConstructor(String.class, ProcessorMetadata.class).newInstance(name, config);
                 processorMap.put(name, processor);
             }
         } catch (Exception e) {

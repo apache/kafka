@@ -20,10 +20,8 @@ package org.apache.kafka.stream.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.stream.processor.KafkaSource;
-import org.apache.kafka.stream.processor.PTopologyBuilder;
 import org.apache.kafka.stream.processor.ProcessorConfig;
 import org.apache.kafka.stream.processor.ProcessorContext;
-import org.apache.kafka.stream.processor.ProcessorProperties;
 import org.apache.kafka.stream.processor.RecordCollector;
 import org.apache.kafka.stream.processor.StateStore;
 import org.apache.kafka.stream.processor.KafkaProcessor;
@@ -54,16 +52,18 @@ public class ProcessorContextImpl implements ProcessorContext {
     private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
 
     public final int id;
-    public final StreamGroup streamGroup;
     public final Ingestor ingestor;
+    public final StreamGroup streamGroup;
 
     private final Metrics metrics;
     private final PTopology topology;
     private final RecordCollectorImpl collector;
     private final ProcessorStateManager stateMgr;
-    private final ProcessorProperties processorProperties;
-    private final ProcessorConfig processorConfig;
-    private final TimestampExtractor timestampExtractor;
+
+    private final Serializer<?> keySerializer;
+    private final Serializer<?> valSerializer;
+    private final Deserializer<?> keyDeserializer;
+    private final Deserializer<?> valDeserializer;
 
     private boolean initialized;
 
@@ -72,28 +72,32 @@ public class ProcessorContextImpl implements ProcessorContext {
                                 Ingestor ingestor,
                                 PTopology topology,
                                 RecordCollectorImpl collector,
-                                ProcessorProperties processorProperties,
-                                ProcessorConfig processorConfig,
+                                ProcessorConfig config,
                                 Metrics metrics) throws IOException {
         this.id = id;
         this.metrics = metrics;
         this.ingestor = ingestor;
         this.topology = topology;
         this.collector = collector;
-        this.processorProperties = processorProperties;
-        this.processorConfig = processorConfig;
-        this.timestampExtractor = this.processorProperties.timestampExtractor();
 
         for (String topic : this.topology.topics()) {
             if (!ingestor.topics().contains(topic))
                 throw new IllegalArgumentException("topic not subscribed: " + topic);
         }
 
-        File stateFile = new File(processorConfig.stateDir, Integer.toString(id));
-        Consumer restoreConsumer = new KafkaConsumer<>(processorProperties.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        this.keySerializer = config.getConfiguredInstance(ProcessorConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
+        this.valSerializer = config.getConfiguredInstance(ProcessorConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
+        this.keyDeserializer = config.getConfiguredInstance(ProcessorConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        this.valDeserializer = config.getConfiguredInstance(ProcessorConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+
+        TimestampExtractor extractor = config.getConfiguredInstance(ProcessorConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+        int bufferedRecordsPerPartition = config.getInt(ProcessorConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+
+        File stateFile = new File(config.getString(ProcessorConfig.STATE_DIR_CONFIG), Integer.toString(id));
+        Consumer restoreConsumer = new KafkaConsumer<>(config.getConsumerProperties(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
 
         this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
-        this.streamGroup = new StreamGroup(this, this.ingestor, new TimeBasedChooser(), this.timestampExtractor, this.processorConfig.bufferedRecordsPerPartition);
+        this.streamGroup = new StreamGroup(this, this.ingestor, new TimeBasedChooser(), extractor, bufferedRecordsPerPartition);
 
         stateMgr.init();
 
@@ -150,22 +154,22 @@ public class ProcessorContextImpl implements ProcessorContext {
 
     @Override
     public Serializer<?> keySerializer() {
-        return processorProperties.keySerializer();
+        return this.keySerializer;
     }
 
     @Override
     public Serializer<?> valueSerializer() {
-        return processorProperties.valueSerializer();
+        return this.valSerializer;
     }
 
     @Override
     public Deserializer<?> keyDeserializer() {
-        return processorProperties.keyDeserializer();
+        return this.keyDeserializer;
     }
 
     @Override
     public Deserializer<?> valueDeserializer() {
-        return processorProperties.valueDeserializer();
+        return this.valDeserializer;
     }
 
     @Override

@@ -19,18 +19,18 @@ package org.apache.kafka.stream.kstream.internals;
 
 import org.apache.kafka.stream.processor.KafkaProcessor;
 import org.apache.kafka.stream.ValueMapper;
-import org.apache.kafka.stream.processor.PConfig;
+import org.apache.kafka.stream.processor.ProcessorMetadata;
 
 class KStreamFlatMapValues<K1, V1, V2> extends KafkaProcessor<K1, V1, K1, V2> {
 
     private final ValueMapper<V1, ? extends Iterable<V2>> mapper;
 
     @SuppressWarnings("unchecked")
-    KStreamFlatMapValues(String name, PConfig config) {
+    KStreamFlatMapValues(String name, ProcessorMetadata config) {
         super(name, config);
 
         if (this.config() == null)
-            throw new IllegalStateException("PConfig should be specified.");
+            throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.mapper = (ValueMapper<V1, ? extends Iterable<V2>>) config.value();
     }

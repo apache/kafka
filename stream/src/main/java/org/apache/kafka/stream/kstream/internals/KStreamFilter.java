@@ -19,9 +19,7 @@ package org.apache.kafka.stream.kstream.internals;
 
 import org.apache.kafka.stream.processor.KafkaProcessor;
 import org.apache.kafka.stream.Predicate;
-import org.apache.kafka.stream.processor.PConfig;
-
-import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.stream.processor.ProcessorMetadata;
 
 class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
 
@@ -43,11 +41,11 @@ class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    public KStreamFilter(String name, PConfig config) {
+    public KStreamFilter(String name, ProcessorMetadata config) {
         super(name, config);
 
         if (this.config() == null)
-            throw new IllegalStateException("PConfig should be specified.");
+            throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.predicateOut = (PredicateOut<K, V>) config.value();
     }

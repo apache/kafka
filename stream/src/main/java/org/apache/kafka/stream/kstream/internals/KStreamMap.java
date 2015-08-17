@@ -20,20 +20,18 @@ package org.apache.kafka.stream.kstream.internals;
 import org.apache.kafka.stream.processor.KafkaProcessor;
 import org.apache.kafka.stream.KeyValue;
 import org.apache.kafka.stream.KeyValueMapper;
-import org.apache.kafka.stream.processor.PConfig;
-
-import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.stream.processor.ProcessorMetadata;
 
 class KStreamMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
 
     private final KeyValueMapper<K1, V1, K2, V2> mapper;
 
     @SuppressWarnings("unchecked")
-    public KStreamMap(String name, PConfig config) {
+    public KStreamMap(String name, ProcessorMetadata config) {
         super(name, config);
 
         if (this.config() == null)
-            throw new IllegalStateException("PConfig should be specified.");
+            throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.mapper = (KeyValueMapper<K1, V1, K2, V2>) config.value();
     }
