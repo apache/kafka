@@ -114,6 +114,10 @@ subprojects {
     }
   }
 
+  tasks.withType(Test) {
+    maxParallelForks = Runtime.runtime.availableProcessors()
+  }
+
   jar {
     from '../LICENSE'
     from '../NOTICE'
