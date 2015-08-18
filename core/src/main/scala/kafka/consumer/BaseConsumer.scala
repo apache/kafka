@@ -40,14 +40,14 @@ class NewShinyConsumer(topic: String, consumerProps: Properties) extends BaseCon
 
   override def receive(): BaseConsumerRecord = {
     while (!recordIter.hasNext)
-      recordIter = consumer.poll(0).iterator
+      recordIter = consumer.poll(Long.MaxValue).iterator
 
     val record = recordIter.next
     BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
   }
 
   override def close() {
-    this.consumer.close
+    this.consumer.close()
   }
 }
 
@@ -66,7 +66,7 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
   }
 
   override def close() {
-    this.consumerConnector.shutdown
+    this.consumerConnector.shutdown()
   }
 }
 

@@ -66,7 +66,7 @@ class ConsoleConsumerTest extends JUnitSuite {
   }
 
   @Test
-  def sShouldParseValidNewConsumerValidConfig() {
+  def shouldParseValidNewConsumerValidConfig() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
