@@ -15,33 +15,40 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.internals.ProcessorNode;
 
-import java.util.ArrayList;
+public class SourceNode<K, V> extends ProcessorNode<K, V, K, V> {
 
-public class MockSource<K, V> extends KafkaSource<K, V> {
+    public Deserializer<K> keyDeserializer;
+    public Deserializer<V> valDeserializer;
 
-    public Deserializer<? extends K> keyDeserializer;
-    public Deserializer<? extends V> valDeserializer;
-
-    public int numReceived = 0;
-    public ArrayList<K> keys = new ArrayList<>();
-    public ArrayList<V> values = new ArrayList<>();
-
-    public MockSource(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer) {
-        super(keyDeserializer, valDeserializer);
+    public SourceNode(String name, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+        super(name);
 
         this.keyDeserializer = keyDeserializer;
         this.valDeserializer = valDeserializer;
     }
 
     @Override
-    public void process(K key, V value) {
-        this.numReceived++;
-        this.keys.add(key);
-        this.values.add(value);
+    public void init(ProcessorContext context) {
+        // do nothing
     }
+
+    @Override
+    public void process(K key, V value) {
+        // just forward to all children
+        for (ProcessorNode<K, V, ?, ?> childNode : this.children()) {
+            childNode.process(key, value);
+        }
+    }
+
+    @Override
+    public void close() {
+        // do nothing
+    }
+
 }

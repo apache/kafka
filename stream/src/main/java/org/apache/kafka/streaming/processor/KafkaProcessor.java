@@ -17,59 +17,18 @@
 
 package org.apache.kafka.streaming.processor;
 
-import java.util.ArrayList;
-import java.util.List;
+public abstract class KafkaProcessor<K, V> implements Processor<K, V>, Punctuator {
 
-public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1, K2, V2>, Punctuator {
-
-    private final List<KafkaProcessor<K2, V2, ?, ?>> children;
-    private final List<KafkaProcessor<?, ?, K1, V1>> parents;
-
-    private final String name;
     private final ProcessorMetadata metadata;
 
-    public boolean initialized;
+    protected ProcessorContext context;
 
-    public KafkaProcessor(String name) {
-        this(name, null);
-    }
-
-    public KafkaProcessor(String name, ProcessorMetadata metadata) {
-        this.name = name;
+    public KafkaProcessor(ProcessorMetadata metadata) {
         this.metadata = metadata;
-
-        this.children  = new ArrayList<>();
-        this.parents = new ArrayList<>();
-
-        this.initialized = false;
-    }
-
-    public String name() {
-        return name;
     }
 
     public ProcessorMetadata metadata() {
         return metadata;
-    }
-
-    public List<KafkaProcessor<K2, V2, ?, ?>> children() {
-        return children;
-    }
-
-    public List<KafkaProcessor<?, ?, K1, V1>> parents() {
-        return parents;
-    }
-
-    public final void chain(KafkaProcessor<K2, V2, ?, ?> child) {
-        child.parents.add(this);
-        children.add(child);
-    }
-
-    @Override
-    public final void forward(K2 key, V2 value) {
-        for (KafkaProcessor<K2, V2, ?, ?> child : children) {
-            child.process(key, value);
-        }
     }
 
     /* Following functions can be overridden by users */
@@ -81,7 +40,7 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
 
     @Override
     public void init(ProcessorContext context) {
-        // do nothing
+        this.context = context;
     }
 
     @Override

@@ -17,110 +17,76 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
-import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public class ProcessorTopology {
 
-    private Map<String, KafkaProcessor> processors = new HashMap<>();
-    private Map<String, KafkaSource> topicSources = new HashMap<>();
+    private Map<String, ProcessorNode> processors = new HashMap<>();
+    private Map<String, SourceNode> sourceTopics = new HashMap<>();
+    private Map<String, SinkNode> sinkTopics = new HashMap<>();
 
-    public ProcessorTopology(Map<String, KafkaProcessor> processors, Map<String, KafkaSource> topicSources) {
+    public ProcessorTopology(Map<String, ProcessorNode> processors,
+                             Map<String, SourceNode> sourceTopics,
+                             Map<String, SinkNode> sinkTopics) {
         this.processors = processors;
-        this.topicSources = topicSources;
+        this.sourceTopics = sourceTopics;
+        this.sinkTopics = sinkTopics;
     }
 
-    public Set<KafkaSource> sources() {
-        Set<KafkaSource> sources = new HashSet<>();
-        for (KafkaSource source : this.topicSources.values()) {
-            sources.add(source);
-        }
-
-        return sources;
+    public Set<String> sourceTopics() {
+        return sourceTopics.keySet();
     }
 
-    public Set<String> topics() {
-        return topicSources.keySet();
+    public Set<String> sinkTopics() {
+        return sinkTopics.keySet();
     }
 
-    public KafkaSource source(String topic) {
-        return topicSources.get(topic);
+    public SourceNode source(String topic) {
+        return sourceTopics.get(topic);
     }
 
-    public Deserializer keyDeser(String topic) {
-        KafkaSource source = topicSources.get(topic);
-
-        if (source == null)
-            throw new IllegalStateException("The topic " + topic + " is unknown.");
-
-        return source.keyDeserializer;
-    }
-
-    public Deserializer valueDeser(String topic) {
-        KafkaSource source = topicSources.get(topic);
-
-        if (source == null)
-            throw new IllegalStateException("The topic " + topic + " is unknown.");
-
-        return source.valDeserializer;
+    public SinkNode sink(String topic) {
+        return sinkTopics.get(topic);
     }
 
     /**
-     * initialize the processors following the DAG ordering
-     * such that parents are always created and initialized before children
+     * Initialize the processors following the DAG reverse ordering
+     * such that parents are always initialized before children
      */
     @SuppressWarnings("unchecked")
-    public final void init(ProcessorContext context) {
-        Deque<KafkaProcessor> deque = new ArrayDeque<>();
-
+    public void init(ProcessorContext context) {
         // initialize sources
-        for (String topic : topicSources.keySet()) {
-            KafkaSource source = topicSources.get(topic);
+        for (String topic : sourceTopics.keySet()) {
+            SourceNode source = sourceTopics.get(topic);
 
-            source.init(context);
-            source.initialized = true;
+            init(source, context);
+        }
+    }
 
-            // put source children to be traversed first
-            for (KafkaProcessor childProcessor : (List<KafkaProcessor>) source.children()) {
-                deque.addLast(childProcessor);
+    /**
+     * Initialize the current processor node by first initializing
+     * its parent nodes first, then the processor itself
+     */
+    @SuppressWarnings("unchecked")
+    private void init(ProcessorNode node, ProcessorContext context) {
+        for (ProcessorNode parentNode : (List<ProcessorNode>) node.parents()) {
+            if (!parentNode.initialized) {
+                init(parentNode, context);
             }
         }
 
-        // traverse starting at the sources' children, and initialize the processor
-        // if 1) it has not been initialized, 2) all its parents are initialized
-        while (!deque.isEmpty()) {
-            KafkaProcessor processor = deque.pollFirst();
+        node.init(context);
+        node.initialized = true;
 
-            if (processor.initialized)
-                continue;
-
-            boolean parentsInitialized = true;
-
-            for (KafkaProcessor parentProcessor : (List<KafkaProcessor>) processor.parents()) {
-                if (!parentProcessor.initialized) {
-                    parentsInitialized = false;
-                    break;
-                }
-            }
-
-            if (parentsInitialized) {
-                processor.init(context);
-                processor.initialized = true;
-
-                // put source children to be traversed first
-                for (KafkaProcessor childProcessor : (List<KafkaProcessor>) processor.children()) {
-                    deque.addLast(childProcessor);
-                }
+        // try to initialize its children
+        for (ProcessorNode childNode : (List<ProcessorNode>) node.children()) {
+            if (!childNode.initialized) {
+                init(childNode, context);
             }
         }
     }
@@ -128,11 +94,11 @@ public class ProcessorTopology {
     public final void close() {
         // close the processors
         // TODO: do we need to follow the DAG ordering
-        for (KafkaProcessor processor : processors.values()) {
-            processor.close();
+        for (ProcessorNode processorNode : processors.values()) {
+            processorNode.close();
         }
 
         processors.clear();
-        topicSources.clear();
+        sourceTopics.clear();
     }
 }

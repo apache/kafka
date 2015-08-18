@@ -26,7 +26,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.processor.RecordCollector;
@@ -80,7 +79,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         this.topology = topology;
         this.collector = collector;
 
-        for (String topic : this.topology.topics()) {
+        for (String topic : this.topology.sourceTopics()) {
             if (!ingestor.topics().contains(topic))
                 throw new IllegalArgumentException("topic not subscribed: " + topic);
         }
@@ -106,7 +105,7 @@ public class ProcessorContextImpl implements ProcessorContext {
 
     public void addPartition(TopicPartition partition) {
         // update the partition -> source stream map
-        KafkaSource source = topology.source(partition.topic());
+        SourceNode source = topology.source(partition.topic());
 
         this.streamGroup.addPartition(partition, source);
         this.ingestor.addPartitionStreamToGroup(this.streamGroup, partition);
@@ -229,6 +228,15 @@ public class ProcessorContextImpl implements ProcessorContext {
             throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
 
         return streamGroup.record().timestamp;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value) {
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V, ?, ?>>) streamGroup.node().children()) {
+            streamGroup.setNode(childNode);
+            childNode.process(key, value);
+        }
     }
 
     @Override

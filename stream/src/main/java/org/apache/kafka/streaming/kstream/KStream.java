@@ -20,6 +20,7 @@ package org.apache.kafka.streaming.kstream;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 
 /**
  * KStream is an abstraction of a stream of key-value pairs.
@@ -135,5 +136,5 @@ public interface KStream<K, V> {
      *
      * @param processor the class of Processor
      */
-    <K1, V1> KStream<K1, V1> process(KafkaProcessor<K, V, K1, V1> processor);
+    <K1, V1> KStream<K1, V1> process(Processor<K, V> processor);
 }

@@ -114,7 +114,7 @@ public class KStreamThread extends Thread {
             rebalanceCallback,
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer());
-        this.ingestor = new IngestorImpl(consumer, topology.topics());
+        this.ingestor = new IngestorImpl(consumer, topology.sourceTopics());
 
         this.stateDir = new File(this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = config.getLong(StreamingConfig.POLL_MS_CONFIG);

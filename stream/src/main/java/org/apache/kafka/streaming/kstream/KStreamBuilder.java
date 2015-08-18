@@ -18,11 +18,8 @@
 package org.apache.kafka.streaming.kstream;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.internals.KStreamImpl;
-import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
-import org.apache.kafka.streaming.kstream.internals.KStreamSource;
 
 /**
  * KStreamBuilder is the class to create KStream instances.
@@ -45,7 +42,10 @@ public class KStreamBuilder extends TopologyBuilder {
      */
     @SuppressWarnings("unchecked")
     public <K, V> KStream<K, V> from(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer, String... topics) {
-        KafkaSource source = addSource(KStreamImpl.SOURCE_NAME + KStreamImpl.INDEX.getAndIncrement(), keyDeserializer, valDeserializer, topics);
-        return new KStreamSource<>(this, source);
+        String name = KStreamImpl.SOURCE_NAME + KStreamImpl.INDEX.getAndIncrement();
+
+        addSource(name, keyDeserializer, valDeserializer, topics);
+
+        return new KStreamImpl<>(this, name);
     }
 }

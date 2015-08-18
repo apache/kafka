@@ -17,19 +17,19 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.internals.SourceNode;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 
 public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
-    private KafkaProcessor<K, V, K, V> source;
+    private SourceNode<K, V> source;
 
-    public KStreamSource(TopologyBuilder topology, KafkaProcessor<K, V, K, V> source) {
+    public KStreamSource(TopologyBuilder topology, SourceNode<K, V> source) {
         super(topology, source.name());
         this.source = source;
     }
 
-    public KafkaProcessor<K, V, K, V> source() {
+    public SourceNode<K, V> source() {
         return source;
     }
 }

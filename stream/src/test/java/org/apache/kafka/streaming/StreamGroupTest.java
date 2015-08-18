@@ -28,7 +28,7 @@ import org.apache.kafka.streaming.processor.internals.StreamGroup;
 import org.apache.kafka.streaming.processor.internals.TimeBasedChooser;
 import org.apache.kafka.test.MockIngestor;
 import org.apache.kafka.test.MockProcessorContext;
-import org.apache.kafka.test.MockSource;
+import org.apache.kafka.test.MockSourceNode;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -106,9 +106,9 @@ public class StreamGroupTest {
 
         TopicPartition partition1 = new TopicPartition("topic1", 1);
         TopicPartition partition2 = new TopicPartition("topic2", 1);
-        MockSource<Integer, Integer> source1 = new MockSource(deserializer, deserializer);
-        MockSource<Integer, Integer> source2 = new MockSource(deserializer, deserializer);
-        MockSource<Integer, Integer> source3 = new MockSource(deserializer, deserializer);
+        MockSourceNode<Integer, Integer> source1 = new MockSourceNode(deserializer, deserializer);
+        MockSourceNode<Integer, Integer> source2 = new MockSourceNode(deserializer, deserializer);
+        MockSourceNode<Integer, Integer> source3 = new MockSourceNode(deserializer, deserializer);
 
         streamGroup.addPartition(partition1, source1);
         mockIngestor.addPartitionStreamToGroup(streamGroup, partition1);

@@ -19,10 +19,9 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
-import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.streaming.kstream.KStreamWindowed;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.streaming.kstream.Predicate;
@@ -159,9 +158,9 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         String sourceName = SOURCE_NAME + INDEX.getAndIncrement();
 
-        KafkaSource<K1, V1> source = topology.addSource(sourceName, keyDeserializer, valDeserializer, topic);
+        topology.addSource(sourceName, keyDeserializer, valDeserializer, topic);
 
-        return new KStreamSource<>(topology, source);
+        return new KStreamImpl<>(topology, sourceName);
     }
 
     @Override
@@ -174,7 +173,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> process(final KafkaProcessor<K, V, K1, V1> processor) {
+    public <K1, V1> KStream<K1, V1> process(final Processor<K, V> processor) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, KStreamProcessor.class, new ProcessorMetadata("Processor", processor), this.name);

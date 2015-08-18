@@ -21,7 +21,7 @@ import org.apache.kafka.streaming.processor.KafkaProcessor;
 import org.apache.kafka.streaming.kstream.Predicate;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 
-class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
+class KStreamFilter<K, V> extends KafkaProcessor<K, V> {
 
     private final PredicateOut<K, V> predicateOut;
 
@@ -41,20 +41,20 @@ class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    public KStreamFilter(String name, ProcessorMetadata config) {
-        super(name, config);
+    public KStreamFilter(ProcessorMetadata metadata) {
+        super(metadata);
 
         if (this.metadata() == null)
             throw new IllegalStateException("ProcessorMetadata should be specified.");
 
-        this.predicateOut = (PredicateOut<K, V>) config.value();
+        this.predicateOut = (PredicateOut<K, V>) metadata.value();
     }
 
     @Override
     public void process(K key, V value) {
         if ((!predicateOut.filterOut && predicateOut.predicate.apply(key, value))
             || (predicateOut.filterOut && !predicateOut.predicate.apply(key, value))) {
-            forward(key, value);
+            context.forward(key, value);
         }
     }
 }

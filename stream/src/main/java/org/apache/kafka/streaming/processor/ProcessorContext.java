@@ -96,6 +96,8 @@ public interface ProcessorContext {
      */
     void flush();
 
+    <K, V> void forward(K key, V value);
+
     void send(String topic, Object key, Object value);
 
     void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer);

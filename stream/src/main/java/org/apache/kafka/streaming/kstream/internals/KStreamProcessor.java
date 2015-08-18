@@ -17,34 +17,26 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streaming.processor.KafkaProcessor;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 
-import java.lang.reflect.InvocationTargetException;
+public class KStreamProcessor<K, V> extends KafkaProcessor<K, V> {
 
-public class KStreamProcessor<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
-
-    private final Processor<K1, V1, K2, V2> processor;
+    private final Processor<K, V> processor;
 
     @SuppressWarnings("unchecked")
-    public KStreamProcessor(String name, ProcessorMetadata metadata) {
-        super(name, metadata);
+    public KStreamProcessor(ProcessorMetadata metadata) {
+        super(metadata);
 
         if (this.metadata() != null)
             throw new IllegalStateException("ProcessorMetadata should be null.");
 
-        try {
-            this.processor = ((KafkaProcessor) metadata.value()).getClass().getDeclaredConstructor(String.class).newInstance(name);
-
-        } catch (Exception e) {
-            throw new KafkaException(e);
-        }
+        this.processor = (Processor<K, V>) metadata.value();
     }
 
     @Override
-    public void process(K1 key, V1 value) {
+    public void process(K key, V value) {
         processor.process(key, value);
     }
 }

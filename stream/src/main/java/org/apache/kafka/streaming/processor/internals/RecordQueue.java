@@ -38,7 +38,7 @@ public interface RecordQueue {
      *
      * @return KafkaProcessor
      */
-    KafkaProcessor source();
+    ProcessorNode source();
 
     /**
      * Adds a StampedRecord to the queue

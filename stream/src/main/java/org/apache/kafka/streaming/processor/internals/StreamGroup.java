@@ -18,7 +18,6 @@
 package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.streaming.processor.Punctuator;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.processor.TimestampExtractor;
@@ -53,6 +52,7 @@ public class StreamGroup {
     private long streamTime = -1;
     private boolean commitRequested = false;
     private StampedRecord currRecord = null;
+    private ProcessorNode currNode = null;
     private volatile int buffered = 0;
 
     /**
@@ -81,6 +81,14 @@ public class StreamGroup {
         return currRecord;
     }
 
+    public ProcessorNode node() {
+        return currNode;
+    }
+
+    public void setNode(ProcessorNode node) {
+        currNode = node;
+    }
+
     public Set<TopicPartition> partitions() {
         return stash.keySet();
     }
@@ -92,7 +100,7 @@ public class StreamGroup {
      * @param source    the instance of KStreamImpl
      */
     @SuppressWarnings("unchecked")
-    public void addPartition(TopicPartition partition, KafkaSource source) {
+    public void addPartition(TopicPartition partition, SourceNode source) {
         synchronized (this) {
             RecordQueue recordQueue = stash.get(partition);
 
@@ -131,8 +139,8 @@ public class StreamGroup {
                     ConsumerRecord<byte[], byte[]> record = iterator.next();
 
                     // deserialize the raw record, extract the timestamp and put into the queue
-                    Deserializer<?> keyDeserializer = ((KafkaSource) recordQueue.source()).keyDeserializer;
-                    Deserializer<?> valDeserializer = ((KafkaSource) recordQueue.source()).valDeserializer;
+                    Deserializer<?> keyDeserializer = ((SourceNode) recordQueue.source()).keyDeserializer;
+                    Deserializer<?> valDeserializer = ((SourceNode) recordQueue.source()).valDeserializer;
 
                     Object key = keyDeserializer.deserialize(record.topic(), record.key());
                     Object value = valDeserializer.deserialize(record.topic(), record.value());
@@ -187,10 +195,11 @@ public class StreamGroup {
 
             long trackedTimestamp = recordQueue.trackedTimestamp();
             currRecord = recordQueue.next();
+            currNode = recordQueue.source();
 
             if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-            recordQueue.source().process(currRecord.key(), currRecord.value());
+            currNode.process(currRecord.key(), currRecord.value());
             consumedOffsets.put(recordQueue.partition(), currRecord.offset());
 
             // TODO: local state flush and downstream producer flush
@@ -245,7 +254,7 @@ public class StreamGroup {
         stash.clear();
     }
 
-    protected RecordQueue createRecordQueue(TopicPartition partition, KafkaSource source) {
+    protected RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
         return new RecordQueueImpl(partition, source, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
     }
 

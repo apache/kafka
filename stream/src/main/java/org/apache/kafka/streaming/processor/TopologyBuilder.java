@@ -19,7 +19,11 @@ package org.apache.kafka.streaming.processor;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streaming.processor.internals.ProcessorNode;
 import org.apache.kafka.streaming.processor.internals.ProcessorTopology;
+import org.apache.kafka.streaming.processor.internals.SinkNode;
+import org.apache.kafka.streaming.processor.internals.SourceNode;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,7 +34,9 @@ public class TopologyBuilder {
 
     private Map<String, ProcessorClazz> processorClasses = new HashMap<>();
     private Map<String, SourceClazz> sourceClasses = new HashMap<>();
+    private Map<String, SinkClazz> sinkClasses = new HashMap<>();
     private Map<String, String> topicsToSourceNames = new HashMap<>();
+    private Map<String, String> topicsToSinkNames = new HashMap<>();
 
     private Map<String, List<String>> parents = new HashMap<>();
     private Map<String, List<String>> children = new HashMap<>();
@@ -55,12 +61,20 @@ public class TopologyBuilder {
         }
     }
 
+    private class SinkClazz {
+        public Serializer keySerializer;
+        public Serializer valSerializer;
+
+        private SinkClazz(Serializer keySerializer, Serializer valSerializer) {
+            this.keySerializer = keySerializer;
+            this.valSerializer = valSerializer;
+        }
+    }
+
     public TopologyBuilder() {}
 
     @SuppressWarnings("unchecked")
-    public final KafkaSource addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
-        KafkaSource source = new KafkaSource(name, keyDeserializer, valDeserializer);
-
+    public final void addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
         for (String topic : topics) {
             if (topicsToSourceNames.containsKey(topic))
                 throw new IllegalArgumentException("Topic " + topic + " has already been registered by another processor.");
@@ -69,8 +83,17 @@ public class TopologyBuilder {
         }
 
         sourceClasses.put(name, new SourceClazz(keyDeserializer, valDeserializer));
+    }
 
-        return source;
+    public final void addSink(String name, Serializer keySerializer, Serializer valSerializer, String... topics) {
+        for (String topic : topics) {
+            if (topicsToSinkNames.containsKey(topic))
+                throw new IllegalArgumentException("Topic " + topic + " has already been registered by another processor.");
+
+            topicsToSinkNames.put(topic, name);
+        }
+
+        sinkClasses.put(name, new SinkClazz(keySerializer, valSerializer));
     }
 
     public final void addProcessor(String name, Class<? extends KafkaProcessor> processorClass, ProcessorMetadata config, String... parentNames) {
@@ -102,28 +125,34 @@ public class TopologyBuilder {
      */
     @SuppressWarnings("unchecked")
     public ProcessorTopology build() {
-        Map<String, KafkaProcessor> processorMap = new HashMap<>();
-        Map<String, KafkaSource> topicSourceMap = new HashMap<>();
+        Map<String, ProcessorNode> processorMap = new HashMap<>();
+        Map<String, SourceNode> topicSourceMap = new HashMap<>();
+        Map<String, SinkNode> topicSinkMap = new HashMap<>();
 
         // create sources
-        try {
-            for (String name : sourceClasses.keySet()) {
-                Deserializer keyDeserializer = sourceClasses.get(name).keyDeserializer;
-                Deserializer valDeserializer = sourceClasses.get(name).valDeserializer;
-                KafkaSource source = new KafkaSource(name, keyDeserializer, valDeserializer);
-                processorMap.put(name, source);
-            }
-        } catch (Exception e) {
-            throw new KafkaException("KafkaProcessor(String) constructor failed: this should not happen.");
+        for (String name : sourceClasses.keySet()) {
+            Deserializer keyDeserializer = sourceClasses.get(name).keyDeserializer;
+            Deserializer valDeserializer = sourceClasses.get(name).valDeserializer;
+            SourceNode node = new SourceNode(name, keyDeserializer, valDeserializer);
+            processorMap.put(name, node);
         }
 
-        // create processors
+        // create sinks
+        for (String name : sinkClasses.keySet()) {
+            Serializer keySerializer = sinkClasses.get(name).keySerializer;
+            Serializer valSerializer = sinkClasses.get(name).valSerializer;
+            SinkNode node = new SinkNode(name, keySerializer, valSerializer);
+            processorMap.put(name, node);
+        }
+
+        // create normal processors
         try {
             for (String name : processorClasses.keySet()) {
                 ProcessorMetadata metadata = processorClasses.get(name).metadata;
                 Class<? extends KafkaProcessor> processorClass = processorClasses.get(name).clazz;
-                KafkaProcessor processor = processorClass.getConstructor(String.class, ProcessorMetadata.class).newInstance(name, metadata);
-                processorMap.put(name, processor);
+                KafkaProcessor processor = processorClass.getConstructor(ProcessorMetadata.class).newInstance(metadata);
+                ProcessorNode node = new ProcessorNode(name, processor);
+                processorMap.put(name, node);
             }
         } catch (Exception e) {
             throw new KafkaException("KafkaProcessor(String) constructor failed: this should not happen.");
@@ -131,18 +160,25 @@ public class TopologyBuilder {
 
         // construct topics to sources map
         for (String topic : topicsToSourceNames.keySet()) {
-            KafkaSource source = (KafkaSource) processorMap.get(topicsToSourceNames.get(topic));
-            topicSourceMap.put(topic, source);
+            SourceNode node = (SourceNode) processorMap.get(topicsToSourceNames.get(topic));
+            topicSourceMap.put(topic, node);
         }
 
-        for (KafkaProcessor processor : processorMap.values()) {
-            // chain children to this processor
-            for (String child : children.get(processor.name())) {
-                KafkaProcessor childProcessor = processorMap.get(child);
-                processor.chain(childProcessor);
+        // construct topics to sinks map
+        for (String topic : topicsToSinkNames.keySet()) {
+            SinkNode node = (SinkNode) processorMap.get(topicsToSourceNames.get(topic));
+            node.addTopic(topic);
+            topicSinkMap.put(topic, node);
+        }
+
+        // chain children to parents to build the DAG
+        for (ProcessorNode node : processorMap.values()) {
+            for (String child : children.get(node.name())) {
+                ProcessorNode childNode = processorMap.get(child);
+                node.chain(childNode);
             }
         }
 
-        return new ProcessorTopology(processorMap, topicSourceMap);
+        return new ProcessorTopology(processorMap, topicSourceMap, topicSinkMap);
     }
 }

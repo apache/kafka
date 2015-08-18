@@ -18,14 +18,12 @@
 package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
-import org.apache.kafka.streaming.processor.KafkaSource;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayDeque;
 
 public class RecordQueueImpl implements RecordQueue {
-    private final KafkaSource source;
+    private final SourceNode source;
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
 
@@ -39,14 +37,14 @@ public class RecordQueueImpl implements RecordQueue {
      * @param source           the instance of KStreamImpl that receives records
      * @param timestampTracker TimestampTracker
      */
-    public RecordQueueImpl(TopicPartition partition, KafkaSource source, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
+    public RecordQueueImpl(TopicPartition partition, SourceNode source, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
         this.partition = partition;
         this.source = source;
         this.timestampTracker = timestampTracker;
     }
 
     @Override
-    public KafkaProcessor source() {
+    public ProcessorNode source() {
         return source;
     }
 
