@@ -88,7 +88,7 @@ object ConsoleConsumer extends Logging {
       formatter.writeTo(msg.key, msg.value, System.out)
       checkErr(formatter)
     }
-    println(s"Processed a total of %messageCount messages")
+    println(s"Processed a total of $messageCount messages")
   }
 
   def checkErr(formatter: MessageFormatter) {
