@@ -44,7 +44,7 @@ class KStreamFilter<K, V> extends KafkaProcessor<K, V, K, V> {
     public KStreamFilter(String name, ProcessorMetadata config) {
         super(name, config);
 
-        if (this.config() == null)
+        if (this.metadata() == null)
             throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.predicateOut = (PredicateOut<K, V>) config.value();

@@ -44,7 +44,7 @@ class KStreamSend<K, V> extends KafkaProcessor<K, V, Object, Object> {
     public KStreamSend(String name, ProcessorMetadata config) {
         super(name, config);
 
-        if (this.config() == null)
+        if (this.metadata() == null)
             throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.topicSerializers = (TopicSer) config.value();

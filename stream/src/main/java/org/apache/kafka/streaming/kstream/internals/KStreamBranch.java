@@ -30,7 +30,7 @@ class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
     public KStreamBranch(String name, ProcessorMetadata config) {
         super(name, config);
 
-        if (this.config() == null)
+        if (this.metadata() == null)
             throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.predicates = (Predicate<K, V>[]) config.value();

@@ -17,12 +17,12 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.processor.KafkaProcessor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.apache.kafka.streaming.processor.KafkaSource;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.kstream.KStreamWindowed;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.streaming.kstream.Predicate;
@@ -52,6 +52,8 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     private static final String BRANCH_NAME = "KAFKA-BRANCH-";
 
     public static final String SOURCE_NAME = "KAFKA-SOURCE-";
+
+    public static final String SEND_NAME = "KAFKA-SEND-";
 
     public static final AtomicInteger INDEX = new AtomicInteger(1);
 
@@ -151,11 +153,13 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
                                             Serializer<V> valSerializer,
                                             Deserializer<K1> keyDeserializer,
                                             Deserializer<V1> valDeserializer) {
-        process(KStreamSend.class, new ProcessorMetadata("Topic-Ser", new KStreamSend.TopicSer(topic, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer)));
+        String sendName = SEND_NAME + INDEX.getAndIncrement();
 
-        String name = SOURCE_NAME + INDEX.getAndIncrement();
+        process(new KStreamSend(sendName, new ProcessorMetadata("Topic-Ser", new KStreamSend.TopicSer(topic, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer))));
 
-        KafkaSource<K1, V1> source = topology.addSource(name, keyDeserializer, valDeserializer, topic);
+        String sourceName = SOURCE_NAME + INDEX.getAndIncrement();
+
+        KafkaSource<K1, V1> source = topology.addSource(sourceName, keyDeserializer, valDeserializer, topic);
 
         return new KStreamSource<>(topology, source);
     }
@@ -163,16 +167,18 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
-        process(KStreamSend.class, new ProcessorMetadata("Topic-Ser", new KStreamSend.TopicSer(topic, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer)));
+        String name = SEND_NAME + INDEX.getAndIncrement();
+
+        process(new KStreamSend(name, new ProcessorMetadata("Topic-Ser", new KStreamSend.TopicSer(topic, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer))));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> process(final Class<? extends KafkaProcessor<K, V, K1, V1>> clazz, ProcessorMetadata config) {
+    public <K1, V1> KStream<K1, V1> process(final KafkaProcessor<K, V, K1, V1> processor) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, clazz, config, this.name);
+        topology.addProcessor(name, KStreamProcessor.class, new ProcessorMetadata("Processor", processor), this.name);
 
-        return new KStreamImpl(topology, name);
+        return new KStreamImpl<>(topology, name);
     }
 }

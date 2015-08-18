@@ -17,30 +17,34 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streaming.processor.KafkaProcessor;
-import org.apache.kafka.streaming.kstream.KeyValue;
-import org.apache.kafka.streaming.kstream.KeyValueMapper;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 
-class KStreamFlatMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
+import java.lang.reflect.InvocationTargetException;
 
-    private final KeyValueMapper<K1, V1, K2, ? extends Iterable<V2>> mapper;
+public class KStreamProcessor<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
+
+    private final Processor<K1, V1, K2, V2> processor;
 
     @SuppressWarnings("unchecked")
-    KStreamFlatMap(String name, ProcessorMetadata config) {
-        super(name, config);
+    public KStreamProcessor(String name, ProcessorMetadata metadata) {
+        super(name, metadata);
 
-        if (this.metadata() == null)
-            throw new IllegalStateException("ProcessorMetadata should be specified.");
+        if (this.metadata() != null)
+            throw new IllegalStateException("ProcessorMetadata should be null.");
 
-        this.mapper = (KeyValueMapper<K1, V1, K2, ? extends Iterable<V2>>) config.value();
+        try {
+            this.processor = ((KafkaProcessor) metadata.value()).getClass().getDeclaredConstructor(String.class).newInstance(name);
+
+        } catch (Exception e) {
+            throw new KafkaException(e);
+        }
     }
 
     @Override
     public void process(K1 key, V1 value) {
-        KeyValue<K2, ? extends Iterable<V2>> newPair = mapper.apply(key, value);
-        for (V2 v : newPair.value) {
-            forward(newPair.key, v);
-        }
+        processor.process(key, value);
     }
 }

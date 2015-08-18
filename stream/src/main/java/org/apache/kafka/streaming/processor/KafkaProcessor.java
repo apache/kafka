@@ -26,7 +26,7 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
     private final List<KafkaProcessor<?, ?, K1, V1>> parents;
 
     private final String name;
-    private final ProcessorMetadata config;
+    private final ProcessorMetadata metadata;
 
     public boolean initialized;
 
@@ -34,9 +34,9 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
         this(name, null);
     }
 
-    public KafkaProcessor(String name, ProcessorMetadata config) {
+    public KafkaProcessor(String name, ProcessorMetadata metadata) {
         this.name = name;
-        this.config = config;
+        this.metadata = metadata;
 
         this.children  = new ArrayList<>();
         this.parents = new ArrayList<>();
@@ -48,10 +48,9 @@ public abstract class KafkaProcessor<K1, V1, K2, V2> implements Processor<K1, V1
         return name;
     }
 
-    public ProcessorMetadata config() {
-        return config;
+    public ProcessorMetadata metadata() {
+        return metadata;
     }
-
 
     public List<KafkaProcessor<K2, V2, ?, ?>> children() {
         return children;

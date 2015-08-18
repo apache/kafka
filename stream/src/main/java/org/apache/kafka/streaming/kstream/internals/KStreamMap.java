@@ -30,7 +30,7 @@ class KStreamMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
     public KStreamMap(String name, ProcessorMetadata config) {
         super(name, config);
 
-        if (this.config() == null)
+        if (this.metadata() == null)
             throw new IllegalStateException("ProcessorMetadata should be specified.");
 
         this.mapper = (KeyValueMapper<K1, V1, K2, V2>) config.value();
