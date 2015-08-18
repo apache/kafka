@@ -25,8 +25,6 @@ import kafka.utils.Json
  */
 case class TopicAndPartition(topic: String, partition: Int) {
 
-  private val version: Long = 1L
-
   def this(tuple: (String, Int)) = this(tuple._1, tuple._2)
 
   def this(partition: Partition) = this(partition.topic, partition.partitionId)
@@ -36,6 +34,4 @@ case class TopicAndPartition(topic: String, partition: Int) {
   def asTuple = (topic, partition)
 
   override def toString = "[%s,%d]".format(topic, partition)
-
-  def toJson = Json.encode(Map("version" -> version, "topic" -> topic, "partition" -> partition))
 }

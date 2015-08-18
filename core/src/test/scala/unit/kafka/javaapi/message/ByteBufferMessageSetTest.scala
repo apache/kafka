@@ -17,7 +17,7 @@
 
 package kafka.javaapi.message
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.junit.Test
 import kafka.message.{DefaultCompressionCodec, CompressionCodec, NoCompressionCodec, Message}
 

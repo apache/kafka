@@ -17,18 +17,19 @@
 
 package kafka.integration
 
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{Test, After, Before}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.server.{KafkaConfig, KafkaServer}
 
-class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
+class RollingBounceTest extends ZooKeeperTestHarness {
 
   val partitionId = 0
   var servers: Seq[KafkaServer] = null
 
+  @Before
   override def setUp() {
     super.setUp()
     // controlled.shutdown.enable is true by default
@@ -39,12 +40,14 @@ class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
     servers = configs.map(c => TestUtils.createServer(KafkaConfig.fromProps(c)))
   }
 
+  @After
   override def tearDown() {
     servers.foreach(_.shutdown())
     servers.foreach(server => CoreUtils.rm(server.config.logDirs))
     super.tearDown()
   }
 
+  @Test
   def testRollingBounce {
     // start all the brokers
     val topic1 = "new-topic1"

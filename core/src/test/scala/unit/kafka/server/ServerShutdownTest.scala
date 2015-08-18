@@ -27,18 +27,18 @@ import kafka.serializer.StringEncoder
 
 import java.io.File
 
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
-import junit.framework.Assert._
+import org.junit.{Before, Test}
+import org.junit.Assert._
 
-class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
+class ServerShutdownTest extends ZooKeeperTestHarness {
   var config: KafkaConfig = null
   val host = "localhost"
   val topic = "test"
   val sent1 = List("hello", "there")
   val sent2 = List("more", "messages")
 
-  override def setUp(): Unit = {
+  @Before
+  override def setUp() {
     super.setUp()
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     config = KafkaConfig.fromProps(props)
@@ -159,6 +159,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
+  @Test
   def testConsecutiveShutdown(){
     val server = new KafkaServer(config)
     try {

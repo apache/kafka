@@ -25,7 +25,6 @@ import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 
 import org.junit.{After, Before, Test}
-import org.scalatest.junit.JUnit3Suite
 
 import java.util.Properties
 import java.io.File
@@ -33,9 +32,9 @@ import java.io.File
 import scala.util.Random
 import scala.collection._
 
-import junit.framework.Assert._
+import org.junit.Assert._
 
-class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
+class OffsetCommitTest extends ZooKeeperTestHarness {
   val random: Random = new Random()
   val group = "test-group"
   val retentionCheckInterval: Long = 100L

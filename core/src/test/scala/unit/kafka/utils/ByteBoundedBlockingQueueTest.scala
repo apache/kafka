@@ -19,7 +19,7 @@ package kafka.utils
 
 import java.util.concurrent.TimeUnit
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.junit.Test
 
 class ByteBoundedBlockingQueueTest {

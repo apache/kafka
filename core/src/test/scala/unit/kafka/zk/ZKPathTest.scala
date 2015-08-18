@@ -17,18 +17,19 @@
 
 package kafka.zk
 
-import junit.framework.Assert
 import kafka.consumer.ConsumerConfig
 import kafka.utils.{ZkPath, TestUtils, ZkUtils}
 import org.apache.kafka.common.config.ConfigException
-import org.scalatest.junit.JUnit3Suite
+import org.junit.Assert._
+import org.junit.Test
 
-class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
+class ZKPathTest extends ZooKeeperTestHarness {
 
   val path: String = "/some_dir"
   val zkSessionTimeoutMs = 1000
   def zkConnectWithInvalidRoot: String = zkConnect + "/ghost"
 
+  @Test
   def testCreatePersistentPathThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
@@ -44,6 +45,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testCreatePersistentPath {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
@@ -54,9 +56,10 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
+    assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
   }
 
+  @Test
   def testMakeSurePersistsPathExistsThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
@@ -72,6 +75,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testMakeSurePersistsPathExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
@@ -82,9 +86,10 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
+    assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
   }
 
+  @Test
   def testCreateEphemeralPathThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
@@ -100,6 +105,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testCreateEphemeralPathExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
@@ -110,9 +116,10 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create ephemeral path")
     }
 
-    Assert.assertTrue("Failed to create ephemeral path", ZkUtils.pathExists(zkClient, path))
+    assertTrue("Failed to create ephemeral path", ZkUtils.pathExists(zkClient, path))
   }
 
+  @Test
   def testCreatePersistentSequentialThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
@@ -128,6 +135,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testCreatePersistentSequentialExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
@@ -140,6 +148,6 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, actualPath))
+    assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, actualPath))
   }
 }

@@ -19,12 +19,11 @@ package kafka.server
 
 import java.io.File
 import kafka.utils._
-import junit.framework.Assert._
+import org.junit.Assert._
 import java.util.{Random, Properties}
 import kafka.consumer.SimpleConsumer
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.zk.ZooKeeperTestHarness
-import org.scalatest.junit.JUnit3Suite
 import kafka.admin.AdminUtils
 import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.utils.TestUtils._
@@ -33,7 +32,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
-class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
+class LogOffsetTest extends ZooKeeperTestHarness {
   val random = new Random() 
   var logDir: File = null
   var topicLogDir: File = null

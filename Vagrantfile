@@ -27,6 +27,7 @@ num_zookeepers = 1
 num_brokers = 3
 num_workers = 0 # Generic workers that get the code, but don't start any services
 ram_megabytes = 1280
+base_box = "ubuntu/trusty64"
 
 # EC2
 ec2_access_key = ENV['AWS_ACCESS_KEY']
@@ -77,7 +78,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   ## Provider-specific global configs
   config.vm.provider :virtualbox do |vb,override|
-    override.vm.box = "ubuntu/trusty64"
+    override.vm.box = base_box
 
     override.hostmanager.ignore_private_ip = false
 

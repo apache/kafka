@@ -30,16 +30,14 @@ import org.junit._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
-import org.scalatest.junit.JUnit3Suite
 
 import scala.collection._
-
 
 /**
  * This is an integration test that tests the fully integrated log cleaner
  */
 @RunWith(value = classOf[Parameterized])
-class LogCleanerIntegrationTest(compressionCodec: String) extends JUnit3Suite {
+class LogCleanerIntegrationTest(compressionCodec: String) {
 
   val time = new MockTime()
   val segmentSize = 100

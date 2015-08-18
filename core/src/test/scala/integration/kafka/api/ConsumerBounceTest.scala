@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
+import org.junit.{Test, Before}
 
 import scala.collection.JavaConversions._
 
@@ -52,6 +53,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       .map(KafkaConfig.fromProps(_, serverConfig))
   }
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -59,6 +61,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     TestUtils.createTopic(this.zkClient, topic, 1, serverCount, this.servers)
   }
 
+  @Test
   def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(10)
 
   /*
@@ -94,6 +97,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     scheduler.shutdown()
   }
 
+  @Test
   def testSeekAndCommitWithBrokerFailures() = seekAndCommitWithBrokerFailures(5)
 
   def seekAndCommitWithBrokerFailures(numIters: Int) {

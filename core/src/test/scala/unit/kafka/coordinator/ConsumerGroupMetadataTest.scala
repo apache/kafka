@@ -17,7 +17,7 @@
 
 package kafka.coordinator
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.junit.JUnitSuite
 

@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{Test, After, Before}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
 import kafka.producer.KeyedMessage
@@ -25,11 +25,12 @@ import kafka.serializer.StringEncoder
 import kafka.utils.{TestUtils}
 import kafka.common._
 
-class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
+class ReplicaFetchTest extends ZooKeeperTestHarness  {
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"
 
+  @Before
   override def setUp() {
     super.setUp()
     brokers = createBrokerConfigs(2, zkConnect, false)
@@ -37,11 +38,13 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
       .map(config => TestUtils.createServer(config))
   }
 
+  @After
   override def tearDown() {
     brokers.foreach(_.shutdown())
     super.tearDown()
   }
 
+  @Test
   def testReplicaFetcherThread() {
     val partition = 0
     val testMessageList1 = List("test1", "test2", "test3", "test4")

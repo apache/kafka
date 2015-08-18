@@ -19,9 +19,8 @@ package kafka.integration
 
 import java.nio.ByteBuffer
 
-import junit.framework.Assert._
 import kafka.admin.AdminUtils
-import kafka.api.{TopicMetadataResponse, TopicMetadataRequest}
+import kafka.api.{TopicMetadataRequest, TopicMetadataResponse}
 import kafka.client.ClientUtils
 import kafka.cluster.{Broker, BrokerEndPoint}
 import kafka.common.ErrorMapping
@@ -30,14 +29,16 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.scalatest.junit.JUnit3Suite
+import org.junit.Assert._
+import org.junit.{Test, After, Before}
 
-class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
+class TopicMetadataTest extends ZooKeeperTestHarness {
   private var server1: KafkaServer = null
   var brokerEndPoints: Seq[BrokerEndPoint] = null
   var adHocConfigs: Seq[KafkaConfig] = null
   val numConfigs: Int = 4
 
+  @Before
   override def setUp() {
     super.setUp()
     val props = createBrokerConfigs(numConfigs, zkConnect)
@@ -47,11 +48,13 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     brokerEndPoints = Seq(new Broker(server1.config.brokerId, server1.config.hostName, server1.boundPort()).getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
   }
 
+  @After
   override def tearDown() {
     server1.shutdown()
     super.tearDown()
   }
 
+  @Test
   def testTopicMetadataRequest {
     // create topic
     val topic = "test"
@@ -68,6 +71,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(topicMetadataRequest, deserializedMetadataRequest)
   }
 
+  @Test
   def testBasicTopicMetadata {
     // create topic
     val topic = "test"
@@ -85,6 +89,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(1, partitionMetadata.head.replicas.size)
   }
 
+  @Test
   def testGetAllTopicMetadata {
     // create topic
     val topic1 = "testGetAllTopicMetadata1"
@@ -109,6 +114,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(1, partitionMetadataTopic2.head.replicas.size)
   }
 
+  @Test
   def testAutoCreateTopic {
     // auto create topic
     val topic = "testAutoCreateTopic"
@@ -135,6 +141,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue(partitionMetadata.head.leader.isDefined)
   }
 
+  @Test
   def testAutoCreateTopicWithCollision {
     // auto create topic
     val topic1 = "testAutoCreate_Topic"
@@ -193,11 +200,11 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
                                 metadata.topicsMetadata.head.partitionsMetadata.nonEmpty)
                               metadata.topicsMetadata.head.partitionsMetadata.head.isr
                             else
-                              ""))
+                              ""), 6000L)
     })
   }
 
-
+  @Test
   def testIsrAfterBrokerShutDownAndJoinsBack {
     val numBrokers = 2 //just 2 brokers are enough for the test
 
@@ -248,10 +255,12 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
 
+  @Test
   def testAliveBrokerListWithNoTopics {
     checkMetadata(Seq(server1), 1)
   }
 
+  @Test
   def testAliveBrokersListWithNoTopicsAfterNewBrokerStartup {
     var adHocServers = adHocConfigs.takeRight(adHocConfigs.size - 1).map(p => createServer(p))
 
@@ -265,6 +274,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
 
+  @Test
   def testAliveBrokersListWithNoTopicsAfterABrokerShutdown {
     val adHocServers = adHocConfigs.map(p => createServer(p))
 

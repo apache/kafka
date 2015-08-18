@@ -45,7 +45,7 @@ import org.slf4j.LoggerFactory;
  * A connection can be added to the nioSelector associated with an integer id by doing
  * 
  * <pre>
- * nioSelector.connect(42, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000);
+ * nioSelector.connect(&quot;42&quot;, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000);
  * </pre>
  * 
  * The connect call does not block on the creation of the TCP connection, so the connect method only begins initiating
@@ -55,8 +55,9 @@ import org.slf4j.LoggerFactory;
  * connections are all done using the <code>poll()</code> call.
  * 
  * <pre>
- * List&lt;NetworkRequest&gt; requestsToSend = Arrays.asList(new NetworkRequest(0, myBytes), new NetworkRequest(1, myOtherBytes));
- * nioSelector.poll(TIMEOUT_MS, requestsToSend);
+ * nioSelector.send(new NetworkSend(myDestination, myBytes));
+ * nioSelector.send(new NetworkSend(myOtherDestination, myOtherBytes));
+ * nioSelector.poll(TIMEOUT_MS);
  * </pre>
  * 
  * The nioSelector maintains several lists that are reset by each call to <code>poll()</code> which are available via
@@ -123,7 +124,7 @@ public class Selector implements Selectable {
      * Begin connecting to the given address and add the connection to this nioSelector associated with the given id
      * number.
      * <p>
-     * Note that this call only initiates the connection, which will be completed on a future {@link #poll(long, List)}
+     * Note that this call only initiates the connection, which will be completed on a future {@link #poll(long)}
      * call. Check {@link #connected()} to see which (if any) connections have completed after a given poll call.
      * @param id The id for the new connection
      * @param address The address to connect to
@@ -171,7 +172,7 @@ public class Selector implements Selectable {
 
     /**
      * Disconnect any connections for the given id (if there are any). The disconnection is asynchronous and will not be
-     * processed until the next {@link #poll(long, List) poll()} call.
+     * processed until the next {@link #poll(long) poll()} call.
      */
     @Override
     public void disconnect(String id) {
@@ -228,8 +229,8 @@ public class Selector implements Selectable {
      * 
      * When this call is completed the user can check for completed sends, receives, connections or disconnects using
      * {@link #completedSends()}, {@link #completedReceives()}, {@link #connected()}, {@link #disconnected()}. These
-     * lists will be cleared at the beginning of each {@link #poll(long, List)} call and repopulated by the call if any
-     * completed I/O.
+     * lists will be cleared at the beginning of each {@link #poll(long)} call and repopulated by the call if there is
+     * any completed I/O.
      * 
      * @param timeout The amount of time to wait, in milliseconds. If negative, wait indefinitely.
      * @throws IllegalStateException If a send is given for which we have no existing connection or for which there is

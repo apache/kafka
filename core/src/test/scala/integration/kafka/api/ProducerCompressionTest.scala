@@ -19,7 +19,6 @@ package kafka.api.test
 
 import java.util.{Properties, Collection, ArrayList}
 
-import org.scalatest.junit.JUnit3Suite
 import org.junit.runners.Parameterized
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized.Parameters
@@ -36,7 +35,7 @@ import kafka.utils.{CoreUtils, TestUtils}
 
 
 @RunWith(value = classOf[Parameterized])
-class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooKeeperTestHarness {
+class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness {
   private val brokerId = 0
   private var server: KafkaServer = null
 

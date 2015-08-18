@@ -20,7 +20,7 @@ package kafka.log
 import java.io._
 import java.nio._
 import java.util.concurrent.atomic._
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.utils.TestUtils._
 import kafka.message._
 import org.junit.Test

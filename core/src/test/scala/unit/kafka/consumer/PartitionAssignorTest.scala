@@ -17,19 +17,20 @@
 
 package kafka.consumer
 
-import org.scalatest.junit.JUnit3Suite
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.apache.zookeeper.data.Stat
 import kafka.utils.{TestUtils, Logging, ZkUtils, Json}
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.common.TopicAndPartition
 import kafka.consumer.PartitionAssignorTest.StaticSubscriptionInfo
 import kafka.consumer.PartitionAssignorTest.Scenario
 import kafka.consumer.PartitionAssignorTest.WildcardSubscriptionInfo
+import org.junit.Test
 
-class PartitionAssignorTest extends JUnit3Suite with Logging {
+class PartitionAssignorTest extends Logging {
 
+  @Test
   def testRoundRobinPartitionAssignor() {
     val assignor = new RoundRobinAssignor
 
@@ -53,6 +54,7 @@ class PartitionAssignorTest extends JUnit3Suite with Logging {
     })
   }
 
+  @Test
   def testRangePartitionAssignor() {
     val assignor = new RangeAssignor
     (1 to PartitionAssignorTest.TestCaseCount).foreach (testCase => {

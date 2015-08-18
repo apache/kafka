@@ -26,9 +26,9 @@ import kafka.utils.{TestUtils, CoreUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{Assert, Test}
-import org.scalatest.junit.JUnit3Suite
+import org.scalatest.Assertions.intercept
 
-class KafkaConfigTest extends JUnit3Suite {
+class KafkaConfigTest {
 
   @Test
   def testLogRetentionTimeHoursProvided() {
@@ -474,6 +474,12 @@ class KafkaConfigTest extends JUnit3Suite {
         case KafkaConfig.OffsetsRetentionCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.OffsetCommitTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.OffsetCommitRequiredAcksProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-2")
+        case KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.ProducerQuotaBytesPerSecondOverridesProp => // ignore string
+        case KafkaConfig.ConsumerQuotaBytesPerSecondOverridesProp => // ignore string
+        case KafkaConfig.NumQuotaSamplesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.QuotaWindowSizeSecondsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
 
         case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
 

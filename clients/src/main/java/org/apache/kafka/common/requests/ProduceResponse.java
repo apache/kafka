@@ -76,14 +76,14 @@ public class ProduceResponse extends AbstractRequestResponse {
     public ProduceResponse(Struct struct) {
         super(struct);
         responses = new HashMap<TopicPartition, PartitionResponse>();
-        for (Object topicResponse : struct.getArray("responses")) {
+        for (Object topicResponse : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicRespStruct = (Struct) topicResponse;
-            String topic = topicRespStruct.getString("topic");
-            for (Object partResponse : topicRespStruct.getArray("partition_responses")) {
+            String topic = topicRespStruct.getString(TOPIC_KEY_NAME);
+            for (Object partResponse : topicRespStruct.getArray(PARTITION_RESPONSES_KEY_NAME)) {
                 Struct partRespStruct = (Struct) partResponse;
-                int partition = partRespStruct.getInt("partition");
-                short errorCode = partRespStruct.getShort("error_code");
-                long offset = partRespStruct.getLong("base_offset");
+                int partition = partRespStruct.getInt(PARTITION_KEY_NAME);
+                short errorCode = partRespStruct.getShort(ERROR_CODE_KEY_NAME);
+                long offset = partRespStruct.getLong(BASE_OFFSET_KEY_NAME);
                 TopicPartition tp = new TopicPartition(topic, partition);
                 responses.put(tp, new PartitionResponse(errorCode, offset));
             }
