@@ -91,7 +91,7 @@ class ConsoleConsumer(BackgroundThreadService):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, message_validator=is_int, from_beginning=True, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, kafka, topic, message_validator=None, from_beginning=True, consumer_timeout_ms=None):
         """
         Args:
             context:                    standard context
@@ -161,7 +161,7 @@ class ConsoleConsumer(BackgroundThreadService):
         node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
 
         # Create and upload log properties
-        log_config = self.render('console_consumer_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
+        log_config = self.render('tools_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
         node.account.create_file(ConsoleConsumer.LOG4J_CONFIG, log_config)
 
         # Run and capture output
@@ -169,7 +169,8 @@ class ConsoleConsumer(BackgroundThreadService):
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
         for line in node.account.ssh_capture(cmd, allow_fail=False):
             msg = line.strip()
-            msg = self.message_validator(msg)
+            if self.message_validator is not None:
+                msg = self.message_validator(msg)
             if msg is not None:
                 self.logger.debug("consumed a message: " + str(msg))
                 self.messages_consumed[idx].append(msg)

@@ -89,6 +89,9 @@ class VerifiableProducer(BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("VerifiableProducer", allow_fail=False)
+        if self.worker_threads is None:
+            return
+
         # block until the corresponding thread exits
         if len(self.worker_threads) >= self.idx(node):
             # Need to guard this because stop is preemptively called before the worker threads are added and started
