@@ -33,9 +33,9 @@ class LogConfigTest {
   def testKafkaConfigToProps() {
     val millisInHour = 60L * 60L * 1000L
     val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, 2: java.lang.Integer)
-    kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, 2: java.lang.Integer)
-    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, 2: java.lang.Integer)
+    kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
 
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
     val logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
