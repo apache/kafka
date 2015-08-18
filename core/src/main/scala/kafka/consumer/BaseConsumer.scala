@@ -36,18 +36,18 @@ class NewShinyConsumer(topic: String, consumerProps: Properties) extends BaseCon
 
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
   consumer.subscribe(topic)
-  var recordIter = consumer.poll(0).iterator()
+  var recordIter = consumer.poll(0).iterator
 
   override def receive(): BaseConsumerRecord = {
     while (!recordIter.hasNext)
-      recordIter = consumer.poll(0).iterator()
+      recordIter = consumer.poll(0).iterator
 
-    val record = recordIter.next()
-    BaseConsumerRecord(record.topic(), record.partition(), record.offset(), record.key(), record.value())
+    val record = recordIter.next
+    BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
   }
 
   override def close() {
-    this.consumer.close()
+    this.consumer.close
   }
 }
 
@@ -57,16 +57,16 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
   val consumerConnector = Consumer.create(new ConsumerConfig(consumerProps))
   val stream: KafkaStream[Array[Byte], Array[Byte]] =
     consumerConnector.createMessageStreamsByFilter(topicFilter, 1, new DefaultDecoder(), new DefaultDecoder()).head
-  val iter = stream.iterator()
+  val iter = stream.iterator
 
   override def receive(): BaseConsumerRecord = {
     // we do not need to check hasNext for KafkaStream iterator
-    val messageAndMetadata = iter.next()
-    BaseConsumerRecord(messageAndMetadata.topic, messageAndMetadata.partition, messageAndMetadata.offset, messageAndMetadata.key(), messageAndMetadata.message())
+    val messageAndMetadata = iter.next
+    BaseConsumerRecord(messageAndMetadata.topic, messageAndMetadata.partition, messageAndMetadata.offset, messageAndMetadata.key, messageAndMetadata.message)
   }
 
   override def close() {
-    this.consumerConnector.shutdown()
+    this.consumerConnector.shutdown
   }
 }
 

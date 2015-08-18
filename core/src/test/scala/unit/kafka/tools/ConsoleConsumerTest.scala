@@ -21,21 +21,13 @@ import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
 import kafka.tools.{ConsoleConsumer, MessageFormatter}
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{After, Before, Test}
+import org.scalatest.junit.{JUnitSuite, JUnit3Suite}
 
-class ConsoleConsumerTest extends JUnit3Suite {
-
-  override def setUp() {
-    super.setUp()
-  }
-
-  override def tearDown() {
-    super.tearDown()
-  }
+class ConsoleConsumerTest extends JUnitSuite {
 
   @Test
-  def testShouldLimitReadsToMaxMessageLimit() {
+  def shouldLimitReadsToMaxMessageLimit() {
     //Mocks
     val consumer = EasyMock.createNiceMock(classOf[BaseConsumer])
     val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
@@ -56,7 +48,7 @@ class ConsoleConsumerTest extends JUnit3Suite {
   }
 
   @Test
-  def testShouldParseValidOldConsumerValidConfig() {
+  def shouldParseValidOldConsumerValidConfig() {
     //Given
     val args: Array[String] = Array(
       "--zookeeper", "localhost:2181",
@@ -74,7 +66,7 @@ class ConsoleConsumerTest extends JUnit3Suite {
   }
 
   @Test
-  def testShouldParseValidNewConsumerValidConfig() {
+  def sShouldParseValidNewConsumerValidConfig() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",

@@ -37,7 +37,6 @@ object ConsoleConsumer extends Logging {
   def main(args: Array[String]) {
     val conf = new ConsumerConfig(args)
     run(conf)
-    System.exit(0)
   }
 
   def run(conf: ConsumerConfig) {
@@ -46,7 +45,7 @@ object ConsoleConsumer extends Logging {
       if (conf.useNewConsumer) {
         new NewShinyConsumer(conf.topicArg, getNewConsumerProps(conf))
       } else {
-        checkZk(conf);
+        checkZk(conf)
         new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
       }
 
@@ -74,8 +73,8 @@ object ConsoleConsumer extends Logging {
       override def run() {
         consumer.close()
 
-        // if awe generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
-        if(!conf.groupIdPassed)
+        // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
+        if (!conf.groupIdPassed)
           ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
       }
     })
@@ -89,7 +88,7 @@ object ConsoleConsumer extends Logging {
       formatter.writeTo(msg.key, msg.value, System.out)
       checkErr(formatter)
     }
-    println("Processed a total of %d messages".format(messageCount))
+    println(s"Processed a total of %messageCount messages")
   }
 
   def checkErr(formatter: MessageFormatter) {
@@ -128,7 +127,7 @@ object ConsoleConsumer extends Logging {
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (config.options.has(config.resetBeginningOpt)) "earliest" else "latest")
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, if (config.keyDeserializer != null) config.keyDeserializer else "org.apache.kafka.common.serialization.StringDeserializer")
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, if(config.valueDeserializer != null) config.valueDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, if (config.valueDeserializer != null) config.valueDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
 
     props
   }
@@ -211,18 +210,13 @@ object ConsoleConsumer extends Logging {
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
     val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
-    val bootstrapServer = options.valueOf(bootstrapServerOpt);
-    val keyDeserializer = options.valueOf(keyDeserializerOpt);
-    val valueDeserializer = options.valueOf(valueDeserializerOpt);
+    val bootstrapServer = options.valueOf(bootstrapServerOpt)
+    val keyDeserializer = options.valueOf(keyDeserializerOpt)
+    val valueDeserializer = options.valueOf(valueDeserializerOpt)
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
 
-    if (!useNewConsumer) {
-      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
-    }
-    else {
-      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, if (useNewConsumer) bootstrapServerOpt else zkConnectOpt)
 
     if (!useNewConsumer && topicOrFilterOpt.size != 1)
       CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
@@ -247,20 +241,19 @@ object ConsoleConsumer extends Logging {
     }
 
     def tryParse(parser: OptionParser, args: Array[String]) = {
-      try {
+      try
         parser.parse(args: _*)
-      } catch {
-        case e: OptionException => {
+      catch {
+        case e: OptionException =>
           Utils.croak(e.getMessage)
           null
-        }
       }
     }
   }
 
   def checkZkPathExists(zkUrl: String, path: String): Boolean = {
     try {
-      val zk = ZkUtils.createZkClient(zkUrl, 30 * 1000, 30 * 1000);
+      val zk = ZkUtils.createZkClient(zkUrl, 30 * 1000, 30 * 1000)
       zk.exists(path)
     } catch {
       case _: Throwable => false
