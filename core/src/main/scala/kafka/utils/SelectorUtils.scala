@@ -25,6 +25,16 @@ import org.apache.kafka.common.utils.{Time => JTime}
 object SelectorUtils {
 
   /**
+   * Invokes `selector.poll` until `predicate` returns `true` or the timeout expires. It returns `true` if the call
+   * completes normally or `false` if the timeout expires.
+   */
+  def pollUntil(selector: Selector, timeout: Long)(predicate: => Boolean)(implicit time: JTime): Boolean =
+    pollUntilFound(selector, timeout) {
+      if (predicate) Some(true)
+      else None
+    }.fold(false)(_ => true)
+
+  /**
    * Invokes `selector.poll` until `find` returns `Some` or the timeout expires. It returns the result of `find` if
    * the call completes normally or `None` if the timeout expires.
    */

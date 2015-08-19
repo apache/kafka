@@ -16,11 +16,15 @@
 */
 package kafka.controller
 
-import kafka.network.BlockingChannel
-import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
-import org.apache.kafka.common.network.NetworkReceive
+import kafka.network.RequestOrResponseSend
+import kafka.utils.{SelectorUtils, CoreUtils, Logging, ShutdownableThread}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.{ChannelBuilders, NetworkSend, Selector, NetworkReceive}
+import org.apache.kafka.common.security.ssl.SSLFactory
+import org.apache.kafka.common.utils.Time
 import collection.mutable.HashMap
 import kafka.cluster.Broker
+import java.net.{SocketTimeoutException, InetSocketAddress}
 import java.util.concurrent.{LinkedBlockingQueue, BlockingQueue}
 import kafka.server.KafkaConfig
 import collection.mutable
@@ -28,8 +32,9 @@ import kafka.api._
 import kafka.common.TopicAndPartition
 import kafka.api.RequestOrResponse
 import collection.Set
+import collection.JavaConverters._
 
-class ControllerChannelManager (private val controllerContext: ControllerContext, config: KafkaConfig) extends Logging {
+class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics) extends Logging {
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
@@ -44,7 +49,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
 
   def shutdown() = {
     brokerLock synchronized {
-      brokerStateInfo.foreach(brokerState => removeExistingBroker(brokerState._1))
+      brokerStateInfo.values.foreach(removeExistingBroker)
     }
   }
 
@@ -72,30 +77,37 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
 
   def removeBroker(brokerId: Int) {
     brokerLock synchronized {
-      removeExistingBroker(brokerId)
+      removeExistingBroker(brokerStateInfo(brokerId))
     }
   }
 
   private def addNewBroker(broker: Broker) {
     val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)]()
-    debug("Controller %d trying to connect to broker %d".format(config.brokerId,broker.id))
-    val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
-    val channel = new BlockingChannel(brokerEndPoint.host, brokerEndPoint.port,
-      BlockingChannel.UseDefaultBufferSize,
-      BlockingChannel.UseDefaultBufferSize,
-      config.controllerSocketTimeoutMs)
-    val requestThread = new RequestSendThread(config.brokerId, controllerContext, broker, messageQueue, channel)
+    debug("Controller %d trying to connect to broker %d".format(config.brokerId, broker.id))
+    val selector = new Selector(
+      config.socketRequestMaxBytes,
+      config.connectionsMaxIdleMs,
+      metrics,
+      time,
+      //FIXME Replace random suffix by something better
+      s"controller-${config.brokerId}-broker-${broker.id}-${scala.util.Random.nextInt(1000)}",
+      Map.empty.asJava,
+      false,
+      ChannelBuilders.create(config.interBrokerSecurityProtocol, SSLFactory.Mode.CLIENT, config.channelConfigs)
+    )
+    val connectionId = broker.id.toString
+    val requestThread = new RequestSendThread(config.brokerId, controllerContext, broker, messageQueue, selector, connectionId, config, time)
     requestThread.setDaemon(false)
-    brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(channel, broker, messageQueue, requestThread))
+    brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(selector, connectionId, broker, messageQueue, requestThread))
   }
 
-  private def removeExistingBroker(brokerId: Int) {
+  private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
     try {
-      brokerStateInfo(brokerId).channel.disconnect()
-      brokerStateInfo(brokerId).messageQueue.clear()
-      brokerStateInfo(brokerId).requestSendThread.shutdown()
-      brokerStateInfo.remove(brokerId)
-    }catch {
+      brokerState.selector.close(brokerState.connectionId)
+      brokerState.messageQueue.clear()
+      brokerState.requestSendThread.shutdown()
+      brokerStateInfo.remove(brokerState.broker.id)
+    } catch {
       case e: Throwable => error("Error while removing broker by the controller", e)
     }
   }
@@ -111,16 +123,18 @@ class RequestSendThread(val controllerId: Int,
                         val controllerContext: ControllerContext,
                         val toBroker: Broker,
                         val queue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],
-                        val channel: BlockingChannel)
+                        val selector: Selector,
+                        val connectionId: String,
+                        val config: KafkaConfig,
+                        val time: Time)
   extends ShutdownableThread("Controller-%d-to-broker-%d-send-thread".format(controllerId, toBroker.id)) {
+
   private val lock = new Object()
   private val stateChangeLogger = KafkaController.stateChangeLogger
-  connectToBroker(toBroker, channel)
+  connectToBroker()
 
   override def doWork(): Unit = {
-    val queueItem = queue.take()
-    val request = queueItem._1
-    val callback = queueItem._2
+    val (request, callback) = queue.take()
     var receive: NetworkReceive = null
     try {
       lock synchronized {
@@ -129,30 +143,32 @@ class RequestSendThread(val controllerId: Int,
           // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
           // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
           try {
-            channel.send(request)
-            receive = channel.receive()
+            selector.send(new NetworkSend(connectionId, RequestOrResponseSend.serialize(request)))
+            def findResponse = selector.completedReceives.asScala.find(_.source() == connectionId)
+            receive = SelectorUtils.pollUntilFound(selector, config.controllerSocketTimeoutMs)(findResponse)(time).getOrElse {
+              throw new SocketTimeoutException(s"No response received within ${config.controllerSocketTimeoutMs} ms")
+            }
             isSendSuccessful = true
           } catch {
             case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
               warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
                   request.toString, toBroker.toString()), e)
-              channel.disconnect()
-              connectToBroker(toBroker, channel)
+              selector.close(connectionId)
+              connectToBroker()
               isSendSuccessful = false
               // backoff before retrying the connection and send
               CoreUtils.swallowTrace(Thread.sleep(300))
           }
         }
         if (receive != null) {
-          var response: RequestOrResponse = null
-          request.requestId.get match {
+          val response = request.requestId.get match {
             case RequestKeys.LeaderAndIsrKey =>
-              response = LeaderAndIsrResponse.readFrom(receive.payload())
+              LeaderAndIsrResponse.readFrom(receive.payload())
             case RequestKeys.StopReplicaKey =>
-              response = StopReplicaResponse.readFrom(receive.payload())
+              StopReplicaResponse.readFrom(receive.payload())
             case RequestKeys.UpdateMetadataKey =>
-              response = UpdateMetadataResponse.readFrom(receive.payload())
+              UpdateMetadataResponse.readFrom(receive.payload())
           }
           stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
             .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))
@@ -165,20 +181,31 @@ class RequestSendThread(val controllerId: Int,
     } catch {
       case e: Throwable =>
         error("Controller %d fails to send a request to broker %s".format(controllerId, toBroker.toString()), e)
-        // If there is any socket error (eg, socket timeout), the channel is no longer usable and needs to be recreated.
-        channel.disconnect()
+        // If there is any socket error (eg, socket timeout), the connection is no longer usable and needs to be recreated.
+        selector.close(connectionId)
     }
   }
 
-  private def connectToBroker(broker: Broker, channel: BlockingChannel) {
+  private def connectToBroker() {
     try {
-      channel.connect()
-      info("Controller %d connected to %s for sending state change requests".format(controllerId, broker.toString()))
+      val brokerEndPoint = toBroker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
+      selector.connect(
+        connectionId,
+        new InetSocketAddress(brokerEndPoint.host, brokerEndPoint.port),
+        config.socketSendBufferBytes,
+        config.socketReceiveBufferBytes
+      )
+      val succeeded = SelectorUtils.pollUntil(selector,
+        config.controllerSocketTimeoutMs)(selector.connected().contains(connectionId))(time)
+
+      if (!succeeded)
+        throw new SocketTimeoutException(s"No response received within ${config.controllerSocketTimeoutMs} ms")
+
+      info("Controller %d connected to %s for sending state change requests".format(controllerId, toBroker.toString()))
     } catch {
-      case e: Throwable => {
-        channel.disconnect()
-        error("Controller %d's connection to broker %s was unsuccessful".format(controllerId, broker.toString()), e)
-      }
+      case e: Throwable =>
+        selector.close(connectionId)
+        error("Controller %d's connection to broker %s was unsuccessful".format(controllerId, toBroker.toString()), e)
     }
   }
 }
@@ -344,7 +371,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
   }
 }
 
-case class ControllerBrokerStateInfo(channel: BlockingChannel,
+case class ControllerBrokerStateInfo(selector: Selector,
+                                     connectionId: String,
                                      broker: Broker,
                                      messageQueue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],
                                      requestSendThread: RequestSendThread)

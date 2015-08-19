@@ -32,6 +32,8 @@ import kafka.utils.ZkUtils._
 import kafka.utils._
 import kafka.utils.CoreUtils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.utils.Time
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import java.util.concurrent.atomic.AtomicInteger
@@ -149,7 +151,7 @@ object KafkaController extends Logging {
   }
 }
 
-class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerState: BrokerState) extends Logging with KafkaMetricsGroup {
+class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerState: BrokerState, time: Time, metrics: Metrics) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private var isRunning = true
   private val stateChangeLogger = KafkaController.stateChangeLogger
@@ -811,7 +813,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
   }
 
   private def startChannelManager() {
-    controllerContext.controllerChannelManager = new ControllerChannelManager(controllerContext, config)
+    controllerContext.controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics)
     controllerContext.controllerChannelManager.startup()
   }
 

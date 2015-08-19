@@ -25,7 +25,9 @@ import kafka.common.ErrorMapping
 import kafka.controller.{ControllerChannelManager, ControllerContext, LeaderIsrAndControllerEpoch}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.utils.SystemTime
 import org.junit.{Test, After, Before}
 
 class LeaderElectionTest extends ZooKeeperTestHarness {
@@ -128,7 +130,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
 
     val controllerContext = new ControllerContext(zkClient, 6000)
     controllerContext.liveBrokers = brokers.toSet
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig)
+    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, new SystemTime, new Metrics)
     controllerChannelManager.startup()
     val staleControllerEpoch = 0
     val leaderAndIsr = new collection.mutable.HashMap[(String, Int), LeaderIsrAndControllerEpoch]
