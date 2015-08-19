@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -15,16 +15,16 @@ package org.apache.kafka.common.network;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.*;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -43,13 +43,18 @@ public class SelectorTest {
     private EchoServer server;
     private Time time;
     private Selectable selector;
+    private ChannelBuilder channelBuilder;
 
     @Before
     public void setup() throws Exception {
-        this.server = new EchoServer();
+        Map<String, Object> configs = new HashMap<String, Object>();
+        configs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+        this.server = new EchoServer(configs);
         this.server.start();
         this.time = new MockTime();
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", new LinkedHashMap<String, String>());
+        this.channelBuilder = new PlaintextChannelBuilder();
+        this.channelBuilder.configure(configs);
+        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
     @After
@@ -208,6 +213,19 @@ public class SelectorTest {
         assertEquals(big, blockingRequest(node, big));
     }
 
+    @Test
+    public void testLargeMessageSequence() throws Exception {
+        int bufferSize = 512 * 1024;
+        String node = "0";
+        int reqs = 50;
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        String requestPrefix = TestUtils.randomString(bufferSize);
+        sendAndReceive(node, requestPrefix, 0, reqs);
+    }
+
+
+
     /**
      * Test sending an empty string
      */
@@ -285,71 +303,27 @@ public class SelectorTest {
         return new String(Utils.toArray(receive.payload()));
     }
 
-    /**
-     * A simple server that takes size delimited byte arrays and just echos them back to the sender.
-     */
-    static class EchoServer extends Thread {
-        public final int port;
-        private final ServerSocket serverSocket;
-        private final List<Thread> threads;
-        private final List<Socket> sockets;
+    private void sendAndReceive(String node, String requestPrefix, int startIndex, int endIndex) throws Exception {
+        int requests = startIndex;
+        int responses = startIndex;
+        selector.send(createSend(node, requestPrefix + "-" + startIndex));
+        requests++;
+        while (responses < endIndex) {
+            // do the i/o
+            selector.poll(0L);
+            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
 
-        public EchoServer() throws Exception {
-            this.serverSocket = new ServerSocket(0);
-            this.port = this.serverSocket.getLocalPort();
-            this.threads = Collections.synchronizedList(new ArrayList<Thread>());
-            this.sockets = Collections.synchronizedList(new ArrayList<Socket>());
-        }
+            // handle requests and responses of the fast node
+            for (NetworkReceive receive : selector.completedReceives()) {
+                assertEquals(requestPrefix + "-" + responses, asString(receive));
+                responses++;
+            }
 
-        public void run() {
-            try {
-                while (true) {
-                    final Socket socket = serverSocket.accept();
-                    sockets.add(socket);
-                    Thread thread = new Thread() {
-                        public void run() {
-                            try {
-                                DataInputStream input = new DataInputStream(socket.getInputStream());
-                                DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                                while (socket.isConnected() && !socket.isClosed()) {
-                                    int size = input.readInt();
-                                    byte[] bytes = new byte[size];
-                                    input.readFully(bytes);
-                                    output.writeInt(size);
-                                    output.write(bytes);
-                                    output.flush();
-                                }
-                            } catch (IOException e) {
-                                // ignore
-                            } finally {
-                                try {
-                                    socket.close();
-                                } catch (IOException e) {
-                                    // ignore
-                                }
-                            }
-                        }
-                    };
-                    thread.start();
-                    threads.add(thread);
-                }
-            } catch (IOException e) {
-                // ignore
+            for (int i = 0; i < selector.completedSends().size() && requests < endIndex; i++, requests++) {
+                selector.send(createSend(node, requestPrefix + "-" + requests));
             }
         }
-
-        public void closeConnections() throws IOException {
-            for (Socket socket : sockets)
-                socket.close();
-        }
-
-        public void close() throws IOException, InterruptedException {
-            this.serverSocket.close();
-            closeConnections();
-            for (Thread t : threads)
-                t.join();
-            join();
-        }
     }
+
 
 }

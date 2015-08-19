@@ -14,29 +14,45 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
+package org.apache.kafka.common.security.auth;
 
-import java.util.Arrays;
+import java.security.Principal;
 
-public class ClientUtilsTest {
+public class KafkaPrincipal implements Principal {
+    private final String name;
 
-    @Test
-    public void testParseAndValidateAddresses() {
-        check("127.0.0.1:8000");
-        check("mydomain.com:8080");
-        check("[::1]:8000");
-        check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
+    public KafkaPrincipal(String name) {
+        if (name == null)
+            throw new IllegalArgumentException("name is null");
+        this.name = name;
     }
 
-    @Test(expected = ConfigException.class)
-    public void testNoPort() {
-        check("127.0.0.1");
+    @Override
+    public boolean equals(Object object) {
+        if (this == object)
+            return true;
+
+        if (object instanceof KafkaPrincipal) {
+            return name.equals(((KafkaPrincipal) object).getName());
+        }
+
+        return false;
     }
 
-    private void check(String... url) {
-        ClientUtils.parseAndValidateAddresses(Arrays.asList(url));
+    @Override
+    public int hashCode() {
+        return name.hashCode();
     }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+
 }

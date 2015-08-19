@@ -14,29 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
+package org.apache.kafka.common.security.auth;
 
-import java.util.Arrays;
+import java.util.Map;
+import java.security.Principal;
 
-public class ClientUtilsTest {
+import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.KafkaException;
 
-    @Test
-    public void testParseAndValidateAddresses() {
-        check("127.0.0.1:8000");
-        check("mydomain.com:8080");
-        check("[::1]:8000");
-        check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
+/** DefaultPrincipalBuilder which return transportLayer's peer Principal **/
+
+public class DefaultPrincipalBuilder implements PrincipalBuilder {
+
+    public void configure(Map<String, ?> configs) {}
+
+    public Principal buildPrincipal(TransportLayer transportLayer, Authenticator authenticator) throws KafkaException {
+        try {
+            return transportLayer.peerPrincipal();
+        } catch (Exception e) {
+            throw new KafkaException("Failed to build principal due to: ", e);
+        }
     }
 
-    @Test(expected = ConfigException.class)
-    public void testNoPort() {
-        check("127.0.0.1");
-    }
+    public void close() throws KafkaException {}
 
-    private void check(String... url) {
-        ClientUtils.parseAndValidateAddresses(Arrays.asList(url));
-    }
 }

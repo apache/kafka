@@ -24,6 +24,8 @@ import java.util.Map;
 public enum SecurityProtocol {
     /** Un-authenticated, non-encrypted channel */
     PLAINTEXT(0, "PLAINTEXT"),
+    /** SSL channel */
+    SSL(1, "SSL"),
     /** Currently identical to PLAINTEXT and used for testing only. We may implement extra instrumentation when testing channel code. */
     TRACE(Short.MAX_VALUE, "TRACE");
 

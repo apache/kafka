@@ -74,7 +74,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
   def testSendOffset() {
     var producer = TestUtils.createNewProducer(brokerList)
     val partition = new Integer(0)
-    
+
     object callback extends Callback {
       var offset = 0L
       def onCompletion(metadata: RecordMetadata, exception: Exception) {
@@ -298,7 +298,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
       }
     }
   }
-  
+
   /**
    * Test that flush immediately sends all accumulated requests.
    */

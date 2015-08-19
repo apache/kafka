@@ -256,9 +256,10 @@ project(':core') {
     testCompile "$junit"
     testCompile "$easymock"
     testCompile 'org.objenesis:objenesis:1.2'
+    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
     testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
-    testCompile project(path: ':clients', configuration: 'archives')
-
+    testCompile project(':clients')
+    testCompile project(':clients').sourceSets.test.output
     testRuntime "$slf4jlog4j"
 
     zinc 'com.typesafe.zinc:zinc:0.3.7'
@@ -390,6 +391,7 @@ project(':clients') {
     compile 'org.xerial.snappy:snappy-java:1.1.1.7'
     compile 'net.jpountz.lz4:lz4:1.2.0'
 
+    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
     testCompile "$junit"
     testRuntime "$slf4jlog4j"
   }

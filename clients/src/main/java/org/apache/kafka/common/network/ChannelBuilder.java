@@ -12,36 +12,33 @@
  */
 package org.apache.kafka.common.network;
 
-import java.io.IOException;
-import java.nio.channels.GatheringByteChannel;
+import java.util.Map;
+import java.nio.channels.SelectionKey;
+
+import org.apache.kafka.common.KafkaException;
 
 /**
- * This interface models the in-progress sending of data to a destination identified by an integer id.
+ * A ChannelBuilder interface to build Channel based on configs
  */
-public interface Send {
+public interface ChannelBuilder {
 
     /**
-     * The numeric id for the destination of this send
+     * Configure this class with the given key-value pairs
      */
-    public String destination();
+    void configure(Map<String, ?> configs) throws KafkaException;
+
 
     /**
-     * Is this send complete?
+     * returns a Channel with TransportLayer and Authenticator configured.
+     * @param  id  channel id
+     * @param  key SelectionKey
      */
-    public boolean completed();
+    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
+
 
     /**
-     * Write some as-yet unwritten bytes from this send to the provided channel. It may take multiple calls for the send
-     * to be completely written
-     * @param channel The Channel to write to
-     * @return The number of bytes written
-     * @throws IOException If the write fails
+     * Closes ChannelBuilder
      */
-    public long writeTo(GatheringByteChannel channel) throws IOException;
-
-    /**
-     * Size of the send
-     */
-    public long size();
+    void close();
 
 }
