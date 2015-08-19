@@ -18,29 +18,29 @@
 package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.KafkaProcessor;
-import org.apache.kafka.streaming.kstream.KeyValue;
-import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
+import org.apache.kafka.streaming.kstream.KeyValue;
+import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
 
-class KStreamFlatMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1, K2, V2> {
+class KStreamFlatMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1> {
 
-    private final KeyValueMapper<K1, V1, K2, ? extends Iterable<V2>> mapper;
+    private final KeyValueFlatMap<K1, V1, K2, V2> mapper;
 
     @SuppressWarnings("unchecked")
-    KStreamFlatMap(String name, ProcessorMetadata config) {
-        super(name, config);
+    KStreamFlatMap(ProcessorMetadata metadata) {
+        super(metadata);
 
         if (this.metadata() == null)
             throw new IllegalStateException("ProcessorMetadata should be specified.");
 
-        this.mapper = (KeyValueMapper<K1, V1, K2, ? extends Iterable<V2>>) config.value();
+        this.mapper = (KeyValueFlatMap<K1, V1, K2, V2>) metadata.value();
     }
 
     @Override
     public void process(K1 key, V1 value) {
-        KeyValue<K2, ? extends Iterable<V2>> newPair = mapper.apply(key, value);
-        for (V2 v : newPair.value) {
-            forward(newPair.key, v);
+        Iterable<KeyValue<K2, V2>> pairs = mapper.apply(key, value);
+        for (KeyValue<K2, V2> pair : pairs) {
+            context.forward(pair.key, pair.value);
         }
     }
 }

@@ -19,7 +19,6 @@ package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.internals.ProcessorNode;
 
 public class SourceNode<K, V> extends ProcessorNode<K, V, K, V> {
 

@@ -19,6 +19,7 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
@@ -102,10 +103,10 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, K1, ? extends Iterable<V1>> mapper) {
+    public <K1, V1> KStream<K1, V1> flatMap(KeyValueFlatMap<K, V, K1, V1> mapper) {
         String name = FLATMAP_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamFlatMap.class, new ProcessorMetadata("Mapper", mapper), this.name);
+        topology.addProcessor(name, KStreamFlatMap.class, new ProcessorMetadata("FlatMapper", mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
