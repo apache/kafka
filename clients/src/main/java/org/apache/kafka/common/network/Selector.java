@@ -146,8 +146,10 @@ public class Selector implements Selectable {
         socketChannel.configureBlocking(false);
         Socket socket = socketChannel.socket();
         socket.setKeepAlive(true);
-        socket.setSendBufferSize(sendBufferSize);
-        socket.setReceiveBufferSize(receiveBufferSize);
+        if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+            socket.setSendBufferSize(sendBufferSize);
+        if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+            socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
         try {
             socketChannel.connect(address);

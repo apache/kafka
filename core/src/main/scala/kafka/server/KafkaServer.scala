@@ -30,7 +30,7 @@ import java.io.{IOException, File}
 
 import kafka.utils._
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, NetworkSend, Selector}
+import org.apache.kafka.common.network.{Selectable, ChannelBuilders, NetworkReceive, NetworkSend, Selector}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.security.ssl.SSLFactory
@@ -276,7 +276,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       brokerState.newState(PendingControlledShutdown)
 
       val selector = new Selector(
-        config.socketRequestMaxBytes,
+        NetworkReceive.UNLIMITED,
         config.connectionsMaxIdleMs,
         metrics,
         kafkaMetricsTime,
@@ -317,8 +317,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                 selector.connect(
                   connectionId(broker),
                   new InetSocketAddress(brokerEndPoint.host, brokerEndPoint.port),
-                  config.socketSendBufferBytes,
-                  config.socketReceiveBufferBytes
+                  Selectable.USE_DEFAULT_BUFFER_SIZE,
+                  Selectable.USE_DEFAULT_BUFFER_SIZE
                 )
                 prevController = broker
               }

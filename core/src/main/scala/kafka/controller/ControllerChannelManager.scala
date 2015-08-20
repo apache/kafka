@@ -19,7 +19,7 @@ package kafka.controller
 import kafka.network.RequestOrResponseSend
 import kafka.utils.{SelectorUtils, CoreUtils, Logging, ShutdownableThread}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ChannelBuilders, NetworkSend, Selector, NetworkReceive}
+import org.apache.kafka.common.network.{Selectable, ChannelBuilders, NetworkSend, Selector, NetworkReceive}
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.utils.Time
 import collection.mutable.HashMap
@@ -85,7 +85,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)]()
     debug("Controller %d trying to connect to broker %d".format(config.brokerId, broker.id))
     val selector = new Selector(
-      config.socketRequestMaxBytes,
+      NetworkReceive.UNLIMITED,
       config.connectionsMaxIdleMs,
       metrics,
       time,
@@ -192,8 +192,8 @@ class RequestSendThread(val controllerId: Int,
       selector.connect(
         connectionId,
         new InetSocketAddress(brokerEndPoint.host, brokerEndPoint.port),
-        config.socketSendBufferBytes,
-        config.socketReceiveBufferBytes
+        Selectable.USE_DEFAULT_BUFFER_SIZE,
+        Selectable.USE_DEFAULT_BUFFER_SIZE
       )
       val succeeded = SelectorUtils.pollUntil(selector,
         config.controllerSocketTimeoutMs)(selector.connected().contains(connectionId))(time)
