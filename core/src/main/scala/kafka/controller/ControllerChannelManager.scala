@@ -144,8 +144,7 @@ class RequestSendThread(val controllerId: Int,
           // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
           try {
             selector.send(new NetworkSend(connectionId, RequestOrResponseSend.serialize(request)))
-            def findResponse = selector.completedReceives.asScala.find(_.source() == connectionId)
-            receive = SelectorUtils.pollUntilFound(selector, config.controllerSocketTimeoutMs)(findResponse)(time).getOrElse {
+            receive = SelectorUtils.pollUntilReceiveCompleted(selector, connectionId, config.controllerSocketTimeoutMs)(time).getOrElse {
               throw new SocketTimeoutException(s"No response received within ${config.controllerSocketTimeoutMs} ms")
             }
             isSendSuccessful = true
@@ -195,8 +194,7 @@ class RequestSendThread(val controllerId: Int,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE
       )
-      val succeeded = SelectorUtils.pollUntil(selector,
-        config.controllerSocketTimeoutMs)(selector.connected().contains(connectionId))(time)
+      val succeeded = SelectorUtils.pollUntilConnected(selector, connectionId, config.controllerSocketTimeoutMs)(time)
 
       if (!succeeded)
         throw new SocketTimeoutException(s"No response received within ${config.controllerSocketTimeoutMs} ms")

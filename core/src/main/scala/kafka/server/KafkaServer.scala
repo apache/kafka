@@ -333,9 +333,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
               val request = new ControlledShutdownRequest(correlationId.getAndIncrement, config.brokerId)
               selector.send(new NetworkSend(connectionId(prevController), RequestOrResponseSend.serialize(request)))
 
-              def findResponse = selector.completedReceives.asScala.find(_.source() == connectionId(prevController))
-
-              response = SelectorUtils.pollUntilFound(selector, config.controllerSocketTimeoutMs)(findResponse)(kafkaMetricsTime).getOrElse {
+              response = SelectorUtils.pollUntilReceiveCompleted(selector, connectionId(prevController), config.controllerSocketTimeoutMs)(kafkaMetricsTime).getOrElse {
                 throw new SocketTimeoutException(s"Did not receive response within ${config.controllerSocketTimeoutMs}")
               }
 

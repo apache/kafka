@@ -18,17 +18,41 @@
 package kafka.utils
 
 import java.util.concurrent.TimeUnit
+import scala.collection.JavaConverters._
 
-import org.apache.kafka.common.network.Selector
+import org.apache.kafka.common.network.{NetworkReceive, Selector}
 import org.apache.kafka.common.utils.{Time => JTime}
 
 object SelectorUtils {
 
   /**
+   * Invokes `selector.poll` until `id` is connected or the timeout expires. It returns `true` if the
+   * call completes normally or `false` if the timeout expires.
+   *
+   * This method is useful for implementing blocking behaviour on top of the non-blocking `Selector`, use it with
+   * care.
+   */
+  def pollUntilConnected(selector: Selector, id: String, timeout: Long)(implicit time: JTime): Boolean =
+    pollUntil(selector, timeout)(selector.connected.contains(id))
+
+  /**
+   * Invokes `selector.poll` until a receive has been completed for `id` or the timeout expires. It returns the received
+   * value in a `Some` if the call completes normally or `None` if the timeout expires.
+   *
+   * This method is useful for implementing blocking behaviour on top of the non-blocking `Selector`, use it with
+   * care.
+   */
+  def pollUntilReceiveCompleted(selector: Selector, id: String, timeout: Long)(implicit time: JTime): Option[NetworkReceive] =
+    pollUntilFound(selector, timeout)(selector.completedReceives.asScala.find(_.source() == id))
+
+  /**
    * Invokes `selector.poll` until `predicate` returns `true` or the timeout expires. It returns `true` if the call
    * completes normally or `false` if the timeout expires.
+   *
+   * This method is useful for implementing blocking behaviour on top of the non-blocking `Selector`, use it with
+   * care.
    */
-  def pollUntil(selector: Selector, timeout: Long)(predicate: => Boolean)(implicit time: JTime): Boolean =
+  private def pollUntil(selector: Selector, timeout: Long)(predicate: => Boolean)(implicit time: JTime): Boolean =
     pollUntilFound(selector, timeout) {
       if (predicate) Some(true)
       else None
@@ -37,8 +61,11 @@ object SelectorUtils {
   /**
    * Invokes `selector.poll` until `find` returns `Some` or the timeout expires. It returns the result of `find` if
    * the call completes normally or `None` if the timeout expires.
+   *
+   * This method is useful for implementing blocking behaviour on top of the non-blocking `Selector`, use it with
+   * care.
    */
-  def pollUntilFound[T](selector: Selector, timeout: Long)(find: => Option[T])(implicit time: JTime): Option[T] = {
+  private def pollUntilFound[T](selector: Selector, timeout: Long)(find: => Option[T])(implicit time: JTime): Option[T] = {
     var result: Option[T] = None
     // for consistency with `Selector.poll`
     if (timeout < 0) {
