@@ -18,7 +18,7 @@
 package org.apache.kafka.streaming;
 
 import org.apache.kafka.streaming.processor.TopologyBuilder;
-import org.apache.kafka.streaming.processor.internals.KStreamThread;
+import org.apache.kafka.streaming.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +34,7 @@ import java.io.File;
  * <p>
  * This streaming instance will co-ordinate with any other instances (whether in this same process, on other processes
  * on this machine, or on remote machines). These processes will divide up the work so that all partitions are being
- * consumed. If instances are added or die, the corresponding {@link KStreamThread} instances will be shutdown or
+ * consumed. If instances are added or die, the corresponding {@link StreamThread} instances will be shutdown or
  * started in the appropriate processes to balance processing load.
  * <p>
  * Internally the {@link KafkaStreaming} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
@@ -64,7 +64,7 @@ public class KafkaStreaming implements Runnable {
     private int state = CREATED;
 
     private final Object lock = new Object();
-    private final KStreamThread[] threads;
+    private final StreamThread[] threads;
     private final File stateDir;
 
 
@@ -72,9 +72,9 @@ public class KafkaStreaming implements Runnable {
         if (config.getClass(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG) == null)
             throw new NullPointerException("timestamp extractor is missing");
 
-        this.threads = new KStreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
+        this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new KStreamThread(builder, config);
+            this.threads[i] = new StreamThread(builder, config);
         }
 
         this.stateDir = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG));
@@ -90,7 +90,7 @@ public class KafkaStreaming implements Runnable {
                 if (!stateDir.exists() && !stateDir.mkdirs())
                     throw new IllegalArgumentException("Failed to create state directory: " + stateDir.getAbsolutePath());
 
-                for (KStreamThread thread : threads) thread.start();
+                for (StreamThread thread : threads) thread.start();
                 log.info("Start-up complete");
             } else {
                 throw new IllegalStateException("This container was already started");
@@ -108,10 +108,10 @@ public class KafkaStreaming implements Runnable {
             if (state == STOPPING) {
                 log.info("Shutting down the container");
 
-                for (KStreamThread thread : threads)
+                for (StreamThread thread : threads)
                     thread.close();
 
-                for (KStreamThread thread : threads) {
+                for (StreamThread thread : threads) {
                     try {
                         thread.join();
                     } catch (InterruptedException ex) {

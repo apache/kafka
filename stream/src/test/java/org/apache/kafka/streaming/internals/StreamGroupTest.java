@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming;
+package org.apache.kafka.streaming.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streaming.processor.TimestampExtractor;
@@ -40,48 +40,6 @@ public class StreamGroupTest {
     private static Serializer<Integer> serializer = new IntegerSerializer();
     private static Deserializer<Integer> deserializer = new IntegerDeserializer();
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-    public MockKStreamSource() {
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-      super(null, deserializer, deserializer, new MockKStreamTopology());
-=======
-      super(null, deserializer, deserializer, new KStreamInitializerImpl(serializer, serializer, deserializer, deserializer));
->>>>>>> new api model
-=======
-      super(null, deserializer, deserializer, new KStreamInitializerImpl());
->>>>>>> wip
-=======
-      super(null, deserializer, deserializer, new MockKStreamTopology());
->>>>>>> wip
-    }
-=======
-    private static class MockKStreamSource extends KStreamSource<Integer, Integer> {
->>>>>>> compile and test passed
-
-        public int numReceived = 0;
-        public ArrayList<Object> keys = new ArrayList<>();
-        public ArrayList<Object> values = new ArrayList<>();
-        public ArrayList<Long> timestamps = new ArrayList<>();
-
-        public MockKStreamSource() {
-            super(null, deserializer, deserializer, new MockKStreamTopology());
-        }
-
-        @Override
-        public void receive(Object key, Object value, long timestamp) {
-            this.numReceived++;
-            this.keys.add(key);
-            this.values.add(value);
-            this.timestamps.add(timestamp);
-        }
-
-    }
-
-=======
->>>>>>> wip
     @SuppressWarnings("unchecked")
     @Test
     public void testAddPartition() {

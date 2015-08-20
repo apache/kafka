@@ -23,6 +23,7 @@ import org.apache.kafka.streaming.processor.RestoreFunc;
 import org.apache.kafka.streaming.processor.StateStore;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streaming.state.OffsetCheckpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

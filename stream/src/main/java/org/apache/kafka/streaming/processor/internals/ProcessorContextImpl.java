@@ -96,7 +96,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         Consumer restoreConsumer = new KafkaConsumer<>(config.getConsumerProperties(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
 
         this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
-        this.streamGroup = new StreamGroup(this, this.ingestor, new TimeBasedChooser(), extractor, bufferedRecordsPerPartition);
+        this.streamGroup = new StreamGroup(this, this.ingestor, extractor, bufferedRecordsPerPartition);
 
         stateMgr.init();
 

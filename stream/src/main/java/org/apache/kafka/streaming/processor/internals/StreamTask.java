@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,46 +17,34 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streaming.processor.Punctuator;
-import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.TimestampExtractor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.Punctuator;
+import org.apache.kafka.streaming.processor.TimestampExtractor;
 
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Set;
 
 /**
- * A StreamGroup is composed of multiple streams from different topics that need to be synchronized.
+ * A StreamTask is associated with a {@link PartitionGroup} which is assigned to a StreamThread for processing.
  */
-public class StreamGroup {
+public class StreamTask {
 
-    private final Ingestor ingestor;
-    private final ProcessorContext context;
-    private final TimestampExtractor timestampExtractor;
-
-    private final Map<TopicPartition, RecordQueue> queuesPerPartition = new HashMap<>();
-    private final PriorityQueue<RecordQueue> queuesByTime = new PriorityQueue<>(new Comparator<RecordQueue>() {
-        public int compare(RecordQueue queue1, RecordQueue queue2) {
-            long time1 = queue1.timestamp();
-            long time2 = queue2.timestamp();
-
-            if (time1 < time2) return -1;
-            if (time1 > time2) return 1;
-            return 0;
-        }
-    });
-
+    private final int id;
     private final int desiredUnprocessed;
 
-    // TODO: merge queuesPerPartition, consumedOffset, and newRecordBuffer into sth. like partition metadata
+    private final Consumer consumer;
+    private final PartitionGroup partitionGroup;
+    private final TimestampExtractor timestampExtractor;
+
     private final Map<TopicPartition, Long> consumedOffsets;
     private final PunctuationQueue punctuationQueue = new PunctuationQueue();
     private final ArrayDeque<NewRecords> newRecordBuffer = new ArrayDeque<>();
@@ -65,25 +53,35 @@ public class StreamGroup {
     private boolean commitRequested = false;
     private StampedRecord currRecord = null;
     private ProcessorNode currNode = null;
-    private volatile int buffered = 0;
 
     /**
      * Creates StreamGroup
      *
-     * @param context                        the task context
-     * @param ingestor                       the instance of {@link Ingestor}
-     * @param timestampExtractor             the instance of {@link TimestampExtractor}
+     * @param consumer                       the instance of {@link Consumer}
+     * @param partitions                     the instance of {@link TimestampExtractor}
      * @param desiredUnprocessedPerPartition the target number of records kept in a queue for each topic
      */
-    public StreamGroup(ProcessorContext context,
-                       Ingestor ingestor,
-                       TimestampExtractor timestampExtractor,
-                       int desiredUnprocessedPerPartition) {
-        this.context = context;
-        this.ingestor = ingestor;
-        this.timestampExtractor = timestampExtractor;
+    public StreamTask(int id,
+                      Consumer consumer,
+                      ProcessorTopology topology,
+                      Collection<TopicPartition> partitions,
+                      int desiredUnprocessedPerPartition) {
+        this.id = id;
+        this.consumer = consumer;
         this.desiredUnprocessed = desiredUnprocessedPerPartition;
         this.consumedOffsets = new HashMap<>();
+
+        // create partition queues and pipe them to corresponding source nodes in the topology
+        Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            RecordQueue queue = createRecordQueue(partition, topology.source(partition.topic()));
+            partitionQueues.put(partition, queue);
+        }
+        this.partitionGroup = new PartitionGroup(partitionQueues);
+    }
+
+    public int id() {
+        return id;
     }
 
     public StampedRecord record() {
@@ -103,76 +101,31 @@ public class StreamGroup {
     }
 
     /**
-     * Adds a partition and its receiver to this stream synchronizer
-     *
-     * @param partition the partition
-     * @param source    the instance of KStreamImpl
-     */
-    @SuppressWarnings("unchecked")
-    public void addPartition(TopicPartition partition, SourceNode source) {
-        synchronized (this) {
-            RecordQueue recordQueue = queuesPerPartition.get(partition);
-
-            if (recordQueue == null) {
-                queuesPerPartition.put(partition, createRecordQueue(partition, source));
-            } else {
-                throw new IllegalStateException("duplicate partition");
-            }
-        }
-    }
-
-    /**
-     * Adds records
+     * Adds records to queues
      *
      * @param partition the partition
      * @param iterator  the iterator of records
      */
     @SuppressWarnings("unchecked")
     public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<byte[], byte[]>> iterator) {
-        synchronized (this) {
-            newRecordBuffer.addLast(new NewRecords(partition, iterator));
+
+        // get deserializers for this partition
+        Deserializer<?> keyDeserializer = partitionGroup.keyDeserializer(partition);
+        Deserializer<?> valDeserializer = partitionGroup.valDeserializer(partition);
+
+        while (iterator.hasNext()) {
+
+            ConsumerRecord<byte[], byte[]> rawRecord = iterator.next();
+
+            // deserialize the raw record, extract the timestamp and put into the queue
+            Object key = keyDeserializer.deserialize(rawRecord.topic(), rawRecord.key());
+            Object value = valDeserializer.deserialize(rawRecord.topic(), rawRecord.value());
+            long timestamp = timestampExtractor.extract(rawRecord.topic(), key, value);
+
+            StampedRecord stampedRecord = new StampedRecord(new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(), key, value), timestamp);
+
+            partitionGroup.putRecord(stampedRecord, partition);
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void ingestNewRecords() {
-        for (NewRecords newRecords : newRecordBuffer) {
-            TopicPartition partition = newRecords.partition;
-            Iterator<ConsumerRecord<byte[], byte[]>> iterator = newRecords.iterator;
-
-            RecordQueue recordQueue = queuesPerPartition.get(partition);
-            if (recordQueue != null) {
-                boolean wasEmpty = recordQueue.isEmpty();
-
-                while (iterator.hasNext()) {
-                    ConsumerRecord<byte[], byte[]> record = iterator.next();
-
-                    // deserialize the raw record, extract the timestamp and put into the queue
-                    Deserializer<?> keyDeserializer = ((SourceNode) recordQueue.source()).keyDeserializer;
-                    Deserializer<?> valDeserializer = ((SourceNode) recordQueue.source()).valDeserializer;
-
-                    Object key = keyDeserializer.deserialize(record.topic(), record.key());
-                    Object value = valDeserializer.deserialize(record.topic(), record.value());
-                    ConsumerRecord deserializedRecord = new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), key, value);
-
-                    long timestamp = timestampExtractor.extract(record.topic(), key, value);
-                    recordQueue.add(new StampedRecord(deserializedRecord, timestamp));
-                    buffered++;
-                }
-
-                int queueSize = recordQueue.size();
-
-                // add this record queue to be considered for processing
-                if (wasEmpty && queueSize > 0)
-                    queuesByTime.offer(recordQueue);
-
-                // if we have buffered enough for this partition, pause
-                if (queueSize >= this.desiredUnprocessed) {
-                    ingestor.pause(partition);
-                }
-            }
-        }
-        newRecordBuffer.clear();
     }
 
     /**
@@ -192,26 +145,15 @@ public class StreamGroup {
     public boolean process() {
         synchronized (this) {
             boolean readyForNextExecution = false;
-            ingestNewRecords();
 
             // take the next record queue with the smallest estimated timestamp to process
-            RecordQueue recordQueue = queuesByTime.poll();
+            long timestamp = partitionGroup.timestamp();
+            StampedRecord record = partitionGroup.nextRecord();
 
-            if (recordQueue == null) {
-                return false;
-            }
-
-            if (recordQueue.size() == 0) throw new IllegalStateException("empty record queue");
-
-            if (recordQueue.size() == this.desiredUnprocessed) {
-                ingestor.unpause(recordQueue.partition(), recordQueue.offset());
-            }
-
-            long trackedTimestamp = recordQueue.timestamp();
             currRecord = recordQueue.next();
             currNode = recordQueue.source();
 
-            if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
+            if (streamTime < timestamp) streamTime = timestamp;
 
             currNode.process(currRecord.key(), currRecord.value());
             consumedOffsets.put(recordQueue.partition(), currRecord.offset());
@@ -236,7 +178,10 @@ public class StreamGroup {
             // update this record queue's estimated timestamp
             if (recordQueue.size() > 0) {
                 readyForNextExecution = true;
-                queuesByTime.offer(recordQueue);
+            }
+
+            if (recordQueue.size() == this.desiredUnprocessed) {
+                ingestor.unpause(recordQueue.partition(), recordQueue.offset());
             }
 
             buffered--;

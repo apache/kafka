@@ -19,8 +19,8 @@ package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -43,21 +43,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
-public class KStreamThread extends Thread {
+public class StreamThread extends Thread {
 
-    private static final Logger log = LoggerFactory.getLogger(KStreamThread.class);
+    private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
-    private final TopologyBuilder builder;
-    private final IngestorImpl ingestor;
+    private final Consumer<byte[], byte[]> consumer;
+    private final ProcessorTopology topology;
     private final RecordCollectorImpl collector;
-    private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
-    private final Map<Integer, ProcessorContextImpl> kstreamContexts = new HashMap<>();
+    private final Map<Integer, StreamTask> tasks = new HashMap<>();
     private final Metrics metrics;
     private final Time time;
 
@@ -77,7 +75,6 @@ public class KStreamThread extends Thread {
     protected final ConsumerRebalanceCallback rebalanceCallback = new ConsumerRebalanceCallback() {
         @Override
         public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
-            ingestor.init();
             addPartitions(assignment);
         }
 
@@ -85,22 +82,17 @@ public class KStreamThread extends Thread {
         public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
             commitAll(time.milliseconds());
             removePartitions();
-            ingestor.clear();
         }
     };
 
     @SuppressWarnings("unchecked")
-    public KStreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
+    public StreamThread(ProcessorTopology topology, StreamingConfig config) throws Exception {
         super();
 
-        this.metrics = new Metrics();
         this.config = config;
-        this.builder = builder;
+        this.topology = topology;
 
         this.streamingMetrics = new KafkaStreamingMetrics();
-
-        // build the topology without initialization to get the topics for consumer
-        ProcessorTopology topology = builder.build();
 
         // create the producer and consumer clients
         Producer<byte[], byte[]> producer = new KafkaProducer<>(config.getProducerProperties(),
@@ -110,11 +102,10 @@ public class KStreamThread extends Thread {
             (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
             (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
 
-        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(config.getConsumerProperties(),
+        consumer = new KafkaConsumer<>(config.getConsumerProperties(),
             rebalanceCallback,
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer());
-        this.ingestor = new IngestorImpl(consumer, topology.sourceTopics());
 
         this.stateDir = new File(this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = config.getLong(StreamingConfig.POLL_MS_CONFIG);
@@ -127,6 +118,8 @@ public class KStreamThread extends Thread {
         this.nextStateCleaning = Long.MAX_VALUE;
         this.recordsProcessed = 0;
         this.time = new SystemTime();
+
+        this.metrics = new Metrics();
     }
 
     /**
@@ -136,7 +129,6 @@ public class KStreamThread extends Thread {
     public synchronized void run() {
         log.info("Starting a kstream thread");
         try {
-            ingestor.open();
             runLoop();
         } catch (RuntimeException e) {
             log.error("Uncaught error during processing: ", e);
@@ -151,7 +143,7 @@ public class KStreamThread extends Thread {
         commitAll(time.milliseconds());
 
         collector.close();
-        ingestor.close();
+        consumer.close();
         removePartitions();
         log.info("kstream thread shutdown complete");
     }
@@ -168,10 +160,20 @@ public class KStreamThread extends Thread {
             boolean readyForNextExecution = false;
 
             while (stillRunning()) {
-                ingestor.poll(readyForNextExecution ? 0 : this.pollTimeMs);
+                // try to fetch some records and put them to tasks' queues
+                // TODO: we may not need to poll every iteration
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(readyForNextExecution ? 0 : this.pollTimeMs);
 
-                for (StreamGroup group : this.streamGroups) {
-                    readyForNextExecution = group.process();
+                for (StreamTask task : tasks.values()) {
+                    for (TopicPartition partition : task.partitions()) {
+                        task.addRecords(partition, records.records(partition).iterator());
+                    }
+                }
+
+                // try to process one record from each task
+                // TODO: we may want to process more than one record in each iteration
+                for (StreamTask task : tasks.values()) {
+                    readyForNextExecution = task.process();
                 }
 
                 maybeCommit();
@@ -203,8 +205,10 @@ public class KStreamThread extends Thread {
     }
 
     private void commitAll(long now) {
+
+        /*
         Map<TopicPartition, Long> commit = new HashMap<>();
-        for (ProcessorContextImpl context : kstreamContexts.values()) {
+        for (ProcessorContextImpl context : tasks.values()) {
             context.flush();
             commit.putAll(context.consumedOffsets());
         }
@@ -217,6 +221,7 @@ public class KStreamThread extends Thread {
             ingestor.commit(commit); // TODO: can this be async?
             streamingMetrics.commitTime.record(now - lastCommit);
         }
+        */
     }
 
     /* delete any state dirs that aren't for active contexts */
@@ -228,7 +233,7 @@ public class KStreamThread extends Thread {
                 for (File dir : stateDirs) {
                     try {
                         Integer id = Integer.parseInt(dir.getName());
-                        if (!kstreamContexts.keySet().contains(id)) {
+                        if (!tasks.keySet().contains(id)) {
                             log.info("Deleting obsolete state directory {} after {} delay ms.", dir.getAbsolutePath(), stateCleanupDelayMs);
                             Utils.rm(dir);
                         }
@@ -245,45 +250,40 @@ public class KStreamThread extends Thread {
     private void addPartitions(Collection<TopicPartition> assignment) {
         HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
+        // TODO: change this hard-coded co-partitioning behavior
         for (TopicPartition partition : partitions) {
-            final Integer id = partition.partition(); // TODO: switch this to the group id
-            ProcessorContextImpl context = kstreamContexts.get(id);
-            if (context == null) {
-                try {
-                    // build the topology and initialize with the context
-                    ProcessorTopology topology = builder.build();
+            final Integer id = partition.partition();
+            StreamTask task = tasks.get(id);
+            if (task == null) {
+                // get the partitions for the task
+                HashSet<TopicPartition> partitionsForTask = new HashSet<>();
+                for (TopicPartition part : partitions)
+                    if (part.partition() == id)
+                        partitionsForTask.add(part);
 
-                    context = new ProcessorContextImpl(id, ingestor, topology, collector, config, metrics);
+                // creat the task
+                task = new StreamTask(id, consumer, topology, partitionsForTask, config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG));
 
-                    topology.init(context);
-
-                    context.initialized();
-
-                    kstreamContexts.put(id, context);
-                } catch (Exception e) {
-                    throw new KafkaException(e);
-                }
-
-                streamGroups.add(context.streamGroup);
+                tasks.put(id, task);
             }
-
-            context.addPartition(partition);
         }
 
         nextStateCleaning = time.milliseconds() + stateCleanupDelayMs;
     }
 
     private void removePartitions() {
-        for (ProcessorContextImpl context : kstreamContexts.values()) {
-            log.info("Removing task context {}", context.id());
+
+        // TODO: change this clearing tasks behavior
+        for (StreamTask task : tasks.values()) {
+            log.info("Removing task {}", task.id());
             try {
-                context.close();
+                task.close();
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
             streamingMetrics.processorDestruction.record();
         }
-        streamGroups.clear();
+        tasks.clear();
     }
 
     private class KafkaStreamingMetrics {

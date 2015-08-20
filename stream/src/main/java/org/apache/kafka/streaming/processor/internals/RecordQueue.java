@@ -17,69 +17,107 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
-import org.apache.kafka.streaming.processor.internals.StampedRecord;
+
+import java.util.ArrayDeque;
 
 /**
  * RecordQueue is a queue of {@link StampedRecord} (ConsumerRecord + timestamp).
  */
-public interface RecordQueue {
+public class RecordQueue {
+
+    private final SourceNode source;
+    private final TopicPartition partition;
+    private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
+    private final TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker = new MinTimestampTracker<>();
+
+    private long offset;
+
+    /**
+     * Creates a new instance of RecordQueue
+     *
+     * @param partition        partition
+     * @param source           source node
+     */
+    public RecordQueue(TopicPartition partition, SourceNode source) {
+        this.partition = partition;
+        this.source = source;
+    }
+
+    public SourceNode source() {
+        return source;
+    }
 
     /**
      * Returns the partition with which this queue is associated
      *
      * @return TopicPartition
      */
-    TopicPartition partition();
-
-    /**
-     * Returns the corresponding source processor with this queue
-     *
-     * @return KafkaProcessor
-     */
-    ProcessorNode source();
+    public TopicPartition partition() {
+        return partition;
+    }
 
     /**
      * Adds a StampedRecord to the queue
      *
      * @param record StampedRecord
      */
-    void add(StampedRecord record);
+    public void add(StampedRecord record) {
+        queue.addLast(record);
+
+        offset = record.offset();
+        timestampTracker.addStampedElement(record);
+    }
 
     /**
      * Returns the next record fro the queue
      *
      * @return StampedRecord
      */
-    StampedRecord next();
+    public StampedRecord next() {
+        StampedRecord elem = queue.pollFirst();
+
+        if (elem == null) return null;
+
+        timestampTracker.removeStampedElement(elem);
+
+        return elem;
+    }
 
     /**
      * Returns the highest offset in the queue
      *
      * @return offset
      */
-    long offset();
+    public long offset() {
+        return offset;
+    }
 
     /**
      * Returns the number of records in the queue
      *
      * @return the number of records
      */
-    int size();
+    public int size() {
+        return queue.size();
+    }
 
     /**
      * Tests if the queue is empty
      *
      * @return true if the queue is empty, otherwise false
      */
-    boolean isEmpty();
+    public boolean isEmpty() {
+        return queue.isEmpty();
+    }
 
     /**
      * Returns a timestamp tracked by the TimestampTracker
      *
      * @return timestamp
      */
-    long trackedTimestamp();
-
+    public long timestamp() {
+        return timestampTracker.get();
+    }
 }

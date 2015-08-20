@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.processor.internals;
+package org.apache.kafka.streaming.state;
 
 import org.apache.kafka.common.TopicPartition;
 
