@@ -15,7 +15,6 @@
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -75,8 +74,7 @@ class ConsoleConsumerTest(Test):
         assert line_count(node, ConsoleConsumer.STDOUT_CAPTURE) == 0
 
         self.consumer.stop_node(node)
-        wait_until(lambda: not self.consumer.alive(node), timeout_sec=10, backoff_sec=.2,
-                   err_msg="Timed out waiting for consumer to stop.")
+
 
 
 

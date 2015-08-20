@@ -14,8 +14,10 @@
 # limitations under the License.
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
 
 import os
+import subprocess
 
 
 def is_int(msg):
@@ -141,7 +143,7 @@ class ConsoleConsumer(BackgroundThreadService):
             cmd = "ps ax | grep -i console_consumer | grep java | grep -v grep | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except:
+        except (subprocess.CalledProcessError, ValueError) as e:
             return []
 
     def alive(self, node):
@@ -180,6 +182,8 @@ class ConsoleConsumer(BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("java", allow_fail=True)
+        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.2,
+                   err_msg="Timed out waiting for consumer to stop.")
 
     def clean_node(self, node):
         node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
