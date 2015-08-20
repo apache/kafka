@@ -87,14 +87,14 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     vb.customize ["modifyvm", :id, "--memory", ram_megabytes.to_s]
 
     if Vagrant.has_plugin?("vagrant-cachier")
-      config.cache.scope = :box
+      override.cache.scope = :box
       # Besides the defaults, we use a custom cache to handle the Oracle JDK
       # download, which downloads via wget during an apt install. Because of the
       # way the installer ends up using its cache directory, we need to jump
       # through some hoops instead of just specifying a cache directly -- we
       # share to a temporary location and the provisioning scripts symlink data
       # to the right location.
-      config.cache.enable :generic, {
+      override.cache.enable :generic, {
         "oracle-jdk7" => { cache_dir: "/tmp/oracle-jdk7-installer-cache" },
       }
     end
@@ -148,7 +148,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     # Exclude some directories that can grow very large from syncing
-    config.vm.synced_folder ".", "/vagrant", type: "rsync", :rsync_excludes => ['.git', 'core/data/', 'logs/', 'system_test/']
+    override.vm.synced_folder ".", "/vagrant", type: "rsync", :rsync_excludes => ['.git', 'core/data/', 'logs/', 'system_test/', 'tests/results/', 'results/']
   end
 
   def name_node(node, name)
