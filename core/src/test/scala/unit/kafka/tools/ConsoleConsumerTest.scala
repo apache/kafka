@@ -21,8 +21,8 @@ import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
 import kafka.tools.{ConsoleConsumer, MessageFormatter}
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
-import org.scalatest.junit.{JUnitSuite, JUnit3Suite}
+import org.junit.Test
+import org.scalatest.junit.JUnitSuite
 
 class ConsoleConsumerTest extends JUnitSuite {
 
