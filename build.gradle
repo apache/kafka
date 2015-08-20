@@ -43,6 +43,7 @@ allprojects {
 
 ext {
     gradleVersion = "2.4"
+    buildVersionFileName = "kafka-version.properties"
 
     skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
     shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
@@ -394,6 +395,49 @@ project(':clients') {
     testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
     testCompile "$junit"
     testRuntime "$slf4jlog4j"
+  }
+
+  task determineCommitId {
+    ext.commitId = "unknown"
+    def takeFromHash = 16
+    if (file("../.git/HEAD").exists()) {
+      def headRef = file("../.git/HEAD").text
+      if (headRef.contains('ref: ')) {
+        headRef = headRef.replaceAll('ref: ', '').trim()
+        commitId = file("../.git/$headRef").text.trim().take(takeFromHash)
+      } else {
+        commitId = headRef.trim().take(takeFromHash)
+      }
+    } else {
+      commitId
+    }
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+        commitId: determineCommitId.commitId,
+        version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+        include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
   }
 
   task testJar(type: Jar) {
