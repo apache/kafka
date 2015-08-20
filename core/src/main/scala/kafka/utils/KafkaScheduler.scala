@@ -88,12 +88,14 @@ class KafkaScheduler(val threads: Int,
   
   override def shutdown() {
     debug("Shutting down task scheduler.")
-    this synchronized {
-      if(isStarted) {
-        executor.shutdown()
-        executor.awaitTermination(1, TimeUnit.DAYS)
+    // We use the local variable to avoid NullPointerException if another thread shuts down scheduler at same time.
+    val executorVar = this.executor
+    if (executorVar != null) {
+      this synchronized {
+        executorVar.shutdown()
         this.executor = null
       }
+      executorVar.awaitTermination(1, TimeUnit.DAYS)
     }
   }
 
