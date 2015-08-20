@@ -18,6 +18,8 @@ package kafka.controller
 
 import java.util
 
+import org.apache.kafka.common.network.Selector
+
 import scala.collection._
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.TimeUnit
@@ -53,8 +55,21 @@ class ControllerContext(val zkClient: ZkClient,
   var allTopics: Set[String] = Set.empty
   var partitionReplicaAssignment: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map.empty
   var partitionLeadershipInfo: mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
-  var partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap
-  var partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet
+  val partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap
+  val partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet
+
+  /**
+   * This map is used to ensure the following invariant: at most one `Selector` instance should be created per broker
+   * during the lifetime of the `metrics` parameter received by `KafkaController` (which has the same lifetime as
+   * `KafkaController` since they are both shut down during `KafkaServer.shutdown()`).
+   *
+   * If we break this invariant, an exception is thrown during the instantiation of Selector` due to the usage of
+   * the same `metricGrpPrefix` for two `Selector` instantiations. This way also helps to maintain the metrics sane.
+   *
+   * In the future, we should consider redesigning `ControllerChannelManager` so that we can use a single `Selector`
+   * for multiple broker connections as that is the intended usage and it may help simplify this code.
+   */
+  private[controller] val selectorMap = mutable.Map[Int, Selector]()
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
   private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
@@ -119,6 +134,12 @@ class ControllerContext(val zkClient: ZkClient,
     partitionReplicaAssignment = partitionReplicaAssignment.filter{ case (topicAndPartition, _) => topicAndPartition.topic != topic }
     allTopics -= topic
   }
+
+  private[controller] def closeSelectors(): Unit = {
+    selectorMap.values.foreach(_.close())
+    selectorMap.clear()
+  }
+
 }
 
 
@@ -690,6 +711,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       isRunning = false
     }
     onControllerResignation()
+    controllerContext.closeSelectors()
   }
 
   def sendRequest(brokerId : Int, request : RequestOrResponse, callback: (RequestOrResponse) => Unit = null) = {

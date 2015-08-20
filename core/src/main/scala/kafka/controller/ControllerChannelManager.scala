@@ -84,16 +84,17 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   private def addNewBroker(broker: Broker) {
     val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)]()
     debug("Controller %d trying to connect to broker %d".format(config.brokerId, broker.id))
-    val selector = new Selector(
-      NetworkReceive.UNLIMITED,
-      config.connectionsMaxIdleMs,
-      metrics,
-      time,
-      //FIXME Replace random suffix by something better
-      s"controller-${config.brokerId}-broker-${broker.id}-${scala.util.Random.nextInt(1000)}",
-      Map.empty.asJava,
-      false,
-      ChannelBuilders.create(config.interBrokerSecurityProtocol, SSLFactory.Mode.CLIENT, config.channelConfigs)
+    val selector = controllerContext.selectorMap.getOrElseUpdate(broker.id,
+      new Selector(
+        NetworkReceive.UNLIMITED,
+        config.connectionsMaxIdleMs,
+        metrics,
+        time,
+        s"controller-${config.brokerId}-broker-${broker.id}",
+        Map.empty.asJava,
+        false,
+        ChannelBuilders.create(config.interBrokerSecurityProtocol, SSLFactory.Mode.CLIENT, config.channelConfigs)
+      )
     )
     val connectionId = broker.id.toString
     val requestThread = new RequestSendThread(config.brokerId, controllerContext, broker, messageQueue, selector, connectionId, config, time)
