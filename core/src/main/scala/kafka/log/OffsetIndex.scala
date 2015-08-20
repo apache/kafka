@@ -280,7 +280,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
       
       /* Windows won't let us modify the file length while the file is mmapped :-( */
       if(Os.isWindows)
-        forceUnmap(this.mmap)
+        forceUnmap()
       try {
         raf.setLength(roundedNewSize)
         this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -295,10 +295,15 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   /**
    * Forcefully free the buffer's mmap. We do this only on windows.
    */
-  private def forceUnmap(m: MappedByteBuffer) {
+  private def forceUnmap() {
     try {
-      if(m.isInstanceOf[sun.nio.ch.DirectBuffer])
-        (m.asInstanceOf[sun.nio.ch.DirectBuffer]).cleaner().clean()
+      if(mmap.isInstanceOf[sun.nio.ch.DirectBuffer]) {
+        val cleaner = (mmap.asInstanceOf[sun.nio.ch.DirectBuffer]).cleaner()
+        if(cleaner != null) {
+          cleaner.clean()
+        }
+        mmap = null
+      }
     } catch {
       case t: Throwable => warn("Error when freeing index buffer", t)
     }
@@ -319,7 +324,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   def delete(): Boolean = {
     info("Deleting index " + this.file.getAbsolutePath)
     if(Os.isWindows)
-      CoreUtils.swallow(forceUnmap(this.mmap))
+      forceUnmap()
     this.file.delete()
   }
   
@@ -334,6 +339,8 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   /** Close the index */
   def close() {
     trimToValidSize()
+    if(Os.isWindows)
+      forceUnmap()
   }
   
   /**
@@ -341,9 +348,28 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
    * @return true iff the rename was successful
    */
   def renameTo(f: File): Boolean = {
-    val success = this.file.renameTo(f)
-    this.file = f
-    success
+    inLock(lock) {
+      val position = this.mmap.position
+
+      if(Os.isWindows)
+        forceUnmap()
+
+      val success = this.file.renameTo(f)
+      this.file = f
+
+      if(Os.isWindows) {
+        val raf = new RandomAccessFile(f, "rw")
+        try {
+          val len = raf.length()
+          this.mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+          this.mmap.position(position)
+        } finally {
+          CoreUtils.swallow(raf.close())
+        }
+      }
+
+      success
+    }
   }
   
   /**

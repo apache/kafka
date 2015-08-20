@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.nio._
 import java.nio.channels._
+import java.nio.file._
 import java.util.concurrent.atomic._
 
 import kafka.utils._
@@ -309,19 +310,20 @@ object FileMessageSet
   def openChannel(file: File, mutable: Boolean, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false): FileChannel = {
     if (mutable) {
       if (fileAlreadyExists)
-        new RandomAccessFile(file, "rw").getChannel()
+        FileChannel.open(file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ)
       else {
         if (preallocate) {
           val randomAccessFile = new RandomAccessFile(file, "rw")
           randomAccessFile.setLength(initFileSize)
-          randomAccessFile.getChannel()
+          randomAccessFile.close
+          FileChannel.open(file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ)
         }
         else
-          new RandomAccessFile(file, "rw").getChannel()
+          FileChannel.open(file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE)
       }
     }
     else
-      new FileInputStream(file).getChannel()
+      FileChannel.open(file.toPath, StandardOpenOption.READ)
   }
 }
 
