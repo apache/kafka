@@ -28,14 +28,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     // Should parse correctly
     var createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
                                                      "--entity-name", "x",
-                                                     "--entity-type", "client",
+                                                     "--entity-type", "clients",
                                                      "--describe"))
     createOpts.checkArgs()
 
     // For --alter and added config
     createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
                                                 "--entity-name", "x",
-                                                "--entity-type", "client",
+                                                "--entity-type", "clients",
                                                 "--alter",
                                                 "--added-config", "a=b,c=d"))
     createOpts.checkArgs()
@@ -43,7 +43,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     // For alter and deleted config
     createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
                                                 "--entity-name", "x",
-                                                "--entity-type", "client",
+                                                "--entity-type", "clients",
                                                 "--alter",
                                                 "--deleted-config", "a,b,c"))
     createOpts.checkArgs()
@@ -51,7 +51,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     // For alter and both added, deleted config
     createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
                                                 "--entity-name", "x",
-                                                "--entity-type", "client",
+                                                "--entity-type", "clients",
                                                 "--alter",
                                                 "--added-config", "a=b,c=d",
                                                 "--deleted-config", "a"))
