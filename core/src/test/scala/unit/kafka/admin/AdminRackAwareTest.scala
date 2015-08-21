@@ -35,6 +35,16 @@ class AdminRackAwareTest extends RackAwareTest  {
     assertEquals(List(0, 3, 1, 5, 4, 2), newList)
     val anotherList = AdminUtils.interlaceBrokersByRack(rackMap - 5)
     assertEquals(List(0, 3, 1, 4, 2), anotherList)
+    val brokerList = List(0, 1, 2, 3, 4, 5)
+    val assignment: scala.collection.Map[Int, Seq[Int]] = AdminUtils.assignReplicasToBrokers(brokerList, 7, 3, 0, 0, rackMap)
+    val expected: Map[Int, Seq[Int]] = Map(0 -> List(0,3,1),
+                                           1 -> List(3,1,5),
+                                           2 -> List(1,5,4),
+                                           3 -> List(5,4,2),
+                                           4 -> List(4,2,0),
+                                           5 -> List(2,0,3),
+                                           6 -> List(0,4,2))
+    assertEquals(expected, assignment)
   }
 
   @Test

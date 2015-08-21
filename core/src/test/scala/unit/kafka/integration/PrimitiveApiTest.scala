@@ -24,6 +24,7 @@ import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import kafka.producer.{KeyedMessage, Producer}
 import org.apache.log4j.{Level, Logger}
 import kafka.zk.ZooKeeperTestHarness
+import org.junit.Test
 import scala.collection._
 import kafka.common.{TopicAndPartition, ErrorMapping, UnknownTopicOrPartitionException, OffsetOutOfRangeException}
 import kafka.utils.{StaticPartitioner, TestUtils, CoreUtils}
@@ -38,6 +39,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness with ZooKeeperTestHar
 
   def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
+  @Test
   def testFetchRequestCanProperlySerialize() {
     val request = new FetchRequestBuilder()
       .clientId("test-client")
@@ -54,6 +56,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness with ZooKeeperTestHar
     assertEquals(request, deserializedRequest)
   }
 
+  @Test
   def testEmptyFetchRequest() {
     val partitionRequests = immutable.Map[TopicAndPartition, PartitionFetchInfo]()
     val request = new FetchRequest(requestInfo = partitionRequests)
@@ -61,6 +64,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness with ZooKeeperTestHar
     assertTrue(!fetched.hasError && fetched.data.size == 0)
   }
 
+  @Test
   def testDefaultEncoderProducerAndFetch() {
     val topic = "test-topic"
 
@@ -84,6 +88,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness with ZooKeeperTestHar
     assertEquals("test-message", TestUtils.readString(fetchedMessageAndOffset.message.payload, "UTF-8"))
   }
 
+  @Test
   def testDefaultEncoderProducerAndFetchWithCompression() {
     val topic = "test-topic"
     val props = new Properties()
@@ -170,6 +175,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness with ZooKeeperTestHar
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
+  @Test
   def testProduceAndMultiFetch() {
     produceAndMultiFetch(producer)
   }
@@ -196,10 +202,12 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness with ZooKeeperTestHar
     }
   }
 
+  @Test
   def testMultiProduce() {
     multiProduce(producer)
   }
 
+  @Test
   def testConsumerEmptyTopic() {
     val newTopic = "new-topic"
     TestUtils.createTopic(zkClient, newTopic, numPartitions = 1, replicationFactor = 1, servers = servers)
@@ -208,6 +216,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness with ZooKeeperTestHar
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
   }
 
+  @Test
   def testPipelinedProduceRequests() {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
     topics.keys.map(topic => TestUtils.createTopic(zkClient, topic, servers = servers))

@@ -82,7 +82,7 @@ trait RackAwareTest {
     if (brokerRackMap.size > 0 && subRackInfo.size != brokerList.size) {
       throw new AdminOperationException("Incomplete broker-rack mapping supplied for broker list " + brokerList)
     }
-    val reverseMap = AdminUtils.getReverseMap(subRackInfo)
+    val reverseMap = AdminUtils.getInverseMap(subRackInfo)
     if (reverseMap.values.map(_.size).toSet.size > 1) {
       throw new AdminOperationException("The number of brokers are not the same for all racks: %s".format(reverseMap))
     }

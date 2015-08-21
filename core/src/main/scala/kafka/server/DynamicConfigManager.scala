@@ -32,8 +32,8 @@ import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
  * Represents all the entities that can be configured via ZK
  */
 object ConfigType {
-  val Topic = "topic"
-  val Client = "client"
+  val Topic = "topics"
+  val Client = "clients"
 }
 
 /**

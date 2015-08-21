@@ -78,7 +78,7 @@ object AdminUtils extends Logging {
    * 1 -> 3,1,5
    * 2 -> 1,5,4
    * 3 -> 5,4,2
-   * 4 -> 4,2,1
+   * 4 -> 4,2,0
    * 5 -> 2,0,3
    *
    * Once it has completed the first round-robin, if there are more partitions to assign, the algorithm will start to
@@ -134,33 +134,53 @@ object AdminUtils extends Logging {
         nextReplicaShift += 1
       val firstReplicaIndex = (currentPartitionId + startIndex) % arrangedBrokerList.size
       val leader = arrangedBrokerList(firstReplicaIndex)
-      var replicaList = List(leader)
-      if (!useRackAware) {
-        for (j <- 0 until replicationFactor - 1)
-          replicaList ::= arrangedBrokerList(replicaIndex(firstReplicaIndex, nextReplicaShift, j, arrangedBrokerList.size))
-      } else {
-        // rack aware assignment
-        val racksWithReplicas: mutable.Set[String] = mutable.Set(rackInfo(leader))
-        var k = 0
-        for (j <- 0 until replicationFactor - 1) {
-          var done = false;
-          while (!done) {
-            val broker = arrangedBrokerList(replicaIndex(firstReplicaIndex, nextReplicaShift * numRacks, k, arrangedBrokerList.size))
-            val rack = rackInfo(broker)
-            // unless every rack has a replica, try to find the broker on the rack without any replica assigned
-            if (!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks) {
-              replicaList ::= broker
-              racksWithReplicas += rack
-              done = true;
-            }
-            k = k + 1
-          }
-        }
-      }
-      ret.put(currentPartitionId, replicaList.reverse)
+      val replicaList = if (!useRackAware)
+                          getReplicaList(arrangedBrokerList, leader, replicationFactor, firstReplicaIndex, nextReplicaShift)
+                        else
+                          getReplicaListWithRackAwareAssignment(arrangedBrokerList, leader, replicationFactor, numRacks,
+                            firstReplicaIndex, nextReplicaShift, rackInfo)
+      ret.put(currentPartitionId, replicaList)
       currentPartitionId = currentPartitionId + 1
     }
     ret.toMap
+  }
+
+  private def getReplicaList(brokerList: Seq[Int],
+                             leader: Int,
+                             replicationFactor: Int,
+                             firstReplicaIndex: Int,
+                             nextReplicaShift: Int): List[Int] = {
+    var replicaList = List(leader)
+    for (j <- 0 until replicationFactor - 1)
+      replicaList ::= brokerList(replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerList.size))
+    replicaList.reverse
+  }
+
+  private def getReplicaListWithRackAwareAssignment(brokerList: Seq[Int],
+                           leader: Int,
+                           replicationFactor: Int,
+                           numRacks: Int,
+                           firstReplicaIndex: Int,
+                           nextReplicaShift: Int,
+                           rackInfo: Map[Int, String]): List[Int] = {
+    var replicaList = List(leader)
+    val racksWithReplicas: mutable.Set[String] = mutable.Set(rackInfo(leader))
+    var k = 0
+    for (j <- 0 until replicationFactor - 1) {
+      var done = false;
+      while (!done) {
+        val broker = brokerList(replicaIndex(firstReplicaIndex, nextReplicaShift * numRacks, k, brokerList.size))
+        val rack = rackInfo(broker)
+        // unless every rack has a replica, try to find the broker on the rack without any replica assigned
+        if (!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks) {
+          replicaList ::= broker
+          racksWithReplicas += rack
+          done = true;
+        }
+        k = k + 1
+      }
+    }
+    replicaList.reverse
   }
 
   /**
@@ -179,7 +199,7 @@ object AdminUtils extends Logging {
    * making sure replicas are distributed to all racks.
    */
   private[admin] def interlaceBrokersByRack(brokerRackMap: Map[Int, String]): Seq[Int] = {
-    val reverseMap = getReverseMap(brokerRackMap)
+    val reverseMap = getInverseMap(brokerRackMap)
     val brokerListsByRack = reverseMap.map { case(rack, list) => (rack, reverseMap(rack).toIterator) }
     val racks = brokerListsByRack.keys.toArray.sorted
     var result: List[Int] = List()
@@ -194,7 +214,7 @@ object AdminUtils extends Logging {
     result.reverse
   }
 
-  private[admin] def getReverseMap(brokerRackMap: Map[Int, String]): Map[String, List[Int]] = {
+  private[admin] def getInverseMap(brokerRackMap: Map[Int, String]): Map[String, List[Int]] = {
     brokerRackMap.toList.map { case(k, v) => (v, k) }
                         .groupBy(_._1)
                         .map { case(k, v) => (k, v.map(_._2))}

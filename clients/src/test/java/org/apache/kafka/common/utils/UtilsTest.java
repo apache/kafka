@@ -52,7 +52,7 @@ public class UtilsTest {
         assertEquals("[::1]:1234", formatAddress("::1", 1234));
         assertEquals("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678", formatAddress("2001:db8:85a3:8d3:1319:8a2e:370:7348", 5678));
     }
-    
+
     @Test
     public void testJoin() {
         assertEquals("", Utils.join(Collections.emptyList(), ","));

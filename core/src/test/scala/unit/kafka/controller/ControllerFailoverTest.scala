@@ -17,28 +17,17 @@
 
 package kafka.controller
 
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.Properties
-
-import junit.framework.Assert._
-import org.scalatest.junit.JUnit3Suite
-
-import org.junit.{Test, After, Before}
-import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, ZkClient}
-import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.apache.log4j.{Logger, Level}
+import java.util.concurrent.LinkedBlockingQueue
 
 import kafka.api.RequestOrResponse
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.BrokerState
-import kafka.server.KafkaConfig
-import kafka.server.KafkaServer
-import kafka.server.RunningAsController
+import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
-import kafka.utils.TestUtils._
+import org.apache.log4j.{Level, Logger}
+import org.junit.{After, Before, Test}
 
-import scala.collection.Map
 import scala.collection.mutable
 
 
@@ -54,10 +43,12 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   override def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
+  @Before
   override def setUp() {
     super.setUp()
   }
 
+  @After
   override def tearDown() {
     super.tearDown()
   }
@@ -66,6 +57,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
    * See @link{https://issues.apache.org/jira/browse/KAFKA-2300}
    * for the background of this test case
    */
+  @Test
   def testMetadataUpdate() {
     log.setLevel(Level.INFO)
     var controller: KafkaServer = this.servers.head;

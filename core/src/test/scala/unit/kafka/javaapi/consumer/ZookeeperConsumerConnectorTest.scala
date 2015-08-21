@@ -29,6 +29,7 @@ import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common.MessageStreamsExistException
+import org.junit.Test
 
 import scala.collection.JavaConversions
 
@@ -50,6 +51,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with ZooKeep
   val consumer1 = "consumer1"
   val nMessages = 2
 
+  @Test
   def testBasic() {
     val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)

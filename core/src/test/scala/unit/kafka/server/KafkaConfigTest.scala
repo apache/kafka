@@ -38,7 +38,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(60L * 60L * 1000L, cfg.logRetentionTimeMillis)
   }
-  
+
   @Test
   def testLogRetentionTimeMinutesProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -47,7 +47,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
   }
-  
+
   @Test
   def testLogRetentionTimeMsProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -56,7 +56,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
   }
-  
+
   @Test
   def testLogRetentionTimeNoConfigProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -64,7 +64,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRetentionTimeMillis)
   }
-  
+
   @Test
   def testLogRetentionTimeBothMinutesAndHoursProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -74,7 +74,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
   }
-  
+
   @Test
   def testLogRetentionTimeBothMinutesAndMsProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -166,11 +166,11 @@ class KafkaConfigTest {
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
     val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
-    
+
     assertEquals(endpoint.host, advertisedHostName)
     assertEquals(endpoint.port, advertisedPort.toInt)
   }
-    
+
   @Test
   def testAdvertisePortDefault() {
     val advertisedHostName = "routable-host"
@@ -187,7 +187,7 @@ class KafkaConfigTest {
     assertEquals(endpoint.host, advertisedHostName)
     assertEquals(endpoint.port, port.toInt)
   }
-  
+
   @Test
   def testAdvertiseHostNameDefault() {
     val hostName = "routable-host"
@@ -203,8 +203,8 @@ class KafkaConfigTest {
 
     assertEquals(endpoint.host, hostName)
     assertEquals(endpoint.port, advertisedPort.toInt)
-  }    
-    
+  }
+
   @Test
   def testDuplicateListeners() {
     val props = new Properties()
@@ -328,7 +328,7 @@ class KafkaConfigTest {
       KafkaConfig.fromProps(props)
     }
   }
-  
+
   @Test
   def testLogRollTimeMsProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -337,7 +337,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRollTimeMillis)
   }
-  
+
   @Test
   def testLogRollTimeBothMsAndHoursProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -347,7 +347,7 @@ class KafkaConfigTest {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRollTimeMillis)
   }
-    
+
   @Test
   def testLogRollTimeNoConfigProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -474,6 +474,12 @@ class KafkaConfigTest {
         case KafkaConfig.OffsetsRetentionCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.OffsetCommitTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.OffsetCommitRequiredAcksProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-2")
+        case KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.ProducerQuotaBytesPerSecondOverridesProp => // ignore string
+        case KafkaConfig.ConsumerQuotaBytesPerSecondOverridesProp => // ignore string
+        case KafkaConfig.NumQuotaSamplesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.QuotaWindowSizeSecondsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
 
         case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
 
@@ -482,6 +488,23 @@ class KafkaConfigTest {
         case KafkaConfig.MetricReporterClassesProp => // ignore string
         case KafkaConfig.RackLocatorClassProp => // ignore
         case KafkaConfig.RackLocatorPropertiesProp => // ignore
+
+        //SSL Configs
+        case KafkaConfig.PrincipalBuilderClassProp =>
+        case KafkaConfig.SSLProtocolProp => // ignore string
+        case KafkaConfig.SSLProviderProp => // ignore string
+        case KafkaConfig.SSLEnabledProtocolsProp =>
+        case KafkaConfig.SSLKeystoreTypeProp => // ignore string
+        case KafkaConfig.SSLKeystoreLocationProp => // ignore string
+        case KafkaConfig.SSLKeystorePasswordProp => // ignore string
+        case KafkaConfig.SSLKeyPasswordProp => // ignore string
+        case KafkaConfig.SSLTruststoreTypeProp => // ignore string
+        case KafkaConfig.SSLTruststorePasswordProp => // ignore string
+        case KafkaConfig.SSLTruststoreLocationProp => // ignore string
+        case KafkaConfig.SSLKeyManagerAlgorithmProp =>
+        case KafkaConfig.SSLTrustManagerAlgorithmProp =>
+        case KafkaConfig.SSLClientAuthProp => // ignore string
+
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })

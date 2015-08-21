@@ -25,7 +25,7 @@ import kafka.server.KafkaConfig
 
 import java.util.ArrayList
 import org.junit.Assert._
-import org.junit.Before
+import org.junit.{Test, Before}
 
 import scala.collection.JavaConverters._
 import kafka.coordinator.ConsumerCoordinator
@@ -65,6 +65,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     TestUtils.createTopic(this.zkClient, topic, 2, serverCount, this.servers)
   }
 
+  @Test
   def testSimpleConsumption() {
     val numRecords = 10000
     sendRecords(numRecords)
@@ -86,6 +87,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     awaitCommitCallback(this.consumers(0), commitCallback)
   }
 
+  @Test
   def testCommitSpecifiedOffsets() {
     sendRecords(5, tp)
     sendRecords(7, tp2)
@@ -116,12 +118,14 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(7, this.consumers(0).committed(tp2))
   }
 
+  @Test
   def testAutoOffsetReset() {
     sendRecords(1)
     this.consumers(0).subscribe(tp)
     consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
+  @Test
   def testSeek() {
     val consumer = this.consumers(0)
     val totalRecords = 50L
@@ -142,12 +146,14 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     consumeRecords(consumer, numRecords = 1, startingOffset = mid.toInt)
   }
 
+  @Test
   def testGroupConsumption() {
     sendRecords(10)
     this.consumers(0).subscribe(topic)
     consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
+  @Test
   def testPositionAndCommit() {
     sendRecords(5)
 
@@ -179,6 +185,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     consumeRecords(this.consumers(1), 1, 5)
   }
 
+  @Test
   def testPartitionsFor() {
     val numParts = 2
     TestUtils.createTopic(this.zkClient, "part-test", numParts, 1, this.servers)
@@ -188,6 +195,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertNull(this.consumers(0).partitionsFor("non-exist-topic"))
   }
 
+  @Test
   def testListTopics() {
     val numParts = 2
     val topic1: String = "part-test-topic-1"
@@ -206,6 +214,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(2, topics.get(topic3).size)
   }
 
+  @Test
   def testPartitionReassignmentCallback() {
     val callback = new TestConsumerReassignmentCallback()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
@@ -238,6 +247,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     consumer0.close()
   }
 
+  @Test
   def testUnsubscribeTopic() {
     val callback = new TestConsumerReassignmentCallback()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
@@ -258,6 +268,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     }
   }
 
+  @Test
   def testExpandingTopicSubscriptions() {
     val otherTopic = "other"
     val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
@@ -276,6 +287,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     }, s"Expected partitions ${expandedSubscriptions.asJava} but actually got ${this.consumers(0).subscriptions}")
   }
 
+  @Test
   def testShrinkingTopicSubscriptions() {
     val otherTopic = "other"
     TestUtils.createTopic(this.zkClient, otherTopic, 2, serverCount, this.servers)
@@ -294,6 +306,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     }, s"Expected partitions ${shrunkenSubscriptions.asJava} but actually got ${this.consumers(0).subscriptions}")
   }
 
+  @Test
   def testPartitionPauseAndResume() {
     sendRecords(5)
     this.consumers(0).subscribe(tp)
@@ -305,6 +318,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     consumeRecords(this.consumers(0), 5, 5)
   }
 
+  @Test
   def testPauseStateNotPreservedByRebalance() {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30");

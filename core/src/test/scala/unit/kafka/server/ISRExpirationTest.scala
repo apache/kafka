@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util.Properties
 
-import org.junit.{Before, After}
+import org.junit.{Test, Before, After}
 import collection.mutable.HashMap
 import collection.mutable.Map
 import kafka.cluster.{Partition, Replica}
@@ -59,6 +59,7 @@ class IsrExpirationTest {
   /*
    * Test the case where a follower is caught up but stops making requests to the leader. Once beyond the configured time limit, it should fall out of ISR
    */
+  @Test
   def testIsrExpirationForStuckFollowers() {
     val log = getLogWithLogEndOffset(15L, 2) // set logEndOffset for leader to 15L
 
@@ -89,6 +90,7 @@ class IsrExpirationTest {
   /*
    * Test the case where a follower never makes a fetch request. It should fall out of ISR because it will be declared stuck
    */
+  @Test
   def testIsrExpirationIfNoFetchRequestMade() {
     val log = getLogWithLogEndOffset(15L, 1) // set logEndOffset for leader to 15L
 
@@ -109,6 +111,7 @@ class IsrExpirationTest {
    * Test the case where a follower continually makes fetch requests but is unable to catch up. It should fall out of the ISR
    * However, any time it makes a request to the LogEndOffset it should be back in the ISR
    */
+  @Test
   def testIsrExpirationForSlowFollowers() {
     // create leader replica
     val log = getLogWithLogEndOffset(15L, 4)

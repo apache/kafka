@@ -49,6 +49,16 @@ object ZkUtils extends Logging {
   val IsrChangeNotificationPath = "/isr_change_notification"
   val EntityConfigPath = "/config"
   val EntityConfigChangesPath = "/config/changes"
+  // These are persistent ZK paths that should exist on kafka broker startup.
+  val persistentZkPaths = Seq(ConsumersPath,
+                              BrokerIdsPath,
+                              BrokerTopicsPath,
+                              EntityConfigChangesPath,
+                              ZkUtils.getEntityConfigRootPath(ConfigType.Topic),
+                              ZkUtils.getEntityConfigRootPath(ConfigType.Client),
+                              DeleteTopicsPath,
+                              BrokerSequenceIdPath,
+                              IsrChangeNotificationPath)
 
   def getTopicPath(topic: String): String = {
     BrokerTopicsPath + "/" + topic
@@ -97,14 +107,7 @@ object ZkUtils extends Logging {
   }
 
   def setupCommonPaths(zkClient: ZkClient) {
-    for(path <- Seq(ConsumersPath,
-                    BrokerIdsPath,
-                    BrokerTopicsPath,
-                    EntityConfigChangesPath,
-                    ZkUtils.getEntityConfigRootPath(ConfigType.Topic),
-                    ZkUtils.getEntityConfigRootPath(ConfigType.Client),
-                    DeleteTopicsPath,
-                    BrokerSequenceIdPath))
+    for(path <- persistentZkPaths)
       makeSurePersistentPathExists(zkClient, path)
   }
 

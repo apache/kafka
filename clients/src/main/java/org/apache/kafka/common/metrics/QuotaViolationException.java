@@ -28,5 +28,4 @@ public class QuotaViolationException extends KafkaException {
     public QuotaViolationException(String m) {
         super(m);
     }
-
 }

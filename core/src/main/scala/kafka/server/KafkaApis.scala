@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.cluster.RackLocator
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.TopicPartition
 import kafka.api._
@@ -43,10 +44,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val zkClient: ZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
-                val metadataCache: MetadataCache) extends Logging {
+                val metadataCache: MetadataCache,
+                val metrics: Metrics) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val rackLocator = RackLocator.create(zkClient, config)
+  // Store all the quota managers for each type of request
+  private val quotaManagers = instantiateQuotaManagers(config)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -252,6 +256,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleProducerRequest(request: RequestChannel.Request) {
     val produceRequest = request.requestObj.asInstanceOf[ProducerRequest]
+    val numBytesAppended = produceRequest.sizeInBytes
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
@@ -267,21 +272,27 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      if (produceRequest.requiredAcks == 0) {
-        // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
-        // the request, since no response is expected by the producer, the server will close socket server so that
-        // the producer client will know that some error has happened and will refresh its metadata
-        if (errorInResponse) {
-          info("Close connection due to error handling produce request with correlation id %d from client id %s with ack=0"
-                  .format(produceRequest.correlationId, produceRequest.clientId))
-          requestChannel.closeConnection(request.processor, request)
+      def produceResponseCallback {
+        if (produceRequest.requiredAcks == 0) {
+          // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
+          // the request, since no response is expected by the producer, the server will close socket server so that
+          // the producer client will know that some error has happened and will refresh its metadata
+          if (errorInResponse) {
+            info(
+              "Close connection due to error handling produce request with correlation id %d from client id %s with ack=0".format(
+                produceRequest.correlationId,
+                produceRequest.clientId))
+            requestChannel.closeConnection(request.processor, request)
+          } else {
+            requestChannel.noOperation(request.processor, request)
+          }
         } else {
-          requestChannel.noOperation(request.processor, request)
+          val response = ProducerResponse(produceRequest.correlationId, responseStatus)
+          requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
         }
-      } else {
-        val response = ProducerResponse(produceRequest.correlationId, responseStatus)
-        requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
       }
+
+      quotaManagers(RequestKeys.ProduceKey).recordAndMaybeThrottle(produceRequest.clientId, numBytesAppended, produceResponseCallback)
     }
 
     // only allow appending to internal topic partitions
@@ -318,14 +329,27 @@ class KafkaApis(val requestChannel: RequestChannel,
             .format(fetchRequest.correlationId, fetchRequest.clientId,
             topicAndPartition, ErrorMapping.exceptionNameFor(data.error)))
         }
-
         // record the bytes out metrics only when the response is being sent
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesOutRate.mark(data.messages.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.messages.sizeInBytes)
       }
 
       val response = FetchResponse(fetchRequest.correlationId, responsePartitionData)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
+      def fetchResponseCallback {
+        requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
+      }
+
+      // Do not throttle replication traffic
+      if (fetchRequest.isFromFollower) {
+        fetchResponseCallback
+      } else {
+        quotaManagers.get(RequestKeys.FetchKey) match {
+          case Some(quotaManager) =>
+            quotaManager.recordAndMaybeThrottle(fetchRequest.clientId, response.sizeInBytes, fetchResponseCallback)
+          case None =>
+            warn("Cannot throttle Api key %s".format(RequestKeys.nameForKey(RequestKeys.FetchKey)))
+        }
+      }
     }
 
     // call the replica manager to fetch messages from the local replica
@@ -608,9 +632,37 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback)
   }
 
+  /*
+   * Returns a Map of all quota managers configured. The request Api key is the key for the Map
+   */
+  private def instantiateQuotaManagers(cfg: KafkaConfig): Map[Short, ClientQuotaManager] = {
+    val producerQuotaManagerCfg = ClientQuotaManagerConfig(
+      quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
+      quotaBytesPerSecondOverrides = cfg.producerQuotaBytesPerSecondOverrides,
+      numQuotaSamples = cfg.numQuotaSamples,
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+    )
+
+    val consumerQuotaManagerCfg = ClientQuotaManagerConfig(
+      quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
+      quotaBytesPerSecondOverrides = cfg.consumerQuotaBytesPerSecondOverrides,
+      numQuotaSamples = cfg.numQuotaSamples,
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+    )
+
+    val quotaManagers = Map[Short, ClientQuotaManager](
+      RequestKeys.ProduceKey ->
+              new ClientQuotaManager(producerQuotaManagerCfg, metrics, RequestKeys.nameForKey(RequestKeys.ProduceKey), new org.apache.kafka.common.utils.SystemTime),
+      RequestKeys.FetchKey ->
+              new ClientQuotaManager(consumerQuotaManagerCfg, metrics, RequestKeys.nameForKey(RequestKeys.FetchKey), new org.apache.kafka.common.utils.SystemTime)
+    )
+    quotaManagers
+  }
+
   def close() {
-    // TODO currently closing the API is an no-op since the API no longer maintain any modules
-    // maybe removing the closing call in the end when KafkaAPI becomes a pure stateless layer
-    debug("Shut down complete.")
+    quotaManagers.foreach { case(apiKey, quotaManager) =>
+      quotaManager.shutdown()
+    }
+    info("Shutdown complete.")
   }
 }

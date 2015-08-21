@@ -23,9 +23,11 @@ import kafka.utils.TestUtils
 
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
+import org.junit.Test
 
 class ServerStartupTest extends ZooKeeperTestHarness {
 
+  @Test
   def testBrokerCreatesZKChroot {
     val brokerId = 0
     val zookeeperChroot = "/kafka-chroot-for-unittest"
@@ -41,6 +43,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     CoreUtils.rm(server.config.logDirs)
   }
 
+  @Test
   def testConflictBrokerRegistration {
     // Try starting a broker with the a conflicting broker id.
     // This shouldn't affect the existing broker registration.

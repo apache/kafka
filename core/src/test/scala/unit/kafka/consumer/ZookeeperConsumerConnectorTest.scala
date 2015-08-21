@@ -30,7 +30,7 @@ import kafka.utils.TestUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import org.apache.log4j.{Level, Logger}
-import org.junit.{After, Before}
+import org.junit.{Test, After, Before}
 
 import scala.collection._
 
@@ -65,6 +65,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     super.tearDown()
   }
 
+  @Test
   def testBasic() {
     val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
@@ -175,7 +176,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
-
+  @Test
   def testCompression() {
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
@@ -255,6 +256,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
+  @Test
   def testCompressionSetConsumption() {
     // send some messages to each broker
     val sentMessages = sendMessages(servers, topic, 200, 0, DefaultCompressionCodec) ++
@@ -278,6 +280,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     zkConsumerConnector1.shutdown
   }
 
+  @Test
   def testConsumerDecoder() {
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
@@ -317,6 +320,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
+  @Test
   def testLeaderSelectionForPartition() {
     val zkClient = ZkUtils.createZkClient(zkConnect, 6000, 30000)
 
@@ -348,6 +352,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     zkClient.close()
   }
 
+  @Test
   def testConsumerRebalanceListener() {
     // Send messages to create topic
     sendMessages(servers, topic, nMessages, 0)
