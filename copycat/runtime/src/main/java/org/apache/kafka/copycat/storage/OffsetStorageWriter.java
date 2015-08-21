@@ -18,6 +18,7 @@
 package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
 import org.slf4j.Logger;
@@ -73,10 +74,10 @@ public class OffsetStorageWriter<K, V> {
     private final Serializer<V> valueSerializer;
     private final String namespace;
     // Offset data in Copycat format
-    private Map<Object, Object> data = new HashMap<>();
+    private Map<SchemaAndValue, SchemaAndValue> data = new HashMap<>();
 
     // Not synchronized, should only be accessed by flush thread
-    private Map<Object, Object> toFlush = null;
+    private Map<SchemaAndValue, SchemaAndValue> toFlush = null;
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
 
@@ -96,7 +97,7 @@ public class OffsetStorageWriter<K, V> {
      * @param partition the partition to store an offset for
      * @param offset the offset
      */
-    public synchronized void setOffset(Object partition, Object offset) {
+    public synchronized void setOffset(SchemaAndValue partition, SchemaAndValue offset) {
         data.put(partition, offset);
     }
 
@@ -141,10 +142,10 @@ public class OffsetStorageWriter<K, V> {
         Map<ByteBuffer, ByteBuffer> offsetsSerialized;
         try {
             offsetsSerialized = new HashMap<>();
-            for (Map.Entry<Object, Object> entry : toFlush.entrySet()) {
-                byte[] key = keySerializer.serialize(namespace, keyConverter.fromCopycatData(entry.getKey()));
+            for (Map.Entry<SchemaAndValue, SchemaAndValue> entry : toFlush.entrySet()) {
+                byte[] key = keySerializer.serialize(namespace, keyConverter.fromCopycatData(entry.getKey().getSchema(), entry.getKey().getValue()));
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
-                byte[] value = valueSerializer.serialize(namespace, valueConverter.fromCopycatData(entry.getValue()));
+                byte[] value = valueSerializer.serialize(namespace, valueConverter.fromCopycatData(entry.getValue().getSchema(), entry.getValue().getValue()));
                 ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
                 offsetsSerialized.put(keyBuffer, valueBuffer);
             }

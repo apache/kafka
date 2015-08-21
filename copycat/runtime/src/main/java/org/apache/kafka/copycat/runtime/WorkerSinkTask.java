@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
@@ -206,10 +207,12 @@ class WorkerSinkTask<K, V> implements WorkerTask {
             List<SinkRecord> records = new ArrayList<>();
             for (ConsumerRecord<K, V> msg : msgs) {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
+                SchemaAndValue keyAndSchema = msg.key() != null ? keyConverter.toCopycatData(msg.key()) : SchemaAndValue.NULL;
+                SchemaAndValue valueAndSchema = msg.value() != null ? valueConverter.toCopycatData(msg.value()) : SchemaAndValue.NULL;
                 records.add(
                         new SinkRecord(msg.topic(), msg.partition(),
-                                keyConverter.toCopycatData(msg.key()),
-                                valueConverter.toCopycatData(msg.value()),
+                                keyAndSchema.getSchema(), keyAndSchema.getValue(),
+                                valueAndSchema.getSchema(), valueAndSchema.getValue(),
                                 msg.offset())
                 );
             }

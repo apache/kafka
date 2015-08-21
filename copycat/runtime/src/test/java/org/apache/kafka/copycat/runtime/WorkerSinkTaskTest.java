@@ -21,6 +21,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.data.Schema;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -52,7 +54,9 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     private static final String TOPIC = "test";
     private static final int PARTITION = 12;
     private static final long FIRST_OFFSET = 45;
+    private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
     private static final int KEY = 12;
+    private static final Schema VALUE_SCHEMA = Schema.STRING_SCHEMA;
     private static final String VALUE = "VALUE";
     private static final byte[] RAW_KEY = "key".getBytes();
     private static final byte[] RAW_VALUE = "value".getBytes();
@@ -118,7 +122,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
             assertEquals(1, recs.size());
             for (SinkRecord rec : recs) {
                 SinkRecord referenceSinkRecord
-                        = new SinkRecord(TOPIC, PARTITION, KEY, VALUE, FIRST_OFFSET + offset);
+                        = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset);
                 assertEquals(referenceSinkRecord, rec);
                 offset++;
             }
@@ -130,7 +134,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     @Test
     public void testDeliverConvertsData() throws Exception {
         // Validate conversion is performed when data is delivered
-        Integer record = 12;
+        SchemaAndValue record = new SchemaAndValue(Schema.INT32_SCHEMA, 12);
 
         ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
                 Collections.singletonMap(
@@ -148,8 +152,10 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.invokeMethod(workerTask, "deliverMessages", records);
-        assertEquals(record, capturedRecords.getValue().iterator().next().getKey());
-        assertEquals(record, capturedRecords.getValue().iterator().next().getValue());
+        assertEquals(record.getSchema(), capturedRecords.getValue().iterator().next().getKeySchema());
+        assertEquals(record.getValue(), capturedRecords.getValue().iterator().next().getKey());
+        assertEquals(record.getSchema(), capturedRecords.getValue().iterator().next().getValueSchema());
+        assertEquals(record.getValue(), capturedRecords.getValue().iterator().next().getValue());
 
         PowerMock.verifyAll();
     }
@@ -314,8 +320,8 @@ public class WorkerSinkTaskTest extends ThreadedTest {
                         return records;
                     }
                 });
-        EasyMock.expect(keyConverter.toCopycatData(RAW_KEY)).andReturn(KEY).anyTimes();
-        EasyMock.expect(valueConverter.toCopycatData(RAW_VALUE)).andReturn(VALUE).anyTimes();
+        EasyMock.expect(keyConverter.toCopycatData(RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).anyTimes();
+        EasyMock.expect(valueConverter.toCopycatData(RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
         Capture<Collection<SinkRecord>> capturedRecords = EasyMock.newCapture(CaptureType.ALL);
         sinkTask.put(EasyMock.capture(capturedRecords));
         EasyMock.expectLastCall().anyTimes();

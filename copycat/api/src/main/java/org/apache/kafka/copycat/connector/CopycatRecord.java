@@ -18,6 +18,7 @@
 package org.apache.kafka.copycat.connector;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.copycat.data.Schema;
 
 /**
  * <p>
@@ -31,17 +32,21 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public abstract class CopycatRecord {
     private final String topic;
     private final Integer kafkaPartition;
+    private final Schema keySchema;
     private final Object key;
+    private final Schema valueSchema;
     private final Object value;
 
-    public CopycatRecord(String topic, Integer kafkaPartition, Object value) {
-        this(topic, kafkaPartition, null, value);
+    public CopycatRecord(String topic, Integer kafkaPartition, Schema valueSchema, Object value) {
+        this(topic, kafkaPartition, null, null, valueSchema, value);
     }
 
-    public CopycatRecord(String topic, Integer kafkaPartition, Object key, Object value) {
+    public CopycatRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value) {
         this.topic = topic;
         this.kafkaPartition = kafkaPartition;
+        this.keySchema = keySchema;
         this.key = key;
+        this.valueSchema = valueSchema;
         this.value = value;
     }
 
@@ -57,8 +62,16 @@ public abstract class CopycatRecord {
         return key;
     }
 
+    public Schema getKeySchema() {
+        return keySchema;
+    }
+
     public Object getValue() {
         return value;
+    }
+
+    public Schema getValueSchema() {
+        return valueSchema;
     }
 
     @Override
@@ -80,11 +93,15 @@ public abstract class CopycatRecord {
 
         CopycatRecord that = (CopycatRecord) o;
 
-        if (key != null ? !key.equals(that.key) : that.key != null)
-            return false;
         if (kafkaPartition != null ? !kafkaPartition.equals(that.kafkaPartition) : that.kafkaPartition != null)
             return false;
         if (topic != null ? !topic.equals(that.topic) : that.topic != null)
+            return false;
+        if (keySchema != null ? !keySchema.equals(that.keySchema) : that.keySchema != null)
+            return false;
+        if (key != null ? !key.equals(that.key) : that.key != null)
+            return false;
+        if (valueSchema != null ? !valueSchema.equals(that.valueSchema) : that.valueSchema != null)
             return false;
         if (value != null ? !value.equals(that.value) : that.value != null)
             return false;
@@ -96,7 +113,9 @@ public abstract class CopycatRecord {
     public int hashCode() {
         int result = topic != null ? topic.hashCode() : 0;
         result = 31 * result + (kafkaPartition != null ? kafkaPartition.hashCode() : 0);
+        result = 31 * result + (keySchema != null ? keySchema.hashCode() : 0);
         result = 31 * result + (key != null ? key.hashCode() : 0);
+        result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         return result;
     }

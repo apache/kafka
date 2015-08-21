@@ -17,6 +17,8 @@
 
 package org.apache.kafka.copycat.file;
 
+import org.apache.kafka.copycat.data.Schema;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
@@ -33,7 +35,11 @@ import java.util.Properties;
  */
 public class FileStreamSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(FileStreamSourceTask.class);
+    private static final Schema OFFSET_KEY_SCHEMA = Schema.STRING_SCHEMA;
+    private static final Schema OFFSET_VALUE_SCHEMA = Schema.OPTIONAL_INT64_SCHEMA;
+    private static final Schema VALUE_SCHEMA = Schema.STRING_SCHEMA;
 
+    private String filename;
     private InputStream stream;
     private BufferedReader reader = null;
     private char[] buffer = new char[1024];
@@ -44,7 +50,7 @@ public class FileStreamSourceTask extends SourceTask {
 
     @Override
     public void start(Properties props) {
-        String filename = props.getProperty(FileStreamSourceConnector.FILE_CONFIG);
+        filename = props.getProperty(FileStreamSourceConnector.FILE_CONFIG);
         if (filename == null) {
             stream = System.in;
             // Tracking offset for stdin doesn't make sense
@@ -52,22 +58,29 @@ public class FileStreamSourceTask extends SourceTask {
         } else {
             try {
                 stream = new FileInputStream(filename);
-                Long lastRecordedOffset = (Long) context.getOffsetStorageReader().getOffset(null);
-                if (lastRecordedOffset != null) {
-                    log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
-                    long skipLeft = lastRecordedOffset;
-                    while (skipLeft > 0) {
-                        try {
-                            long skipped = stream.skip(skipLeft);
-                            skipLeft -= skipped;
-                        } catch (IOException e) {
-                            log.error("Error while trying to seek to previous offset in file: ", e);
-                            throw new CopycatException(e);
+                SchemaAndValue offsetWithSchema = context.getOffsetStorageReader().getOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, filename));
+                if (offsetWithSchema != null) {
+                    if (!offsetWithSchema.getSchema().equals(OFFSET_VALUE_SCHEMA))
+                        throw new CopycatException("Unexpected offset schema.");
+                    Long lastRecordedOffset = (Long) offsetWithSchema.getValue();
+                    if (lastRecordedOffset != null) {
+                        log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
+                        long skipLeft = lastRecordedOffset;
+                        while (skipLeft > 0) {
+                            try {
+                                long skipped = stream.skip(skipLeft);
+                                skipLeft -= skipped;
+                            } catch (IOException e) {
+                                log.error("Error while trying to seek to previous offset in file: ", e);
+                                throw new CopycatException(e);
+                            }
                         }
+                        log.debug("Skipped to offset {}", lastRecordedOffset);
                     }
-                    log.debug("Skipped to offset {}", lastRecordedOffset);
+                    streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
+                } else {
+                    streamOffset = 0L;
                 }
-                streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
             } catch (FileNotFoundException e) {
                 throw new CopycatException("Couldn't find file for FileStreamSourceTask: {}", e);
             }
@@ -111,7 +124,7 @@ public class FileStreamSourceTask extends SourceTask {
                         if (line != null) {
                             if (records == null)
                                 records = new ArrayList<>();
-                            records.add(new SourceRecord(null, streamOffset, topic, line));
+                            records.add(new SourceRecord(OFFSET_KEY_SCHEMA, filename, OFFSET_VALUE_SCHEMA, streamOffset, topic, VALUE_SCHEMA, line));
                         }
                         new ArrayList<SourceRecord>();
                     } while (line != null);

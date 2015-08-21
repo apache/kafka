@@ -18,6 +18,9 @@
 package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.copycat.data.Schema;
+import org.apache.kafka.copycat.data.SchemaAndValue;
+import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
 import org.easymock.Capture;
@@ -45,7 +48,9 @@ import static org.junit.Assert.assertTrue;
 public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
     // Copycat format - any types should be accepted here
+    private static final Schema OFFSET_KEY_SCHEMA = SchemaBuilder.array(Schema.STRING_SCHEMA).build();
     private static final List<String> OFFSET_KEY = Arrays.asList("key", "key");
+    private static final Schema OFFSET_VALUE_SCHEMA = Schema.STRING_SCHEMA;
     private static final String OFFSET_VALUE = "value";
     // Native objects - must match serializer types
     private static final int OFFSET_KEY_CONVERTED = 12;
@@ -87,7 +92,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
 
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
@@ -123,7 +128,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         assertTrue(writer.beginFlush());
@@ -143,7 +148,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
         assertTrue(writer.beginFlush());
         writer.doFlush(callback);
         assertTrue(writer.beginFlush()); // should throw
@@ -155,7 +160,7 @@ public class OffsetStorageWriterTest {
     public void testCancelBeforeAwaitFlush() {
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
         assertTrue(writer.beginFlush());
         writer.cancelFlush();
 
@@ -173,7 +178,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
         assertTrue(writer.beginFlush());
         // Start the flush, then immediately cancel before allowing the mocked store request to finish
         Future<Void> flushFuture = writer.doFlush(callback);
@@ -202,9 +207,9 @@ public class OffsetStorageWriterTest {
     private void expectStore(final Callback<Void> callback,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
-        EasyMock.expect(keyConverter.fromCopycatData(OFFSET_KEY)).andReturn(OFFSET_KEY_CONVERTED);
+        EasyMock.expect(keyConverter.fromCopycatData(OFFSET_KEY_SCHEMA, OFFSET_KEY)).andReturn(OFFSET_KEY_CONVERTED);
         EasyMock.expect(keySerializer.serialize(NAMESPACE, OFFSET_KEY_CONVERTED)).andReturn(OFFSET_KEY_SERIALIZED);
-        EasyMock.expect(valueConverter.fromCopycatData(OFFSET_VALUE)).andReturn(OFFSET_VALUE_CONVERTED);
+        EasyMock.expect(valueConverter.fromCopycatData(OFFSET_VALUE_SCHEMA, OFFSET_VALUE)).andReturn(OFFSET_VALUE_CONVERTED);
         EasyMock.expect(valueSerializer.serialize(NAMESPACE, OFFSET_VALUE_CONVERTED)).andReturn(OFFSET_VALUE_SERIALIZED);
 
         final Capture<Callback<Void>> storeCallback = Capture.newInstance();

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -131,10 +132,10 @@ class WorkerSourceTask<K, V> implements WorkerTask {
      */
     private synchronized void sendRecords(List<SourceRecord> records) {
         for (SourceRecord record : records) {
-            final ProducerRecord<K, V> producerRecord
-                    = new ProducerRecord<>(record.getTopic(), record.getKafkaPartition(),
-                    keyConverter.fromCopycatData(record.getKey()),
-                    valueConverter.fromCopycatData(record.getValue()));
+            K key = (record.getKeySchema() != null) ? keyConverter.fromCopycatData(record.getKeySchema(), record.getKey()) : null;
+            V value = (record.getValueSchema() != null) ? valueConverter.fromCopycatData(record.getValueSchema(), record.getValue()) : null;
+            final ProducerRecord<K, V> producerRecord = new ProducerRecord<>(
+                    record.getTopic(), record.getKafkaPartition(), key, value);
             log.trace("Appending record with key {}, value {}", record.getKey(), record.getValue());
             if (!flushing) {
                 outstandingMessages.put(producerRecord, producerRecord);
@@ -157,7 +158,8 @@ class WorkerSourceTask<K, V> implements WorkerTask {
                         }
                     });
             // Offsets are converted & serialized in the OffsetWriter
-            offsetWriter.setOffset(record.getSourcePartition(), record.getSourceOffset());
+            offsetWriter.setOffset(new SchemaAndValue(record.getSourcePartitionSchema(), record.getSourcePartition()),
+                    new SchemaAndValue(record.getSourceOffsetSchema(), record.getSourceOffset()));
         }
     }
 

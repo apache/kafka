@@ -19,6 +19,7 @@ package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,17 +57,17 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
     }
 
     @Override
-    public Object getOffset(Object partition) {
+    public SchemaAndValue getOffset(SchemaAndValue partition) {
         return getOffsets(Arrays.asList(partition)).get(partition);
     }
 
     @Override
-    public Map<Object, Object> getOffsets(Collection<Object> partitions) {
+    public Map<SchemaAndValue, SchemaAndValue> getOffsets(Collection<SchemaAndValue> partitions) {
         // Serialize keys so backing store can work with them
-        Map<ByteBuffer, Object> serializedToOriginal = new HashMap<>(partitions.size());
-        for (Object key : partitions) {
+        Map<ByteBuffer, SchemaAndValue> serializedToOriginal = new HashMap<>(partitions.size());
+        for (SchemaAndValue key : partitions) {
             try {
-                byte[] keySerialized = keySerializer.serialize(namespace, keyConverter.fromCopycatData(key));
+                byte[] keySerialized = keySerializer.serialize(namespace, keyConverter.fromCopycatData(key.getSchema(), key.getValue()));
                 ByteBuffer keyBuffer = (keySerialized != null) ? ByteBuffer.wrap(keySerialized) : null;
                 serializedToOriginal.put(keyBuffer, key);
             } catch (Throwable t) {
@@ -86,7 +87,7 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
         }
 
         // Deserialize all the values and map back to the original keys
-        Map<Object, Object> result = new HashMap<>(partitions.size());
+        Map<SchemaAndValue, SchemaAndValue> result = new HashMap<>(partitions.size());
         for (Map.Entry<ByteBuffer, ByteBuffer> rawEntry : raw.entrySet()) {
             try {
                 // Since null could be a valid key, explicitly check whether map contains the key
@@ -95,8 +96,8 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
                             + "store may have returned invalid data", rawEntry.getKey());
                     continue;
                 }
-                Object origKey = serializedToOriginal.get(rawEntry.getKey());
-                Object deserializedValue = valueConverter.toCopycatData(
+                SchemaAndValue origKey = serializedToOriginal.get(rawEntry.getKey());
+                SchemaAndValue deserializedValue = valueConverter.toCopycatData(
                         valueDeserializer.deserialize(namespace, rawEntry.getValue().array())
                 );
 

@@ -23,6 +23,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.data.Schema;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -57,11 +59,15 @@ import static org.junit.Assert.*;
 
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
+    private static final Schema PARTITION_SCHEMA = Schema.BYTES_SCHEMA;
     private static final byte[] PARTITION_BYTES = "partition".getBytes();
+    private static final Schema OFFSET_SCHEMA = Schema.BYTES_SCHEMA;
     private static final byte[] OFFSET_BYTES = "offset-1".getBytes();
 
     // Copycat-format data
+    private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
     private static final Integer KEY = -1;
+    private static final Schema RECORD_SCHEMA = Schema.INT64_SCHEMA;
     private static final Long RECORD = 12L;
     // Native-formatted data. The actual format of this data doesn't matter -- we just want to see that the right version
     // is used in the right place.
@@ -83,7 +89,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private static final Properties EMPTY_TASK_PROPS = new Properties();
     private static final List<SourceRecord> RECORDS = Arrays.asList(
-            new SourceRecord(PARTITION_BYTES, OFFSET_BYTES, "topic", null, KEY, RECORD)
+            new SourceRecord(PARTITION_SCHEMA, PARTITION_BYTES, OFFSET_SCHEMA, OFFSET_BYTES, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
 
     @Override
@@ -195,7 +201,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         List<SourceRecord> records = new ArrayList<>();
         // Can just use the same record for key and value
-        records.add(new SourceRecord(PARTITION_BYTES, OFFSET_BYTES, "topic", null, KEY, RECORD));
+        records.add(new SourceRecord(PARTITION_SCHEMA, PARTITION_BYTES, OFFSET_SCHEMA, OFFSET_BYTES, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD));
 
         Capture<ProducerRecord<ByteBuffer, String>> sent = expectSendRecord();
 
@@ -228,8 +234,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private Capture<ProducerRecord<ByteBuffer, String>> expectSendRecord() throws InterruptedException {
-        EasyMock.expect(keyConverter.fromCopycatData(KEY)).andStubReturn(CONVERTED_KEY);
-        EasyMock.expect(valueConverter.fromCopycatData(RECORD)).andStubReturn(CONVERTED_RECORD);
+        EasyMock.expect(keyConverter.fromCopycatData(KEY_SCHEMA, KEY)).andStubReturn(CONVERTED_KEY);
+        EasyMock.expect(valueConverter.fromCopycatData(RECORD_SCHEMA, RECORD)).andStubReturn(CONVERTED_RECORD);
 
         Capture<ProducerRecord<ByteBuffer, String>> sent = EasyMock.newCapture();
         // 1. Converted data passed to the producer, which will need callbacks invoked for flush to work
@@ -249,7 +255,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                     }
                 });
         // 2. Offset data is passed to the offset storage.
-        offsetWriter.setOffset(PARTITION_BYTES, OFFSET_BYTES);
+        offsetWriter.setOffset(new SchemaAndValue(PARTITION_SCHEMA, PARTITION_BYTES), new SchemaAndValue(OFFSET_SCHEMA, OFFSET_BYTES));
         PowerMock.expectLastCall().anyTimes();
 
         return sent;
