@@ -34,6 +34,7 @@ import org.apache.kafka.common.network.{Selectable, ChannelBuilders, NetworkRece
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.security.ssl.SSLFactory
+import org.apache.kafka.common.utils.AppInfoParser
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -46,7 +47,6 @@ import kafka.network.{RequestOrResponseSend, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import kafka.coordinator.{ConsumerCoordinator}
-
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -215,6 +215,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
+        AppInfoParser.registerAppInfo(jmxPrefix, config.brokerId.toString)
         info("started")
       }
     }
@@ -409,6 +410,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
         startupComplete.set(false)
         isShuttingDown.set(false)
+        AppInfoParser.unregisterAppInfo(jmxPrefix, config.brokerId.toString)
         shutdownLatch.countDown()
         info("shut down completed")
       }

@@ -27,7 +27,6 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
   def startup() {
     try {
       server.startup()
-      AppInfo.registerInfo()
     }
     catch {
       case e: Throwable =>
