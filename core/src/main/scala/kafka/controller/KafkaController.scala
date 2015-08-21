@@ -64,7 +64,7 @@ class ControllerContext(val zkClient: ZkClient,
    * `KafkaController` since they are both shut down during `KafkaServer.shutdown()`).
    *
    * If we break this invariant, an exception is thrown during the instantiation of Selector` due to the usage of
-   * the same `metricGrpPrefix` for two `Selector` instantiations. This way also helps to maintain the metrics sane.
+   * two equal `MetricName` instances for two `Selector` instantiations. This way also helps to maintain the metrics sane.
    *
    * In the future, we should consider redesigning `ControllerChannelManager` so that we can use a single `Selector`
    * for multiple broker connections as that is the intended usage and it may help simplify this code.
