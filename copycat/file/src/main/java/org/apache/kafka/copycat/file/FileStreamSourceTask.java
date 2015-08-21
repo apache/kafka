@@ -64,7 +64,7 @@ public class FileStreamSourceTask extends SourceTask {
                 log.info("Opened file " + filename);
                 Long lastRecordedOffset = (Long) context.getOffsetStorageReader().getOffset(filename);
                 if (lastRecordedOffset != null) {
-                    log.debug("Found previous offset, trying to skip to file offset: " + lastRecordedOffset);
+                    log.debug("Found previous offset, trying to skip to file offset: {}", lastRecordedOffset);
                     long skipLeft = lastRecordedOffset;
                     while (skipLeft > 0) {
                         try {
@@ -75,7 +75,7 @@ public class FileStreamSourceTask extends SourceTask {
                             throw new CopycatException(e);
                         }
                     }
-                    log.debug("Skipped to offset", lastRecordedOffset);
+                    log.debug("Skipped to offset {}", lastRecordedOffset);
                 }
                 streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
                 reader = new BufferedReader(new InputStreamReader(stream));
