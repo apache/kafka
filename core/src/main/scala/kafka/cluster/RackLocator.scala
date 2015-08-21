@@ -25,6 +25,16 @@ import org.I0Itec.zkclient.ZkClient
 
 import scala.collection.Map
 
+/**
+ * Interface that defines API to get broker to rack mapping. This is used by
+ * rack aware replica assignment. The implementation class can be passed as
+ * rack.locator.class property at server start up or -rack-locator-class command
+ * line argument for TopicCommand.
+ *
+ * @param zkClient ZkClient for the cluster that can be used to retrieve information
+ *                 from ZooKeeper
+ * @param props Properties used by implementation.
+ */
 abstract class RackLocator(val zkClient: ZkClient, val props: Properties) {
   def getRackInfo(): Map[Int, String]
 }
