@@ -43,12 +43,12 @@ class TestMirrorMakerService(Test):
                                            max_messages=self.num_messages, throughput=1000)
 
         # Use a regex whitelist to check that the start command is well-formed in this case
-        self.mirror_maker = MirrorMaker(test_context, source=self.source_kafka, target=self.target_kafka,
-                                        whitelist=".*", consumer_timeout_ms=10000)
+        self.mirror_maker = MirrorMaker(test_context, num_nodes=1, source=self.source_kafka, target=self.target_kafka,
+                                        whitelist=".*", consumer_timeout_ms=2000)
 
         # This will consume from target kafka cluster
         self.consumer = ConsoleConsumer(test_context, num_nodes=1, kafka=self.target_kafka, topic=self.topic,
-                                        consumer_timeout_ms=10000)
+                                        consumer_timeout_ms=1000)
 
     def setUp(self):
         # Source cluster
@@ -64,7 +64,7 @@ class TestMirrorMakerService(Test):
         Test end-to-end behavior under non-failure conditions.
 
         Setup: two single node Kafka clusters, each connected to its own single node zookeeper cluster.
-        One is source, and the other is target.
+        One is source, and the other is target. Single-node mirror maker mirrors from source to target.
 
         - Start mirror maker.
         - Produce a small number of messages to the source cluster.
@@ -73,7 +73,7 @@ class TestMirrorMakerService(Test):
         """
         self.mirror_maker.start()
         # Check that consumer_timeout_ms setting made it to config file
-        self.mirror_maker.node.account.ssh(
+        self.mirror_maker.nodes[0].account.ssh(
             "grep \"consumer\.timeout\.ms\" %s" % MirrorMaker.CONSUMER_CONFIG, allow_fail=False)
 
         self.producer.start()
@@ -82,7 +82,8 @@ class TestMirrorMakerService(Test):
         self.consumer.wait()
 
         num_consumed = len(self.consumer.messages_consumed[1])
-        num_produced = self.num_messages
+        num_produced = self.producer.num_acked
+        assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
         assert num_produced == num_consumed, "num_produced: %d, num_consumed: %d" % (num_produced, num_consumed)
 
         self.mirror_maker.stop()

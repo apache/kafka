@@ -98,6 +98,7 @@ class VerifiableProducer(BackgroundThreadService):
             self.worker_threads[self.idx(node) - 1].join()
 
     def clean_node(self, node):
+        node.account.kill_process("VerifiableProducer", clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf /mnt/producer.log", allow_fail=False)
 
     def try_parse_json(self, string):

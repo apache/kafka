@@ -186,5 +186,9 @@ class ConsoleConsumer(BackgroundThreadService):
                    err_msg="Timed out waiting for consumer to stop.")
 
     def clean_node(self, node):
+        if self.alive(node):
+            self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
+                             (self.__class__.__name__, node.account))
+        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
 

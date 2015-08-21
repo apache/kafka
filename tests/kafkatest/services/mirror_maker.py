@@ -71,7 +71,7 @@ class MirrorMaker(Service):
             "collect_default": True}
         }
 
-    def __init__(self, context, source, target, whitelist=None, blacklist=None, num_streams=1, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1, consumer_timeout_ms=None):
         """
         MirrorMaker mirrors messages from one or more source clusters to a single destination cluster.
 
@@ -81,41 +81,40 @@ class MirrorMaker(Service):
             target:                     target Kafka cluster to which data will be mirrored
             whitelist:                  whitelist regex for topics to mirror
             blacklist:                  blacklist regex for topics not to mirror
-            num_streams:                number of consumer threads to create
+            num_streams:                number of consumer threads to create; can be a single int, or a list with
+                                            one value per node, allowing num_streams to be the same for each node,
+                                            or configured independently per-node
             consumer_timeout_ms:        consumer stops if t > consumer_timeout_ms elapses between consecutive messages
         """
-        super(MirrorMaker, self).__init__(context, num_nodes=1)
+        super(MirrorMaker, self).__init__(context, num_nodes=num_nodes)
 
         self.consumer_timeout_ms = consumer_timeout_ms
         self.num_streams = num_streams
+        if not isinstance(num_streams, int):
+            # if not an integer, num_streams should be configured per-node
+            assert len(num_streams) == num_nodes
         self.whitelist = whitelist
         self.blacklist = blacklist
         self.source = source
         self.target = target
 
-    @property
-    def start_cmd(self):
+    def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % MirrorMaker.LOG4J_CONFIG
         cmd += " %s/bin/kafka-run-class.sh kafka.tools.MirrorMaker" % MirrorMaker.KAFKA_HOME
         cmd += " --consumer.config %s" % MirrorMaker.CONSUMER_CONFIG
         cmd += " --producer.config %s" % MirrorMaker.PRODUCER_CONFIG
-        cmd += " --num.streams %d" % self.num_streams
-
+        if isinstance(self.num_streams, int):
+            cmd += " --num.streams %d" % self.num_streams
+        else:
+            # config num_streams separately on each node
+            cmd += " --num.streams %d" % self.num_streams[self.idx(node) - 1]
         if self.whitelist is not None:
             cmd += " --whitelist=\"%s\"" % self.whitelist
         if self.blacklist is not None:
             cmd += " --blacklist=\"%s\"" % self.blacklist
         cmd += " 1>> %s 2>> %s &" % (MirrorMaker.LOG_FILE, MirrorMaker.LOG_FILE)
         return cmd
-
-    @property
-    def node(self):
-        """Convenience method since this Service only ever has one node"""
-        if self.nodes:
-            return self.nodes[0]
-        else:
-            return None
 
     def pids(self, node):
         try:
@@ -125,8 +124,8 @@ class MirrorMaker(Service):
         except (subprocess.CalledProcessError, ValueError) as e:
             return []
 
-    def alive(self):
-        return len(self.pids(self.node)) > 0
+    def alive(self, node):
+        return len(self.pids(node)) > 0
 
     def start_node(self, node):
         node.account.ssh("mkdir -p %s" % MirrorMaker.PERSISTENT_ROOT, allow_fail=False)
@@ -146,18 +145,21 @@ class MirrorMaker(Service):
         node.account.create_file(MirrorMaker.LOG4J_CONFIG, log_config)
 
         # Run mirror maker
-        cmd = self.start_cmd
+        cmd = self.start_cmd(node)
         self.logger.debug("Mirror maker command: %s", cmd)
         node.account.ssh(cmd, allow_fail=False)
-        wait_until(lambda: self.alive(), timeout_sec=10, backoff_sec=.5,
+        wait_until(lambda: self.alive(node), timeout_sec=10, backoff_sec=.5,
                    err_msg="Mirror maker took to long to start.")
         self.logger.debug("Mirror maker is alive")
 
     def stop_node(self, node):
         node.account.kill_process("java", allow_fail=True)
-        wait_until(lambda: not self.alive(), timeout_sec=10, backoff_sec=.5,
+        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.5,
                    err_msg="Mirror maker took to long to stop.")
 
     def clean_node(self, node):
+        if self.alive(node):
+            self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
+                             (self.__class__.__name__, node.account))
+        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf %s" % MirrorMaker.PERSISTENT_ROOT, allow_fail=False)
-
