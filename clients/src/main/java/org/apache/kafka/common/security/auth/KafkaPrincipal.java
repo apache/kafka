@@ -22,6 +22,10 @@ import java.security.Principal;
 public class KafkaPrincipal implements Principal {
     private final String name;
 
+    public static KafkaPrincipal anonymousPrincipal() {
+        return new KafkaPrincipal("ANONYMOUS");
+    }
+
     public KafkaPrincipal(String name) {
         if (name == null)
             throw new IllegalArgumentException("name is null");

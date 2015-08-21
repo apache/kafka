@@ -229,6 +229,6 @@ class SocketServerTest extends JUnitSuite {
     val socket = connect()
     val bytes = new Array[Byte](40)
     sendRequest(socket, 0, bytes)
-    assertEquals(new KafkaPrincipal("ANONYMOUS"),server.requestChannel.receiveRequest().session.principal)
+    assertEquals(KafkaPrincipal.anonymousPrincipal(), server.requestChannel.receiveRequest().session.principal)
   }
 }
