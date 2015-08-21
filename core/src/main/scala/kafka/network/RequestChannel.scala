@@ -18,6 +18,7 @@
 package kafka.network
 
 import java.nio.ByteBuffer
+import java.security.Principal
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
@@ -44,7 +45,9 @@ object RequestChannel extends Logging {
     byteBuffer
   }
 
-  case class Request(processor: Int, connectionId: String, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
+  case class Session(principal: Principal, host: String)
+
+  case class Request(processor: Int, connectionId: String, session: Session = null, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
     @volatile var requestDequeueTimeMs = -1L
     @volatile var apiLocalCompleteTimeMs = -1L
     @volatile var responseCompleteTimeMs = -1L
