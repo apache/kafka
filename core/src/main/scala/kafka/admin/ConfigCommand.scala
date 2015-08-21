@@ -38,7 +38,7 @@ object ConfigCommand {
     val opts = new ConfigCommandOptions(args)
 
     if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity (topic/client) configs")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity (topics/clients) configs")
 
     opts.checkArgs()
 
@@ -122,7 +122,7 @@ object ConfigCommand {
             .ofType(classOf[String])
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val entityType = parser.accepts("entity-type", "Type of entity (topic/client)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients)")
             .withRequiredArg
             .ofType(classOf[String])
     val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id)")

@@ -17,28 +17,17 @@
 
 package kafka.controller
 
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.Properties
-
-import junit.framework.Assert._
-import org.scalatest.junit.JUnit3Suite
-
-import org.junit.{Test, After, Before}
-import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, ZkClient}
-import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.apache.log4j.{Logger, Level}
+import java.util.concurrent.LinkedBlockingQueue
 
 import kafka.api.RequestOrResponse
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.BrokerState
-import kafka.server.KafkaConfig
-import kafka.server.KafkaServer
-import kafka.server.RunningAsController
+import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
-import kafka.utils.TestUtils._
+import org.apache.log4j.{Level, Logger}
+import org.junit.{After, Before, Test}
 
-import scala.collection.Map
 import scala.collection.mutable
 
 

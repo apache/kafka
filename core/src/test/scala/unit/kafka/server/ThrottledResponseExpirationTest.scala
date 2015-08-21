@@ -19,14 +19,13 @@ package kafka.server
 
 
 import java.util.Collections
-import java.util.concurrent.{TimeUnit, DelayQueue}
+import java.util.concurrent.{DelayQueue, TimeUnit}
 
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
-import org.junit.{AfterClass, Before, Assert, Test}
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{Assert, Before, Test}
 
-class ThrottledResponseExpirationTest extends JUnit3Suite {
+class ThrottledResponseExpirationTest {
   private val time = new MockTime
   private var numCallbacks: Int = 0
   private val metrics = new org.apache.kafka.common.metrics.Metrics(new MetricConfig(),
