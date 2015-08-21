@@ -601,6 +601,7 @@ public class SSLTransportLayer implements TransportLayer {
         try {
             return sslEngine.getSession().getPeerPrincipal();
         } catch (SSLPeerUnverifiedException se) {
+            log.warn("SSL peer is not authenticated, returning ANONYMOUS instead");
             return new KafkaPrincipal("ANONYMOUS");
         }
     }
