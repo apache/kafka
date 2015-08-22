@@ -18,7 +18,7 @@ package kafka.admin
 
 import kafka.log.Log
 import kafka.zk.ZooKeeperTestHarness
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.utils.{ZkUtils, TestUtils}
 import kafka.server.{KafkaServer, KafkaConfig}
 import org.junit.Test

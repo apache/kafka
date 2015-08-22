@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
 import kafka.utils._
