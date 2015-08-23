@@ -14,8 +14,10 @@
 # limitations under the License.
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
 
 import os
+import subprocess
 
 
 def is_int(msg):
@@ -91,7 +93,7 @@ class ConsoleConsumer(BackgroundThreadService):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, message_validator=is_int, from_beginning=True, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, kafka, topic, message_validator=None, from_beginning=True, consumer_timeout_ms=None):
         """
         Args:
             context:                    standard context
@@ -141,7 +143,7 @@ class ConsoleConsumer(BackgroundThreadService):
             cmd = "ps ax | grep -i console_consumer | grep java | grep -v grep | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except:
+        except (subprocess.CalledProcessError, ValueError) as e:
             return []
 
     def alive(self, node):
@@ -161,7 +163,7 @@ class ConsoleConsumer(BackgroundThreadService):
         node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
 
         # Create and upload log properties
-        log_config = self.render('console_consumer_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
+        log_config = self.render('tools_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
         node.account.create_file(ConsoleConsumer.LOG4J_CONFIG, log_config)
 
         # Run and capture output
@@ -169,7 +171,8 @@ class ConsoleConsumer(BackgroundThreadService):
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
         for line in node.account.ssh_capture(cmd, allow_fail=False):
             msg = line.strip()
-            msg = self.message_validator(msg)
+            if self.message_validator is not None:
+                msg = self.message_validator(msg)
             if msg is not None:
                 self.logger.debug("consumed a message: " + str(msg))
                 self.messages_consumed[idx].append(msg)
@@ -179,7 +182,13 @@ class ConsoleConsumer(BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("java", allow_fail=True)
+        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.2,
+                   err_msg="Timed out waiting for consumer to stop.")
 
     def clean_node(self, node):
+        if self.alive(node):
+            self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
+                             (self.__class__.__name__, node.account))
+        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
 

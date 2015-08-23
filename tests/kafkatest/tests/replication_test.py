@@ -19,7 +19,7 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.console_consumer import ConsoleConsumer
+from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 
 import signal
 import time
@@ -76,12 +76,12 @@ class ReplicationTest(Test):
 
         """
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=3000)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=3000, message_validator=is_int)
 
         # Produce in a background thread while driving broker failures
         self.producer.start()
-        if not wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5):
-            raise RuntimeError("Producer failed to start in a reasonable amount of time.")
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
+             err_msg="Producer failed to start in a reasonable amount of time.")
         failure()
         self.producer.stop()
 

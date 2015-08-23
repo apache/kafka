@@ -23,5 +23,5 @@ setup(name="kafkatest",
       platforms=["any"], 
       license="apache2.0",
       packages=find_packages(),
-      requires=["ducktape(>=0.2.0)"]
+      requires=["ducktape(==0.3.0)"]
       )
