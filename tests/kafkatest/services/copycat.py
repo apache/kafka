@@ -15,7 +15,6 @@
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-from .util import monitor_log
 import subprocess, signal
 
 
@@ -56,7 +55,7 @@ class CopycatStandaloneService(Service):
         node.account.create_file("/mnt/copycat-connector.properties", self.connector_config_template)
 
         self.logger.info("Starting Copycat standalone process")
-        with monitor_log(self.node, "/mnt/copycat.log") as monitor:
+        with node.account.monitor_log("/mnt/copycat.log") as monitor:
             node.account.ssh("/opt/kafka/bin/copycat-standalone.sh /mnt/copycat.properties /mnt/copycat-connector.properties " +
                              "1>> /mnt/copycat.log 2>> /mnt/copycat.log & echo $! > /mnt/copycat.pid")
             monitor.wait_until('Copycat started', timeout_sec=10, err_msg="Never saw message indicating Copycat finished startup")
@@ -78,7 +77,7 @@ class CopycatStandaloneService(Service):
         for pid in pids:
             self.node.account.signal(pid, sig, allow_fail=False)
         for pid in pids:
-            wait_until(lambda: self.node.account.alive(pid), timeout_sec=10, err_msg="Copycat standalone process took too long to exit")
+            wait_until(lambda: not self.node.account.alive(pid), timeout_sec=10, err_msg="Copycat standalone process took too long to exit")
 
         node.account.ssh("rm -f /mnt/copycat.pid", allow_fail=False)
 
