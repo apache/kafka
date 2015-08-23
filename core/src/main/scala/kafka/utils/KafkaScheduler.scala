@@ -70,6 +70,7 @@ class KafkaScheduler(val threads: Int,
                      daemon: Boolean = true) extends Scheduler with Logging {
   private var executor: ScheduledThreadPoolExecutor = null
   private val schedulerThreadId = new AtomicInteger(0)
+  private val shutdownLock = new Object
   
   override def startup() {
     debug("Initializing task scheduler.")
@@ -88,14 +89,17 @@ class KafkaScheduler(val threads: Int,
   
   override def shutdown() {
     debug("Shutting down task scheduler.")
-    // We use the local variable to avoid NullPointerException if another thread shuts down scheduler at same time.
-    val executorVar = this.executor
-    if (executorVar != null) {
-      this synchronized {
-        executorVar.shutdown()
+    // Synchronize on the shutdownLock to avoid NullPointerException when multiple threads are shutting down scheduler
+    // at same time.
+    shutdownLock synchronized {
+      if (isStarted) {
+        this synchronized {
+          this.executor.shutdown()
+        }
+        // Release the scheduler lock to avoid deadlock with schedule.
+        executor.awaitTermination(1, TimeUnit.DAYS)
         this.executor = null
       }
-      executorVar.awaitTermination(1, TimeUnit.DAYS)
     }
   }
 
