@@ -78,7 +78,7 @@ class CopycatStandaloneService(Service):
         for pid in pids:
             self.node.account.signal(pid, sig, allow_fail=False)
         for pid in pids:
-            wait_until(lambda: self.node.account.ssh("kill -0 " + str(pid), allow_fail=True) == 0, timeout_sec=10, err_msg="Copycat standalone process took too long to exit")
+            wait_until(lambda: self.node.account.alive(pid), timeout_sec=10, err_msg="Copycat standalone process took too long to exit")
 
         node.account.ssh("rm -f /mnt/copycat.pid", allow_fail=False)
 
@@ -88,4 +88,9 @@ class CopycatStandaloneService(Service):
         self.start_node(self.node)
 
     def clean_node(self, node):
+        if len(self.pids()) > 0:
+            self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
+                             (self.__class__.__name__, node.account))
+        for pid in self.pids():
+            self.node.account.signal(pid, signal.SIGKILL, allow_fail=False)
         node.account.ssh("rm -rf /mnt/copycat.pid /mnt/copycat.log /mnt/copycat.properties /mnt/copycat-connector.properties " + " ".join(self.files), allow_fail=False)

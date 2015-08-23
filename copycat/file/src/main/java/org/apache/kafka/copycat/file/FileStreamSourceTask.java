@@ -81,7 +81,9 @@ public class FileStreamSourceTask extends SourceTask {
                 reader = new BufferedReader(new InputStreamReader(stream));
             } catch (FileNotFoundException e) {
                 log.warn("Couldn't find file for FileStreamSourceTask, sleeping to wait for it to be created");
-                Thread.sleep(1000);
+                synchronized (this) {
+                    this.wait(1000);
+                }
                 return null;
             }
         }
@@ -125,7 +127,9 @@ public class FileStreamSourceTask extends SourceTask {
             }
 
             if (nread <= 0)
-                Thread.sleep(1);
+                synchronized (this) {
+                    this.wait(1000);
+                }
 
             return records;
         } catch (IOException e) {
@@ -175,6 +179,7 @@ public class FileStreamSourceTask extends SourceTask {
             } catch (IOException e) {
                 log.error("Failed to close ConsoleSourceTask stream: ", e);
             }
+            this.notify();
         }
     }
 }
