@@ -20,7 +20,7 @@ package kafka.utils
 import kafka.cluster._
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.server.ConfigType
-import org.I0Itec.zkclient.ZkClient
+import org.I0Itec.zkclient.{ZkClient,ZkConnection}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException,
   ZkMarshallingError, ZkBadVersionException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
@@ -35,6 +35,15 @@ import kafka.controller.ReassignedPartitionsContext
 import kafka.controller.KafkaController
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
+
+import org.apache.zookeeper.AsyncCallback.StatCallback
+import org.apache.zookeeper.AsyncCallback.StringCallback
+import org.apache.zookeeper.CreateMode
+import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.WatchedEvent
+import org.apache.zookeeper.Watcher
+import org.apache.zookeeper.ZooDefs.Ids
+import org.apache.zookeeper.ZooKeeper
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -809,7 +818,13 @@ object ZkUtils extends Logging {
 
   def createZkClient(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int): ZkClient = {
     val zkClient = new ZkClient(zkUrl, sessionTimeout, connectionTimeout, ZKStringSerializer)
-    zkClient    
+    zkClient
+  }
+  
+  def createZkClientAndConnection(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int): (ZkClient, ZkConnection) = {
+    val zkConnection = new ZkConnection(zkUrl, sessionTimeout)
+    val zkClient = new ZkClient(zkConnection, connectionTimeout, ZKStringSerializer)
+    (zkClient, zkConnection)    
   }
 }
 
@@ -890,5 +905,154 @@ object ZkPath {
   def createPersistentSequential(client: ZkClient, path: String, data: Object): String = {
     checkNamespace(client)
     client.createPersistentSequential(path, data)
+  }
+}
+
+class ZKWatchedEphemeral(ephemeralPath : String, ephemeralData : String, zkConnection : ZkConnection) extends Logging {
+  private val path = ephemeralPath
+  private val data = ephemeralData
+  private val zkHandle = zkConnection.getZookeeper
+  private val createCallback = new CreateCallback
+  private val ephemeralWatcher = new EphemeralWatcher
+  private val existsCallback = new ExistsCallback
+  private var stop : Boolean = false
+  private class CreateCallback extends StringCallback {
+    def processResult(rc : Int,
+                      path : String,
+                      ctx : Object,
+                      name : String) {
+      Code.get(rc) match {
+        case Code.OK => {
+          // check that exists and wait
+           checkAndWatch
+        }
+        case Code.CONNECTIONLOSS => {
+          // TODO: Backoff 
+          
+          // and try again
+          createAndWatch
+        }
+        case Code.NONODE => {
+          error("No node for path %s (could be the parent missing)".format(path))
+        }
+        case Code.SESSIONEXPIRED => {
+          error("Session has expired while creating %s".format(path))  
+        }
+        case _ => {
+          info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
+        }
+      }
+    }      
+  }
+  
+  private class EphemeralWatcher extends Watcher {
+    def process(event : WatchedEvent) {
+      // if node deleted, then recreate it
+      if(!stop && event.getType == Watcher.Event.EventType.NodeDeleted)
+        createAndWatch
+    }
+  }
+  
+  private class ExistsCallback extends StatCallback {
+    def processResult(rc : Int,
+                 path : String,
+                 ctx : Object,
+                 stat : Stat) {
+      Code.get(rc) match {
+        case Code.OK => {}
+        case Code.CONNECTIONLOSS => {
+          // Backoff and try again
+          checkAndWatch
+        }
+        case Code.SESSIONEXPIRED => {
+          error("Session has expired while creating %s".format(path))  
+        }
+        case _ => {
+          info("ZooKeeper event while checking if registration node exists %s %s".format(path, Code.get(rc)))
+        }
+      }
+    }
+  }
+  
+  private def checkAndWatch() {
+    zkHandle.exists(path, 
+                    ephemeralWatcher, 
+                    existsCallback,
+                    null)        
+  }
+  
+  private def createRecursive(prefix : String, suffix : String) {
+    info("### Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
+    if(suffix.isEmpty()) {
+      zkHandle.create(prefix, 
+                  data.getBytes(), 
+                  Ids.OPEN_ACL_UNSAFE, 
+                  CreateMode.EPHEMERAL, 
+                  createCallback,
+                  null)
+    } else {
+      zkHandle.create(prefix, 
+                  new Array[Byte](0), 
+                  Ids.OPEN_ACL_UNSAFE, 
+                  CreateMode.PERSISTENT, 
+                  new StringCallback() {
+                        def processResult(rc : Int,
+                                          path : String,
+                                          ctx : Object,
+                                          name : String) {
+                          
+                          Code.get(rc) match {
+                            case Code.OK => {
+                              // Nothing to do
+                            }
+                            case Code.NODEEXISTS => {
+                              // Nothing to do
+                            }
+                            case Code.CONNECTIONLOSS => {
+                              // TODO: Backoff 
+          
+                              // and try again
+                              val suffix = ctx.asInstanceOf[String]
+                              createRecursive(path, suffix)
+                            }
+                            case Code.NONODE => {
+                              error("No node for path %s (could be the parent missing)".format(path))
+                            }
+                            case Code.SESSIONEXPIRED => {
+                              error("Session has expired while creating %s".format(path))  
+                            }
+                            case _ => {
+                              info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
+                            }
+                          }
+                        }
+                  },
+                  suffix)
+      // Update prefix and suffix
+      val index = suffix.indexOf('/', 1) match {
+        case -1 => suffix.length
+        case x : Int => x
+      }
+      // Get new prefix
+      val newPrefix = prefix + suffix.substring(0, index)
+      // Get new suffix
+      val newSuffix = suffix.substring(index, suffix.length)
+      createRecursive(newPrefix, newSuffix)
+    }        
+  }
+  
+  def createAndWatch() {
+    val index = path.indexOf('/', 1) match {
+        case -1 => path.length
+        case x : Int => x
+    }
+    val prefix = path.substring(0, index)
+    val suffix = path.substring(index, path.length)
+    info("### Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
+    createRecursive(prefix, suffix)   
+  }
+  
+  def halt() {
+    stop = true
   }
 }
