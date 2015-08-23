@@ -34,9 +34,10 @@ import kafka.network.BlockingChannel
 import kafka.serializer._
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ZkUtils._
+import kafka.utils.ZKWatchedEphemeral
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient}
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
@@ -90,6 +91,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private val rebalanceLock = new Object
   private var fetcher: Option[ConsumerFetcherManager] = None
   private var zkClient: ZkClient = null
+  private var zkConnection : ZkConnection = null
   private var topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
   private val checkpointedZkOffsets = new Pool[TopicAndPartition, Long]
   private val topicThreadIdAndQueues = new Pool[(String, ConsumerThreadId), BlockingQueue[FetchedDataChunk]]
@@ -178,7 +180,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def connectZk() {
     info("Connecting to zookeeper instance at " + config.zkConnect)
-    zkClient = ZkUtils.createZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
+    var (client, connection) = ZkUtils.createZkClientAndConnection(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
+    zkClient = client
+    zkConnection = connection
   }
 
   // Blocks until the offset manager is located and a channel is established to it.
@@ -255,15 +259,20 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   // this API is used by unit tests only
   def getTopicRegistry: Pool[String, Pool[Int, PartitionTopicInfo]] = topicRegistry
-
+  private var zkWatchedEphemeral : ZKWatchedEphemeral = null
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) {
     info("begin registering consumer " + consumerIdString + " in ZK")
     val timestamp = SystemTime.milliseconds.toString
     val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
                                                   "timestamp" -> timestamp))
 
-    createEphemeralPathExpectConflictHandleZKBug(zkClient, dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, null,
-                                                 (consumerZKString, consumer) => true, config.zkSessionTimeoutMs)
+    //createEphemeralPathExpectConflictHandleZKBug(zkClient, dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, null,
+    //                                             (consumerZKString, consumer) => true, config.zkSessionTimeoutMs)
+    
+    if(zkWatchedEphemeral != null)
+      zkWatchedEphemeral.halt
+    zkWatchedEphemeral = new ZKWatchedEphemeral(dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, zkConnection)
+    zkWatchedEphemeral.createAndWatch
     info("end registering consumer " + consumerIdString + " in ZK")
   }
 
