@@ -20,5 +20,10 @@
 
 # Set Kafka specific environment variables here.
 
-# The java implementation to use.
-export JAVA_HOME=${JAVA_HOME}
+#export JAVA_HOME=/usr/jdk1.7/
+#export LOG_DIR="/tmp/logs/
+#export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false"
+#export JMX_PORT="9999"
+#export KAFKA_HEAP_OPTS="-Xmx300M"
+#export KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -Djava.awt.headless=true"
+#export KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/kafka-gc.txt -XX:+PrintGCDetails"
