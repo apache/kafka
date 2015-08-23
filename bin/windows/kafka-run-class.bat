@@ -27,11 +27,12 @@ set BASE_DIR=%CD%
 popd
 
 
+
 IF exist %BASE_DIR%\config\kafka-env.cmd (
   call %BASE_DIR%\config\kafka-env.cmd
 )
 
-IF not exist %JAVA_HOME%\bin\java.exe (
+IF not exist "%JAVA_HOME%\bin\java.exe" (
   echo Error: JAVA_HOME is incorrectly set.
   goto :eof
 )
@@ -68,6 +69,7 @@ rem Classpath addition for kafka-examples
 for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
 	call :concat %%i
 )
+
 
 rem Classpath addition for release
 for %%i in (%BASE_DIR%\libs\*.jar) do (

@@ -20,4 +20,3 @@ rem It allows users to override JAVA_HOME, LOG_DIR etc..
 rem Set Kafka specific environment variables here.
 
 rem  The java implementation to use.
-set JAVA_HOME=%JAVA_HOME%
