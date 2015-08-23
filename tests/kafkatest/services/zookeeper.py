@@ -16,6 +16,7 @@
 
 from ducktape.services.service import Service
 
+import subprocess
 import time
 
 
@@ -51,6 +52,17 @@ class ZookeeperService(Service):
 
         time.sleep(5)  # give it some time to start
 
+    def pids(self, node):
+        try:
+            cmd = "ps ax | grep -i zookeeper | grep java | grep -v grep | awk '{print $1}'"
+            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
+            return pid_arr
+        except (subprocess.CalledProcessError, ValueError) as e:
+            return []
+
+    def alive(self, node):
+        return len(self.pids(node)) > 0
+
     def stop_node(self, node):
         idx = self.idx(node)
         self.logger.info("Stopping %s node %d on %s" % (type(self).__name__, idx, node.account.hostname))
@@ -58,6 +70,10 @@ class ZookeeperService(Service):
 
     def clean_node(self, node):
         self.logger.info("Cleaning ZK node %d on %s", self.idx(node), node.account.hostname)
+        if self.alive(node):
+            self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
+                             (self.__class__.__name__, node.account))
+        node.account.kill_process("zookeeper", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf /mnt/zookeeper /mnt/zookeeper.properties /mnt/zk.log", allow_fail=False)
 
     def connect_setting(self):
