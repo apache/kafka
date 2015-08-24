@@ -23,6 +23,7 @@ import java.nio.channels._
 import kafka.api.RequestOrResponse
 import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.network.NetworkReceive
+import org.apache.kafka.common.requests.{RequestSend, AbstractRequest, RequestHeader}
 
 
 object BlockingChannel{
@@ -104,6 +105,14 @@ class BlockingChannel( val host: String,
   }
 
   def isConnected = connected
+
+  def send(header: RequestHeader, body: AbstractRequest): Long = {
+    if(!connected)
+      throw new ClosedChannelException()
+
+    val send = new RequestSend(connectionId, header, body.toStruct)
+    send.writeCompletelyTo(writeChannel)
+  }
 
   def send(request: RequestOrResponse): Long = {
     if(!connected)
