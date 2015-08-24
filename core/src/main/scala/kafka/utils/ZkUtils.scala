@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
 
 import org.apache.zookeeper.ZooDefs
+import scala.collection.JavaConverters._
 import scala.collection._
 import kafka.api.LeaderAndIsr
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -63,14 +64,14 @@ object ZkUtils extends Logging {
     val loginConfigurationFile: String = System.getProperty("java.security.auth.login.config")
     var isSecurityEnabled  = false
     if (loginConfigurationFile != null && loginConfigurationFile.length > 0) {
-      val config_file: File = new File(loginConfigurationFile)
-      if (!config_file.canRead) {
-        throw new KafkaException("File " + loginConfigurationFile + " cannot be read.")
+      val configFile: File = new File(loginConfigurationFile)
+      if (!configFile.canRead) {
+        throw new KafkaException(s"File $loginConfigurationFile cannot be read.")
       }
       try {
-        val config_uri: URI = config_file.toURI
-        val login_conf = Configuration.getInstance("JavaLoginConfig", new URIParameter(config_uri))
-        isSecurityEnabled = login_conf.getAppConfigurationEntry("Client") != null
+        val configUri: URI = configFile.toURI
+        val loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configUri))
+        isSecurityEnabled = loginConf.getAppConfigurationEntry("Client") != null
       } catch {
         case ex: Exception => {
           throw new KafkaException(ex)
@@ -81,11 +82,9 @@ object ZkUtils extends Logging {
   }
 
   val DefaultAcls: List[ACL] = if (isSecure) {
-    import scala.collection.JavaConversions._
-    (ZooDefs.Ids.CREATOR_ALL_ACL ++ ZooDefs.Ids.READ_ACL_UNSAFE).toList
+    (ZooDefs.Ids.CREATOR_ALL_ACL.asScala ++ ZooDefs.Ids.READ_ACL_UNSAFE.asScala).toList
   } else {
-    import scala.collection.JavaConversions._
-    ZooDefs.Ids.OPEN_ACL_UNSAFE.toList
+    ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala.toList
   }
 
   def getTopicPath(topic: String): String = {
