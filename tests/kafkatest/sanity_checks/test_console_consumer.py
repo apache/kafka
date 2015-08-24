@@ -61,20 +61,20 @@ class ConsoleConsumerTest(Test):
         self.consumer.start()
         node = self.consumer.nodes[0]
 
-        if not wait_until(lambda: self.consumer.alive(node), timeout_sec=10, backoff_sec=.2):
-            raise Exception("Consumer was too slow to start")
+        wait_until(lambda: self.consumer.alive(node), 
+            timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
         self.logger.info("consumer started in %s seconds " % str(time.time() - t0))
 
         # Verify that log output is happening
-        if not wait_until(lambda: file_exists(node, ConsoleConsumer.LOG_FILE), timeout_sec=10):
-            raise Exception("Timed out waiting for log file to exist")
+        wait_until(lambda: file_exists(node, ConsoleConsumer.LOG_FILE), timeout_sec=10,
+                   err_msg="Timed out waiting for logging to start.")
         assert line_count(node, ConsoleConsumer.LOG_FILE) > 0
 
         # Verify no consumed messages
         assert line_count(node, ConsoleConsumer.STDOUT_CAPTURE) == 0
 
         self.consumer.stop_node(node)
-        if not wait_until(lambda: not self.consumer.alive(node), timeout_sec=10, backoff_sec=.2):
-            raise Exception("Took too long for consumer to die.")
+
+
 
 

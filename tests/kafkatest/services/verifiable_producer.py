@@ -89,12 +89,16 @@ class VerifiableProducer(BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("VerifiableProducer", allow_fail=False)
+        if self.worker_threads is None:
+            return
+
         # block until the corresponding thread exits
         if len(self.worker_threads) >= self.idx(node):
             # Need to guard this because stop is preemptively called before the worker threads are added and started
             self.worker_threads[self.idx(node) - 1].join()
 
     def clean_node(self, node):
+        node.account.kill_process("VerifiableProducer", clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf /mnt/producer.log", allow_fail=False)
 
     def try_parse_json(self, string):
