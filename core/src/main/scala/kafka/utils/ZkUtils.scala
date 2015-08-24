@@ -908,13 +908,13 @@ object ZkPath {
   }
 }
 
-class ZKWatchedEphemeral(ephemeralPath : String, ephemeralData : String, zkConnection : ZkConnection) extends Logging {
-  private val path = ephemeralPath
-  private val data = ephemeralData
-  private val zkHandle = zkConnection.getZookeeper
+class ZKWatchedEphemeral(path : String, 
+                          data : String, 
+                          zkHandle : ZooKeeper) extends Logging {
   private val createCallback = new CreateCallback
   private val ephemeralWatcher = new EphemeralWatcher
   private val existsCallback = new ExistsCallback
+  @volatile 
   private var stop : Boolean = false
   private class CreateCallback extends StringCallback {
     def processResult(rc : Int,
@@ -927,9 +927,7 @@ class ZKWatchedEphemeral(ephemeralPath : String, ephemeralData : String, zkConne
            checkAndWatch
         }
         case Code.CONNECTIONLOSS => {
-          // TODO: Backoff 
-          
-          // and try again
+          // try again
           createAndWatch
         }
         case Code.NONODE => {
@@ -982,7 +980,7 @@ class ZKWatchedEphemeral(ephemeralPath : String, ephemeralData : String, zkConne
   }
   
   private def createRecursive(prefix : String, suffix : String) {
-    info("### Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
+    debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     if(suffix.isEmpty()) {
       zkHandle.create(prefix, 
                   data.getBytes(), 
@@ -1009,9 +1007,7 @@ class ZKWatchedEphemeral(ephemeralPath : String, ephemeralData : String, zkConne
                               // Nothing to do
                             }
                             case Code.CONNECTIONLOSS => {
-                              // TODO: Backoff 
-          
-                              // and try again
+                              // try again
                               val suffix = ctx.asInstanceOf[String]
                               createRecursive(path, suffix)
                             }
@@ -1048,7 +1044,7 @@ class ZKWatchedEphemeral(ephemeralPath : String, ephemeralData : String, zkConne
     }
     val prefix = path.substring(0, index)
     val suffix = path.substring(index, path.length)
-    info("### Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
+    debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     createRecursive(prefix, suffix)   
   }
   

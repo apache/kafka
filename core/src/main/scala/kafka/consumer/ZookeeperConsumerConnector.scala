@@ -271,7 +271,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     
     if(zkWatchedEphemeral != null)
       zkWatchedEphemeral.halt
-    zkWatchedEphemeral = new ZKWatchedEphemeral(dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, zkConnection)
+    zkWatchedEphemeral = new ZKWatchedEphemeral(dirs.
+                                                 consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, 
+                                                 zkConnection.getZookeeper)
     zkWatchedEphemeral.createAndWatch
     info("end registering consumer " + consumerIdString + " in ZK")
   }
