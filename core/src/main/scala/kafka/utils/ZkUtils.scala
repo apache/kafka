@@ -824,7 +824,7 @@ object ZkUtils extends Logging {
   def createZkClientAndConnection(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int): (ZkClient, ZkConnection) = {
     val zkConnection = new ZkConnection(zkUrl, sessionTimeout)
     val zkClient = new ZkClient(zkConnection, connectionTimeout, ZKStringSerializer)
-    (zkClient, zkConnection)    
+    (zkClient, zkConnection)
   }
 }
 
@@ -908,13 +908,13 @@ object ZkPath {
   }
 }
 
-class ZKWatchedEphemeral(path : String, 
-                          data : String, 
+class ZKWatchedEphemeral(path : String,
+                          data : String,
                           zkHandle : ZooKeeper) extends Logging {
   private val createCallback = new CreateCallback
   private val ephemeralWatcher = new EphemeralWatcher
   private val existsCallback = new ExistsCallback
-  @volatile 
+  @volatile
   private var stop : Boolean = false
   private class CreateCallback extends StringCallback {
     def processResult(rc : Int,
@@ -934,7 +934,7 @@ class ZKWatchedEphemeral(path : String,
           error("No node for path %s (could be the parent missing)".format(path))
         }
         case Code.SESSIONEXPIRED => {
-          error("Session has expired while creating %s".format(path))  
+          error("Session has expired while creating %s".format(path))
         }
         case _ => {
           info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
@@ -942,7 +942,7 @@ class ZKWatchedEphemeral(path : String,
       }
     }      
   }
-  
+ 
   private class EphemeralWatcher extends Watcher {
     def process(event : WatchedEvent) {
       // if node deleted, then recreate it
@@ -950,7 +950,7 @@ class ZKWatchedEphemeral(path : String,
         createAndWatch
     }
   }
-  
+
   private class ExistsCallback extends StatCallback {
     def processResult(rc : Int,
                  path : String,
@@ -963,7 +963,7 @@ class ZKWatchedEphemeral(path : String,
           checkAndWatch
         }
         case Code.SESSIONEXPIRED => {
-          error("Session has expired while creating %s".format(path))  
+          error("Session has expired while creating %s".format(path))
         }
         case _ => {
           info("ZooKeeper event while checking if registration node exists %s %s".format(path, Code.get(rc)))
@@ -971,34 +971,33 @@ class ZKWatchedEphemeral(path : String,
       }
     }
   }
-  
+
   private def checkAndWatch() {
-    zkHandle.exists(path, 
-                    ephemeralWatcher, 
+    zkHandle.exists(path,
+                    ephemeralWatcher,
                     existsCallback,
-                    null)        
+                    null)
   }
-  
+
   private def createRecursive(prefix : String, suffix : String) {
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     if(suffix.isEmpty()) {
-      zkHandle.create(prefix, 
-                  data.getBytes(), 
-                  Ids.OPEN_ACL_UNSAFE, 
-                  CreateMode.EPHEMERAL, 
+      zkHandle.create(prefix,
+                  data.getBytes(),
+                  Ids.OPEN_ACL_UNSAFE,
+                  CreateMode.EPHEMERAL,
                   createCallback,
                   null)
     } else {
-      zkHandle.create(prefix, 
-                  new Array[Byte](0), 
-                  Ids.OPEN_ACL_UNSAFE, 
-                  CreateMode.PERSISTENT, 
+      zkHandle.create(prefix,
+                  new Array[Byte](0),
+                  Ids.OPEN_ACL_UNSAFE,
+                  CreateMode.PERSISTENT,
                   new StringCallback() {
                         def processResult(rc : Int,
                                           path : String,
                                           ctx : Object,
                                           name : String) {
-                          
                           Code.get(rc) match {
                             case Code.OK => {
                               // Nothing to do
@@ -1015,7 +1014,7 @@ class ZKWatchedEphemeral(path : String,
                               error("No node for path %s (could be the parent missing)".format(path))
                             }
                             case Code.SESSIONEXPIRED => {
-                              error("Session has expired while creating %s".format(path))  
+                              error("Session has expired while creating %s".format(path))
                             }
                             case _ => {
                               info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
@@ -1034,9 +1033,9 @@ class ZKWatchedEphemeral(path : String,
       // Get new suffix
       val newSuffix = suffix.substring(index, suffix.length)
       createRecursive(newPrefix, newSuffix)
-    }        
+    }
   }
-  
+
   def createAndWatch() {
     val index = path.indexOf('/', 1) match {
         case -1 => path.length
@@ -1045,9 +1044,9 @@ class ZKWatchedEphemeral(path : String,
     val prefix = path.substring(0, index)
     val suffix = path.substring(index, path.length)
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
-    createRecursive(prefix, suffix)   
+    createRecursive(prefix, suffix)
   }
-  
+
   def halt() {
     stop = true
   }
