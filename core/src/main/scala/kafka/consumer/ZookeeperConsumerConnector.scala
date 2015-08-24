@@ -268,11 +268,11 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     //createEphemeralPathExpectConflictHandleZKBug(zkClient, dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, null,
     //                                             (consumerZKString, consumer) => true, config.zkSessionTimeoutMs)
-    
+
     if(zkWatchedEphemeral != null)
       zkWatchedEphemeral.halt
     zkWatchedEphemeral = new ZKWatchedEphemeral(dirs.
-                                                 consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, 
+                                                 consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo,
                                                  zkConnection.getZookeeper)
     zkWatchedEphemeral.createAndWatch
     info("end registering consumer " + consumerIdString + " in ZK")
