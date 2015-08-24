@@ -820,7 +820,7 @@ object ZkUtils extends Logging {
     val zkClient = new ZkClient(zkUrl, sessionTimeout, connectionTimeout, ZKStringSerializer)
     zkClient
   }
-  
+
   def createZkClientAndConnection(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int): (ZkClient, ZkConnection) = {
     val zkConnection = new ZkConnection(zkUrl, sessionTimeout)
     val zkClient = new ZkClient(zkConnection, connectionTimeout, ZKStringSerializer)
@@ -940,9 +940,9 @@ class ZKWatchedEphemeral(path : String,
           info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
         }
       }
-    }      
+    }  
   }
- 
+  
   private class EphemeralWatcher extends Watcher {
     def process(event : WatchedEvent) {
       // if node deleted, then recreate it
