@@ -934,15 +934,16 @@ class ZKWatchedEphemeral(path : String,
           error("No node for path %s (could be the parent missing)".format(path))
         }
         case Code.SESSIONEXPIRED => {
+
           error("Session has expired while creating %s".format(path))
         }
         case _ => {
           info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
         }
       }
-    }  
+    }
   }
-  
+
   private class EphemeralWatcher extends Watcher {
     def process(event : WatchedEvent) {
       // if node deleted, then recreate it
