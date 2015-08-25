@@ -260,8 +260,8 @@ object AdminUtils extends Logging {
       }
 
       //by default we make user that issues topic creation as the owner.
-      if(!config.containsKey(LogConfig.OwnersProp)) {
-        config.put(LogConfig.OwnersProp,  System.getProperty("user.name"))
+      if (!config.containsKey(LogConfig.OwnersProp)) {
+        config.put(LogConfig.OwnersProp, System.getProperty("user.name"))
       }
     }
 
