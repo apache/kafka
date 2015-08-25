@@ -77,14 +77,14 @@ object RequestChannel extends Logging {
     buffer = null
     private val requestLogger = Logger.getLogger("kafka.request.logger")
 
-    private def requestDesc: String = {
+    private def requestDesc(details: Boolean): String = {
       if (requestObj != null)
-        requestObj.describe(false)
+        requestObj.describe(details)
       else
         header.toString + " -- " + body.toString
     }
 
-    trace("Processor %d received request : %s".format(processor, requestDesc))
+    trace("Processor %d received request : %s".format(processor, requestDesc(false)))
 
     def updateRequestMetrics() {
       val endTimeMs = SystemTime.milliseconds
@@ -118,10 +118,10 @@ object RequestChannel extends Logging {
 
       if(requestLogger.isTraceEnabled)
         requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
-                .format(requestDesc, connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+          .format(requestDesc(false), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
       else if(requestLogger.isDebugEnabled)
         requestLogger.debug("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
-          .format(requestDesc, connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+          .format(requestDesc(true), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
     }
   }
   
