@@ -17,22 +17,24 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayDeque;
+import java.util.PriorityQueue;
 
 /**
- * RecordQueue is a queue of {@link StampedRecord} (ConsumerRecord + timestamp).
+ * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
+ * partition timestamp defined as the minimum timestamp of records in its queue; in addition, its partition
+ * timestamp is monotonically increasing such that once it is advanced, it will not be decremented.
  */
 public class RecordQueue {
 
     private final SourceNode source;
     private final TopicPartition partition;
-    private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
-    private final TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker = new MinTimestampTracker<>();
+    private final ArrayDeque<StampedRecord> fifoQueue = new ArrayDeque<>();
+    private final PriorityQueue<StampedRecord> timeQueue = new PriorityQueue<>();
 
-    private long offset;
+    private long partitionTime = -1L;
 
     /**
      * Creates a new instance of RecordQueue
@@ -64,34 +66,33 @@ public class RecordQueue {
      * @param record StampedRecord
      */
     public void add(StampedRecord record) {
-        queue.addLast(record);
+        fifoQueue.addLast(record);
 
-        offset = record.offset();
-        timestampTracker.addStampedElement(record);
+        // only add it to the timestamp tracker queue if its timestamp
+        // is no smaller than the current partition timestamp
+        if (record.timestamp >= partitionTime) {
+            timeQueue.offer(record);
+        }
     }
 
     /**
-     * Returns the next record fro the queue
+     * Returns the get record fro the queue
      *
      * @return StampedRecord
      */
-    public StampedRecord next() {
-        StampedRecord elem = queue.pollFirst();
+    public StampedRecord get() {
+        StampedRecord elem = fifoQueue.pollFirst();
 
         if (elem == null) return null;
 
-        timestampTracker.removeStampedElement(elem);
+        // try to advance the partition timestamp if necessary
+        timeQueue.remove(elem);
+
+        if (!timeQueue.isEmpty()) {
+            partitionTime = timeQueue.peek().timestamp;
+        }
 
         return elem;
-    }
-
-    /**
-     * Returns the highest offset in the queue
-     *
-     * @return offset
-     */
-    public long offset() {
-        return offset;
     }
 
     /**
@@ -100,7 +101,7 @@ public class RecordQueue {
      * @return the number of records
      */
     public int size() {
-        return queue.size();
+        return fifoQueue.size();
     }
 
     /**
@@ -109,15 +110,15 @@ public class RecordQueue {
      * @return true if the queue is empty, otherwise false
      */
     public boolean isEmpty() {
-        return queue.isEmpty();
+        return fifoQueue.isEmpty();
     }
 
     /**
-     * Returns a timestamp tracked by the TimestampTracker
+     * Returns the tracked partition timestamp
      *
      * @return timestamp
      */
     public long timestamp() {
-        return timestampTracker.get();
+        return partitionTime;
     }
 }

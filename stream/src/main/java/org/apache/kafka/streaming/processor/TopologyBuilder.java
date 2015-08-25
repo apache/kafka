@@ -42,12 +42,10 @@ public class TopologyBuilder {
     private Map<String, List<String>> children = new HashMap<>();
 
     private class ProcessorClazz {
-        public Class<? extends KafkaProcessor> clazz;
-        public ProcessorMetadata metadata;
+        public ProcessorFactory factory;
 
-        public ProcessorClazz(Class<? extends KafkaProcessor> clazz, ProcessorMetadata metadata) {
-            this.clazz = clazz;
-            this.metadata = metadata;
+        public ProcessorClazz(ProcessorFactory factory) {
+            this.factory = factory;
         }
     }
 
@@ -96,11 +94,11 @@ public class TopologyBuilder {
         sinkClasses.put(name, new SinkClazz(keySerializer, valSerializer));
     }
 
-    public final void addProcessor(String name, Class<? extends KafkaProcessor> processorClass, ProcessorMetadata config, String... parentNames) {
+    public final void addProcessor(String name, ProcessorFactory factory, String... parentNames) {
         if (processorClasses.containsKey(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
 
-        processorClasses.put(name, new ProcessorClazz(processorClass, config));
+        processorClasses.put(name, new ProcessorClazz(factory));
 
         if (parentNames != null) {
             for (String parent : parentNames) {
@@ -145,17 +143,16 @@ public class TopologyBuilder {
             processorMap.put(name, node);
         }
 
-        // create normal processors
+        // create processors
         try {
             for (String name : processorClasses.keySet()) {
-                ProcessorMetadata metadata = processorClasses.get(name).metadata;
-                Class<? extends KafkaProcessor> processorClass = processorClasses.get(name).clazz;
-                KafkaProcessor processor = processorClass.getConstructor(ProcessorMetadata.class).newInstance(metadata);
+                ProcessorFactory processorFactory = processorClasses.get(name).factory;
+                Processor processor = processorFactory.build();
                 ProcessorNode node = new ProcessorNode(name, processor);
                 processorMap.put(name, node);
             }
         } catch (Exception e) {
-            throw new KafkaException("KafkaProcessor(String) constructor failed: this should not happen.");
+            throw new KafkaException("Processor(String) constructor failed: this should not happen.");
         }
 
         // construct topics to sources map
@@ -167,8 +164,8 @@ public class TopologyBuilder {
         // construct topics to sinks map
         for (String topic : topicsToSinkNames.keySet()) {
             SinkNode node = (SinkNode) processorMap.get(topicsToSourceNames.get(topic));
-            node.addTopic(topic);
             topicSinkMap.put(topic, node);
+            node.addTopic(topic);
         }
 
         // chain children to parents to build the DAG

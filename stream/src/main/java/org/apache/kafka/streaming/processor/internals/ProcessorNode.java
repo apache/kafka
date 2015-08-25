@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ public class ProcessorNode<K1, V1, K2, V2> {
     private final List<ProcessorNode<?, ?, K1, V1>> parents;
 
     private final String name;
-    private final KafkaProcessor<K1, V1> processor;
+    private final Processor<K1, V1> processor;
 
     public boolean initialized;
 
@@ -37,7 +37,7 @@ public class ProcessorNode<K1, V1, K2, V2> {
         this(name, null);
     }
 
-    public ProcessorNode(String name, KafkaProcessor<K1, V1> processor) {
+    public ProcessorNode(String name, Processor<K1, V1> processor) {
         this.name = name;
         this.processor = processor;
         this.parents = new ArrayList<>();
@@ -50,7 +50,7 @@ public class ProcessorNode<K1, V1, K2, V2> {
         return name;
     }
 
-    public KafkaProcessor<K1, V1> processor() {
+    public Processor<K1, V1> processor() {
         return processor;
     }
 

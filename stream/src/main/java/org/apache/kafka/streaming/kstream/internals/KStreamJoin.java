@@ -17,14 +17,14 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.kstream.ValueJoiner;
 import org.apache.kafka.streaming.kstream.Window;
 
 import java.util.Iterator;
 
-class KStreamJoin<K, V, V1, V2> extends KafkaProcessor<K, V1, K, V> {
+class KStreamJoin<K, V, V1, V2> extends Processor<K, V1, K, V> {
 
     private static final String JOIN_NAME = "KAFKA-JOIN";
     private static final String JOIN_OTHER_NAME = "KAFKA-JOIN-OTHER";
@@ -38,7 +38,7 @@ class KStreamJoin<K, V, V1, V2> extends KafkaProcessor<K, V1, K, V> {
     private final Finder<K, V1> finder1;
     private final Finder<K, V2> finder2;
     private final ValueJoiner<V1, V2, V> joiner;
-    final KafkaProcessor<K, V2, K, V> processorForOtherStream;
+    final Processor<K, V2, K, V> processorForOtherStream;
 
     private ProcessorContext context;
 
@@ -100,8 +100,8 @@ class KStreamJoin<K, V, V1, V2> extends KafkaProcessor<K, V1, K, V> {
         }
     }
 
-    private KafkaProcessor<K, V2, K, V> processorForOther() {
-        return new KafkaProcessor<K, V2, K, V>(JOIN_OTHER_NAME) {
+    private Processor<K, V2, K, V> processorForOther() {
+        return new Processor<K, V2, K, V>(JOIN_OTHER_NAME) {
 
             @SuppressWarnings("unchecked")
             @Override

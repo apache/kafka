@@ -19,7 +19,6 @@ package org.apache.kafka.streaming.kstream;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
 import org.apache.kafka.streaming.processor.Processor;
 
 /**

@@ -17,87 +17,82 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.processor.Punctuator;
 import org.apache.kafka.streaming.processor.TimestampExtractor;
 
-import java.util.ArrayDeque;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * A StreamTask is associated with a {@link PartitionGroup} which is assigned to a StreamThread for processing.
+ * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
  */
 public class StreamTask {
 
     private final int id;
-    private final int desiredUnprocessed;
+    private final int maxBufferedSize;
 
     private final Consumer consumer;
     private final PartitionGroup partitionGroup;
+    private final PunctuationQueue punctuationQueue;
+    private final ProcessorContext processorContext;
     private final TimestampExtractor timestampExtractor;
 
-    private final Map<TopicPartition, Long> consumedOffsets;
-    private final PunctuationQueue punctuationQueue = new PunctuationQueue();
-    private final ArrayDeque<NewRecords> newRecordBuffer = new ArrayDeque<>();
-
-    private long streamTime = -1;
     private boolean commitRequested = false;
-    private StampedRecord currRecord = null;
-    private ProcessorNode currNode = null;
 
     /**
      * Creates StreamGroup
      *
-     * @param consumer                       the instance of {@link Consumer}
-     * @param partitions                     the instance of {@link TimestampExtractor}
-     * @param desiredUnprocessedPerPartition the target number of records kept in a queue for each topic
+     * @param id                    the ID of this task
+     * @param consumer              the instance of {@link Consumer}
+     * @param topology              the instance of {@link ProcessorTopology}
+     * @param partitions            the collection of assigned {@link TopicPartition}
+     * @param config                the {@link StreamingConfig} specified by the user
      */
     public StreamTask(int id,
                       Consumer consumer,
                       ProcessorTopology topology,
                       Collection<TopicPartition> partitions,
-                      int desiredUnprocessedPerPartition) {
+                      StreamingConfig config) {
+
         this.id = id;
         this.consumer = consumer;
-        this.desiredUnprocessed = desiredUnprocessedPerPartition;
-        this.consumedOffsets = new HashMap<>();
+        this.punctuationQueue = new PunctuationQueue();
+        this.maxBufferedSize = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        this.timestampExtractor = config.getConfiguredInstance(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
 
-        // create partition queues and pipe them to corresponding source nodes in the topology
+        // create queues for each assigned partition and associate them
+        // to corresponding source nodes in the processor topology
         Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
+
         for (TopicPartition partition : partitions) {
-            RecordQueue queue = createRecordQueue(partition, topology.source(partition.topic()));
+            SourceNode source = topology.source(partition.topic());
+            RecordQueue queue = createRecordQueue(partition, source);
             partitionQueues.put(partition, queue);
         }
+
         this.partitionGroup = new PartitionGroup(partitionQueues);
+
+        // initialize the topology with its own context
+        this.processorContext = new ProcessorContextImpl(id, this, config, )
+
+        topology.init();
     }
 
     public int id() {
         return id;
     }
 
-    public StampedRecord record() {
-        return currRecord;
-    }
-
-    public ProcessorNode node() {
-        return currNode;
-    }
-
-    public void setNode(ProcessorNode node) {
-        currNode = node;
-    }
-
     public Set<TopicPartition> partitions() {
-        return queuesPerPartition.keySet();
+        return this.partitionGroup.partitions();
     }
 
     /**
@@ -146,60 +141,36 @@ public class StreamTask {
         synchronized (this) {
             boolean readyForNextExecution = false;
 
-            // take the next record queue with the smallest estimated timestamp to process
-            long timestamp = partitionGroup.timestamp();
-            StampedRecord record = partitionGroup.nextRecord();
+            // process the next record from the partition-group queue
+            // with the smallest estimated timestamp to process
+            TopicPartition partition = partitionGroup.processRecord();
 
-            currRecord = recordQueue.next();
-            currNode = recordQueue.source();
-
-            if (streamTime < timestamp) streamTime = timestamp;
-
-            currNode.process(currRecord.key(), currRecord.value());
-            consumedOffsets.put(recordQueue.partition(), currRecord.offset());
-
-            // TODO: local state flush and downstream producer flush
-            // need to be done altogether with offset commit atomically
             if (commitRequested) {
-                // flush local state
-                context.flush();
-
-                // flush produced records in the downstream
-                context.recordCollector().flush();
-
-                // commit consumed offsets
-                ingestor.commit(consumedOffsets());
+                // TODO: flush the following states atomically
+                // 1) flush local state
+                // 2) commit consumed offsets
+                // 3) flush produced records in the downstream
             }
 
-            if (commitRequested) ingestor.commit(Collections.singletonMap(
-                new TopicPartition(currRecord.topic(), currRecord.partition()),
-                currRecord.offset()));
-
-            // update this record queue's estimated timestamp
-            if (recordQueue.size() > 0) {
+            // we can continue processing this task as long as its
+            // partition group still have buffered records
+            if (partitionGroup.numbuffered() > 0) {
                 readyForNextExecution = true;
             }
 
-            if (recordQueue.size() == this.desiredUnprocessed) {
-                ingestor.unpause(recordQueue.partition(), recordQueue.offset());
+            // if after processing this record, its partition queue's buffered size has been
+            // decreased to the threshold, we can then resume the consumption on this partition
+            if (partitionGroup.numbuffered(partition) == this.maxBufferedSize) {
+                consumer.resume(partition);
             }
 
-            buffered--;
-            currRecord = null;
-
-            punctuationQueue.mayPunctuate(streamTime);
+            // possibly trigger registered punctuation functions if
+            // partition group's time has reached the defined stamp
+            long timestamp = partitionGroup.timestamp();
+            punctuationQueue.mayPunctuate(timestamp);
 
             return readyForNextExecution;
         }
-    }
-
-    /**
-     * Returns consumed offsets
-     *
-     * @return the map of partition to consumed offset
-     */
-    public Map<TopicPartition, Long> consumedOffsets() {
-        return this.consumedOffsets;
     }
 
     /**
@@ -210,21 +181,10 @@ public class StreamTask {
     }
 
     public void close() {
-        queuesByTime.clear();
-        queuesPerPartition.clear();
+        this.partitionGroup.close();
     }
 
     protected RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
         return new RecordQueue(partition, source);
-    }
-
-    private static class NewRecords {
-        final TopicPartition partition;
-        final Iterator<ConsumerRecord<byte[], byte[]>> iterator;
-
-        NewRecords(TopicPartition partition, Iterator<ConsumerRecord<byte[], byte[]>> iterator) {
-            this.partition = partition;
-            this.iterator = iterator;
-        }
     }
 }

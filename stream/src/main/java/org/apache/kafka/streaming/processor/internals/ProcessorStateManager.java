@@ -44,13 +44,19 @@ public class ProcessorStateManager {
     private final Map<TopicPartition, Long> restoredOffsets;
     private final Map<TopicPartition, Long> checkpointedOffsets;
 
-    public ProcessorStateManager(int id, File baseDir, Consumer<byte[], byte[]> restoreConsumer) {
+    public ProcessorStateManager(int id, File baseDir, Consumer<byte[], byte[]> restoreConsumer) throws IOException {
         this.id = id;
         this.baseDir = baseDir;
         this.stores = new HashMap<>();
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
         this.checkpointedOffsets = new HashMap<>();
+
+        OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
+        this.checkpointedOffsets.putAll(checkpoint.read());
+
+        // delete the checkpoint file after finish loading its stored offsets
+        checkpoint.delete();
     }
 
     public File baseDir() {
@@ -59,14 +65,6 @@ public class ProcessorStateManager {
 
     public Consumer<byte[], byte[]> restoreConsumer() {
         return this.restoreConsumer;
-    }
-
-    public void init() throws IOException {
-        OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
-        this.checkpointedOffsets.putAll(checkpoint.read());
-
-        // delete the checkpoint file after finish loading its stored offsets
-        checkpoint.delete();
     }
 
     public void register(StateStore store, RestoreFunc restoreFunc) {

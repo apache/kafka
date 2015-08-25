@@ -64,13 +64,6 @@ public interface ProcessorContext {
     Deserializer<?> valueDeserializer();
 
     /**
-     * Returns a RecordCollector
-     *
-     * @return RecordCollector
-     */
-    RecordCollector recordCollector();
-
-    /**
      * Returns the state directory for the partition.
      *
      * @return the state directory
@@ -96,13 +89,9 @@ public interface ProcessorContext {
      */
     void flush();
 
+    void schedule(Processor processor, long interval);
+
     <K, V> void forward(K key, V value);
-
-    void send(String topic, Object key, Object value);
-
-    void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer);
-
-    void schedule(KafkaProcessor processor, long interval);
 
     void commit();
 

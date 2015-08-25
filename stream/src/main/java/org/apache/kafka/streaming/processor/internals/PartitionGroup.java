@@ -22,24 +22,30 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
 
 /**
- * A PartitionGroup is composed from a set of partitions.
+ * A PartitionGroup is composed from a set of partitions; it also keeps track
+ * of the consumed offsets for each of its partitions.
  */
 public class PartitionGroup {
 
     private final Map<TopicPartition, RecordQueue> partitionQueues;
 
+    private final Map<TopicPartition, Long> consumedOffsets;
+
     private final PriorityQueue<RecordQueue> queuesByTime;
 
-    private volatile int totalBuffered;
+    // since task is thread-safe, we do not need to synchronize on local variables
+    private int totalBuffered;
 
     public PartitionGroup(Map<TopicPartition, RecordQueue> partitionQueues) {
-
-        this.partitionQueues = partitionQueues;
         this.queuesByTime = new PriorityQueue<>(new Comparator<RecordQueue>() {
+
+            @Override
             public int compare(RecordQueue queue1, RecordQueue queue2) {
                 long time1 = queue1.timestamp();
                 long time2 = queue2.timestamp();
@@ -50,28 +56,41 @@ public class PartitionGroup {
             }
         });
 
-        totalBuffered = 0;
+        this.partitionQueues = partitionQueues;
+
+        this.consumedOffsets = new HashMap<>();
+
+        this.totalBuffered = 0;
     }
 
     /**
-     * Get the next record from the partition with the lowest timestamp to be processed
+     * Process one record from this partition group's queues
+     * as the first record from the lowest stamped partition,
+     * return its partition when completed
      */
-    public StampedRecord nextRecord() {
-
-        // Get the partition with the lowest timestamp.
+    @SuppressWarnings("unchecked")
+    public TopicPartition processRecord() {
+        // get the partition with the lowest timestamp.
         RecordQueue recordQueue = queuesByTime.poll();
 
-        // Get the first record from this partition's queue.
-        StampedRecord record = recordQueue.next();
+        // get the first record from this partition's queue.
+        StampedRecord record = recordQueue.get();
 
         totalBuffered--;
 
-        // Update the partition's timestamp and re-order it with other partitions.
+        // process the record by passing it to the source node of the topology
+        recordQueue.source().process(record.key(), record.value());
+
+        // update the partition's timestamp and re-order it against other partitions.
         if (recordQueue.size() > 0) {
             queuesByTime.offer(recordQueue);
         }
 
-        return record;
+        // update the consumed offset map.
+        consumedOffsets.put(recordQueue.partition(), record.offset());
+
+        // return the processed record's partition
+        return recordQueue.partition();
     }
 
     /**
@@ -93,8 +112,9 @@ public class PartitionGroup {
         totalBuffered++;
 
         // add this record queue to be considered for processing in the future if it was empty before
-        if (wasEmpty)
+        if (wasEmpty) {
             queuesByTime.offer(recordQueue);
+        }
     }
 
     public Deserializer<?> keyDeserializer(TopicPartition partition) {
@@ -115,13 +135,33 @@ public class PartitionGroup {
         return recordQueue.source().valDeserializer;
     }
 
-    public long timestamp() {
+    public Set<TopicPartition> partitions() {
+        return partitionQueues.keySet();
+    }
 
-        // return the timestamp of this partition-group as the smallest partition timestamp
-        if (queuesByTime.isEmpty())
+    /**
+     * Return the timestamp of this partition group as the smallest
+     * partition timestamp among all its partitions
+     */
+    public long timestamp() {
+        if (queuesByTime.isEmpty()) {
             return -1L;
-        else
+        } else {
             return queuesByTime.peek().timestamp();
+        }
+    }
+
+    public long offset(TopicPartition partition) {
+        Long offset = consumedOffsets.get(partition);
+
+        if (offset == null)
+            throw new KafkaException("No record has ever been consumed for this partition.");
+
+        return offset;
+    }
+
+    public Map<TopicPartition, Long> offsets() {
+        return consumedOffsets;
     }
 
     public int numbuffered(TopicPartition partition) {
@@ -135,5 +175,11 @@ public class PartitionGroup {
 
     public int numbuffered() {
         return totalBuffered;
+    }
+
+    public void close() {
+        queuesByTime.clear();
+        consumedOffsets.clear();
+        partitionQueues.clear();
     }
 }

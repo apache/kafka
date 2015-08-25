@@ -39,6 +39,8 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streaming.processor.TimestampExtractor;
+import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +55,7 @@ public class StreamThread extends Thread {
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
     private final Consumer<byte[], byte[]> consumer;
-    private final ProcessorTopology topology;
+    private final TopologyBuilder builder;
     private final RecordCollectorImpl collector;
     private final Map<Integer, StreamTask> tasks = new HashMap<>();
     private final Metrics metrics;
@@ -86,11 +88,11 @@ public class StreamThread extends Thread {
     };
 
     @SuppressWarnings("unchecked")
-    public StreamThread(ProcessorTopology topology, StreamingConfig config) throws Exception {
+    public StreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
         super();
 
         this.config = config;
-        this.topology = topology;
+        this.builder = builder;
 
         this.streamingMetrics = new KafkaStreamingMetrics();
 
@@ -214,11 +216,11 @@ public class StreamThread extends Thread {
         }
 
         // check if commit is really needed, i.e. if all the offsets are already committed
-        if (ingestor.commitNeeded(commit)) {
+        if (consumer.commitNeeded(commit)) {
             // TODO: for exactly-once we need to make sure the flush and commit
             // are executed atomically whenever it is triggered by user
             collector.flush();
-            ingestor.commit(commit); // TODO: can this be async?
+            consumer.commit(commit); // TODO: can this be async?
             streamingMetrics.commitTime.record(now - lastCommit);
         }
         */
@@ -261,8 +263,8 @@ public class StreamThread extends Thread {
                     if (part.partition() == id)
                         partitionsForTask.add(part);
 
-                // creat the task
-                task = new StreamTask(id, consumer, topology, partitionsForTask, config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG));
+                // create the task
+                task = new StreamTask(id, consumer, builder.build(), partitionsForTask, config);
 
                 tasks.put(id, task);
             }

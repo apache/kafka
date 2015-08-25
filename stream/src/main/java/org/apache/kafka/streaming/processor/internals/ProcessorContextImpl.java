@@ -30,7 +30,7 @@ import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.processor.RecordCollector;
 import org.apache.kafka.streaming.processor.StateStore;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.RestoreFunc;
 import org.apache.kafka.streaming.processor.TimestampExtractor;
 
@@ -50,13 +50,9 @@ public class ProcessorContextImpl implements ProcessorContext {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
 
-    public final int id;
-    public final Ingestor ingestor;
-    public final StreamGroup streamGroup;
-
+    private final int id;
+    private final StreamTask task;
     private final Metrics metrics;
-    private final ProcessorTopology topology;
-    private final RecordCollectorImpl collector;
     private final ProcessorStateManager stateMgr;
 
     private final Serializer<?> keySerializer;
@@ -65,50 +61,34 @@ public class ProcessorContextImpl implements ProcessorContext {
     private final Deserializer<?> valDeserializer;
 
     private boolean initialized;
+    private ProcessorNode currNode;
+    private StampedRecord currRecord;
 
     @SuppressWarnings("unchecked")
     public ProcessorContextImpl(int id,
-                                Ingestor ingestor,
-                                ProcessorTopology topology,
-                                RecordCollectorImpl collector,
+                                StreamTask task,
                                 StreamingConfig config,
                                 Metrics metrics) throws IOException {
         this.id = id;
+        this.task = task;
         this.metrics = metrics;
-        this.ingestor = ingestor;
-        this.topology = topology;
-        this.collector = collector;
-
-        for (String topic : this.topology.sourceTopics()) {
-            if (!ingestor.topics().contains(topic))
-                throw new IllegalArgumentException("topic not subscribed: " + topic);
-        }
 
         this.keySerializer = config.getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
         this.valSerializer = config.getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
         this.keyDeserializer = config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
         this.valDeserializer = config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
 
-        TimestampExtractor extractor = config.getConfiguredInstance(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
-        int bufferedRecordsPerPartition = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-
         File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(id));
-        Consumer restoreConsumer = new KafkaConsumer<>(config.getConsumerProperties(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+
+        Consumer restoreConsumer = new KafkaConsumer<>(
+            config.getConsumerProperties(),
+            null /* no callback for restore consumer */,
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer());
 
         this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
-        this.streamGroup = new StreamGroup(this, this.ingestor, extractor, bufferedRecordsPerPartition);
 
-        stateMgr.init();
-
-        initialized = false;
-    }
-
-    public void addPartition(TopicPartition partition) {
-        // update the partition -> source stream map
-        SourceNode source = topology.source(partition.topic());
-
-        this.streamGroup.addPartition(partition, source);
-        this.ingestor.addPartitionStreamToGroup(this.streamGroup, partition);
+        this.initialized = false;
     }
 
     @Override
@@ -116,10 +96,10 @@ public class ProcessorContextImpl implements ProcessorContext {
 
         ProcessorContextImpl other = (ProcessorContextImpl) o;
 
-        if (this.streamGroup != other.streamGroup)
+        if (this.task != other.task)
             return false;
 
-        Set<TopicPartition> partitions = this.streamGroup.partitions();
+        Set<TopicPartition> partitions = this.task.partitions();
         Map<Integer, List<String>> partitionsById = new HashMap<>();
         int firstId = -1;
         for (TopicPartition partition : partitions) {
@@ -172,11 +152,6 @@ public class ProcessorContextImpl implements ProcessorContext {
     }
 
     @Override
-    public RecordCollector recordCollector() {
-        return collector;
-    }
-
-    @Override
     public File stateDir() {
         return stateMgr.baseDir();
     }
@@ -197,13 +172,6 @@ public class ProcessorContextImpl implements ProcessorContext {
     @Override
     public void flush() {
         stateMgr.flush();
-    }
-
-    public String topic() {
-        if (streamGroup.record() == null)
-            throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
-
-        return streamGroup.record().topic();
     }
 
     @Override
@@ -240,40 +208,12 @@ public class ProcessorContextImpl implements ProcessorContext {
     }
 
     @Override
-    public void send(String topic, Object key, Object value) {
-        collector.send(new ProducerRecord<>(topic, key, value));
-    }
-
-    @Override
-    public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) {
-        if (keySerializer == null || valSerializer == null)
-            throw new IllegalStateException("key and value serializers must be specified");
-
-        collector.send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer);
-    }
-
-    @Override
     public void commit() {
-        streamGroup.commitOffset();
+        task.commitOffset();
     }
 
     @Override
-    public void schedule(KafkaProcessor processor, long interval) {
-        streamGroup.schedule(processor, interval);
+    public void schedule(Processor processor, long interval) {
+        task.schedule(processor, interval);
     }
-
-    public void initialized() {
-        initialized = true;
-    }
-
-    public Map<TopicPartition, Long> consumedOffsets() {
-        return streamGroup.consumedOffsets();
-    }
-
-    public void close() throws Exception {
-        topology.close();
-        stateMgr.close(collector.offsets());
-        streamGroup.close();
-    }
-
 }

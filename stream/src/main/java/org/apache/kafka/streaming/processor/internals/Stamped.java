@@ -27,6 +27,7 @@ public class Stamped<V> implements Comparable {
         this.timestamp = timestamp;
     }
 
+    @Override
     public int compareTo(Object other) {
         long otherTimestamp = ((Stamped<?>) other).timestamp;
 

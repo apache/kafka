@@ -17,12 +17,12 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 import org.apache.kafka.streaming.kstream.KeyValue;
 import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
 
-class KStreamFlatMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1> {
+class KStreamFlatMap<K1, V1, K2, V2> extends Processor<K1, V1> {
 
     private final KeyValueFlatMap<K1, V1, K2, V2> mapper;
 

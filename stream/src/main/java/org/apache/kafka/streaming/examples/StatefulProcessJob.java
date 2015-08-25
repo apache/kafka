@@ -20,7 +20,7 @@ package org.apache.kafka.streaming.examples;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.KafkaStreaming;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.ProcessorContext;
@@ -33,7 +33,7 @@ import java.util.Properties;
 
 public class StatefulProcessJob {
 
-    private static class MyProcessor extends KafkaProcessor<String, Integer, Object, Object> {
+    private static class MyProcessor extends Processor<String, Integer, Object, Object> {
         private ProcessorContext context;
         private KeyValueStore<String, Integer> kvStore;
 

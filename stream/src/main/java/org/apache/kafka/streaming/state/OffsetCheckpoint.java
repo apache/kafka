@@ -43,7 +43,7 @@ import java.util.Map;
  *   .
  *   &lt;topic_name_n&gt; &lt;partition_n&gt; &lt;offset_n&gt;
  * </pre>
- *   The first line contains a number designating the format version (currently 0), the next line contains
+ *   The first line contains a number designating the format version (currently 0), the get line contains
  *   a number giving the total number of offsets. Each successive line gives a topic/partition/offset triple
  *   separated by spaces.
  */

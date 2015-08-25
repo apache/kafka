@@ -18,11 +18,11 @@
 package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 
-class KStreamSend<K, V> extends KafkaProcessor<K, V, Object, Object> {
+class KStreamSend<K, V> extends Processor<K, V, Object, Object> {
 
     private ProcessorContext context;
 

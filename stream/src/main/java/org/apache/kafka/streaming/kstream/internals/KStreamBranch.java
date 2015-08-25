@@ -18,11 +18,11 @@
 package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 import org.apache.kafka.streaming.kstream.Predicate;
 
-class KStreamBranch<K, V> extends KafkaProcessor<K, V, K, V> {
+class KStreamBranch<K, V> extends Processor<K, V, K, V> {
 
     private final Predicate<K, V>[] predicates;
 

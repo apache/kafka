@@ -17,11 +17,11 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 
 import java.util.ArrayList;
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
+public class MockProcessor<K1, V1> extends Processor<K1, V1, Object, Object> {
     public final ArrayList<String> processed = new ArrayList<>();
     public final ArrayList<Long> punctuated = new ArrayList<>();
 

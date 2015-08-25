@@ -17,11 +17,10 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 
-public class KStreamProcessor<K, V> extends KafkaProcessor<K, V> {
+public class KStreamProcessor<K, V> extends Processor<K, V> {
 
     private final Processor<K, V> processor;
 

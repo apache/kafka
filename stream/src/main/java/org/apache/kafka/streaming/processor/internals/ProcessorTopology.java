@@ -19,6 +19,7 @@ package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.streaming.processor.ProcessorContext;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +53,14 @@ public class ProcessorTopology {
 
     public SinkNode sink(String topic) {
         return sinkTopics.get(topic);
+    }
+
+    public Collection<SourceNode> sources() {
+        return sourceTopics.values();
+    }
+
+    public Collection<SinkNode> sinks() {
+        return sinkTopics.values();
     }
 
     /**
@@ -93,12 +102,13 @@ public class ProcessorTopology {
 
     public final void close() {
         // close the processors
-        // TODO: do we need to follow the DAG ordering
+        // TODO: do we need to follow the DAG ordering?
         for (ProcessorNode processorNode : processors.values()) {
             processorNode.close();
         }
 
         processors.clear();
         sourceTopics.clear();
+        sinkTopics.clear();
     }
 }

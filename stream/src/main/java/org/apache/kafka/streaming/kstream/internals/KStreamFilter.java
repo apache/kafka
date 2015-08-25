@@ -17,11 +17,11 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.kstream.Predicate;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 
-class KStreamFilter<K, V> extends KafkaProcessor<K, V> {
+class KStreamFilter<K, V> extends Processor<K, V> {
 
     private final PredicateOut<K, V> predicateOut;
 

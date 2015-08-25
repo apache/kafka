@@ -17,13 +17,12 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.kstream.KeyValue;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
-import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.processor.ProcessorMetadata;
 
-class KStreamMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1> {
+class KStreamMap<K1, V1, K2, V2> extends Processor<K1, V1> {
 
     private final KeyValueMapper<K1, V1, K2, V2> mapper;
 

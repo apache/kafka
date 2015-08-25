@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 <<<<<<< HEAD:stream/src/test/java/org/apache/kafka/test/MockKStreamContext.java
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -81,6 +82,9 @@ import org.apache.kafka.stream.processor.StateStore;
 >>>>>>> Refactor Processor and KStream APIs
 =======
 import org.apache.kafka.streaming.processor.KafkaProcessor;
+=======
+import org.apache.kafka.streaming.processor.Processor;
+>>>>>>> wip: refactor StreamTask and ProcessorContext, fix RecordQueue timestamp tracking
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.processor.RecordCollector;
 import org.apache.kafka.streaming.processor.RestoreFunc;
@@ -273,7 +277,7 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public void schedule(KafkaProcessor processor, long interval) {
+    public void schedule(Processor processor, long interval) {
         throw new UnsupportedOperationException("schedule() not supported");
     }
 
