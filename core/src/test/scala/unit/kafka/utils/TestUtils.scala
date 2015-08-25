@@ -254,6 +254,17 @@ object TestUtils extends Logging {
     bytes
   }
 
+  def maybeCreateBrokerRegisterLockPath(zkClient: ZkClient): Unit = {
+    if (!ZkUtils.pathExists(zkClient, ZkUtils.BrokerRegisterLocksPath)) {
+      try {
+        ZkUtils.createPersistentPath(zkClient, ZkUtils.BrokerRegisterLocksPath, "")
+      }
+      catch {
+        case e: Exception => // do nothing
+      }
+    }
+  }
+
   /**
    * Generate a random string of letters and digits of the given length
    * @param len The length of the string
@@ -501,13 +512,14 @@ object TestUtils extends Logging {
   }
 
   def createBrokersInZk(zkClient: ZkClient, zkConnection: ZkConnection, ids: Seq[Int]): Seq[Broker] = {
+    maybeCreateBrokerRegisterLockPath(zkClient)
     val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
     brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, zkConnection, b.id, "localhost", 6667, b.endPoints, jmxPort = -1))
     brokers
   }
 
   def deleteBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
+    val brokers = ids.map(id => new Broker(id, "localhost", 6667 + id, SecurityProtocol.PLAINTEXT))
     brokers.foreach(b => ZkUtils.deletePath(zkClient, ZkUtils.BrokerIdsPath + "/" + b))
     brokers
   }

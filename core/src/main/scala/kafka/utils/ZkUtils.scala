@@ -49,6 +49,7 @@ object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
+  val BrokerRegisterLocksPath = "/brokers/register-locks"
   val ControllerPath = "/controller"
   val ControllerEpochPath = "/controller_epoch"
   val ReassignPartitionsPath = "/admin/reassign_partitions"
@@ -62,6 +63,7 @@ object ZkUtils extends Logging {
   val persistentZkPaths = Seq(ConsumersPath,
                               BrokerIdsPath,
                               BrokerTopicsPath,
+                              BrokerRegisterLocksPath,
                               EntityConfigChangesPath,
                               ZkUtils.getEntityConfigRootPath(ConfigType.Topic),
                               ZkUtils.getEntityConfigRootPath(ConfigType.Client),
@@ -207,11 +209,25 @@ object ZkUtils extends Logging {
   def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], jmxPort: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
+    val zkLock = new ZKLock(zkClient, ZkUtils.BrokerRegisterLocksPath, Some(5))
+    zkLock.acquire()
+    try {
+      verifyUniqueHostPort(host, port, zkClient)
+      val brokerInfo = Json.encode(Map("version" -> 2, "host" -> host, "port" -> port, "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
+      registerBrokerInZk(zkClient, zkConnection, brokerIdPath, brokerInfo)
 
-    val brokerInfo = Json.encode(Map("version" -> 2, "host" -> host, "port" -> port, "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
-    registerBrokerInZk(zkClient, zkConnection, brokerIdPath, brokerInfo)
+      info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
+    } finally {
+      zkLock.release()
+    }
+  }
 
-    info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
+
+  private def verifyUniqueHostPort(host:String, port:Int, zkClient: ZkClient): Unit = {
+    val allBrokers = ZkUtils.getAllBrokersInCluster(zkClient)
+    for (e <- allBrokers flatMap { broker => broker.endPoints.values })
+       if (e.host == host && e.port == port)
+          throw new RuntimeException("Host/port combination %s:%d is already registered by an existing broker".format(host, port))
   }
 
   private def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, brokerIdPath: String, brokerInfo: String) {
@@ -324,6 +340,10 @@ object ZkUtils extends Logging {
 
   def createSequentialPersistentPath(client: ZkClient, path: String, data: String = ""): String = {
     ZkPath.createPersistentSequential(client, path, data)
+  }
+
+  def createEphemeralSequential(client: ZkClient, path: String, data: String = ""): String = {
+    ZkPath.createEphemeralSequential(client, path, data)
   }
 
   /**
@@ -862,6 +882,11 @@ object ZkPath {
   def createPersistentSequential(client: ZkClient, path: String, data: Object): String = {
     checkNamespace(client)
     client.createPersistentSequential(path, data)
+  }
+
+  def createEphemeralSequential(client: ZkClient, path: String, data: Object): String = {
+    checkNamespace(client)
+    client.createEphemeralSequential(path, data)
   }
 }
 

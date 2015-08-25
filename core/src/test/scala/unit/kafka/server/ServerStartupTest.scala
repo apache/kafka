@@ -17,11 +17,13 @@
 
 package kafka.server
 
+import kafka.cluster.Broker
 import kafka.utils.ZkUtils
 import kafka.utils.CoreUtils
 import kafka.utils.TestUtils
 
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
 
@@ -67,5 +69,19 @@ class ServerStartupTest extends ZooKeeperTestHarness {
 
     server1.shutdown()
     CoreUtils.rm(server1.config.logDirs)
+  }
+
+  @Test
+  def testConflictBrokerRegistrationWithSameHostAndPort() {
+
+    val brokers = List(0, 1)
+
+    intercept[RuntimeException] {
+      for (id <- brokers) {
+        TestUtils.maybeCreateBrokerRegisterLockPath(zkClient)
+        val broker = new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT)
+        ZkUtils.registerBrokerInZk(zkClient, id, "localhost", 6667, broker.endPoints, 6000, jmxPort = -1)
+      }
+    }
   }
 }
