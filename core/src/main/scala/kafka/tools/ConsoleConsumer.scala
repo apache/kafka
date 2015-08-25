@@ -53,8 +53,16 @@ object ConsoleConsumer extends Logging {
 
     addShutdownHook(consumer, conf)
 
-    process(conf.maxMessages, conf.formatter, consumer, conf.skipMessageOnError)
-    reportRecordCount()
+    try {
+      process(conf.maxMessages, conf.formatter, consumer, conf.skipMessageOnError)
+    } finally {
+      consumer.cleanup()
+      reportRecordCount()
+
+      // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
+      if (!conf.groupIdPassed)
+        ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
+    }
   }
 
   def checkZk(config: ConsumerConfig) {
@@ -74,11 +82,7 @@ object ConsoleConsumer extends Logging {
   def addShutdownHook(consumer: BaseConsumer, conf: ConsumerConfig) {
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
-        consumer.close()
-
-        // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
-        if (!conf.groupIdPassed)
-          ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
+        consumer.stop()
       }
     })
   }
@@ -91,7 +95,7 @@ object ConsoleConsumer extends Logging {
       } catch {
         case e: Throwable => {
           error("Error processing message, stopping consumer: ", e)
-          consumer.close()
+          consumer.stop()
           return
         }
       }
@@ -99,10 +103,12 @@ object ConsoleConsumer extends Logging {
         formatter.writeTo(msg.key, msg.value, System.out)
       } catch {
         case e: Throwable =>
-          if (skipMessageOnError)
+          if (skipMessageOnError) {
             error("Error processing message, skipping this message: ", e)
-          else
+          } else {
+            consumer.stop()
             throw e
+          }
       }
       checkErr(formatter)
     }
