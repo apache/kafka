@@ -62,7 +62,7 @@ object ZkUtils extends Logging {
 
   val isSecure: Boolean = {
     val loginConfigurationFile: String = System.getProperty("java.security.auth.login.config")
-    var isSecurityEnabled  = false
+    var isSecurityEnabled = false
     if (loginConfigurationFile != null && loginConfigurationFile.length > 0) {
       val configFile: File = new File(loginConfigurationFile)
       if (!configFile.canRead) {
@@ -279,9 +279,8 @@ object ZkUtils extends Logging {
    */
   def makeSurePersistentPathExists(client: ZkClient, path: String, acls: List[ACL] = DefaultAcls) {
     //Consumer path is kept open as different consumers will write under this node.
-    val acl = if(path == null || path.isEmpty || path.equals(ConsumersPath)) {
-      import scala.collection.JavaConversions._
-      ZooDefs.Ids.OPEN_ACL_UNSAFE.toList
+    val acl = if (path == null || path.isEmpty || path.equals(ConsumersPath)) {
+      ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala.toList
     } else acls
 
     if (!client.exists(path))
