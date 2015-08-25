@@ -47,7 +47,7 @@ class ConsoleConsumerTest extends JUnitSuite {
     EasyMock.replay(formatter)
 
     //Test
-    ConsoleConsumer.process(messageLimit, formatter, consumer)
+    ConsoleConsumer.process(messageLimit, formatter, consumer, true)
   }
 
   @Test
