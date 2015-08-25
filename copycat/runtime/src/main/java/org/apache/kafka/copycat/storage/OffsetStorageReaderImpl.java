@@ -57,17 +57,17 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
     }
 
     @Override
-    public SchemaAndValue getOffset(SchemaAndValue partition) {
-        return getOffsets(Arrays.asList(partition)).get(partition);
+    public SchemaAndValue offset(SchemaAndValue partition) {
+        return offsets(Arrays.asList(partition)).get(partition);
     }
 
     @Override
-    public Map<SchemaAndValue, SchemaAndValue> getOffsets(Collection<SchemaAndValue> partitions) {
+    public Map<SchemaAndValue, SchemaAndValue> offsets(Collection<SchemaAndValue> partitions) {
         // Serialize keys so backing store can work with them
         Map<ByteBuffer, SchemaAndValue> serializedToOriginal = new HashMap<>(partitions.size());
         for (SchemaAndValue key : partitions) {
             try {
-                byte[] keySerialized = keySerializer.serialize(namespace, keyConverter.fromCopycatData(key.getSchema(), key.getValue()));
+                byte[] keySerialized = keySerializer.serialize(namespace, keyConverter.fromCopycatData(key.schema(), key.value()));
                 ByteBuffer keyBuffer = (keySerialized != null) ? ByteBuffer.wrap(keySerialized) : null;
                 serializedToOriginal.put(keyBuffer, key);
             } catch (Throwable t) {

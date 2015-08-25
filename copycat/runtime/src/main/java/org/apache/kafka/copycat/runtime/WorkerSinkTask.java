@@ -145,11 +145,11 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         consumer.commit(offsets, sync ? CommitType.SYNC : CommitType.ASYNC, cb);
     }
 
-    public Time getTime() {
+    public Time time() {
         return time;
     }
 
-    public WorkerConfig getWorkerConfig() {
+    public WorkerConfig workerConfig() {
         return workerConfig;
     }
 
@@ -161,7 +161,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
 
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
-        Properties props = workerConfig.getUnusedProperties();
+        Properties props = workerConfig.unusedProperties();
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "copycat-" + id.toString());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
@@ -188,7 +188,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         // To do this correctly, we need to first make sure we have been assigned partitions, which poll() will guarantee.
         // We ask for offsets after this poll to make sure any offsets committed before the rebalance are picked up correctly.
         newConsumer.poll(0);
-        Map<TopicPartition, Long> offsets = context.getOffsets();
+        Map<TopicPartition, Long> offsets = context.offsets();
         for (TopicPartition tp : newConsumer.subscriptions()) {
             Long offset = offsets.get(tp);
             if (offset != null)
@@ -211,8 +211,8 @@ class WorkerSinkTask<K, V> implements WorkerTask {
                 SchemaAndValue valueAndSchema = msg.value() != null ? valueConverter.toCopycatData(msg.value()) : SchemaAndValue.NULL;
                 records.add(
                         new SinkRecord(msg.topic(), msg.partition(),
-                                keyAndSchema.getSchema(), keyAndSchema.getValue(),
-                                valueAndSchema.getSchema(), valueAndSchema.getValue(),
+                                keyAndSchema.schema(), keyAndSchema.value(),
+                                valueAndSchema.schema(), valueAndSchema.value(),
                                 msg.offset())
                 );
             }

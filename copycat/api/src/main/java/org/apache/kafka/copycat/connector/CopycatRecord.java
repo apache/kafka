@@ -50,27 +50,27 @@ public abstract class CopycatRecord {
         this.value = value;
     }
 
-    public String getTopic() {
+    public String topic() {
         return topic;
     }
 
-    public Integer getKafkaPartition() {
+    public Integer kafkaPartition() {
         return kafkaPartition;
     }
 
-    public Object getKey() {
+    public Object key() {
         return key;
     }
 
-    public Schema getKeySchema() {
+    public Schema keySchema() {
         return keySchema;
     }
 
-    public Object getValue() {
+    public Object value() {
         return value;
     }
 
-    public Schema getValueSchema() {
+    public Schema valueSchema() {
         return valueSchema;
     }
 

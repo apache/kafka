@@ -101,7 +101,7 @@ public class JsonConverterTest {
         ByteBuffer reference = ByteBuffer.wrap("test-string".getBytes("UTF-8"));
         String msg = "{ \"schema\": { \"type\": \"bytes\" }, \"payload\": \"dGVzdC1zdHJpbmc=\" }";
         SchemaAndValue schemaAndValue = converter.toCopycatData(parse(msg));
-        ByteBuffer converted = ByteBuffer.wrap((byte[]) schemaAndValue.getValue());
+        ByteBuffer converted = ByteBuffer.wrap((byte[]) schemaAndValue.value());
         assertEquals(reference, converted);
     }
 

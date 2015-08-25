@@ -30,11 +30,11 @@ public class SchemaAndValue {
         this.schema = schema;
     }
 
-    public Schema getSchema() {
+    public Schema schema() {
         return schema;
     }
 
-    public Object getValue() {
+    public Object value() {
         return value;
     }
 

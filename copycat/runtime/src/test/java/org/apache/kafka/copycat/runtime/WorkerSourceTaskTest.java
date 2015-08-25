@@ -255,7 +255,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                     }
                 });
         // 2. Offset data is passed to the offset storage.
-        offsetWriter.setOffset(new SchemaAndValue(PARTITION_SCHEMA, PARTITION_BYTES), new SchemaAndValue(OFFSET_SCHEMA, OFFSET_BYTES));
+        offsetWriter.offset(new SchemaAndValue(PARTITION_SCHEMA, PARTITION_BYTES), new SchemaAndValue(OFFSET_SCHEMA, OFFSET_BYTES));
         PowerMock.expectLastCall().anyTimes();
 
         return sent;

@@ -57,17 +57,17 @@ public class FutureCallback<T> implements Callback<T>, Future<T> {
     @Override
     public T get() throws InterruptedException, ExecutionException {
         finishedLatch.await();
-        return getResult();
+        return result();
     }
 
     @Override
     public T get(long l, TimeUnit timeUnit)
             throws InterruptedException, ExecutionException, TimeoutException {
         finishedLatch.await(l, timeUnit);
-        return getResult();
+        return result();
     }
 
-    private T getResult() throws ExecutionException {
+    private T result() throws ExecutionException {
         if (exception != null) {
             throw new ExecutionException(exception);
         }

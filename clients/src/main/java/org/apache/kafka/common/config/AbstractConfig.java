@@ -101,6 +101,14 @@ public class AbstractConfig {
         return keys;
     }
 
+    public Properties unusedProperties() {
+        Set<String> unusedKeys = this.unused();
+        Properties unusedProps = new Properties();
+        for (String key : unusedKeys)
+            unusedProps.put(key, this.originals().get(key));
+        return unusedProps;
+    }
+
     public Map<String, Object> originals() {
         Map<String, Object> copy = new HashMap<String, Object>();
         copy.putAll(originals);

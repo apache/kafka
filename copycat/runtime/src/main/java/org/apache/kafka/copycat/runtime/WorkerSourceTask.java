@@ -132,11 +132,11 @@ class WorkerSourceTask<K, V> implements WorkerTask {
      */
     private synchronized void sendRecords(List<SourceRecord> records) {
         for (SourceRecord record : records) {
-            K key = (record.getKeySchema() != null) ? keyConverter.fromCopycatData(record.getKeySchema(), record.getKey()) : null;
-            V value = (record.getValueSchema() != null) ? valueConverter.fromCopycatData(record.getValueSchema(), record.getValue()) : null;
+            K key = (record.keySchema() != null) ? keyConverter.fromCopycatData(record.keySchema(), record.key()) : null;
+            V value = (record.valueSchema() != null) ? valueConverter.fromCopycatData(record.valueSchema(), record.value()) : null;
             final ProducerRecord<K, V> producerRecord = new ProducerRecord<>(
-                    record.getTopic(), record.getKafkaPartition(), key, value);
-            log.trace("Appending record with key {}, value {}", record.getKey(), record.getValue());
+                    record.topic(), record.kafkaPartition(), key, value);
+            log.trace("Appending record with key {}, value {}", record.key(), record.value());
             if (!flushing) {
                 outstandingMessages.put(producerRecord, producerRecord);
             } else {
@@ -158,8 +158,8 @@ class WorkerSourceTask<K, V> implements WorkerTask {
                         }
                     });
             // Offsets are converted & serialized in the OffsetWriter
-            offsetWriter.setOffset(new SchemaAndValue(record.getSourcePartitionSchema(), record.getSourcePartition()),
-                    new SchemaAndValue(record.getSourceOffsetSchema(), record.getSourceOffset()));
+            offsetWriter.offset(new SchemaAndValue(record.sourcePartitionSchema(), record.sourcePartition()),
+                    new SchemaAndValue(record.sourceOffsetSchema(), record.sourceOffset()));
         }
     }
 

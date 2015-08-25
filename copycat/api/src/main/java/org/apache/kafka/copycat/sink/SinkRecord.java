@@ -35,7 +35,7 @@ public class SinkRecord extends CopycatRecord {
         this.kafkaOffset = kafkaOffset;
     }
 
-    public long getKafkaOffset() {
+    public long kafkaOffset() {
         return kafkaOffset;
     }
 

@@ -58,11 +58,11 @@ public class FileStreamSourceTask extends SourceTask {
         } else {
             try {
                 stream = new FileInputStream(filename);
-                SchemaAndValue offsetWithSchema = context.getOffsetStorageReader().getOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, filename));
+                SchemaAndValue offsetWithSchema = context.offsetStorageReader().offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, filename));
                 if (offsetWithSchema != null) {
-                    if (!offsetWithSchema.getSchema().equals(OFFSET_VALUE_SCHEMA))
+                    if (!offsetWithSchema.schema().equals(OFFSET_VALUE_SCHEMA))
                         throw new CopycatException("Unexpected offset schema.");
-                    Long lastRecordedOffset = (Long) offsetWithSchema.getValue();
+                    Long lastRecordedOffset = (Long) offsetWithSchema.value();
                     if (lastRecordedOffset != null) {
                         log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
                         long skipLeft = lastRecordedOffset;

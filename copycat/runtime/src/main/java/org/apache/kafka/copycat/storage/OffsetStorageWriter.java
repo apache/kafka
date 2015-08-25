@@ -97,7 +97,7 @@ public class OffsetStorageWriter<K, V> {
      * @param partition the partition to store an offset for
      * @param offset the offset
      */
-    public synchronized void setOffset(SchemaAndValue partition, SchemaAndValue offset) {
+    public synchronized void offset(SchemaAndValue partition, SchemaAndValue offset) {
         data.put(partition, offset);
     }
 
@@ -143,9 +143,9 @@ public class OffsetStorageWriter<K, V> {
         try {
             offsetsSerialized = new HashMap<>();
             for (Map.Entry<SchemaAndValue, SchemaAndValue> entry : toFlush.entrySet()) {
-                byte[] key = keySerializer.serialize(namespace, keyConverter.fromCopycatData(entry.getKey().getSchema(), entry.getKey().getValue()));
+                byte[] key = keySerializer.serialize(namespace, keyConverter.fromCopycatData(entry.getKey().schema(), entry.getKey().value()));
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
-                byte[] value = valueSerializer.serialize(namespace, valueConverter.fromCopycatData(entry.getValue().getSchema(), entry.getValue().getValue()));
+                byte[] value = valueSerializer.serialize(namespace, valueConverter.fromCopycatData(entry.getValue().schema(), entry.getValue().value()));
                 ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
                 offsetsSerialized.put(keyBuffer, valueBuffer);
             }

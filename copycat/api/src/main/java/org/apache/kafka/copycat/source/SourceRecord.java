@@ -69,19 +69,19 @@ public class SourceRecord extends CopycatRecord {
         this.sourceOffset = sourceOffset;
     }
 
-    public Schema getSourcePartitionSchema() {
+    public Schema sourcePartitionSchema() {
         return sourcePartitionSchema;
     }
 
-    public Object getSourcePartition() {
+    public Object sourcePartition() {
         return sourcePartition;
     }
 
-    public Schema getSourceOffsetSchema() {
+    public Schema sourceOffsetSchema() {
         return sourceOffsetSchema;
     }
 
-    public Object getSourceOffset() {
+    public Object sourceOffset() {
         return sourceOffset;
     }
 

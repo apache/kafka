@@ -92,7 +92,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
+        writer.offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
 
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
@@ -128,7 +128,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
+        writer.offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         assertTrue(writer.beginFlush());
@@ -148,7 +148,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
+        writer.offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
         assertTrue(writer.beginFlush());
         writer.doFlush(callback);
         assertTrue(writer.beginFlush()); // should throw
@@ -160,7 +160,7 @@ public class OffsetStorageWriterTest {
     public void testCancelBeforeAwaitFlush() {
         PowerMock.replayAll();
 
-        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
+        writer.offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
         assertTrue(writer.beginFlush());
         writer.cancelFlush();
 
@@ -178,7 +178,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
+        writer.offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, OFFSET_KEY), new SchemaAndValue(OFFSET_VALUE_SCHEMA, OFFSET_VALUE));
         assertTrue(writer.beginFlush());
         // Start the flush, then immediately cancel before allowing the mocked store request to finish
         Future<Void> flushFuture = writer.doFlush(callback);

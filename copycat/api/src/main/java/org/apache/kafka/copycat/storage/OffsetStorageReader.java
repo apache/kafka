@@ -37,12 +37,12 @@ public interface OffsetStorageReader {
      * @param partition object uniquely identifying the partition of data
      * @return object uniquely identifying the offset in the partition of data
      */
-    SchemaAndValue getOffset(SchemaAndValue partition);
+    SchemaAndValue offset(SchemaAndValue partition);
 
     /**
      * <p>
      * Get a set of offsets for the specified partition identifiers. This may be more efficient
-     * than calling {@link #getOffset(SchemaAndValue)} repeatedly.
+     * than calling {@link #offset(SchemaAndValue)} repeatedly.
      * </p>
      * <p>
      * Note that when errors occur, this method omits the associated data and tries to return as
@@ -56,5 +56,5 @@ public interface OffsetStorageReader {
      * @param partitions set of identifiers for partitions of data
      * @return a map of partition identifiers to decoded offsets
      */
-    Map<SchemaAndValue, SchemaAndValue> getOffsets(Collection<SchemaAndValue> partitions);
+    Map<SchemaAndValue, SchemaAndValue> offsets(Collection<SchemaAndValue> partitions);
 }

@@ -64,7 +64,7 @@ public class FileStreamSinkTask extends SinkTask {
     @Override
     public void put(Collection<SinkRecord> sinkRecords) {
         for (SinkRecord record : sinkRecords) {
-            outputStream.println(record.getValue());
+            outputStream.println(record.value());
         }
     }
 

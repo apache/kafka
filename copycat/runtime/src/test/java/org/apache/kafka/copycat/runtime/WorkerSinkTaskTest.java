@@ -152,10 +152,10 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.invokeMethod(workerTask, "deliverMessages", records);
-        assertEquals(record.getSchema(), capturedRecords.getValue().iterator().next().getKeySchema());
-        assertEquals(record.getValue(), capturedRecords.getValue().iterator().next().getKey());
-        assertEquals(record.getSchema(), capturedRecords.getValue().iterator().next().getValueSchema());
-        assertEquals(record.getValue(), capturedRecords.getValue().iterator().next().getValue());
+        assertEquals(record.schema(), capturedRecords.getValue().iterator().next().keySchema());
+        assertEquals(record.value(), capturedRecords.getValue().iterator().next().key());
+        assertEquals(record.schema(), capturedRecords.getValue().iterator().next().valueSchema());
+        assertEquals(record.value(), capturedRecords.getValue().iterator().next().value());
 
         PowerMock.verifyAll();
     }
@@ -179,7 +179,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         // Second triggers commit, gets a second offset
         workerThread.iteration();
         // Commit finishes synchronously for testing so we can check this immediately
-        assertEquals(0, workerThread.getCommitFailures());
+        assertEquals(0, workerThread.commitFailures());
         workerTask.stop();
         workerTask.close();
 
@@ -204,7 +204,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         // Second iteration triggers commit
         workerThread.iteration();
         workerThread.iteration();
-        assertEquals(1, workerThread.getCommitFailures());
+        assertEquals(1, workerThread.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerThread, "committing"));
         workerTask.stop();
         workerTask.close();
@@ -229,7 +229,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         workerThread.iteration();
         workerThread.iteration();
         // TODO Response to consistent failures?
-        assertEquals(1, workerThread.getCommitFailures());
+        assertEquals(1, workerThread.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerThread, "committing"));
         workerTask.stop();
         workerTask.close();
@@ -258,7 +258,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         workerThread.iteration();
         workerThread.iteration();
         // TODO Response to consistent failures?
-        assertEquals(1, workerThread.getCommitFailures());
+        assertEquals(1, workerThread.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerThread, "committing"));
         workerTask.stop();
         workerTask.close();

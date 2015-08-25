@@ -39,12 +39,12 @@ public class FileStreamSinkConnector extends SinkConnector {
     }
 
     @Override
-    public Class<? extends Task> getTaskClass() {
+    public Class<? extends Task> taskClass() {
         return FileStreamSinkTask.class;
     }
 
     @Override
-    public List<Properties> getTaskConfigs(int maxTasks) {
+    public List<Properties> taskConfigs(int maxTasks) {
         ArrayList<Properties> configs = new ArrayList<>();
         for (int i = 0; i < maxTasks; i++) {
             Properties config = new Properties();
