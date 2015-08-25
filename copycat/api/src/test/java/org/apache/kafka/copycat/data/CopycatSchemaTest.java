@@ -208,14 +208,14 @@ public class CopycatSchemaTest {
     @Test
     public void testPrimitiveEquality() {
         // Test that primitive types, which only need to consider all the type & metadata fields, handle equality correctly
-        CopycatSchema s1 = new CopycatSchema(Schema.Type.INT8, false, null, "name", "version".getBytes(), "doc", null, null, null);
-        CopycatSchema s2 = new CopycatSchema(Schema.Type.INT8, false, null, "name", "version".getBytes(), "doc", null, null, null);
-        CopycatSchema differentType = new CopycatSchema(Schema.Type.INT16, false, null, "name", "version".getBytes(), "doc", null, null, null);
-        CopycatSchema differentOptional = new CopycatSchema(Schema.Type.INT8, true, null, "name", "version".getBytes(), "doc", null, null, null);
-        CopycatSchema differentDefault = new CopycatSchema(Schema.Type.INT8, false, true, "name", "version".getBytes(), "doc", null, null, null);
-        CopycatSchema differentName = new CopycatSchema(Schema.Type.INT8, false, null, "otherName", "version".getBytes(), "doc", null, null, null);
-        CopycatSchema differentVersion = new CopycatSchema(Schema.Type.INT8, false, null, "name", "otherVersion".getBytes(), "doc", null, null, null);
-        CopycatSchema differentDoc = new CopycatSchema(Schema.Type.INT8, false, null, "name", "version".getBytes(), "other doc", null, null, null);
+        CopycatSchema s1 = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "doc", null, null, null);
+        CopycatSchema s2 = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "doc", null, null, null);
+        CopycatSchema differentType = new CopycatSchema(Schema.Type.INT16, false, null, "name", 2, "doc", null, null, null);
+        CopycatSchema differentOptional = new CopycatSchema(Schema.Type.INT8, true, null, "name", 2, "doc", null, null, null);
+        CopycatSchema differentDefault = new CopycatSchema(Schema.Type.INT8, false, true, "name", 2, "doc", null, null, null);
+        CopycatSchema differentName = new CopycatSchema(Schema.Type.INT8, false, null, "otherName", 2, "doc", null, null, null);
+        CopycatSchema differentVersion = new CopycatSchema(Schema.Type.INT8, false, null, "name", 4, "doc", null, null, null);
+        CopycatSchema differentDoc = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "other doc", null, null, null);
 
         assertEquals(s1, s2);
         assertNotEquals(s1, differentType);

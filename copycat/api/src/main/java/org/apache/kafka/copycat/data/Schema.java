@@ -114,9 +114,10 @@ public interface Schema {
     String name();
 
     /**
+     * Get the optional version of the schema. If a version is included, newer versions *must* be larger than older ones.
      * @return the version of this schema
      */
-    byte[] version();
+    Integer version();
 
     /**
      * @return the documentation for this schema

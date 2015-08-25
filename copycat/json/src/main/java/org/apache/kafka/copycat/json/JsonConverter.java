@@ -346,12 +346,8 @@ public class JsonConverter implements Converter<JsonNode> {
             builder.name(schemaNameNode.textValue());
 
         JsonNode schemaVersionNode = jsonSchema.get(JsonSchema.SCHEMA_VERSION_FIELD_NAME);
-        if (schemaVersionNode != null && schemaVersionNode.isTextual()) {
-            try {
-                builder.version(schemaVersionNode.binaryValue());
-            } catch (IOException e) {
-                throw new DataException("Invalid encoding of version", e);
-            }
+        if (schemaVersionNode != null && schemaVersionNode.isIntegralNumber()) {
+            builder.version(schemaVersionNode.intValue());
         }
 
         JsonNode schemaDocNode = jsonSchema.get(JsonSchema.SCHEMA_DOC_FIELD_NAME);

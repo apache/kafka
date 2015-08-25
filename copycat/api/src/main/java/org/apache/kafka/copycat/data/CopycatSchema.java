@@ -55,14 +55,14 @@ public class CopycatSchema implements Schema {
     // serializer-specific schema. However, can also be useful in specifying other logical types (e.g. a set is an array
     // with additional constraints).
     private final String name;
-    private final byte[] version;
+    private final Integer version;
     // Optional human readable documentation describing this schema.
     private final String doc;
 
     /**
      * Construct a Schema. Most users should not construct schemas manually, preferring {@link SchemaBuilder} instead.
      */
-    public CopycatSchema(Type type, boolean optional, Object defaultValue, String name, byte[] version, String doc, List<Field> fields, Schema keySchema, Schema valueSchema) {
+    public CopycatSchema(Type type, boolean optional, Object defaultValue, String name, Integer version, String doc, List<Field> fields, Schema keySchema, Schema valueSchema) {
         this.type = type;
         this.optional = optional;
         this.defaultValue = defaultValue;
@@ -104,7 +104,7 @@ public class CopycatSchema implements Schema {
     }
 
     @Override
-    public byte[] version() {
+    public Integer version() {
         return version;
     }
 
@@ -216,7 +216,7 @@ public class CopycatSchema implements Schema {
                 Objects.equals(keySchema, schema.keySchema) &&
                 Objects.equals(valueSchema, schema.valueSchema) &&
                 Objects.equals(name, schema.name) &&
-                Arrays.equals(version, schema.version) &&
+                Objects.equals(version, schema.version) &&
                 Objects.equals(doc, schema.doc);
     }
 

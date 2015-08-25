@@ -33,7 +33,7 @@ import java.util.List;
  *     Here is an example of building a struct schema:
  *     <pre>
  *     Schema dateSchema = SchemaBuilder.struct()
- *         .name("com.example.CalendarDate").version("1.1".getBytes()).doc("A calendar date including month, day, and year.")
+ *         .name("com.example.CalendarDate").version(2).doc("A calendar date including month, day, and year.")
  *         .field("month", Schema.STRING_SCHEMA)
  *         .field("day", Schema.INT8_SCHEMA)
  *         .field("year", Schema.INT16_SCHEMA)
@@ -67,7 +67,7 @@ public class SchemaBuilder implements Schema {
     private Schema valueSchema = null;
 
     private String name;
-    private byte[] version;
+    private Integer version;
     // Optional human readable documentation describing this schema.
     private String doc;
 
@@ -143,18 +143,17 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
-    public byte[] version() {
+    public Integer version() {
         return version;
     }
 
     /**
-     * Set the version of this schema. Schema versions are byte[] to allow for many different underlying schema
-     * management systems to interoperate with this API (e.g. versions could be an integer in network byte order, a hash
-     * digest bytes, or a string).
+     * Set the version of this schema. Schema versions are integers which, if provided, must indicate which schema is
+     * newer and which is older by their ordering.
      * @param version the schema version
      * @return the SchemaBuilder
      */
-    public SchemaBuilder version(byte[] version) {
+    public SchemaBuilder version(Integer version) {
         checkNull(VERSION_FIELD, this.version);
         this.version = version;
         return this;

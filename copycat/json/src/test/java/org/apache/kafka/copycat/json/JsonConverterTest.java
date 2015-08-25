@@ -52,8 +52,8 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA, null), converter.toCopycatData(parse("{ \"schema\": { \"type\": \"boolean\", \"optional\": true }, \"payload\": null }")));
         assertEquals(new SchemaAndValue(SchemaBuilder.bool().defaultValue(true).build(), true),
                 converter.toCopycatData(parse("{ \"schema\": { \"type\": \"boolean\", \"default\": true }, \"payload\": null }")));
-        assertEquals(new SchemaAndValue(SchemaBuilder.bool().required().name("bool").version("versionnum".getBytes()).doc("the documentation").build(), true),
-                converter.toCopycatData(parse("{ \"schema\": { \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": \"" + JsonNodeFactory.instance.binaryNode("versionnum".getBytes()).asText() + "\", \"doc\": \"the documentation\"}, \"payload\": true }")));
+        assertEquals(new SchemaAndValue(SchemaBuilder.bool().required().name("bool").version(2).doc("the documentation").build(), true),
+                converter.toCopycatData(parse("{ \"schema\": { \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 2, \"doc\": \"the documentation\"}, \"payload\": true }")));
     }
 
     // Schema types
@@ -162,19 +162,11 @@ public class JsonConverterTest {
         assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"default\": true }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
 
-        // Irritatingly, using a BinaryNode does not work with equals() if you parse the JSON (resulting in a TextNode
-        // since it's base64-encoded), so we handle that test separately
-        converted = converter.fromCopycatData(SchemaBuilder.bool().required().name("bool").doc("the documentation").build(), true);
+        converted = converter.fromCopycatData(SchemaBuilder.bool().required().name("bool").version(3).doc("the documentation").build(), true);
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"doc\": \"the documentation\"}"),
+        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 3, \"doc\": \"the documentation\"}"),
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
-
-        // Test specifically targeting the version field
-        converted = converter.fromCopycatData(SchemaBuilder.bool().version("versionnum".getBytes()).build(), true);
-        validateEnvelope(converted);
-        assertEquals(JsonNodeFactory.instance.binaryNode("versionnum".getBytes()),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).get("version"));
     }
 
     // Schema types

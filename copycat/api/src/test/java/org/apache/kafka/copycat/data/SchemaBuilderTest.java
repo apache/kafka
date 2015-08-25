@@ -31,7 +31,7 @@ import static org.junit.Assert.assertNull;
 
 public class SchemaBuilderTest {
     private static final String NAME = "name";
-    private static final byte[] VERSION = "1.1".getBytes();
+    private static final Integer VERSION = 2;
     private static final String DOC = "doc";
 
     @Test
@@ -275,7 +275,7 @@ public class SchemaBuilderTest {
         }
     }
 
-    private void assertMetadata(Schema schema, String name, byte[] version, String doc) {
+    private void assertMetadata(Schema schema, String name, Integer version, String doc) {
         assertEquals(name, schema.name());
         assertEquals(version, schema.version());
         assertEquals(doc, schema.doc());
