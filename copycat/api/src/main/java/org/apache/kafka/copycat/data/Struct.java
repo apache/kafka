@@ -210,7 +210,7 @@ public class Struct {
      * @return the Struct, to allow chaining of {@link #put(String, Object)} calls
      */
     public Struct put(Field field, Object value) {
-        Schema.validateValue(field.schema(), value);
+        CopycatSchema.validateValue(field.schema(), value);
         values[field.index()] = value;
         return this;
     }
@@ -227,7 +227,7 @@ public class Struct {
             Object value = values[field.index()];
             if (value == null && (fieldSchema.isOptional() || fieldSchema.defaultValue() != null))
                 continue;
-            Schema.validateValue(fieldSchema, value);
+            CopycatSchema.validateValue(fieldSchema, value);
         }
     }
 

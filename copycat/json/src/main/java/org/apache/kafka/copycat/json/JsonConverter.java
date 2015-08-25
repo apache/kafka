@@ -36,7 +36,7 @@ public class JsonConverter implements Converter<JsonNode> {
 
     private static final HashMap<Schema.Type, JsonToCopycatTypeConverter> TO_COPYCAT_CONVERTERS = new HashMap<>();
 
-    private static Object checkOptionalAndDefault(ISchema schema) {
+    private static Object checkOptionalAndDefault(Schema schema) {
         if (schema.defaultValue() != null)
             return schema.defaultValue();
         if (schema.isOptional())
@@ -47,56 +47,56 @@ public class JsonConverter implements Converter<JsonNode> {
     static {
         TO_COPYCAT_CONVERTERS.put(Schema.Type.BOOLEAN, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.booleanValue();
             }
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.INT8, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
                 return (byte) value.intValue();
             }
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.INT16, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
                 return (short) value.intValue();
             }
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.INT32, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.intValue();
             }
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.INT64, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.longValue();
             }
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.FLOAT32, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.floatValue();
             }
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.FLOAT64, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.doubleValue();
             }
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.BYTES, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 try {
                     if (value.isNull()) return checkOptionalAndDefault(schema);
                     return value.binaryValue();
@@ -107,14 +107,14 @@ public class JsonConverter implements Converter<JsonNode> {
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.STRING, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.textValue();
             }
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.ARRAY, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
 
                 Schema elemSchema = schema.valueSchema();
@@ -129,7 +129,7 @@ public class JsonConverter implements Converter<JsonNode> {
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.MAP, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
 
                 Schema keySchema = schema.keySchema();
@@ -163,7 +163,7 @@ public class JsonConverter implements Converter<JsonNode> {
         });
         TO_COPYCAT_CONVERTERS.put(Schema.Type.STRUCT, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(ISchema schema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 if (value.isNull()) return checkOptionalAndDefault(schema);
 
                 if (!value.isObject())
@@ -467,7 +467,7 @@ public class JsonConverter implements Converter<JsonNode> {
     }
 
 
-    private static Object convertToCopycat(ISchema schema, JsonNode jsonValue) {
+    private static Object convertToCopycat(Schema schema, JsonNode jsonValue) {
         JsonToCopycatTypeConverter typeConverter = TO_COPYCAT_CONVERTERS.get(schema.type());
         if (typeConverter == null)
             throw new DataException("Unknown schema type: " + schema.type());
@@ -477,6 +477,6 @@ public class JsonConverter implements Converter<JsonNode> {
 
 
     private interface JsonToCopycatTypeConverter {
-        Object convert(ISchema schema, JsonNode value);
+        Object convert(Schema schema, JsonNode value);
     }
 }
