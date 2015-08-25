@@ -139,11 +139,17 @@ public class Struct {
     }
 
     public ByteBuffer getBytes(Field field) {
-        return (ByteBuffer) get(field);
+        Object result = get(field);
+        if (result instanceof byte[])
+            return ByteBuffer.wrap((byte[]) result);
+        return (ByteBuffer) result;
     }
 
     public ByteBuffer getBytes(String name) {
-        return (ByteBuffer) get(name);
+        Object result = get(name);
+        if (result instanceof byte[])
+            return ByteBuffer.wrap((byte[]) result);
+        return (ByteBuffer) result;
     }
 
     /**
