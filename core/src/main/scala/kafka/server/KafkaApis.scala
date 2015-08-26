@@ -55,7 +55,8 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handle(request: RequestChannel.Request) {
     try{
-      trace("Handling request: " + request.requestObj + " from connection: " + request.connectionId + ", security protocol: " + request.securityProtocol + ", principal:" + request.session.principal)
+      trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
+        format(request.requestObj, request.connectionId, request.securityProtocol, request.session.principal))
       request.requestId match {
         case RequestKeys.ProduceKey => handleProducerRequest(request)
         case RequestKeys.FetchKey => handleFetchRequest(request)
