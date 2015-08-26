@@ -17,10 +17,10 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayDeque;
-import java.util.PriorityQueue;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -32,9 +32,9 @@ public class RecordQueue {
     private final SourceNode source;
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> fifoQueue = new ArrayDeque<>();
-    private final PriorityQueue<StampedRecord> timeQueue = new PriorityQueue<>();
+    private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker = new MinTimestampTracker<>();
 
-    private long partitionTime = -1L;
+    private long partitionTime = TimestampTracker.NOT_KNOWN;
 
     /**
      * Creates a new instance of RecordQueue
@@ -67,12 +67,7 @@ public class RecordQueue {
      */
     public void add(StampedRecord record) {
         fifoQueue.addLast(record);
-
-        // only add it to the timestamp tracker queue if its timestamp
-        // is no smaller than the current partition timestamp
-        if (record.timestamp >= partitionTime) {
-            timeQueue.offer(record);
-        }
+        timeTracker.addElement(record);
     }
 
     /**
@@ -85,12 +80,14 @@ public class RecordQueue {
 
         if (elem == null) return null;
 
-        // try to advance the partition timestamp if necessary
-        timeQueue.remove(elem);
+        timeTracker.removeElement(elem);
 
-        if (!timeQueue.isEmpty()) {
-            partitionTime = timeQueue.peek().timestamp;
-        }
+        // only advance the partition timestamp if its currently
+        // tracked min timestamp has exceeded its value
+        long timestamp = timeTracker.get();
+
+        if (timestamp > partitionTime)
+            partitionTime = timestamp;
 
         return elem;
     }

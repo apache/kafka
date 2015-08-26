@@ -56,7 +56,7 @@ public class StreamTask {
     private ProcessorNode currNode = null;
 
     /**
-     * Creates StreamGroup
+     * Create {@link StreamTask} with its assigned partitions
      *
      * @param id                    the ID of this task
      * @param consumer              the instance of {@link Consumer}
