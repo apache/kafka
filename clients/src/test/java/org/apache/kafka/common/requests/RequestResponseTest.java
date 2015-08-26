@@ -29,6 +29,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
@@ -65,7 +67,10 @@ public class RequestResponseTest {
                 createOffsetFetchResponse(),
                 createProduceRequest(),
                 createProduceRequest().getErrorResponse(0, new UnknownServerException()),
-                createProduceResponse());
+                createProduceResponse(),
+                createStopReplicaRequest(),
+                createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
+                createStopReplicaResponse());
 
         for (AbstractRequestResponse req: requestResponseList) {
             ByteBuffer buffer = ByteBuffer.allocate(req.sizeOf());
@@ -216,5 +221,16 @@ public class RequestResponseTest {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000));
         return new ProduceResponse(responseData, 0);
+    }
+
+    private AbstractRequest createStopReplicaRequest() {
+        Set<TopicPartition> partitions = new HashSet<>(Arrays.asList(new TopicPartition("test", 0)));
+        return new StopReplicaRequest(0, 1, true, partitions);
+    }
+
+    private AbstractRequestResponse createStopReplicaResponse() {
+        Map<TopicPartition, Short> responses = new HashMap<>();
+        responses.put(new TopicPartition("test", 0), Errors.NONE.code());
+        return new StopReplicaResponse(Errors.NONE.code(), responses);
     }
 }

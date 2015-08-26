@@ -16,15 +16,11 @@
  */
 package org.apache.kafka.common.protocol;
 
-import static org.apache.kafka.common.protocol.types.Type.BYTES;
-import static org.apache.kafka.common.protocol.types.Type.INT16;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
-import static org.apache.kafka.common.protocol.types.Type.STRING;
-
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
+
+import static org.apache.kafka.common.protocol.types.Type.*;
 
 public class Protocol {
 
@@ -446,6 +442,29 @@ public class Protocol {
     public static final Schema[] HEARTBEAT_REQUEST = new Schema[] {HEARTBEAT_REQUEST_V0};
     public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0};
 
+    /* Replica api */
+    public static final Schema STOP_REPLICA_REQUEST_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
+                                                                              new Field("partition", INT32, "Topic partition id."));
+
+    public static final Schema STOP_REPLICA_REQUEST_V0 = new Schema(new Field("controller_id", INT32, "The controller id."),
+                                                                    new Field("controller_epoch", INT32, "The controller epoch."),
+                                                                    new Field("delete_partitions",
+                                                                              INT8,
+                                                                              "Boolean which indicates if replica's partitions must be deleted."),
+                                                                    new Field("partitions",
+                                                                              new ArrayOf(STOP_REPLICA_REQUEST_PARTITION_V0)));
+
+    public static final Schema STOP_REPLICA_RESPONSE_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
+                                                                               new Field("partition", INT32, "Topic partition id."),
+                                                                               new Field("error_code", INT16, "Error code."));
+
+    public static final Schema STOP_REPLICA_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."),
+                                                                     new Field("partitions",
+                                                                               new ArrayOf(STOP_REPLICA_RESPONSE_PARTITION_V0)));
+
+    public static final Schema[] STOP_REPLICA_REQUEST = new Schema[] {STOP_REPLICA_REQUEST_V0};
+    public static final Schema[] STOP_REPLICA_RESPONSE = new Schema[] {STOP_REPLICA_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
     public static final Schema[][] RESPONSES = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -459,7 +478,7 @@ public class Protocol {
         REQUESTS[ApiKeys.LIST_OFFSETS.id] = LIST_OFFSET_REQUEST;
         REQUESTS[ApiKeys.METADATA.id] = METADATA_REQUEST;
         REQUESTS[ApiKeys.LEADER_AND_ISR.id] = new Schema[] {};
-        REQUESTS[ApiKeys.STOP_REPLICA.id] = new Schema[] {};
+        REQUESTS[ApiKeys.STOP_REPLICA.id] = STOP_REPLICA_REQUEST;
         REQUESTS[ApiKeys.UPDATE_METADATA_KEY.id] = new Schema[] {};
         REQUESTS[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = new Schema[] {};
         REQUESTS[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_REQUEST;
@@ -468,12 +487,13 @@ public class Protocol {
         REQUESTS[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_REQUEST;
         REQUESTS[ApiKeys.HEARTBEAT.id] = HEARTBEAT_REQUEST;
 
+
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
         RESPONSES[ApiKeys.LIST_OFFSETS.id] = LIST_OFFSET_RESPONSE;
         RESPONSES[ApiKeys.METADATA.id] = METADATA_RESPONSE;
         RESPONSES[ApiKeys.LEADER_AND_ISR.id] = new Schema[] {};
-        RESPONSES[ApiKeys.STOP_REPLICA.id] = new Schema[] {};
+        RESPONSES[ApiKeys.STOP_REPLICA.id] = STOP_REPLICA_RESPONSE;
         RESPONSES[ApiKeys.UPDATE_METADATA_KEY.id] = new Schema[] {};
         RESPONSES[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = new Schema[] {};
         RESPONSES[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_RESPONSE;
