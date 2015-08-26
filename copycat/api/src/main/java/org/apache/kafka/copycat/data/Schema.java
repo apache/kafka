@@ -143,7 +143,7 @@ public interface Schema {
     List<Field> fields();
 
     /**
-     * Get the list of fields for this Schema. Throws a DataException if this schema is not a struct.
+     * Get a field for this Schema by name. Throws a DataException if this schema is not a struct.
      * @param fieldName the name of the field to look up
      * @return the Field object for the specified field, or null if there is no field with the given name
      */
