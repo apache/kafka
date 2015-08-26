@@ -41,7 +41,7 @@ public class Protocol {
 
     public static final Schema METADATA_REQUEST_V0 = new Schema(new Field("topics",
                                                                           new ArrayOf(STRING),
-                                                                          "An array of topics to fetch metadata for. If no topics are specified fetch metadtata for all topics."));
+                                                                          "An array of topics to fetch metadata for. If no topics are specified fetch metadata for all topics."));
 
     public static final Schema BROKER = new Schema(new Field("node_id", INT32, "The broker id."),
                                                    new Field("host", STRING, "The hostname of the broker."),
@@ -396,6 +396,25 @@ public class Protocol {
     public static final Schema[] CONSUMER_METADATA_REQUEST = new Schema[] {CONSUMER_METADATA_REQUEST_V0};
     public static final Schema[] CONSUMER_METADATA_RESPONSE = new Schema[] {CONSUMER_METADATA_RESPONSE_V0};
 
+    /* Controlled shutdown api */
+    public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = new Schema(new Field("broker_id",
+                                                                                     INT32,
+                                                                                     "The id of the broker for which controlled shutdown has been requested."));
+
+    public static final Schema CONTROLLED_SHUTDOWN_PARTITION_V1 = new Schema(new Field("topic", STRING),
+                                                                             new Field("partition",
+                                                                                       INT32,
+                                                                                       "Topic partition id."));
+
+    public static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = new Schema(new Field("error_code", INT16),
+                                                                            new Field("partitions_remaining",
+                                                                                      new ArrayOf(CONTROLLED_SHUTDOWN_PARTITION_V1),
+                                                                                      "The partitions that the broker still leads."));
+
+    /* V0 is not supported as it would require changes to the request header not to include `clientId` */
+    public static final Schema[] CONTROLLED_SHUTDOWN_REQUEST = new Schema[] {null, CONTROLLED_SHUTDOWN_REQUEST_V1};
+    public static final Schema[] CONTROLLED_SHUTDOWN_RESPONSE = new Schema[] {null, CONTROLLED_SHUTDOWN_RESPONSE_V1};
+
     /* Join group api */
     public static final Schema JOIN_GROUP_REQUEST_V0 = new Schema(new Field("group_id",
                                                                             STRING,
@@ -465,7 +484,8 @@ public class Protocol {
     public static final Schema[] STOP_REPLICA_REQUEST = new Schema[] {STOP_REPLICA_REQUEST_V0};
     public static final Schema[] STOP_REPLICA_RESPONSE = new Schema[] {STOP_REPLICA_RESPONSE_V0};
 
-    /* an array of all requests and responses with all schema versions */
+    /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
+     * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
     public static final Schema[][] RESPONSES = new Schema[ApiKeys.MAX_API_KEY + 1][];
 
@@ -480,7 +500,7 @@ public class Protocol {
         REQUESTS[ApiKeys.LEADER_AND_ISR.id] = new Schema[] {};
         REQUESTS[ApiKeys.STOP_REPLICA.id] = STOP_REPLICA_REQUEST;
         REQUESTS[ApiKeys.UPDATE_METADATA_KEY.id] = new Schema[] {};
-        REQUESTS[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = new Schema[] {};
+        REQUESTS[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_REQUEST;
         REQUESTS[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_REQUEST;
         REQUESTS[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_REQUEST;
         REQUESTS[ApiKeys.CONSUMER_METADATA.id] = CONSUMER_METADATA_REQUEST;
@@ -495,7 +515,7 @@ public class Protocol {
         RESPONSES[ApiKeys.LEADER_AND_ISR.id] = new Schema[] {};
         RESPONSES[ApiKeys.STOP_REPLICA.id] = STOP_REPLICA_RESPONSE;
         RESPONSES[ApiKeys.UPDATE_METADATA_KEY.id] = new Schema[] {};
-        RESPONSES[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = new Schema[] {};
+        RESPONSES[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_RESPONSE;
         RESPONSES[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_RESPONSE;
         RESPONSES[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_RESPONSE;
         RESPONSES[ApiKeys.CONSUMER_METADATA.id] = CONSUMER_METADATA_RESPONSE;

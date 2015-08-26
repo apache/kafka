@@ -44,6 +44,9 @@ public class RequestResponseTest {
                 createConsumerMetadataRequest(),
                 createConsumerMetadataRequest().getErrorResponse(0, new UnknownServerException()),
                 createConsumerMetadataResponse(),
+                createControlledShutdownRequest(),
+                createControlledShutdownResponse(),
+                createControlledShutdownRequest().getErrorResponse(0, new UnknownServerException()),
                 createFetchRequest(),
                 createFetchRequest().getErrorResponse(0, new UnknownServerException()),
                 createFetchResponse(),
@@ -233,4 +236,17 @@ public class RequestResponseTest {
         responses.put(new TopicPartition("test", 0), Errors.NONE.code());
         return new StopReplicaResponse(Errors.NONE.code(), responses);
     }
+
+    private AbstractRequest createControlledShutdownRequest() {
+        return new ControlledShutdownRequest(10);
+    }
+
+    private AbstractRequestResponse createControlledShutdownResponse() {
+        HashSet<TopicPartition> topicPartitions = new HashSet<>(Arrays.asList(
+                new TopicPartition("test2", 5),
+                new TopicPartition("test1", 10)
+        ));
+        return new ControlledShutdownResponse(Errors.NONE.code(), topicPartitions);
+    }
+
 }
