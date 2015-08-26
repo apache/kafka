@@ -231,6 +231,6 @@ public class RequestResponseTest {
     private AbstractRequestResponse createStopReplicaResponse() {
         Map<TopicPartition, Short> responses = new HashMap<>();
         responses.put(new TopicPartition("test", 0), Errors.NONE.code());
-        return new StopReplicaResponse(responses, Errors.NONE.code());
+        return new StopReplicaResponse(Errors.NONE.code(), responses);
     }
 }

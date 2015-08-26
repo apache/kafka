@@ -87,7 +87,7 @@ public class StopReplicaRequest extends AbstractRequest {
 
         switch (versionId) {
             case 0:
-                return new StopReplicaResponse(responses, Errors.NONE.code());
+                return new StopReplicaResponse(Errors.NONE.code(), responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.STOP_REPLICA.id)));

@@ -43,10 +43,10 @@ public class StopReplicaResponse extends AbstractRequestResponse {
      */
 
     public StopReplicaResponse(Map<TopicPartition, Short> responses) {
-        this(responses, Errors.NONE.code());
+        this(Errors.NONE.code(), responses);
     }
 
-    public StopReplicaResponse(Map<TopicPartition, Short> responses, short errorCode) {
+    public StopReplicaResponse(short errorCode, Map<TopicPartition, Short> responses) {
         super(new Struct(CURRENT_SCHEMA));
 
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
