@@ -17,18 +17,18 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.Punctuator;
+import org.apache.kafka.streaming.processor.Processor;
 
-public class PunctuationSchedule extends Stamped<Punctuator> {
+public class PunctuationSchedule extends Stamped<Processor> {
 
     final long interval;
 
-    public PunctuationSchedule(Punctuator punctuator, long interval) {
-        super(punctuator, System.currentTimeMillis() + interval);
+    public PunctuationSchedule(Processor processor, long interval) {
+        super(processor, System.currentTimeMillis() + interval);
         this.interval = interval;
     }
 
-    public Punctuator punctuator() {
+    public Processor processor() {
         return value;
     }
 

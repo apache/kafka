@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streaming.processor;
 
-public interface Punctuator {
+public interface ProcessorFactory {
 
-    void punctuate(long streamTime);
+    Processor build();
 }

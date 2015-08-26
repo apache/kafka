@@ -19,7 +19,6 @@ package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
@@ -28,11 +27,9 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.RecordCollector;
 import org.apache.kafka.streaming.processor.StateStore;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.RestoreFunc;
-import org.apache.kafka.streaming.processor.TimestampExtractor;
 
 
 import org.slf4j.Logger;
@@ -53,6 +50,7 @@ public class ProcessorContextImpl implements ProcessorContext {
     private final int id;
     private final StreamTask task;
     private final Metrics metrics;
+    private final RecordCollector collector;
     private final ProcessorStateManager stateMgr;
 
     private final Serializer<?> keySerializer;
@@ -61,17 +59,17 @@ public class ProcessorContextImpl implements ProcessorContext {
     private final Deserializer<?> valDeserializer;
 
     private boolean initialized;
-    private ProcessorNode currNode;
-    private StampedRecord currRecord;
 
     @SuppressWarnings("unchecked")
     public ProcessorContextImpl(int id,
                                 StreamTask task,
                                 StreamingConfig config,
+                                RecordCollector collector,
                                 Metrics metrics) throws IOException {
         this.id = id;
         this.task = task;
         this.metrics = metrics;
+        this.collector = collector;
 
         this.keySerializer = config.getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
         this.valSerializer = config.getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
@@ -89,6 +87,10 @@ public class ProcessorContextImpl implements ProcessorContext {
         this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
 
         this.initialized = false;
+    }
+
+    public RecordCollector recordCollector() {
+        return this.collector;
     }
 
     @Override
@@ -170,39 +172,42 @@ public class ProcessorContextImpl implements ProcessorContext {
     }
 
     @Override
-    public void flush() {
-        stateMgr.flush();
+    public String topic() {
+        if (task.record() == null)
+            throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
+
+        return task.record().topic();
     }
 
     @Override
     public int partition() {
-        if (streamGroup.record() == null)
+        if (task.record() == null)
             throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
 
-        return streamGroup.record().partition();
+        return task.record().partition();
     }
 
     @Override
     public long offset() {
-        if (this.streamGroup.record() == null)
+        if (this.task.record() == null)
             throw new IllegalStateException("this should not happen as offset() should only be called while a record is processed");
 
-        return this.streamGroup.record().offset();
+        return this.task.record().offset();
     }
 
     @Override
     public long timestamp() {
-        if (streamGroup.record() == null)
+        if (task.record() == null)
             throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
 
-        return streamGroup.record().timestamp;
+        return task.record().timestamp;
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V, ?, ?>>) streamGroup.node().children()) {
-            streamGroup.setNode(childNode);
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V, ?, ?>>) task.node().children()) {
+            task.node(childNode);
             childNode.process(key, value);
         }
     }

@@ -18,7 +18,6 @@
 package org.apache.kafka.streaming.state;
 
 import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.RecordCollector;
 import org.apache.kafka.streaming.processor.RestoreFunc;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
@@ -32,6 +31,8 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streaming.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streaming.processor.internals.RecordCollector;
 
 import java.util.HashSet;
 import java.util.List;
@@ -212,7 +213,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private void logChange() {
-        RecordCollector collector = context.recordCollector();
+        RecordCollector collector = ((ProcessorContextImpl)context).recordCollector();
         Serializer<K> keySerializer = (Serializer<K>) context.keySerializer();
         Serializer<V> valueSerializer = (Serializer<V>) context.valueSerializer();
 

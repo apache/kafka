@@ -25,7 +25,6 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.processor.internals.StreamGroup;
-import org.apache.kafka.test.MockIngestor;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.junit.Test;

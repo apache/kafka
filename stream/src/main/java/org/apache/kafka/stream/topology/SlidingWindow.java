@@ -23,12 +23,22 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+<<<<<<< HEAD:stream/src/main/java/org/apache/kafka/stream/topology/SlidingWindow.java
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.RecordCollector;
 import org.apache.kafka.stream.RestoreFunc;
 import org.apache.kafka.stream.topology.internals.WindowSupport;
 import org.apache.kafka.stream.util.FilteredIterator;
 import org.apache.kafka.clients.processor.internals.Stamped;
+=======
+import org.apache.kafka.streaming.kstream.internals.FilteredIterator;
+import org.apache.kafka.streaming.kstream.internals.WindowSupport;
+import org.apache.kafka.streaming.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streaming.processor.internals.RecordCollector;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.RestoreFunc;
+import org.apache.kafka.streaming.processor.internals.Stamped;
+>>>>>>> record current Node and current Record in StreamTask, add ProcessorFactory:stream/src/main/java/org/apache/kafka/streaming/kstream/SlidingWindow.java
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -173,7 +183,7 @@ public class SlidingWindow<K, V> extends WindowSupport implements Window<K, V> {
         IntegerSerializer intSerializer = new IntegerSerializer();
         ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
 
-        RecordCollector collector = context.recordCollector();
+        RecordCollector collector = ((ProcessorContextImpl)context).recordCollector();
 
         for (Map.Entry<K, ValueList<V>> entry : map.entrySet()) {
             ValueList<V> values = entry.getValue();

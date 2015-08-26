@@ -17,15 +17,18 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streaming.StreamingConfig;
+import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.Punctuator;
 import org.apache.kafka.streaming.processor.TimestampExtractor;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -46,7 +49,11 @@ public class StreamTask {
     private final ProcessorContext processorContext;
     private final TimestampExtractor timestampExtractor;
 
+    private final Map<TopicPartition, Long> consumedOffsets;
+
     private boolean commitRequested = false;
+    private StampedRecord currRecord = null;
+    private ProcessorNode currNode = null;
 
     /**
      * Creates StreamGroup
@@ -61,6 +68,7 @@ public class StreamTask {
                       Consumer consumer,
                       ProcessorTopology topology,
                       Collection<TopicPartition> partitions,
+                      RecordCollector collector,
                       StreamingConfig config) {
 
         this.id = id;
@@ -82,9 +90,16 @@ public class StreamTask {
         this.partitionGroup = new PartitionGroup(partitionQueues);
 
         // initialize the topology with its own context
-        this.processorContext = new ProcessorContextImpl(id, this, config, )
+        try {
+            this.processorContext = new ProcessorContextImpl(id, this, config, collector, new Metrics());
+        } catch (IOException e) {
+            throw new KafkaException("Error while creating the state manager in processor context.");
+        }
 
-        topology.init();
+        topology.init(this.processorContext);
+
+        // initialize the consumed offset cache
+        this.consumedOffsets = new HashMap<>();
     }
 
     public int id() {
@@ -126,11 +141,11 @@ public class StreamTask {
     /**
      * Schedules a punctuation for the processor
      *
-     * @param punctuator the punctuator requesting scheduler
+     * @param processor the processor requesting scheduler
      * @param interval  the interval in milliseconds
      */
-    public void schedule(Punctuator punctuator, long interval) {
-        punctuationQueue.schedule(new PunctuationSchedule(punctuator, interval));
+    public void schedule(Processor processor, long interval) {
+        punctuationQueue.schedule(new PunctuationSchedule(processor, interval));
     }
 
     /**
@@ -141,9 +156,17 @@ public class StreamTask {
         synchronized (this) {
             boolean readyForNextExecution = false;
 
-            // process the next record from the partition-group queue
-            // with the smallest estimated timestamp to process
-            TopicPartition partition = partitionGroup.processRecord();
+            // get the next record queue to process
+            RecordQueue queue = partitionGroup.nextQueue();
+
+            // get a record from the queue and process it
+            // by passing to the source node of the topology
+            this.currRecord = partitionGroup.getRecord(queue);
+            this.currNode = queue.source();
+            this.currNode.process(currRecord.key(), currRecord.value());
+
+            // update the consumed offset map.
+            consumedOffsets.put(queue.partition(), currRecord.offset());
 
             if (commitRequested) {
                 // TODO: flush the following states atomically
@@ -160,8 +183,8 @@ public class StreamTask {
 
             // if after processing this record, its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            if (partitionGroup.numbuffered(partition) == this.maxBufferedSize) {
-                consumer.resume(partition);
+            if (partitionGroup.numbuffered(queue.partition()) == this.maxBufferedSize) {
+                consumer.resume(queue.partition());
             }
 
             // possibly trigger registered punctuation functions if
@@ -173,6 +196,18 @@ public class StreamTask {
         }
     }
 
+    public StampedRecord record() {
+        return this.currRecord;
+    }
+
+    public ProcessorNode node() {
+        return this.currNode;
+    }
+
+    public void node(ProcessorNode node) {
+        this.currNode = node;
+    }
+
     /**
      * Request committing the current record's offset
      */
@@ -182,6 +217,7 @@ public class StreamTask {
 
     public void close() {
         this.partitionGroup.close();
+        this.consumedOffsets.clear();
     }
 
     protected RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {

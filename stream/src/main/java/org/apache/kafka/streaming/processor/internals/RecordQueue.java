@@ -61,7 +61,7 @@ public class RecordQueue {
     }
 
     /**
-     * Adds a StampedRecord to the queue
+     * Add a {@link StampedRecord} into the queue
      *
      * @param record StampedRecord
      */
@@ -76,11 +76,11 @@ public class RecordQueue {
     }
 
     /**
-     * Returns the get record fro the queue
+     * Get the next {@link StampedRecord} from the queue
      *
      * @return StampedRecord
      */
-    public StampedRecord get() {
+    public StampedRecord poll() {
         StampedRecord elem = fifoQueue.pollFirst();
 
         if (elem == null) return null;

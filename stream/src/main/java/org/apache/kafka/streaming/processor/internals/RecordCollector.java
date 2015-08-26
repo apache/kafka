@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
-import org.apache.kafka.streaming.processor.RecordCollector;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -30,9 +29,9 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
-public class RecordCollectorImpl implements RecordCollector {
+public class RecordCollector {
 
-    private static final Logger log = LoggerFactory.getLogger(RecordCollectorImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(RecordCollector.class);
 
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
@@ -50,26 +49,23 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Serializer<Object> valueSerializer;
 
 
-    public RecordCollectorImpl(Producer<byte[], byte[]> producer, Serializer<Object> keySerializer, Serializer<Object> valueSerializer) {
+    public RecordCollector(Producer<byte[], byte[]> producer, Serializer<Object> keySerializer, Serializer<Object> valueSerializer) {
         this.producer = producer;
         this.offsets = new HashMap<>();
         this.keySerializer = keySerializer;
         this.valueSerializer = valueSerializer;
     }
 
-    @Override
     public void send(ProducerRecord<Object, Object> record) {
         send(record, this.keySerializer, this.valueSerializer);
     }
 
-    @Override
     public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         byte[] keyBytes = keySerializer.serialize(record.topic(), record.key());
         byte[] valBytes = valueSerializer.serialize(record.topic(), record.value());
         this.producer.send(new ProducerRecord<>(record.topic(), keyBytes, valBytes), callback);
     }
 
-    @Override
     public void flush() {
         this.producer.flush();
     }

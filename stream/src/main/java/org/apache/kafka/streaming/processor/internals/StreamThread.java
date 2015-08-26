@@ -39,7 +39,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streaming.processor.TimestampExtractor;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,7 +55,7 @@ public class StreamThread extends Thread {
 
     private final Consumer<byte[], byte[]> consumer;
     private final TopologyBuilder builder;
-    private final RecordCollectorImpl collector;
+    private final RecordCollector collector;
     private final Map<Integer, StreamTask> tasks = new HashMap<>();
     private final Metrics metrics;
     private final Time time;
@@ -100,7 +99,7 @@ public class StreamThread extends Thread {
         Producer<byte[], byte[]> producer = new KafkaProducer<>(config.getProducerProperties(),
             new ByteArraySerializer(),
             new ByteArraySerializer());
-        this.collector = new RecordCollectorImpl(producer,
+        this.collector = new RecordCollector(producer,
             (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
             (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
 
@@ -264,7 +263,7 @@ public class StreamThread extends Thread {
                         partitionsForTask.add(part);
 
                 // create the task
-                task = new StreamTask(id, consumer, builder.build(), partitionsForTask, config);
+                task = new StreamTask(id, consumer, builder.build(), partitionsForTask, collector, config);
 
                 tasks.put(id, task);
             }

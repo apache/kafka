@@ -28,14 +28,11 @@ import java.util.PriorityQueue;
 import java.util.Set;
 
 /**
- * A PartitionGroup is composed from a set of partitions; it also keeps track
- * of the consumed offsets for each of its partitions.
+ * A PartitionGroup is composed from a set of partitions.
  */
 public class PartitionGroup {
 
     private final Map<TopicPartition, RecordQueue> partitionQueues;
-
-    private final Map<TopicPartition, Long> consumedOffsets;
 
     private final PriorityQueue<RecordQueue> queuesByTime;
 
@@ -58,39 +55,40 @@ public class PartitionGroup {
 
         this.partitionQueues = partitionQueues;
 
-        this.consumedOffsets = new HashMap<>();
-
         this.totalBuffered = 0;
     }
 
     /**
-     * Process one record from this partition group's queues
-     * as the first record from the lowest stamped partition,
-     * return its partition when completed
+     * Get one record from the specified partition queue
      */
-    @SuppressWarnings("unchecked")
-    public TopicPartition processRecord() {
-        // get the partition with the lowest timestamp.
-        RecordQueue recordQueue = queuesByTime.poll();
+    public StampedRecord getRecord(RecordQueue queue) {
+        // get the first record from this queue.
+        StampedRecord record = queue.poll();
 
-        // get the first record from this partition's queue.
-        StampedRecord record = recordQueue.get();
+        // update the partition's timestamp and re-order it against other partitions.
+
+        queuesByTime.remove(queue);
+
+        if (queue.size() > 0) {
+            queuesByTime.offer(queue);
+        }
 
         totalBuffered--;
 
-        // process the record by passing it to the source node of the topology
-        recordQueue.source().process(record.key(), record.value());
+        return record;
+    }
 
-        // update the partition's timestamp and re-order it against other partitions.
-        if (recordQueue.size() > 0) {
-            queuesByTime.offer(recordQueue);
-        }
+    /**
+     * Get the next partition queue that has the lowest timestamp to process
+     */
+    public RecordQueue nextQueue() {
+        // get the partition with the lowest timestamp
+        RecordQueue recordQueue = queuesByTime.peek();
 
-        // update the consumed offset map.
-        consumedOffsets.put(recordQueue.partition(), record.offset());
+        if (recordQueue == null)
+            throw new KafkaException("No records have ever been added to this partition group yet.");
 
-        // return the processed record's partition
-        return recordQueue.partition();
+        return recordQueue;
     }
 
     /**
@@ -151,19 +149,6 @@ public class PartitionGroup {
         }
     }
 
-    public long offset(TopicPartition partition) {
-        Long offset = consumedOffsets.get(partition);
-
-        if (offset == null)
-            throw new KafkaException("No record has ever been consumed for this partition.");
-
-        return offset;
-    }
-
-    public Map<TopicPartition, Long> offsets() {
-        return consumedOffsets;
-    }
-
     public int numbuffered(TopicPartition partition) {
         RecordQueue recordQueue = partitionQueues.get(partition);
 
@@ -179,7 +164,6 @@ public class PartitionGroup {
 
     public void close() {
         queuesByTime.clear();
-        consumedOffsets.clear();
         partitionQueues.clear();
     }
 }

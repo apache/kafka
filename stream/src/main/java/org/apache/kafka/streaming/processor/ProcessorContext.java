@@ -84,11 +84,6 @@ public interface ProcessorContext {
      */
     void register(StateStore store, RestoreFunc restoreFunc);
 
-    /**
-     * Flush the local state of this context
-     */
-    void flush();
-
     void schedule(Processor processor, long interval);
 
     <K, V> void forward(K key, V value);
