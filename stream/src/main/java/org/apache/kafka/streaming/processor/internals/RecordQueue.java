@@ -31,22 +31,24 @@ public class RecordQueue {
 
     private final SourceNode source;
     private final TopicPartition partition;
-    private final ArrayDeque<StampedRecord> fifoQueue = new ArrayDeque<>();
-    private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker = new MinTimestampTracker<>();
+    private final ArrayDeque<StampedRecord> fifoQueue;
+    private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
 
     private long partitionTime = TimestampTracker.NOT_KNOWN;
 
-    /**
-     * Creates a new instance of RecordQueue
-     *
-     * @param partition        partition
-     * @param source           source node
-     */
     public RecordQueue(TopicPartition partition, SourceNode source) {
         this.partition = partition;
         this.source = source;
+
+        this.fifoQueue = new ArrayDeque<>();
+        this.timeTracker = new MinTimestampTracker<>();
     }
 
+    /**
+     * Returns the corresponding source node in the topology
+     *
+     * @return SourceNode
+     */
     public SourceNode source() {
         return source;
     }

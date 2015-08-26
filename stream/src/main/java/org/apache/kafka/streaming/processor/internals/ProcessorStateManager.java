@@ -63,10 +63,6 @@ public class ProcessorStateManager {
         return this.baseDir;
     }
 
-    public Consumer<byte[], byte[]> restoreConsumer() {
-        return this.restoreConsumer;
-    }
-
     public void register(StateStore store, RestoreFunc restoreFunc) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);

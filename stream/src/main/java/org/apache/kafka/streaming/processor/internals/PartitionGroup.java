@@ -22,13 +22,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 
 /**
- * A PartitionGroup is composed from a set of partitions.
+ * A PartitionGroup is composed from a set of partitions. It also maintains the timestamp of this
+ * group, hence the associated task as the min timestamp across all partitions in the group.
  */
 public class PartitionGroup {
 
@@ -60,13 +60,14 @@ public class PartitionGroup {
 
     /**
      * Get one record from the specified partition queue
+     *
+     * @return StampedRecord
      */
     public StampedRecord getRecord(RecordQueue queue) {
         // get the first record from this queue.
         StampedRecord record = queue.poll();
 
         // update the partition's timestamp and re-order it against other partitions.
-
         queuesByTime.remove(queue);
 
         if (queue.size() > 0) {
@@ -80,6 +81,8 @@ public class PartitionGroup {
 
     /**
      * Get the next partition queue that has the lowest timestamp to process
+     *
+     * @return RecordQueue
      */
     public RecordQueue nextQueue() {
         // get the partition with the lowest timestamp
@@ -92,7 +95,7 @@ public class PartitionGroup {
     }
 
     /**
-     * Put a timestamped record associated into its corresponding partition's queues.
+     * Put a timestamped record associated into its corresponding partition's queues
      */
     public void putRecord(StampedRecord record, TopicPartition partition) {
         if (record.partition() != partition.partition() || !record.topic().equals(partition.topic()))
@@ -143,7 +146,7 @@ public class PartitionGroup {
      */
     public long timestamp() {
         if (queuesByTime.isEmpty()) {
-            return -1L;
+            return TimestampTracker.NOT_KNOWN;
         } else {
             return queuesByTime.peek().timestamp();
         }

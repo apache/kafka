@@ -19,7 +19,6 @@ package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-// TODO: making this class exposed to user in the lower-level Processor
 public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
     public StampedRecord(ConsumerRecord<Object, Object> record, long timestamp) {

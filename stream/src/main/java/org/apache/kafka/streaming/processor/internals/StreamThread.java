@@ -53,9 +53,9 @@ public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
-    private final Consumer<byte[], byte[]> consumer;
     private final TopologyBuilder builder;
     private final RecordCollector collector;
+    private final Consumer<byte[], byte[]> consumer;
     private final Map<Integer, StreamTask> tasks = new HashMap<>();
     private final Metrics metrics;
     private final Time time;
@@ -128,7 +128,7 @@ public class StreamThread extends Thread {
      */
     @Override
     public synchronized void run() {
-        log.info("Starting a kstream thread");
+        log.info("Starting a stream thread");
         try {
             runLoop();
         } catch (RuntimeException e) {
@@ -140,13 +140,13 @@ public class StreamThread extends Thread {
     }
 
     private void shutdown() {
-        log.info("Shutting down a kstream thread");
+        log.info("Shutting down a stream thread");
         commitAll(time.milliseconds());
 
         collector.close();
         consumer.close();
         removePartitions();
-        log.info("kstream thread shutdown complete");
+        log.info("Stream thread shutdown complete");
     }
 
     /**
@@ -206,8 +206,6 @@ public class StreamThread extends Thread {
     }
 
     private void commitAll(long now) {
-
-        /*
         Map<TopicPartition, Long> commit = new HashMap<>();
         for (ProcessorContextImpl context : tasks.values()) {
             context.flush();
@@ -222,7 +220,6 @@ public class StreamThread extends Thread {
             consumer.commit(commit); // TODO: can this be async?
             streamingMetrics.commitTime.record(now - lastCommit);
         }
-        */
     }
 
     /* delete any state dirs that aren't for active contexts */
@@ -303,9 +300,9 @@ public class StreamThread extends Thread {
             this.commitTime.add(new MetricName(group, "commits-per-second"), new Rate(new Count()));
 
             this.processTime = metrics.sensor("process-time");
-            this.commitTime.add(new MetricName(group, "process-time-avg-ms"), new Avg());
-            this.commitTime.add(new MetricName(group, "process-time-max-ms"), new Max());
-            this.commitTime.add(new MetricName(group, "process-calls-per-second"), new Rate(new Count()));
+            this.processTime.add(new MetricName(group, "process-time-avg-ms"), new Avg());
+            this.processTime.add(new MetricName(group, "process-time-max-ms"), new Max());
+            this.processTime.add(new MetricName(group, "process-calls-per-second"), new Rate(new Count()));
 
             this.windowTime = metrics.sensor("window-time");
             this.windowTime.add(new MetricName(group, "window-time-avg-ms"), new Avg());

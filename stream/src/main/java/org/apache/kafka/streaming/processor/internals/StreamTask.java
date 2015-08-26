@@ -17,16 +17,21 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitType;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.processor.TimestampExtractor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -40,6 +45,8 @@ import java.util.Set;
  */
 public class StreamTask {
 
+    private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
+
     private final int id;
     private final int maxBufferedSize;
 
@@ -50,6 +57,8 @@ public class StreamTask {
     private final TimestampExtractor timestampExtractor;
 
     private final Map<TopicPartition, Long> consumedOffsets;
+    private final Map<TopicPartition, Long> producedoffsets;
+    private final Callback producerCallback;
 
     private boolean commitRequested = false;
     private StampedRecord currRecord = null;
@@ -98,8 +107,22 @@ public class StreamTask {
 
         topology.init(this.processorContext);
 
-        // initialize the consumed offset cache
+        // initialize the consumed and produced offset cache
         this.consumedOffsets = new HashMap<>();
+        this.producedoffsets = new HashMap<>();
+
+        this.producerCallback = new Callback() {
+
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                if (exception == null) {
+                    TopicPartition partition = new TopicPartition(metadata.topic(), metadata.partition());
+                    producedoffsets.put(partition, metadata.offset());
+                } else {
+                    log.error("Error sending record: ", exception);
+                }
+            }
+        };
     }
 
     public int id() {
@@ -165,14 +188,19 @@ public class StreamTask {
             this.currNode = queue.source();
             this.currNode.process(currRecord.key(), currRecord.value());
 
-            // update the consumed offset map.
+            // update the consumed offset map after processing is done
             consumedOffsets.put(queue.partition(), currRecord.offset());
 
+            // commit the current task state if requested during the processing
             if (commitRequested) {
-                // TODO: flush the following states atomically
                 // 1) flush local state
+                ((ProcessorContextImpl) processorContext).stateManager().flush();
+
                 // 2) commit consumed offsets
+                consumer.commit(consumedOffsets, CommitType.SYNC);
+
                 // 3) flush produced records in the downstream
+                ((ProcessorContextImpl) processorContext).recordCollector().flush();
             }
 
             // we can continue processing this task as long as its
@@ -209,9 +237,9 @@ public class StreamTask {
     }
 
     /**
-     * Request committing the current record's offset
+     * Request committing the current task's state
      */
-    public void commitOffset() {
+    public void commit() {
         this.commitRequested = true;
     }
 
