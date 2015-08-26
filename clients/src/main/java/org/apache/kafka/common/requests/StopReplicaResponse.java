@@ -36,6 +36,12 @@ public class StopReplicaResponse extends AbstractRequestResponse {
     private final Map<TopicPartition, Short> responses;
     private final short errorCode;
 
+    /**
+     * Possible error code:
+     *
+     * STALE_CONTROLLER_EPOCH (11)
+     */
+
     public StopReplicaResponse(Map<TopicPartition, Short> responses) {
         this(responses, Errors.NONE.code());
     }

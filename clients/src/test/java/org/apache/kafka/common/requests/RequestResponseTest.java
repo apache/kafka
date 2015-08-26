@@ -219,8 +219,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createStopReplicaRequest() {
-        Set<TopicPartition> partitions = new HashSet<>();
-        partitions.add(new TopicPartition("test", 0));
+        Set<TopicPartition> partitions = new HashSet<>(Arrays.asList(new TopicPartition("test", 0)));
         return new StopReplicaRequest(0, 1, true, partitions);
     }
 

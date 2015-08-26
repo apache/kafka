@@ -443,20 +443,22 @@ public class Protocol {
     public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0};
 
     /* Replica api */
-    public static final Schema STOP_REPLICA_REQUEST_PARTITION_V0 = new Schema(new Field("topic", STRING, "The partition name."),
+    public static final Schema STOP_REPLICA_REQUEST_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
                                                                               new Field("partition", INT32, "Topic partition id."));
 
     public static final Schema STOP_REPLICA_REQUEST_V0 = new Schema(new Field("controller_id", INT32, "The controller id."),
                                                                     new Field("controller_epoch", INT32, "The controller epoch."),
-                                                                    new Field("delete_partitions", INT8),
+                                                                    new Field("delete_partitions",
+                                                                              INT8,
+                                                                              "Boolean which indicates if replica's partitions must be deleted."),
                                                                     new Field("partitions",
                                                                               new ArrayOf(STOP_REPLICA_REQUEST_PARTITION_V0)));
 
-    public static final Schema STOP_REPLICA_RESPONSE_PARTITION_V0 = new Schema(new Field("topic", STRING, "The partition name."),
+    public static final Schema STOP_REPLICA_RESPONSE_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
                                                                                new Field("partition", INT32, "Topic partition id."),
-                                                                               new Field("error_code", INT16));
+                                                                               new Field("error_code", INT16, "Error code."));
 
-    public static final Schema STOP_REPLICA_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
+    public static final Schema STOP_REPLICA_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."),
                                                                      new Field("partitions",
                                                                                new ArrayOf(STOP_REPLICA_RESPONSE_PARTITION_V0)));
 
