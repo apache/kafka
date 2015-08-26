@@ -196,7 +196,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *             buffer.add(record);
  *             if (buffer.size() &gt;= commitInterval) {
  *                 insertIntoDb(buffer);
- *                 consumer.commit(CommitType.SYNC);
+ *                 consumer.commitSync();
  *                 buffer.clear();
  *             }
  *         }
