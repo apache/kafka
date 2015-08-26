@@ -27,88 +27,60 @@ import java.util.Set;
 
 public class ProcessorTopology {
 
-    private Map<String, ProcessorNode> processors = new HashMap<>();
-    private Map<String, SourceNode> sourceTopics = new HashMap<>();
-    private Map<String, SinkNode> sinkTopics = new HashMap<>();
+    private List<ProcessorNode> processors;
+    private Map<String, SourceNode> sourceByTopics;
+    private Map<String, SinkNode> sinkByTopics;
 
-    public ProcessorTopology(Map<String, ProcessorNode> processors,
-                             Map<String, SourceNode> sourceTopics,
-                             Map<String, SinkNode> sinkTopics) {
+    public ProcessorTopology(List<ProcessorNode> processors,
+                             Map<String, SourceNode> sourceByTopics,
+                             Map<String, SinkNode> sinkByTopics) {
         this.processors = processors;
-        this.sourceTopics = sourceTopics;
-        this.sinkTopics = sinkTopics;
+        this.sourceByTopics = sourceByTopics;
+        this.sinkByTopics = sinkByTopics;
     }
 
     public Set<String> sourceTopics() {
-        return sourceTopics.keySet();
+        return sourceByTopics.keySet();
     }
 
     public Set<String> sinkTopics() {
-        return sinkTopics.keySet();
+        return sinkByTopics.keySet();
     }
 
     public SourceNode source(String topic) {
-        return sourceTopics.get(topic);
+        return sourceByTopics.get(topic);
     }
 
     public SinkNode sink(String topic) {
-        return sinkTopics.get(topic);
+        return sinkByTopics.get(topic);
     }
 
     public Collection<SourceNode> sources() {
-        return sourceTopics.values();
+        return sourceByTopics.values();
     }
 
     public Collection<SinkNode> sinks() {
-        return sinkTopics.values();
+        return sinkByTopics.values();
     }
 
     /**
      * Initialize the processors following the DAG reverse ordering
      * such that parents are always initialized before children
      */
-    @SuppressWarnings("unchecked")
     public void init(ProcessorContext context) {
-        // initialize sources
-        for (String topic : sourceTopics.keySet()) {
-            SourceNode source = sourceTopics.get(topic);
-
-            init(source, context);
-        }
-    }
-
-    /**
-     * Initialize the current processor node by first initializing
-     * its parent nodes first, then the processor itself
-     */
-    @SuppressWarnings("unchecked")
-    private void init(ProcessorNode node, ProcessorContext context) {
-        for (ProcessorNode parentNode : (List<ProcessorNode>) node.parents()) {
-            if (!parentNode.initialized) {
-                init(parentNode, context);
-            }
-        }
-
-        node.init(context);
-        node.initialized = true;
-
-        // try to initialize its children
-        for (ProcessorNode childNode : (List<ProcessorNode>) node.children()) {
-            if (!childNode.initialized) {
-                init(childNode, context);
-            }
+        for (ProcessorNode node : processors) {
+            node.init(context);
         }
     }
 
     public final void close() {
         // close the processors
-        // TODO: do we need to follow the DAG ordering?
-        for (ProcessorNode processorNode : processors.values()) {
-            processorNode.close();
+        for (ProcessorNode node : processors) {
+            node.close();
         }
 
         processors.clear();
-        sourceTopics.clear();
-        sinkTopics.clear();
+        sourceByTopics.clear();
+        sinkByTopics.clear();
     }
 }

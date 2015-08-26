@@ -31,8 +31,6 @@ public class ProcessorNode<K1, V1, K2, V2> {
     private final String name;
     private final Processor<K1, V1> processor;
 
-    public boolean initialized;
-
     public ProcessorNode(String name) {
         this(name, null);
     }
@@ -42,8 +40,6 @@ public class ProcessorNode<K1, V1, K2, V2> {
         this.processor = processor;
         this.parents = new ArrayList<>();
         this.children = new ArrayList<>();
-
-        this.initialized = false;
     }
 
     public String name() {

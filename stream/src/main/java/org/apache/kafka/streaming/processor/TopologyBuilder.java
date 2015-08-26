@@ -27,95 +27,128 @@ import org.apache.kafka.streaming.processor.internals.SourceNode;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class TopologyBuilder {
 
-    private Map<String, ProcessorClazz> processorClasses = new HashMap<>();
-    private Map<String, SourceClazz> sourceClasses = new HashMap<>();
-    private Map<String, SinkClazz> sinkClasses = new HashMap<>();
-    private Map<String, String> topicsToSourceNames = new HashMap<>();
-    private Map<String, String> topicsToSinkNames = new HashMap<>();
+    // list of node factories in a topological order
+    private ArrayList<NodeFactory> nodeFactories = new ArrayList<>();
 
-    private Map<String, List<String>> parents = new HashMap<>();
-    private Map<String, List<String>> children = new HashMap<>();
+    private Set<String> nodeNames = new HashSet<>();
+    private Set<String> sourceTopicNames = new HashSet<>();
 
-    private class ProcessorClazz {
-        public ProcessorFactory factory;
+    private interface NodeFactory {
+        ProcessorNode build();
+    }
 
-        public ProcessorClazz(ProcessorFactory factory) {
+    private class ProcessorNodeFactory implements NodeFactory {
+        public final String[] parents;
+        private final String name;
+        private final ProcessorFactory factory;
+
+        public ProcessorNodeFactory(String name, String[] parents, ProcessorFactory factory) {
+            this.name = name;
+            this.parents = parents.clone();
             this.factory = factory;
+        }
+
+        public ProcessorNode build() {
+            Processor processor = factory.build();
+            return new ProcessorNode(name, processor);
         }
     }
 
-    private class SourceClazz {
-        public Deserializer keyDeserializer;
-        public Deserializer valDeserializer;
+    private class SourceNodeFactory implements NodeFactory {
+        public final String[] topics;
+        private final String name;
+        private Deserializer keyDeserializer;
+        private Deserializer valDeserializer;
 
-        private SourceClazz(Deserializer keyDeserializer, Deserializer valDeserializer) {
+        private SourceNodeFactory(String name, String[] topics, Deserializer keyDeserializer, Deserializer valDeserializer) {
+            this.name = name;
+            this.topics = topics.clone();
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
         }
+
+        public ProcessorNode build() {
+            return new SourceNode(name, keyDeserializer, valDeserializer);
+        }
     }
 
-    private class SinkClazz {
-        public Serializer keySerializer;
-        public Serializer valSerializer;
+    private class SinkNodeFactory implements NodeFactory {
+        public final String[] parents;
+        public final String topic;
+        private final String name;
+        private Serializer keySerializer;
+        private Serializer valSerializer;
 
-        private SinkClazz(Serializer keySerializer, Serializer valSerializer) {
+        private SinkNodeFactory(String name, String[] parents, String topic, Serializer keySerializer, Serializer valSerializer) {
+            this.name = name;
+            this.parents = parents.clone();
+            this.topic = topic;
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
+        }
+        public ProcessorNode build() {
+            return new SinkNode(name, topic, keySerializer, valSerializer);
         }
     }
 
     public TopologyBuilder() {}
 
-    @SuppressWarnings("unchecked")
     public final void addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
-        for (String topic : topics) {
-            if (topicsToSourceNames.containsKey(topic))
-                throw new IllegalArgumentException("Topic " + topic + " has already been registered by another processor.");
-
-            topicsToSourceNames.put(topic, name);
-        }
-
-        sourceClasses.put(name, new SourceClazz(keyDeserializer, valDeserializer));
-    }
-
-    public final void addSink(String name, Serializer keySerializer, Serializer valSerializer, String... topics) {
-        for (String topic : topics) {
-            if (topicsToSinkNames.containsKey(topic))
-                throw new IllegalArgumentException("Topic " + topic + " has already been registered by another processor.");
-
-            topicsToSinkNames.put(topic, name);
-        }
-
-        sinkClasses.put(name, new SinkClazz(keySerializer, valSerializer));
-    }
-
-    public final void addProcessor(String name, ProcessorFactory factory, String... parentNames) {
-        if (processorClasses.containsKey(name))
+        if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
 
-        processorClasses.put(name, new ProcessorClazz(factory));
+        for (String topic : topics) {
+            if (sourceTopicNames.contains(topic))
+                throw new IllegalArgumentException("Topic " + topic + " has already been registered by another processor.");
+        }
+
+        nodeNames.add(name);
+        nodeFactories.add(new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
+    }
+
+    public final void addSink(String name, String topic, Serializer keySerializer, Serializer valSerializer, String... parentNames) {
+        if (nodeNames.contains(name))
+            throw new IllegalArgumentException("Processor " + name + " is already added.");
 
         if (parentNames != null) {
             for (String parent : parentNames) {
-                if (!processorClasses.containsKey(parent))
+                if (parent.equals(name)) {
+                    throw new IllegalArgumentException("Processor " + name + " cannot be a parent of itself");
+                }
+                if (!nodeNames.contains(parent)) {
                     throw new IllegalArgumentException("Parent processor " + parent + " is not added yet.");
-
-                // add to parent list
-                if (!parents.containsKey(name))
-                    parents.put(name, new ArrayList<>());
-                parents.get(name).add(parent);
-
-                // add to children list
-                if (!children.containsKey(parent))
-                    children.put(parent, new ArrayList<>());
-                children.get(parent).add(name);
+                }
             }
         }
+
+        nodeNames.add(name);
+        nodeFactories.add(new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
+    }
+
+    public final void addProcessor(String name, ProcessorFactory factory, String... parentNames) {
+        if (nodeNames.contains(name))
+            throw new IllegalArgumentException("Processor " + name + " is already added.");
+
+        if (parentNames != null) {
+            for (String parent : parentNames) {
+                if (parent.equals(name)) {
+                    throw new IllegalArgumentException("Processor " + name + " cannot be a parent of itself");
+                }
+                if (!nodeNames.contains(parent)) {
+                    throw new IllegalArgumentException("Parent processor " + parent + " is not added yet.");
+                }
+            }
+        }
+
+        nodeNames.add(name);
+        nodeFactories.add(new ProcessorNodeFactory(name, parentNames, factory));
     }
 
     /**
@@ -123,59 +156,41 @@ public class TopologyBuilder {
      */
     @SuppressWarnings("unchecked")
     public ProcessorTopology build() {
+        List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
         Map<String, SinkNode> topicSinkMap = new HashMap<>();
 
-        // create sources
-        for (String name : sourceClasses.keySet()) {
-            Deserializer keyDeserializer = sourceClasses.get(name).keyDeserializer;
-            Deserializer valDeserializer = sourceClasses.get(name).valDeserializer;
-            SourceNode node = new SourceNode(name, keyDeserializer, valDeserializer);
-            processorMap.put(name, node);
-        }
-
-        // create sinks
-        for (String name : sinkClasses.keySet()) {
-            Serializer keySerializer = sinkClasses.get(name).keySerializer;
-            Serializer valSerializer = sinkClasses.get(name).valSerializer;
-            SinkNode node = new SinkNode(name, keySerializer, valSerializer);
-            processorMap.put(name, node);
-        }
-
-        // create processors
         try {
-            for (String name : processorClasses.keySet()) {
-                ProcessorFactory processorFactory = processorClasses.get(name).factory;
-                Processor processor = processorFactory.build();
-                ProcessorNode node = new ProcessorNode(name, processor);
-                processorMap.put(name, node);
+            // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
+            for (NodeFactory factory : nodeFactories) {
+                ProcessorNode node = factory.build();
+                processorNodes.add(node);
+                processorMap.put(node.name(), node);
+
+                if (factory instanceof ProcessorNodeFactory) {
+                    for (String parent : ((ProcessorNodeFactory) factory).parents) {
+                        processorMap.get(parent).chain(node);
+                    }
+                } else if (factory instanceof SourceNodeFactory) {
+                    for (String topic : ((SourceNodeFactory)factory).topics) {
+                        topicSourceMap.put(topic, (SourceNode) node);
+                    }
+                } else if (factory instanceof SinkNodeFactory) {
+                    String topic = ((SinkNodeFactory) factory).topic;
+                    topicSinkMap.put(topic, (SinkNode) node);
+
+                    for (String parent : ((SinkNodeFactory) factory).parents) {
+                        processorMap.get(parent).chain(node);
+                    }
+                } else {
+                    throw new IllegalStateException("unknown factory class: " + factory.getClass().getName());
+                }
             }
         } catch (Exception e) {
-            throw new KafkaException("Processor(String) constructor failed: this should not happen.");
+            throw new KafkaException("ProcessorNode construction failed: this should not happen.");
         }
 
-        // construct topics to sources map
-        for (String topic : topicsToSourceNames.keySet()) {
-            SourceNode node = (SourceNode) processorMap.get(topicsToSourceNames.get(topic));
-            topicSourceMap.put(topic, node);
-        }
-
-        // construct topics to sinks map
-        for (String topic : topicsToSinkNames.keySet()) {
-            SinkNode node = (SinkNode) processorMap.get(topicsToSourceNames.get(topic));
-            topicSinkMap.put(topic, node);
-            node.addTopic(topic);
-        }
-
-        // chain children to parents to build the DAG
-        for (ProcessorNode node : processorMap.values()) {
-            for (String child : children.get(node.name())) {
-                ProcessorNode childNode = processorMap.get(child);
-                node.chain(childNode);
-            }
-        }
-
-        return new ProcessorTopology(processorMap, topicSourceMap, topicSinkMap);
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap);
     }
 }

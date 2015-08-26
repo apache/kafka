@@ -26,22 +26,18 @@ import java.util.List;
 
 public class SinkNode<K, V> extends ProcessorNode<K, V, K, V> {
 
+    private final String topic;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valSerializer;
-    private final List<String> topics;
 
     private ProcessorContext context;
 
-    public SinkNode(String name, Serializer<K> keySerializer, Serializer<V> valSerializer) {
+    public SinkNode(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
         super(name);
 
-        this.topics = new ArrayList<>();
+        this.topic = topic;
         this.keySerializer = keySerializer;
         this.valSerializer = valSerializer;
-    }
-
-    public void addTopic(String topic) {
-        this.topics.add(topic);
     }
 
     @Override
@@ -53,9 +49,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V, K, V> {
     public void process(K key, V value) {
         // send to all the registered topics
         RecordCollector collector = ((ProcessorContextImpl)context).recordCollector();
-        for (String topic : topics) {
-            collector.send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer);
-        }
+        collector.send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer);
     }
 
     @Override
