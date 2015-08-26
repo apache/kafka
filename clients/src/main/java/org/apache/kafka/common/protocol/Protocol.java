@@ -107,9 +107,25 @@ public class Protocol {
                                                                                                                                       INT16),
                                                                                                                             new Field("base_offset",
                                                                                                                                       INT64))))))));
+    public static final Schema PRODUCE_REQUEST_V1 = PRODUCE_REQUEST_V0;
 
-    public static final Schema[] PRODUCE_REQUEST = new Schema[] {PRODUCE_REQUEST_V0};
-    public static final Schema[] PRODUCE_RESPONSE = new Schema[] {PRODUCE_RESPONSE_V0};
+    public static final Schema PRODUCE_RESPONSE_V1 = new Schema(new Field("responses",
+                                                                          new ArrayOf(new Schema(new Field("topic", STRING),
+                                                                                                 new Field("partition_responses",
+                                                                                                           new ArrayOf(new Schema(new Field("partition",
+                                                                                                                                            INT32),
+                                                                                                                                  new Field("error_code",
+                                                                                                                                            INT16),
+                                                                                                                                  new Field("base_offset",
+                                                                                                                                            INT64))))))),
+                                                                new Field("throttle_time_ms",
+                                                                          INT32,
+                                                                          "Duration in milliseconds for which the request was throttled" +
+                                                                              " due to quota violation. (Zero if the request did not violate any quota.)",
+                                                                          0));
+
+    public static final Schema[] PRODUCE_REQUEST = new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1};
+    public static final Schema[] PRODUCE_RESPONSE = new Schema[] {PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1};
 
     /* Offset commit api */
     public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -342,6 +358,9 @@ public class Protocol {
                                                                        new ArrayOf(FETCH_REQUEST_TOPIC_V0),
                                                                        "Topics to fetch."));
 
+    // The V1 Fetch Request body is the same as V0.
+    // Only the version number is incremented to indicate a newer client
+    public static final Schema FETCH_REQUEST_V1 = FETCH_REQUEST_V0;
     public static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                   INT32,
                                                                                   "Topic partition id."),
@@ -357,9 +376,16 @@ public class Protocol {
 
     public static final Schema FETCH_RESPONSE_V0 = new Schema(new Field("responses",
                                                                         new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
+    public static final Schema FETCH_RESPONSE_V1 = new Schema(new Field("throttle_time_ms",
+                                                                        INT32,
+                                                                        "Duration in milliseconds for which the request was throttled" +
+                                                                            " due to quota violation. (Zero if the request did not violate any quota.)",
+                                                                        0),
+                                                              new Field("responses",
+                                                                      new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0};
-    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0};
+    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1};
+    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1};
 
     /* Consumer metadata api */
     public static final Schema CONSUMER_METADATA_REQUEST_V0 = new Schema(new Field("group_id",

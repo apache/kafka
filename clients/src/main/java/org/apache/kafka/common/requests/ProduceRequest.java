@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ProduceRequest  extends AbstractRequest {
+public class ProduceRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.PRODUCE.id);
     private static final String ACKS_KEY_NAME = "acks";
@@ -103,7 +103,7 @@ public class ProduceRequest  extends AbstractRequest {
 
         switch (versionId) {
             case 0:
-                return new ProduceResponse(responseMap);
+                return new ProduceResponse(responseMap, 0);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.PRODUCE.id)));

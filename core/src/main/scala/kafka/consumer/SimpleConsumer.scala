@@ -131,7 +131,7 @@ class SimpleConsumer(val host: String,
         response = sendRequest(request)
       }
     }
-    val fetchResponse = FetchResponse.readFrom(response.payload())
+    val fetchResponse = FetchResponse.readFrom(response.payload(), request.versionId)
     val fetchedSize = fetchResponse.sizeInBytes
     fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestSizeHist.update(fetchedSize)
     fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestSizeHist.update(fetchedSize)

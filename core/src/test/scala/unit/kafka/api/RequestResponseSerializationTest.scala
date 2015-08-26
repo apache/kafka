@@ -18,9 +18,12 @@
 package kafka.api
 
 
+import java.nio.channels.GatheringByteChannel
+
 import kafka.cluster.{BrokerEndPoint, EndPoint, Broker}
 import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError}
 import kafka.common._
+import kafka.consumer.FetchRequestAndResponseStatsRegistry
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.utils.SystemTime
 
@@ -150,7 +153,7 @@ object SerializationTestUtils {
     ProducerResponse(1, Map(
       TopicAndPartition(topic1, 0) -> ProducerResponseStatus(0.toShort, 10001),
       TopicAndPartition(topic2, 0) -> ProducerResponseStatus(0.toShort, 20001)
-    ))
+    ), ProducerRequest.CurrentVersion, 100)
 
   def createTestFetchRequest: FetchRequest = {
     new FetchRequest(requestInfo = requestInfos)
@@ -303,5 +306,40 @@ class RequestResponseSerializationTest extends JUnitSuite {
                   buffer.hasRemaining)
       assertEquals("The original and deserialized for " + original.getClass.getSimpleName + " should be the same.", original, deserialized)
     }
+  }
+
+  @Test
+  def testProduceResponseVersion() {
+    val oldClientResponse = ProducerResponse(1, Map(
+      TopicAndPartition("t1", 0) -> ProducerResponseStatus(0.toShort, 10001),
+      TopicAndPartition("t2", 0) -> ProducerResponseStatus(0.toShort, 20001)
+    ))
+
+    val newClientResponse = ProducerResponse(1, Map(
+      TopicAndPartition("t1", 0) -> ProducerResponseStatus(0.toShort, 10001),
+      TopicAndPartition("t2", 0) -> ProducerResponseStatus(0.toShort, 20001)
+    ), 1, 100)
+
+    // new response should have 4 bytes more than the old response since delayTime is an INT32
+    assertEquals(oldClientResponse.sizeInBytes + 4, newClientResponse.sizeInBytes)
+
+    val buffer = ByteBuffer.allocate(newClientResponse.sizeInBytes)
+    newClientResponse.writeTo(buffer)
+    buffer.rewind()
+    assertEquals(ProducerResponse.readFrom(buffer).throttleTime, 100)
+  }
+
+  @Test
+  def testFetchResponseVersion() {
+    val oldClientResponse = FetchResponse(1, Map(
+      TopicAndPartition("t1", 0) -> new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
+    ), 0)
+
+    val newClientResponse = FetchResponse(1, Map(
+      TopicAndPartition("t1", 0) -> new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
+    ), 1, 100)
+
+    // new response should have 4 bytes more than the old response since delayTime is an INT32
+    assertEquals(oldClientResponse.sizeInBytes + 4, newClientResponse.sizeInBytes)
   }
 }
