@@ -107,6 +107,8 @@ public class TopologyBuilder {
         for (String topic : topics) {
             if (sourceTopicNames.contains(topic))
                 throw new IllegalArgumentException("Topic " + topic + " has already been registered by another processor.");
+
+            sourceTopicNames.add(topic);
         }
 
         nodeNames.add(name);
