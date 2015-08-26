@@ -38,21 +38,21 @@ import java.util.concurrent.TimeUnit;
 /**
  * WorkerTask that uses a SinkTask to export data from Kafka.
  */
-class WorkerSinkTask<K, V> implements WorkerTask {
+class WorkerSinkTask implements WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);
 
     private final ConnectorTaskId id;
     private final SinkTask task;
     private final WorkerConfig workerConfig;
     private final Time time;
-    private final Converter<K> keyConverter;
-    private final Converter<V> valueConverter;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
     private WorkerSinkTaskThread workThread;
-    private KafkaConsumer<K, V> consumer;
+    private KafkaConsumer<byte[], byte[]> consumer;
     private final SinkTaskContext context;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
-                          Converter<K> keyConverter, Converter<V> valueConverter, Time time) {
+                          Converter keyConverter, Converter valueConverter, Time time) {
         this.id = id;
         this.task = task;
         this.workerConfig = workerConfig;
@@ -107,7 +107,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
     public void poll(long timeoutMs) {
         try {
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
-            ConsumerRecords<K, V> msgs = consumer.poll(timeoutMs);
+            ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
             log.trace("{} polling returned {} messages", id, msgs.count());
             deliverMessages(msgs);
         } catch (ConsumerWakeupException we) {
@@ -154,7 +154,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         return workerConfig;
     }
 
-    private KafkaConsumer<K, V> createConsumer(Properties taskProps) {
+    private KafkaConsumer<byte[], byte[]> createConsumer(Properties taskProps) {
         String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
             throw new CopycatException("Sink tasks require a list of topics.");
@@ -168,12 +168,10 @@ class WorkerSinkTask<K, V> implements WorkerTask {
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                workerConfig.getClass(WorkerConfig.KEY_DESERIALIZER_CLASS_CONFIG).getName());
-        props.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                workerConfig.getClass(WorkerConfig.VALUE_DESERIALIZER_CLASS_CONFIG).getName());
+        props.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
-        KafkaConsumer<K, V> newConsumer;
+        KafkaConsumer<byte[], byte[]> newConsumer;
         try {
             newConsumer = new KafkaConsumer<>(props);
         } catch (Throwable t) {
@@ -202,14 +200,14 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         return new WorkerSinkTaskThread(this, "WorkerSinkTask-" + id, time, workerConfig);
     }
 
-    private void deliverMessages(ConsumerRecords<K, V> msgs) {
+    private void deliverMessages(ConsumerRecords<byte[], byte[]> msgs) {
         // Finally, deliver this batch to the sink
         if (msgs.count() > 0) {
             List<SinkRecord> records = new ArrayList<>();
-            for (ConsumerRecord<K, V> msg : msgs) {
+            for (ConsumerRecord<byte[], byte[]> msg : msgs) {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
-                SchemaAndValue keyAndSchema = msg.key() != null ? keyConverter.toCopycatData(msg.key()) : SchemaAndValue.NULL;
-                SchemaAndValue valueAndSchema = msg.value() != null ? valueConverter.toCopycatData(msg.value()) : SchemaAndValue.NULL;
+                SchemaAndValue keyAndSchema = keyConverter.toCopycatData(msg.topic(), msg.key());
+                SchemaAndValue valueAndSchema = valueConverter.toCopycatData(msg.topic(), msg.value());
                 records.add(
                         new SinkRecord(msg.topic(), msg.partition(),
                                 keyAndSchema.schema(), keyAndSchema.value(),

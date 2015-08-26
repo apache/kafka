@@ -92,7 +92,6 @@ public interface Schema {
     Schema OPTIONAL_STRING_SCHEMA = SchemaBuilder.string().optional().build();
     Schema OPTIONAL_BYTES_SCHEMA = SchemaBuilder.bytes().optional().build();
 
-
     /**
      * @return the type of this schema
      */

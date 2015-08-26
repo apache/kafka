@@ -17,8 +17,6 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.slf4j.Logger;
@@ -35,25 +33,20 @@ import java.util.Map;
  * directly, the interface is only separate from this implementation because it needs to be
  * included in the public API package.
  */
-public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
+public class OffsetStorageReaderImpl implements OffsetStorageReader {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageReaderImpl.class);
 
     private final OffsetBackingStore backingStore;
     private final String namespace;
-    private final Converter<K> keyConverter;
-    private final Converter<V> valueConverter;
-    private final Serializer<K> keySerializer;
-    private final Deserializer<V> valueDeserializer;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
 
     public OffsetStorageReaderImpl(OffsetBackingStore backingStore, String namespace,
-                                   Converter<K> keyConverter, Converter<V> valueConverter,
-                                   Serializer<K> keySerializer, Deserializer<V> valueDeserializer) {
+                                   Converter keyConverter, Converter valueConverter) {
         this.backingStore = backingStore;
         this.namespace = namespace;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
-        this.keySerializer = keySerializer;
-        this.valueDeserializer = valueDeserializer;
     }
 
     @Override
@@ -67,7 +60,7 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
         Map<ByteBuffer, SchemaAndValue> serializedToOriginal = new HashMap<>(partitions.size());
         for (SchemaAndValue key : partitions) {
             try {
-                byte[] keySerialized = keySerializer.serialize(namespace, keyConverter.fromCopycatData(key.schema(), key.value()));
+                byte[] keySerialized = keyConverter.fromCopycatData(namespace, key.schema(), key.value());
                 ByteBuffer keyBuffer = (keySerialized != null) ? ByteBuffer.wrap(keySerialized) : null;
                 serializedToOriginal.put(keyBuffer, key);
             } catch (Throwable t) {
@@ -97,9 +90,7 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
                     continue;
                 }
                 SchemaAndValue origKey = serializedToOriginal.get(rawEntry.getKey());
-                SchemaAndValue deserializedValue = valueConverter.toCopycatData(
-                        valueDeserializer.deserialize(namespace, rawEntry.getValue().array())
-                );
+                SchemaAndValue deserializedValue = valueConverter.toCopycatData(namespace, rawEntry.getValue().array());
 
                 result.put(origKey, deserializedValue);
             } catch (Throwable t) {

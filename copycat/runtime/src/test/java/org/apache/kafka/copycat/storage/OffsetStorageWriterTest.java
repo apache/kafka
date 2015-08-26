@@ -17,7 +17,6 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.data.SchemaBuilder;
@@ -52,9 +51,6 @@ public class OffsetStorageWriterTest {
     private static final List<String> OFFSET_KEY = Arrays.asList("key", "key");
     private static final Schema OFFSET_VALUE_SCHEMA = Schema.STRING_SCHEMA;
     private static final String OFFSET_VALUE = "value";
-    // Native objects - must match serializer types
-    private static final int OFFSET_KEY_CONVERTED = 12;
-    private static final String OFFSET_VALUE_CONVERTED = "value-converted";
     // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
@@ -63,11 +59,9 @@ public class OffsetStorageWriterTest {
             ByteBuffer.wrap(OFFSET_VALUE_SERIALIZED));
 
     @Mock private OffsetBackingStore store;
-    @Mock private Converter<Integer> keyConverter;
-    @Mock private Converter<String> valueConverter;
-    @Mock private Serializer<Integer> keySerializer;
-    @Mock private Serializer<String> valueSerializer;
-    private OffsetStorageWriter<Integer, String> writer;
+    @Mock private Converter keyConverter;
+    @Mock private Converter valueConverter;
+    private OffsetStorageWriter writer;
 
     private static Exception exception = new RuntimeException("error");
 
@@ -75,7 +69,7 @@ public class OffsetStorageWriterTest {
 
     @Before
     public void setup() {
-        writer = new OffsetStorageWriter<>(store, NAMESPACE, keyConverter, valueConverter, keySerializer, valueSerializer);
+        writer = new OffsetStorageWriter(store, NAMESPACE, keyConverter, valueConverter);
         service = Executors.newFixedThreadPool(1);
     }
 
@@ -207,10 +201,8 @@ public class OffsetStorageWriterTest {
     private void expectStore(final Callback<Void> callback,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
-        EasyMock.expect(keyConverter.fromCopycatData(OFFSET_KEY_SCHEMA, OFFSET_KEY)).andReturn(OFFSET_KEY_CONVERTED);
-        EasyMock.expect(keySerializer.serialize(NAMESPACE, OFFSET_KEY_CONVERTED)).andReturn(OFFSET_KEY_SERIALIZED);
-        EasyMock.expect(valueConverter.fromCopycatData(OFFSET_VALUE_SCHEMA, OFFSET_VALUE)).andReturn(OFFSET_VALUE_CONVERTED);
-        EasyMock.expect(valueSerializer.serialize(NAMESPACE, OFFSET_VALUE_CONVERTED)).andReturn(OFFSET_VALUE_SERIALIZED);
+        EasyMock.expect(keyConverter.fromCopycatData(NAMESPACE, OFFSET_KEY_SCHEMA, OFFSET_KEY)).andReturn(OFFSET_KEY_SERIALIZED);
+        EasyMock.expect(valueConverter.fromCopycatData(NAMESPACE, OFFSET_VALUE_SCHEMA, OFFSET_VALUE)).andReturn(OFFSET_VALUE_SERIALIZED);
 
         final Capture<Callback<Void>> storeCallback = Capture.newInstance();
         EasyMock.expect(store.set(EasyMock.eq(NAMESPACE), EasyMock.eq(OFFSETS_SERIALIZED),

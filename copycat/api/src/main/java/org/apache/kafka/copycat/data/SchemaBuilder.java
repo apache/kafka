@@ -21,6 +21,7 @@ import org.apache.kafka.copycat.errors.DataException;
 import org.apache.kafka.copycat.errors.SchemaBuilderException;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -346,7 +347,7 @@ public class SchemaBuilder implements Schema {
      * @return the {@link Schema}
      */
     public Schema build() {
-        return new CopycatSchema(type, isOptional(), defaultValue, name, version, doc, fields, keySchema, valueSchema);
+        return new CopycatSchema(type, isOptional(), defaultValue, name, version, doc, fields == null ? null : Collections.unmodifiableList(fields), keySchema, valueSchema);
     }
 
     /**

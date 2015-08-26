@@ -17,7 +17,6 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
@@ -64,14 +63,12 @@ import java.util.concurrent.Future;
  * This class is not thread-safe. It should only be accessed from a Task's processing thread.
  * </p>
  */
-public class OffsetStorageWriter<K, V> {
+public class OffsetStorageWriter {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageWriter.class);
 
     private final OffsetBackingStore backingStore;
-    private final Converter<K> keyConverter;
-    private final Converter<V> valueConverter;
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valueSerializer;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
     private final String namespace;
     // Offset data in Copycat format
     private Map<SchemaAndValue, SchemaAndValue> data = new HashMap<>();
@@ -82,14 +79,11 @@ public class OffsetStorageWriter<K, V> {
     private long currentFlushId = 0;
 
     public OffsetStorageWriter(OffsetBackingStore backingStore,
-                               String namespace, Converter<K> keyConverter, Converter<V> valueConverter,
-                               Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+                               String namespace, Converter keyConverter, Converter valueConverter) {
         this.backingStore = backingStore;
         this.namespace = namespace;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
     }
 
     /**
@@ -143,9 +137,9 @@ public class OffsetStorageWriter<K, V> {
         try {
             offsetsSerialized = new HashMap<>();
             for (Map.Entry<SchemaAndValue, SchemaAndValue> entry : toFlush.entrySet()) {
-                byte[] key = keySerializer.serialize(namespace, keyConverter.fromCopycatData(entry.getKey().schema(), entry.getKey().value()));
+                byte[] key = keyConverter.fromCopycatData(namespace, entry.getKey().schema(), entry.getKey().value());
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
-                byte[] value = valueSerializer.serialize(namespace, valueConverter.fromCopycatData(entry.getValue().schema(), entry.getValue().value()));
+                byte[] value = valueConverter.fromCopycatData(namespace, entry.getValue().schema(), entry.getValue().value());
                 ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
                 offsetsSerialized.put(keyBuffer, valueBuffer);
             }
