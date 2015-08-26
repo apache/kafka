@@ -110,7 +110,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void commit(Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback) {
+    public synchronized void commitAsync(Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
         for (Entry<TopicPartition, Long> entry : offsets.entrySet())
             subscriptions.committed(entry.getKey(), entry.getValue());
@@ -120,19 +120,24 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void commit(Map<TopicPartition, Long> offsets, CommitType commitType) {
-        commit(offsets, commitType, null);
+    public synchronized void commitSync(Map<TopicPartition, Long> offsets) {
+        commitAsync(offsets, null);
     }
 
     @Override
-    public synchronized void commit(CommitType commitType, ConsumerCommitCallback callback) {
+    public synchronized void commitAsync() {
+        commitAsync(null);
+    }
+
+    @Override
+    public synchronized void commitAsync(OffsetCommitCallback callback) {
         ensureNotClosed();
-        commit(this.subscriptions.allConsumed(), commitType, callback);
+        commitAsync(this.subscriptions.allConsumed(), callback);
     }
 
     @Override
-    public synchronized void commit(CommitType commitType) {
-        commit(commitType, null);
+    public synchronized void commitSync() {
+        commitSync(this.subscriptions.allConsumed());
     }
 
     @Override

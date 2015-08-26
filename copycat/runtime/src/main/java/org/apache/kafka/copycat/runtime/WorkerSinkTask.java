@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
@@ -137,13 +138,21 @@ class WorkerSinkTask implements WorkerTask {
             }
         }
 
-        ConsumerCommitCallback cb = new ConsumerCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, Long> offsets, Exception error) {
-                workThread.onCommitCompleted(error, seqno);
+        if (sync) {
+            try {
+                consumer.commitSync(offsets);
+            } catch (KafkaException e) {
+                workThread.onCommitCompleted(e, seqno);
             }
-        };
-        consumer.commit(offsets, sync ? CommitType.SYNC : CommitType.ASYNC, cb);
+        } else {
+            OffsetCommitCallback cb = new OffsetCommitCallback() {
+                @Override
+                public void onComplete(Map<TopicPartition, Long> offsets, Exception error) {
+                    workThread.onCommitCompleted(error, seqno);
+                }
+            };
+            consumer.commitAsync(offsets, cb);
+        }
     }
 
     public Time time() {

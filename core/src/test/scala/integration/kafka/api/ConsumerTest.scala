@@ -80,7 +80,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
     // check async commit callbacks
     val commitCallback = new CountConsumerCommitCallback()
-    this.consumers(0).commit(CommitType.ASYNC, commitCallback)
+    this.consumers(0).commitAsync(commitCallback)
 
     // shouldn't make progress until poll is invoked
     Thread.sleep(10)
@@ -99,7 +99,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     this.consumers(0).poll(50)
     val pos1 = this.consumers(0).position(tp)
     val pos2 = this.consumers(0).position(tp2)
-    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp, 3L)).asJava, CommitType.SYNC)
+    this.consumers(0).commitSync(Map[TopicPartition,java.lang.Long]((tp, 3L)).asJava)
     assertEquals(3, this.consumers(0).committed(tp))
     intercept[NoOffsetForPartitionException] {
       this.consumers(0).committed(tp2)
@@ -107,13 +107,13 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     // positions should not change
     assertEquals(pos1, this.consumers(0).position(tp))
     assertEquals(pos2, this.consumers(0).position(tp2))
-    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp2, 5L)).asJava, CommitType.SYNC)
+    this.consumers(0).commitSync(Map[TopicPartition,java.lang.Long]((tp2, 5L)).asJava)
     assertEquals(3, this.consumers(0).committed(tp))
     assertEquals(5, this.consumers(0).committed(tp2))
 
     // Using async should pick up the committed changes after commit completes
     val commitCallback = new CountConsumerCommitCallback()
-    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp2, 7L)).asJava, CommitType.ASYNC, commitCallback)
+    this.consumers(0).commitAsync(Map[TopicPartition,java.lang.Long]((tp2, 7L)).asJava, commitCallback)
     awaitCommitCallback(this.consumers(0), commitCallback)
     assertEquals(7, this.consumers(0).committed(tp2))
   }
@@ -170,12 +170,12 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     this.consumers(0).assign(List(tp))
 
     assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers(0).position(tp))
-    this.consumers(0).commit(CommitType.SYNC)
+    this.consumers(0).commitSync()
     assertEquals(0L, this.consumers(0).committed(tp))
 
     consumeRecords(this.consumers(0), 5, 0)
     assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers(0).position(tp))
-    this.consumers(0).commit(CommitType.SYNC)
+    this.consumers(0).commitSync()
     assertEquals("Committed offset should be returned", 5L, this.consumers(0).committed(tp))
 
     sendRecords(1)
@@ -390,7 +390,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(startCount + 1, commitCallback.count)
   }
 
-  private class CountConsumerCommitCallback extends ConsumerCommitCallback {
+  private class CountConsumerCommitCallback extends OffsetCommitCallback {
     var count = 0
 
     override def onComplete(offsets: util.Map[TopicPartition, lang.Long], exception: Exception): Unit = count += 1

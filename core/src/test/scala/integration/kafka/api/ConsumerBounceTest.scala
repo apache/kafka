@@ -86,7 +86,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         consumed += 1
       }
 
-      consumer.commit(CommitType.SYNC)
+      consumer.commitSync()
       assertEquals(consumer.position(tp), consumer.committed(tp))
 
       if (consumer.position(tp) == numRecords) {
@@ -130,7 +130,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         assertEquals(pos, consumer.position(tp))
       } else if (coin == 2) {
         info("Committing offset.")
-        consumer.commit(CommitType.SYNC)
+        consumer.commitSync()
         assertEquals(consumer.position(tp), consumer.committed(tp))
       }
     }

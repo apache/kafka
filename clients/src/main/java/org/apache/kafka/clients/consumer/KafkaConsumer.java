@@ -79,10 +79,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * out. It will be one larger than the highest offset the consumer has seen in that partition. It automatically advances
  * every time the consumer receives data calls {@link #poll(long)} and receives messages.
  * <p>
- * The {@link #commit(CommitType) committed position} is the last offset that has been saved securely. Should the
+ * The {@link #commitSync() committed position} is the last offset that has been saved securely. Should the
  * process fail and restart, this is the offset that it will recover to. The consumer can either automatically commit
  * offsets periodically, or it can choose to control this committed position manually by calling
- * {@link #commit(CommitType) commit}.
+ * {@link #commitSync() commit}.
  * <p>
  * This distinction gives the consumer control over when a record is considered consumed. It is discussed in further
  * detail below.
@@ -540,7 +540,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metricsTags,
                     this.time,
                     requestTimeoutMs,
-                    retryBackoffMs);
+                    retryBackoffMs,
+                    new Coordinator.DefaultOffsetCommitCallback());
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                         Deserializer.class);
@@ -706,8 +707,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * The offset used for fetching the data is governed by whether or not {@link #seek(TopicPartition, long)} is used.
      * If {@link #seek(TopicPartition, long)} is used, it will use the specified offsets on startup and on every
      * rebalance, to consume data from that offset sequentially on every poll. If not, it will use the last checkpointed
-     * offset using {@link #commit(Map, CommitType) commit(offsets, sync)} for the subscribed list of partitions.
-     *
+     * offset using {@link #commitSync(Map) commit(offsets)} for the subscribed list of partitions.
+     * 
      * @param timeout The time, in milliseconds, spent waiting in poll if data is not available. If 0, returns
      *            immediately with any records available now. Must not be negative.
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
@@ -775,7 +776,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void scheduleAutoCommitTask(final long interval) {
         DelayedTask task = new DelayedTask() {
             public void run(long now) {
-                commit(CommitType.ASYNC);
+                commitAsync(new OffsetCommitCallback() {
+                    @Override
+                    public void onComplete(Map<TopicPartition, Long> offsets, Exception exception) {
+                        if (exception != null)
+                            log.error("Auto offset commit failed.", exception);
+                    }
+                });
                 client.schedule(this, now + interval);
             }
         };
@@ -783,24 +790,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Commits the specified offsets for the specified list of topics and partitions to Kafka.
+     * Commits offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
      * <p>
-     * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
-     * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
+     * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
-     * commit are silently discarded. If you need to determine the result of an asynchronous commit, you should use
-     * {@link #commit(Map, CommitType, ConsumerCommitCallback)}. Synchronous commits (i.e. {@link CommitType#SYNC})
-     * block until either the commit succeeds or an unrecoverable error is encountered (in which case it is thrown
-     * to the caller).
-     *
-     * @param offsets The list of offsets per partition that should be committed to Kafka.
-     * @param commitType Control whether the commit is blocking
+     * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
+     * encountered (in which case it is thrown to the caller).
      */
     @Override
-    public void commit(final Map<TopicPartition, Long> offsets, CommitType commitType) {
-        commit(offsets, commitType, null);
+    public void commitSync() {
+        acquire();
+        try {
+            commitSync(subscriptions.allConsumed());
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -810,24 +816,27 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
-     * commit are either passed to the callback (if provided) or silently discarded. Synchronous commits (i.e.
-     * {@link CommitType#SYNC}) block until either the commit succeeds or an unrecoverable error is encountered. In
-     * this case, the error is either passed to the callback (if provided) or thrown to the caller.
+     * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
+     * encountered (in which case it is thrown to the caller).
      *
      * @param offsets The list of offsets per partition that should be committed to Kafka.
-     * @param commitType Control whether the commit is blocking
-     * @param callback Callback to invoke when the commit completes
      */
     @Override
-    public void commit(final Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback) {
+    public void commitSync(final Map<TopicPartition, Long> offsets) {
         acquire();
         try {
-            log.debug("Committing offsets ({}): {} ", commitType.toString().toLowerCase(), offsets);
-            coordinator.commitOffsets(offsets, commitType, callback);
+            coordinator.commitOffsetsSync(offsets);
         } finally {
             release();
         }
+    }
+
+    /**
+     * Convenient method. Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
+     */
+    @Override
+    public void commitAsync() {
+        commitAsync(null);
     }
 
     /**
@@ -837,42 +846,43 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
-     * commit are either passed to the callback (if provided) or silently discarded. Synchronous commits (i.e.
-     * {@link CommitType#SYNC}) block until either the commit succeeds or an unrecoverable error is encountered. In
-     * this case, the error is either passed to the callback (if provided) or thrown to the caller.
+     * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
+     * (if provided) or discarded.
      *
-     * @param commitType Whether or not the commit should block until it is acknowledged.
      * @param callback Callback to invoke when the commit completes
      */
     @Override
-    public void commit(CommitType commitType, ConsumerCommitCallback callback) {
+    public void commitAsync(OffsetCommitCallback callback) {
         acquire();
         try {
-            commit(subscriptions.allConsumed(), commitType, callback);
+            commitAsync(subscriptions.allConsumed(), callback);
         } finally {
             release();
         }
     }
 
     /**
-     * Commits offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
+     * Commits the specified offsets for the specified list of topics and partitions to Kafka.
      * <p>
-     * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
-     * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
+     * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
-     * commit are silently discarded. If you need to determine the result of an asynchronous commit, you should use
-     * {@link #commit(CommitType, ConsumerCommitCallback)}. Synchronous commits (i.e. {@link CommitType#SYNC})
-     * block until either the commit succeeds or an unrecoverable error is encountered (in which case it is thrown
-     * to the caller).
+     * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
+     * (if provided) or discarded.
      *
-     * @param commitType Whether or not the commit should block until it is acknowledged.
+     * @param offsets The list of offsets per partition that should be committed to Kafka.
+     * @param callback Callback to invoke when the commit completes
      */
     @Override
-    public void commit(CommitType commitType) {
-        commit(commitType, null);
+    public void commitAsync(final Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
+        acquire();
+        try {
+            log.debug("Committing offsets: {} ", offsets);
+            coordinator.commitOffsetsAsync(offsets, callback);
+        } finally {
+            release();
+        }
     }
 
     /**
