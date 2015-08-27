@@ -18,24 +18,41 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streaming.processor.Processor;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.ProcessorDef;
 
 import java.util.ArrayList;
 
-public class MockProcessor<K1, V1> extends Processor<K1, V1, Object, Object> {
+public class MockProcessorDef<K, V> implements ProcessorDef {
+
     public final ArrayList<String> processed = new ArrayList<>();
     public final ArrayList<Long> punctuated = new ArrayList<>();
 
-    public MockProcessor() {
-        super("MOCK");
+    public Processor instance() {
+        return new MockProcessor();
     }
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
+    public class MockProcessor implements Processor<K, V> {
 
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+        @Override
+        public void init(ProcessorContext context) {
+            // do nothing
+        }
+
+        @Override
+        public void process(K key, V value) {
+            processed.add(key + ":" + value);
+        }
+
+        @Override
+        public void punctuate(long streamTime) {
+            punctuated.add(streamTime);
+        }
+
+        @Override
+        public void close() {
+            // do nothing
+        }
+
     }
 }

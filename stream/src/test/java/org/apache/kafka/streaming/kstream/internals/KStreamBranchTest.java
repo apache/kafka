@@ -22,9 +22,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
 import org.apache.kafka.streaming.kstream.Predicate;
-import org.apache.kafka.streaming.kstream.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamBuilder;
-import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessorDef;
 import org.junit.Test;
 
 import java.lang.reflect.Array;
@@ -33,15 +32,15 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamBranchTest {
 
-    private String topic1 = "topic";
+    private String topicName = "topic";
 
-    private KStreamBuilder topology = new MockKStreamBuilder();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
     @SuppressWarnings("unchecked")
     @Test
     public void testKStreamBranch() {
+        KStreamBuilder builder = new KStreamBuilder();
 
         Predicate<Integer, String> isEven = new Predicate<Integer, String>() {
             @Override
@@ -66,21 +65,22 @@ public class KStreamBranchTest {
 
         KStream<Integer, String> stream;
         KStream<Integer, String>[] branches;
-        MockProcessor<Integer, String>[] processors;
+        MockProcessorDef<Integer, String>[] processors;
 
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic1);
+        stream = builder.from(keyDeserializer, valDeserializer, topicName);
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
 
-        processors = (MockProcessor<Integer, String>[]) Array.newInstance(MockProcessor.class, branches.length);
+        processors = (MockProcessorDef<Integer, String>[]) Array.newInstance(MockProcessorDef.class, branches.length);
         for (int i = 0; i < branches.length; i++) {
-            processors[i] = new MockProcessor<>();
+            processors[i] = new MockProcessorDef<>();
             branches[i].process(processors[i]);
         }
 
+        KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
+            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(3, processors[0].processed.size());

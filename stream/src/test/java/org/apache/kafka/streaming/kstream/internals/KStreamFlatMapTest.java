@@ -22,10 +22,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
 import org.apache.kafka.streaming.kstream.KeyValue;
-import org.apache.kafka.streaming.kstream.KeyValueMapper;
-import org.apache.kafka.streaming.kstream.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamBuilder;
-import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
+import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessorDef;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -36,22 +35,22 @@ public class KStreamFlatMapTest {
 
     private String topicName = "topic";
 
-    private KStreamBuilder topology = new MockKStreamBuilder();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
     public void testFlatMap() {
+        KStreamBuilder builder = new KStreamBuilder();
 
-        KeyValueMapper<Integer, String, String, Iterable<String>> mapper =
-            new KeyValueMapper<Integer, String, String, Iterable<String>>() {
+        KeyValueFlatMap<Integer, String, String, String> mapper =
+            new KeyValueFlatMap<Integer, String, String, String>() {
                 @Override
-                public KeyValue<String, Iterable<String>> apply(Integer key, String value) {
-                    ArrayList<String> result = new ArrayList<String>();
+                public Iterable<KeyValue<String, String>> apply(Integer key, String value) {
+                    ArrayList<KeyValue<String, String>> result = new ArrayList<>();
                     for (int i = 0; i < key; i++) {
-                        result.add(value);
+                        result.add(KeyValue.pair(Integer.toString(key), value));
                     }
-                    return KeyValue.pair(Integer.toString(key * 10), (Iterable<String>) result);
+                    return result;
                 }
             };
 
@@ -98,16 +97,21 @@ public class KStreamFlatMapTest {
         KStreamSource<Integer, String> stream;
 =======
         KStream<Integer, String> stream;
+<<<<<<< HEAD
 >>>>>>> wip
         MockProcessor<String, String> processor;
+=======
+        MockProcessorDef<String, String> processor;
+>>>>>>> kstream test fix
 
-        processor = new MockProcessor<>();
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
+        processor = new MockProcessorDef<>();
+        stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.flatMap(mapper).process(processor);
 >>>>>>> compile and test passed
 
+        KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
+            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());

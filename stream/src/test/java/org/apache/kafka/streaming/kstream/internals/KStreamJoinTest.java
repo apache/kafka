@@ -27,11 +27,9 @@ import org.apache.kafka.streaming.kstream.KeyValue;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.streaming.kstream.ValueJoiner;
 import org.apache.kafka.streaming.kstream.ValueMapper;
-import org.apache.kafka.streaming.kstream.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamBuilder;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorContext;
-import org.apache.kafka.test.UnlimitedWindow;
+import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.UnlimitedWindowDef;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -41,7 +39,6 @@ public class KStreamJoinTest {
     private String topic1 = "topic1";
     private String topic2 = "topic2";
 
-    private KStreamBuilder topology = new MockKStreamBuilder();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
@@ -85,6 +82,7 @@ public class KStreamJoinTest {
 
     @Test
     public void testJoin() {
+        KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -92,25 +90,24 @@ public class KStreamJoinTest {
         KStream<Integer, String> stream2;
         KStreamWindowed<Integer, String> windowed1;
         KStreamWindowed<Integer, String> windowed2;
-        MockProcessor<Integer, String> processor;
+        MockProcessorDef<Integer, String> processor;
         String[] expected;
 
-        processor = new MockProcessor<>();
-        stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic1);
-        stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic2);
-        windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
-        windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
+        processor = new MockProcessorDef<>();
+        stream1 = builder.from(keyDeserializer, valDeserializer, topic1);
+        stream2 = builder.from(keyDeserializer, valDeserializer, topic2);
+        windowed1 = stream1.with(new UnlimitedWindowDef<Integer, String>("window1"));
+        windowed2 = stream2.with(new UnlimitedWindowDef<Integer, String>("window2"));
 
         windowed1.join(windowed2, joiner).process(processor);
 
-        MockProcessorContext context = new MockProcessorContext(null, null);
-        topology.init(context);
-        context.setTime(0L);
+        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver.setTime(0L);
 
         // push two items to the main stream. the other stream's window is empty
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream1).source().process(expectedKeys[i], "X" + expectedKeys[i]);
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -118,7 +115,7 @@ public class KStreamJoinTest {
         // push two items to the other stream. the main stream's window has two items
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream2).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
+            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -134,7 +131,7 @@ public class KStreamJoinTest {
         // push all items to the main stream. this should produce two items.
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream1).source().process(expectedKeys[i], "X" + expectedKeys[i]);
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -151,7 +148,7 @@ public class KStreamJoinTest {
 
         // push all items to the other stream. this should produce 6 items
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream2).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
+            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());
@@ -165,6 +162,7 @@ public class KStreamJoinTest {
 
     @Test
     public void testJoinPrior() {
+        KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -172,26 +170,24 @@ public class KStreamJoinTest {
         KStream<Integer, String> stream2;
         KStreamWindowed<Integer, String> windowed1;
         KStreamWindowed<Integer, String> windowed2;
-        MockProcessor<Integer, String> processor;
+        MockProcessorDef<Integer, String> processor;
         String[] expected;
 
-        processor = new MockProcessor<>();
-        stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic1);
-        stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic2);
-        windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
-        windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
+        processor = new MockProcessorDef<>();
+        stream1 = builder.from(keyDeserializer, valDeserializer, topic1);
+        stream2 = builder.from(keyDeserializer, valDeserializer, topic2);
+        windowed1 = stream1.with(new UnlimitedWindowDef<Integer, String>("window1"));
+        windowed2 = stream2.with(new UnlimitedWindowDef<Integer, String>("window2"));
 
         windowed1.joinPrior(windowed2, joiner).process(processor);
 
-        MockProcessorContext context = new MockProcessorContext(null, null);
-        topology.init(context);
+        KStreamTestDriver driver = new KStreamTestDriver(builder);
 
         // push two items to the main stream. the other stream's window is empty
 
         for (int i = 0; i < 2; i++) {
-            context.setTime(i);
-
-            ((KStreamSource<Integer, String>) stream1).source().process(expectedKeys[i], "X" + expectedKeys[i]);
+            driver.setTime(i);
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -200,9 +196,8 @@ public class KStreamJoinTest {
         // no corresponding item in the main window has a newer timestamp
 
         for (int i = 0; i < 2; i++) {
-            context.setTime(i + 1);
-
-            ((KStreamSource<Integer, String>) stream2).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
+            driver.setTime(i + 1);
+            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -212,9 +207,8 @@ public class KStreamJoinTest {
         // push all items with newer timestamps to the main stream. this should produce two items.
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            context.setTime(i + 2);
-
-            ((KStreamSource<Integer, String>) stream1).source().process(expectedKeys[i], "X" + expectedKeys[i]);
+            driver.setTime(i + 2);
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -231,9 +225,8 @@ public class KStreamJoinTest {
 
         // push all items with older timestamps to the other stream. this should produce six items
         for (int i = 0; i < expectedKeys.length; i++) {
-            context.setTime(i);
-
-            ((KStreamSource<Integer, String>) stream2).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
+            driver.setTime(i);
+            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());

@@ -21,11 +21,10 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
+import org.apache.kafka.streaming.kstream.Window;
 import org.apache.kafka.streaming.kstream.WindowDef;
-import org.apache.kafka.streaming.kstream.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamBuilder;
-import org.apache.kafka.test.MockProcessorContext;
-import org.apache.kafka.test.UnlimitedWindow;
+import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.UnlimitedWindowDef;
 import org.junit.Test;
 
 import java.util.Iterator;
@@ -35,31 +34,32 @@ import static org.junit.Assert.assertEquals;
 public class KStreamWindowedTest {
 
     private String topicName = "topic";
+    private String windowName = "MyWindow";
 
-    private KStreamBuilder topology = new MockKStreamBuilder();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
     public void testWindowedStream() {
+        KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         KStream<Integer, String> stream;
-        WindowDef<Integer, String> window;
+        WindowDef<Integer, String> windowDef;
 
-        window = new UnlimitedWindow<>();
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-        stream.with(window);
+        windowDef = new UnlimitedWindowDef<>(windowName);
+        stream = builder.from(keyDeserializer, valDeserializer, topicName);
+        stream.with(windowDef);
 
-        MockProcessorContext context = new MockProcessorContext(null, null);
-        topology.init(context);
-        context.setTime(0L);
+        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        Window<Integer, String> window = (Window<Integer, String>) driver.getStateStore(windowName);
+        driver.setTime(0L);
 
         // two items in the window
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
+            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(1, countItem(window.find(0, 0L)));
@@ -70,7 +70,7 @@ public class KStreamWindowedTest {
         // previous two items + all items, thus two are duplicates, in the window
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
+            driver.process(topicName, expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(2, countItem(window.find(0, 0L)));

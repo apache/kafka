@@ -22,9 +22,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
 import org.apache.kafka.streaming.kstream.ValueMapper;
-import org.apache.kafka.streaming.kstream.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamBuilder;
-import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessorDef;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -33,12 +32,12 @@ public class KStreamMapValuesTest {
 
     private String topicName = "topic";
 
-    private KStreamBuilder topology = new MockKStreamBuilder();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
     public void testFlatMapValues() {
+        KStreamBuilder builder = new KStreamBuilder();
 
         ValueMapper<String, Integer> mapper =
             new ValueMapper<String, Integer>() {
@@ -51,12 +50,13 @@ public class KStreamMapValuesTest {
         final int[] expectedKeys = new int[]{1, 10, 100, 1000};
 
         KStream<Integer, String> stream;
-        MockProcessor<Integer, Integer> processor = new MockProcessor<>();
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
+        MockProcessorDef<Integer, Integer> processor = new MockProcessorDef<>();
+        stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.mapValues(mapper).process(processor);
 
+        KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], Integer.toString(expectedKeys[i]));
+            driver.process(topicName, expectedKeys[i], Integer.toString(expectedKeys[i]));
         }
 
         assertEquals(4, processor.processed.size());

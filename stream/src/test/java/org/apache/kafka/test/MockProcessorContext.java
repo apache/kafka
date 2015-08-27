@@ -92,11 +92,16 @@ import org.apache.kafka.streaming.processor.StateStore;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streaming.processor.internals.ProcessorNode;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class MockProcessorContext implements ProcessorContext {
 
+<<<<<<< HEAD
 <<<<<<< HEAD
   Serializer serializer;
   Deserializer deserializer;
@@ -197,6 +202,13 @@ public class MockProcessorContext implements ProcessorContext {
 =======
     Serializer serializer;
     Deserializer deserializer;
+=======
+    private Serializer serializer;
+    private Deserializer deserializer;
+    private ProcessorNode node;
+
+    private Map<String, StateStore> storeMap = new HashMap<>();
+>>>>>>> kstream test fix
 
     long timestamp = -1L;
 
@@ -210,7 +222,7 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public boolean joinable(ProcessorContext other) {
+    public boolean joinable() {
         // TODO
         return true;
     }
@@ -252,7 +264,13 @@ public class MockProcessorContext implements ProcessorContext {
 
     @Override
     public void register(StateStore store, RestoreFunc func) {
-        throw new UnsupportedOperationException("restore() not supported.");
+        if (func != null) new UnsupportedOperationException("RestoreFunc not supported.");
+        storeMap.put(store.name(), store);
+    }
+
+    @Override
+    public StateStore getStateStore(String name) {
+        return storeMap.get(name);
     }
 
     @Override
@@ -261,8 +279,20 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        throw new UnsupportedOperationException("forward() not supported");
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) node().children()) {
+            node(childNode);
+            childNode.process(key, value);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, int childIndex) {
+        ProcessorNode childNode = (ProcessorNode<K, V>) node().children().get(childIndex);
+        node(childNode);
+        childNode.process(key, value);
     }
 
     @Override
@@ -291,4 +321,11 @@ public class MockProcessorContext implements ProcessorContext {
     }
 >>>>>>> compile and test passed
 
+    public void node(ProcessorNode node) {
+        this.node = node;
+    }
+
+    public ProcessorNode node() {
+        return this.node;
+    }
 }
