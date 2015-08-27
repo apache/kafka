@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -39,12 +40,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Map<String, List<PartitionInfo>> partitions;
     private final SubscriptionState subscriptions;
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    private Set<TopicPartition> paused;
     private boolean closed;
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(offsetResetStrategy);
-        this.partitions = new HashMap<String, List<PartitionInfo>>();
-        this.records = new HashMap<TopicPartition, List<ConsumerRecord<K, V>>>();
+        this.partitions = new HashMap<>();
+        this.records = new HashMap<>();
+        this.paused = new HashSet<>();
         this.closed = false;
     }
     
@@ -194,14 +197,18 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void pause(TopicPartition... partitions) {
-        for (TopicPartition partition : partitions)
+        for (TopicPartition partition : partitions) {
             subscriptions.pause(partition);
+            paused.add(partition);
+        }
     }
 
     @Override
     public void resume(TopicPartition... partitions) {
-        for (TopicPartition partition : partitions)
+        for (TopicPartition partition : partitions) {
             subscriptions.resume(partition);
+            paused.remove(partition);
+        }
     }
 
     @Override
@@ -213,6 +220,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
 
+    }
+
+    public Set<TopicPartition> paused() {
+        return paused;
     }
 
     private void ensureNotClosed() {

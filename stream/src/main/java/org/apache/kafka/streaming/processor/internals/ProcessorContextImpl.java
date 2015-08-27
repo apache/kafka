@@ -97,34 +97,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         return this.collector;
     }
 
-    @Override
-    public boolean joinable() {
-        Set<TopicPartition> partitions = this.task.partitions();
-        Map<Integer, List<String>> partitionsById = new HashMap<>();
-        int firstId = -1;
-        for (TopicPartition partition : partitions) {
-            if (!partitionsById.containsKey(partition.partition())) {
-                partitionsById.put(partition.partition(), new ArrayList<String>());
-            }
-            partitionsById.get(partition.partition()).add(partition.topic());
-
-            if (firstId < 0)
-                firstId = partition.partition();
-        }
-
-        List<String> topics = partitionsById.get(firstId);
-        for (List<String> topicsPerPartition : partitionsById.values()) {
-            if (topics.size() != topicsPerPartition.size())
-                return false;
-
-            for (String topic : topicsPerPartition) {
-                if (!topics.contains(topic))
-                    return false;
-            }
-        }
-
-        return true;
-    }
+    public StreamTask task() { return this.task; }
 
     @Override
     public int id() {
@@ -169,6 +142,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         stateMgr.register(store, restoreFunc);
     }
 
+    @Override
     public StateStore getStateStore(String name) {
         return stateMgr.getStore(name);
     }

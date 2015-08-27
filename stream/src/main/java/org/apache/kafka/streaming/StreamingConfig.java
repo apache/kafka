@@ -100,12 +100,12 @@ public class StreamingConfig extends AbstractConfig {
                                         Type.LONG,
                                         100,
                                         Importance.LOW,
-                                    POLL_MS_DOC)
+                                        POLL_MS_DOC)
                                 .define(NUM_STREAM_THREADS_CONFIG,
-                                    Type.INT,
-                                    1,
-                                    Importance.LOW,
-                                    NUM_STREAM_THREADS_DOC)
+                                        Type.INT,
+                                        1,
+                                        Importance.LOW,
+                                        NUM_STREAM_THREADS_DOC)
                                 .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                                         Type.INT,
                                         1000,
@@ -115,7 +115,7 @@ public class StreamingConfig extends AbstractConfig {
                                         Type.LONG,
                                         60000,
                                         Importance.LOW,
-                                    STATE_CLEANUP_DELAY_MS_DOC)
+                                        STATE_CLEANUP_DELAY_MS_DOC)
                                 .define(TOTAL_RECORDS_TO_PROCESS,
                                         Type.LONG,
                                         -1L,

@@ -17,25 +17,25 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streaming.processor.internals.SourceNode;
+
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streaming.processor.internals.SourceNode;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockSourceNode<K, V> extends SourceNode<K, V> {
 
-    public Deserializer<? extends K> keyDeserializer;
-    public Deserializer<? extends V> valDeserializer;
+    public static final String NAME = "MOCK-SOURCE-";
+
+    public static final AtomicInteger INDEX = new AtomicInteger(1);
 
     public int numReceived = 0;
     public ArrayList<K> keys = new ArrayList<>();
     public ArrayList<V> values = new ArrayList<>();
 
-    public MockSourceNode(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer) {
-        super(keyDeserializer, valDeserializer);
-
-        this.keyDeserializer = keyDeserializer;
-        this.valDeserializer = valDeserializer;
+    public MockSourceNode(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+        super(NAME + INDEX.getAndIncrement(), keyDeserializer, valDeserializer);
     }
 
     @Override

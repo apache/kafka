@@ -61,8 +61,6 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     public static final String SEND_NAME = "KAFKA-SEND-";
 
-    public static final String WINDOW_NAME = "KAFKA-WINDOW-";
-
     public static final AtomicInteger INDEX = new AtomicInteger(1);
 
     protected TopologyBuilder topology;
