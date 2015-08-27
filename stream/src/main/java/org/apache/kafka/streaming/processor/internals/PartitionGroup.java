@@ -86,12 +86,7 @@ public class PartitionGroup {
      */
     public RecordQueue nextQueue() {
         // get the partition with the lowest timestamp
-        RecordQueue recordQueue = queuesByTime.peek();
-
-        if (recordQueue == null)
-            throw new KafkaException("No records have ever been added to this partition group yet.");
-
-        return recordQueue;
+        return queuesByTime.peek();
     }
 
     /**

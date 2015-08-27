@@ -20,12 +20,12 @@ package org.apache.kafka.streaming.processor.internals;
 import org.apache.kafka.clients.consumer.CommitType;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
@@ -57,10 +57,10 @@ public class StreamTask {
     private final TimestampExtractor timestampExtractor;
 
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final Map<TopicPartition, Long> producedoffsets;
-    private final Callback producerCallback;
+    private final RecordCollector recordCollector;
 
     private boolean commitRequested = false;
+    private boolean commitOffsetNeeded = false;
     private StampedRecord currRecord = null;
     private ProcessorNode currNode = null;
 
@@ -69,15 +69,17 @@ public class StreamTask {
      *
      * @param id                    the ID of this task
      * @param consumer              the instance of {@link Consumer}
-     * @param topology              the instance of {@link ProcessorTopology}
+     * @param producer              the instance of {@link Producer}
      * @param partitions            the collection of assigned {@link TopicPartition}
+     * @param topology              the instance of {@link ProcessorTopology}
      * @param config                the {@link StreamingConfig} specified by the user
      */
+    @SuppressWarnings("unchecked")
     public StreamTask(int id,
-                      Consumer consumer,
-                      ProcessorTopology topology,
+                      Consumer<byte[], byte[]> consumer,
+                      Producer<byte[], byte[]> producer,
                       Collection<TopicPartition> partitions,
-                      RecordCollector collector,
+                      ProcessorTopology topology,
                       StreamingConfig config) {
 
         this.id = id;
@@ -98,31 +100,22 @@ public class StreamTask {
 
         this.partitionGroup = new PartitionGroup(partitionQueues);
 
+        // initialize the consumed and produced offset cache
+        this.consumedOffsets = new HashMap<>();
+
+        // create the record recordCollector that maintains the produced offsets
+        this.recordCollector = new RecordCollector(producer,
+            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
+            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
+
         // initialize the topology with its own context
         try {
-            this.processorContext = new ProcessorContextImpl(id, this, config, collector, new Metrics());
+            this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, new Metrics());
         } catch (IOException e) {
             throw new KafkaException("Error while creating the state manager in processor context.");
         }
 
         topology.init(this.processorContext);
-
-        // initialize the consumed and produced offset cache
-        this.consumedOffsets = new HashMap<>();
-        this.producedoffsets = new HashMap<>();
-
-        this.producerCallback = new Callback() {
-
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                if (exception == null) {
-                    TopicPartition partition = new TopicPartition(metadata.topic(), metadata.partition());
-                    producedoffsets.put(partition, metadata.offset());
-                } else {
-                    log.error("Error sending record: ", exception);
-                }
-            }
-        };
     }
 
     public int id() {
@@ -159,28 +152,29 @@ public class StreamTask {
 
             partitionGroup.putRecord(stampedRecord, partition);
         }
-    }
 
-    /**
-     * Schedules a punctuation for the processor
-     *
-     * @param processor the processor requesting scheduler
-     * @param interval  the interval in milliseconds
-     */
-    public void schedule(Processor processor, long interval) {
-        punctuationQueue.schedule(new PunctuationSchedule(processor, interval));
+
+        // if after adding these records, its partition queue's buffered size has been
+        // increased beyond the threshold, we can then pause the consumption for this partition
+        if (partitionGroup.numbuffered(partition) == this.maxBufferedSize) {
+            consumer.pause(partition);
+        }
     }
 
     /**
      * Processes one record
+     *
+     * @return number of records left in the buffer of this task's partition group after the processing is done
      */
     @SuppressWarnings("unchecked")
-    public boolean process() {
+    public int process() {
         synchronized (this) {
-            boolean readyForNextExecution = false;
-
             // get the next record queue to process
             RecordQueue queue = partitionGroup.nextQueue();
+
+            // if there is no queues that have any data, return immediately
+            if (queue == null)
+                return 0;
 
             // get a record from the queue and process it
             // by passing to the source node of the topology
@@ -190,23 +184,11 @@ public class StreamTask {
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(queue.partition(), currRecord.offset());
+            commitOffsetNeeded = true;
 
             // commit the current task state if requested during the processing
             if (commitRequested) {
-                // 1) flush local state
-                ((ProcessorContextImpl) processorContext).stateManager().flush();
-
-                // 2) commit consumed offsets
-                consumer.commit(consumedOffsets, CommitType.SYNC);
-
-                // 3) flush produced records in the downstream
-                ((ProcessorContextImpl) processorContext).recordCollector().flush();
-            }
-
-            // we can continue processing this task as long as its
-            // partition group still have buffered records
-            if (partitionGroup.numbuffered() > 0) {
-                readyForNextExecution = true;
+                commit();
             }
 
             // if after processing this record, its partition queue's buffered size has been
@@ -220,7 +202,7 @@ public class StreamTask {
             long timestamp = partitionGroup.timestamp();
             punctuationQueue.mayPunctuate(timestamp);
 
-            return readyForNextExecution;
+            return partitionGroup.numbuffered();
         }
     }
 
@@ -237,10 +219,38 @@ public class StreamTask {
     }
 
     /**
-     * Request committing the current task's state
+     * Commit the current task state
      */
     public void commit() {
+        // 1) flush local state
+        ((ProcessorContextImpl) processorContext).stateManager().flush();
+
+        // 2) commit consumed offsets if it is dirty already
+        if (commitOffsetNeeded) {
+            consumer.commit(consumedOffsets, CommitType.SYNC);
+            commitOffsetNeeded = false;
+        }
+
+        // 3) flush produced records in the downstream
+        // TODO: this will actually block on all produced records across the tasks
+        recordCollector.flush();
+    }
+
+    /**
+     * Request committing the current task's state
+     */
+    public void needCommit() {
         this.commitRequested = true;
+    }
+
+    /**
+     * Schedules a punctuation for the processor
+     *
+     * @param processor the processor requesting scheduler
+     * @param interval  the interval in milliseconds
+     */
+    public void schedule(Processor processor, long interval) {
+        punctuationQueue.schedule(new PunctuationSchedule(processor, interval));
     }
 
     public void close() {
@@ -248,7 +258,7 @@ public class StreamTask {
         this.consumedOffsets.clear();
     }
 
-    protected RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
+    private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
         return new RecordQueue(partition, source);
     }
 }

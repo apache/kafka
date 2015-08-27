@@ -35,7 +35,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -53,24 +52,24 @@ public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
+    private volatile boolean running;
+
     private final TopologyBuilder builder;
-    private final RecordCollector collector;
+    private final Producer<byte[], byte[]> producer;
     private final Consumer<byte[], byte[]> consumer;
-    private final Map<Integer, StreamTask> tasks = new HashMap<>();
-    private final Metrics metrics;
+    private final Map<Integer, StreamTask> tasks;
     private final Time time;
 
-    private final StreamingConfig config;
     private final File stateDir;
     private final long pollTimeMs;
+    private final long cleanTimeMs;
     private final long commitTimeMs;
-    private final long stateCleanupDelayMs;
     private final long totalRecordsToProcess;
-    private final KafkaStreamingMetrics streamingMetrics;
+    private final KafkaStreamingMetrics metrics;
+    private final StreamingConfig config;
 
-    private volatile boolean running;
+    private long lastClean;
     private long lastCommit;
-    private long nextStateCleaning;
     private long recordsProcessed;
 
     protected final ConsumerRebalanceCallback rebalanceCallback = new ConsumerRebalanceCallback() {
@@ -93,34 +92,34 @@ public class StreamThread extends Thread {
         this.config = config;
         this.builder = builder;
 
-        this.streamingMetrics = new KafkaStreamingMetrics();
-
         // create the producer and consumer clients
-        Producer<byte[], byte[]> producer = new KafkaProducer<>(config.getProducerProperties(),
+        this.producer = new KafkaProducer<>(config.getProducerProperties(),
             new ByteArraySerializer(),
             new ByteArraySerializer());
-        this.collector = new RecordCollector(producer,
-            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
-            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
 
-        consumer = new KafkaConsumer<>(config.getConsumerProperties(),
+        this.consumer = new KafkaConsumer<>(config.getConsumerProperties(),
             rebalanceCallback,
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer());
 
+        // initialize the task list
+        this.tasks = new HashMap<>();
+
+        // read in task specific config values
         this.stateDir = new File(this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = config.getLong(StreamingConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamingConfig.COMMIT_INTERVAL_MS_CONFIG);
-        this.stateCleanupDelayMs = config.getLong(StreamingConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+        this.cleanTimeMs = config.getLong(StreamingConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
         this.totalRecordsToProcess = config.getLong(StreamingConfig.TOTAL_RECORDS_TO_PROCESS);
 
-        this.running = true;
+        this.lastClean = 0;
         this.lastCommit = 0;
-        this.nextStateCleaning = Long.MAX_VALUE;
         this.recordsProcessed = 0;
         this.time = new SystemTime();
 
-        this.metrics = new Metrics();
+        this.metrics = new KafkaStreamingMetrics();
+
+        this.running = true;
     }
 
     /**
@@ -139,16 +138,6 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void shutdown() {
-        log.info("Shutting down a stream thread");
-        commitAll(time.milliseconds());
-
-        collector.close();
-        consumer.close();
-        removePartitions();
-        log.info("Stream thread shutdown complete");
-    }
-
     /**
      * Shutdown this streaming thread.
      */
@@ -156,14 +145,23 @@ public class StreamThread extends Thread {
         running = false;
     }
 
+    private void shutdown() {
+        log.info("Shutting down a stream thread");
+        commitAll(time.milliseconds());
+
+        producer.close();
+        consumer.close();
+        removePartitions();
+        log.info("Stream thread shutdown complete");
+    }
+
     private void runLoop() {
         try {
-            boolean readyForNextExecution = false;
+            int totalNumBuffered = 0;
 
             while (stillRunning()) {
-                // try to fetch some records and put them to tasks' queues
-                // TODO: we may not need to poll every iteration
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(readyForNextExecution ? 0 : this.pollTimeMs);
+                // try to fetch some records if necessary
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
 
                 for (StreamTask task : tasks.values()) {
                     for (TopicPartition partition : task.partitions()) {
@@ -172,13 +170,14 @@ public class StreamThread extends Thread {
                 }
 
                 // try to process one record from each task
-                // TODO: we may want to process more than one record in each iteration
+                totalNumBuffered = 0;
+
                 for (StreamTask task : tasks.values()) {
-                    readyForNextExecution = task.process();
+                    totalNumBuffered += task.process();
                 }
 
+                maybeClean();
                 maybeCommit();
-                maybeCleanState();
             }
         } catch (Exception e) {
             throw new KafkaException(e);
@@ -190,49 +189,52 @@ public class StreamThread extends Thread {
             log.debug("Shutting down at user request.");
             return false;
         }
+
         if (totalRecordsToProcess >= 0 && recordsProcessed >= totalRecordsToProcess) {
-            log.debug("Shutting down as we've reached the user-configured limit of {} records to process.", totalRecordsToProcess);
+            log.debug("Shutting down as we've reached the user configured limit of {} records to process.", totalRecordsToProcess);
             return false;
         }
+
         return true;
     }
 
     private void maybeCommit() {
         long now = time.milliseconds();
+
         if (commitTimeMs >= 0 && lastCommit + commitTimeMs < now) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
             commitAll(now);
         }
     }
 
+    /**
+     * Commit the states of all its tasks
+     * @param now
+     */
     private void commitAll(long now) {
-        Map<TopicPartition, Long> commit = new HashMap<>();
-        for (ProcessorContextImpl context : tasks.values()) {
-            context.flush();
-            commit.putAll(context.consumedOffsets());
+        for (StreamTask task : tasks.values()) {
+            task.commit();
         }
 
-        // check if commit is really needed, i.e. if all the offsets are already committed
-        if (consumer.commitNeeded(commit)) {
-            // TODO: for exactly-once we need to make sure the flush and commit
-            // are executed atomically whenever it is triggered by user
-            collector.flush();
-            consumer.commit(commit); // TODO: can this be async?
-            streamingMetrics.commitTime.record(now - lastCommit);
-        }
+        metrics.commitTime.record(now - time.milliseconds());
+
+        lastCommit = now;
     }
 
-    /* delete any state dirs that aren't for active contexts */
-    private void maybeCleanState() {
+    /**
+     * Cleanup any states of the tasks that have been removed from this thread
+     */
+    private void maybeClean() {
         long now = time.milliseconds();
-        if (now > nextStateCleaning) {
+
+        if (now > lastClean) {
             File[] stateDirs = stateDir.listFiles();
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
                         Integer id = Integer.parseInt(dir.getName());
                         if (!tasks.keySet().contains(id)) {
-                            log.info("Deleting obsolete state directory {} after {} delay ms.", dir.getAbsolutePath(), stateCleanupDelayMs);
+                            log.info("Deleting obsolete state directory {} after delayed {} ms.", dir.getAbsolutePath(), cleanTimeMs);
                             Utils.rm(dir);
                         }
                     } catch (NumberFormatException e) {
@@ -241,7 +243,8 @@ public class StreamThread extends Thread {
                     }
                 }
             }
-            nextStateCleaning = Long.MAX_VALUE;
+
+            lastClean = now;
         }
     }
 
@@ -260,13 +263,13 @@ public class StreamThread extends Thread {
                         partitionsForTask.add(part);
 
                 // create the task
-                task = new StreamTask(id, consumer, builder.build(), partitionsForTask, collector, config);
+                task = new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
 
                 tasks.put(id, task);
             }
         }
 
-        nextStateCleaning = time.milliseconds() + stateCleanupDelayMs;
+        lastClean = time.milliseconds() + cleanTimeMs;
     }
 
     private void removePartitions() {
@@ -279,12 +282,14 @@ public class StreamThread extends Thread {
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
-            streamingMetrics.processorDestruction.record();
+            metrics.processorDestruction.record();
         }
         tasks.clear();
     }
 
     private class KafkaStreamingMetrics {
+        final Metrics metrics;
+
         final Sensor commitTime;
         final Sensor processTime;
         final Sensor windowTime;
@@ -294,10 +299,12 @@ public class StreamThread extends Thread {
         public KafkaStreamingMetrics() {
             String group = "kafka-streaming";
 
+            this.metrics = new Metrics();
+
             this.commitTime = metrics.sensor("commit-time");
             this.commitTime.add(new MetricName(group, "commit-time-avg-ms"), new Avg());
-            this.commitTime.add(new MetricName(group, "commits-time-max-ms"), new Max());
-            this.commitTime.add(new MetricName(group, "commits-per-second"), new Rate(new Count()));
+            this.commitTime.add(new MetricName(group, "commit-time-max-ms"), new Max());
+            this.commitTime.add(new MetricName(group, "commit-per-second"), new Rate(new Count()));
 
             this.processTime = metrics.sensor("process-time");
             this.processTime.add(new MetricName(group, "process-time-avg-ms"), new Avg());
@@ -314,9 +321,6 @@ public class StreamThread extends Thread {
 
             this.processorDestruction = metrics.sensor("processor-destruction");
             this.processorDestruction.add(new MetricName(group, "processor-destruction"), new Rate(new Count()));
-
         }
-
     }
-
 }
