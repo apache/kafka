@@ -81,6 +81,14 @@ public interface KafkaClient extends Closeable {
     public List<ClientResponse> poll(long timeout, long now);
 
     /**
+     * Disconnect connection to a particular node (if there is one). The disconnection is asynchronous and will not be
+     * processed until the next {@link #poll(long, long) poll()} call.
+     *
+     * @param nodeId The id of the node
+     */
+    public void disconnect(String nodeId);
+
+    /**
      * Complete all in-flight requests for a given connection
      * 
      * @param id The connection to complete requests for

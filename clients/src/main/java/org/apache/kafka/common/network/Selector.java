@@ -184,7 +184,7 @@ public class Selector implements Selectable {
      */
     @Override
     public void disconnect(String id) {
-        KafkaChannel channel = channelForId(id);
+        KafkaChannel channel = this.channels.get(id);
         if (channel != null)
             channel.disconnect();
     }
