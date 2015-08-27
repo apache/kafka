@@ -34,6 +34,8 @@ import scala.collection.JavaConversions._
  */
 object ConsoleConsumer extends Logging {
 
+  var messageCount = 0
+
   def main(args: Array[String]) {
     val conf = new ConsumerConfig(args)
     run(conf)
@@ -51,7 +53,16 @@ object ConsoleConsumer extends Logging {
 
     addShutdownHook(consumer, conf)
 
-    process(conf.maxMessages, conf.formatter, consumer)
+    try {
+      process(conf.maxMessages, conf.formatter, consumer, conf.skipMessageOnError)
+    } finally {
+      consumer.cleanup()
+      reportRecordCount()
+
+      // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
+      if (!conf.groupIdPassed)
+        ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
+    }
   }
 
   def checkZk(config: ConsumerConfig) {
@@ -71,24 +82,40 @@ object ConsoleConsumer extends Logging {
   def addShutdownHook(consumer: BaseConsumer, conf: ConsumerConfig) {
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
-        consumer.close()
-
-        // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
-        if (!conf.groupIdPassed)
-          ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
+        consumer.stop()
       }
     })
   }
 
-  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer) {
-    var messageCount = 0
+  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, skipMessageOnError: Boolean) {
     while (messageCount < maxMessages || maxMessages == -1) {
       messageCount += 1
-      val msg: BaseConsumerRecord = consumer.receive()
-      formatter.writeTo(msg.key, msg.value, System.out)
+      val msg: BaseConsumerRecord = try {
+        consumer.receive()
+      } catch {
+        case e: Throwable => {
+          error("Error processing message, stopping consumer: ", e)
+          consumer.stop()
+          return
+        }
+      }
+      try {
+        formatter.writeTo(msg.key, msg.value, System.out)
+      } catch {
+        case e: Throwable =>
+          if (skipMessageOnError) {
+            error("Error processing message, skipping this message: ", e)
+          } else {
+            consumer.stop()
+            throw e
+          }
+      }
       checkErr(formatter)
     }
-    println(s"Processed a total of $messageCount messages")
+  }
+
+  def reportRecordCount() {
+    System.err.println(s"Processed a total of $messageCount messages")
   }
 
   def checkErr(formatter: MessageFormatter) {
@@ -203,7 +230,10 @@ object ConsoleConsumer extends Logging {
     val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
     val topicArg = options.valueOf(topicOrFilterOpt.head)
     val filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
-    val consumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerConfigOpt))
+    val consumerProps = if (options.has(consumerConfigOpt))
+      Utils.loadProps(options.valueOf(consumerConfigOpt))
+    else
+      new Properties()
     val zkConnectionStr = options.valueOf(zkConnectOpt)
     val fromBeginning = options.has(resetBeginningOpt)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false

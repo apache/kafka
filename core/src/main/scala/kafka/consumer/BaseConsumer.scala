@@ -26,7 +26,8 @@ import java.util.Properties
  */
 trait BaseConsumer {
   def receive(): BaseConsumerRecord
-  def close()
+  def stop()
+  def cleanup()
 }
 
 case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: Array[Byte], value: Array[Byte])
@@ -47,7 +48,11 @@ class NewShinyConsumer(topic: String, consumerProps: Properties) extends BaseCon
     BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
   }
 
-  override def close() {
+  override def stop() {
+    this.consumer.wakeup()
+  }
+
+  override def cleanup() {
     this.consumer.close()
   }
 }
@@ -66,7 +71,11 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
     BaseConsumerRecord(messageAndMetadata.topic, messageAndMetadata.partition, messageAndMetadata.offset, messageAndMetadata.key, messageAndMetadata.message)
   }
 
-  override def close() {
+  override def stop() {
+    this.consumerConnector.shutdown()
+  }
+
+  override def cleanup() {
     this.consumerConnector.shutdown()
   }
 }
