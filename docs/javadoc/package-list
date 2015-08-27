@@ -1,0 +1,5 @@
+org.apache.kafka.clients.consumer
+org.apache.kafka.clients.producer
+org.apache.kafka.common
+org.apache.kafka.common.errors
+org.apache.kafka.common.serialization
