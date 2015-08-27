@@ -19,7 +19,6 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
 import org.apache.kafka.streaming.processor.ProcessorDef;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
