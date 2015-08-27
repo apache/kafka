@@ -3,7 +3,7 @@ package org.apache.kafka.streaming.kstream.internals;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamWindowed;
 import org.apache.kafka.streaming.kstream.ValueJoiner;
-import org.apache.kafka.streaming.kstream.Window;
+import org.apache.kafka.streaming.kstream.WindowDef;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 
 /**
@@ -11,11 +11,11 @@ import org.apache.kafka.streaming.processor.TopologyBuilder;
  */
 public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStreamWindowed<K, V> {
 
-    private final Window<K, V> window;
+    private final WindowDef<K, V> windowDef;
 
-    public KStreamWindowedImpl(TopologyBuilder topology, String name, Window<K, V> window) {
+    public KStreamWindowedImpl(TopologyBuilder topology, String name, WindowDef<K, V> windowDef) {
         super(topology, name);
-        this.window = window;
+        this.windowDef = windowDef;
     }
 
     @Override
@@ -29,8 +29,8 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
     }
 
     private <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, boolean prior, ValueJoiner<V, V1, V2> valueJoiner) {
-        String thisWindowName = this.window.name();
-        String otherWindowName = ((KStreamWindowedImpl<K, V1>) other).window.name();
+        String thisWindowName = this.windowDef.name();
+        String otherWindowName = ((KStreamWindowedImpl<K, V1>) other).windowDef.name();
 
         KStreamJoin<K, V2, V, V1> join = new KStreamJoin<>(thisWindowName, otherWindowName, prior, valueJoiner);
 

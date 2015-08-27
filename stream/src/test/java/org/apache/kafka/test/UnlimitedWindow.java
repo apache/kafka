@@ -19,14 +19,14 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.kstream.KeyValue;
-import org.apache.kafka.streaming.kstream.Window;
+import org.apache.kafka.streaming.kstream.WindowDef;
 import org.apache.kafka.streaming.kstream.internals.FilteredIterator;
 import org.apache.kafka.streaming.processor.internals.Stamped;
 
 import java.util.Iterator;
 import java.util.LinkedList;
 
-public class UnlimitedWindow<K, V> implements Window<K, V> {
+public class UnlimitedWindow<K, V> implements WindowDef<K, V> {
 
     private LinkedList<Stamped<KeyValue<K, V>>> list = new LinkedList<>();
 

@@ -20,10 +20,12 @@ package org.apache.kafka.streaming.processor.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 
-public class SourceNode<K, V> extends ProcessorNode<K, V, K, V> {
+public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     public Deserializer<K> keyDeserializer;
     public Deserializer<V> valDeserializer;
+
+    private ProcessorContext context;
 
     public SourceNode(String name, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(name);
@@ -34,15 +36,12 @@ public class SourceNode<K, V> extends ProcessorNode<K, V, K, V> {
 
     @Override
     public void init(ProcessorContext context) {
-        // do nothing
+        this.context = context;
     }
 
     @Override
     public void process(K key, V value) {
-        // just forward to all children
-        for (ProcessorNode<K, V, ?, ?> childNode : this.children()) {
-            childNode.process(key, value);
-        }
+        context.forward(key, value);
     }
 
     @Override

@@ -172,7 +172,7 @@ public class TopologyBuilder {
 
                 if (factory instanceof ProcessorNodeFactory) {
                     for (String parent : ((ProcessorNodeFactory) factory).parents) {
-                        processorMap.get(parent).chain(node);
+                        processorMap.get(parent).addChild(node);
                     }
                 } else if (factory instanceof SourceNodeFactory) {
                     for (String topic : ((SourceNodeFactory)factory).topics) {
@@ -183,7 +183,7 @@ public class TopologyBuilder {
                     topicSinkMap.put(topic, (SinkNode) node);
 
                     for (String parent : ((SinkNodeFactory) factory).parents) {
-                        processorMap.get(parent).chain(node);
+                        processorMap.get(parent).addChild(node);
                     }
                 } else {
                     throw new IllegalStateException("unknown factory class: " + factory.getClass().getName());

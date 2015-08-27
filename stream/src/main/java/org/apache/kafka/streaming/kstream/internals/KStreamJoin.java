@@ -20,7 +20,7 @@ package org.apache.kafka.streaming.kstream.internals;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.kstream.ValueJoiner;
-import org.apache.kafka.streaming.kstream.Window.WindowInstance;
+import org.apache.kafka.streaming.kstream.Window;
 import org.apache.kafka.streaming.processor.ProcessorFactory;
 
 import java.util.Iterator;
@@ -70,8 +70,8 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorFactory {
             if (!context.joinable())
                 throw new IllegalStateException("Streams are not joinable.");
 
-            final WindowInstance<K, V1> window1 = (WindowInstance<K, V1>) context.getStateStore(windowName1);
-            final WindowInstance<K, V2> window2 = (WindowInstance<K, V2>) context.getStateStore(windowName2);
+            final Window<K, V1> window1 = (Window<K, V1>) context.getStateStore(windowName1);
+            final Window<K, V2> window2 = (Window<K, V2>) context.getStateStore(windowName2);
 
             if (prior) {
                 this.finder1 = new Finder<K, V1>() {

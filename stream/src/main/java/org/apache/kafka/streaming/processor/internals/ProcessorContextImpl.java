@@ -204,7 +204,7 @@ public class ProcessorContextImpl implements ProcessorContext {
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V, ?, ?>>) task.node().children()) {
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) task.node().children()) {
             task.node(childNode);
             childNode.process(key, value);
         }
@@ -213,7 +213,7 @@ public class ProcessorContextImpl implements ProcessorContext {
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode childNode = (ProcessorNode<K, V, ?, ?>) task.node().children().get(childIndex);
+        ProcessorNode childNode = (ProcessorNode<K, V>) task.node().children().get(childIndex);
         task.node(childNode);
         childNode.process(key, value);
     }

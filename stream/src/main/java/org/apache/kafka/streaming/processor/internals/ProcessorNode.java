@@ -23,22 +23,20 @@ import org.apache.kafka.streaming.processor.ProcessorContext;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ProcessorNode<K1, V1, K2, V2> {
+public class ProcessorNode<K, V> {
 
-    private final List<ProcessorNode<K2, V2, ?, ?>> children;
-    private final List<ProcessorNode<?, ?, K1, V1>> parents;
+    private final List<ProcessorNode<?, ?>> children;
 
     private final String name;
-    private final Processor<K1, V1> processor;
+    private final Processor<K, V> processor;
 
     public ProcessorNode(String name) {
         this(name, null);
     }
 
-    public ProcessorNode(String name, Processor<K1, V1> processor) {
+    public ProcessorNode(String name, Processor<K, V> processor) {
         this.name = name;
         this.processor = processor;
-        this.parents = new ArrayList<>();
         this.children = new ArrayList<>();
     }
 
@@ -46,20 +44,11 @@ public class ProcessorNode<K1, V1, K2, V2> {
         return name;
     }
 
-    public Processor<K1, V1> processor() {
-        return processor;
-    }
-
-    public List<ProcessorNode<?, ?, K1, V1>> parents() {
-        return parents;
-    }
-
-    public List<ProcessorNode<K2, V2, ?, ?>> children() {
+    public List<ProcessorNode<?, ?>> children() {
         return children;
     }
 
-    public final void chain(ProcessorNode<K2, V2, ?, ?> child) {
-        child.parents.add(this);
+    public final void addChild(ProcessorNode<?, ?> child) {
         children.add(child);
     }
 
@@ -67,7 +56,7 @@ public class ProcessorNode<K1, V1, K2, V2> {
         processor.init(context);
     }
 
-    public void process(K1 key, V1 value) {
+    public void process(K key, V value) {
         processor.process(key, value);
     }
 

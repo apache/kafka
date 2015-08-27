@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
-import org.apache.kafka.streaming.kstream.Window;
+import org.apache.kafka.streaming.kstream.WindowDef;
 import org.apache.kafka.streaming.kstream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamBuilder;
 import org.apache.kafka.test.MockProcessorContext;
@@ -46,7 +46,7 @@ public class KStreamWindowedTest {
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         KStream<Integer, String> stream;
-        Window<Integer, String> window;
+        WindowDef<Integer, String> window;
 
         window = new UnlimitedWindow<>();
         stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);

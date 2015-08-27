@@ -27,7 +27,7 @@ import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.streaming.kstream.Predicate;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.ValueMapper;
-import org.apache.kafka.streaming.kstream.Window;
+import org.apache.kafka.streaming.kstream.WindowDef;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -130,12 +130,12 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public KStreamWindowed<K, V> with(Window<K, V> window) {
+    public KStreamWindowed<K, V> with(WindowDef<K, V> windowDef) {
         String name = WINDOWED_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamWindow<>(window), this.name);
+        topology.addProcessor(name, new KStreamWindow<>(windowDef), this.name);
 
-        return new KStreamWindowedImpl<>(topology, name, window);
+        return new KStreamWindowedImpl<>(topology, name, windowDef);
     }
 
     @Override

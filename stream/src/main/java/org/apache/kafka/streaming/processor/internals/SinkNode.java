@@ -24,7 +24,7 @@ import org.apache.kafka.streaming.processor.ProcessorContext;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SinkNode<K, V> extends ProcessorNode<K, V, K, V> {
+public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     private final String topic;
     private final Serializer<K> keySerializer;

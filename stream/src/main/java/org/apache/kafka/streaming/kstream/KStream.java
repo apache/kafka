@@ -19,7 +19,6 @@ package org.apache.kafka.streaming.kstream;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorFactory;
 
 /**
@@ -84,10 +83,10 @@ public interface KStream<K, V> {
     /**
      * Creates a new windowed stream using a specified window instance.
      *
-     * @param window the instance of Window
+     * @param windowDef the instance of Window
      * @return KStream
      */
-    KStreamWindowed<K, V> with(Window<K, V> window);
+    KStreamWindowed<K, V> with(WindowDef<K, V> windowDef);
 
     /**
      * Creates an array of streams from this stream. Each stream in the array coresponds to a predicate in

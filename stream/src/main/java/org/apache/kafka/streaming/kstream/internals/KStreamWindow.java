@@ -17,25 +17,22 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
+import org.apache.kafka.streaming.kstream.Window;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorFactory;
-import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.kstream.KStream;
-import org.apache.kafka.streaming.kstream.KStreamWindowed;
-import org.apache.kafka.streaming.kstream.ValueJoiner;
-import org.apache.kafka.streaming.kstream.Window;
+import org.apache.kafka.streaming.kstream.WindowDef;
 
 public class KStreamWindow<K, V> implements ProcessorFactory {
 
-    private final Window<K, V> window;
+    private final WindowDef<K, V> windowDef;
 
-    KStreamWindow(Window<K, V> window) {
-        this.window = window;
+    KStreamWindow(WindowDef<K, V> windowDef) {
+        this.windowDef = windowDef;
     }
 
-    public Window<K, V> window() {
-        return window;
+    public WindowDef<K, V> window() {
+        return windowDef;
     }
 
     @Override
@@ -45,27 +42,27 @@ public class KStreamWindow<K, V> implements ProcessorFactory {
 
     private class KStreamWindowProcessor extends KStreamProcessor<K, V> {
 
-        private Window.WindowInstance<K, V> windowInstance;
+        private Window<K, V> window;
 
         @Override
         public void init(ProcessorContext context) {
-            this.context = context;
-            this.windowInstance = window.build();
-            this.windowInstance.init(context);
+            super.init(context);
+            this.window = windowDef.build();
+            this.window.init(context);
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public void process(K key, V value) {
             synchronized (this) {
-                windowInstance.put(key, value, context.timestamp());
+                window.put(key, value, context.timestamp());
                 context.forward(key, value);
             }
         }
 
         @Override
         public void close() {
-            windowInstance.close();
+            window.close();
         }
     }
 }
