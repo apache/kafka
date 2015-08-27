@@ -45,7 +45,7 @@ public abstract class SinkTaskContext {
      *
      * @param offsets map of offsets for topic partitions
      */
-    public void resetOffset(Map<TopicPartition, Long> offsets) {
+    public void offset(Map<TopicPartition, Long> offsets) {
         this.offsets = offsets;
     }
 
@@ -53,7 +53,7 @@ public abstract class SinkTaskContext {
      * Get offsets that the SinkTask has submitted to be reset. Used by the Copycat framework.
      * @return the map of offsets
      */
-    public Map<TopicPartition, Long> getOffsets() {
+    public Map<TopicPartition, Long> offsets() {
         return offsets;
     }
 }

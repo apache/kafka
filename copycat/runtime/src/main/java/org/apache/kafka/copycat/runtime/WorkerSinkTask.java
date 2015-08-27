@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
@@ -121,7 +122,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
     public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
         log.info("{} Committing offsets", this);
         HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        for (TopicPartition tp : consumer.subscriptions()) {
+        for (TopicPartition tp : consumer.assignment()) {
             offsets.put(tp, consumer.position(tp));
         }
         // We only don't flush the task in one case: when shutting down, the task has already been
@@ -145,11 +146,11 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         consumer.commit(offsets, sync ? CommitType.SYNC : CommitType.ASYNC, cb);
     }
 
-    public Time getTime() {
+    public Time time() {
         return time;
     }
 
-    public WorkerConfig getWorkerConfig() {
+    public WorkerConfig workerConfig() {
         return workerConfig;
     }
 
@@ -161,7 +162,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
 
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
-        Properties props = workerConfig.getUnusedProperties();
+        Properties props = workerConfig.unusedProperties();
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "copycat-" + id.toString());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
@@ -180,7 +181,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         }
 
         log.debug("Task {} subscribing to topics {}", id, topics);
-        newConsumer.subscribe(topics);
+        newConsumer.subscribe(Arrays.asList(topics));
 
         // Seek to any user-provided offsets. This is useful if offsets are tracked in the downstream system (e.g., to
         // enable exactly once delivery to that system).
@@ -188,8 +189,8 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         // To do this correctly, we need to first make sure we have been assigned partitions, which poll() will guarantee.
         // We ask for offsets after this poll to make sure any offsets committed before the rebalance are picked up correctly.
         newConsumer.poll(0);
-        Map<TopicPartition, Long> offsets = context.getOffsets();
-        for (TopicPartition tp : newConsumer.subscriptions()) {
+        Map<TopicPartition, Long> offsets = context.offsets();
+        for (TopicPartition tp : newConsumer.assignment()) {
             Long offset = offsets.get(tp);
             if (offset != null)
                 newConsumer.seek(tp, offset);
@@ -207,10 +208,12 @@ class WorkerSinkTask<K, V> implements WorkerTask {
             List<SinkRecord> records = new ArrayList<>();
             for (ConsumerRecord<K, V> msg : msgs) {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
+                SchemaAndValue keyAndSchema = msg.key() != null ? keyConverter.toCopycatData(msg.key()) : SchemaAndValue.NULL;
+                SchemaAndValue valueAndSchema = msg.value() != null ? valueConverter.toCopycatData(msg.value()) : SchemaAndValue.NULL;
                 records.add(
                         new SinkRecord(msg.topic(), msg.partition(),
-                                keyConverter.toCopycatData(msg.key()),
-                                valueConverter.toCopycatData(msg.value()),
+                                keyAndSchema.schema(), keyAndSchema.value(),
+                                valueAndSchema.schema(), valueAndSchema.value(),
                                 msg.offset())
                 );
             }

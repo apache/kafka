@@ -34,7 +34,7 @@ public class SourceTaskContext {
     /**
      * Get the OffsetStorageReader for this SourceTask.
      */
-    public OffsetStorageReader getOffsetStorageReader() {
+    public OffsetStorageReader offsetStorageReader() {
         return reader;
     }
 }

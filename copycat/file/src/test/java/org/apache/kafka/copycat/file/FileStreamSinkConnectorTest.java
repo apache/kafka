@@ -60,11 +60,11 @@ public class FileStreamSinkConnectorTest {
         PowerMock.replayAll();
 
         connector.start(sinkProperties);
-        List<Properties> taskConfigs = connector.getTaskConfigs(1);
+        List<Properties> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertEquals(FILENAME, taskConfigs.get(0).getProperty(FileStreamSinkConnector.FILE_CONFIG));
 
-        taskConfigs = connector.getTaskConfigs(2);
+        taskConfigs = connector.taskConfigs(2);
         assertEquals(2, taskConfigs.size());
         for (int i = 0; i < 2; i++) {
             assertEquals(FILENAME, taskConfigs.get(0).getProperty(FileStreamSinkConnector.FILE_CONFIG));
@@ -78,7 +78,7 @@ public class FileStreamSinkConnectorTest {
         PowerMock.replayAll();
 
         connector.start(sinkProperties);
-        assertEquals(FileStreamSinkTask.class, connector.getTaskClass());
+        assertEquals(FileStreamSinkTask.class, connector.taskClass());
 
         PowerMock.verifyAll();
     }

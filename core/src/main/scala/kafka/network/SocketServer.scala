@@ -253,34 +253,46 @@ private[kafka] class Acceptor(val host: String,
     serverChannel.register(nioSelector, SelectionKey.OP_ACCEPT);
     startupComplete()
     var currentProcessor = processorBeginIndex
-    while(isRunning) {
-      val ready = nioSelector.select(500)
-      if(ready > 0) {
-        val keys = nioSelector.selectedKeys()
-        val iter = keys.iterator()
-        while(iter.hasNext && isRunning) {
-          var key: SelectionKey = null
-          try {
-            key = iter.next
-            iter.remove()
-            if(key.isAcceptable)
-              accept(key, processors(currentProcessor))
-            else
-               throw new IllegalStateException("Unrecognized key state for acceptor thread.")
+    try {
+      while (isRunning) {
+        try {
+          val ready = nioSelector.select(500)
+          if (ready > 0) {
+            val keys = nioSelector.selectedKeys()
+            val iter = keys.iterator()
+            while (iter.hasNext && isRunning) {
+              var key: SelectionKey = null
+              try {
+                key = iter.next
+                iter.remove()
+                if (key.isAcceptable)
+                  accept(key, processors(currentProcessor))
+                else
+                  throw new IllegalStateException("Unrecognized key state for acceptor thread.")
 
-            // round robin to the next processor thread
-            currentProcessor = (currentProcessor + 1) % processorEndIndex
-            if (currentProcessor < processorBeginIndex) currentProcessor = processorBeginIndex
-          } catch {
-            case e: Throwable => error("Error while accepting connection", e)
+                // round robin to the next processor thread
+                currentProcessor = (currentProcessor + 1) % processorEndIndex
+                if (currentProcessor < processorBeginIndex) currentProcessor = processorBeginIndex
+              } catch {
+                case e: Throwable => error("Error while accepting connection", e)
+              }
+            }
           }
         }
+        catch {
+          // We catch all the throwables to prevent the acceptor thread from exiting on exceptions due
+          // to a select operation on a specific channel or a bad request. We don't want the
+          // the broker to stop responding to requests from other clients in these scenarios.
+          case e: ControlThrowable => throw e
+          case e: Throwable => error("Error occurred", e)
+        }
       }
+    } finally {
+      debug("Closing server socket and selector.")
+      swallowError(serverChannel.close())
+      swallowError(nioSelector.close())
+      shutdownComplete()
     }
-    debug("Closing server socket and selector.")
-    swallowError(serverChannel.close())
-    swallowError(nioSelector.close())
-    shutdownComplete()
   }
 
   /*
@@ -404,7 +416,10 @@ private[kafka] class Processor(val id: Int,
         }
         collection.JavaConversions.collectionAsScalaIterable(selector.completedReceives).foreach(receive => {
           try {
-            val req = RequestChannel.Request(processor = id, connectionId = receive.source, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
+
+            val channel = selector.channelForId(receive.source);
+            val session = RequestChannel.Session(channel.principal, channel.socketDescription)
+            val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
             requestChannel.sendRequest(req)
           } catch {
             case e @ (_: InvalidRequestException | _: SchemaException) => {

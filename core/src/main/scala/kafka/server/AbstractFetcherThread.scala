@@ -37,8 +37,17 @@ import com.yammer.metrics.core.Gauge
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
  */
-abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroker: BrokerEndPoint, socketTimeout: Int, socketBufferSize: Int,
-                                     fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1, fetchBackOffMs: Int = 0,
+abstract class AbstractFetcherThread(name: String,
+                                     clientId: String,
+                                     sourceBroker: BrokerEndPoint,
+                                     socketTimeout: Int,
+                                     socketBufferSize: Int,
+                                     fetchSize: Int,
+                                     fetcherBrokerId: Int = -1,
+                                     maxWait: Int = 0,
+                                     minBytes: Int = 1,
+                                     fetchBackOffMs: Int = 0,
+                                     fetchRequestVersion: Short = FetchRequest.CurrentVersion,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
   private val partitionMap = new mutable.HashMap[TopicAndPartition, PartitionFetchState] // a (topic, partition) -> partitionFetchState map
@@ -52,7 +61,8 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
           clientId(clientId).
           replicaId(fetcherBrokerId).
           maxWait(maxWait).
-          minBytes(minBytes)
+          minBytes(minBytes).
+          requestVersion(fetchRequestVersion)
 
   /* callbacks to be defined in subclass */
 

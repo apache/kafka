@@ -47,12 +47,12 @@ public class FileStreamSourceConnector extends SourceConnector {
     }
 
     @Override
-    public Class<? extends Task> getTaskClass() {
+    public Class<? extends Task> taskClass() {
         return FileStreamSourceTask.class;
     }
 
     @Override
-    public List<Properties> getTaskConfigs(int maxTasks) {
+    public List<Properties> taskConfigs(int maxTasks) {
         ArrayList<Properties> configs = new ArrayList<>();
         // Only one input stream makes sense.
         Properties config = new Properties();

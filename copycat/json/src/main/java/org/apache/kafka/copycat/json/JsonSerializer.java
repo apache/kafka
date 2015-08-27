@@ -51,6 +51,9 @@ public class JsonSerializer implements Serializer<JsonNode> {
 
     @Override
     public byte[] serialize(String topic, JsonNode data) {
+        if (data == null)
+            return null;
+
         // This serializer works for Copycat data that requires a schema to be included, so we expect it to have a
         // specific format: { "schema": {...}, "payload": ... }.
         if (!data.isObject() || data.size() != 2 || !data.has("schema") || !data.has("payload"))

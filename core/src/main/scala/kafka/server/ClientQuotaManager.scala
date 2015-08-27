@@ -95,7 +95,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       if (response != null) {
         // Decrement the size of the delay queue
         delayQueueSensor.record(-1)
-        trace("Response throttled for: " + response.delayTimeMs + " ms")
+        trace("Response throttled for: " + response.throttleTimeMs + " ms")
         response.execute()
       }
     }
@@ -110,25 +110,25 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @return Number of milliseconds to delay the response in case of Quota violation.
    *         Zero otherwise
    */
-  def recordAndMaybeThrottle(clientId: String, value: Int, callback: => Unit): Int = {
+  def recordAndMaybeThrottle(clientId: String, value: Int, callback: Int => Unit): Int = {
     val clientSensors = getOrCreateQuotaSensors(clientId)
-    var delayTimeMs = 0L
+    var throttleTimeMs = 0
     try {
       clientSensors.quotaSensor.record(value)
       // trigger the callback immediately if quota is not violated
-      callback
+      callback(0)
     } catch {
       case qve: QuotaViolationException =>
         // Compute the delay
         val clientMetric = metrics.metrics().get(clientRateMetricName(clientId))
-        delayTimeMs = delayTime(clientMetric.value(), getQuotaMetricConfig(quota(clientId)))
-        delayQueue.add(new ThrottledResponse(time, delayTimeMs, callback))
+        throttleTimeMs = throttleTime(clientMetric.value(), getQuotaMetricConfig(quota(clientId)))
+        delayQueue.add(new ThrottledResponse(time, throttleTimeMs, callback))
         delayQueueSensor.record()
-        clientSensors.throttleTimeSensor.record(delayTimeMs)
+        clientSensors.throttleTimeSensor.record(throttleTimeMs)
         // If delayed, add the element to the delayQueue
-        logger.debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), delayTimeMs))
+        logger.debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
-    delayTimeMs.toInt
+    throttleTimeMs
   }
 
   /*
@@ -139,12 +139,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * we need to add a delay of X to W such that O * W / (W + X) = T.
    * Solving for X, we get X = (O - T)/T * W.
    */
-  private def delayTime(metricValue: Double, config: MetricConfig): Long =
-  {
+  private def throttleTime(metricValue: Double, config: MetricConfig): Int = {
     val quota = config.quota()
     val difference = metricValue - quota.bound
     val time = difference / quota.bound * config.timeWindowMs() * config.samples()
-    time.round
+    time.round.toInt
   }
 
   /**

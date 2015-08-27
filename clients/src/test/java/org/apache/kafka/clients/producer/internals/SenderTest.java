@@ -26,7 +26,9 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -43,6 +45,9 @@ public class SenderTest {
     private static final short ACKS_ALL = -1;
     private static final int MAX_RETRIES = 0;
     private static final int REQUEST_TIMEOUT_MS = 10000;
+    private static final String CLIENT_ID = "clientId";
+    private static final String METRIC_GROUP = "producer-metrics";
+    private static final double EPS = 0.0001;
 
     private TopicPartition tp = new TopicPartition("test", 0);
     private MockTime time = new MockTime();
@@ -62,11 +67,12 @@ public class SenderTest {
                                        REQUEST_TIMEOUT_MS,
                                        metrics,
                                        time,
-                                       "clientId");
+                                       CLIENT_ID);
 
     @Before
     public void setup() {
         metadata.update(cluster, time.milliseconds());
+        metricTags.put("client-id", CLIENT_ID);
     }
 
     @Test
@@ -76,12 +82,31 @@ public class SenderTest {
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
-        client.respond(produceResponse(tp, offset, Errors.NONE.code()));
+        client.respond(produceResponse(tp, offset, Errors.NONE.code(), 0));
         sender.run(time.milliseconds());
         assertEquals("All requests completed.", offset, (long) client.inFlightRequestCount());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
         assertEquals(offset, future.get().offset());
+    }
+
+    /*
+     * Send multiple requests. Verify that the client side quota metrics have the right values
+     */
+    @Test
+    public void testQuotaMetrics() throws Exception {
+        final long offset = 0;
+        for (int i = 1; i <= 3; i++) {
+            Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null).future;
+            sender.run(time.milliseconds()); // send produce request
+            client.respond(produceResponse(tp, offset, Errors.NONE.code(), 100 * i));
+            sender.run(time.milliseconds());
+        }
+        Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
+        KafkaMetric avgMetric = allMetrics.get(new MetricName("produce-throttle-time-avg", METRIC_GROUP, "", metricTags));
+        KafkaMetric maxMetric = allMetrics.get(new MetricName("produce-throttle-time-max", METRIC_GROUP, "", metricTags));
+        assertEquals(200, avgMetric.value(), EPS);
+        assertEquals(300, maxMetric.value(), EPS);
     }
 
     @Test
@@ -110,7 +135,7 @@ public class SenderTest {
         sender.run(time.milliseconds()); // resend
         assertEquals(1, client.inFlightRequestCount());
         long offset = 0;
-        client.respond(produceResponse(tp, offset, Errors.NONE.code()));
+        client.respond(produceResponse(tp, offset, Errors.NONE.code(), 0));
         sender.run(time.milliseconds());
         assertTrue("Request should have retried and completed", future.isDone());
         assertEquals(offset, future.get().offset());
@@ -138,10 +163,10 @@ public class SenderTest {
         }
     }
 
-    private Struct produceResponse(TopicPartition tp, long offset, int error) {
+    private Struct produceResponse(TopicPartition tp, long offset, int error, int throttleTimeMs) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse((short) error, offset);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
-        ProduceResponse response = new ProduceResponse(partResp);
+        ProduceResponse response = new ProduceResponse(partResp, throttleTimeMs);
         return response.toStruct();
     }
 

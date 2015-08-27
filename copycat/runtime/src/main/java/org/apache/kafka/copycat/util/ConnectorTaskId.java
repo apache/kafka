@@ -32,11 +32,11 @@ public class ConnectorTaskId implements Serializable {
         this.task = task;
     }
 
-    public String getConnector() {
+    public String connector() {
         return connector;
     }
 
-    public int getTask() {
+    public int task() {
         return task;
     }
 

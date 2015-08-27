@@ -19,6 +19,7 @@ package org.apache.kafka.copycat.source;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.CopycatRecord;
+import org.apache.kafka.copycat.data.Schema;
 
 /**
  * <p>
@@ -40,29 +41,47 @@ import org.apache.kafka.copycat.connector.CopycatRecord;
  */
 @InterfaceStability.Unstable
 public class SourceRecord extends CopycatRecord {
+    private final Schema sourcePartitionSchema;
     private final Object sourcePartition;
+    private final Schema sourceOffsetSchema;
     private final Object sourceOffset;
 
-    public SourceRecord(Object sourcePartition, Object sourceOffset, String topic, Integer partition, Object value) {
-        this(sourcePartition, sourceOffset, topic, partition, null, value);
+    public SourceRecord(Schema sourcePartitionSchema, Object sourcePartition,
+                        Schema sourceOffsetSchema, Object sourceOffset,
+                        String topic, Integer partition, Schema valueSchema, Object value) {
+        this(sourcePartitionSchema, sourcePartition, sourceOffsetSchema, sourceOffset, topic, partition, null, null, valueSchema, value);
     }
 
-    public SourceRecord(Object sourcePartition, Object sourceOffset, String topic, Object value) {
-        this(sourcePartition, sourceOffset, topic, null, null, value);
+    public SourceRecord(Schema sourcePartitionSchema, Object sourcePartition,
+                        Schema sourceOffsetSchema, Object sourceOffset,
+                        String topic, Schema valueSchema, Object value) {
+        this(sourcePartitionSchema, sourcePartition, sourceOffsetSchema, sourceOffset, topic, null, null, null, valueSchema, value);
     }
 
-    public SourceRecord(Object sourcePartition, Object sourceOffset, String topic, Integer partition,
-                        Object key, Object value) {
-        super(topic, partition, key, value);
+    public SourceRecord(Schema sourcePartitionSchema, Object sourcePartition,
+                        Schema sourceOffsetSchema, Object sourceOffset,
+                        String topic, Integer partition,
+                        Schema keySchema, Object key, Schema valueSchema, Object value) {
+        super(topic, partition, keySchema, key, valueSchema, value);
+        this.sourcePartitionSchema = sourcePartitionSchema;
         this.sourcePartition = sourcePartition;
+        this.sourceOffsetSchema = sourceOffsetSchema;
         this.sourceOffset = sourceOffset;
     }
 
-    public Object getSourcePartition() {
+    public Schema sourcePartitionSchema() {
+        return sourcePartitionSchema;
+    }
+
+    public Object sourcePartition() {
         return sourcePartition;
     }
 
-    public Object getSourceOffset() {
+    public Schema sourceOffsetSchema() {
+        return sourceOffsetSchema;
+    }
+
+    public Object sourceOffset() {
         return sourceOffset;
     }
 
@@ -77,9 +96,13 @@ public class SourceRecord extends CopycatRecord {
 
         SourceRecord that = (SourceRecord) o;
 
-        if (sourceOffset != null ? !sourceOffset.equals(that.sourceOffset) : that.sourceOffset != null)
+        if (sourcePartitionSchema != null ? !sourcePartitionSchema.equals(that.sourcePartitionSchema) : that.sourcePartitionSchema != null)
+            return false;
+        if (sourceOffsetSchema != null ? !sourceOffsetSchema.equals(that.sourceOffsetSchema) : that.sourceOffsetSchema != null)
             return false;
         if (sourcePartition != null ? !sourcePartition.equals(that.sourcePartition) : that.sourcePartition != null)
+            return false;
+        if (sourceOffset != null ? !sourceOffset.equals(that.sourceOffset) : that.sourceOffset != null)
             return false;
 
         return true;
@@ -88,6 +111,8 @@ public class SourceRecord extends CopycatRecord {
     @Override
     public int hashCode() {
         int result = super.hashCode();
+        result = 31 * result + (sourcePartitionSchema != null ? sourcePartitionSchema.hashCode() : 0);
+        result = 31 * result + (sourceOffsetSchema != null ? sourceOffsetSchema.hashCode() : 0);
         result = 31 * result + (sourcePartition != null ? sourcePartition.hashCode() : 0);
         result = 31 * result + (sourceOffset != null ? sourceOffset.hashCode() : 0);
         return result;

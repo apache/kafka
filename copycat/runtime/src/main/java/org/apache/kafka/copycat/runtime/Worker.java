@@ -115,7 +115,7 @@ public class Worker<K, V> {
     public void start() {
         log.info("Worker starting");
 
-        Properties unusedConfigs = config.getUnusedProperties();
+        Properties unusedConfigs = config.unusedProperties();
 
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
@@ -188,9 +188,9 @@ public class Worker<K, V> {
         final WorkerTask workerTask;
         if (task instanceof SourceTask) {
             SourceTask sourceTask = (SourceTask) task;
-            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl<>(offsetBackingStore, id.getConnector(),
+            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl<>(offsetBackingStore, id.connector(),
                     keyConverter, valueConverter, offsetKeySerializer, offsetValueDeserializer);
-            OffsetStorageWriter<K, V> offsetWriter = new OffsetStorageWriter<>(offsetBackingStore, id.getConnector(),
+            OffsetStorageWriter<K, V> offsetWriter = new OffsetStorageWriter<>(offsetBackingStore, id.connector(),
                     keyConverter, valueConverter, offsetKeySerializer, offsetValueSerializer);
             workerTask = new WorkerSourceTask<>(id, sourceTask, keyConverter, valueConverter, producer,
                     offsetReader, offsetWriter, config, time);

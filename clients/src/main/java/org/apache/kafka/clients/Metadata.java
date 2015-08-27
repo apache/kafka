@@ -12,13 +12,14 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.HashSet;
-import java.util.Set;
-
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -118,12 +119,14 @@ public final class Metadata {
     }
 
     /**
-     * Add one or more topics to maintain metadata for
+     * Replace the current set of topics maintained to the one provided
+     * @param topics
      */
-    public synchronized void addTopics(String... topics) {
-        for (String topic : topics)
-            this.topics.add(topic);
-        requestUpdate();
+    public synchronized void setTopics(Collection<String> topics) {
+        if (!this.topics.containsAll(topics))
+            requestUpdate();
+        this.topics.clear();
+        this.topics.addAll(topics);
     }
 
     /**

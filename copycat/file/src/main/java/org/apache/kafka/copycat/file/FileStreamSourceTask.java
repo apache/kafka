@@ -17,6 +17,8 @@
 
 package org.apache.kafka.copycat.file;
 
+import org.apache.kafka.copycat.data.Schema;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
@@ -33,6 +35,9 @@ import java.util.Properties;
  */
 public class FileStreamSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(FileStreamSourceTask.class);
+    private static final Schema OFFSET_KEY_SCHEMA = Schema.STRING_SCHEMA;
+    private static final Schema OFFSET_VALUE_SCHEMA = Schema.OPTIONAL_INT64_SCHEMA;
+    private static final Schema VALUE_SCHEMA = Schema.STRING_SCHEMA;
 
     private String filename;
     private InputStream stream;
@@ -61,23 +66,29 @@ public class FileStreamSourceTask extends SourceTask {
         if (stream == null) {
             try {
                 stream = new FileInputStream(filename);
-                log.info("Opened file " + filename);
-                Long lastRecordedOffset = (Long) context.getOffsetStorageReader().getOffset(filename);
-                if (lastRecordedOffset != null) {
-                    log.debug("Found previous offset, trying to skip to file offset: {}", lastRecordedOffset);
-                    long skipLeft = lastRecordedOffset;
-                    while (skipLeft > 0) {
-                        try {
-                            long skipped = stream.skip(skipLeft);
-                            skipLeft -= skipped;
-                        } catch (IOException e) {
-                            log.error("Error while trying to seek to previous offset in file: ", e);
-                            throw new CopycatException(e);
+                SchemaAndValue offsetWithSchema = context.offsetStorageReader().offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, filename));
+                if (offsetWithSchema != null) {
+                    if (!offsetWithSchema.schema().equals(OFFSET_VALUE_SCHEMA))
+                        throw new CopycatException("Unexpected offset schema.");
+                    Long lastRecordedOffset = (Long) offsetWithSchema.value();
+                    if (lastRecordedOffset != null) {
+                        log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
+                        long skipLeft = lastRecordedOffset;
+                        while (skipLeft > 0) {
+                            try {
+                                long skipped = stream.skip(skipLeft);
+                                skipLeft -= skipped;
+                            } catch (IOException e) {
+                                log.error("Error while trying to seek to previous offset in file: ", e);
+                                throw new CopycatException(e);
+                            }
                         }
+                        log.debug("Skipped to offset {}", lastRecordedOffset);
                     }
-                    log.debug("Skipped to offset {}", lastRecordedOffset);
+                    streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
+                } else {
+                    streamOffset = 0L;
                 }
-                streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
                 reader = new BufferedReader(new InputStreamReader(stream));
             } catch (FileNotFoundException e) {
                 log.warn("Couldn't find file for FileStreamSourceTask, sleeping to wait for it to be created");
@@ -119,7 +130,7 @@ public class FileStreamSourceTask extends SourceTask {
                         if (line != null) {
                             if (records == null)
                                 records = new ArrayList<>();
-                            records.add(new SourceRecord(filename, streamOffset, topic, line));
+                            records.add(new SourceRecord(OFFSET_KEY_SCHEMA, filename, OFFSET_VALUE_SCHEMA, streamOffset, topic, VALUE_SCHEMA, line));
                         }
                         new ArrayList<SourceRecord>();
                     } while (line != null);

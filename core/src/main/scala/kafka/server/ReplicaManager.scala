@@ -31,7 +31,6 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.metrics.Metrics
 
 import scala.collection._
 
@@ -304,7 +303,6 @@ class ReplicaManager(val config: KafkaConfig,
                      responseCallback: Map[TopicAndPartition, ProducerResponseStatus] => Unit) {
 
     if (isValidRequiredAcks(requiredAcks)) {
-
       val sTime = SystemTime.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))

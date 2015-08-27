@@ -18,6 +18,8 @@
 package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.copycat.data.Schema;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 
 /**
  * The Converter interface provides support for translating between Copycat's runtime data format
@@ -31,15 +33,16 @@ public interface Converter<T> {
 
     /**
      * Convert a Copycat data object to a native object for serialization.
-     * @param value
+     * @param schema the schema for the value
+     * @param value the value to convert
      * @return
      */
-    T fromCopycatData(Object value);
+    T fromCopycatData(Schema schema, Object value);
 
     /**
      * Convert a native object to a Copycat data object.
-     * @param value
-     * @return
+     * @param value the value to convert
+     * @return an object containing the {@link Schema} and the converted value
      */
-    Object toCopycatData(T value);
+    SchemaAndValue toCopycatData(T value);
 }
