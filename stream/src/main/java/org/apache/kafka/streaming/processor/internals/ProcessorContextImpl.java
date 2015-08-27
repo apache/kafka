@@ -217,7 +217,11 @@ public class ProcessorContextImpl implements ProcessorContext {
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
+<<<<<<< HEAD
         ProcessorNode childNode = (ProcessorNode<K, V>) task.node().children().get(childIndex);
+=======
+        ProcessorNode childNode = (ProcessorNode<K, V, ?, ?>) task.node().children().get(childIndex);
+>>>>>>> kstream refactored
         task.node(childNode);
         childNode.process(key, value);
     }
