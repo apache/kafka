@@ -19,25 +19,26 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.kstream.ValueMapper;
-import org.apache.kafka.streaming.processor.ProcessorMetadata;
+import org.apache.kafka.streaming.processor.ProcessorFactory;
 
-class KStreamMapValues<K1, V1, V2> extends Processor<K1, V1, K1, V2> {
+class KStreamMapValues<K1, V1, V2> implements ProcessorFactory {
 
     private final ValueMapper<V1, V2> mapper;
 
-    @SuppressWarnings("unchecked")
-    public KStreamMapValues(String name, ProcessorMetadata config) {
-        super(name, config);
-
-        if (this.metadata() == null)
-            throw new IllegalStateException("ProcessorMetadata should be specified.");
-
-        this.mapper = (ValueMapper<V1, V2>) config.value();
+    public KStreamMapValues(ValueMapper<V1, V2> mapper) {
+        this.mapper = mapper;
     }
 
     @Override
-    public void process(K1 key, V1 value) {
-        V2 newValue = mapper.apply(value);
-        forward(key, newValue);
+    public Processor build() {
+        return new KStreamMapProcessor();
+    }
+
+    private class KStreamMapProcessor extends KStreamProcessor<K1, V1> {
+        @Override
+        public void process(K1 key, V1 value) {
+            V2 newValue = mapper.apply(value);
+            context.forward(key, newValue);
+        }
     }
 }

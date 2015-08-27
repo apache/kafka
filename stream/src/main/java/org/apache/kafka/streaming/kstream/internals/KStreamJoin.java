@@ -20,110 +20,112 @@ package org.apache.kafka.streaming.kstream.internals;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.kstream.ValueJoiner;
-import org.apache.kafka.streaming.kstream.Window;
+import org.apache.kafka.streaming.kstream.Window.WindowInstance;
+import org.apache.kafka.streaming.processor.ProcessorFactory;
 
 import java.util.Iterator;
 
-class KStreamJoin<K, V, V1, V2> extends Processor<K, V1, K, V> {
-
-    private static final String JOIN_NAME = "KAFKA-JOIN";
-    private static final String JOIN_OTHER_NAME = "KAFKA-JOIN-OTHER";
+class KStreamJoin<K, V, V1, V2> implements ProcessorFactory {
 
     private static abstract class Finder<K, T> {
         abstract Iterator<T> find(K key, long timestamp);
     }
 
-    private final KStreamWindow<K, V1> stream1;
-    private final KStreamWindow<K, V2> stream2;
-    private final Finder<K, V1> finder1;
-    private final Finder<K, V2> finder2;
+    private final String windowName1;
+    private final String windowName2;
     private final ValueJoiner<V1, V2, V> joiner;
-    final Processor<K, V2, K, V> processorForOtherStream;
+    private final boolean prior;
 
-    private ProcessorContext context;
-
-    KStreamJoin(KStreamWindow<K, V1> stream1, KStreamWindow<K, V2> stream2, boolean prior, ValueJoiner<V1, V2, V> joiner) {
-        super(JOIN_NAME);
-
-        this.stream1 = stream1;
-        this.stream2 = stream2;
-        final Window<K, V1> window1 = stream1.window();
-        final Window<K, V2> window2 = stream2.window();
-
-        if (prior) {
-            this.finder1 = new Finder<K, V1>() {
-                Iterator<V1> find(K key, long timestamp) {
-                    return window1.findAfter(key, timestamp);
-                }
-            };
-            this.finder2 = new Finder<K, V2>() {
-                Iterator<V2> find(K key, long timestamp) {
-                    return window2.findBefore(key, timestamp);
-                }
-            };
-        } else {
-            this.finder1 = new Finder<K, V1>() {
-                Iterator<V1> find(K key, long timestamp) {
-                    return window1.find(key, timestamp);
-                }
-            };
-            this.finder2 = new Finder<K, V2>() {
-                Iterator<V2> find(K key, long timestamp) {
-                    return window2.find(key, timestamp);
-                }
-            };
+    private Processor processorForOtherStream = null;
+    public final ProcessorFactory processorFactoryForOtherStream = new ProcessorFactory() {
+        @Override
+        public Processor build() {
+            return processorForOtherStream;
         }
+    };
 
+    KStreamJoin(String windowName1, String windowName2, boolean prior, ValueJoiner<V1, V2, V> joiner) {
+        this.windowName1 = windowName1;
+        this.windowName2 = windowName2;
         this.joiner = joiner;
-
-        this.processorForOtherStream = processorForOther();
+        this.prior = prior;
     }
 
     @Override
-    public void init(ProcessorContext context) {
-        this.context = context;
-
-        // check if these two streams are joinable
-        if (!stream1.context().joinable(stream2.context()))
-            throw new IllegalStateException("Stream " + stream1.name() + " and stream " +
-                stream2.name() + " are not joinable.");
+    public Processor build() {
+        return new KStreamJoinProcessor();
     }
 
-    @Override
-    public void process(K key, V1 value) {
-        long timestamp = context.timestamp();
-        Iterator<V2> iter = finder2.find(key, timestamp);
-        if (iter != null) {
-            while (iter.hasNext()) {
-                doJoin(key, value, iter.next());
+    private class KStreamJoinProcessor extends KStreamProcessor<K, V1> {
+
+        private Finder<K, V1> finder1;
+        private Finder<K, V2> finder2;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(ProcessorContext context) {
+            super.init(context);
+
+            // check if these two streams are joinable
+            if (!context.joinable())
+                throw new IllegalStateException("Streams are not joinable.");
+
+            final WindowInstance<K, V1> window1 = (WindowInstance<K, V1>) context.getStateStore(windowName1);
+            final WindowInstance<K, V2> window2 = (WindowInstance<K, V2>) context.getStateStore(windowName2);
+
+            if (prior) {
+                this.finder1 = new Finder<K, V1>() {
+                    Iterator<V1> find(K key, long timestamp) {
+                        return window1.findAfter(key, timestamp);
+                    }
+                };
+                this.finder2 = new Finder<K, V2>() {
+                    Iterator<V2> find(K key, long timestamp) {
+                        return window2.findBefore(key, timestamp);
+                    }
+                };
+            } else {
+                this.finder1 = new Finder<K, V1>() {
+                    Iterator<V1> find(K key, long timestamp) {
+                        return window1.find(key, timestamp);
+                    }
+                };
+                this.finder2 = new Finder<K, V2>() {
+                    Iterator<V2> find(K key, long timestamp) {
+                        return window2.find(key, timestamp);
+                    }
+                };
             }
-        }
-    }
 
-    private Processor<K, V2, K, V> processorForOther() {
-        return new Processor<K, V2, K, V>(JOIN_OTHER_NAME) {
-
-            @SuppressWarnings("unchecked")
-            @Override
-            public void process(K key, V2 value) {
-                long timestamp = context.timestamp();
-                Iterator<V1> iter = finder1.find(key, timestamp);
-                if (iter != null) {
-                    while (iter.hasNext()) {
-                        doJoin(key, iter.next(), value);
+            processorForOtherStream = new KStreamProcessor<K, V2>() {
+                @Override
+                public void process(K key, V2 value) {
+                    long timestamp = context.timestamp();
+                    Iterator<V1> iter = finder1.find(key, timestamp);
+                    if (iter != null) {
+                        while (iter.hasNext()) {
+                            doJoin(key, iter.next(), value);
+                        }
                     }
                 }
-            }
+            };
+        }
 
-            @Override
-            public void close() {
-                // down stream instances are close when the primary stream is closed
+        @Override
+        public void process(K key, V1 value) {
+            long timestamp = context.timestamp();
+            Iterator<V2> iter = finder2.find(key, timestamp);
+            if (iter != null) {
+                while (iter.hasNext()) {
+                    doJoin(key, value, iter.next());
+                }
             }
-        };
+        }
+
+        // TODO: use the "outer-stream" topic as the resulted join stream topic
+        private void doJoin(K key, V1 value1, V2 value2) {
+            context.forward(key, joiner.apply(value1, value2));
+        }
     }
 
-    // TODO: use the "outer-stream" topic as the resulted join stream topic
-    private void doJoin(K key, V1 value1, V2 value2) {
-        forward(key, joiner.apply(value1, value2));
-    }
 }

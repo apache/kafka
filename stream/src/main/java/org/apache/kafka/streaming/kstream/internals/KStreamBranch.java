@@ -17,36 +17,34 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streaming.processor.Processor;
-import org.apache.kafka.streaming.processor.ProcessorMetadata;
+import org.apache.kafka.streaming.processor.ProcessorFactory;
 import org.apache.kafka.streaming.kstream.Predicate;
 
-class KStreamBranch<K, V> extends Processor<K, V, K, V> {
+class KStreamBranch<K, V> implements ProcessorFactory {
 
     private final Predicate<K, V>[] predicates;
 
     @SuppressWarnings("unchecked")
-    public KStreamBranch(String name, ProcessorMetadata config) {
-        super(name, config);
-
-        if (this.metadata() == null)
-            throw new IllegalStateException("ProcessorMetadata should be specified.");
-
-        this.predicates = (Predicate<K, V>[]) config.value();
+    public KStreamBranch(Predicate... predicates) {
+        this.predicates = predicates;
     }
 
     @Override
-    public void process(K key, V value) {
-        if (this.children().size() != this.predicates.length)
-            throw new KafkaException("Number of branched streams does not match the length of predicates: this should not happen.");
+    public Processor build() {
+        return new KStreamBranchProcessor();
+    }
 
-        for (int i = 0; i < predicates.length; i++) {
-            if (predicates[i].apply(key, value)) {
-                // do not use forward here bu directly call process() and then break the loop
-                // so that no record is going to be piped to multiple streams
-                this.children().get(i).process(key, value);
-                break;
+    private class KStreamBranchProcessor extends KStreamProcessor<K, V> {
+        @Override
+        public void process(K key, V value) {
+            for (int i = 0; i < predicates.length; i++) {
+                if (predicates[i].apply(key, value)) {
+                    // use forward with childIndex here and then break the loop
+                    // so that no record is going to be piped to multiple streams
+                    context.forward(key, value, i);
+                    break;
+                }
             }
         }
     }

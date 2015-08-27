@@ -20,7 +20,7 @@ package org.apache.kafka.streaming.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
-import org.apache.kafka.streaming.processor.ProcessorMetadata;
+import org.apache.kafka.streaming.processor.ProcessorFactory;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.apache.kafka.streaming.kstream.KStreamWindowed;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
@@ -30,7 +30,6 @@ import org.apache.kafka.streaming.kstream.ValueMapper;
 import org.apache.kafka.streaming.kstream.Window;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -50,9 +49,19 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     private static final String BRANCH_NAME = "KAFKA-BRANCH-";
 
+    private static final String BRANCHCHILD_NAME = "KAFKA-BRANCHCHILD-";
+
+    private static final String WINDOWED_NAME = "KAFKA-WINDOWED-";
+
+    public static final String JOIN_NAME = "KAFKA-JOIN-";
+
+    public static final String JOINOTHER_NAME = "KAFKA-JOINOTHER-";
+
     public static final String SOURCE_NAME = "KAFKA-SOURCE-";
 
     public static final String SEND_NAME = "KAFKA-SEND-";
+
+    public static final String WINDOW_NAME = "KAFKA-WINDOW-";
 
     public static final AtomicInteger INDEX = new AtomicInteger(1);
 
@@ -68,7 +77,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public KStream<K, V> filter(Predicate<K, V> predicate) {
         String name = FILTER_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamFilter.class, new ProcessorMetadata("Predicate", new KStreamFilter.PredicateOut<>(predicate)), this.name);
+        topology.addProcessor(name, new KStreamFilter(predicate, false), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -77,7 +86,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public KStream<K, V> filterOut(final Predicate<K, V> predicate) {
         String name = FILTER_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamFilter.class, new ProcessorMetadata("Predicate", new KStreamFilter.PredicateOut<>(predicate, true)), this.name);
+        topology.addProcessor(name, new KStreamFilter(predicate, true), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -86,7 +95,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper) {
         String name = MAP_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamMap.class, new ProcessorMetadata("Mapper", mapper), this.name);
+        topology.addProcessor(name, new KStreamMap(mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -95,7 +104,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper) {
         String name = MAPVALUES_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamMapValues.class, new ProcessorMetadata("ValueMapper", mapper), this.name);
+        topology.addProcessor(name, new KStreamMapValues(mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -105,7 +114,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <K1, V1> KStream<K1, V1> flatMap(KeyValueFlatMap<K, V, K1, V1> mapper) {
         String name = FLATMAP_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamFlatMap.class, new ProcessorMetadata("FlatMapper", mapper), this.name);
+        topology.addProcessor(name, new KStreamFlatMap(mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -115,34 +124,37 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <V1> KStream<K, V1> flatMapValues(ValueMapper<V, ? extends Iterable<V1>> mapper) {
         String name = FLATMAPVALUES_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamFlatMapValues.class, new ProcessorMetadata("ValueMapper", mapper), this.name);
+        topology.addProcessor(name, new KStreamFlatMapValues(mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
 
     @Override
     public KStreamWindowed<K, V> with(Window<K, V> window) {
-        KStreamWindow<K, V> windowed = new KStreamWindow<>(window);
+        String name = WINDOWED_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(windowed, processor);
+        topology.addProcessor(name, new KStreamWindow<>(window), this.name);
 
-        return new KStreamWindow.KStreamWindowedImpl<>(topology, windowed);
+        return new KStreamWindowedImpl<>(topology, name, window);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
-        String name = BRANCH_NAME + INDEX.getAndIncrement();
+        String branchName = BRANCH_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamBranch.class, new ProcessorMetadata("Predicates", Arrays.copyOf(predicates, predicates.length)), this.name);
+        topology.addProcessor(branchName, new KStreamBranch(predicates.clone()), this.name);
 
-        KStreamImpl branch = new KStreamImpl<>(topology, name);
-        List<KStream<K, V>> avatars = new ArrayList<>();
+        List<KStream<K, V>> branchChildren = new ArrayList<>();
         for (int i = 0; i < predicates.length; i++) {
-            avatars.add(branch);
+            String childName = BRANCHCHILD_NAME + INDEX.getAndIncrement();
+
+            topology.addProcessor(childName, new KStreamPassThrough(), branchName);
+
+            branchChildren.add(new KStreamImpl<K, V>(topology, childName));
         }
 
-        return (KStream<K, V>[]) avatars.toArray();
+        return (KStream<K, V>[]) branchChildren.toArray();
     }
 
     @SuppressWarnings("unchecked")
@@ -154,7 +166,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
                                             Deserializer<V1> valDeserializer) {
         String sendName = SEND_NAME + INDEX.getAndIncrement();
 
-        process(new KStreamSend(sendName, new ProcessorMetadata("Topic-Ser", new KStreamSend.TopicSer(topic, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer))));
+        topology.addSink(sendName, topic, keySerializer, valSerializer, this.name);
 
         String sourceName = SOURCE_NAME + INDEX.getAndIncrement();
 
@@ -168,15 +180,15 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
         String name = SEND_NAME + INDEX.getAndIncrement();
 
-        process(new KStreamSend(name, new ProcessorMetadata("Topic-Ser", new KStreamSend.TopicSer(topic, (Serializer<Object>) keySerializer, (Serializer<Object>) valSerializer))));
+        topology.addSink(name, topic, keySerializer, valSerializer, this.name);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> process(final Processor<K, V> processor) {
+    public <K1, V1> KStream<K1, V1> process(final ProcessorFactory processorFactory) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, KStreamProcessor.class, new ProcessorMetadata("Processor", processor), this.name);
+        topology.addProcessor(name, processorFactory, this.name);
 
         return new KStreamImpl<>(topology, name);
     }

@@ -20,25 +20,26 @@ package org.apache.kafka.streaming.kstream.internals;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.kstream.KeyValue;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
-import org.apache.kafka.streaming.processor.ProcessorMetadata;
+import org.apache.kafka.streaming.processor.ProcessorFactory;
 
-class KStreamMap<K1, V1, K2, V2> extends Processor<K1, V1> {
+class KStreamMap<K1, V1, K2, V2> implements ProcessorFactory {
 
     private final KeyValueMapper<K1, V1, K2, V2> mapper;
 
-    @SuppressWarnings("unchecked")
-    public KStreamMap(ProcessorMetadata metadata) {
-        super(metadata);
-
-        if (this.metadata() == null)
-            throw new IllegalStateException("ProcessorMetadata should be specified.");
-
-        this.mapper = (KeyValueMapper<K1, V1, K2, V2>) metadata.value();
+    public KStreamMap(KeyValueMapper<K1, V1, K2, V2> mapper) {
+        this.mapper = mapper;
     }
 
     @Override
-    public void process(K1 key, V1 value) {
-        KeyValue<K2, V2> newPair = mapper.apply(key, value);
-        context.forward(newPair.key, newPair.value);
+    public Processor build() {
+        return new KStreamMapProcessor();
+    }
+
+    private class KStreamMapProcessor extends KStreamProcessor<K1, V1> {
+        @Override
+        public void process(K1 key, V1 value) {
+            KeyValue<K2, V2> newPair = mapper.apply(key, value);
+            context.forward(newPair.key, newPair.value);
+        }
     }
 }

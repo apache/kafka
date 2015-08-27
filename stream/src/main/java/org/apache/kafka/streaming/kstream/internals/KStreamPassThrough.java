@@ -18,30 +18,19 @@
 package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.Processor;
-import org.apache.kafka.streaming.kstream.ValueMapper;
 import org.apache.kafka.streaming.processor.ProcessorFactory;
 
-class KStreamFlatMapValues<K1, V1, V2> implements ProcessorFactory {
-
-    private final ValueMapper<V1, ? extends Iterable<V2>> mapper;
-
-    @SuppressWarnings("unchecked")
-    KStreamFlatMapValues(ValueMapper<V1, ? extends Iterable<V2>> mapper) {
-        this.mapper = mapper;
-    }
+class KStreamPassThrough<K, V> implements ProcessorFactory {
 
     @Override
     public Processor build() {
-        return new KStreamFlatMapValuesProcessor();
+        return new KStreamPassThroughProcessor();
     }
 
-    private class KStreamFlatMapValuesProcessor extends KStreamProcessor<K1, V1> {
+    public class KStreamPassThroughProcessor<K, V> extends KStreamProcessor<K, V> {
         @Override
-        public void process(K1 key, V1 value) {
-            Iterable<V2> newValues = mapper.apply(value);
-            for (V2 v : newValues) {
-                context.forward(key, v);
-            }
+        public void process(K key, V value) {
+            context.forward(key, value);
         }
     }
 }

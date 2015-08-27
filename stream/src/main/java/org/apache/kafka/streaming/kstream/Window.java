@@ -22,16 +22,22 @@ import org.apache.kafka.streaming.processor.StateStore;
 
 import java.util.Iterator;
 
-public interface Window<K, V> extends StateStore {
+public interface Window<K, V> {
 
-    void init(ProcessorContext context);
+    interface WindowInstance<K, V> extends StateStore {
 
-    Iterator<V> find(K key, long timestamp);
+        void init(ProcessorContext context);
 
-    Iterator<V> findAfter(K key, long timestamp);
+        Iterator<V> find(K key, long timestamp);
 
-    Iterator<V> findBefore(K key, long timestamp);
+        Iterator<V> findAfter(K key, long timestamp);
 
-    void put(K key, V value, long timestamp);
+        Iterator<V> findBefore(K key, long timestamp);
 
+        void put(K key, V value, long timestamp);
+    }
+
+    String name();
+
+    WindowInstance<K, V> build();
 }

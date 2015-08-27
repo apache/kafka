@@ -77,7 +77,7 @@ public class ProcessorStateManager {
         // ---- register the store ---- //
 
         // check that the underlying change log topic exist or not
-        if (restoreConsumer.listTopics().keySet().contains(store.name())) {
+        if (restoreConsumer.listTopics().containsKey(store.name())) {
             boolean partitionNotFound = true;
             for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(store.name())) {
                 if (partitionInfo.partition() == id) {
@@ -137,6 +137,10 @@ public class ProcessorStateManager {
 
         // un-subscribe the change log partition
         restoreConsumer.unsubscribe(storePartition);
+    }
+
+    public StateStore getStore(String name) {
+        return stores.get(name);
     }
 
     public void cleanup() throws IOException {

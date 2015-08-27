@@ -18,24 +18,27 @@
 package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.Processor;
-import org.apache.kafka.streaming.processor.ProcessorMetadata;
+import org.apache.kafka.streaming.processor.ProcessorContext;
 
-public class KStreamProcessor<K, V> extends Processor<K, V> {
+abstract class KStreamProcessor<K, V> implements Processor<K, V> {
 
-    private final Processor<K, V> processor;
+    protected ProcessorContext context;
 
-    @SuppressWarnings("unchecked")
-    public KStreamProcessor(ProcessorMetadata metadata) {
-        super(metadata);
+    @Override
+    abstract public void process(K key, V value);
 
-        if (this.metadata() != null)
-            throw new IllegalStateException("ProcessorMetadata should be null.");
-
-        this.processor = (Processor<K, V>) metadata.value();
+    @Override
+    public void init(ProcessorContext context) {
+        this.context = context;
     }
 
     @Override
-    public void process(K key, V value) {
-        processor.process(key, value);
+    public void punctuate(long streamTime) {
+       // do nothing
+    }
+
+    @Override
+    public void close() {
+        // do nothing
     }
 }

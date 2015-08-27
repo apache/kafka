@@ -26,7 +26,7 @@ import java.io.File;
 public interface ProcessorContext {
 
     // TODO: this is better moved to a KStreamContext
-    boolean joinable(ProcessorContext other);
+    boolean joinable();
 
     /**
      * Returns the partition group id
@@ -84,9 +84,13 @@ public interface ProcessorContext {
      */
     void register(StateStore store, RestoreFunc restoreFunc);
 
+    StateStore getStateStore(String name);
+
     void schedule(Processor processor, long interval);
 
     <K, V> void forward(K key, V value);
+
+    <K, V> void forward(K key, V value, int childIndex);
 
     void commit();
 

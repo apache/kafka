@@ -19,42 +19,29 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.kstream.Predicate;
-import org.apache.kafka.streaming.processor.ProcessorMetadata;
+import org.apache.kafka.streaming.processor.ProcessorFactory;
 
-class KStreamFilter<K, V> extends Processor<K, V> {
+class KStreamFilter<K, V> implements ProcessorFactory {
 
-    private final PredicateOut<K, V> predicateOut;
+    private final Predicate<K, V> predicate;
+    private final boolean filterOut;
 
-    public static final class PredicateOut<K1, V1> {
-
-        public final Predicate<K1, V1> predicate;
-        public final boolean filterOut;
-
-        public PredicateOut(Predicate<K1, V1> predicate) {
-            this(predicate, false);
-        }
-
-        public PredicateOut(Predicate<K1, V1> predicate, boolean filterOut) {
-            this.predicate = predicate;
-            this.filterOut = filterOut;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public KStreamFilter(ProcessorMetadata metadata) {
-        super(metadata);
-
-        if (this.metadata() == null)
-            throw new IllegalStateException("ProcessorMetadata should be specified.");
-
-        this.predicateOut = (PredicateOut<K, V>) metadata.value();
+    public KStreamFilter(Predicate<K, V> predicate, boolean filterOut) {
+        this.predicate = predicate;
+        this.filterOut = filterOut;
     }
 
     @Override
-    public void process(K key, V value) {
-        if ((!predicateOut.filterOut && predicateOut.predicate.apply(key, value))
-            || (predicateOut.filterOut && !predicateOut.predicate.apply(key, value))) {
-            context.forward(key, value);
+    public Processor build() {
+        return new KStreamFilterProcessor();
+    }
+
+    private class KStreamFilterProcessor extends KStreamProcessor<K, V> {
+        @Override
+        public void process(K key, V value) {
+            if (filterOut ^ predicate.apply(key, value)) {
+                context.forward(key, value);
+            }
         }
     }
 }
