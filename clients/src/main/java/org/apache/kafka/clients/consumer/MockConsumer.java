@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka. This class is <i> not
@@ -64,15 +65,41 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
+    public void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
-        this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
+        this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
+        List<String> topicsToSubscribe = new ArrayList<>();
+        for (String topic: partitions.keySet()) {
+            if (pattern.matcher(topic).matches() &&
+                !subscriptions.subscription().contains(topic))
+                topicsToSubscribe.add(topic);
+        }
+        subscribeTopics(topicsToSubscribe, new NoOpConsumerRebalanceListener(), true);
+    }
+
+    @Override
+    public synchronized void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
+        subscribeTopics(topics, listener, false);
+    }
+
+    private void subscribeTopics(List<String> topics, final ConsumerRebalanceListener listener,
+                            boolean isSubscribedViaPatternSubscription) {
+        ensureNotClosed();
+        this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener), isSubscribedViaPatternSubscription);
     }
 
     @Override
     public synchronized void assign(List<TopicPartition> partitions) {
         ensureNotClosed();
         this.subscriptions.assign(partitions);
+    }
+
+    @Override
+    public void unsubscribe(Pattern pattern) {
+        ensureNotClosed();
+        if (subscriptions.getSubscribedPattern() != null &&
+            subscriptions.getSubscribedPattern().equals(pattern))
+            subscriptions.unsubscribe();
     }
 
     @Override

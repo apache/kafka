@@ -16,6 +16,7 @@ import java.io.Closeable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
@@ -54,6 +55,16 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#assign(List)
      */
     public void assign(List<TopicPartition> partitions);
+
+    /**
+    * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
+    */
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
+
+    /**
+     * @see KafkaConsumer#unsubscribe(Pattern)
+     */
+    public void unsubscribe(Pattern pattern);
 
     /**
      * @see KafkaConsumer#poll(long)

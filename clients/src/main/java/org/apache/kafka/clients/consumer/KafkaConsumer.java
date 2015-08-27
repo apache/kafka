@@ -43,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -57,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 /**
  * A Kafka client that consumes records from a Kafka cluster.
@@ -393,7 +395,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  */
 @InterfaceStability.Unstable
-public class KafkaConsumer<K, V> implements Consumer<K, V> {
+public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
@@ -644,10 +646,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
+        subscribeTopics(topics, listener, false);
+    }
+
+    private void subscribeTopics(List<String> topics, ConsumerRebalanceListener listener, boolean isSubscribedViaPatternSubscription) {
         acquire();
         try {
             log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
-            this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
+            this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener), isSubscribedViaPatternSubscription);
             metadata.setTopics(topics);
         } finally {
             release();
@@ -671,6 +677,60 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void subscribe(List<String> topics) {
         subscribe(topics, new NoOpConsumerRebalanceListener());
+    }
+
+    /**
+     * Subscribes to topics matching specified pattern and uses the consumer's group
+     * management functionality. The pattern matching will be done periodically against topics
+     * existing at the time of check.
+     * <p>
+     * As part of group management, the consumer will keep track of the list of consumers that
+     * belong to a particular group and will trigger a rebalance operation if one of the
+     * following events trigger -
+     * <ul>
+     * <li>Number of partitions change for any of the subscribed list of topics
+     * <li>Topic is created or deleted
+     * <li>An existing member of the consumer group dies
+     * <li>A new member is added to an existing consumer group via the join API
+     * </ul>
+     *
+     * @param pattern Pattern to subscribe to
+     */
+    @Override
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+        acquire();
+        try {
+            log.debug("Subscribed to pattern: {}", pattern);
+            this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
+            this.metadata.needMetadataForAllTopics(true);
+            this.metadata.addListener(this);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Unsubscribe from topics subscribed via pattern subscription
+     *
+     * @param pattern Pattern to unsubscribe from, must match the pattern subscribed to
+     */
+    public void unsubscribe(Pattern pattern) {
+        acquire();
+        try {
+            final Pattern subscribedPattern = this.subscriptions.getSubscribedPattern();
+
+            if (subscribedPattern.pattern().equals(pattern.pattern())) {
+                log.debug("Unsubscribed from pattern: {}", subscribedPattern);
+                this.subscriptions.unsubscribe();
+                this.metadata.needMetadataForAllTopics(false);
+                this.metadata.removeListener(this);
+            } else {
+                log.debug("Could not unsubscribe from pattern {} as it is not subscribed to",
+                    subscribedPattern);
+            }
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -1156,4 +1216,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
     }
+
+    @Override
+    public void onMetadataUpdate(Cluster cluster) {
+        final List<String> topicsToSubscribe = new ArrayList<>();
+
+        for (String topic : cluster.topics())
+            if (this.subscriptions.getSubscribedPattern().matcher(topic).matches())
+                topicsToSubscribe.add(topic);
+
+        subscribeTopics(topicsToSubscribe, this.subscriptions.listener().underlying(), true);
+    }
+
 }

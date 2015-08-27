@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition
@@ -47,6 +48,9 @@ import java.util.Set;
  */
 public class SubscriptionState {
 
+    /* the pattern user has requested */
+    private Pattern subscribedPattern;
+
     /* the list of topics the user has requested */
     private final Set<String> subscription;
 
@@ -67,6 +71,8 @@ public class SubscriptionState {
 
     /* Listener to be invoked when assignment changes */
     private RebalanceListener listener;
+    private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
+        "Subscription to topics, partitions and pattern are mutually exclusive";
 
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
@@ -75,14 +81,20 @@ public class SubscriptionState {
         this.assignment = new HashMap<>();
         this.needsPartitionAssignment = false;
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
+        this.subscribedPattern = null;
     }
 
     public void subscribe(List<String> topics, RebalanceListener listener) {
+        subscribe(topics, listener, false);
+    }
+
+    public void subscribe(List<String> topics, RebalanceListener listener, boolean isSubscribedViaPattern) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        if (!this.userAssignment.isEmpty())
-            throw new IllegalStateException("Subscription to topics and partitions are mutually exclusive");
+        if (!this.userAssignment.isEmpty() ||
+            (!isSubscribedViaPattern && this.subscribedPattern != null))
+            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
 
         this.listener = listener;
 
@@ -105,8 +117,8 @@ public class SubscriptionState {
     }
 
     public void assign(List<TopicPartition> partitions) {
-        if (!this.subscription.isEmpty())
-            throw new IllegalStateException("Subscription to topics and partitions are mutually exclusive");
+        if (!this.subscription.isEmpty() || this.subscribedPattern != null)
+            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
 
         this.userAssignment.clear();
         this.userAssignment.addAll(partitions);
@@ -116,6 +128,29 @@ public class SubscriptionState {
                 addAssignedPartition(partition);
 
         this.assignment.keySet().retainAll(this.userAssignment);
+    }
+
+    public void subscribe(Pattern pattern, RebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        if (!this.subscription.isEmpty() || !this.userAssignment.isEmpty())
+            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
+
+        this.listener = listener;
+        this.subscribedPattern = pattern;
+    }
+
+    public void unsubscribe() {
+        this.subscription.clear();
+        this.assignment.clear();
+        this.needsPartitionAssignment = true;
+        this.subscribedPattern = null;
+    }
+
+
+    public Pattern getSubscribedPattern() {
+        return this.subscribedPattern;
     }
 
     public void clearAssignment() {
