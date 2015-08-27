@@ -68,7 +68,7 @@ public class SlidingWindowDef<K, V> implements WindowDef<K, V> {
     }
 
     @Override
-    public Window<K, V> define() {
+    public Window<K, V> instance() {
         return new SlidingWindow();
     }
 

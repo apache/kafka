@@ -56,7 +56,7 @@ public class TopologyBuilder {
         }
 
         public ProcessorNode build() {
-            Processor processor = definition.define();
+            Processor processor = definition.instance();
             return new ProcessorNode(name, processor);
         }
     }

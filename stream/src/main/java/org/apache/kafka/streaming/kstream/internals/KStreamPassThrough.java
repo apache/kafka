@@ -23,7 +23,7 @@ import org.apache.kafka.streaming.processor.ProcessorDef;
 class KStreamPassThrough<K, V> implements ProcessorDef {
 
     @Override
-    public Processor define() {
+    public Processor instance() {
         return new KStreamPassThroughProcessor();
     }
 

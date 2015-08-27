@@ -36,7 +36,7 @@ public class KStreamWindow<K, V> implements ProcessorDef {
     }
 
     @Override
-    public Processor define() {
+    public Processor instance() {
         return new KStreamWindowProcessor();
     }
 
@@ -47,7 +47,7 @@ public class KStreamWindow<K, V> implements ProcessorDef {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            this.window = windowDef.define();
+            this.window = windowDef.instance();
             this.window.init(context);
         }
 

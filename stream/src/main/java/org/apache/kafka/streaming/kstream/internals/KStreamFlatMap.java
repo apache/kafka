@@ -31,7 +31,7 @@ class KStreamFlatMap<K1, V1, K2, V2> implements ProcessorDef {
     }
 
     @Override
-    public Processor define() {
+    public Processor instance() {
         return new KStreamFlatMapProcessor();
     }
 

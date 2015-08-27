@@ -32,7 +32,7 @@ class KStreamFilter<K, V> implements ProcessorDef {
     }
 
     @Override
-    public Processor define() {
+    public Processor instance() {
         return new KStreamFilterProcessor();
     }
 
