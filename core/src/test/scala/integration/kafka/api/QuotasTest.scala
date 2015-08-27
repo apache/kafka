@@ -183,7 +183,7 @@ class QuotasTest extends KafkaServerTestHarness {
   }
 
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) {
-    consumer.subscribe(topic1)
+    consumer.subscribe(List(topic1))
     var numConsumed = 0
     while (numConsumed < numRecords) {
       for (cr <- consumer.poll(100)) {

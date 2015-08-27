@@ -13,7 +13,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceCallback;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -144,12 +143,6 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
     /**
-     * <code>rebalance.callback.class</code>
-     */
-    public static final String CONSUMER_REBALANCE_CALLBACK_CLASS_CONFIG = "rebalance.callback.class";
-    private static final String CONSUMER_REBALANCE_CALLBACK_CLASS_DOC = "A user-provided callback to execute when partition assignments change.";
-
-    /**
      * <code>check.crcs</code>
      */
     public static final String CHECK_CRCS_CONFIG = "check.crcs";
@@ -259,11 +252,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         in("latest", "earliest", "none"),
                                         Importance.MEDIUM,
                                         AUTO_OFFSET_RESET_DOC)
-                                .define(CONSUMER_REBALANCE_CALLBACK_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        NoOpConsumerRebalanceCallback.class,
-                                        Importance.LOW,
-                                        CONSUMER_REBALANCE_CALLBACK_CLASS_DOC)
                                 .define(CHECK_CRCS_CONFIG,
                                         Type.BOOLEAN,
                                         true,
