@@ -42,6 +42,9 @@ public class CopycatSchema implements Schema {
         SCHEMA_TYPE_CLASSES.put(Type.FLOAT64, Arrays.asList((Class) Double.class));
         SCHEMA_TYPE_CLASSES.put(Type.BOOLEAN, Arrays.asList((Class) Boolean.class));
         SCHEMA_TYPE_CLASSES.put(Type.STRING, Arrays.asList((Class) String.class));
+        // Bytes are special and have 2 representations. byte[] causes problems because it doesn't handle equals() and
+        // hashCode() like we want objects to, so we support both byte[] and ByteBuffer. Using plain byte[] can cause
+        // those methods to fail, so ByteBuffers are recommended
         SCHEMA_TYPE_CLASSES.put(Type.BYTES, Arrays.asList((Class) byte[].class, (Class) ByteBuffer.class));
         SCHEMA_TYPE_CLASSES.put(Type.ARRAY, Arrays.asList((Class) List.class));
         SCHEMA_TYPE_CLASSES.put(Type.MAP, Arrays.asList((Class) Map.class));
@@ -172,9 +175,6 @@ public class CopycatSchema implements Schema {
                 return;
         }
 
-        // Special case for bytes. byte[] causes problems because it doesn't handle equals()/hashCode() like we want
-        // objects to, so we support both byte[] and ByteBuffer. Using plain byte[] can cause those methods to fail, so
-        // ByteBuffers are recommended
         final List<Class> expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
         if (expectedClasses == null)
             throw new DataException("Invalid Java object for schema type " + schema.type() + ": " + value.getClass());
