@@ -19,6 +19,7 @@ package org.apache.kafka.copycat.sink;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.CopycatRecord;
+import org.apache.kafka.copycat.data.Schema;
 
 /**
  * SinkRecord is a CopycatRecord that has been read from Kafka and includes the kafkaOffset of
@@ -29,12 +30,12 @@ import org.apache.kafka.copycat.connector.CopycatRecord;
 public class SinkRecord extends CopycatRecord {
     private final long kafkaOffset;
 
-    public SinkRecord(String topic, int partition, Object key, Object value, long kafkaOffset) {
-        super(topic, partition, key, value);
+    public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset) {
+        super(topic, partition, keySchema, key, valueSchema, value);
         this.kafkaOffset = kafkaOffset;
     }
 
-    public long getKafkaOffset() {
+    public long kafkaOffset() {
         return kafkaOffset;
     }
 

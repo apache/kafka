@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.file;
 
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -86,9 +87,9 @@ public class FileStreamSourceTaskTest {
         os.flush();
         List<SourceRecord> records = task.poll();
         assertEquals(1, records.size());
-        assertEquals(TOPIC, records.get(0).getTopic());
-        assertEquals("partial line finished", records.get(0).getValue());
-        assertEquals(22L, records.get(0).getSourceOffset());
+        assertEquals(TOPIC, records.get(0).topic());
+        assertEquals("partial line finished", records.get(0).value());
+        assertEquals(22L, records.get(0).sourceOffset());
         assertEquals(null, task.poll());
 
         // Different line endings, and make sure the final \r doesn't result in a line until we can
@@ -97,21 +98,21 @@ public class FileStreamSourceTaskTest {
         os.flush();
         records = task.poll();
         assertEquals(4, records.size());
-        assertEquals("line1", records.get(0).getValue());
-        assertEquals(28L, records.get(0).getSourceOffset());
-        assertEquals("line2", records.get(1).getValue());
-        assertEquals(35L, records.get(1).getSourceOffset());
-        assertEquals("line3", records.get(2).getValue());
-        assertEquals(41L, records.get(2).getSourceOffset());
-        assertEquals("line4", records.get(3).getValue());
-        assertEquals(47L, records.get(3).getSourceOffset());
+        assertEquals("line1", records.get(0).value());
+        assertEquals(28L, records.get(0).sourceOffset());
+        assertEquals("line2", records.get(1).value());
+        assertEquals(35L, records.get(1).sourceOffset());
+        assertEquals("line3", records.get(2).value());
+        assertEquals(41L, records.get(2).sourceOffset());
+        assertEquals("line4", records.get(3).value());
+        assertEquals(47L, records.get(3).sourceOffset());
 
         os.write("subsequent text".getBytes());
         os.flush();
         records = task.poll();
         assertEquals(1, records.size());
-        assertEquals("", records.get(0).getValue());
-        assertEquals(48L, records.get(0).getSourceOffset());
+        assertEquals("", records.get(0).value());
+        assertEquals(48L, records.get(0).sourceOffset());
 
         task.stop();
     }
@@ -133,8 +134,6 @@ public class FileStreamSourceTaskTest {
 
 
     private void expectOffsetLookupReturnNone() {
-        EasyMock.expect(
-                offsetStorageReader.getOffset(EasyMock.anyObject(Object.class)))
-                .andReturn(null);
+        EasyMock.expect(offsetStorageReader.offset(EasyMock.anyObject(SchemaAndValue.class))).andReturn(null);
     }
 }

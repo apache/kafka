@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
 import java.util.Properties;
-import java.util.Set;
 
 /**
  * Configuration for standalone workers.
@@ -128,14 +127,5 @@ public class WorkerConfig extends AbstractConfig {
 
     public WorkerConfig(Properties props) {
         super(config, props);
-    }
-
-    public Properties getUnusedProperties() {
-        Set<String> unusedKeys = this.unused();
-        Properties unusedProps = new Properties();
-        for (String key : unusedKeys) {
-            unusedProps.put(key, this.originals().get(key));
-        }
-        return unusedProps;
     }
 }

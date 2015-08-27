@@ -57,12 +57,12 @@ public class ConnectorReconfigurationTest {
         }
 
         @Override
-        public Class<? extends Task> getTaskClass() {
+        public Class<? extends Task> taskClass() {
             return null;
         }
 
         @Override
-        public List<Properties> getTaskConfigs(int count) {
+        public List<Properties> taskConfigs(int count) {
             return null;
         }
 

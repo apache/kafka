@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -131,11 +132,11 @@ class WorkerSourceTask<K, V> implements WorkerTask {
      */
     private synchronized void sendRecords(List<SourceRecord> records) {
         for (SourceRecord record : records) {
-            final ProducerRecord<K, V> producerRecord
-                    = new ProducerRecord<>(record.getTopic(), record.getKafkaPartition(),
-                    keyConverter.fromCopycatData(record.getKey()),
-                    valueConverter.fromCopycatData(record.getValue()));
-            log.trace("Appending record with key {}, value {}", record.getKey(), record.getValue());
+            K key = (record.keySchema() != null) ? keyConverter.fromCopycatData(record.keySchema(), record.key()) : null;
+            V value = (record.valueSchema() != null) ? valueConverter.fromCopycatData(record.valueSchema(), record.value()) : null;
+            final ProducerRecord<K, V> producerRecord = new ProducerRecord<>(
+                    record.topic(), record.kafkaPartition(), key, value);
+            log.trace("Appending record with key {}, value {}", record.key(), record.value());
             if (!flushing) {
                 outstandingMessages.put(producerRecord, producerRecord);
             } else {
@@ -157,7 +158,8 @@ class WorkerSourceTask<K, V> implements WorkerTask {
                         }
                     });
             // Offsets are converted & serialized in the OffsetWriter
-            offsetWriter.setOffset(record.getSourcePartition(), record.getSourceOffset());
+            offsetWriter.offset(new SchemaAndValue(record.sourcePartitionSchema(), record.sourcePartition()),
+                    new SchemaAndValue(record.sourceOffsetSchema(), record.sourceOffset()));
         }
     }
 

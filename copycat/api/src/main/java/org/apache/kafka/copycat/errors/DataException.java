@@ -15,18 +15,21 @@
  * limitations under the License.
  **/
 
+package org.apache.kafka.copycat.errors;
 
-
-package org.apache.kafka.copycat.data;
-
-/** Thrown for errors parsing schemas and protocols. */
-public class SchemaParseException extends DataRuntimeException {
-    public SchemaParseException(Throwable cause) {
-        super(cause);
+/**
+ * Base class for all Copycat data API exceptions.
+ */
+public class DataException extends CopycatException {
+    public DataException(String s) {
+        super(s);
     }
 
-    public SchemaParseException(String message) {
-        super(message);
+    public DataException(String s, Throwable throwable) {
+        super(s, throwable);
+    }
+
+    public DataException(Throwable throwable) {
+        super(throwable);
     }
 }
-

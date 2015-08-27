@@ -145,9 +145,9 @@ public class StandaloneHerderTest {
         PowerMock.expectLastCall();
 
         // Just return the connector properties for the individual task we generate by default
-        EasyMock.<Class<? extends Task>>expect(connector.getTaskClass()).andReturn(taskClass);
+        EasyMock.<Class<? extends Task>>expect(connector.taskClass()).andReturn(taskClass);
 
-        EasyMock.expect(connector.getTaskConfigs(ConnectorConfig.TASKS_MAX_DEFAULT))
+        EasyMock.expect(connector.taskConfigs(ConnectorConfig.TASKS_MAX_DEFAULT))
                 .andReturn(Arrays.asList(taskProps));
         // And we should instantiate the tasks. For a sink task, we should see added properties for
         // the input topic partitions
