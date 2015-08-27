@@ -17,15 +17,13 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Future;
 
 /**
@@ -71,10 +69,10 @@ public class OffsetStorageWriter {
     private final Converter valueConverter;
     private final String namespace;
     // Offset data in Copycat format
-    private Map<SchemaAndValue, SchemaAndValue> data = new HashMap<>();
+    private Map<Map<String, Object>, Map<String, Object>> data = new HashMap<>();
 
     // Not synchronized, should only be accessed by flush thread
-    private Map<SchemaAndValue, SchemaAndValue> toFlush = null;
+    private Map<Map<String, Object>, Map<String, Object>> toFlush = null;
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
 
@@ -91,8 +89,8 @@ public class OffsetStorageWriter {
      * @param partition the partition to store an offset for
      * @param offset the offset
      */
-    public synchronized void offset(SchemaAndValue partition, SchemaAndValue offset) {
-        data.put(partition, offset);
+    public synchronized void offset(Map<String, ?> partition, Map<String, ?> offset) {
+        data.put((Map<String, Object>) partition, (Map<String, Object>) offset);
     }
 
     private boolean flushing() {
@@ -136,10 +134,14 @@ public class OffsetStorageWriter {
         Map<ByteBuffer, ByteBuffer> offsetsSerialized;
         try {
             offsetsSerialized = new HashMap<>();
-            for (Map.Entry<SchemaAndValue, SchemaAndValue> entry : toFlush.entrySet()) {
-                byte[] key = keyConverter.fromCopycatData(namespace, entry.getKey().schema(), entry.getKey().value());
+            for (Map.Entry<Map<String, Object>, Map<String, Object>> entry : toFlush.entrySet()) {
+                // Offsets are specified as schemaless to the converter, using whatever internal schema is appropriate
+                // for that data. The only enforcement of the format is here.
+                OffsetUtils.validateFormat(entry.getKey());
+                OffsetUtils.validateFormat(entry.getValue());
+                byte[] key = keyConverter.fromCopycatData(namespace, null, entry.getKey());
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
-                byte[] value = valueConverter.fromCopycatData(namespace, entry.getValue().schema(), entry.getValue().value());
+                byte[] value = valueConverter.fromCopycatData(namespace, null, entry.getValue());
                 ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
                 offsetsSerialized.put(keyBuffer, valueBuffer);
             }
@@ -149,6 +151,7 @@ public class OffsetStorageWriter {
             log.error("CRITICAL: Failed to serialize offset data, making it impossible to commit "
                     + "offsets under namespace {}. This likely won't recover unless the "
                     + "unserializable partition or offset information is overwritten.", namespace);
+            log.error("Cause of serialization failure:", t);
             callback.onCompletion(t, null);
             return null;
         }

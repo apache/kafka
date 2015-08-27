@@ -52,6 +52,8 @@ public class Worker {
     private WorkerConfig config;
     private Converter keyConverter;
     private Converter valueConverter;
+    private Converter offsetKeyConverter;
+    private Converter offsetValueConverter;
     private OffsetBackingStore offsetBackingStore;
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
     private KafkaProducer<byte[], byte[]> producer;
@@ -66,9 +68,13 @@ public class Worker {
         this.time = time;
         this.config = config;
         this.keyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.keyConverter.configure(config.originals(), true);
+        this.keyConverter.configure(config.originalsWithPrefix("key.converter."), true);
         this.valueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.valueConverter.configure(config.originals(), false);
+        this.valueConverter.configure(config.originalsWithPrefix("value.converter."), false);
+        this.offsetKeyConverter = config.getConfiguredInstance(WorkerConfig.OFFSET_KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.offsetKeyConverter.configure(config.originalsWithPrefix("offset.key.converter."), true);
+        this.offsetValueConverter = config.getConfiguredInstance(WorkerConfig.OFFSET_VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.offsetValueConverter.configure(config.originalsWithPrefix("offset.value.converter."), false);
 
         if (offsetBackingStore != null) {
             this.offsetBackingStore = offsetBackingStore;
@@ -155,9 +161,9 @@ public class Worker {
         if (task instanceof SourceTask) {
             SourceTask sourceTask = (SourceTask) task;
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
-                    keyConverter, valueConverter);
+                    offsetKeyConverter, offsetValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
-                    keyConverter, valueConverter);
+                    offsetKeyConverter, offsetValueConverter);
             workerTask = new WorkerSourceTask(id, sourceTask, keyConverter, valueConverter, producer,
                     offsetReader, offsetWriter, config, time);
         } else if (task instanceof SinkTask) {

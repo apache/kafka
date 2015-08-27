@@ -115,6 +115,21 @@ public class AbstractConfig {
         return copy;
     }
 
+    /**
+     * Gets all original settings with the given prefix, stripping the prefix before adding it to the output.
+     *
+     * @param prefix the prefix to use as a filter
+     * @return a Map containing the settings with the prefix
+     */
+    public Map<String, Object> originalsWithPrefix(String prefix) {
+        Map<String, Object> result = new HashMap<String, Object>();
+        for(Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
+                result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+        }
+        return result;
+    }
+
     public Map<String, ?> values() {
         return new HashMap<String, Object>(values);
     }

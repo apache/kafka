@@ -32,8 +32,7 @@ import java.util.Properties;
 public class WorkerConfig extends AbstractConfig {
 
     public static final String CLUSTER_CONFIG = "cluster";
-    private static final String
-            CLUSTER_CONFIG_DOC =
+    private static final String CLUSTER_CONFIG_DOC =
             "ID for this cluster, which is used to provide a namespace so multiple Copycat clusters "
                     + "or instances may co-exist while sharing a single Kafka cluster.";
     public static final String CLUSTER_DEFAULT = "copycat";
@@ -57,6 +56,14 @@ public class WorkerConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_CONFIG = "value.converter";
     public static final String VALUE_CONVERTER_CLASS_DOC =
             "Converter class for value Copycat data that implements the <code>Converter</code> interface.";
+
+    public static final String OFFSET_KEY_CONVERTER_CLASS_CONFIG = "offset.key.converter";
+    public static final String OFFSET_KEY_CONVERTER_CLASS_DOC =
+            "Converter class for offset key Copycat data that implements the <code>Converter</code> interface.";
+
+    public static final String OFFSET_VALUE_CONVERTER_CLASS_CONFIG = "offset.value.converter";
+    public static final String OFFSET_VALUE_CONVERTER_CLASS_DOC =
+            "Converter class for offset value Copycat data that implements the <code>Converter</code> interface.";
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -88,6 +95,10 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
+                .define(OFFSET_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        Importance.HIGH, OFFSET_KEY_CONVERTER_CLASS_DOC)
+                .define(OFFSET_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        Importance.HIGH, OFFSET_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)

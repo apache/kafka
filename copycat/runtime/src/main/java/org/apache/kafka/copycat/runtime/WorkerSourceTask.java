@@ -23,7 +23,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.copycat.cli.WorkerConfig;
-import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -155,8 +154,7 @@ class WorkerSourceTask implements WorkerTask {
                         }
                     });
             // Offsets are converted & serialized in the OffsetWriter
-            offsetWriter.offset(new SchemaAndValue(record.sourcePartitionSchema(), record.sourcePartition()),
-                    new SchemaAndValue(record.sourceOffsetSchema(), record.sourceOffset()));
+            offsetWriter.offset(record.sourcePartition(), record.sourceOffset());
         }
     }
 

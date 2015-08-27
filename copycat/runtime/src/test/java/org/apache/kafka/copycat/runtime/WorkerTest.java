@@ -55,6 +55,10 @@ public class WorkerTest extends ThreadedTest {
         Properties workerProps = new Properties();
         workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("offset.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("offset.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("offset.key.converter.schemas.enable", "false");
+        workerProps.setProperty("offset.value.converter.schemas.enable", "false");
         WorkerConfig config = new WorkerConfig(workerProps);
         worker = new Worker(new MockTime(), config, offsetBackingStore);
         worker.start();
