@@ -21,7 +21,6 @@ import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.kstream.ValueJoiner;
 import org.apache.kafka.streaming.kstream.Window;
-import org.apache.kafka.streaming.kstream.Window.WindowInstance;
 import org.apache.kafka.streaming.processor.ProcessorDef;
 
 import java.util.Iterator;
