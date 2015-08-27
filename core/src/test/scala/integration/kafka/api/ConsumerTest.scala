@@ -12,7 +12,7 @@
  */
 package kafka.api
 
-import java.{lang, util}
+import java.{util, lang}
 
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -27,6 +27,7 @@ import java.util.ArrayList
 import org.junit.Assert._
 import org.junit.{Test, Before}
 
+import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import kafka.coordinator.ConsumerCoordinator
 
@@ -70,9 +71,9 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     val numRecords = 10000
     sendRecords(numRecords)
 
-    assertEquals(0, this.consumers(0).subscriptions.size)
-    this.consumers(0).subscribe(tp)
-    assertEquals(1, this.consumers(0).subscriptions.size)
+    assertEquals(0, this.consumers(0).assignment.size)
+    this.consumers(0).assign(List(tp))
+    assertEquals(1, this.consumers(0).assignment.size)
     
     this.consumers(0).seek(tp, 0)
     consumeRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
@@ -92,8 +93,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(5, tp)
     sendRecords(7, tp2)
 
-    this.consumers(0).subscribe(tp)
-    this.consumers(0).subscribe(tp2)
+    this.consumers(0).assign(List(tp, tp2));
 
     // Need to poll to join the group
     this.consumers(0).poll(50)
@@ -121,7 +121,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   @Test
   def testAutoOffsetReset() {
     sendRecords(1)
-    this.consumers(0).subscribe(tp)
+    this.consumers(0).assign(List(tp))
     consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
@@ -130,7 +130,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     val consumer = this.consumers(0)
     val totalRecords = 50L
     sendRecords(totalRecords.toInt)
-    consumer.subscribe(tp)
+    consumer.assign(List(tp))
 
     consumer.seekToEnd(tp)
     assertEquals(totalRecords, consumer.position(tp))
@@ -149,7 +149,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   @Test
   def testGroupConsumption() {
     sendRecords(10)
-    this.consumers(0).subscribe(topic)
+    this.consumers(0).subscribe(List(topic))
     consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
@@ -167,7 +167,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       this.consumers(0).position(new TopicPartition(topic, 15))
     }
 
-    this.consumers(0).subscribe(tp)
+    this.consumers(0).assign(List(tp))
 
     assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers(0).position(tp))
     this.consumers(0).commit(CommitType.SYNC)
@@ -181,7 +181,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(1)
 
     // another consumer in the same group should get the same position
-    this.consumers(1).subscribe(tp)
+    this.consumers(1).assign(List(tp))
     consumeRecords(this.consumers(1), 1, 5)
   }
 
@@ -216,14 +216,14 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testPartitionReassignmentCallback() {
-    val callback = new TestConsumerReassignmentCallback()
+    val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30");
-    val consumer0 = new KafkaConsumer(this.consumerConfig, callback, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    consumer0.subscribe(topic)
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumer0.subscribe(List(topic), listener)
         
     // the initial subscription should cause a callback execution
-    while(callback.callsToAssigned == 0)
+    while(listener.callsToAssigned == 0)
       consumer0.poll(50)
     
     // get metadata for the topic
@@ -238,31 +238,32 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     this.servers(coordinator).shutdown()
     
     // this should cause another callback execution
-    while(callback.callsToAssigned < 2)
+    while(listener.callsToAssigned < 2)
       consumer0.poll(50)
 
-    assertEquals(2, callback.callsToAssigned)
-    assertEquals(2, callback.callsToRevoked)
+    assertEquals(2, listener.callsToAssigned)
+    assertEquals(2, listener.callsToRevoked)
 
     consumer0.close()
   }
 
   @Test
   def testUnsubscribeTopic() {
-    val callback = new TestConsumerReassignmentCallback()
+
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30");
-    val consumer0 = new KafkaConsumer(this.consumerConfig, callback, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
 
     try {
-      consumer0.subscribe(topic)
+      val listener = new TestConsumerReassignmentListener()
+      consumer0.subscribe(List(topic), listener)
 
       // the initial subscription should cause a callback execution
-      while (callback.callsToAssigned == 0)
+      while (listener.callsToAssigned == 0)
         consumer0.poll(50)
 
-      consumer0.unsubscribe(topic)
-      assertEquals(0, consumer0.subscriptions.size())
+      consumer0.subscribe(List())
+      assertEquals(0, consumer0.assignment.size())
     } finally {
       consumer0.close()
     }
@@ -273,18 +274,18 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     val otherTopic = "other"
     val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     val expandedSubscriptions = subscriptions ++ Set(new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
-    this.consumers(0).subscribe(topic)
+    this.consumers(0).subscribe(List(topic))
     TestUtils.waitUntilTrue(() => {
       this.consumers(0).poll(50)
-      this.consumers(0).subscriptions == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).subscriptions}")
+      this.consumers(0).assignment == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment}")
 
     TestUtils.createTopic(this.zkClient, otherTopic, 2, serverCount, this.servers)
-    this.consumers(0).subscribe(otherTopic)
+    this.consumers(0).subscribe(List(topic, otherTopic))
     TestUtils.waitUntilTrue(() => {
       this.consumers(0).poll(50)
-      this.consumers(0).subscriptions == expandedSubscriptions.asJava
-    }, s"Expected partitions ${expandedSubscriptions.asJava} but actually got ${this.consumers(0).subscriptions}")
+      this.consumers(0).assignment == expandedSubscriptions.asJava
+    }, s"Expected partitions ${expandedSubscriptions.asJava} but actually got ${this.consumers(0).assignment}")
   }
 
   @Test
@@ -293,23 +294,23 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     TestUtils.createTopic(this.zkClient, otherTopic, 2, serverCount, this.servers)
     val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
     val shrunkenSubscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
-    this.consumers(0).subscribe(topic, otherTopic)
+    this.consumers(0).subscribe(List(topic, otherTopic))
     TestUtils.waitUntilTrue(() => {
       this.consumers(0).poll(50)
-      this.consumers(0).subscriptions == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).subscriptions}")
+      this.consumers(0).assignment == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment}")
 
-    this.consumers(0).unsubscribe(otherTopic)
+    this.consumers(0).subscribe(List(topic))
     TestUtils.waitUntilTrue(() => {
       this.consumers(0).poll(50)
-      this.consumers(0).subscriptions == shrunkenSubscriptions.asJava
-    }, s"Expected partitions ${shrunkenSubscriptions.asJava} but actually got ${this.consumers(0).subscriptions}")
+      this.consumers(0).assignment == shrunkenSubscriptions.asJava
+    }, s"Expected partitions ${shrunkenSubscriptions.asJava} but actually got ${this.consumers(0).assignment}")
   }
 
   @Test
   def testPartitionPauseAndResume() {
     sendRecords(5)
-    this.consumers(0).subscribe(tp)
+    this.consumers(0).assign(List(tp))
     consumeRecords(this.consumers(0), 5, 0)
     this.consumers(0).pause(tp)
     sendRecords(5)
@@ -322,22 +323,22 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   def testPauseStateNotPreservedByRebalance() {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30");
-    val consumer0 = new KafkaConsumer(this.consumerConfig, null, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
 
     sendRecords(5)
-    consumer0.subscribe(topic)
+    consumer0.subscribe(List(topic))
     consumeRecords(consumer0, 5, 0)
     consumer0.pause(tp)
 
     // subscribe to a new topic to trigger a rebalance
-    consumer0.subscribe("topic2")
+    consumer0.subscribe(List("topic2"))
 
     // after rebalance, our position should be reset and our pause state lost,
     // so we should be able to consume from the beginning
     consumeRecords(consumer0, 0, 5)
   }
 
-  private class TestConsumerReassignmentCallback extends ConsumerRebalanceCallback {
+  private class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
     var callsToAssigned = 0
     var callsToRevoked = 0
     def onPartitionsAssigned(consumer: Consumer[_,_], partitions: java.util.Collection[TopicPartition]) {

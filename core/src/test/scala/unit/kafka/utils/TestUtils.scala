@@ -47,8 +47,7 @@ import kafka.log._
 
 import org.junit.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback
+import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.security.ssl.SSLFactory
@@ -435,7 +434,6 @@ object TestUtils extends Logging {
                         partitionFetchSize: Long = 4096L,
                         partitionAssignmentStrategy: String = "blah",
                         sessionTimeout: Int = 30000,
-                        callback: Option[ConsumerRebalanceCallback] = None,
                         enableSSL: Boolean = false,
                         trustStoreFile: Option[File] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -455,11 +453,7 @@ object TestUtils extends Logging {
       consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
       consumerProps.putAll(addSSLConfigs(SSLFactory.Mode.CLIENT, false, trustStoreFile, "consumer"))
     }
-    if (callback.isDefined) {
-      new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps, callback.get, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    } else {
-      new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
-    }
+    new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
 
   /**

@@ -453,6 +453,7 @@ public class Fetcher<K, V> {
             }
             this.sensors.bytesFetched.record(totalBytes);
             this.sensors.recordsFetched.record(totalCount);
+            this.sensors.fetchThrottleTimeSensor.record(response.getThrottleTime());
         }
         this.sensors.fetchLatency.record(resp.requestLatencyMs());
     }
@@ -493,6 +494,7 @@ public class Fetcher<K, V> {
         public final Sensor recordsFetched;
         public final Sensor fetchLatency;
         public final Sensor recordsFetchLag;
+        public final Sensor fetchThrottleTimeSensor;
 
 
         public FetchManagerMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> tags) {
@@ -542,6 +544,17 @@ public class Fetcher<K, V> {
                 this.metricGrpName,
                 "The maximum lag in terms of number of records for any partition in this window",
                 tags), new Max());
+
+            this.fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
+            this.fetchThrottleTimeSensor.add(new MetricName("fetch-throttle-time-avg",
+                                                         this.metricGrpName,
+                                                         "The average throttle time in ms",
+                                                         tags), new Avg());
+
+            this.fetchThrottleTimeSensor.add(new MetricName("fetch-throttle-time-max",
+                                                         this.metricGrpName,
+                                                         "The maximum throttle time in ms",
+                                                         tags), new Max());
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {

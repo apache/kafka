@@ -33,9 +33,10 @@ case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: 
 
 class NewShinyConsumer(topic: String, consumerProps: Properties) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
+  import scala.collection.JavaConversions._
 
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-  consumer.subscribe(topic)
+  consumer.subscribe(List(topic))
   var recordIter = consumer.poll(0).iterator
 
   override def receive(): BaseConsumerRecord = {

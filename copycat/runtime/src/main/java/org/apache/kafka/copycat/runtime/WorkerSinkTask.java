@@ -121,7 +121,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
      **/
     public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
         HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        for (TopicPartition tp : consumer.subscriptions()) {
+        for (TopicPartition tp : consumer.assignment()) {
             offsets.put(tp, consumer.position(tp));
         }
         // We only don't flush the task in one case: when shutting down, the task has already been
@@ -180,7 +180,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         }
 
         log.debug("Task {} subscribing to topics {}", id, topics);
-        newConsumer.subscribe(topics);
+        newConsumer.subscribe(Arrays.asList(topics));
 
         // Seek to any user-provided offsets. This is useful if offsets are tracked in the downstream system (e.g., to
         // enable exactly once delivery to that system).
@@ -189,7 +189,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         // We ask for offsets after this poll to make sure any offsets committed before the rebalance are picked up correctly.
         newConsumer.poll(0);
         Map<TopicPartition, Long> offsets = context.offsets();
-        for (TopicPartition tp : newConsumer.subscriptions()) {
+        for (TopicPartition tp : newConsumer.assignment()) {
             Long offset = offsets.get(tp);
             if (offset != null)
                 newConsumer.seek(tp, offset);

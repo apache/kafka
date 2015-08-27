@@ -20,6 +20,7 @@ package org.apache.kafka.common.security.auth;
 import java.security.Principal;
 
 public class KafkaPrincipal implements Principal {
+    public final static KafkaPrincipal ANONYMOUS = new KafkaPrincipal("ANONYMOUS");
     private final String name;
 
     public KafkaPrincipal(String name) {

@@ -465,6 +465,7 @@ public class Selector implements Selectable {
         this.sensors.connectionClosed.record();
     }
 
+
     /**
      * check if channel is ready
      */
@@ -475,9 +476,11 @@ public class Selector implements Selectable {
     }
 
     /**
-     * Get the channel associated with this numeric id
+     * Get the channel associated with this connection
+     * Exposing this to allow SocketServer get the Principal from the channel when creating a request
+     * without making Selector know about Principals
      */
-    private KafkaChannel channelForId(String id) {
+    public KafkaChannel channelForId(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel == null)
             throw new IllegalStateException("Attempt to write to socket for which there is no open connection. Connection id " + id + " existing connections " + channels.keySet().toString());

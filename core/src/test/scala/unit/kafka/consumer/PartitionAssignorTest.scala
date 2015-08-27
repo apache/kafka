@@ -127,7 +127,7 @@ private object PartitionAssignorTest extends Logging {
       "\n" +
       "Group                  : %s\n".format(group) +
       "Topic partition counts : %s\n".format(topicPartitionCounts) +
-      "Consumer subscriptions : %s\n".format(subscriptions)
+      "Consumer assignment : %s\n".format(subscriptions)
     }
   }
 

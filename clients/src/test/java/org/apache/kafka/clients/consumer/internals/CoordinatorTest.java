@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -72,7 +73,7 @@ public class CoordinatorTest {
     private Metrics metrics;
     private Map<String, String> metricTags = new LinkedHashMap<String, String>();
     private ConsumerNetworkClient consumerClient;
-    private MockRebalanceCallback rebalanceCallback;
+    private MockSubscriptionListener subscriptionListener;
     private Coordinator coordinator;
 
     @Before
@@ -83,7 +84,7 @@ public class CoordinatorTest {
         this.metadata = new Metadata(0, Long.MAX_VALUE);
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
         this.metrics = new Metrics(time);
-        this.rebalanceCallback = new MockRebalanceCallback();
+        this.subscriptionListener = new MockSubscriptionListener();
 
         client.setNode(node);
 
@@ -98,8 +99,7 @@ public class CoordinatorTest {
                 metricTags,
                 time,
                 requestTimeoutMs,
-                retryBackoffMs,
-                rebalanceCallback);
+                retryBackoffMs);
     }
 
     @Test
@@ -168,7 +168,7 @@ public class CoordinatorTest {
         coordinator.ensureCoordinatorKnown();
 
         // illegal_generation will cause re-partition
-        subscriptions.subscribe(topicName);
+        subscriptions.subscribe(Arrays.asList(topicName), subscriptionListener);
         subscriptions.changePartitionAssignment(Collections.singletonList(tp));
 
         time.sleep(sessionTimeoutMs);
@@ -192,7 +192,7 @@ public class CoordinatorTest {
         coordinator.ensureCoordinatorKnown();
 
         // illegal_generation will cause re-partition
-        subscriptions.subscribe(topicName);
+        subscriptions.subscribe(Arrays.asList(topicName), subscriptionListener);
         subscriptions.changePartitionAssignment(Collections.singletonList(tp));
 
         time.sleep(sessionTimeoutMs);
@@ -233,7 +233,7 @@ public class CoordinatorTest {
 
     @Test
     public void testNormalJoinGroup() {
-        subscriptions.subscribe(topicName);
+        subscriptions.subscribe(Arrays.asList(topicName), subscriptionListener);
         subscriptions.needReassignment();
 
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
@@ -245,15 +245,15 @@ public class CoordinatorTest {
 
         assertFalse(subscriptions.partitionAssignmentNeeded());
         assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
-        assertEquals(1, rebalanceCallback.revokedCount);
-        assertEquals(Collections.emptySet(), rebalanceCallback.revoked);
-        assertEquals(1, rebalanceCallback.assignedCount);
-        assertEquals(Collections.singleton(tp), rebalanceCallback.assigned);
+        assertEquals(1, subscriptionListener.revokedCount);
+        assertEquals(Collections.emptySet(), subscriptionListener.revoked);
+        assertEquals(1, subscriptionListener.assignedCount);
+        assertEquals(Collections.singleton(tp), subscriptionListener.assigned);
     }
 
     @Test
     public void testReJoinGroup() {
-        subscriptions.subscribe(topicName);
+        subscriptions.subscribe(Arrays.asList(topicName), subscriptionListener);
         subscriptions.needReassignment();
 
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
@@ -266,15 +266,15 @@ public class CoordinatorTest {
         coordinator.ensurePartitionAssignment();
         assertFalse(subscriptions.partitionAssignmentNeeded());
         assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
-        assertEquals(1, rebalanceCallback.revokedCount);
-        assertEquals(Collections.emptySet(), rebalanceCallback.revoked);
-        assertEquals(1, rebalanceCallback.assignedCount);
-        assertEquals(Collections.singleton(tp), rebalanceCallback.assigned);
+        assertEquals(1, subscriptionListener.revokedCount);
+        assertEquals(Collections.emptySet(), subscriptionListener.revoked);
+        assertEquals(1, subscriptionListener.assignedCount);
+        assertEquals(Collections.singleton(tp), subscriptionListener.assigned);
     }
 
     @Test(expected = ApiException.class)
     public void testUnknownPartitionAssignmentStrategy() {
-        subscriptions.subscribe(topicName);
+        subscriptions.subscribe(Arrays.asList(topicName), subscriptionListener);
         subscriptions.needReassignment();
 
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
@@ -287,7 +287,7 @@ public class CoordinatorTest {
 
     @Test(expected = ApiException.class)
     public void testInvalidSessionTimeout() {
-        subscriptions.subscribe(topicName);
+        subscriptions.subscribe(Arrays.asList(topicName), subscriptionListener);
         subscriptions.needReassignment();
 
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
@@ -431,7 +431,7 @@ public class CoordinatorTest {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorKnown();
 
-        subscriptions.subscribe(tp);
+        subscriptions.assign(Arrays.asList(tp));
         subscriptions.needRefreshCommits();
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded();
@@ -444,7 +444,7 @@ public class CoordinatorTest {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorKnown();
 
-        subscriptions.subscribe(tp);
+        subscriptions.assign(Arrays.asList(tp));
         subscriptions.needRefreshCommits();
         client.prepareResponse(offsetFetchResponse(tp, Errors.OFFSET_LOAD_IN_PROGRESS.code(), "", 100L));
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
@@ -458,7 +458,7 @@ public class CoordinatorTest {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorKnown();
 
-        subscriptions.subscribe(tp);
+        subscriptions.assign(Arrays.asList(tp));
         subscriptions.needRefreshCommits();
         client.prepareResponse(offsetFetchResponse(tp, Errors.NOT_COORDINATOR_FOR_CONSUMER.code(), "", 100L));
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
@@ -473,7 +473,7 @@ public class CoordinatorTest {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorKnown();
 
-        subscriptions.subscribe(tp);
+        subscriptions.assign(Arrays.asList(tp));
         subscriptions.needRefreshCommits();
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", -1L));
         coordinator.refreshCommittedOffsetsIfNeeded();
@@ -528,7 +528,7 @@ public class CoordinatorTest {
         }
     }
 
-    private static class MockRebalanceCallback implements Coordinator.RebalanceCallback {
+    private static class MockSubscriptionListener extends SubscriptionState.RebalanceListener {
         public Collection<TopicPartition> revoked;
         public Collection<TopicPartition> assigned;
         public int revokedCount = 0;
@@ -546,5 +546,6 @@ public class CoordinatorTest {
             this.revoked = partitions;
             revokedCount++;
         }
+
     }
 }
