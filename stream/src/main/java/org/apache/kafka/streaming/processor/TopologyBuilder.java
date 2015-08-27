@@ -47,16 +47,16 @@ public class TopologyBuilder {
     private class ProcessorNodeFactory implements NodeFactory {
         public final String[] parents;
         private final String name;
-        private final ProcessorFactory factory;
+        private final ProcessorDef definition;
 
-        public ProcessorNodeFactory(String name, String[] parents, ProcessorFactory factory) {
+        public ProcessorNodeFactory(String name, String[] parents, ProcessorDef definition) {
             this.name = name;
             this.parents = parents.clone();
-            this.factory = factory;
+            this.definition = definition;
         }
 
         public ProcessorNode build() {
-            Processor processor = factory.build();
+            Processor processor = definition.define();
             return new ProcessorNode(name, processor);
         }
     }
@@ -134,7 +134,7 @@ public class TopologyBuilder {
         nodeFactories.add(new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
     }
 
-    public final void addProcessor(String name, ProcessorFactory factory, String... parentNames) {
+    public final void addProcessor(String name, ProcessorDef definition, String... parentNames) {
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
 
@@ -150,7 +150,7 @@ public class TopologyBuilder {
         }
 
         nodeNames.add(name);
-        nodeFactories.add(new ProcessorNodeFactory(name, parentNames, factory));
+        nodeFactories.add(new ProcessorNodeFactory(name, parentNames, definition));
     }
 
     /**
@@ -186,7 +186,7 @@ public class TopologyBuilder {
                         processorMap.get(parent).addChild(node);
                     }
                 } else {
-                    throw new IllegalStateException("unknown factory class: " + factory.getClass().getName());
+                    throw new IllegalStateException("unknown definition class: " + factory.getClass().getName());
                 }
             }
         } catch (Exception e) {

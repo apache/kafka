@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.internals;
+package org.apache.kafka.streaming.kstream.internals;
 
 import static org.junit.Assert.assertEquals;
 

@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.internals;
+package org.apache.kafka.streaming.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
+import org.apache.kafka.streaming.kstream.ValueMapper;
 import org.apache.kafka.streaming.kstream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamBuilder;
 import org.apache.kafka.test.MockProcessor;
@@ -27,33 +29,43 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamSourceTest {
+public class KStreamMapValuesTest {
 
     private String topicName = "topic";
 
     private KStreamBuilder topology = new MockKStreamBuilder();
-    private StringDeserializer keyDeserializer = new StringDeserializer();
+    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
-    public void testKStreamSource() {
+    public void testFlatMapValues() {
 
-        MockProcessor<String, String> processor = new MockProcessor<>();
+        ValueMapper<String, Integer> mapper =
+            new ValueMapper<String, Integer>() {
+                @Override
+                public Integer apply(String value) {
+                    return value.length();
+                }
+            };
 
-        KStream<String, String> stream = topology.<String, String>from(keyDeserializer, valDeserializer, topicName);
-        stream.process(processor);
+        final int[] expectedKeys = new int[]{1, 10, 100, 1000};
 
-        final String[] expectedKeys = new String[]{"k1", "k2", "k3"};
-        final String[] expectedValues = new String[]{"v1", "v2", "v3"};
+        KStream<Integer, String> stream;
+        MockProcessor<Integer, Integer> processor = new MockProcessor<>();
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
+        stream.mapValues(mapper).process(processor);
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<String, String>) stream).source().process(expectedKeys[i], expectedValues[i]);
+            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], Integer.toString(expectedKeys[i]));
         }
 
-        assertEquals(3, processor.processed.size());
+        assertEquals(4, processor.processed.size());
 
-        for (int i = 0; i < expectedKeys.length; i++) {
-            assertEquals(expectedKeys[i] + ":" + expectedValues[i], processor.processed.get(i));
+        String[] expected = new String[]{"1:1", "10:2", "100:3", "1000:4"};
+
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], processor.processed.get(i));
         }
     }
+
 }

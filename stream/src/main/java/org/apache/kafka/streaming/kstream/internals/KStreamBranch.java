@@ -18,10 +18,10 @@
 package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.Processor;
-import org.apache.kafka.streaming.processor.ProcessorFactory;
+import org.apache.kafka.streaming.processor.ProcessorDef;
 import org.apache.kafka.streaming.kstream.Predicate;
 
-class KStreamBranch<K, V> implements ProcessorFactory {
+class KStreamBranch<K, V> implements ProcessorDef {
 
     private final Predicate<K, V>[] predicates;
 
@@ -31,7 +31,7 @@ class KStreamBranch<K, V> implements ProcessorFactory {
     }
 
     @Override
-    public Processor build() {
+    public Processor define() {
         return new KStreamBranchProcessor();
     }
 

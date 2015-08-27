@@ -21,5 +21,5 @@ public interface WindowDef<K, V> {
 
     String name();
 
-    Window<K, V> build();
+    Window<K, V> define();
 }

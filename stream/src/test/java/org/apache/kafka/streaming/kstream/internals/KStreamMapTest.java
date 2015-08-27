@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.internals;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -30,9 +30,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-import java.util.ArrayList;
-
-public class KStreamFlatMapTest {
+public class KStreamMapTest {
 
     private String topicName = "topic";
 
@@ -41,40 +39,58 @@ public class KStreamFlatMapTest {
     private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
-    public void testFlatMap() {
+    public void testMap() {
 
-        KeyValueMapper<Integer, String, String, Iterable<String>> mapper =
-            new KeyValueMapper<Integer, String, String, Iterable<String>>() {
+        KeyValueMapper<Integer, String, String, Integer> mapper =
+            new KeyValueMapper<Integer, String, String, Integer>() {
                 @Override
-                public KeyValue<String, Iterable<String>> apply(Integer key, String value) {
-                    ArrayList<String> result = new ArrayList<String>();
-                    for (int i = 0; i < key; i++) {
-                        result.add(value);
-                    }
-                    return KeyValue.pair(Integer.toString(key * 10), (Iterable<String>) result);
+                public KeyValue<String, Integer> apply(Integer key, String value) {
+                    return KeyValue.pair(value, key);
                 }
             };
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+    KStreamTopology initializer = new MockKStreamTopology();
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+>>>>>>> new api model
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
+>>>>>>> wip
+    KStreamSource<Integer, String> stream;
+    MockProcessor<String, Integer> processor;
+=======
+        KStreamTopology initializer = new MockKStreamTopology();
+        KStreamSource<Integer, String> stream;
+=======
         KStream<Integer, String> stream;
-        MockProcessor<String, String> processor;
+>>>>>>> wip
+        MockProcessor<String, Integer> processor;
+>>>>>>> compile and test passed
 
         processor = new MockProcessor<>();
         stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-        stream.flatMap(mapper).process(processor);
+        stream.map(mapper).process(processor);
 
         for (int i = 0; i < expectedKeys.length; i++) {
             ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
-        assertEquals(6, processor.processed.size());
+        assertEquals(4, processor.processed.size());
 
-        String[] expected = new String[]{"10:V1", "20:V2", "20:V2", "30:V3", "30:V3", "30:V3"};
+        String[] expected = new String[]{"V0:0", "V1:1", "V2:2", "V3:3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
         }
     }
-
 }

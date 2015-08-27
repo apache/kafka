@@ -15,22 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.internals;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
-import org.apache.kafka.streaming.kstream.Predicate;
+import org.apache.kafka.streaming.kstream.WindowDef;
 import org.apache.kafka.streaming.kstream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamBuilder;
-import org.apache.kafka.test.MockProcessor;
-
+import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.UnlimitedWindow;
 import org.junit.Test;
+
+import java.util.Iterator;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamFilterTest {
+public class KStreamWindowedTest {
 
     private String topicName = "topic";
 
@@ -38,47 +40,52 @@ public class KStreamFilterTest {
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
-    private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
-        @Override
-        public boolean apply(Integer key, String value) {
-            return (key % 3) == 0;
-        }
-    };
-
     @Test
-    public void testFilter() {
-        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
+    public void testWindowedStream() {
+
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         KStream<Integer, String> stream;
-        MockProcessor<Integer, String> processor;
+        WindowDef<Integer, String> window;
 
-        processor = new MockProcessor<>();
+        window = new UnlimitedWindow<>();
         stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-        stream.filter(isMultipleOfThree).process(processor);
+        stream.with(window);
 
-        for (int i = 0; i < expectedKeys.length; i++) {
+        MockProcessorContext context = new MockProcessorContext(null, null);
+        topology.init(context);
+        context.setTime(0L);
+
+        // two items in the window
+
+        for (int i = 0; i < 2; i++) {
             ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
-        assertEquals(2, processor.processed.size());
-    }
+        assertEquals(1, countItem(window.find(0, 0L)));
+        assertEquals(1, countItem(window.find(1, 0L)));
+        assertEquals(0, countItem(window.find(2, 0L)));
+        assertEquals(0, countItem(window.find(3, 0L)));
 
-    @Test
-    public void testFilterOut() {
-        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
-
-        KStream<Integer, String> stream;
-        MockProcessor<Integer, String> processor;
-
-        processor = new MockProcessor<>();
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-        stream.filterOut(isMultipleOfThree).process(processor);
+        // previous two items + all items, thus two are duplicates, in the window
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
-        assertEquals(5, processor.processed.size());
+        assertEquals(2, countItem(window.find(0, 0L)));
+        assertEquals(2, countItem(window.find(1, 0L)));
+        assertEquals(1, countItem(window.find(2, 0L)));
+        assertEquals(1, countItem(window.find(3, 0L)));
     }
 
+
+    private <T> int countItem(Iterator<T> iter) {
+        int i = 0;
+        while (iter.hasNext()) {
+            i++;
+            iter.next();
+        }
+        return i;
+    }
 }

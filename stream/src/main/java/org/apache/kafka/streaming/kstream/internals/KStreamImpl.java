@@ -19,7 +19,8 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.processor.ProcessorFactory;
+import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
+import org.apache.kafka.streaming.processor.ProcessorDef;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
 import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
 import org.apache.kafka.streaming.kstream.KStreamWindowed;
@@ -185,10 +186,10 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> process(final ProcessorFactory processorFactory) {
+    public <K1, V1> KStream<K1, V1> process(final ProcessorDef processorDef) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, processorFactory, this.name);
+        topology.addProcessor(name, processorDef, this.name);
 
         return new KStreamImpl<>(topology, name);
     }

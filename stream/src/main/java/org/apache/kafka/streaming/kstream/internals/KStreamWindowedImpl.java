@@ -37,7 +37,7 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
         String joinName = JOIN_NAME + INDEX.getAndIncrement();
         String joinOtherName = JOINOTHER_NAME + INDEX.getAndIncrement();
         topology.addProcessor(joinName, join, this.name);
-        topology.addProcessor(joinOtherName, join.processorFactoryForOtherStream, ((KStreamImpl) other).name);
+        topology.addProcessor(joinOtherName, join.processorDefForOtherStream, ((KStreamImpl) other).name);
 
         return new KStreamImpl<>(topology, joinName);
     }

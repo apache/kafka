@@ -18,12 +18,12 @@
 package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.Processor;
-import org.apache.kafka.streaming.processor.ProcessorFactory;
+import org.apache.kafka.streaming.processor.ProcessorDef;
 
-class KStreamPassThrough<K, V> implements ProcessorFactory {
+class KStreamPassThrough<K, V> implements ProcessorDef {
 
     @Override
-    public Processor build() {
+    public Processor define() {
         return new KStreamPassThroughProcessor();
     }
 

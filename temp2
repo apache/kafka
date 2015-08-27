@@ -1,4 +1,4 @@
-stream/src/main/java/org/apache/kafka/stream/topology/SlidingWindow.java
-stream/src/main/java/org/apache/kafka/streaming/kstream/SlidingWindow.java
-stream/src/main/java/org/apache/kafka/streaming/kstream/SlidingWindowDef.java
+stream/src/test/java/org/apache/kafka/streaming/KStreamBranchTest.java
+stream/src/test/java/org/apache/kafka/streaming/KStreamJoinTest.java
+stream/src/test/java/org/apache/kafka/streaming/KStreamMapValuesTest.java
 stream/src/test/java/org/apache/kafka/streaming/KStreamWindowedTest.java

@@ -20,16 +20,13 @@ package org.apache.kafka.streaming.kstream.internals;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.kstream.ValueJoiner;
-<<<<<<< HEAD
 import org.apache.kafka.streaming.kstream.Window;
-=======
 import org.apache.kafka.streaming.kstream.Window.WindowInstance;
->>>>>>> kstream refactored
-import org.apache.kafka.streaming.processor.ProcessorFactory;
+import org.apache.kafka.streaming.processor.ProcessorDef;
 
 import java.util.Iterator;
 
-class KStreamJoin<K, V, V1, V2> implements ProcessorFactory {
+class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
 
     private static abstract class Finder<K, T> {
         abstract Iterator<T> find(K key, long timestamp);
@@ -41,9 +38,9 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorFactory {
     private final boolean prior;
 
     private Processor processorForOtherStream = null;
-    public final ProcessorFactory processorFactoryForOtherStream = new ProcessorFactory() {
+    public final ProcessorDef processorDefForOtherStream = new ProcessorDef() {
         @Override
-        public Processor build() {
+        public Processor define() {
             return processorForOtherStream;
         }
     };
@@ -56,7 +53,7 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorFactory {
     }
 
     @Override
-    public Processor build() {
+    public Processor define() {
         return new KStreamJoinProcessor();
     }
 
@@ -74,13 +71,8 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorFactory {
             if (!context.joinable())
                 throw new IllegalStateException("Streams are not joinable.");
 
-<<<<<<< HEAD
             final Window<K, V1> window1 = (Window<K, V1>) context.getStateStore(windowName1);
             final Window<K, V2> window2 = (Window<K, V2>) context.getStateStore(windowName2);
-=======
-            final WindowInstance<K, V1> window1 = (WindowInstance<K, V1>) context.getStateStore(windowName1);
-            final WindowInstance<K, V2> window2 = (WindowInstance<K, V2>) context.getStateStore(windowName2);
->>>>>>> kstream refactored
 
             if (prior) {
                 this.finder1 = new Finder<K, V1>() {

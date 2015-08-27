@@ -1,4 +1,4 @@
-stream/src/main/java/org/apache/kafka/stream/topology/SlidingWindow.java: needs merge
-stream/src/main/java/org/apache/kafka/streaming/kstream/SlidingWindow.java: needs merge
-stream/src/main/java/org/apache/kafka/streaming/kstream/SlidingWindowDef.java: needs merge
+stream/src/test/java/org/apache/kafka/streaming/KStreamBranchTest.java: needs merge
+stream/src/test/java/org/apache/kafka/streaming/KStreamJoinTest.java: needs merge
+stream/src/test/java/org/apache/kafka/streaming/KStreamMapValuesTest.java: needs merge
 stream/src/test/java/org/apache/kafka/streaming/KStreamWindowedTest.java: needs merge

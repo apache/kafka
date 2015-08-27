@@ -19,9 +19,9 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.kstream.ValueMapper;
-import org.apache.kafka.streaming.processor.ProcessorFactory;
+import org.apache.kafka.streaming.processor.ProcessorDef;
 
-class KStreamFlatMapValues<K1, V1, V2> implements ProcessorFactory {
+class KStreamFlatMapValues<K1, V1, V2> implements ProcessorDef {
 
     private final ValueMapper<V1, ? extends Iterable<V2>> mapper;
 
@@ -31,7 +31,7 @@ class KStreamFlatMapValues<K1, V1, V2> implements ProcessorFactory {
     }
 
     @Override
-    public Processor build() {
+    public Processor define() {
         return new KStreamFlatMapValuesProcessor();
     }
 

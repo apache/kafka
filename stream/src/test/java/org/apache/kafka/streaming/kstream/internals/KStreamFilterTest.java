@@ -15,24 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
-import org.apache.kafka.streaming.kstream.KeyValue;
-import org.apache.kafka.streaming.kstream.KeyValueMapper;
+import org.apache.kafka.streaming.kstream.Predicate;
 import org.apache.kafka.streaming.kstream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamBuilder;
 import org.apache.kafka.test.MockProcessor;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-import java.util.ArrayList;
-
-public class KStreamFlatMapTest {
+public class KStreamFilterTest {
 
     private String topicName = "topic";
 
@@ -40,30 +38,23 @@ public class KStreamFlatMapTest {
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
+    private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
+        @Override
+        public boolean apply(Integer key, String value) {
+            return (key % 3) == 0;
+        }
+    };
+
     @Test
-    public void testFlatMap() {
-
-        KeyValueMapper<Integer, String, String, Iterable<String>> mapper =
-            new KeyValueMapper<Integer, String, String, Iterable<String>>() {
-                @Override
-                public KeyValue<String, Iterable<String>> apply(Integer key, String value) {
-                    ArrayList<String> result = new ArrayList<String>();
-                    for (int i = 0; i < key; i++) {
-                        result.add(value);
-                    }
-                    return KeyValue.pair(Integer.toString(key * 10), (Iterable<String>) result);
-                }
-            };
-
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+    public void testFilter() {
+        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
-    KStreamTopology topology = new MockKStreamTopology();
-
+    KStreamTopology initializer = new MockKStreamTopology();
 =======
     KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
 >>>>>>> new api model
@@ -71,52 +62,64 @@ public class KStreamFlatMapTest {
     KStreamInitializer initializer = new KStreamInitializerImpl();
 >>>>>>> wip
 =======
-    KStreamTopology topology = new MockKStreamTopology();
-
+    KStreamTopology initializer = new MockKStreamTopology();
 >>>>>>> wip
     KStreamSource<Integer, String> stream;
-    MockProcessor<String, String> processor;
-
-<<<<<<< HEAD
-    processor = new TestProcessor<>();
-<<<<<<< HEAD
-<<<<<<< HEAD
-    stream = new KStreamSource<>(null, topology);
+    MockProcessor<Integer, String> processor;
 =======
-    stream = new KStreamSource<>(null, initializer);
->>>>>>> new api model
-=======
-=======
-    processor = new MockProcessor<>();
->>>>>>> removing io.confluent imports: wip
-    stream = new KStreamSource<>(null, topology);
->>>>>>> wip
-    stream.flatMap(mapper).process(processor);
-=======
-        KStreamTopology topology = new MockKStreamTopology();
-
+        KStreamTopology initializer = new MockKStreamTopology();
         KStreamSource<Integer, String> stream;
 =======
         KStream<Integer, String> stream;
 >>>>>>> wip
-        MockProcessor<String, String> processor;
+        MockProcessor<Integer, String> processor;
+>>>>>>> compile and test passed
 
         processor = new MockProcessor<>();
         stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-        stream.flatMap(mapper).process(processor);
+        stream.filter(isMultipleOfThree).process(processor);
+
+        for (int i = 0; i < expectedKeys.length; i++) {
+            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
+        }
+
+        assertEquals(2, processor.processed.size());
+    }
+
+    @Test
+    public void testFilterOut() {
+        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
+
+        KStream<Integer, String> stream;
+        MockProcessor<Integer, String> processor;
+
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+    KStreamTopology initializer = new MockKStreamTopology();
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+>>>>>>> new api model
+=======
+    KStreamInitializer initializer = new KStreamInitializerImpl();
+>>>>>>> wip
+=======
+    KStreamTopology initializer = new MockKStreamTopology();
+>>>>>>> wip
+    KStreamSource<Integer, String> stream;
+    MockProcessor<Integer, String> processor;
+=======
+        processor = new MockProcessor<>();
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
+        stream.filterOut(isMultipleOfThree).process(processor);
 >>>>>>> compile and test passed
 
         for (int i = 0; i < expectedKeys.length; i++) {
             ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
-        assertEquals(6, processor.processed.size());
-
-        String[] expected = new String[]{"10:V1", "20:V2", "20:V2", "30:V3", "30:V3", "30:V3"};
-
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
-        }
+        assertEquals(5, processor.processed.size());
     }
 
 }

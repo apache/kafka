@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
