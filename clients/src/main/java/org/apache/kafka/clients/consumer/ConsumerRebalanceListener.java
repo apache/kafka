@@ -20,11 +20,13 @@ import org.apache.kafka.common.TopicPartition;
  * A callback interface that the user can implement to trigger custom actions when the set of partitions assigned to the
  * consumer changes.
  * <p>
- * This is applicable when the consumer is having Kafka auto-manage group membership, if the consumer's directly subscribe to partitions
+ * This is applicable when the consumer is having Kafka auto-manage group membership. If the consumer's directly assign partitions,
  * those partitions will never be reassigned and this callback is not applicable.
  * <p>
  * When Kafka is managing the group membership, a partition re-assignment will be triggered any time the members of the group changes or the subscription
  * of the members changes. This can occur when processes die, new process instances are added or old instances come back to life after failure.
+ * Rebalances can also be triggered by changes affecting the subscribed topics (e.g. when then number of partitions is
+ * administratively adjusted).
  * <p>
  * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
  * the {@link #onPartitionsRevoked(Consumer, Collection)} call we can ensure that any time partition assignment changes
@@ -48,11 +50,11 @@ import org.apache.kafka.common.TopicPartition;
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
  * {@code
- *   public class SaveOffsetsOnRebalance implements ConsumerRebalanceCallback {
+ *   public class SaveOffsetsOnRebalance implements ConsumerRebalanceListener {
  *       public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {
  *           // read the offsets from an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
- *              consumer.position(partition, readOffsetFromExternalStore(partition));
+ *              consumer.seek(partition, readOffsetFromExternalStore(partition));
  *       }      
  *       public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {
  *           // save the offsets in an external store using some custom code not described here
@@ -63,7 +65,7 @@ import org.apache.kafka.common.TopicPartition;
  * }
  * </pre>
  */
-public interface ConsumerRebalanceCallback {
+public interface ConsumerRebalanceListener {
 
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful

@@ -330,7 +330,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
             throws Exception {
         final long finalOffset = FIRST_OFFSET + expectedMessages - 1;
 
-        EasyMock.expect(consumer.subscriptions()).andReturn(Collections.singleton(TOPIC_PARTITION));
+        EasyMock.expect(consumer.assignment()).andReturn(Collections.singleton(TOPIC_PARTITION));
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andAnswer(
                 new IAnswer<Long>() {
                     @Override

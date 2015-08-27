@@ -26,7 +26,7 @@ import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 
 object ProducerRequest {
-  val CurrentVersion = 0.shortValue
+  val CurrentVersion = 1.shortValue
 
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort

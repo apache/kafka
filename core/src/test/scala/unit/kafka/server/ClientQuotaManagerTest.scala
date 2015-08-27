@@ -30,7 +30,7 @@ class ClientQuotaManagerTest {
                                                 quotaBytesPerSecondOverrides = "p1=2000,p2=4000")
 
   var numCallbacks: Int = 0
-  def callback {
+  def callback(delayTimeMs: Int) {
     numCallbacks += 1
   }
 
