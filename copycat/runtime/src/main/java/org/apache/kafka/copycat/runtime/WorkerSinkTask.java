@@ -120,6 +120,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
      * the write commit. This should only be invoked by the WorkerSinkTaskThread.
      **/
     public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
+        log.info("{} Committing offsets", this);
         HashMap<TopicPartition, Long> offsets = new HashMap<>();
         for (TopicPartition tp : consumer.assignment()) {
             offsets.put(tp, consumer.position(tp));

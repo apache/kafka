@@ -51,11 +51,19 @@ public class FileStreamSourceTask extends SourceTask {
     @Override
     public void start(Properties props) {
         filename = props.getProperty(FileStreamSourceConnector.FILE_CONFIG);
-        if (filename == null) {
+        if (filename == null || filename.isEmpty()) {
             stream = System.in;
             // Tracking offset for stdin doesn't make sense
             streamOffset = null;
-        } else {
+        }
+        topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
+        if (topic == null)
+            throw new CopycatException("ConsoleSourceTask config missing topic setting");
+    }
+
+    @Override
+    public List<SourceRecord> poll() throws InterruptedException {
+        if (stream == null) {
             try {
                 stream = new FileInputStream(filename);
                 SchemaAndValue offsetWithSchema = context.offsetStorageReader().offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, filename));
@@ -81,18 +89,16 @@ public class FileStreamSourceTask extends SourceTask {
                 } else {
                     streamOffset = 0L;
                 }
+                reader = new BufferedReader(new InputStreamReader(stream));
             } catch (FileNotFoundException e) {
-                throw new CopycatException("Couldn't find file for FileStreamSourceTask: {}", e);
+                log.warn("Couldn't find file for FileStreamSourceTask, sleeping to wait for it to be created");
+                synchronized (this) {
+                    this.wait(1000);
+                }
+                return null;
             }
         }
-        topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
-        if (topic == null)
-            throw new CopycatException("ConsoleSourceTask config missing topic setting");
-        reader = new BufferedReader(new InputStreamReader(stream));
-    }
 
-    @Override
-    public List<SourceRecord> poll() throws InterruptedException {
         // Unfortunately we can't just use readLine() because it blocks in an uninterruptible way.
         // Instead we have to manage splitting lines ourselves, using simple backoff when no new data
         // is available.
@@ -132,7 +138,9 @@ public class FileStreamSourceTask extends SourceTask {
             }
 
             if (nread <= 0)
-                Thread.sleep(1);
+                synchronized (this) {
+                    this.wait(1000);
+                }
 
             return records;
         } catch (IOException e) {
@@ -182,8 +190,7 @@ public class FileStreamSourceTask extends SourceTask {
             } catch (IOException e) {
                 log.error("Failed to close ConsoleSourceTask stream: ", e);
             }
-            reader = null;
-            stream = null;
+            this.notify();
         }
     }
 }

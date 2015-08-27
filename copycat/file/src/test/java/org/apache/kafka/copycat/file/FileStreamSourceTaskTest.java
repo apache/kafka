@@ -118,18 +118,19 @@ public class FileStreamSourceTaskTest {
     }
 
     @Test(expected = CopycatException.class)
-    public void testMissingTopic() {
-        expectOffsetLookupReturnNone();
+    public void testMissingTopic() throws InterruptedException {
         replay();
 
         config.remove(FileStreamSourceConnector.TOPIC_CONFIG);
         task.start(config);
     }
 
-    @Test(expected = CopycatException.class)
-    public void testInvalidFile() {
+    public void testInvalidFile() throws InterruptedException {
         config.setProperty(FileStreamSourceConnector.FILE_CONFIG, "bogusfilename");
         task.start(config);
+        // Currently the task retries indefinitely if the file isn't found, but shouldn't return any data.
+        for (int i = 0; i < 100; i++)
+            assertEquals(null, task.poll());
     }
 
 
