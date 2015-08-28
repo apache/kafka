@@ -64,4 +64,8 @@ public class ProtoUtils {
         return (Struct) currentResponseSchema(apiKey).read(buffer);
     }
 
+    public static Struct parseResponse(int apiKey, int version, ByteBuffer buffer) {
+        return (Struct) responseSchema(apiKey, version).read(buffer);
+    }
+
 }

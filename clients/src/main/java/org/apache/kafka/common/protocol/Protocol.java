@@ -461,6 +461,39 @@ public class Protocol {
     public static final Schema[] HEARTBEAT_REQUEST = new Schema[] {HEARTBEAT_REQUEST_V0};
     public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0};
 
+    /* Leader and ISR api */
+    public static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0 =
+            new Schema(new Field("topic", STRING, "Topic name."),
+                       new Field("partition", INT32, "Topic partition id."),
+                       new Field("controller_epoch", INT32, "The controller epoch."),
+                       new Field("leader", INT32, "The broker id for the leader."),
+                       new Field("leader_epoch", INT32, "The leader epoch."),
+                       new Field("isr", new ArrayOf(INT32), "The in sync replica ids."),
+                       new Field("zk_version", INT32, "The ZK version."),
+                       new Field("replicas", new ArrayOf(INT32), "The replica ids."));
+
+    public static final Schema LEADER_AND_ISR_REQUEST_LEADER_V0 =
+            new Schema(new Field("id", INT32, "The broker id."),
+                       new Field("host", STRING, "The hostname of the broker."),
+                       new Field("port", INT32, "The port on which the broker accepts requests."));
+
+    public static final Schema LEADER_AND_ISR_REQUEST_V0 = new Schema(new Field("controller_id", INT32, "The controller id."),
+                                                                      new Field("controller_epoch", INT32, "The controller epoch."),
+                                                                      new Field("partition_states",
+                                                                                new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0)),
+                                                                      new Field("leaders", new ArrayOf(LEADER_AND_ISR_REQUEST_LEADER_V0)));
+
+    public static final Schema LEADER_AND_ISR_RESPONSE_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
+                                                                                 new Field("partition", INT32, "Topic partition id."),
+                                                                                 new Field("error_code", INT16, "Error code."));
+
+    public static final Schema LEADER_AND_ISR_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."),
+                                                                       new Field("partitions",
+                                                                                 new ArrayOf(LEADER_AND_ISR_RESPONSE_PARTITION_V0)));
+
+    public static final Schema[] LEADER_AND_ISR_REQUEST = new Schema[] {LEADER_AND_ISR_REQUEST_V0};
+    public static final Schema[] LEADER_AND_ISR_RESPONSE = new Schema[] {LEADER_AND_ISR_RESPONSE_V0};
+
     /* Replica api */
     public static final Schema STOP_REPLICA_REQUEST_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
                                                                               new Field("partition", INT32, "Topic partition id."));
@@ -484,6 +517,56 @@ public class Protocol {
     public static final Schema[] STOP_REPLICA_REQUEST = new Schema[] {STOP_REPLICA_REQUEST_V0};
     public static final Schema[] STOP_REPLICA_RESPONSE = new Schema[] {STOP_REPLICA_RESPONSE_V0};
 
+    /* Update metadata api */
+
+    public static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V0 =
+            new Schema(new Field("topic", STRING, "Topic name."),
+                       new Field("partition", INT32, "Topic partition id."),
+                       new Field("controller_epoch", INT32, "The controller epoch."),
+                       new Field("leader", INT32, "The broker id for the leader."),
+                       new Field("leader_epoch", INT32, "The leader epoch."),
+                       new Field("isr", new ArrayOf(INT32), "The in sync replica ids."),
+                       new Field("zk_version", INT32, "The ZK version."),
+                       new Field("replicas", new ArrayOf(INT32), "The replica ids."));
+
+    public static final Schema UPDATE_METADATA_REQUEST_BROKER_V0 =
+            new Schema(new Field("id", INT32, "The broker id."),
+                       new Field("host", STRING, "The hostname of the broker."),
+                       new Field("port", INT32, "The port on which the broker accepts requests."));
+
+    public static final Schema UPDATE_METADATA_REQUEST_V0 = new Schema(new Field("controller_id", INT32, "The controller id."),
+                                                                       new Field("controller_epoch", INT32, "The controller epoch."),
+                                                                       new Field("partition_states",
+                                                                                 new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V0)),
+                                                                       new Field("alive_brokers",
+                                                                                 new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V0)));
+
+    public static final Schema UPDATE_METADATA_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."));
+
+    public static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V1 = UPDATE_METADATA_REQUEST_PARTITION_STATE_V0;
+
+    public static final Schema UPDATE_METADATA_REQUEST_END_POINT_V1 =
+            // for some reason, V1 sends `port` before `host` while V0 sends `host` before `port
+            new Schema(new Field("port", INT32, "The port on which the broker accepts requests."),
+                       new Field("host", STRING, "The hostname of the broker."),
+                       new Field("security_protocol_type", INT16, "The security protocol type."));
+
+    public static final Schema UPDATE_METADATA_REQUEST_BROKER_V1 =
+            new Schema(new Field("id", INT32, "The broker id."),
+                       new Field("end_points", new ArrayOf(UPDATE_METADATA_REQUEST_END_POINT_V1)));
+
+    public static final Schema UPDATE_METADATA_REQUEST_V1 = new Schema(new Field("controller_id", INT32, "The controller id."),
+                                                                       new Field("controller_epoch", INT32, "The controller epoch."),
+                                                                       new Field("partition_states",
+                                                                                 new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V1)),
+                                                                       new Field("alive_brokers",
+                                                                                 new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V1)));
+
+    public static final Schema UPDATE_METADATA_RESPONSE_V1 = UPDATE_METADATA_RESPONSE_V0;
+
+    public static final Schema[] UPDATE_METADATA_REQUEST = new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1};
+    public static final Schema[] UPDATE_METADATA_RESPONSE = new Schema[] {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -497,9 +580,9 @@ public class Protocol {
         REQUESTS[ApiKeys.FETCH.id] = FETCH_REQUEST;
         REQUESTS[ApiKeys.LIST_OFFSETS.id] = LIST_OFFSET_REQUEST;
         REQUESTS[ApiKeys.METADATA.id] = METADATA_REQUEST;
-        REQUESTS[ApiKeys.LEADER_AND_ISR.id] = new Schema[] {};
+        REQUESTS[ApiKeys.LEADER_AND_ISR.id] = LEADER_AND_ISR_REQUEST;
         REQUESTS[ApiKeys.STOP_REPLICA.id] = STOP_REPLICA_REQUEST;
-        REQUESTS[ApiKeys.UPDATE_METADATA_KEY.id] = new Schema[] {};
+        REQUESTS[ApiKeys.UPDATE_METADATA_KEY.id] = UPDATE_METADATA_REQUEST;
         REQUESTS[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_REQUEST;
         REQUESTS[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_REQUEST;
         REQUESTS[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_REQUEST;
@@ -512,9 +595,9 @@ public class Protocol {
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
         RESPONSES[ApiKeys.LIST_OFFSETS.id] = LIST_OFFSET_RESPONSE;
         RESPONSES[ApiKeys.METADATA.id] = METADATA_RESPONSE;
-        RESPONSES[ApiKeys.LEADER_AND_ISR.id] = new Schema[] {};
+        RESPONSES[ApiKeys.LEADER_AND_ISR.id] = LEADER_AND_ISR_RESPONSE;
         RESPONSES[ApiKeys.STOP_REPLICA.id] = STOP_REPLICA_RESPONSE;
-        RESPONSES[ApiKeys.UPDATE_METADATA_KEY.id] = new Schema[] {};
+        RESPONSES[ApiKeys.UPDATE_METADATA_KEY.id] = UPDATE_METADATA_RESPONSE;
         RESPONSES[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_RESPONSE;
         RESPONSES[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_RESPONSE;
         RESPONSES[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_RESPONSE;
