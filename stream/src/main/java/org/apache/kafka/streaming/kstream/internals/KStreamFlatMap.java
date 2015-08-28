@@ -18,15 +18,15 @@
 package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.kstream.KeyValue;
-import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
+import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorDef;
 
 class KStreamFlatMap<K1, V1, K2, V2> implements ProcessorDef {
 
-    private final KeyValueFlatMap<K1, V1, K2, V2> mapper;
+    private final KeyValueMapper<K1, V1, Iterable<KeyValue<K2, V2>>> mapper;
 
-    KStreamFlatMap(KeyValueFlatMap<K1, V1, K2, V2> mapper) {
+    KStreamFlatMap(KeyValueMapper<K1, V1, Iterable<KeyValue<K2, V2>>> mapper) {
         this.mapper = mapper;
     }
 

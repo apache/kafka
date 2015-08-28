@@ -42,7 +42,7 @@ public class KStreamJob {
         KStream<String, String> stream1 = builder.from(new StringDeserializer(), new StringDeserializer(), "topic1");
 
         KStream<String, Integer> stream2 =
-            stream1.map(new KeyValueMapper<String, String, String, Integer>() {
+            stream1.map(new KeyValueMapper<String, String, KeyValue<String, Integer>>() {
                 @Override
                 public KeyValue<String, Integer> apply(String key, String value) {
                     return new KeyValue<>(key, new Integer(value));

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streaming.kstream;
 
-public interface KeyValueMapper<K1, V1, K2, V2> {
+public interface KeyValueMapper<K, V, R> {
 
-    KeyValue<K2, V2> apply(K1 key, V1 value);
+    R apply(K key, V value);
 }

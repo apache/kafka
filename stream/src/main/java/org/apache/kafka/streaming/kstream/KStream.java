@@ -50,7 +50,7 @@ public interface KStream<K, V> {
      * @param <V1>   the value type of the new stream
      * @return KStream
      */
-    <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper);
+    <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper);
 
     /**
      * Creates a new stream by transforming valuesa by a mapper to all values of this stream
@@ -69,7 +69,7 @@ public interface KStream<K, V> {
      * @param <V1>   the value type of the new stream
      * @return KStream
      */
-    <K1, V1> KStream<K1, V1> flatMap(KeyValueFlatMap<K, V, K1, V1> mapper);
+    <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, Iterable<KeyValue<K1, V1>>> mapper);
 
     /**
      * Creates a new stream by applying a mapper to all values of this stream and using the values in the resulting Iterable
@@ -78,7 +78,7 @@ public interface KStream<K, V> {
      * @param <V1>      the value type of the new stream
      * @return KStream
      */
-    <V1> KStream<K, V1> flatMapValues(ValueMapper<V, ? extends Iterable<V1>> processor);
+    <V1> KStream<K, V1> flatMapValues(ValueMapper<V, Iterable<V1>> processor);
 
     /**
      * Creates a new windowed stream using a specified window instance.

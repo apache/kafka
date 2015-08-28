@@ -19,9 +19,9 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streaming.kstream.KeyValue;
 import org.apache.kafka.streaming.processor.ProcessorDef;
 import org.apache.kafka.streaming.processor.TopologyBuilder;
-import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
 import org.apache.kafka.streaming.kstream.KStreamWindowed;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.streaming.kstream.Predicate;
@@ -90,7 +90,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper) {
+    public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper) {
         String name = MAP_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, new KStreamMap(mapper), this.name);
@@ -109,7 +109,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K1, V1> KStream<K1, V1> flatMap(KeyValueFlatMap<K, V, K1, V1> mapper) {
+    public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, Iterable<KeyValue<K1, V1>>> mapper) {
         String name = FLATMAP_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, new KStreamFlatMap(mapper), this.name);
@@ -119,7 +119,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <V1> KStream<K, V1> flatMapValues(ValueMapper<V, ? extends Iterable<V1>> mapper) {
+    public <V1> KStream<K, V1> flatMapValues(ValueMapper<V, Iterable<V1>> mapper) {
         String name = FLATMAPVALUES_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, new KStreamFlatMapValues(mapper), this.name);

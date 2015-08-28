@@ -24,9 +24,9 @@ import org.apache.kafka.streaming.processor.ProcessorDef;
 
 class KStreamMap<K1, V1, K2, V2> implements ProcessorDef {
 
-    private final KeyValueMapper<K1, V1, K2, V2> mapper;
+    private final KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper;
 
-    public KStreamMap(KeyValueMapper<K1, V1, K2, V2> mapper) {
+    public KStreamMap(KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper) {
         this.mapper = mapper;
     }
 

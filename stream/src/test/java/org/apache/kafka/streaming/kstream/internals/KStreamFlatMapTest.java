@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
 import org.apache.kafka.streaming.kstream.KeyValue;
-import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
+import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorDef;
 import org.junit.Test;
@@ -42,8 +42,8 @@ public class KStreamFlatMapTest {
     public void testFlatMap() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        KeyValueFlatMap<Integer, String, String, String> mapper =
-            new KeyValueFlatMap<Integer, String, String, String>() {
+        KeyValueMapper<Integer, String, Iterable<KeyValue<String, String>>> mapper =
+            new KeyValueMapper<Integer, String, Iterable<KeyValue<String, String>>>() {
                 @Override
                 public Iterable<KeyValue<String, String>> apply(Integer key, String value) {
                     ArrayList<KeyValue<String, String>> result = new ArrayList<>();

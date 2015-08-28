@@ -40,8 +40,8 @@ public class KStreamMapTest {
     public void testMap() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        KeyValueMapper<Integer, String, String, Integer> mapper =
-            new KeyValueMapper<Integer, String, String, Integer>() {
+        KeyValueMapper<Integer, String, KeyValue<String, Integer>> mapper =
+            new KeyValueMapper<Integer, String, KeyValue<String, Integer>>() {
                 @Override
                 public KeyValue<String, Integer> apply(Integer key, String value) {
                     return KeyValue.pair(value, key);

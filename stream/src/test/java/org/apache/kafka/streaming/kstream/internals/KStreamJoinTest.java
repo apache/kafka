@@ -63,16 +63,16 @@ public class KStreamJoinTest {
         }
     };
 
-    private KeyValueMapper<Integer, String, Integer, String> keyValueMapper =
-        new KeyValueMapper<Integer, String, Integer, String>() {
+    private KeyValueMapper<Integer, String, KeyValue<Integer, String>> keyValueMapper =
+        new KeyValueMapper<Integer, String, KeyValue<Integer, String>>() {
             @Override
             public KeyValue<Integer, String> apply(Integer key, String value) {
                 return KeyValue.pair(key, value);
             }
         };
 
-    KeyValueMapper<Integer, String, Integer, Iterable<String>> keyValueMapper2 =
-        new KeyValueMapper<Integer, String, Integer, Iterable<String>>() {
+    KeyValueMapper<Integer, String, KeyValue<Integer, Iterable<String>>> keyValueMapper2 =
+        new KeyValueMapper<Integer, String, KeyValue<Integer, Iterable<String>>>() {
             @Override
             public KeyValue<Integer, Iterable<String>> apply(Integer key, String value) {
                 return KeyValue.pair(key, (Iterable<String>) Utils.mkSet(value));
