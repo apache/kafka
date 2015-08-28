@@ -174,7 +174,6 @@ class ConsoleConsumer(BackgroundThreadService):
             if self.message_validator is not None:
                 msg = self.message_validator(msg)
             if msg is not None:
-                self.logger.debug("consumed a message: " + str(msg))
                 self.messages_consumed[idx].append(msg)
 
     def start_node(self, node):
