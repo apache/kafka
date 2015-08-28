@@ -37,15 +37,16 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
         String thisWindowName = this.windowDef.name();
         String otherWindowName = ((KStreamWindowedImpl<K, V1>) other).windowDef.name();
 
+        KStreamJoin<K, V2, V, V1> joinThis = new KStreamJoin<>(otherWindowName, valueJoiner);
+        KStreamJoin<K, V2, V1, V> joinOther = new KStreamJoin<>(thisWindowName, KStreamJoin.reserveJoiner(valueJoiner));
+        KStreamPassThrough<K, V2> joinMerge = new KStreamPassThrough<>();
+
         String joinThisName = JOINTHIS_NAME + INDEX.getAndIncrement();
         String joinOtherName = JOINOTHER_NAME + INDEX.getAndIncrement();
         String joinMergeName = JOINMERGE_NAME + INDEX.getAndIncrement();
 
-        KStreamJoin<K, V2, V, V1> join = new KStreamJoin<>(thisWindowName, otherWindowName, valueJoiner);
-        KStreamPassThrough<K, V2> joinMerge = new KStreamPassThrough<>();
-
-        topology.addProcessor(joinThisName, join, this.name);
-        topology.addProcessor(joinOtherName, join.processorDefForOtherStream, ((KStreamImpl) other).name);
+        topology.addProcessor(joinThisName, joinThis, this.name);
+        topology.addProcessor(joinOtherName, joinOther, ((KStreamImpl) other).name);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
 
         return new KStreamImpl<>(topology, joinMergeName);

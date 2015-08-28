@@ -22,8 +22,6 @@ import org.apache.kafka.streaming.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-
 /**
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
@@ -118,5 +116,5 @@ public class KafkaStreaming {
         state = STOPPED;
 
         log.info("Stopped Kafka Stream process");
-   }
+    }
 }
