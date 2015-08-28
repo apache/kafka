@@ -123,6 +123,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
     // kafka.consumer.FetchRequestAndResponseStats <-- kafka.consumer.SimpleConsumer
     new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchResponseSize"),
     new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchRequestRateAndTimeMs"),
+    new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchRequestThrottleTimeMs"),
 
     /**
      * ProducerRequestStats <-- SyncProducer
@@ -148,7 +149,8 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
 
     // kafka.producer.ProducerRequestStats <-- SyncProducer
     new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestRateAndTimeMs"),
-    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestSize")
+    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestSize"),
+    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestThrottleTimeMs")
   )
 
   private def toMBeanName(tags: collection.Map[String, String]): Option[String] = {
