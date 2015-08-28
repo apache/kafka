@@ -75,6 +75,11 @@ public interface ProcessorContext {
     Metrics metrics();
 
     /**
+     * Check if this process's incoming streams are joinable
+     */
+    boolean joinable();
+
+    /**
      * Registers and possibly restores the specified storage engine.
      *
      * @param store the storage engine

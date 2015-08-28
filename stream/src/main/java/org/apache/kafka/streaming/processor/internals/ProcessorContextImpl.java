@@ -20,6 +20,7 @@ package org.apache.kafka.streaming.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -36,7 +37,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class ProcessorContextImpl implements ProcessorContext {
 
@@ -93,6 +98,35 @@ public class ProcessorContextImpl implements ProcessorContext {
     }
 
     public StreamTask task() { return this.task; }
+
+    @Override
+    public boolean joinable() {
+        Set<TopicPartition> partitions = this.task.partitions();
+        Map<Integer, List<String>> partitionsById = new HashMap<>();
+        int firstId = -1;
+        for (TopicPartition partition : partitions) {
+            if (!partitionsById.containsKey(partition.partition())) {
+                partitionsById.put(partition.partition(), new ArrayList<String>());
+            }
+            partitionsById.get(partition.partition()).add(partition.topic());
+
+            if (firstId < 0)
+                firstId = partition.partition();
+        }
+
+        List<String> topics = partitionsById.get(firstId);
+        for (List<String> topicsPerPartition : partitionsById.values()) {
+            if (topics.size() != topicsPerPartition.size())
+                return false;
+
+            for (String topic : topicsPerPartition) {
+                if (!topics.contains(topic))
+                    return false;
+            }
+        }
+
+        return true;
+    }
 
     @Override
     public int id() {
