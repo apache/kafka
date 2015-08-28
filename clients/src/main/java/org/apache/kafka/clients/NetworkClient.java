@@ -329,6 +329,18 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Generate a request header for the given API key
+     *
+     * @param key The api key
+     * @param version The api version
+     * @return A request header with the appropriate client id and correlation id
+     */
+    @Override
+    public RequestHeader nextRequestHeader(ApiKeys key, short version) {
+        return new RequestHeader(key.id, version, clientId, correlation++);
+    }
+
+    /**
      * Interrupt the client if it is blocked waiting on I/O.
      */
     @Override
