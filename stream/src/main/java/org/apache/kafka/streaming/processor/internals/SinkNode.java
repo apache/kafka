@@ -38,6 +38,11 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     }
 
     @Override
+    public void addChild(ProcessorNode<?, ?> child) {
+        throw new UnsupportedOperationException("sink node does not allow addChild");
+    }
+
+    @Override
     public void init(ProcessorContext context) {
         this.context = context;
     }

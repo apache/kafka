@@ -40,15 +40,15 @@ public class ProcessorNode<K, V> {
         this.children = new ArrayList<>();
     }
 
-    public String name() {
+    public final String name() {
         return name;
     }
 
-    public List<ProcessorNode<?, ?>> children() {
+    public final List<ProcessorNode<?, ?>> children() {
         return children;
     }
 
-    public final void addChild(ProcessorNode<?, ?> child) {
+    public void addChild(ProcessorNode<?, ?> child) {
         children.add(child);
     }
 
