@@ -135,7 +135,7 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
             int firstId = -1;
             for (TopicPartition partition : partitions) {
                 if (!partitionsById.containsKey(partition.partition())) {
-                    partitionsById.put(partition.partition(), new ArrayList<>());
+                    partitionsById.put(partition.partition(), new ArrayList<String>());
                 }
                 partitionsById.get(partition.partition()).add(partition.topic());
 

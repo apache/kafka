@@ -69,6 +69,7 @@ public class StreamTaskTest {
         setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
+        setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
         setProperty(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
     }});
 
@@ -103,8 +104,8 @@ public class StreamTaskTest {
         assertEquals(source2.numReceived, 0);
 
         assertEquals(task.process(), 4);
-        assertEquals(source1.numReceived, 2);
-        assertEquals(source2.numReceived, 0);
+        assertEquals(source1.numReceived, 1);
+        assertEquals(source2.numReceived, 1);
 
         assertEquals(task.process(), 3);
         assertEquals(source1.numReceived, 2);
@@ -158,21 +159,14 @@ public class StreamTaskTest {
         assertTrue(consumer.paused().contains(partition2));
 
         assertEquals(task.process(), 7);
-        assertEquals(source1.numReceived, 2);
-        assertEquals(source2.numReceived, 0);
+        assertEquals(source1.numReceived, 1);
+        assertEquals(source2.numReceived, 1);
 
         assertEquals(consumer.paused().size(), 1);
-        assertTrue(consumer.paused().contains(partition2));
+        assertTrue(consumer.paused().contains(partition1));
 
         assertEquals(task.process(), 6);
-        assertEquals(source1.numReceived, 3);
-        assertEquals(source2.numReceived, 0);
-
-        assertEquals(consumer.paused().size(), 1);
-        assertTrue(consumer.paused().contains(partition2));
-
-        assertEquals(task.process(), 5);
-        assertEquals(source1.numReceived, 3);
+        assertEquals(source1.numReceived, 2);
         assertEquals(source2.numReceived, 1);
 
         assertEquals(consumer.paused().size(), 0);

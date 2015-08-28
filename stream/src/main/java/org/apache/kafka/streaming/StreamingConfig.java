@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streaming;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -80,8 +81,10 @@ public class StreamingConfig extends AbstractConfig {
     /** <code>value.deserializer</code> */
     public static final String VALUE_DESERIALIZER_CLASS_CONFIG = ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
-
-
+    /**
+     * <code>bootstrap.servers</code>
+     */
+    public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
     private static final String SYSTEM_TEMP_DIRECTORY = System.getProperty("java.io.tmpdir");
 
@@ -145,28 +148,32 @@ public class StreamingConfig extends AbstractConfig {
                                 .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                                         Type.CLASS,
                                         Importance.HIGH,
-                                        TIMESTAMP_EXTRACTOR_CLASS_DOC);
+                                        TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                                .define(BOOTSTRAP_SERVERS_CONFIG,
+                                        Type.STRING,
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC);
     }
 
     public StreamingConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 
-    public Properties getConsumerProperties() {
-        Properties props = new Properties();
+    public Map<String, Object> getConsumerConfigs() {
+        Map<String, Object> props = this.originals();
 
         // set consumer default property values
-        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range");
 
         return props;
     }
 
-    public Properties getProducerProperties() {
-        Properties props = new Properties();
+    public Map<String, Object> getProducerConfigs() {
+        Map<String, Object> props = this.originals();
 
         // set producer default property values
-        props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "100");
+        props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
         return props;
     }

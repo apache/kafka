@@ -20,7 +20,6 @@ package org.apache.kafka.streaming.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -37,11 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 public class ProcessorContextImpl implements ProcessorContext {
 
@@ -79,7 +74,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(id));
 
         Consumer restoreConsumer = new KafkaConsumer<>(
-            config.getConsumerProperties(),
+            config.getConsumerConfigs(),
             null /* no callback for restore consumer */,
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer());

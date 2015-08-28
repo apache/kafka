@@ -105,8 +105,8 @@ public class StreamTask {
 
         // create the record recordCollector that maintains the produced offsets
         this.recordCollector = new RecordCollector(producer,
-            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
-            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
+            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class),
+            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class));
 
         // initialize the topology with its own context
         try {

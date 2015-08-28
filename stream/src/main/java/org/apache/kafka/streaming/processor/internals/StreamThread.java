@@ -93,11 +93,11 @@ public class StreamThread extends Thread {
         this.builder = builder;
 
         // create the producer and consumer clients
-        this.producer = new KafkaProducer<>(config.getProducerProperties(),
+        this.producer = new KafkaProducer<>(config.getProducerConfigs(),
             new ByteArraySerializer(),
             new ByteArraySerializer());
 
-        this.consumer = new KafkaConsumer<>(config.getConsumerProperties(),
+        this.consumer = new KafkaConsumer<>(config.getConsumerConfigs(),
             rebalanceCallback,
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer());
