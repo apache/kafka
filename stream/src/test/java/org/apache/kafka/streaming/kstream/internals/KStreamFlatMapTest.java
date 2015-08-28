@@ -48,7 +48,7 @@ public class KStreamFlatMapTest {
                 public Iterable<KeyValue<String, String>> apply(Integer key, String value) {
                     ArrayList<KeyValue<String, String>> result = new ArrayList<>();
                     for (int i = 0; i < key; i++) {
-                        result.add(KeyValue.pair(Integer.toString(key), value));
+                        result.add(KeyValue.pair(Integer.toString(key * 10 + i), value));
                     }
                     return result;
                 }
@@ -116,7 +116,7 @@ public class KStreamFlatMapTest {
 
         assertEquals(6, processor.processed.size());
 
-        String[] expected = new String[]{"10:V1", "20:V2", "20:V2", "30:V3", "30:V3", "30:V3"};
+        String[] expected = new String[]{"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));

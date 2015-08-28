@@ -34,25 +34,20 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
 
     @Override
     public <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, ValueJoiner<V, V1, V2> valueJoiner) {
-        return join(other, false, valueJoiner);
-    }
-
-    @Override
-    public <V1, V2> KStream<K, V2> joinPrior(KStreamWindowed<K, V1> other, ValueJoiner<V, V1, V2> valueJoiner) {
-        return join(other, true, valueJoiner);
-    }
-
-    private <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, boolean prior, ValueJoiner<V, V1, V2> valueJoiner) {
         String thisWindowName = this.windowDef.name();
         String otherWindowName = ((KStreamWindowedImpl<K, V1>) other).windowDef.name();
 
-        KStreamJoin<K, V2, V, V1> join = new KStreamJoin<>(thisWindowName, otherWindowName, prior, valueJoiner);
-
-        String joinName = JOIN_NAME + INDEX.getAndIncrement();
+        String joinThisName = JOINTHIS_NAME + INDEX.getAndIncrement();
         String joinOtherName = JOINOTHER_NAME + INDEX.getAndIncrement();
-        topology.addProcessor(joinName, join, this.name);
-        topology.addProcessor(joinOtherName, join.processorDefForOtherStream, ((KStreamImpl) other).name);
+        String joinMergeName = JOINMERGE_NAME + INDEX.getAndIncrement();
 
-        return new KStreamImpl<>(topology, joinName);
+        KStreamJoin<K, V2, V, V1> join = new KStreamJoin<>(thisWindowName, otherWindowName, valueJoiner);
+        KStreamPassThrough<K, V2> joinMerge = new KStreamPassThrough<>();
+
+        topology.addProcessor(joinThisName, join, this.name);
+        topology.addProcessor(joinOtherName, join.processorDefForOtherStream, ((KStreamImpl) other).name);
+        topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
+
+        return new KStreamImpl<>(topology, joinMergeName);
     }
 }

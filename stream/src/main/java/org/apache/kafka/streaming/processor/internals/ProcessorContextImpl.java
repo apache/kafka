@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +53,7 @@ public class ProcessorContextImpl implements ProcessorContext {
     private final Metrics metrics;
     private final RecordCollector collector;
     private final ProcessorStateManager stateMgr;
+    private final ArrayDeque<ProcessorNode> nodeStack = new ArrayDeque<ProcessorNode>();
 
     private final Serializer<?> keySerializer;
     private final Serializer<?> valSerializer;
@@ -214,8 +216,12 @@ public class ProcessorContextImpl implements ProcessorContext {
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
         for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) task.node().children()) {
-            task.node(childNode);
-            childNode.process(key, value);
+            pushNode(childNode);
+            try {
+                childNode.process(key, value);
+            } finally {
+                popNode();
+            }
         }
     }
 
@@ -223,8 +229,22 @@ public class ProcessorContextImpl implements ProcessorContext {
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
         ProcessorNode childNode = (ProcessorNode<K, V>) task.node().children().get(childIndex);
-        task.node(childNode);
-        childNode.process(key, value);
+        pushNode(childNode);
+        try {
+            childNode.process(key, value);
+        } finally {
+            popNode();
+        }
+    }
+
+    private void pushNode(ProcessorNode node) {
+        nodeStack.push(node);
+        task.node(node);
+    }
+
+    private void popNode() {
+        nodeStack.pop();
+        task.node(nodeStack.peek());
     }
 
     @Override

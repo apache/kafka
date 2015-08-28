@@ -95,6 +95,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.processor.internals.ProcessorNode;
 
 import java.io.File;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -206,6 +207,7 @@ public class MockProcessorContext implements ProcessorContext {
     private Serializer serializer;
     private Deserializer deserializer;
     private ProcessorNode node;
+    private final ArrayDeque<ProcessorNode> nodeStack = new ArrayDeque<ProcessorNode>();
 
     private Map<String, StateStore> storeMap = new HashMap<>();
 >>>>>>> kstream test fix
@@ -280,8 +282,12 @@ public class MockProcessorContext implements ProcessorContext {
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
         for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) node().children()) {
-            node(childNode);
-            childNode.process(key, value);
+            pushNode(childNode);
+            try {
+                childNode.process(key, value);
+            } finally {
+                popNode();
+            }
         }
     }
 
@@ -289,8 +295,12 @@ public class MockProcessorContext implements ProcessorContext {
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
         ProcessorNode childNode = (ProcessorNode<K, V>) node().children().get(childIndex);
-        node(childNode);
-        childNode.process(key, value);
+        pushNode(childNode);
+        try {
+            childNode.process(key, value);
+        } finally {
+            popNode();
+        }
     }
 
     @Override
@@ -319,11 +329,18 @@ public class MockProcessorContext implements ProcessorContext {
     }
 >>>>>>> compile and test passed
 
-    public void node(ProcessorNode node) {
+    public void pushNode(ProcessorNode node) {
+        nodeStack.push(node);
         this.node = node;
     }
 
-    public ProcessorNode node() {
+    public ProcessorNode popNode() {
+        ProcessorNode node = nodeStack.pop();
+        this.node = nodeStack.peek();
+        return node;
+    }
+
+    private ProcessorNode node() {
         return this.node;
     }
 }

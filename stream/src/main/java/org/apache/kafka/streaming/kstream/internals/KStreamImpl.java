@@ -52,9 +52,11 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     private static final String WINDOWED_NAME = "KAFKA-WINDOWED-";
 
-    public static final String JOIN_NAME = "KAFKA-JOIN-";
+    public static final String JOINTHIS_NAME = "KAFKA-JOINTHIS-";
 
     public static final String JOINOTHER_NAME = "KAFKA-JOINOTHER-";
+
+    public static final String JOINMERGE_NAME = "KAFKA-JOINMERGE-";
 
     public static final String SOURCE_NAME = "KAFKA-SOURCE-";
 

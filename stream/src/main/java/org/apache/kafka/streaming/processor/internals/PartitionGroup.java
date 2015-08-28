@@ -40,7 +40,7 @@ public class PartitionGroup {
     private int totalBuffered;
 
     public PartitionGroup(Map<TopicPartition, RecordQueue> partitionQueues) {
-        this.queuesByTime = new PriorityQueue<>(new Comparator<RecordQueue>() {
+        this.queuesByTime = new PriorityQueue<>(partitionQueues.size(), new Comparator<RecordQueue>() {
 
             @Override
             public int compare(RecordQueue queue1, RecordQueue queue2) {

@@ -85,7 +85,7 @@ public class UnlimitedWindowDef<K, V> implements WindowDef<K, V> {
 
         @Override
         public String name() {
-            return null;
+            return name;
         }
 
         @Override
