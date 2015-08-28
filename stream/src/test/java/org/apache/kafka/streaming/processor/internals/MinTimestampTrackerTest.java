@@ -48,7 +48,7 @@ public class MinTimestampTrackerTest {
         assertEquals(100L, tracker.get());
 
         // remove 100
-        tracker.addElement((Stamped<String>) elems[removalIndex++]);
+        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
         assertEquals(101L, tracker.get());
 
         // add 102
@@ -68,24 +68,24 @@ public class MinTimestampTrackerTest {
         assertEquals(98L, tracker.get());
 
         // remove 101
-        tracker.addElement((Stamped<String>) elems[removalIndex++]);
+        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
         assertEquals(98L, tracker.get());
 
         // remove 102
-        tracker.addElement((Stamped<String>) elems[removalIndex++]);
+        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
         assertEquals(98L, tracker.get());
 
         // remove 98
-        tracker.addElement((Stamped<String>) elems[removalIndex++]);
+        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
         assertEquals(99L, tracker.get());
 
         // remove 99
-        tracker.addElement((Stamped<String>) elems[removalIndex++]);
+        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
         assertEquals(100L, tracker.get());
 
         // remove 100
-        tracker.addElement((Stamped<String>) elems[removalIndex++]);
-        assertEquals(-1L, tracker.get());
+        tracker.removeElement((Stamped<String>) elems[removalIndex++]);
+        assertEquals(TimestampTracker.NOT_KNOWN, tracker.get());
 
         assertEquals(insertionIndex, removalIndex);
     }
