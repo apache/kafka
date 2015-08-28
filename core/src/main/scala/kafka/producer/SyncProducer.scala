@@ -104,8 +104,12 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
         response = doSend(producerRequest, if(producerRequest.requiredAcks == 0) false else true)
       }
     }
-    if(producerRequest.requiredAcks != 0)
-      ProducerResponse.readFrom(response.payload)
+    if(producerRequest.requiredAcks != 0) {
+      val producerResponse = ProducerResponse.readFrom(response.payload)
+      producerRequestStats.getProducerRequestStats(config.host, config.port).throttleTimeHist.update(producerResponse.throttleTime)
+      producerRequestStats.getProducerRequestAllBrokersStats.throttleTimeHist.update(producerResponse.throttleTime)
+      producerResponse
+    }
     else
       null
   }
