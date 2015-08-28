@@ -535,28 +535,9 @@ public class Utils {
      * @return Set
      */
     public static <T> HashSet<T> mkSet(T... elems) {
-        HashSet<T> set = new HashSet<T>();
-        for (T e : elems) set.add(e);
-        return set;
+        return new HashSet<>(Arrays.asList(elems));
     }
-
-    /**
-     * Makes a string of a comma separated list of collection elements
-     * @param collection the collection
-     * @param <E> the type of collection elements
-     * @return String
-     */
-    public static <E> String mkString(Collection<E> collection) {
-        StringBuilder sb = new StringBuilder();
-        int count = collection.size();
-        for (E elem : collection) {
-            sb.append(elem.toString());
-            count--;
-            if (count > 0) sb.append(", ");
-        }
-        return sb.toString();
-    }
-
+    
     /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *

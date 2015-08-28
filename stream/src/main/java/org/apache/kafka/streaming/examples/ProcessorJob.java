@@ -96,6 +96,6 @@ public class ProcessorJob {
         builder.addSink("SINK", "topic-sink", new StringSerializer(), new IntegerSerializer(), "PROCESS");
 
         KafkaStreaming streaming = new KafkaStreaming(builder, config);
-        streaming.run();
+        streaming.start();
     }
 }

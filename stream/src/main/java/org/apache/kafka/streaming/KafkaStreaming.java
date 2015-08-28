@@ -52,21 +52,17 @@ import java.io.File;
  * </pre>
  *
  */
-public class KafkaStreaming implements Runnable {
+public class KafkaStreaming {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
 
     // Container States
     private static final int CREATED = 0;
     private static final int RUNNING = 1;
-    private static final int STOPPING = 2;
-    private static final int STOPPED = 3;
+    private static final int STOPPED = 2;
     private int state = CREATED;
 
-    private final Object lock = new Object();
     private final StreamThread[] threads;
-    private final File stateDir;
-
 
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
         if (config.getClass(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG) == null)
@@ -76,72 +72,51 @@ public class KafkaStreaming implements Runnable {
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new StreamThread(builder, config);
         }
-
-        this.stateDir = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG));
     }
 
     /**
-     * Execute the stream processors
+     * Start the stream process by starting all its threads
      */
-    public void run() {
-        synchronized (lock) {
-            log.info("Starting container");
-            if (state == CREATED) {
-                if (!stateDir.exists() && !stateDir.mkdirs())
-                    throw new IllegalArgumentException("Failed to create state directory: " + stateDir.getAbsolutePath());
+    public synchronized void start() {
+        log.debug("Starting Kafka Stream process");
 
-                for (StreamThread thread : threads) thread.start();
-                log.info("Start-up complete");
-            } else {
-                throw new IllegalStateException("This container was already started");
-            }
+        if (state == CREATED) {
+            for (StreamThread thread : threads)
+                thread.start();
+        } else {
+            throw new IllegalStateException("This process was already started.");
+        }
 
-            state = RUNNING;
-            while (state == RUNNING) {
+        state = RUNNING;
+
+        log.info("Started Kafka Stream process");
+    }
+
+    /**
+     * Shutdown this stream process by signaling the threads to stop,
+     * wait for them to join and clean up the process instance.
+     */
+    public synchronized void close() {
+        log.debug("Stopping Kafka Stream process");
+
+        if (state == RUNNING) {
+            // signal the threads to stop and wait
+            for (StreamThread thread : threads)
+                thread.close();
+
+            for (StreamThread thread : threads) {
                 try {
-                    lock.wait();
+                    thread.join();
                 } catch (InterruptedException ex) {
                     Thread.interrupted();
                 }
             }
-
-            if (state == STOPPING) {
-                log.info("Shutting down the container");
-
-                for (StreamThread thread : threads)
-                    thread.close();
-
-                for (StreamThread thread : threads) {
-                    try {
-                        thread.join();
-                    } catch (InterruptedException ex) {
-                        Thread.interrupted();
-                    }
-                }
-                state = STOPPED;
-                lock.notifyAll();
-                log.info("Shutdown complete");
-            }
+        } else {
+            throw new IllegalStateException("This process has not started yet.");
         }
-    }
 
-    /**
-     * Shutdown this streaming instance.
-     */
-    public void close() {
-        synchronized (lock) {
-            if (state == CREATED || state == RUNNING) {
-                state = STOPPING;
-                lock.notifyAll();
-            }
-            while (state == STOPPING) {
-                try {
-                    lock.wait();
-                } catch (InterruptedException ex) {
-                    Thread.interrupted();
-                }
-            }
-        }
-    }
+        state = STOPPED;
 
+        log.info("Stopped Kafka Stream process");
+   }
 }

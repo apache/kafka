@@ -17,7 +17,10 @@
 
 package org.apache.kafka.streaming.processor;
 
-// TODO: this should be removed once we move to Java 8
+/**
+ * Restoration logic for log-backed state stores upon restart,
+ * it takes one record at a time from the logs to apply to the restoring state.
+ */
 public interface RestoreFunc {
 
     void apply(byte[] key, byte[] value);

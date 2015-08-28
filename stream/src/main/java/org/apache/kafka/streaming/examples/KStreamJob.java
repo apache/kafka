@@ -73,6 +73,6 @@ public class KStreamJob {
         streams[1].sendTo("topic3", stringSerializer, intSerializer);
 
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
-        kstream.run();
+        kstream.start();
     }
 }
