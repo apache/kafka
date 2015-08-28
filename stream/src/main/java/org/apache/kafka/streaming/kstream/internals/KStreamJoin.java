@@ -17,20 +17,13 @@
 
 package org.apache.kafka.streaming.kstream.internals;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streaming.kstream.ValueJoiner;
 import org.apache.kafka.streaming.kstream.Window;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 import org.apache.kafka.streaming.processor.ProcessorDef;
-import org.apache.kafka.streaming.processor.internals.ProcessorContextImpl;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
 
@@ -74,7 +67,7 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
             super.init(context);
 
             // check if these two streams are joinable
-            if (!joinable())
+            if (!context.joinable())
                 throw new IllegalStateException("Streams are not joinable.");
 
             final Window<K, V1> window1 = (Window<K, V1>) context.getStateStore(windowName1);
@@ -127,34 +120,6 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
                     doJoin(key, value, iter.next());
                 }
             }
-        }
-
-        private boolean joinable() {
-            Set<TopicPartition> partitions = ((ProcessorContextImpl) this.context).task().partitions();
-            Map<Integer, List<String>> partitionsById = new HashMap<>();
-            int firstId = -1;
-            for (TopicPartition partition : partitions) {
-                if (!partitionsById.containsKey(partition.partition())) {
-                    partitionsById.put(partition.partition(), new ArrayList<String>());
-                }
-                partitionsById.get(partition.partition()).add(partition.topic());
-
-                if (firstId < 0)
-                    firstId = partition.partition();
-            }
-
-            List<String> topics = partitionsById.get(firstId);
-            for (List<String> topicsPerPartition : partitionsById.values()) {
-                if (topics.size() != topicsPerPartition.size())
-                    return false;
-
-                for (String topic : topicsPerPartition) {
-                    if (!topics.contains(topic))
-                        return false;
-                }
-            }
-
-            return true;
         }
 
         // TODO: use the "outer-stream" topic as the resulted join stream topic
