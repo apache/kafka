@@ -29,8 +29,7 @@ import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.ValueMapper;
 import org.apache.kafka.streaming.kstream.WindowDef;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.reflect.Array;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class KStreamImpl<K, V> implements KStream<K, V> {
@@ -143,16 +142,16 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(branchName, new KStreamBranch(predicates.clone()), this.name);
 
-        List<KStream<K, V>> branchChildren = new ArrayList<>();
+        KStream<K, V>[] branchChildren = (KStream<K, V>[]) Array.newInstance(KStream.class, predicates.length);
         for (int i = 0; i < predicates.length; i++) {
             String childName = BRANCHCHILD_NAME + INDEX.getAndIncrement();
 
             topology.addProcessor(childName, new KStreamPassThrough(), branchName);
 
-            branchChildren.add(new KStreamImpl<K, V>(topology, childName));
+            branchChildren[i] = new KStreamImpl<K, V>(topology, childName);
         }
 
-        return (KStream<K, V>[]) branchChildren.toArray();
+        return branchChildren;
     }
 
     @SuppressWarnings("unchecked")

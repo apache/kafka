@@ -61,7 +61,7 @@ public class KStreamBranchTest {
             }
         };
 
-        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
+        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6};
 
         KStream<Integer, String> stream;
         KStream<Integer, String>[] branches;
@@ -84,7 +84,7 @@ public class KStreamBranchTest {
         }
 
         assertEquals(3, processors[0].processed.size());
-        assertEquals(2, processors[1].processed.size());
-        assertEquals(4, processors[2].processed.size());
+        assertEquals(1, processors[1].processed.size());
+        assertEquals(2, processors[2].processed.size());
     }
 }
