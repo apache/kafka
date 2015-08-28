@@ -19,7 +19,6 @@ package org.apache.kafka.streaming.kstream.internals;
 
 import static org.junit.Assert.assertEquals;
 
-import org.apache.kafka.streaming.kstream.internals.FilteredIterator;
 import org.junit.Test;
 
 import java.util.ArrayList;

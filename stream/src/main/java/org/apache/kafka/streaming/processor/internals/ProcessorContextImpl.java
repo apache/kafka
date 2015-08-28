@@ -97,7 +97,9 @@ public class ProcessorContextImpl implements ProcessorContext {
         return this.collector;
     }
 
-    public StreamTask task() { return this.task; }
+    public StreamTask task() {
+        return this.task;
+    }
 
     @Override
     public boolean joinable() {

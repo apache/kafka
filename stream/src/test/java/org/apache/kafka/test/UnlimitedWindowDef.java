@@ -48,26 +48,26 @@ public class UnlimitedWindowDef<K, V> implements WindowDef<K, V> {
         private LinkedList<Stamped<KeyValue<K, V>>> list = new LinkedList<>();
 
         @Override
-        public void init (ProcessorContext context){
+        public void init(ProcessorContext context) {
             context.register(this, null);
         }
 
         @Override
-        public Iterator<V> find(final K key, long timestamp){
+        public Iterator<V> find(final K key, long timestamp) {
             return find(key, Long.MIN_VALUE, timestamp);
         }
 
         @Override
-        public Iterator<V> findAfter(final K key, long timestamp){
+        public Iterator<V> findAfter(final K key, long timestamp) {
             return find(key, timestamp, Long.MAX_VALUE);
         }
 
         @Override
-        public Iterator<V> findBefore(final K key, long timestamp){
+        public Iterator<V> findBefore(final K key, long timestamp) {
             return find(key, Long.MIN_VALUE, Long.MAX_VALUE);
         }
 
-        private Iterator<V> find(final K key, final long startTime, final long endTime){
+        private Iterator<V> find(final K key, final long startTime, final long endTime) {
             return new FilteredIterator<V, Stamped<KeyValue<K, V>>>(list.iterator()) {
                 protected V filter(Stamped<KeyValue<K, V>> item) {
                     if (item.value.key.equals(key) && startTime <= item.timestamp && item.timestamp <= endTime)
@@ -79,25 +79,25 @@ public class UnlimitedWindowDef<K, V> implements WindowDef<K, V> {
         }
 
         @Override
-        public void put (K key, V value,long timestamp){
+        public void put(K key, V value, long timestamp) {
             list.add(new Stamped<>(KeyValue.pair(key, value), timestamp));
         }
 
         @Override
-        public String name () {
+        public String name() {
             return null;
         }
 
         @Override
-        public void flush () {
+        public void flush() {
         }
 
         @Override
-        public void close () {
+        public void close() {
         }
 
         @Override
-        public boolean persistent () {
+        public boolean persistent() {
             return false;
         }
     }

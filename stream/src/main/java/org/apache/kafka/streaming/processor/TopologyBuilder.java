@@ -175,7 +175,7 @@ public class TopologyBuilder {
                         processorMap.get(parent).addChild(node);
                     }
                 } else if (factory instanceof SourceNodeFactory) {
-                    for (String topic : ((SourceNodeFactory)factory).topics) {
+                    for (String topic : ((SourceNodeFactory) factory).topics) {
                         topicSourceMap.put(topic, (SourceNode) node);
                     }
                 } else if (factory instanceof SinkNodeFactory) {

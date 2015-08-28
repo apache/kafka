@@ -52,26 +52,30 @@ public class StreamTaskTest {
     private final TopicPartition partition2 = new TopicPartition("topic2", 1);
     private final HashSet<TopicPartition> partitions = new HashSet<>(Arrays.asList(partition1, partition2));
 
-    private final MockSourceNode<Integer, Integer> source1 = new MockSourceNode<>(intDeserializer, intDeserializer);
-    private final MockSourceNode<Integer, Integer> source2 = new MockSourceNode<>(intDeserializer, intDeserializer);
+    private final MockSourceNode source1 = new MockSourceNode<>(intDeserializer, intDeserializer);
+    private final MockSourceNode source2 = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final ProcessorTopology topology = new ProcessorTopology(
-        Arrays.asList(source1, source2),
-        new HashMap<String, SourceNode>(){{
-            put("topic1", source1);
-            put("topic2", source2);
-        }},
-        Collections.emptyMap()
+        Arrays.asList((ProcessorNode) source1, (ProcessorNode) source2),
+        new HashMap<String, SourceNode>() {
+            {
+                put("topic1", source1);
+                put("topic2", source2);
+            }
+        },
+        Collections.<String, SinkNode>emptyMap()
     );
 
-    private final StreamingConfig config = new StreamingConfig(new Properties() {{
-        setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
-        setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
-        setProperty(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
-    }});
+    private final StreamingConfig config = new StreamingConfig(new Properties() {
+        {
+            setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+            setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+            setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+            setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+            setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
+            setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
+            setProperty(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
+        }
+    });
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);

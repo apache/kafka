@@ -20,7 +20,6 @@ package org.apache.kafka.streaming.processor.internals;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

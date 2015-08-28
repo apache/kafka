@@ -21,9 +21,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streaming.processor.ProcessorContext;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     private final String topic;
@@ -48,7 +45,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(K key, V value) {
         // send to all the registered topics
-        RecordCollector collector = ((ProcessorContextImpl)context).recordCollector();
+        RecordCollector collector = ((ProcessorContextImpl) context).recordCollector();
         collector.send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer);
     }
 

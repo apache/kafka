@@ -26,7 +26,6 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
 import java.util.Map;
-import java.util.Properties;
 
 public class StreamingConfig extends AbstractConfig {
 
