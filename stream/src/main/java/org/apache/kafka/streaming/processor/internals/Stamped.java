@@ -35,5 +35,4 @@ public class Stamped<V> implements Comparable {
         else if (timestamp > otherTimestamp) return 1;
         return 0;
     }
-
 }
