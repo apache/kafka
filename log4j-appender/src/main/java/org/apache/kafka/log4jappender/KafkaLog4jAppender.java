@@ -42,10 +42,22 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private static final String RETRIES_CONFIG = "retries";
     private static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
     private static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
+    private static final String SECURITY_PROTOCOL = "security.protocol";
+    private static final String SSL_TRUSTSTORE_LOCATION = "ssl.truststore.location";
+    private static final String SSL_TRUSTSTORE_PASSWORD = "ssl.truststore.password";
+    private static final String SSL_KEYSTORE_TYPE = "ssl.keystore.type";
+    private static final String SSL_KEYSTORE_LOCATION = "ssl.keystore.location";
+    private static final String SSL_KEYSTORE_PASSWORD = "ssl.keystore.password";
 
     private String brokerList = null;
     private String topic = null;
     private String compressionType = null;
+    private String securityProtocol = null;
+    private String sslTruststoreLocation = null;
+    private String sslTruststorePassword = null;
+    private String sslKeystoreType = null;
+    private String sslKeystoreLocation = null;
+    private String sslKeystorePassword = null;
 
     private int retries = 0;
     private int requiredNumAcks = Integer.MAX_VALUE;
@@ -104,6 +116,54 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.syncSend = syncSend;
     }
 
+    public String getSslTruststorePassword() {
+        return sslTruststorePassword;
+    }
+
+    public String getSslTruststoreLocation() {
+        return sslTruststoreLocation;
+    }
+
+    public String getSecurityProtocol() {
+        return securityProtocol;
+    }
+
+    public void setSecurityProtocol(String securityProtocol) {
+        this.securityProtocol = securityProtocol;
+    }
+
+    public void setSslTruststoreLocation(String sslTruststoreLocation) {
+        this.sslTruststoreLocation = sslTruststoreLocation;
+    }
+
+    public void setSslTruststorePassword(String sslTruststorePassword) {
+        this.sslTruststorePassword = sslTruststorePassword;
+    }
+
+    public void setSslKeystorePassword(String sslKeystorePassword) {
+        this.sslKeystorePassword = sslKeystorePassword;
+    }
+
+    public void setSslKeystoreType(String sslKeystoreType) {
+        this.sslKeystoreType = sslKeystoreType;
+    }
+
+    public void setSslKeystoreLocation(String sslKeystoreLocation) {
+        this.sslKeystoreLocation = sslKeystoreLocation;
+    }
+
+    public String getSslKeystoreLocation() {
+        return sslKeystoreLocation;
+    }
+
+    public String getSslKeystoreType() {
+        return sslKeystoreType;
+    }
+
+    public String getSslKeystorePassword() {
+        return sslKeystorePassword;
+    }
+
     @Override
     public void activateOptions() {
         // check for config parameter validity
@@ -120,6 +180,19 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
             props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
         if (retries > 0)
             props.put(RETRIES_CONFIG, retries);
+        if (securityProtocol != null && sslTruststoreLocation != null &&
+            sslTruststorePassword != null) {
+            props.put(SECURITY_PROTOCOL, securityProtocol);
+            props.put(SSL_TRUSTSTORE_LOCATION, sslTruststoreLocation);
+            props.put(SSL_TRUSTSTORE_PASSWORD, sslTruststorePassword);
+
+            if (sslKeystoreType != null && sslKeystoreLocation != null &&
+                sslKeystorePassword != null) {
+                props.put(SSL_KEYSTORE_TYPE, sslKeystoreType);
+                props.put(SSL_KEYSTORE_LOCATION, sslKeystoreLocation);
+                props.put(SSL_KEYSTORE_PASSWORD, sslKeystorePassword);
+            }
+        }
 
         props.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
