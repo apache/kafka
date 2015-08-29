@@ -18,6 +18,7 @@
 package kafka.producer
 
 import java.util.Random
+import java.util.concurrent.TimeUnit
 
 import kafka.api._
 import kafka.network.{RequestOrResponseSend, BlockingChannel}
@@ -106,8 +107,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     }
     if(producerRequest.requiredAcks != 0) {
       val producerResponse = ProducerResponse.readFrom(response.payload)
-      producerRequestStats.getProducerRequestStats(config.host, config.port).throttleTimeHist.update(producerResponse.throttleTime)
-      producerRequestStats.getProducerRequestAllBrokersStats.throttleTimeHist.update(producerResponse.throttleTime)
+      producerRequestStats.getProducerRequestStats(config.host, config.port).throttleTimeHist.update(producerResponse.throttleTime, TimeUnit.MILLISECONDS)
+      producerRequestStats.getProducerRequestAllBrokersStats.throttleTimeHist.update(producerResponse.throttleTime, TimeUnit.MILLISECONDS)
       producerResponse
     }
     else
