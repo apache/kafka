@@ -123,7 +123,7 @@ public class AbstractConfig {
      */
     public Map<String, Object> originalsWithPrefix(String prefix) {
         Map<String, Object> result = new HashMap<String, Object>();
-        for(Map.Entry<String, ?> entry : originals.entrySet()) {
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
                 result.put(entry.getKey().substring(prefix.length()), entry.getValue());
         }
