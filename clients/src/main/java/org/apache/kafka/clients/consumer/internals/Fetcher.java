@@ -105,7 +105,7 @@ public class Fetcher<K, V> {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
 
-        this.records = new LinkedList<PartitionRecords<K, V>>();
+        this.records = new LinkedList<>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
         this.retryBackoffMs = retryBackoffMs;
@@ -302,7 +302,7 @@ public class Fetcher<K, V> {
      * @return A response which can be polled to obtain the corresponding offset.
      */
     private RequestFuture<Long> sendListOffsetRequest(final TopicPartition topicPartition, long timestamp) {
-        Map<TopicPartition, ListOffsetRequest.PartitionData> partitions = new HashMap<TopicPartition, ListOffsetRequest.PartitionData>(1);
+        Map<TopicPartition, ListOffsetRequest.PartitionData> partitions = new HashMap<>(1);
         partitions.put(topicPartition, new ListOffsetRequest.PartitionData(timestamp, 1));
         PartitionInfo info = metadata.fetch().partition(topicPartition);
         if (info == null) {
@@ -429,7 +429,7 @@ public class Fetcher<K, V> {
                     int bytes = 0;
                     ByteBuffer buffer = partition.recordSet;
                     MemoryRecords records = MemoryRecords.readableRecords(buffer);
-                    List<ConsumerRecord<K, V>> parsed = new ArrayList<ConsumerRecord<K, V>>();
+                    List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                     for (LogEntry logEntry : records) {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
@@ -437,7 +437,7 @@ public class Fetcher<K, V> {
                     if (!parsed.isEmpty()) {
                         ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                         this.subscriptions.fetched(tp, record.offset() + 1);
-                        this.records.add(new PartitionRecords<K, V>(fetchOffset, tp, parsed));
+                        this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                         this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
                     }
                     this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
@@ -476,7 +476,7 @@ public class Fetcher<K, V> {
         ByteBuffer valueBytes = logEntry.record().value();
         V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), Utils.toArray(valueBytes));
 
-        return new ConsumerRecord<K, V>(partition.topic(), partition.partition(), offset, key, value);
+        return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, key, value);
     }
 
     private static class PartitionRecords<K, V> {
@@ -491,15 +491,15 @@ public class Fetcher<K, V> {
         }
     }
 
-    private class FetchManagerMetrics {
-        public final Metrics metrics;
-        public final String metricGrpName;
+    private static class FetchManagerMetrics {
+        private final Metrics metrics;
+        private final String metricGrpName;
 
-        public final Sensor bytesFetched;
-        public final Sensor recordsFetched;
-        public final Sensor fetchLatency;
-        public final Sensor recordsFetchLag;
-        public final Sensor fetchThrottleTimeSensor;
+        private final Sensor bytesFetched;
+        private final Sensor recordsFetched;
+        private final Sensor fetchLatency;
+        private final Sensor recordsFetchLag;
+        private final Sensor fetchThrottleTimeSensor;
 
 
         public FetchManagerMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> tags) {
@@ -563,19 +563,15 @@ public class Fetcher<K, V> {
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
-            // record bytes fetched
-            String name = "topic." + topic + ".bytes-fetched";
-            Sensor bytesFetched = this.metrics.getSensor(name);
-            if (bytesFetched == null)
-                bytesFetched = this.metrics.sensor(name);
-            bytesFetched.record(bytes);
+            getSensor("topic." + topic + ".bytes-fetched").record(bytes);
+            getSensor("topic." + topic + ".records-fetched").record(records);
+        }
 
-            // record records fetched
-            name = "topic." + topic + ".records-fetched";
-            Sensor recordsFetched = this.metrics.getSensor(name);
-            if (recordsFetched == null)
-                recordsFetched = this.metrics.sensor(name);
-            recordsFetched.record(records);
+        private Sensor getSensor(String name1) {
+            Sensor topic = this.metrics.getSensor(name1);
+            if (topic == null)
+                topic = this.metrics.sensor(name1);
+            return topic;
         }
     }
 }
