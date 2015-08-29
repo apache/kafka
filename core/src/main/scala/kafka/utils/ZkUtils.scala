@@ -204,23 +204,27 @@ object ZkUtils extends Logging {
    * @param timeout
    * @param jmxPort
    */
-  def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], timeout: Int, jmxPort: Int) {
+  def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], timeout: Int, jmxPort: Int): ZKWatchedEphemeral = {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
     val brokerInfo = Json.encode(Map("version" -> 2, "host" -> host, "port" -> port, "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
     val expectedBroker = new Broker(id, advertisedEndpoints)
-
-    registerBrokerInZk(zkClient, brokerIdPath, brokerInfo, expectedBroker, timeout)
+    val zkWatchedEphemeral = registerBrokerInZk(zkClient, zkConnection, brokerIdPath, brokerInfo, expectedBroker, timeout)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
+    zkWatchedEphemeral
   }
 
-  private def registerBrokerInZk(zkClient: ZkClient, brokerIdPath: String, brokerInfo: String, expectedBroker: Broker, timeout: Int) {
+  private def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, brokerIdPath: String, brokerInfo: String, expectedBroker: Broker, timeout: Int): ZKWatchedEphemeral = {
     try {
-      createEphemeralPathExpectConflictHandleZKBug(zkClient, brokerIdPath, brokerInfo, expectedBroker,
-        (brokerString: String, broker: Any) => Broker.createBroker(broker.asInstanceOf[Broker].id, brokerString).equals(broker.asInstanceOf[Broker]),
-        timeout)
+      //createEphemeralPathExpectConflictHandleZKBug(zkClient, brokerIdPath, brokerInfo, expectedBroker,
+      //  (brokerString: String, broker: Any) => Broker.createBroker(broker.asInstanceOf[Broker].id, brokerString).equals(broker.asInstanceOf[Broker]),
+      //  timeout)
+      val zkWatchedEphemeral = new ZKWatchedEphemeral(brokerIdPath, brokerInfo,
+                                                      zkConnection.getZookeeper)
+      zkWatchedEphemeral.createAndWatch
+      zkWatchedEphemeral
 
     } catch {
       case e: ZkNodeExistsException =>

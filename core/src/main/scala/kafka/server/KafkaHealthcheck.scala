@@ -21,7 +21,7 @@ import kafka.cluster.EndPoint
 import kafka.utils._
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
+import org.I0Itec.zkclient.{IZkStateListener, ZkClient, ZkConnection}
 import java.net.InetAddress
 
 
@@ -36,16 +36,24 @@ import java.net.InetAddress
 class KafkaHealthcheck(private val brokerId: Int,
                        private val advertisedEndpoints: Map[SecurityProtocol, EndPoint],
                        private val zkSessionTimeoutMs: Int,
-                       private val zkClient: ZkClient) extends Logging {
+                       private val zkClient: ZkClient,
+                       private val zkConnection: ZkConnection) extends Logging {
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
   val sessionExpireListener = new SessionExpireListener
+  var zkWatchedEphemeral: ZKWatchedEphemeral = null
 
   def startup() {
     zkClient.subscribeStateChanges(sessionExpireListener)
     register()
   }
 
+  def shutdown() {
+    if(zkWatchedEphemeral != null) {
+      zkWatchedEphemeral.halt
+      zkWatchedEphemeral = null
+    }
+  }
   /**
    * Register this broker as "alive" in zookeeper
    */
@@ -62,7 +70,7 @@ class KafkaHealthcheck(private val brokerId: Int,
     // only PLAINTEXT is supported as default
     // if the broker doesn't listen on PLAINTEXT protocol, an empty endpoint will be registered and older clients will be unable to connect
     val plaintextEndpoint = updatedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
-    ZkUtils.registerBrokerInZk(zkClient, brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, zkSessionTimeoutMs, jmxPort)
+    zkWatchedEphemeral = ZkUtils.registerBrokerInZk(zkClient, zkConnection, brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, zkSessionTimeoutMs, jmxPort)
   }
 
   /**
@@ -73,6 +81,8 @@ class KafkaHealthcheck(private val brokerId: Int,
     @throws(classOf[Exception])
     def handleStateChanged(state: KeeperState) {
       // do nothing, since zkclient will do reconnect for us.
+      if(state == KeeperState.Expired)
+        shutdown()
     }
 
     /**

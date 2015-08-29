@@ -216,6 +216,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           if (config.autoCommitEnable)
             commitOffsets(true)
           if (zkClient != null) {
+            if(zkWatchedEphemeral != null) {
+              zkWatchedEphemeral.halt
+              zkWatchedEphemeral = null
+            }
             zkClient.close()
             zkClient = null
           }
@@ -269,8 +273,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     //createEphemeralPathExpectConflictHandleZKBug(zkClient, dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, null,
     //                                             (consumerZKString, consumer) => true, config.zkSessionTimeoutMs)
 
-    if(zkWatchedEphemeral != null)
-      zkWatchedEphemeral.halt
+    assert(zkWatchedEphemeral == null)
     zkWatchedEphemeral = new ZKWatchedEphemeral(dirs.
                                                  consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo,
                                                  zkConnection.getZookeeper)
