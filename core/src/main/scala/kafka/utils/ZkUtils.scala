@@ -944,9 +944,9 @@ class ZKWatchedEphemeral(path : String,
           info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
         }
       }
-    }  
+    }
   }
-  
+
   private class EphemeralWatcher extends Watcher {
     def process(event : WatchedEvent) {
       // if node deleted, then recreate it

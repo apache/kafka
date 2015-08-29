@@ -56,7 +56,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
        case None => -1
     }
   }
-  
+
   var zkWatchedEphemeral : ZKWatchedEphemeral = null;
   def elect: Boolean = {
     val timestamp = SystemTime.milliseconds.toString
