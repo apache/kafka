@@ -100,11 +100,13 @@ object ConsumerPerformance {
     var lastReportTime: Long = startMs
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
-    var lastConsumed = System.currentTimeMillis
-    while(messagesRead < count && lastConsumed >= System.currentTimeMillis - timeout) {
+    var lastConsumedTime = System.currentTimeMillis
+
+
+    while(messagesRead < count && System.currentTimeMillis() - lastConsumedTime < timeout) {
       val records = consumer.poll(100)
       if(records.count() > 0)
-        lastConsumed = System.currentTimeMillis
+        lastConsumedTime = System.currentTimeMillis
       for(record <- records) {
         messagesRead += 1
         if(record.key != null)
