@@ -160,7 +160,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         /* setup zookeeper */
         var (client, connection) = initZk()
         zkClient = client
-        zkConnection = connection 
+        zkConnection = connection
 
         /* start log manager */
         logManager = createLogManager(zkClient, brokerState)
