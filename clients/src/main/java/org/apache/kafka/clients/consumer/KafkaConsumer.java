@@ -32,9 +32,9 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -57,8 +57,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.apache.kafka.common.utils.Utils.min;
 
 /**
  * A Kafka client that consumes records from a Kafka cluster.
@@ -729,7 +727,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             while (remaining >= 0) {
                 long start = time.milliseconds();
                 Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
-                long end = time.milliseconds();
 
                 if (!records.isEmpty()) {
                     // if data is available, then return it, but first send off the
@@ -740,13 +737,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     return new ConsumerRecords<>(records);
                 }
 
-                remaining -= end - start;
-
-                // nothing was available, so we should backoff before retrying
-                if (remaining > 0) {
-                    Utils.sleep(min(remaining, retryBackoffMs));
-                    remaining -= time.milliseconds() - end;
-                }
+                remaining -= time.milliseconds() - start;
             }
 
             return ConsumerRecords.empty();
