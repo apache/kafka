@@ -33,16 +33,13 @@ object NetworkClientBlockingOps {
 
 class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
 
-  def blockingReady(node: Node, timeout: Long, retryBackoff: Option[Long])(implicit time: JTime): Boolean = {
+  def blockingReady(node: Node, timeout: Long)(implicit time: JTime): Boolean = {
     client.ready(node, time.milliseconds()) || pollUntil(timeout) { (_, now) =>
       if (client.isReady(node, now))
         true
       else if (client.connectionFailed(node))
         throw new IOException(s"Connection to $node failed")
-      else {
-        retryBackoff.foreach(Thread.sleep)
-        false
-      }
+      else false
     }
   }
 

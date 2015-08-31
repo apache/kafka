@@ -277,7 +277,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     val socketTimeoutMs = config.controllerSocketTimeoutMs
 
     def socketTimeoutException: Throwable =
-      new SocketTimeoutException(s"Did not receive response within $socketTimeoutException")
+      new SocketTimeoutException(s"Did not receive response within $socketTimeoutMs")
 
     def networkClientControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
@@ -296,7 +296,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           selector,
           metadataUpdater,
           config.brokerId.toString,
-          Integer.MAX_VALUE,
+          1,
           0,
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           Selectable.USE_DEFAULT_BUFFER_SIZE)
@@ -341,7 +341,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           if (prevController != null) {
             try {
 
-              if (!networkClient.blockingReady(node(prevController), socketTimeoutMs, Some(10)))
+              if (!networkClient.blockingReady(node(prevController), socketTimeoutMs))
                 throw socketTimeoutException
 
               // send the controlled shutdown request

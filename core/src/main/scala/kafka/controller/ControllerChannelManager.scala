@@ -103,7 +103,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         selector,
         new ManualMetadataUpdater(Seq(brokerNode).asJava),
         config.brokerId.toString,
-        Int.MaxValue,
+        1,
         0,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE
@@ -206,7 +206,7 @@ class RequestSendThread(val controllerId: Int,
     import NetworkClientBlockingOps._
     try {
 
-      val ready = networkClient.blockingReady(brokerNode, socketTimeoutMs, Some(10))(time)
+      val ready = networkClient.blockingReady(brokerNode, socketTimeoutMs)(time)
 
       if (!ready)
         throw new SocketTimeoutException(s"No response received within $socketTimeoutMs ms")
