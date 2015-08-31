@@ -107,8 +107,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     }
     if(producerRequest.requiredAcks != 0) {
       val producerResponse = ProducerResponse.readFrom(response.payload)
-      producerRequestStats.getProducerRequestStats(config.host, config.port).throttleTimeHist.update(producerResponse.throttleTime, TimeUnit.MILLISECONDS)
-      producerRequestStats.getProducerRequestAllBrokersStats.throttleTimeHist.update(producerResponse.throttleTime, TimeUnit.MILLISECONDS)
+      producerRequestStats.getProducerRequestStats(config.host, config.port).throttleTimeStats.update(producerResponse.throttleTime, TimeUnit.MILLISECONDS)
+      producerRequestStats.getProducerRequestAllBrokersStats.throttleTimeStats.update(producerResponse.throttleTime, TimeUnit.MILLISECONDS)
       producerResponse
     }
     else

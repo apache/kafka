@@ -29,7 +29,7 @@ class ProducerRequestMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup
 
   val requestTimer = new KafkaTimer(newTimer("ProducerRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags))
   val requestSizeHist = newHistogram("ProducerRequestSize", biased = true, tags)
-  val throttleTimeHist = newTimer("ProducerRequestThrottleTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags);
+  val throttleTimeStats = newTimer("ProducerRequestThrottleTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags);
 }
 
 /**

@@ -136,8 +136,8 @@ class SimpleConsumer(val host: String,
     val fetchedSize = fetchResponse.sizeInBytes
     fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestSizeHist.update(fetchedSize)
     fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestSizeHist.update(fetchedSize)
-    fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).throttleTimeHist.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
-    fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.throttleTimeHist.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).throttleTimeStats.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.throttleTimeStats.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
     fetchResponse
   }
 
