@@ -33,8 +33,9 @@ import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.{InvalidReceiveException, ChannelBuilder,
-                                        PlaintextChannelBuilder, SSLChannelBuilder}
+                                        PlaintextChannelBuilder, SSLChannelBuilder, SaslChannelBuilder}
 import org.apache.kafka.common.security.ssl.SSLFactory
+import org.apache.kafka.common.security.kerberos.LoginFactory
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
@@ -516,7 +517,8 @@ private[kafka] class Processor(val id: Int,
 
   private def createChannelBuilder(): ChannelBuilder = {
     val channelBuilder: ChannelBuilder = if (protocol == SecurityProtocol.SSL)  new SSLChannelBuilder(SSLFactory.Mode.SERVER)
-                                        else new PlaintextChannelBuilder()
+                                         else if (protocol == SecurityProtocol.PLAINTEXTSASL) new SaslChannelBuilder(LoginFactory.Mode.SERVER)
+                                         else new PlaintextChannelBuilder()
 
     channelBuilder.configure(channelConfigs)
     channelBuilder

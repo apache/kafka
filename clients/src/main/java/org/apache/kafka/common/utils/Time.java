@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.Date;
 /**
  * An interface abstracting the clock to use in unit testing classes that make use of clock time
  */
@@ -32,8 +33,29 @@ public interface Time {
     public long nanoseconds();
 
     /**
+     * Returns time in milliseconds as does System.currentTimeMillis(),
+     * but uses elapsed time from an arbitrary epoch more like System.nanoTime().
+     * The difference is that if somebody changes the system clock,
+     * Time.currentElapsedTime will change but nanoTime won't.
+     * @return  The time in milliseconds from some arbitrary point in time.
+     */
+    public long currentElapsedTime();
+
+    /**
+     * Explicitly returns system dependent current wall time.
+     * @return Current time in msec.
+     */
+    public long currentWallTime();
+
+    /**
      * Sleep for the given number of milliseconds
      */
     public void sleep(long ms);
+
+    /**
+     * This is to convert the elapsedTime to a Date.
+     * @return A date object indicated by the elapsedTime.
+     */
+    public Date elapsedTimeToDate(long elapsedTime);
 
 }
