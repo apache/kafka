@@ -27,7 +27,10 @@
 	<allow pkg="javax.management" />
 	<allow pkg="org.slf4j" />
 	<allow pkg="org.junit" />
+  <allow pkg="java.security" />
 	<allow pkg="javax.net.ssl" />
+  <allow pkg="javax.security" />
+  <allow pkg="org.ietf.jgss" />
 
 	<!-- no one depends on the server -->
 	<disallow pkg="kafka" />
@@ -39,6 +42,7 @@
 	<subpackage name="common">
 		<disallow pkg="org.apache.kafka.clients" />
 		<allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.common.security" />
 		<allow pkg="org.apache.kafka.test" />
 
 		<subpackage name="config">

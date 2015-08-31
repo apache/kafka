@@ -10,37 +10,19 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.common.network;
 
-import java.util.Map;
-import java.nio.channels.SelectionKey;
+package org.apache.kafka.common.config;
 
-import org.apache.kafka.common.KafkaException;
 
-/**
- * A ChannelBuilder interface to build Channel based on configs
- */
-public interface ChannelBuilder {
-
-    /**
-     * Configure this class with the given key-value pairs
+public class SaslConfigs {
+    /*
+     * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
-    void configure(Map<String, ?> configs) throws KafkaException;
 
+    public static final String SASL_KAFKA_SERVER_REALM = "sasl.kafka.server.realm";
+    public static final String SASL_KAFKA_SERVER_DOC = "The sasl kafka server realm."
+        + "Default will be from kafka jaas config";
+    public static final String DEFAULT_KAFKA_SERVER_REALM = "";
 
-    /**
-     * returns a Channel with TransportLayer and Authenticator configured.
-     * @param  id  channel id
-     * @param  key SelectionKey
-     * @param  maxReceiveSize
-     * @returns KafkaChannel
-     */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
-
-
-    /**
-     * Closes ChannelBuilder
-     */
-    void close();
 
 }
