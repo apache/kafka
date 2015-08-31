@@ -48,7 +48,7 @@ public class RequestResponseTest {
                 createConsumerMetadataResponse(),
                 createControlledShutdownRequest(),
                 createControlledShutdownResponse(),
-                createControlledShutdownRequest().getErrorResponse(0, new UnknownServerException()),
+                createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchRequest(),
                 createFetchRequest().getErrorResponse(0, new UnknownServerException()),
                 createFetchResponse(),
@@ -77,7 +77,7 @@ public class RequestResponseTest {
                 createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
                 createStopReplicaResponse(),
                 createUpdateMetadataRequest(1),
-                createUpdateMetadataRequest(1).getErrorResponse(0, new UnknownServerException()),
+                createUpdateMetadataRequest(1).getErrorResponse(1, new UnknownServerException()),
                 createUpdateMetadataResponse(),
                 createLeaderAndIsrRequest(),
                 createLeaderAndIsrRequest().getErrorResponse(0, new UnknownServerException()),
@@ -306,18 +306,27 @@ public class RequestResponseTest {
         partitionStates.put(new TopicPartition("topic20", 1),
                 new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
-        Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints1 = new HashMap<>();
-        endPoints1.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1223));
+        if (version == 0) {
+            Set<UpdateMetadataRequest.BrokerEndPoint> aliveBrokers = new HashSet<>(Arrays.asList(
+                    new UpdateMetadataRequest.BrokerEndPoint(0, "host1", 1223),
+                    new UpdateMetadataRequest.BrokerEndPoint(1, "host2", 1234)
+            ));
 
-        Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints2 = new HashMap<>();
-        endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
-        endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
+            return new UpdateMetadataRequest(1, 10, aliveBrokers, partitionStates);
+        } else {
+            Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints1 = new HashMap<>();
+            endPoints1.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1223));
 
-        Set<UpdateMetadataRequest.Broker> aliveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1),
-            new UpdateMetadataRequest.Broker(1, endPoints2)
-        ));
+            Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints2 = new HashMap<>();
+            endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
+            endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
 
-        return new UpdateMetadataRequest(version, 1, 10, partitionStates, aliveBrokers);
+            Set<UpdateMetadataRequest.Broker> aliveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1),
+                    new UpdateMetadataRequest.Broker(1, endPoints2)
+            ));
+
+            return new UpdateMetadataRequest(1, 10, partitionStates, aliveBrokers);
+        }
     }
 
     private AbstractRequestResponse createUpdateMetadataResponse() {

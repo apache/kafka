@@ -22,7 +22,7 @@ import org.apache.kafka.clients.{ClientResponse, ClientRequest, ManualMetadataUp
 import org.apache.kafka.common.{TopicPartition, Node}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{Selectable, ChannelBuilders, Selector, NetworkReceive}
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{SecurityProtocol, ApiKeys}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.utils.Time
@@ -345,7 +345,6 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         partitionStateInfos.foreach(p => stateChangeLogger.trace(("Controller %d epoch %d sending UpdateMetadata request %s " +
           "to broker %d for partition %s").format(controllerId, controllerEpoch, p._2.leaderIsrAndControllerEpoch,
           broker, p._1)))
-        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_083)) (1: Short) else (0: Short)
         val partitionStates = partitionStateInfos.map { case (topicPartition, partitionStateInfo) =>
           val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
           val partitionState = new UpdateMetadataRequest.PartitionState(controllerEpoch, leaderIsr.leader,
@@ -354,15 +353,27 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           )
           topicPartition -> partitionState
         }
-        val aliveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
-          val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
-            securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
-          }
-          new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava)
-        }
 
-        val updateMetadataRequest = new UpdateMetadataRequest(version, controllerId, controllerEpoch,
-          partitionStates.asJava, aliveBrokers.asJava)
+        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_083)) (1: Short) else (0: Short)
+
+        val updateMetadataRequest =
+          if (version == 0) {
+            val aliveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
+              val brokerEndPoint = broker.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)
+              new UpdateMetadataRequest.BrokerEndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
+            }
+            new UpdateMetadataRequest(controllerId, controllerEpoch, aliveBrokers.asJava, partitionStates.asJava)
+          }
+          else {
+            val aliveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
+              val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
+                securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
+              }
+              new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava)
+            }
+            new UpdateMetadataRequest(controllerId, controllerEpoch, partitionStates.asJava, aliveBrokers.asJava)
+          }
+
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, Some(version), updateMetadataRequest, null)
       }
       updateMetadataRequestMap.clear()

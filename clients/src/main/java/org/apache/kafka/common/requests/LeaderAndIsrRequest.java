@@ -65,7 +65,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     private static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
     private static final String PARTITION_STATES_KEY_NAME = "partition_states";
-    private static final String LEADERS_KEY_NAME = "leaders";
+    private static final String LIVE_LEADERS_KEY_NAME = "live_leaders";
 
     // partition_states key names
     private static final String TOPIC_KEY_NAME = "topic";
@@ -76,7 +76,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private static final String ZK_VERSION_KEY_NAME = "zk_version";
     private static final String REPLICAS_KEY_NAME = "replicas";
 
-    // leaders key names
+    // live_leaders key names
     private static final String END_POINT_ID_KEY_NAME = "id";
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
@@ -84,10 +84,10 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private final int controllerId;
     private final int controllerEpoch;
     private final Map<TopicPartition, PartitionState> partitionStates;
-    private final Set<EndPoint> leaders;
+    private final Set<EndPoint> liveLeaders;
 
     public LeaderAndIsrRequest(int controllerId, int controllerEpoch, Map<TopicPartition, PartitionState> partitionStates,
-                               Set<EndPoint> leaders) {
+                               Set<EndPoint> liveLeaders) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
@@ -109,20 +109,20 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         }
         struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
 
-        List<Struct> leadersData = new ArrayList<>(leaders.size());
-        for (EndPoint leader : leaders) {
-            Struct leaderData = struct.instance(LEADERS_KEY_NAME);
+        List<Struct> leadersData = new ArrayList<>(liveLeaders.size());
+        for (EndPoint leader : liveLeaders) {
+            Struct leaderData = struct.instance(LIVE_LEADERS_KEY_NAME);
             leaderData.set(END_POINT_ID_KEY_NAME, leader.id);
             leaderData.set(HOST_KEY_NAME, leader.host);
             leaderData.set(PORT_KEY_NAME, leader.port);
             leadersData.add(leaderData);
         }
-        struct.set(LEADERS_KEY_NAME, leadersData.toArray());
+        struct.set(LIVE_LEADERS_KEY_NAME, leadersData.toArray());
 
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
         this.partitionStates = partitionStates;
-        this.leaders = leaders;
+        this.liveLeaders = liveLeaders;
     }
 
     public LeaderAndIsrRequest(Struct struct) {
@@ -155,7 +155,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         }
 
         Set<EndPoint> leaders = new HashSet<>();
-        for (Object leadersDataObj : struct.getArray(LEADERS_KEY_NAME)) {
+        for (Object leadersDataObj : struct.getArray(LIVE_LEADERS_KEY_NAME)) {
             Struct leadersData = (Struct) leadersDataObj;
             int id = leadersData.getInt(END_POINT_ID_KEY_NAME);
             String host = leadersData.getString(HOST_KEY_NAME);
@@ -166,7 +166,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
         controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
         this.partitionStates = partitionStates;
-        this.leaders = leaders;
+        this.liveLeaders = leaders;
     }
 
     @Override
@@ -197,8 +197,8 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         return partitionStates;
     }
 
-    public Set<EndPoint> leaders() {
-        return leaders;
+    public Set<EndPoint> liveLeaders() {
+        return liveLeaders;
     }
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer, int versionId) {

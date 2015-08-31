@@ -472,7 +472,7 @@ public class Protocol {
                        new Field("zk_version", INT32, "The ZK version."),
                        new Field("replicas", new ArrayOf(INT32), "The replica ids."));
 
-    public static final Schema LEADER_AND_ISR_REQUEST_LEADER_V0 =
+    public static final Schema LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0 =
             new Schema(new Field("id", INT32, "The broker id."),
                        new Field("host", STRING, "The hostname of the broker."),
                        new Field("port", INT32, "The port on which the broker accepts requests."));
@@ -481,7 +481,7 @@ public class Protocol {
                                                                       new Field("controller_epoch", INT32, "The controller epoch."),
                                                                       new Field("partition_states",
                                                                                 new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0)),
-                                                                      new Field("leaders", new ArrayOf(LEADER_AND_ISR_REQUEST_LEADER_V0)));
+                                                                      new Field("live_leaders", new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
     public static final Schema LEADER_AND_ISR_RESPONSE_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
                                                                                  new Field("partition", INT32, "Topic partition id."),
@@ -519,15 +519,7 @@ public class Protocol {
 
     /* Update metadata api */
 
-    public static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V0 =
-            new Schema(new Field("topic", STRING, "Topic name."),
-                       new Field("partition", INT32, "Topic partition id."),
-                       new Field("controller_epoch", INT32, "The controller epoch."),
-                       new Field("leader", INT32, "The broker id for the leader."),
-                       new Field("leader_epoch", INT32, "The leader epoch."),
-                       new Field("isr", new ArrayOf(INT32), "The in sync replica ids."),
-                       new Field("zk_version", INT32, "The ZK version."),
-                       new Field("replicas", new ArrayOf(INT32), "The replica ids."));
+    public static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V0 = LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0;
 
     public static final Schema UPDATE_METADATA_REQUEST_BROKER_V0 =
             new Schema(new Field("id", INT32, "The broker id."),
