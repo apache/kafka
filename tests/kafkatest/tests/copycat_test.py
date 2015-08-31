@@ -15,8 +15,10 @@
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.copycat import CopycatStandaloneService
+from kafkatest.services.console_consumer import ConsoleConsumer
 from ducktape.utils.util import wait_until
-import hashlib, subprocess
+from ducktape.mark import parametrize
+import hashlib, subprocess, json
 
 class CopycatStandaloneFileTest(KafkaTest):
     """
@@ -30,8 +32,14 @@ class CopycatStandaloneFileTest(KafkaTest):
 
     OFFSETS_FILE = "/mnt/copycat.offsets"
 
-    FIRST_INPUT = "foo\nbar\nbaz\n"
-    SECOND_INPUT = "razz\nma\ntazz\n"
+    TOPIC = "test"
+
+    FIRST_INPUT_LIST = ["foo", "bar", "baz"]
+    FIRST_INPUT = "\n".join(FIRST_INPUT_LIST) + "\n"
+    SECOND_INPUT_LIST = ["razz", "ma", "tazz"]
+    SECOND_INPUT = "\n".join(SECOND_INPUT_LIST) + "\n"
+
+    SCHEMA = { "type": "string", "optional": False }
 
     def __init__(self, test_context):
         super(CopycatStandaloneFileTest, self).__init__(test_context, num_zk=1, num_brokers=1, topics={
@@ -40,8 +48,18 @@ class CopycatStandaloneFileTest(KafkaTest):
 
         self.source = CopycatStandaloneService(test_context, self.kafka, [self.INPUT_FILE, self.OFFSETS_FILE])
         self.sink = CopycatStandaloneService(test_context, self.kafka, [self.OUTPUT_FILE, self.OFFSETS_FILE])
+        self.consumer_validator = ConsoleConsumer(test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=1000)
 
-    def test_file_source_and_sink(self):
+    @parametrize(converter="org.apache.kafka.copycat.json.JsonConverter", schemas=True)
+    @parametrize(converter="org.apache.kafka.copycat.json.JsonConverter", schemas=False)
+    @parametrize(converter="org.apache.kafka.copycat.storage.StringConverter", schemas=None)
+    def test_file_source_and_sink(self, converter="org.apache.kafka.json.JsonConverter", schemas=True):
+        assert converter != None, "converter type must be set"
+        # Template parameters
+        self.key_converter = converter
+        self.value_converter = converter
+        self.schemas = schemas
+
         # These need to be set
         self.source.set_configs(self.render("copycat-standalone.properties"), self.render("copycat-file-source.properties"))
         self.sink.set_configs(self.render("copycat-standalone.properties"), self.render("copycat-file-sink.properties"))
@@ -60,6 +78,13 @@ class CopycatStandaloneFileTest(KafkaTest):
 
         self.source.node.account.ssh("echo -e -n " + repr(self.SECOND_INPUT) + " >> " + self.INPUT_FILE)
         wait_until(lambda: self.validate_output(self.FIRST_INPUT + self.SECOND_INPUT), timeout_sec=60, err_msg="Sink output file never converged to the same state as the input file")
+
+        # Validate the format of the data in the Kafka topic
+        self.consumer_validator.run()
+        expected = json.dumps([line if not self.schemas else { "schema": self.SCHEMA, "payload": line } for line in self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST])
+        decoder = (json.loads if converter.endswith("JsonConverter") else str)
+        actual = json.dumps([decoder(x) for x in self.consumer_validator.messages_consumed[1]])
+        assert expected == actual, "Expected %s but saw %s in Kafka" % (expected, actual)
 
     def validate_output(self, value):
         try:

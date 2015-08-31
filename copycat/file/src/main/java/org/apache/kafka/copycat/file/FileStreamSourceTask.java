@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.file;
 
 import org.apache.kafka.copycat.data.Schema;
-import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
@@ -26,17 +25,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * FileStreamSourceTask reads from stdin or a file.
  */
 public class FileStreamSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(FileStreamSourceTask.class);
-    private static final Schema OFFSET_KEY_SCHEMA = Schema.STRING_SCHEMA;
-    private static final Schema OFFSET_VALUE_SCHEMA = Schema.OPTIONAL_INT64_SCHEMA;
+    public static final String FILENAME_FIELD = "filename";
+    public  static final String POSITION_FIELD = "position";
     private static final Schema VALUE_SCHEMA = Schema.STRING_SCHEMA;
 
     private String filename;
@@ -66,14 +63,14 @@ public class FileStreamSourceTask extends SourceTask {
         if (stream == null) {
             try {
                 stream = new FileInputStream(filename);
-                SchemaAndValue offsetWithSchema = context.offsetStorageReader().offset(new SchemaAndValue(OFFSET_KEY_SCHEMA, filename));
-                if (offsetWithSchema != null) {
-                    if (!offsetWithSchema.schema().equals(OFFSET_VALUE_SCHEMA))
-                        throw new CopycatException("Unexpected offset schema.");
-                    Long lastRecordedOffset = (Long) offsetWithSchema.value();
+                Map<String, Object> offset = context.offsetStorageReader().offset(Collections.singletonMap(FILENAME_FIELD, filename));
+                if (offset != null) {
+                    Object lastRecordedOffset = offset.get(POSITION_FIELD);
+                    if (lastRecordedOffset != null && !(lastRecordedOffset instanceof Long))
+                        throw new CopycatException("Offset position is the incorrect type");
                     if (lastRecordedOffset != null) {
                         log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
-                        long skipLeft = lastRecordedOffset;
+                        long skipLeft = (Long) lastRecordedOffset;
                         while (skipLeft > 0) {
                             try {
                                 long skipped = stream.skip(skipLeft);
@@ -85,7 +82,7 @@ public class FileStreamSourceTask extends SourceTask {
                         }
                         log.debug("Skipped to offset {}", lastRecordedOffset);
                     }
-                    streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
+                    streamOffset = (lastRecordedOffset != null) ? (Long) lastRecordedOffset : 0L;
                 } else {
                     streamOffset = 0L;
                 }
@@ -130,7 +127,7 @@ public class FileStreamSourceTask extends SourceTask {
                         if (line != null) {
                             if (records == null)
                                 records = new ArrayList<>();
-                            records.add(new SourceRecord(OFFSET_KEY_SCHEMA, filename, OFFSET_VALUE_SCHEMA, streamOffset, topic, VALUE_SCHEMA, line));
+                            records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, VALUE_SCHEMA, line));
                         }
                         new ArrayList<SourceRecord>();
                     } while (line != null);
@@ -192,5 +189,13 @@ public class FileStreamSourceTask extends SourceTask {
             }
             this.notify();
         }
+    }
+
+    private Map<String, String> offsetKey(String filename) {
+        return Collections.singletonMap(FILENAME_FIELD, filename);
+    }
+
+    private Map<String, Long> offsetValue(Long pos) {
+        return Collections.singletonMap(POSITION_FIELD, pos);
     }
 }

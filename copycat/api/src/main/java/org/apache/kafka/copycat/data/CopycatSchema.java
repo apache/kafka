@@ -23,20 +23,37 @@ import java.nio.ByteBuffer;
 import java.util.*;
 
 public class CopycatSchema implements Schema {
-    private static final Map<Type, Class<?>> SCHEMA_TYPE_CLASSES = new HashMap<>();
+    /**
+     * Maps Schema.Types to a list of Java classes that can be used to represent them.
+     */
+    private static final Map<Type, List<Class>> SCHEMA_TYPE_CLASSES = new HashMap<>();
+
+    /**
+     * Maps the Java classes to the corresponding Schema.Type.
+     */
+    private static final Map<Class<?>, Type> JAVA_CLASS_SCHEMA_TYPES = new HashMap<>();
+
     static {
-        SCHEMA_TYPE_CLASSES.put(Type.INT8, Byte.class);
-        SCHEMA_TYPE_CLASSES.put(Type.INT16, Short.class);
-        SCHEMA_TYPE_CLASSES.put(Type.INT32, Integer.class);
-        SCHEMA_TYPE_CLASSES.put(Type.INT64, Long.class);
-        SCHEMA_TYPE_CLASSES.put(Type.FLOAT32, Float.class);
-        SCHEMA_TYPE_CLASSES.put(Type.FLOAT64, Double.class);
-        SCHEMA_TYPE_CLASSES.put(Type.BOOLEAN, Boolean.class);
-        SCHEMA_TYPE_CLASSES.put(Type.STRING, String.class);
-        SCHEMA_TYPE_CLASSES.put(Type.ARRAY, List.class);
-        SCHEMA_TYPE_CLASSES.put(Type.MAP, Map.class);
-        SCHEMA_TYPE_CLASSES.put(Type.STRUCT, Struct.class);
-        // Bytes are handled as a special case
+        SCHEMA_TYPE_CLASSES.put(Type.INT8, Arrays.asList((Class) Byte.class));
+        SCHEMA_TYPE_CLASSES.put(Type.INT16, Arrays.asList((Class) Short.class));
+        SCHEMA_TYPE_CLASSES.put(Type.INT32, Arrays.asList((Class) Integer.class));
+        SCHEMA_TYPE_CLASSES.put(Type.INT64, Arrays.asList((Class) Long.class));
+        SCHEMA_TYPE_CLASSES.put(Type.FLOAT32, Arrays.asList((Class) Float.class));
+        SCHEMA_TYPE_CLASSES.put(Type.FLOAT64, Arrays.asList((Class) Double.class));
+        SCHEMA_TYPE_CLASSES.put(Type.BOOLEAN, Arrays.asList((Class) Boolean.class));
+        SCHEMA_TYPE_CLASSES.put(Type.STRING, Arrays.asList((Class) String.class));
+        // Bytes are special and have 2 representations. byte[] causes problems because it doesn't handle equals() and
+        // hashCode() like we want objects to, so we support both byte[] and ByteBuffer. Using plain byte[] can cause
+        // those methods to fail, so ByteBuffers are recommended
+        SCHEMA_TYPE_CLASSES.put(Type.BYTES, Arrays.asList((Class) byte[].class, (Class) ByteBuffer.class));
+        SCHEMA_TYPE_CLASSES.put(Type.ARRAY, Arrays.asList((Class) List.class));
+        SCHEMA_TYPE_CLASSES.put(Type.MAP, Arrays.asList((Class) Map.class));
+        SCHEMA_TYPE_CLASSES.put(Type.STRUCT, Arrays.asList((Class) Struct.class));
+
+        for (Map.Entry<Type, List<Class>> schemaClasses : SCHEMA_TYPE_CLASSES.entrySet()) {
+            for (Class<?> schemaClass : schemaClasses.getValue())
+                JAVA_CLASS_SCHEMA_TYPES.put(schemaClass, schemaClasses.getKey());
+        }
     }
 
     // The type of the field
@@ -158,14 +175,19 @@ public class CopycatSchema implements Schema {
                 return;
         }
 
-        // Special case for bytes. byte[] causes problems because it doesn't handle equals()/hashCode() like we want
-        // objects to, so we support both byte[] and ByteBuffer. Using plain byte[] can cause those methods to fail, so
-        // ByteBuffers are recommended
-        if (schema.type() == Type.BYTES && (value instanceof byte[] || value instanceof ByteBuffer))
-            return;
-        Class<?> expectedClass = SCHEMA_TYPE_CLASSES.get(schema.type());
-        if (expectedClass == null || !expectedClass.isInstance(value))
-                throw new DataException("Invalid value: expected " + expectedClass + " for type " + schema.type() + " but tried to use " + value.getClass());
+        final List<Class> expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
+        if (expectedClasses == null)
+            throw new DataException("Invalid Java object for schema type " + schema.type() + ": " + value.getClass());
+
+        boolean foundMatch = false;
+        for (Class<?> expectedClass : expectedClasses) {
+            if (expectedClass.isInstance(value)) {
+                foundMatch = true;
+                break;
+            }
+        }
+        if (!foundMatch)
+            throw new DataException("Invalid Java object for schema type " + schema.type() + ": " + value.getClass());
 
         switch (schema.type()) {
             case STRUCT:
@@ -231,5 +253,33 @@ public class CopycatSchema implements Schema {
             return "Schema{" + name + ":" + type + "}";
         else
             return "Schema{" + type + "}";
+    }
+
+
+    /**
+     * Get the {@link Type} associated with the the given class.
+     *
+     * @param klass the Class to
+     * @return the corresponding type, nor null if there is no matching type
+     */
+    public static Type schemaType(Class<?> klass) {
+        synchronized (JAVA_CLASS_SCHEMA_TYPES) {
+            Type schemaType = JAVA_CLASS_SCHEMA_TYPES.get(klass);
+            if (schemaType != null)
+                return schemaType;
+
+            // Since the lookup only checks the class, we need to also try
+            for (Map.Entry<Class<?>, Type> entry : JAVA_CLASS_SCHEMA_TYPES.entrySet()) {
+                try {
+                    klass.asSubclass(entry.getKey());
+                    // Cache this for subsequent lookups
+                    JAVA_CLASS_SCHEMA_TYPES.put(klass, entry.getValue());
+                    return entry.getValue();
+                } catch (ClassCastException e) {
+                    // Expected, ignore
+                }
+            }
+        }
+        return null;
     }
 }

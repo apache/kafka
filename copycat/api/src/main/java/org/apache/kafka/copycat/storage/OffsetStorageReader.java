@@ -18,15 +18,20 @@
 package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.copycat.data.SchemaAndValue;
 
 import java.util.Collection;
 import java.util.Map;
 
 /**
+ * <p>
  * OffsetStorageReader provides access to the offset storage used by sources. This can be used by
  * connectors to determine offsets to start consuming data from. This is most commonly used during
  * initialization of a task, but can also be used during runtime, e.g. when reconfiguring a task.
+ * </p>
+ * <p>
+ * Offsets are always defined as Maps of Strings to primitive types, i.e. all types supported by
+ * {@link org.apache.kafka.copycat.data.Schema} other than Array, Map, and Struct.
+ * </p>
  */
 @InterfaceStability.Unstable
 public interface OffsetStorageReader {
@@ -37,12 +42,12 @@ public interface OffsetStorageReader {
      * @param partition object uniquely identifying the partition of data
      * @return object uniquely identifying the offset in the partition of data
      */
-    SchemaAndValue offset(SchemaAndValue partition);
+    <T> Map<String, Object> offset(Map<String, T> partition);
 
     /**
      * <p>
      * Get a set of offsets for the specified partition identifiers. This may be more efficient
-     * than calling {@link #offset(SchemaAndValue)} repeatedly.
+     * than calling {@link #offset(Map)} repeatedly.
      * </p>
      * <p>
      * Note that when errors occur, this method omits the associated data and tries to return as
@@ -56,5 +61,5 @@ public interface OffsetStorageReader {
      * @param partitions set of identifiers for partitions of data
      * @return a map of partition identifiers to decoded offsets
      */
-    Map<SchemaAndValue, SchemaAndValue> offsets(Collection<SchemaAndValue> partitions);
+    <T> Map<Map<String, T>, Map<String, Object>> offsets(Collection<Map<String, T>> partitions);
 }

@@ -23,7 +23,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.copycat.cli.WorkerConfig;
-import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -46,33 +45,31 @@ import java.util.concurrent.TimeoutException;
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
  */
-class WorkerSourceTask<K, V> implements WorkerTask {
+class WorkerSourceTask implements WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);
 
     private ConnectorTaskId id;
     private SourceTask task;
-    private final Converter<K> keyConverter;
-    private final Converter<V> valueConverter;
-    private KafkaProducer<K, V> producer;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
+    private KafkaProducer<byte[], byte[]> producer;
     private WorkerSourceTaskThread workThread;
     private OffsetStorageReader offsetReader;
-    private OffsetStorageWriter<K, V> offsetWriter;
+    private OffsetStorageWriter offsetWriter;
     private final WorkerConfig workerConfig;
     private final Time time;
 
     // Use IdentityHashMap to ensure correctness with duplicate records. This is a HashMap because
     // there is no IdentityHashSet.
-    private IdentityHashMap<ProducerRecord<K, V>, ProducerRecord<K, V>>
-            outstandingMessages;
+    private IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> outstandingMessages;
     // A second buffer is used while an offset flush is running
-    private IdentityHashMap<ProducerRecord<K, V>, ProducerRecord<K, V>>
-            outstandingMessagesBacklog;
+    private IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> outstandingMessagesBacklog;
     private boolean flushing;
 
     public WorkerSourceTask(ConnectorTaskId id, SourceTask task,
-                            Converter<K> keyConverter, Converter<V> valueConverter,
-                            KafkaProducer<K, V> producer,
-                            OffsetStorageReader offsetReader, OffsetStorageWriter<K, V> offsetWriter,
+                            Converter keyConverter, Converter valueConverter,
+                            KafkaProducer<byte[], byte[]> producer,
+                            OffsetStorageReader offsetReader, OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig, Time time) {
         this.id = id;
         this.task = task;
@@ -132,10 +129,9 @@ class WorkerSourceTask<K, V> implements WorkerTask {
      */
     private synchronized void sendRecords(List<SourceRecord> records) {
         for (SourceRecord record : records) {
-            K key = (record.keySchema() != null) ? keyConverter.fromCopycatData(record.keySchema(), record.key()) : null;
-            V value = (record.valueSchema() != null) ? valueConverter.fromCopycatData(record.valueSchema(), record.value()) : null;
-            final ProducerRecord<K, V> producerRecord = new ProducerRecord<>(
-                    record.topic(), record.kafkaPartition(), key, value);
+            byte[] key = keyConverter.fromCopycatData(record.topic(), record.keySchema(), record.key());
+            byte[] value = valueConverter.fromCopycatData(record.topic(), record.valueSchema(), record.value());
+            final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(), key, value);
             log.trace("Appending record with key {}, value {}", record.key(), record.value());
             if (!flushing) {
                 outstandingMessages.put(producerRecord, producerRecord);
@@ -158,13 +154,12 @@ class WorkerSourceTask<K, V> implements WorkerTask {
                         }
                     });
             // Offsets are converted & serialized in the OffsetWriter
-            offsetWriter.offset(new SchemaAndValue(record.sourcePartitionSchema(), record.sourcePartition()),
-                    new SchemaAndValue(record.sourceOffsetSchema(), record.sourceOffset()));
+            offsetWriter.offset(record.sourcePartition(), record.sourceOffset());
         }
     }
 
-    private synchronized void recordSent(final ProducerRecord<K, V> record) {
-        ProducerRecord<K, V> removed = outstandingMessages.remove(record);
+    private synchronized void recordSent(final ProducerRecord<byte[], byte[]> record) {
+        ProducerRecord<byte[], byte[]> removed = outstandingMessages.remove(record);
         // While flushing, we may also see callbacks for items in the backlog
         if (removed == null && flushing)
             removed = outstandingMessagesBacklog.remove(record);
@@ -276,7 +271,7 @@ class WorkerSourceTask<K, V> implements WorkerTask {
 
     private void finishSuccessfulFlush() {
         // If we were successful, we can just swap instead of replacing items back into the original map
-        IdentityHashMap<ProducerRecord<K, V>, ProducerRecord<K, V>> temp = outstandingMessages;
+        IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> temp = outstandingMessages;
         outstandingMessages = outstandingMessagesBacklog;
         outstandingMessagesBacklog = temp;
         flushing = false;
