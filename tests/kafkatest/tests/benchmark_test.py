@@ -57,45 +57,26 @@ class Benchmark(KafkaTest):
     @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=1, message_size=DEFAULT_RECORD_SIZE)
     @parametrize(acks=-1, topic=TOPIC_REP_THREE, num_producers=1, message_size=DEFAULT_RECORD_SIZE)
     @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3, message_size=DEFAULT_RECORD_SIZE)
+    @matrix(acks=[1], topic=[TOPIC_REP_THREE], num_producers=[1], message_size=[10, 100, 1000, 10000, 100000])
     def test_producer_throughput(self, acks, topic, num_producers, message_size):
         """
         Setup: 1 node zk + 3 node kafka cluster
-        Produce 1e6 100-byte messages to a topic with 6 partitions. Required acks, and topic replication factor
-        are varied depending on arguments injected into this test.
+        Produce ~128MB worth of messages to a topic with 6 partitions. Required acks, topic replication factor,
+        and message size are varied depending on arguments injected into this test.
 
         Collect and return aggregate throughput statistics after all messages have been acknowledged.
-
-        (This runs ProducerPerformance.java under the hood)
-        """
-        self.perf = ProducerPerformanceService(
-            self.test_context, num_producers, self.kafka, topic=topic,
-            num_records=self.msgs_default, record_size=message_size,  throughput=-1,
-            settings={
-                'acks': acks,
-                'batch.size': self.batch_size,
-                'buffer.memory': self.buffer_memory})
-        self.perf.run()
-        return compute_aggregate_throughput(self.perf)
-
-    @matrix(message_size=[10, 100, 1000, 10000, 100000])
-    def test_producer_throughput_multiple_message_size(self, message_size):
-        """
-        Setup: 1 node zk + 3 node kafka cluster
-        With a single producer, produce a fixed amount of data to a topic with 6 partitions, acks=1,
-        replication-factor=3, and message size depends on the value of the injected argument.
-
-        Collect and return aggregate throughput statistics after all messages have been acknowledged.
-
         (This runs ProducerPerformance.java under the hood)
         """
         # Always generate the same total amount of data
         nrecords = int(self.target_data_size / message_size)
 
         self.perf = ProducerPerformanceService(
-            self.test_context, 1, self.kafka,
-            topic=TOPIC_REP_THREE, num_records=nrecords, record_size=message_size, throughput=-1,
-            settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
-        )
+            self.test_context, num_producers, self.kafka, topic=topic,
+            num_records=nrecords, record_size=message_size,  throughput=-1,
+            settings={
+                'acks': acks,
+                'batch.size': self.batch_size,
+                'buffer.memory': self.buffer_memory})
         self.perf.run()
         return compute_aggregate_throughput(self.perf)
 
@@ -123,6 +104,7 @@ class Benchmark(KafkaTest):
         # there aren't even 5 elements
         block_size = max(len(self.perf.stats[0]) / 5, 1)
         nblocks = len(self.perf.stats[0]) / block_size
+
         for i in range(nblocks):
             subset = self.perf.stats[0][i*block_size:min((i+1)*block_size, len(self.perf.stats[0]))]
             if len(subset) == 0:
@@ -189,7 +171,7 @@ class Benchmark(KafkaTest):
 
     @matrix(new_consumer=[True, False])
     @matrix(num_consumers=[1, 3])
-    def test_single_consumer(self, new_consumer, num_consumers):
+    def test_consumer_throughput(self, new_consumer, num_consumers):
         """
         Consume 1e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
         (using new consumer iff new_consumer == True), and report throughput.

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from performance import PerformanceService, parse_performance_output
+from performance import PerformanceService
 from end_to_end_latency import EndToEndLatencyService
 from producer_performance import ProducerPerformanceService
 from consumer_performance import ConsumerPerformanceService

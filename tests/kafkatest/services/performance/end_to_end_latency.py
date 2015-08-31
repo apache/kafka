@@ -17,6 +17,13 @@ from kafkatest.services.performance import PerformanceService
 
 
 class EndToEndLatencyService(PerformanceService):
+
+    logs = {
+        "end_to_end_latency_log": {
+            "path": "/mnt/end-to-end-latency.log",
+            "collect_default": True},
+    }
+
     def __init__(self, context, num_nodes, kafka, topic, num_records, consumer_fetch_max_wait=100, acks=1):
         super(EndToEndLatencyService, self).__init__(context, num_nodes)
         self.kafka = kafka
@@ -36,10 +43,12 @@ class EndToEndLatencyService(PerformanceService):
         cmd = "/opt/kafka/bin/kafka-run-class.sh kafka.tools.EndToEndLatency "\
               "%(bootstrap_servers)s %(zk_connect)s %(topic)s %(num_records)d "\
               "%(consumer_fetch_max_wait)d %(acks)d" % args
+
+        cmd += " | tee /mnt/end-to-end-latency.log"
+
         self.logger.debug("End-to-end latency %d command: %s", idx, cmd)
         results = {}
         for line in node.account.ssh_capture(cmd):
-            self.logger.debug("End-to-end latency %d: %s", idx, line.strip())
             if line.startswith("Avg latency:"):
                 results['latency_avg_ms'] = float(line.split()[2])
             if line.startswith("Percentiles"):

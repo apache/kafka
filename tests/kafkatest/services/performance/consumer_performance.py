@@ -43,6 +43,12 @@ class ConsumerPerformanceService(PerformanceService):
         "new-consumer", "Use the new consumer implementation."
     """
 
+    logs = {
+        "consumer_performance_log": {
+            "path": "/mnt/consumer-performance.log",
+            "collect_default": True},
+    }
+
     def __init__(self, context, num_nodes, kafka, topic, messages, new_consumer=False, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
@@ -52,12 +58,12 @@ class ConsumerPerformanceService(PerformanceService):
         self.settings = settings
 
         # These less-frequently used settings can be updated manually after instantiation
-        self.fetch_size = 1024 * 1024
-        self.socket_buffer_size = 2 * 1024 * 1024
-        self.threads = 10
-        self.num_fetch_threads = 1
+        self.fetch_size = None
+        self.socket_buffer_size = None
+        self.threads = None
+        self.num_fetch_threads = None
         self.group = None
-        self.from_latest = False
+        self.from_latest = None
 
 
     @property
@@ -66,10 +72,6 @@ class ConsumerPerformanceService(PerformanceService):
         args = {
             'topic': self.topic,
             'messages': self.messages,
-            'fetch-size': self.fetch_size,
-            'socket-buffer-size': self.socket_buffer_size,
-            'threads': self.threads,
-            'num-fetch-threads': self.num_fetch_threads
         }
 
         if self.new_consumer:
@@ -77,6 +79,18 @@ class ConsumerPerformanceService(PerformanceService):
             args['broker-list'] = self.kafka.bootstrap_servers()
         else:
             args['zookeeper'] = self.kafka.zk.connect_setting()
+
+        if self.fetch_size is not None:
+            args['fetch-size'] = self.fetch_size
+
+        if self.socket_buffer_size is not None:
+            args['socket-buffer-size'] = self.socket_buffer_size
+
+        if self.threads is not None:
+            args['threads'] = self.threads
+
+        if self.num_fetch_threads is not None:
+            args['num-fetch-threads'] = self.num_fetch_threads
 
         if self.group is not None:
             args['group'] = self.group
@@ -95,6 +109,7 @@ class ConsumerPerformanceService(PerformanceService):
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
 
+        cmd += " | tee /mnt/consumer-performance.log"
         return cmd
 
     def _worker(self, idx, node):
@@ -102,7 +117,6 @@ class ConsumerPerformanceService(PerformanceService):
         self.logger.debug("Consumer performance %d command: %s", idx, cmd)
         last = None
         for line in node.account.ssh_capture(cmd):
-            self.logger.debug("Consumer performance %d: %s", idx, line.strip())
             last = line
         # Parse and save the last line's information
         parts = last.split(',')

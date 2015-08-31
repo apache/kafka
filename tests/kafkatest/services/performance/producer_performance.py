@@ -17,6 +17,13 @@ from kafkatest.services.performance import PerformanceService
 
 
 class ProducerPerformanceService(PerformanceService):
+
+    logs = {
+        "producer_performance_log": {
+            "path": "/mnt/producer-performance.log",
+            "collect_default": True},
+    }
+
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, settings={}, intermediate_stats=False):
         super(ProducerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
@@ -33,7 +40,8 @@ class ProducerPerformanceService(PerformanceService):
         args = self.args.copy()
         args.update({'bootstrap_servers': self.kafka.bootstrap_servers()})
         cmd = "/opt/kafka/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance "\
-              "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s" % args
+              "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s"\
+              " | tee /mnt/producer-performance.log" % args
 
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
@@ -54,15 +62,15 @@ class ProducerPerformanceService(PerformanceService):
             }
         last = None
         for line in node.account.ssh_capture(cmd):
-            self.logger.debug("Producer performance %d: %s", idx, line.strip())
             if self.intermediate_stats:
                 try:
                     self.stats[idx-1].append(parse_stats(line))
                 except:
                     # Sometimes there are extraneous log messages
                     pass
+
             last = line
         try:
             self.results[idx-1] = parse_stats(last)
         except:
-            self.logger.error("Bad last line: %s", last)
+            raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
