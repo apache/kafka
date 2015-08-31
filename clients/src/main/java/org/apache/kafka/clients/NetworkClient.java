@@ -189,6 +189,7 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time in ms
      * @return true if the node is ready
      */
+    @Override
     public boolean isReady(Node node, long now) {
         // if we need to update our metadata now declare all requests unready to make metadata requests first
         // priority
@@ -329,7 +330,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Generate a request header for the given API key
+     * Generate a request header for the given API key and version
      *
      * @param key The api key
      * @param version The api version
@@ -364,6 +365,7 @@ public class NetworkClient implements KafkaClient {
      *
      * @return The node with the fewest in-flight requests.
      */
+    @Override
     public Node leastLoadedNode(long now) {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         int inflight = Integer.MAX_VALUE;
@@ -503,10 +505,12 @@ public class NetworkClient implements KafkaClient {
             return metadata.fetch().nodes();
         }
 
+        @Override
         public boolean isUpdateDue(long now) {
             return !this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0;
         }
 
+        @Override
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
@@ -548,10 +552,10 @@ public class NetworkClient implements KafkaClient {
             return false;
         }
 
+        @Override
         public void requestUpdate() {
             this.metadata.requestUpdate();
         }
-
 
         private void handleResponse(RequestHeader header, Struct body, long now) {
             this.metadataFetchInProgress = false;

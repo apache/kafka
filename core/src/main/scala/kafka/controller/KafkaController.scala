@@ -19,9 +19,8 @@ package kafka.controller
 import java.util
 
 import org.apache.kafka.clients.NetworkClient
-import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{RequestHeader, AbstractRequest, AbstractRequestResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse}
 
 import scala.collection._
 import com.yammer.metrics.core.Gauge
@@ -41,7 +40,6 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kafka.server._
 import kafka.common.TopicAndPartition
@@ -61,11 +59,11 @@ class ControllerContext(val zkClient: ZkClient,
   val partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet
 
   /**
-   * This map is used to ensure the following invariant: at most one `Selector` instance should be created per broker
-   * during the lifetime of the `metrics` parameter received by `KafkaController` (which has the same lifetime as
-   * `KafkaController` since they are both shut down during `KafkaServer.shutdown()`).
+   * This map is used to ensure the following invariant: at most one `NetworkClient`/`Selector` instance should be
+   * created per broker during the lifetime of the `metrics` parameter received by `KafkaController` (which has the same
+   * lifetime as `KafkaController` since they are both shut down during `KafkaServer.shutdown()`).
    *
-   * If we break this invariant, an exception is thrown during the instantiation of Selector` due to the usage of
+   * If we break this invariant, an exception is thrown during the instantiation of `Selector` due to the usage of
    * two equal `MetricName` instances for two `Selector` instantiations. This way also helps to maintain the metrics sane.
    *
    * In the future, we should consider redesigning `ControllerChannelManager` so that we can use a single
