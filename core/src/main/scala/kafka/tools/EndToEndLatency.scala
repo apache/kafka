@@ -22,6 +22,8 @@ import java.util.{Arrays, Properties}
 import org.apache.kafka.clients.consumer.{CommitType, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 
+import scala.collection.JavaConversions._
+
 
 /**
  * This class records the average end to end latency for a single message to travel through Kafka
@@ -60,7 +62,7 @@ object EndToEndLatency {
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
 
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-    consumer.subscribe(topic)
+    consumer.subscribe(List(topic))
 
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)

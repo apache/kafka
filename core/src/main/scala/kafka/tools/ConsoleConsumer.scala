@@ -345,4 +345,3 @@ class ChecksumMessageFormatter extends MessageFormatter {
     output.println(topicStr + "checksum:" + chksum)
   }
 }
-
