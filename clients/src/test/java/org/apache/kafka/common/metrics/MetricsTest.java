@@ -35,6 +35,10 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
+import static org.junit.Assert.fail;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class MetricsTest {
 
@@ -272,6 +276,18 @@ public class MetricsTest {
         } catch (QuotaViolationException e) {
             // this is good
         }
+    }
+
+    @Test
+    public void testQuotasEquality() {
+        final Quota quota1 = Quota.lessThan(10.5);
+        final Quota quota2 = Quota.moreThan(10.5);
+
+        assertFalse(quota1.equals(quota2));
+
+        Quota quota3 = Quota.moreThan(10.5);
+
+        assertTrue(quota2.equals(quota3));
     }
 
     @Test
