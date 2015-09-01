@@ -26,8 +26,9 @@ import org.slf4j.LoggerFactory;
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
  * <p>
- * This processing is defined by extending the {@link TopologyBuilder} abstract class to specify the transformation operator build. The
- * {@link KafkaStreaming} instance will be responsible for the lifecycle of these processors. It will instantiate and
+ * This processing is defined by using the {@link TopologyBuilder} class or its superclass KStreamBuilder to specify
+ * the transformation.
+ * The {@link KafkaStreaming} instance will be responsible for the lifecycle of these processors. It will instantiate and
  * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
  * <p>
  * This streaming instance will co-ordinate with any other instances (whether in this same process, on other processes
@@ -40,13 +41,20 @@ import org.slf4j.LoggerFactory;
  * <p>
  * A simple example might look like this:
  * <pre>
- *    Properties props = new Properties();
+ *    Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
  *    props.put("bootstrap.servers", "localhost:4242");
- *    properties config = new properties(props);
- *    config.processor(ExampleStreamProcessor.class);
- *    config.serialization(new StringSerializer(), new StringDeserializer());
- *    KafkaStreaming container = new KafkaStreaming(new MyKStreamTopology(), config);
- *    container.run();
+ *    props.put("key.deserializer", StringDeserializer.class);
+ *    props.put("value.deserializer", StringDeserializer.class);
+ *    props.put("key.serializer", StringSerializer.class);
+ *    props.put("value.serializer", IntegerSerializer.class);
+ *    props.put("timestamp.extractor", MyTimestampExtractor.class);
+ *    StreamingConfig config = new StreamingConfig(props);
+ *
+ *    KStreamBuilder builder = new KStreamBuilder();
+ *    builder.from("topic1").mapValue(value -> value.length()).sendTo("topic2");
+ *
+ *    KafkaStreaming streaming = new KafkaStreaming(builder, config);
+ *    streaming.start();
  * </pre>
  *
  */
