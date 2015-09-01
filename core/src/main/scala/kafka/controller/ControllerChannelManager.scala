@@ -147,9 +147,11 @@ class RequestSendThread(val controllerId: Int,
   private val lock = new Object()
   private val stateChangeLogger = KafkaController.stateChangeLogger
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
-  connectToBroker()
 
   override def doWork(): Unit = {
+
+    def backoff(): Unit = CoreUtils.swallowTrace(Thread.sleep(300))
+
     val QueueItem(apiKey, apiVersion, request, callback) = queue.take()
     import NetworkClientBlockingOps._
     var clientResponse: ClientResponse = null
@@ -160,23 +162,27 @@ class RequestSendThread(val controllerId: Int,
           // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
           // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
           try {
-            val requestHeader = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
-            val send = new RequestSend(brokerNode.idString, requestHeader, request.toStruct)
-            val clientRequest = new ClientRequest(time.milliseconds(), true, send, null)
-            clientResponse = networkClient.blockingSendAndReceive(clientRequest, socketTimeoutMs)(time).getOrElse {
-              throw new SocketTimeoutException(s"No response received within $socketTimeoutMs ms")
+            if (!brokerReady()) {
+              isSendSuccessful = false
+              backoff()
             }
-            isSendSuccessful = true
+            else {
+              val requestHeader = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
+              val send = new RequestSend(brokerNode.idString, requestHeader, request.toStruct)
+              val clientRequest = new ClientRequest(time.milliseconds(), true, send, null)
+              clientResponse = networkClient.blockingSendAndReceive(clientRequest, socketTimeoutMs)(time).getOrElse {
+                throw new SocketTimeoutException(s"No response received within $socketTimeoutMs ms")
+              }
+              isSendSuccessful = true
+            }
           } catch {
             case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
               warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
                   request.toString, toBroker.toString()), e)
               networkClient.disconnectAndPoll(brokerNode.idString, 0)(time)
-              connectToBroker()
               isSendSuccessful = false
-              // backoff before retrying the connection and send
-              CoreUtils.swallowTrace(Thread.sleep(300))
+              backoff()
           }
         }
         if (clientResponse != null) {
@@ -202,22 +208,29 @@ class RequestSendThread(val controllerId: Int,
     }
   }
 
-  private def connectToBroker() {
+  private def brokerReady(): Boolean = {
     import NetworkClientBlockingOps._
     try {
 
-      val ready = networkClient.blockingReady(brokerNode, socketTimeoutMs)(time)
+      if (networkClient.isReady(brokerNode, time.milliseconds()))
+        true
+      else {
+        val ready = networkClient.blockingReady(brokerNode, socketTimeoutMs)(time)
 
-      if (!ready)
-        throw new SocketTimeoutException(s"No response received within $socketTimeoutMs ms")
+        if (!ready)
+          throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
-      info("Controller %d connected to %s for sending state change requests".format(controllerId, toBroker.toString()))
+        info("Controller %d connected to %s for sending state change requests".format(controllerId, toBroker.toString()))
+        true
+      }
     } catch {
       case e: Throwable =>
         error("Controller %d's connection to broker %s was unsuccessful".format(controllerId, toBroker.toString()), e)
         networkClient.disconnectAndPoll(brokerNode.idString, 0)(time)
+        false
     }
   }
+
 }
 
 class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging {
