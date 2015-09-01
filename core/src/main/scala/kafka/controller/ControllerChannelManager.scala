@@ -94,7 +94,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         config.connectionsMaxIdleMs,
         metrics,
         time,
-        s"controller-${config.brokerId}-broker-${broker.id}",
+        "controller-channel",
         Map("broker-id" -> broker.id.toString).asJava,
         false,
         ChannelBuilders.create(config.interBrokerSecurityProtocol, SSLFactory.Mode.CLIENT, config.channelConfigs)
