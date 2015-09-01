@@ -99,7 +99,7 @@ public class StandaloneHerder implements Herder {
         log.info("Creating connector {} of type {}", connName, className);
         int maxTasks = connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG);
         List<String> topics = connConfig.getList(ConnectorConfig.TOPICS_CONFIG); // Sinks only
-        Properties configs = connConfig.getUnusedProperties();
+        Properties configs = connConfig.unusedProperties();
 
         if (connectors.containsKey(connName)) {
             log.error("Ignoring request to create connector due to conflicting connector name");
@@ -161,11 +161,11 @@ public class StandaloneHerder implements Herder {
     }
 
     private void createConnectorTasks(ConnectorState state) {
-        String taskClassName = state.connector.getTaskClass().getName();
+        String taskClassName = state.connector.taskClass().getName();
 
         log.info("Creating tasks for connector {} of type {}", state.name, taskClassName);
 
-        List<Properties> taskConfigs = state.connector.getTaskConfigs(state.maxTasks);
+        List<Properties> taskConfigs = state.connector.taskConfigs(state.maxTasks);
 
         // Generate the final configs, including framework provided settings
         Map<ConnectorTaskId, Properties> taskProps = new HashMap<>();

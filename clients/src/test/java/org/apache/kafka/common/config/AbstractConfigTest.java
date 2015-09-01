@@ -17,10 +17,12 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.junit.Test;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertEquals;
 
 public class AbstractConfigTest {
 
@@ -33,6 +35,17 @@ public class AbstractConfigTest {
         testInvalidInputs("org.apache.kafka.clients.producer.unknown-metrics-reporter");
         testInvalidInputs("test1,test2");
         testInvalidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter,");
+    }
+
+    @Test
+    public void testOriginalsWithPrefix() {
+        Properties props = new Properties();
+        props.put("foo.bar", "abc");
+        props.put("setting", "def");
+        TestConfig config = new TestConfig(props);
+        Map<String, Object> expected = new HashMap<>();
+        expected.put("bar", "abc");
+        assertEquals(expected, config.originalsWithPrefix("foo."));
     }
 
     private void testValidInputs(String configValue) {

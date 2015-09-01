@@ -21,8 +21,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.copycat.data.*;
-import org.apache.kafka.copycat.errors.CopycatException;
+import org.apache.kafka.copycat.errors.DataException;
 import org.apache.kafka.copycat.storage.Converter;
 
 import java.io.IOException;
@@ -32,64 +33,94 @@ import java.util.*;
 /**
  * Implementation of Converter that uses JSON to store schemas and objects.
  */
-public class JsonConverter implements Converter<JsonNode> {
+public class JsonConverter implements Converter {
+    private static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
+    private static final boolean SCHEMAS_ENABLE_DEFAULT = true;
 
-    private static final HashMap<String, JsonToCopycatTypeConverter> TO_COPYCAT_CONVERTERS
-            = new HashMap<>();
+    private static final HashMap<Schema.Type, JsonToCopycatTypeConverter> TO_COPYCAT_CONVERTERS = new HashMap<>();
+
+    private static Object checkOptionalAndDefault(Schema schema) {
+        if (schema.defaultValue() != null)
+            return schema.defaultValue();
+        if (schema.isOptional())
+            return null;
+        throw new DataException("Invalid null value for required field");
+    }
 
     static {
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.BOOLEAN_TYPE_NAME, new JsonToCopycatTypeConverter() {
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.BOOLEAN, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.booleanValue();
             }
         });
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.INT_TYPE_NAME, new JsonToCopycatTypeConverter() {
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.INT8, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
+                return (byte) value.intValue();
+            }
+        });
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.INT16, new JsonToCopycatTypeConverter() {
+            @Override
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
+                return (short) value.intValue();
+            }
+        });
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.INT32, new JsonToCopycatTypeConverter() {
+            @Override
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.intValue();
             }
         });
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.LONG_TYPE_NAME, new JsonToCopycatTypeConverter() {
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.INT64, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.longValue();
             }
         });
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.FLOAT_TYPE_NAME, new JsonToCopycatTypeConverter() {
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.FLOAT32, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.floatValue();
             }
         });
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.DOUBLE_TYPE_NAME, new JsonToCopycatTypeConverter() {
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.FLOAT64, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.doubleValue();
             }
         });
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.BYTES_TYPE_NAME, new JsonToCopycatTypeConverter() {
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.BYTES, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
                 try {
+                    if (value.isNull()) return checkOptionalAndDefault(schema);
                     return value.binaryValue();
                 } catch (IOException e) {
-                    throw new CopycatException("Invalid bytes field", e);
+                    throw new DataException("Invalid bytes field", e);
                 }
             }
         });
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.STRING_TYPE_NAME, new JsonToCopycatTypeConverter() {
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.STRING, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.textValue();
             }
         });
-        TO_COPYCAT_CONVERTERS.put(JsonSchema.ARRAY_TYPE_NAME, new JsonToCopycatTypeConverter() {
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.ARRAY, new JsonToCopycatTypeConverter() {
             @Override
-            public Object convert(JsonNode jsonSchema, JsonNode value) {
-                JsonNode elemSchema = jsonSchema.get(JsonSchema.ARRAY_ITEMS_FIELD_NAME);
-                if (elemSchema == null)
-                    throw new CopycatException("Array schema did not specify the element type");
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
+
+                Schema elemSchema = schema == null ? null : schema.valueSchema();
                 ArrayList<Object> result = new ArrayList<>();
                 for (JsonNode elem : value) {
                     result.add(convertToCopycat(elemSchema, elem));
@@ -97,54 +128,192 @@ public class JsonConverter implements Converter<JsonNode> {
                 return result;
             }
         });
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.MAP, new JsonToCopycatTypeConverter() {
+            @Override
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
 
-    }
+                Schema keySchema = schema == null ? null : schema.keySchema();
+                Schema valueSchema = schema == null ? null : schema.valueSchema();
 
-    @Override
-    public JsonNode fromCopycatData(Object value) {
-        return convertToJsonWithSchemaEnvelope(value);
-    }
-
-    @Override
-    public Object toCopycatData(JsonNode value) {
-        if (!value.isObject() || value.size() != 2 || !value.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !value.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
-            throw new CopycatException("JSON value converted to Copycat must be in envelope containing schema");
-
-        return convertToCopycat(value.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME), value.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
-    }
-
-
-    private static JsonNode asJsonSchema(Schema schema) {
-        switch (schema.getType()) {
-            case BOOLEAN:
-                return JsonSchema.BOOLEAN_SCHEMA;
-            case BYTES:
-                return JsonSchema.BYTES_SCHEMA;
-            case DOUBLE:
-                return JsonSchema.DOUBLE_SCHEMA;
-            case FLOAT:
-                return JsonSchema.FLOAT_SCHEMA;
-            case INT:
-                return JsonSchema.INT_SCHEMA;
-            case LONG:
-                return JsonSchema.LONG_SCHEMA;
-            case NULL:
-                throw new UnsupportedOperationException("null schema not supported");
-            case STRING:
-                return JsonSchema.STRING_SCHEMA;
-            case UNION: {
-                throw new UnsupportedOperationException("union schema not supported");
+                // If the map uses strings for keys, it should be encoded in the natural JSON format. If it uses other
+                // primitive types or a complex type as a key, it will be encoded as a list of pairs. If we don't have a
+                // schema, we default to encoding in a Map.
+                Map<Object, Object> result = new HashMap<>();
+                if (schema == null || keySchema.type() == Schema.Type.STRING) {
+                    if (!value.isObject())
+                        throw new DataException("Map's with string fields should be encoded as JSON objects, but found " + value.getNodeType());
+                    Iterator<Map.Entry<String, JsonNode>> fieldIt = value.fields();
+                    while (fieldIt.hasNext()) {
+                        Map.Entry<String, JsonNode> entry = fieldIt.next();
+                        result.put(entry.getKey(), convertToCopycat(valueSchema, entry.getValue()));
+                    }
+                } else {
+                    if (!value.isArray())
+                        throw new DataException("Map's with non-string fields should be encoded as JSON array of tuples, but found " + value.getNodeType());
+                    for (JsonNode entry : value) {
+                        if (!entry.isArray())
+                            throw new DataException("Found invalid map entry instead of array tuple: " + entry.getNodeType());
+                        if (entry.size() != 2)
+                            throw new DataException("Found invalid map entry, expected length 2 but found :" + entry.size());
+                        result.put(convertToCopycat(keySchema, entry.get(0)),
+                                convertToCopycat(valueSchema, entry.get(1)));
+                    }
+                }
+                return result;
             }
-            case ARRAY:
-                return JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.ARRAY_TYPE_NAME)
-                        .set(JsonSchema.ARRAY_ITEMS_FIELD_NAME, asJsonSchema(schema.getElementType()));
-            case ENUM:
-                throw new UnsupportedOperationException("enum schema not supported");
-            case MAP:
-                throw new UnsupportedOperationException("map schema not supported");
-            default:
-                throw new CopycatException("Couldn't translate unsupported schema type " + schema.getType().getName() + ".");
+        });
+        TO_COPYCAT_CONVERTERS.put(Schema.Type.STRUCT, new JsonToCopycatTypeConverter() {
+            @Override
+            public Object convert(Schema schema, JsonNode value) {
+                if (value.isNull()) return checkOptionalAndDefault(schema);
+
+                if (!value.isObject())
+                    throw new DataException("Structs should be encoded as JSON objects, but found " + value.getNodeType());
+
+                // We only have ISchema here but need Schema, so we need to materialize the actual schema. Using ISchema
+                // avoids having to materialize the schema for non-Struct types but it cannot be avoided for Structs since
+                // they require a schema to be provided at construction. However, the schema is only a SchemaBuilder during
+                // translation of schemas to JSON; during the more common translation of data to JSON, the call to schema.schema()
+                // just returns the schema Object and has no overhead.
+                Struct result = new Struct(schema.schema());
+                for (Field field : schema.fields())
+                    result.put(field, convertToCopycat(field.schema(), value.get(field.name())));
+
+                return result;
+            }
+        });
+
+
+    }
+
+    private boolean enableSchemas = SCHEMAS_ENABLE_DEFAULT;
+
+    private final JsonSerializer serializer = new JsonSerializer();
+    private final JsonDeserializer deserializer = new JsonDeserializer();
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        Object enableConfigsVal = configs.get(SCHEMAS_ENABLE_CONFIG);
+        if (enableConfigsVal != null)
+            enableSchemas = enableConfigsVal.toString().equals("true");
+
+        serializer.configure(configs, isKey);
+        deserializer.configure(configs, isKey);
+    }
+
+    @Override
+    public byte[] fromCopycatData(String topic, Schema schema, Object value) {
+        JsonNode jsonValue = enableSchemas ? convertToJsonWithEnvelope(schema, value) : convertToJsonWithoutEnvelope(schema, value);
+        try {
+            return serializer.serialize(topic, jsonValue);
+        } catch (SerializationException e) {
+            throw new DataException("Converting Copycat data to byte[] failed due to serialization error: ", e);
         }
+    }
+
+    @Override
+    public SchemaAndValue toCopycatData(String topic, byte[] value) {
+        JsonNode jsonValue;
+        try {
+            jsonValue = deserializer.deserialize(topic, value);
+        } catch (SerializationException e) {
+            throw new DataException("Converting byte[] to Copycat data failed due to serialization error: ", e);
+        }
+
+        if (enableSchemas && (jsonValue == null || !jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has("schema") || !jsonValue.has("payload")))
+            throw new DataException("JsonDeserializer with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields");
+
+        // The deserialized data should either be an envelope object containing the schema and the payload or the schema
+        // was stripped during serialization and we need to fill in an all-encompassing schema.
+        if (!enableSchemas) {
+            ObjectNode envelope = JsonNodeFactory.instance.objectNode();
+            envelope.set("schema", null);
+            envelope.set("payload", jsonValue);
+            jsonValue = envelope;
+        }
+
+        return jsonToCopycat(jsonValue);
+    }
+
+    private SchemaAndValue jsonToCopycat(JsonNode jsonValue) {
+        if (jsonValue == null)
+            return SchemaAndValue.NULL;
+
+        if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
+            throw new DataException("JSON value converted to Copycat must be in envelope containing schema");
+
+        Schema schema = asCopycatSchema(jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        return new SchemaAndValue(schema, convertToCopycat(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)));
+    }
+
+    private static ObjectNode asJsonSchema(Schema schema) {
+        if (schema == null)
+            return null;
+
+        final ObjectNode jsonSchema;
+        switch (schema.type()) {
+            case BOOLEAN:
+                jsonSchema = JsonSchema.BOOLEAN_SCHEMA.deepCopy();
+                break;
+            case BYTES:
+                jsonSchema = JsonSchema.BYTES_SCHEMA.deepCopy();
+                break;
+            case FLOAT64:
+                jsonSchema = JsonSchema.DOUBLE_SCHEMA.deepCopy();
+                break;
+            case FLOAT32:
+                jsonSchema = JsonSchema.FLOAT_SCHEMA.deepCopy();
+                break;
+            case INT8:
+                jsonSchema = JsonSchema.INT8_SCHEMA.deepCopy();
+                break;
+            case INT16:
+                jsonSchema = JsonSchema.INT16_SCHEMA.deepCopy();
+                break;
+            case INT32:
+                jsonSchema = JsonSchema.INT32_SCHEMA.deepCopy();
+                break;
+            case INT64:
+                jsonSchema = JsonSchema.INT64_SCHEMA.deepCopy();
+                break;
+            case STRING:
+                jsonSchema = JsonSchema.STRING_SCHEMA.deepCopy();
+                break;
+            case ARRAY:
+                jsonSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.ARRAY_TYPE_NAME);
+                jsonSchema.set(JsonSchema.ARRAY_ITEMS_FIELD_NAME, asJsonSchema(schema.valueSchema()));
+                break;
+            case MAP:
+                jsonSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.MAP_TYPE_NAME);
+                jsonSchema.set(JsonSchema.MAP_KEY_FIELD_NAME, asJsonSchema(schema.keySchema()));
+                jsonSchema.set(JsonSchema.MAP_VALUE_FIELD_NAME, asJsonSchema(schema.valueSchema()));
+                break;
+            case STRUCT:
+                jsonSchema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.STRUCT_TYPE_NAME);
+                ArrayNode fields = JsonNodeFactory.instance.arrayNode();
+                for (Field field : schema.fields()) {
+                    ObjectNode fieldJsonSchema = asJsonSchema(field.schema());
+                    fieldJsonSchema.put(JsonSchema.STRUCT_FIELD_NAME_FIELD_NAME, field.name());
+                    fields.add(fieldJsonSchema);
+                }
+                jsonSchema.set(JsonSchema.STRUCT_FIELDS_FIELD_NAME, fields);
+                break;
+            default:
+                throw new DataException("Couldn't translate unsupported schema type " + schema + ".");
+        }
+
+        jsonSchema.put(JsonSchema.SCHEMA_OPTIONAL_FIELD_NAME, schema.isOptional());
+        if (schema.name() != null)
+            jsonSchema.put(JsonSchema.SCHEMA_NAME_FIELD_NAME, schema.name());
+        if (schema.version() != null)
+            jsonSchema.put(JsonSchema.SCHEMA_VERSION_FIELD_NAME, schema.version());
+        if (schema.doc() != null)
+            jsonSchema.put(JsonSchema.SCHEMA_DOC_FIELD_NAME, schema.doc());
+        if (schema.defaultValue() != null)
+            jsonSchema.set(JsonSchema.SCHEMA_DEFAULT_FIELD_NAME, convertToJson(schema, schema.defaultValue()));
+
+        return jsonSchema;
     }
 
 
@@ -154,112 +323,269 @@ public class JsonConverter implements Converter<JsonNode> {
 
         JsonNode schemaTypeNode = jsonSchema.get(JsonSchema.SCHEMA_TYPE_FIELD_NAME);
         if (schemaTypeNode == null || !schemaTypeNode.isTextual())
-            throw new CopycatException("Schema must contain 'type' field");
+            throw new DataException("Schema must contain 'type' field");
 
+        final SchemaBuilder builder;
         switch (schemaTypeNode.textValue()) {
             case JsonSchema.BOOLEAN_TYPE_NAME:
-                return SchemaBuilder.builder().booleanType();
-            case JsonSchema.INT_TYPE_NAME:
-                return SchemaBuilder.builder().intType();
-            case JsonSchema.LONG_TYPE_NAME:
-                return SchemaBuilder.builder().longType();
+                builder = SchemaBuilder.bool();
+                break;
+            case JsonSchema.INT8_TYPE_NAME:
+                builder = SchemaBuilder.int8();
+                break;
+            case JsonSchema.INT16_TYPE_NAME:
+                builder = SchemaBuilder.int16();
+                break;
+            case JsonSchema.INT32_TYPE_NAME:
+                builder = SchemaBuilder.int32();
+                break;
+            case JsonSchema.INT64_TYPE_NAME:
+                builder = SchemaBuilder.int64();
+                break;
             case JsonSchema.FLOAT_TYPE_NAME:
-                return SchemaBuilder.builder().floatType();
+                builder = SchemaBuilder.float32();
+                break;
             case JsonSchema.DOUBLE_TYPE_NAME:
-                return SchemaBuilder.builder().doubleType();
+                builder = SchemaBuilder.float64();
+                break;
             case JsonSchema.BYTES_TYPE_NAME:
-                return SchemaBuilder.builder().bytesType();
+                builder = SchemaBuilder.bytes();
+                break;
             case JsonSchema.STRING_TYPE_NAME:
-                return SchemaBuilder.builder().stringType();
+                builder = SchemaBuilder.string();
+                break;
             case JsonSchema.ARRAY_TYPE_NAME:
                 JsonNode elemSchema = jsonSchema.get(JsonSchema.ARRAY_ITEMS_FIELD_NAME);
                 if (elemSchema == null)
-                    throw new CopycatException("Array schema did not specify the element type");
-                return Schema.createArray(asCopycatSchema(elemSchema));
+                    throw new DataException("Array schema did not specify the element type");
+                builder = SchemaBuilder.array(asCopycatSchema(elemSchema));
+                break;
+            case JsonSchema.MAP_TYPE_NAME:
+                JsonNode keySchema = jsonSchema.get(JsonSchema.MAP_KEY_FIELD_NAME);
+                if (keySchema == null)
+                    throw new DataException("Map schema did not specify the key type");
+                JsonNode valueSchema = jsonSchema.get(JsonSchema.MAP_VALUE_FIELD_NAME);
+                if (valueSchema == null)
+                    throw new DataException("Map schema did not specify the value type");
+                builder = SchemaBuilder.map(asCopycatSchema(keySchema), asCopycatSchema(valueSchema));
+                break;
+            case JsonSchema.STRUCT_TYPE_NAME:
+                builder = SchemaBuilder.struct();
+                JsonNode fields = jsonSchema.get(JsonSchema.STRUCT_FIELDS_FIELD_NAME);
+                if (fields == null || !fields.isArray())
+                    throw new DataException("Struct schema's \"fields\" argument is not an array.");
+                for (JsonNode field : fields) {
+                    JsonNode jsonFieldName = field.get(JsonSchema.STRUCT_FIELD_NAME_FIELD_NAME);
+                    if (jsonFieldName == null || !jsonFieldName.isTextual())
+                        throw new DataException("Struct schema's field name not specified properly");
+                    builder.field(jsonFieldName.asText(), asCopycatSchema(field));
+                }
+                break;
             default:
-                throw new CopycatException("Unknown schema type: " + schemaTypeNode.textValue());
+                throw new DataException("Unknown schema type: " + schemaTypeNode.textValue());
         }
+
+
+        JsonNode schemaOptionalNode = jsonSchema.get(JsonSchema.SCHEMA_OPTIONAL_FIELD_NAME);
+        if (schemaOptionalNode != null && schemaOptionalNode.isBoolean() && schemaOptionalNode.booleanValue())
+            builder.optional();
+        else
+            builder.required();
+
+        JsonNode schemaNameNode = jsonSchema.get(JsonSchema.SCHEMA_NAME_FIELD_NAME);
+        if (schemaNameNode != null && schemaNameNode.isTextual())
+            builder.name(schemaNameNode.textValue());
+
+        JsonNode schemaVersionNode = jsonSchema.get(JsonSchema.SCHEMA_VERSION_FIELD_NAME);
+        if (schemaVersionNode != null && schemaVersionNode.isIntegralNumber()) {
+            builder.version(schemaVersionNode.intValue());
+        }
+
+        JsonNode schemaDocNode = jsonSchema.get(JsonSchema.SCHEMA_DOC_FIELD_NAME);
+        if (schemaDocNode != null && schemaDocNode.isTextual())
+            builder.doc(schemaDocNode.textValue());
+
+        JsonNode schemaDefaultNode = jsonSchema.get(JsonSchema.SCHEMA_DEFAULT_FIELD_NAME);
+        if (schemaDefaultNode != null)
+            builder.defaultValue(convertToCopycat(builder, schemaDefaultNode));
+
+        return builder.build();
     }
 
 
     /**
      * Convert this object, in org.apache.kafka.copycat.data format, into a JSON object with an envelope object
      * containing schema and payload fields.
-     * @param value
-     * @return
+     * @param schema the schema for the data
+     * @param value the value
+     * @return JsonNode-encoded version
      */
-    private static JsonNode convertToJsonWithSchemaEnvelope(Object value) {
-        return convertToJson(value).toJsonNode();
+    private static JsonNode convertToJsonWithEnvelope(Schema schema, Object value) {
+        return new JsonSchema.Envelope(asJsonSchema(schema), convertToJson(schema, value)).toJsonNode();
+    }
+
+    private static JsonNode convertToJsonWithoutEnvelope(Schema schema, Object value) {
+        return convertToJson(schema, value);
     }
 
     /**
      * Convert this object, in the org.apache.kafka.copycat.data format, into a JSON object, returning both the schema
      * and the converted object.
      */
-    private static JsonSchema.Envelope convertToJson(Object value) {
+    private static JsonNode convertToJson(Schema schema, Object value) {
         if (value == null) {
-            return JsonSchema.nullEnvelope();
-        } else if (value instanceof Boolean) {
-            return JsonSchema.booleanEnvelope((Boolean) value);
-        } else if (value instanceof Byte) {
-            return JsonSchema.intEnvelope((Byte) value);
-        } else if (value instanceof Short) {
-            return JsonSchema.intEnvelope((Short) value);
-        } else if (value instanceof Integer) {
-            return JsonSchema.intEnvelope((Integer) value);
-        } else if (value instanceof Long) {
-            return JsonSchema.longEnvelope((Long) value);
-        } else if (value instanceof Float) {
-            return JsonSchema.floatEnvelope((Float) value);
-        } else if (value instanceof Double) {
-            return JsonSchema.doubleEnvelope((Double) value);
-        } else if (value instanceof byte[]) {
-            return JsonSchema.bytesEnvelope((byte[]) value);
-        } else if (value instanceof ByteBuffer) {
-            return JsonSchema.bytesEnvelope(((ByteBuffer) value).array());
-        } else if (value instanceof CharSequence) {
-            return JsonSchema.stringEnvelope(value.toString());
-        } else if (value instanceof Collection) {
-            Collection collection = (Collection) value;
-            ObjectNode schema = JsonNodeFactory.instance.objectNode().put(JsonSchema.SCHEMA_TYPE_FIELD_NAME, JsonSchema.ARRAY_TYPE_NAME);
-            ArrayNode list = JsonNodeFactory.instance.arrayNode();
-            JsonNode itemSchema = null;
-            for (Object elem : collection) {
-                JsonSchema.Envelope fieldSchemaAndValue = convertToJson(elem);
-                if (itemSchema == null) {
-                    itemSchema = fieldSchemaAndValue.schema;
-                    schema.set(JsonSchema.ARRAY_ITEMS_FIELD_NAME, itemSchema);
-                } else {
-                    if (!itemSchema.equals(fieldSchemaAndValue.schema))
-                        throw new CopycatException("Mismatching schemas found in a list.");
-                }
-
-                list.add(fieldSchemaAndValue.payload);
-            }
-            return new JsonSchema.Envelope(schema, list);
+            if (schema == null) // Any schema is valid and we don't have a default, so treat this as an optional schema
+                return null;
+            if (schema.defaultValue() != null)
+                return convertToJson(schema, schema.defaultValue());
+            if (schema.isOptional())
+                return JsonNodeFactory.instance.nullNode();
+            throw new DataException("Conversion error: null value for field that is required and has no default value");
         }
 
-        throw new CopycatException("Couldn't convert " + value + " to Avro.");
+        try {
+            final Schema.Type schemaType;
+            if (schema == null) {
+                schemaType = CopycatSchema.schemaType(value.getClass());
+                if (schemaType == null)
+                    throw new DataException("Java class " + value.getClass() + " does not have corresponding schema type.");
+            } else {
+                schemaType = schema.type();
+            }
+            switch (schemaType) {
+                case INT8:
+                    return JsonNodeFactory.instance.numberNode((Byte) value);
+                case INT16:
+                    return JsonNodeFactory.instance.numberNode((Short) value);
+                case INT32:
+                    return JsonNodeFactory.instance.numberNode((Integer) value);
+                case INT64:
+                    return JsonNodeFactory.instance.numberNode((Long) value);
+                case FLOAT32:
+                    return JsonNodeFactory.instance.numberNode((Float) value);
+                case FLOAT64:
+                    return JsonNodeFactory.instance.numberNode((Double) value);
+                case BOOLEAN:
+                    return JsonNodeFactory.instance.booleanNode((Boolean) value);
+                case STRING:
+                    CharSequence charSeq = (CharSequence) value;
+                    return JsonNodeFactory.instance.textNode(charSeq.toString());
+                case BYTES:
+                    if (value instanceof byte[])
+                        return JsonNodeFactory.instance.binaryNode((byte[]) value);
+                    else if (value instanceof ByteBuffer)
+                        return JsonNodeFactory.instance.binaryNode(((ByteBuffer) value).array());
+                    else
+                        throw new DataException("Invalid type for bytes type: " + value.getClass());
+                case ARRAY: {
+                    Collection collection = (Collection) value;
+                    ArrayNode list = JsonNodeFactory.instance.arrayNode();
+                    for (Object elem : collection) {
+                        Schema valueSchema = schema == null ? null : schema.valueSchema();
+                        JsonNode fieldValue = convertToJson(valueSchema, elem);
+                        list.add(fieldValue);
+                    }
+                    return list;
+                }
+                case MAP: {
+                    Map<?, ?> map = (Map<?, ?>) value;
+                    // If true, using string keys and JSON object; if false, using non-string keys and Array-encoding
+                    boolean objectMode;
+                    if (schema == null) {
+                        objectMode = true;
+                        for (Map.Entry<?, ?> entry : map.entrySet()) {
+                            if (!(entry.getKey() instanceof String)) {
+                                objectMode = false;
+                                break;
+                            }
+                        }
+                    } else {
+                        objectMode = schema.keySchema().type() == Schema.Type.STRING;
+                    }
+                    ObjectNode obj = null;
+                    ArrayNode list = null;
+                    if (objectMode)
+                        obj = JsonNodeFactory.instance.objectNode();
+                    else
+                        list = JsonNodeFactory.instance.arrayNode();
+                    for (Map.Entry<?, ?> entry : map.entrySet()) {
+                        Schema keySchema = schema == null ? null : schema.keySchema();
+                        Schema valueSchema = schema == null ? null : schema.valueSchema();
+                        JsonNode mapKey = convertToJson(keySchema, entry.getKey());
+                        JsonNode mapValue = convertToJson(valueSchema, entry.getValue());
+
+                        if (objectMode)
+                            obj.set(mapKey.asText(), mapValue);
+                        else
+                            list.add(JsonNodeFactory.instance.arrayNode().add(mapKey).add(mapValue));
+                    }
+                    return objectMode ? obj : list;
+                }
+                case STRUCT: {
+                    Struct struct = (Struct) value;
+                    if (struct.schema() != schema)
+                        throw new DataException("Mismatching schema.");
+                    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+                    for (Field field : schema.fields()) {
+                        obj.set(field.name(), convertToJson(field.schema(), struct.get(field)));
+                    }
+                    return obj;
+                }
+            }
+
+            throw new DataException("Couldn't convert " + value + " to JSON.");
+        } catch (ClassCastException e) {
+            throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
+        }
     }
 
 
-    private static Object convertToCopycat(JsonNode jsonSchema, JsonNode jsonValue) {
-        if (jsonSchema.isNull())
-            return null;
+    private static Object convertToCopycat(Schema schema, JsonNode jsonValue) {
+        JsonToCopycatTypeConverter typeConverter;
+        final Schema.Type schemaType;
+        if (schema != null) {
+            schemaType = schema.type();
+        } else {
+            switch (jsonValue.getNodeType()) {
+                case NULL:
+                    // Special case. With no schema
+                    return null;
+                case BOOLEAN:
+                    schemaType = Schema.Type.BOOLEAN;
+                    break;
+                case NUMBER:
+                    if (jsonValue.isIntegralNumber())
+                        schemaType = Schema.Type.INT64;
+                    else
+                        schemaType = Schema.Type.FLOAT64;
+                    break;
+                case ARRAY:
+                    schemaType = Schema.Type.ARRAY;
+                    break;
+                case OBJECT:
+                    schemaType = Schema.Type.MAP;
+                    break;
+                case STRING:
+                    schemaType = Schema.Type.STRING;
+                    break;
 
-        JsonNode schemaTypeNode = jsonSchema.get(JsonSchema.SCHEMA_TYPE_FIELD_NAME);
-        if (schemaTypeNode == null || !schemaTypeNode.isTextual())
-            throw new CopycatException("Schema must contain 'type' field. Schema: " + jsonSchema.toString());
+                case BINARY:
+                case MISSING:
+                case POJO:
+                default:
+                    schemaType = null;
+                    break;
+            }
+        }
+        typeConverter = TO_COPYCAT_CONVERTERS.get(schemaType);
+        if (typeConverter == null)
+            throw new DataException("Unknown schema type: " + schema.type());
 
-        JsonToCopycatTypeConverter typeConverter = TO_COPYCAT_CONVERTERS.get(schemaTypeNode.textValue());
-        if (typeConverter != null)
-            return typeConverter.convert(jsonSchema, jsonValue);
-
-        throw new CopycatException("Unknown schema type: " + schemaTypeNode);
+        return typeConverter.convert(schema, jsonValue);
     }
 
 
     private interface JsonToCopycatTypeConverter {
-        Object convert(JsonNode schema, JsonNode value);
+        Object convert(Schema schema, JsonNode value);
     }
 }

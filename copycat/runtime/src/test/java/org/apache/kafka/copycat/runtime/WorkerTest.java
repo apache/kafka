@@ -17,8 +17,6 @@
 
 package org.apache.kafka.copycat.runtime;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.copycat.cli.WorkerConfig;
@@ -49,10 +47,6 @@ public class WorkerTest extends ThreadedTest {
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private Worker worker;
     private OffsetBackingStore offsetBackingStore = PowerMock.createMock(OffsetBackingStore.class);
-    private Serializer offsetKeySerializer = PowerMock.createMock(Serializer.class);
-    private Serializer offsetValueSerializer = PowerMock.createMock(Serializer.class);
-    private Deserializer offsetKeyDeserializer = PowerMock.createMock(Deserializer.class);
-    private Deserializer offsetValueDeserializer = PowerMock.createMock(Deserializer.class);
 
     @Before
     public void setup() {
@@ -61,14 +55,12 @@ public class WorkerTest extends ThreadedTest {
         Properties workerProps = new Properties();
         workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("key.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
-        workerProps.setProperty("value.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
-        workerProps.setProperty("key.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
-        workerProps.setProperty("value.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
+        workerProps.setProperty("offset.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("offset.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("offset.key.converter.schemas.enable", "false");
+        workerProps.setProperty("offset.value.converter.schemas.enable", "false");
         WorkerConfig config = new WorkerConfig(workerProps);
-        worker = new Worker(new MockTime(), config, offsetBackingStore,
-                offsetKeySerializer, offsetValueSerializer,
-                offsetKeyDeserializer, offsetValueDeserializer);
+        worker = new Worker(new MockTime(), config, offsetBackingStore);
         worker.start();
     }
 

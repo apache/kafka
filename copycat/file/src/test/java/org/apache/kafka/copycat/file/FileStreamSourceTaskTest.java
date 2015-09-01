@@ -30,7 +30,9 @@ import org.powermock.api.easymock.PowerMock;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
@@ -86,9 +88,10 @@ public class FileStreamSourceTaskTest {
         os.flush();
         List<SourceRecord> records = task.poll();
         assertEquals(1, records.size());
-        assertEquals(TOPIC, records.get(0).getTopic());
-        assertEquals("partial line finished", records.get(0).getValue());
-        assertEquals(22L, records.get(0).getSourceOffset());
+        assertEquals(TOPIC, records.get(0).topic());
+        assertEquals("partial line finished", records.get(0).value());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 22L), records.get(0).sourceOffset());
         assertEquals(null, task.poll());
 
         // Different line endings, and make sure the final \r doesn't result in a line until we can
@@ -97,44 +100,48 @@ public class FileStreamSourceTaskTest {
         os.flush();
         records = task.poll();
         assertEquals(4, records.size());
-        assertEquals("line1", records.get(0).getValue());
-        assertEquals(28L, records.get(0).getSourceOffset());
-        assertEquals("line2", records.get(1).getValue());
-        assertEquals(35L, records.get(1).getSourceOffset());
-        assertEquals("line3", records.get(2).getValue());
-        assertEquals(41L, records.get(2).getSourceOffset());
-        assertEquals("line4", records.get(3).getValue());
-        assertEquals(47L, records.get(3).getSourceOffset());
+        assertEquals("line1", records.get(0).value());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 28L), records.get(0).sourceOffset());
+        assertEquals("line2", records.get(1).value());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(1).sourcePartition());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 35L), records.get(1).sourceOffset());
+        assertEquals("line3", records.get(2).value());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(2).sourcePartition());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 41L), records.get(2).sourceOffset());
+        assertEquals("line4", records.get(3).value());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(3).sourcePartition());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 47L), records.get(3).sourceOffset());
 
         os.write("subsequent text".getBytes());
         os.flush();
         records = task.poll();
         assertEquals(1, records.size());
-        assertEquals("", records.get(0).getValue());
-        assertEquals(48L, records.get(0).getSourceOffset());
+        assertEquals("", records.get(0).value());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 48L), records.get(0).sourceOffset());
 
         task.stop();
     }
 
     @Test(expected = CopycatException.class)
-    public void testMissingTopic() {
-        expectOffsetLookupReturnNone();
+    public void testMissingTopic() throws InterruptedException {
         replay();
 
         config.remove(FileStreamSourceConnector.TOPIC_CONFIG);
         task.start(config);
     }
 
-    @Test(expected = CopycatException.class)
-    public void testInvalidFile() {
+    public void testInvalidFile() throws InterruptedException {
         config.setProperty(FileStreamSourceConnector.FILE_CONFIG, "bogusfilename");
         task.start(config);
+        // Currently the task retries indefinitely if the file isn't found, but shouldn't return any data.
+        for (int i = 0; i < 100; i++)
+            assertEquals(null, task.poll());
     }
 
 
     private void expectOffsetLookupReturnNone() {
-        EasyMock.expect(
-                offsetStorageReader.getOffset(EasyMock.anyObject(Object.class)))
-                .andReturn(null);
+        EasyMock.expect(offsetStorageReader.offset(EasyMock.anyObject(Map.class))).andReturn(null);
     }
 }

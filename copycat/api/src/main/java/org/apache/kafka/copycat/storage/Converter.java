@@ -18,28 +18,40 @@
 package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.copycat.data.Schema;
+import org.apache.kafka.copycat.data.SchemaAndValue;
+
+import java.util.Map;
 
 /**
  * The Converter interface provides support for translating between Copycat's runtime data format
- * and the "native" runtime format used by the serialization layer. This is used to translate
- * two types of data: records and offsets. The (de)serialization is performed by a separate
- * component -- the producer or consumer serializer or deserializer for records or a Copycat
- * serializer or deserializer for offsets.
+ * and byte[]. Internally, this likely includes an intermediate step to the format used by the serialization
+ * layer (e.g. JsonNode, GenericRecord, Message).
  */
 @InterfaceStability.Unstable
-public interface Converter<T> {
+public interface Converter {
+
+    /**
+     * Configure this class.
+     * @param configs configs in key/value pairs
+     * @param isKey whether is for key or value
+     */
+    void configure(Map<String, ?> configs, boolean isKey);
 
     /**
      * Convert a Copycat data object to a native object for serialization.
-     * @param value
+     * @param topic the topic associated with the data
+     * @param schema the schema for the value
+     * @param value the value to convert
      * @return
      */
-    T fromCopycatData(Object value);
+    byte[] fromCopycatData(String topic, Schema schema, Object value);
 
     /**
      * Convert a native object to a Copycat data object.
-     * @param value
-     * @return
+     * @param topic the topic associated with the data
+     * @param value the value to convert
+     * @return an object containing the {@link Schema} and the converted value
      */
-    Object toCopycatData(T value);
+    SchemaAndValue toCopycatData(String topic, byte[] value);
 }

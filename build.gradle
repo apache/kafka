@@ -29,7 +29,7 @@ buildscript {
 
 def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
 def slf4japi="org.slf4j:slf4j-api:1.7.6"
-def junit='junit:junit:4.6'
+def junit='junit:junit:4.11'
 def easymock='org.easymock:easymock:3.3.1'
 def powermock='org.powermock:powermock-module-junit4:1.6.2'
 def powermock_easymock='org.powermock:powermock-api-easymock:1.6.2'
@@ -214,7 +214,7 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
   }
 }
 
-def copycatPkgs = ['copycat:data', 'copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
+def copycatPkgs = ['copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
 def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools'] + copycatPkgs
 
 tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
@@ -558,56 +558,13 @@ project(':log4j-appender') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:data') {
-  apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-data"
-
-  dependencies {
-    compile project(':clients')
-    compile "$slf4japi"
-
-    testCompile "$junit"
-    testRuntime "$slf4jlog4j"
-  }
-
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
-  }
-
-  javadoc {
-    include "**/org/apache/kafka/copycat/data/*"
-  }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom (testCompile)
-  }
-
-  /* FIXME Re-enable this with KAFKA-2367 when the placeholder data API is replaced
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest') */
-}
-
 project(':copycat:api') {
   apply plugin: 'checkstyle'
   archivesBaseName = "copycat-api"
 
   dependencies {
-    compile project(':copycat:data')
     compile "$slf4japi"
+    compile project(':clients')
 
     testCompile "$junit"
     testRuntime "$slf4jlog4j"

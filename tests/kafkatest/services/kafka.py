@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.services.service import Service
+from ducktape.utils.util import wait_until
 
 import json
 import re
@@ -62,8 +63,9 @@ class KafkaService(Service):
 
         cmd = "/opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid"
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
-        node.account.ssh(cmd)
-        time.sleep(5)
+        with node.account.monitor_log("/mnt/kafka.log") as monitor:
+            node.account.ssh(cmd)
+            monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
         if len(self.pids(node)) == 0:
             raise Exception("No process ids recorded on node %s" % str(node))
 

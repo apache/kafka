@@ -17,15 +17,13 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Future;
 
 /**
@@ -63,32 +61,27 @@ import java.util.concurrent.Future;
  * This class is not thread-safe. It should only be accessed from a Task's processing thread.
  * </p>
  */
-public class OffsetStorageWriter<K, V> {
+public class OffsetStorageWriter {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageWriter.class);
 
     private final OffsetBackingStore backingStore;
-    private final Converter<K> keyConverter;
-    private final Converter<V> valueConverter;
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valueSerializer;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
     private final String namespace;
     // Offset data in Copycat format
-    private Map<Object, Object> data = new HashMap<>();
+    private Map<Map<String, Object>, Map<String, Object>> data = new HashMap<>();
 
     // Not synchronized, should only be accessed by flush thread
-    private Map<Object, Object> toFlush = null;
+    private Map<Map<String, Object>, Map<String, Object>> toFlush = null;
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
 
     public OffsetStorageWriter(OffsetBackingStore backingStore,
-                               String namespace, Converter<K> keyConverter, Converter<V> valueConverter,
-                               Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+                               String namespace, Converter keyConverter, Converter valueConverter) {
         this.backingStore = backingStore;
         this.namespace = namespace;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
     }
 
     /**
@@ -96,8 +89,8 @@ public class OffsetStorageWriter<K, V> {
      * @param partition the partition to store an offset for
      * @param offset the offset
      */
-    public synchronized void setOffset(Object partition, Object offset) {
-        data.put(partition, offset);
+    public synchronized void offset(Map<String, ?> partition, Map<String, ?> offset) {
+        data.put((Map<String, Object>) partition, (Map<String, Object>) offset);
     }
 
     private boolean flushing() {
@@ -141,10 +134,14 @@ public class OffsetStorageWriter<K, V> {
         Map<ByteBuffer, ByteBuffer> offsetsSerialized;
         try {
             offsetsSerialized = new HashMap<>();
-            for (Map.Entry<Object, Object> entry : toFlush.entrySet()) {
-                byte[] key = keySerializer.serialize(namespace, keyConverter.fromCopycatData(entry.getKey()));
+            for (Map.Entry<Map<String, Object>, Map<String, Object>> entry : toFlush.entrySet()) {
+                // Offsets are specified as schemaless to the converter, using whatever internal schema is appropriate
+                // for that data. The only enforcement of the format is here.
+                OffsetUtils.validateFormat(entry.getKey());
+                OffsetUtils.validateFormat(entry.getValue());
+                byte[] key = keyConverter.fromCopycatData(namespace, null, entry.getKey());
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
-                byte[] value = valueSerializer.serialize(namespace, valueConverter.fromCopycatData(entry.getValue()));
+                byte[] value = valueConverter.fromCopycatData(namespace, null, entry.getValue());
                 ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
                 offsetsSerialized.put(keyBuffer, valueBuffer);
             }
@@ -154,6 +151,7 @@ public class OffsetStorageWriter<K, V> {
             log.error("CRITICAL: Failed to serialize offset data, making it impossible to commit "
                     + "offsets under namespace {}. This likely won't recover unless the "
                     + "unserializable partition or offset information is overwritten.", namespace);
+            log.error("Cause of serialization failure:", t);
             callback.onCompletion(t, null);
             return null;
         }

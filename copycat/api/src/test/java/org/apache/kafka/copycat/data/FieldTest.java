@@ -15,22 +15,26 @@
  * limitations under the License.
  **/
 
-
-
 package org.apache.kafka.copycat.data;
 
-/** Base Avro exception. */
-public class DataRuntimeException extends RuntimeException {
-    public DataRuntimeException(Throwable cause) {
-        super(cause);
-    }
+import org.junit.Test;
 
-    public DataRuntimeException(String message) {
-        super(message);
-    }
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
-    public DataRuntimeException(String message, Throwable cause) {
-        super(message, cause);
+public class FieldTest {
+
+    @Test
+    public void testEquality() {
+        Field field1 = new Field("name", 0, Schema.INT8_SCHEMA);
+        Field field2 = new Field("name", 0, Schema.INT8_SCHEMA);
+        Field differentName = new Field("name2", 0, Schema.INT8_SCHEMA);
+        Field differentIndex = new Field("name", 1, Schema.INT8_SCHEMA);
+        Field differentSchema = new Field("name", 0, Schema.INT16_SCHEMA);
+
+        assertEquals(field1, field2);
+        assertNotEquals(field1, differentName);
+        assertNotEquals(field1, differentIndex);
+        assertNotEquals(field1, differentSchema);
     }
 }
-

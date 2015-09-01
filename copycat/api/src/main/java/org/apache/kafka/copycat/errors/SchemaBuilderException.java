@@ -15,19 +15,18 @@
  * limitations under the License.
  **/
 
+package org.apache.kafka.copycat.errors;
 
-
-package org.apache.kafka.copycat.data;
-
-
-/** Thrown when an illegal type is used. */
-public class DataTypeException extends DataRuntimeException {
-    public DataTypeException(String message) {
-        super(message);
+public class SchemaBuilderException extends DataException {
+    public SchemaBuilderException(String s) {
+        super(s);
     }
 
-    public DataTypeException(String message, Throwable cause) {
-        super(message, cause);
+    public SchemaBuilderException(String s, Throwable throwable) {
+        super(s, throwable);
+    }
+
+    public SchemaBuilderException(Throwable throwable) {
+        super(throwable);
     }
 }
-

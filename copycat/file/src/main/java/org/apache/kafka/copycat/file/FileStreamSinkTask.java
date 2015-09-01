@@ -24,8 +24,8 @@ import org.apache.kafka.copycat.sink.SinkTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.Map;
@@ -54,9 +54,9 @@ public class FileStreamSinkTask extends SinkTask {
             outputStream = System.out;
         } else {
             try {
-                outputStream = new PrintStream(new File(filename));
+                outputStream = new PrintStream(new FileOutputStream(filename, true));
             } catch (FileNotFoundException e) {
-                throw new CopycatException("Couldn't find or create file for FileStreamSinkTask: {}", e);
+                throw new CopycatException("Couldn't find or create file for FileStreamSinkTask", e);
             }
         }
     }
@@ -64,7 +64,7 @@ public class FileStreamSinkTask extends SinkTask {
     @Override
     public void put(Collection<SinkRecord> sinkRecords) {
         for (SinkRecord record : sinkRecords) {
-            outputStream.println(record.getValue());
+            outputStream.println(record.value());
         }
     }
 
