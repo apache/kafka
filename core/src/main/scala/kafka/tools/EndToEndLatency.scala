@@ -46,7 +46,7 @@ object EndToEndLatency {
     val brokerList = args(0)
     val topic = args(1)
     val numMessages = args(2).toInt
-    val producerAcks = args(3).toInt
+    val producerAcks = args(3)
     val messageLen = args(4).toInt
 
     val consumerProps = new Properties()
