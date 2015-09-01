@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.errors;
 
-public class BrokerNotAvailableException extends InvalidMetadataException {
+public class BrokerNotAvailableException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 

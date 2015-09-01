@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.errors;
 
-public class ControllerMovedException extends InvalidMetadataException {
+public class ControllerMovedException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
