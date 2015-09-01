@@ -87,7 +87,6 @@ public class MockClient implements KafkaClient {
         return false;
     }
 
-    @Override
     public void disconnect(String node) {
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {
@@ -212,6 +211,11 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void close() {
+    }
+
+    @Override
+    public void close(String nodeId) {
+        ready.remove(Integer.valueOf(nodeId));
     }
 
     @Override

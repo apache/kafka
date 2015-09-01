@@ -145,14 +145,14 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Disconnect connection to a particular node (if there is one). The disconnection is asynchronous and will not be
-     * processed until the next {@link #poll(long, long) poll()} call.
+     * Closes the connection to a particular node (if there is one).
      *
      * @param nodeId The id of the node
      */
     @Override
-    public void disconnect(String nodeId) {
-        selector.disconnect(nodeId);
+    public void close(String nodeId) {
+        selector.close(nodeId);
+        connectionStates.remove(nodeId);
     }
 
     /**

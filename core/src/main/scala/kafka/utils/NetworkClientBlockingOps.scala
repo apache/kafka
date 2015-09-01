@@ -43,12 +43,6 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
     }
   }
 
-  def disconnectAndPoll(nodeId: String, pollTimeout: Long)(implicit time: JTime): Boolean = {
-    client.disconnect(nodeId)
-    client.poll(pollTimeout, time.milliseconds())
-    client.connectionState(nodeId) == ConnectionState.DISCONNECTED
-  }
-
   def blockingSendAndReceive(request: ClientRequest, timeout: Long)(implicit time: JTime): Option[ClientResponse] = {
     client.send(request)
 

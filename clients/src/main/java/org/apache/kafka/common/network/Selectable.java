@@ -53,6 +53,11 @@ public interface Selectable {
     public void close();
 
     /**
+     * Close the connection identified by the given id
+     */
+    public void close(String nodeId);
+
+    /**
      * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
      * @param send The request to send
      */

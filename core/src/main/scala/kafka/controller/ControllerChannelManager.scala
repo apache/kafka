@@ -116,7 +116,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
 
   private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
     try {
-      brokerState.networkClient.disconnect(brokerState.brokerNode.idString)
+      brokerState.networkClient.close(brokerState.brokerNode.idString)
       brokerState.messageQueue.clear()
       brokerState.requestSendThread.shutdown()
       brokerStateInfo.remove(brokerState.broker.id)
@@ -180,7 +180,7 @@ class RequestSendThread(val controllerId: Int,
               warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
                   request.toString, toBroker.toString()), e)
-              networkClient.disconnectAndPoll(brokerNode.idString, 0)(time)
+              networkClient.close(brokerNode.idString)
               isSendSuccessful = false
               backoff()
           }
@@ -204,7 +204,7 @@ class RequestSendThread(val controllerId: Int,
       case e: Throwable =>
         error("Controller %d fails to send a request to broker %s".format(controllerId, toBroker.toString()), e)
         // If there is any socket error (eg, socket timeout), the connection is no longer usable and needs to be recreated.
-        networkClient.disconnectAndPoll(brokerNode.idString, 0)(time)
+        networkClient.close(brokerNode.idString)
     }
   }
 
@@ -226,7 +226,7 @@ class RequestSendThread(val controllerId: Int,
     } catch {
       case e: Throwable =>
         error("Controller %d's connection to broker %s was unsuccessful".format(controllerId, toBroker.toString()), e)
-        networkClient.disconnectAndPoll(brokerNode.idString, 0)(time)
+        networkClient.close(brokerNode.idString)
         false
     }
   }

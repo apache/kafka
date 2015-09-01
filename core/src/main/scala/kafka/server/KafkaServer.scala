@@ -329,7 +329,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                 ioException = false
 
                 if (prevController != null)
-                  networkClient.disconnectAndPoll(node(prevController).idString, 0)
+                  networkClient.close(node(prevController).idString)
 
                 prevController = broker
                 metadataUpdater.setNodes(Seq(node(prevController)).asJava)
