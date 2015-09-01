@@ -128,7 +128,7 @@ class EndToEndLatencyService(PerformanceService):
         })
         cmd = "/opt/kafka/bin/kafka-run-class.sh kafka.tools.EndToEndLatency "\
               "%(bootstrap_servers)s %(topic)s %(num_records)d "\
-              "%(acks)d 20 true" % args
+              "%(acks)d 20" % args
         self.logger.debug("End-to-end latency %d command: %s", idx, cmd)
         results = {}
         for line in node.account.ssh_capture(cmd):

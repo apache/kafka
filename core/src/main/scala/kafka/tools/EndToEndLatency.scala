@@ -32,15 +32,14 @@ import scala.collection.JavaConversions._
  * num_messages = # messages to send
  * producer_acks = See ProducerConfig.ACKS_DOC
  * message_size_bytes = size of each message in bytes
- * use_busy_wait = if False the client will sleep for 1ms (ConsumerConfig.RETRY_BACKOFF_MS_CONFIG) between requests. This limits the lower granularity. Setting to true provides finer grained results (useful when running locally).
  *
- *  e.g. [localhost:9092 test 10000 1 20 true]
+ *  e.g. [localhost:9092 test 10000 1 20]
  */
 
 object EndToEndLatency {
   def main(args: Array[String]) {
-    if (args.length != 6) {
-      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes use_busy_wait")
+    if (args.length != 5) {
+      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes")
       System.exit(1)
     }
 
@@ -48,12 +47,11 @@ object EndToEndLatency {
     val topic = args(1)
     val numMessages = args(2).toInt
     val producerAcks = args(3).toInt
-    val messageLen = if (args.length > 4) args(4).toInt else 20
-    val busyWait = args(5).toBoolean
+    val messageLen = args(4).toInt
 
     val consumerProps = new Properties()
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, topic)
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
@@ -92,12 +90,7 @@ object EndToEndLatency {
       val begin = System.nanoTime
 
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message))
-
-      if (busyWait)
-        while (!recordIter.hasNext)
-          recordIter = consumer.poll(0).iterator
-      else
-        recordIter = consumer.poll(Long.MaxValue).iterator
+      recordIter = consumer.poll(Long.MaxValue).iterator
 
       val elapsed = System.nanoTime - begin
 
