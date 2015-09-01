@@ -26,6 +26,7 @@ import org.apache.kafka.streaming.processor.internals.SinkNode;
 import org.apache.kafka.streaming.processor.internals.SourceNode;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -194,5 +195,9 @@ public class TopologyBuilder {
         }
 
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap);
+    }
+
+    public Set<String> sourceTopics() {
+        return Collections.unmodifiableSet(sourceTopicNames);
     }
 }

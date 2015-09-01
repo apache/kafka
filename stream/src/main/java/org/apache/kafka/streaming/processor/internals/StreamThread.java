@@ -159,6 +159,10 @@ public class StreamThread extends Thread {
         try {
             int totalNumBuffered = 0;
 
+            for (String topic : builder.sourceTopics()) {
+                consumer.subscribe(topic);
+            }
+
             while (stillRunning()) {
                 // try to fetch some records if necessary
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);

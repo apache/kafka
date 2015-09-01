@@ -27,13 +27,23 @@ import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KeyValue;
 import org.apache.kafka.streaming.kstream.KeyValueMapper;
 import org.apache.kafka.streaming.kstream.Predicate;
+import org.apache.kafka.streaming.processor.TimestampExtractor;
 
-import java.util.Properties;
+import java.util.HashMap;
+import java.util.Map;
 
 public class KStreamJob {
 
     public static void main(String[] args) throws Exception {
-        StreamingConfig config = new StreamingConfig(new Properties());
+        Map<String, Object> props = new HashMap<>();
+        props.put("bootstrap.servers", "localhost:9092");
+        props.put("key.serializer", StringSerializer.class);
+        props.put("value.serializer", StringSerializer.class);
+        props.put("key.deserializer", StringDeserializer.class);
+        props.put("value.deserializer", StringDeserializer.class);
+        props.put("timestamp.extractor", WallclockTimestampExtractor.class);
+        StreamingConfig config = new StreamingConfig(props);
+
         KStreamBuilder builder = new KStreamBuilder();
 
         StringSerializer stringSerializer = new StringSerializer();
@@ -75,4 +85,13 @@ public class KStreamJob {
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.start();
     }
+
+    public static class WallclockTimestampExtractor implements TimestampExtractor {
+        @Override
+        public long extract(String topic, Object key, Object value) {
+            return System.currentTimeMillis();
+        }
+    }
+
+
 }

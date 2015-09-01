@@ -37,7 +37,7 @@ import java.util.LinkedList;
 import java.util.Map;
 
 public class SlidingWindowDef<K, V> implements WindowDef<K, V> {
-    private String name;
+    private final String name;
     private final long duration;
     private final int maxCount;
     private final Serializer<K> keySerializer;
