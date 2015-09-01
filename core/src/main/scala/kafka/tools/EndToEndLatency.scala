@@ -79,7 +79,6 @@ object EndToEndLatency {
 
     //Ensure we are at latest offset
     var recordIter = consumer.poll(0).iterator
-    Thread.sleep(2000)
     consumer.seekToEnd()
 
     var totalTime = 0.0
