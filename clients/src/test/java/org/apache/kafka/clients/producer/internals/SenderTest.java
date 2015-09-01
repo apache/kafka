@@ -14,6 +14,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 import java.util.Collections;
@@ -128,8 +129,10 @@ public class SenderTest {
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals(1, client.inFlightRequestCount());
+        assertFalse(client.ready().isEmpty());
         client.disconnect(client.requests().peek().request().destination());
         assertEquals(0, client.inFlightRequestCount());
+        assertTrue(client.ready().isEmpty());
         sender.run(time.milliseconds()); // receive error
         sender.run(time.milliseconds()); // reconnect
         sender.run(time.milliseconds()); // resend
