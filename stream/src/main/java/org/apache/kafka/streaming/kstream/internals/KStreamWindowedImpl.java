@@ -38,7 +38,7 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
         String otherWindowName = ((KStreamWindowedImpl<K, V1>) other).windowDef.name();
 
         KStreamJoin<K, V2, V, V1> joinThis = new KStreamJoin<>(otherWindowName, valueJoiner);
-        KStreamJoin<K, V2, V1, V> joinOther = new KStreamJoin<>(thisWindowName, KStreamJoin.reserveJoiner(valueJoiner));
+        KStreamJoin<K, V2, V1, V> joinOther = new KStreamJoin<>(thisWindowName, KStreamJoin.reverseJoiner(valueJoiner));
         KStreamPassThrough<K, V2> joinMerge = new KStreamPassThrough<>();
 
         String joinThisName = JOINTHIS_NAME + INDEX.getAndIncrement();
