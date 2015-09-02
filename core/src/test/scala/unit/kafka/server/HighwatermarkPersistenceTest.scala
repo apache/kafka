@@ -19,7 +19,6 @@ package kafka.server
 import kafka.log._
 import java.io.File
 import org.I0Itec.zkclient.ZkClient
-import org.scalatest.junit.JUnit3Suite
 import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
@@ -28,7 +27,7 @@ import kafka.cluster.Replica
 import kafka.utils.{SystemTime, KafkaScheduler, TestUtils, MockTime, CoreUtils}
 import java.util.concurrent.atomic.AtomicBoolean
 
-class HighwatermarkPersistenceTest extends JUnit3Suite {
+class HighwatermarkPersistenceTest {
 
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
@@ -44,6 +43,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
       CoreUtils.rm(dir)
   }
 
+  @Test
   def testHighWatermarkPersistenceSinglePartition() {
     // mock zkclient
     val zkClient = EasyMock.createMock(classOf[ZkClient])
@@ -79,6 +79,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     replicaManager.shutdown(false)
   }
 
+  @Test
   def testHighWatermarkPersistenceMultiplePartitions() {
     val topic1 = "foo1"
     val topic2 = "foo2"

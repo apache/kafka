@@ -17,7 +17,6 @@
 package kafka.admin
 
 import kafka.log.Log
-import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import junit.framework.Assert._
 import kafka.utils.{ZkUtils, TestUtils}
@@ -26,7 +25,7 @@ import org.junit.Test
 import java.util.Properties
 import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
 
-class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
+class DeleteTopicTest extends ZooKeeperTestHarness {
 
   @Test
   def testDeleteTopicWithAllAliveReplicas() {

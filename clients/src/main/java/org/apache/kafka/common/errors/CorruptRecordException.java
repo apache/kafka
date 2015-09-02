@@ -13,7 +13,7 @@
 package org.apache.kafka.common.errors;
 
 /**
- * This exception indicates a record has failed it's internal CRC check, this generally indicates network or disk
+ * This exception indicates a record has failed its internal CRC check, this generally indicates network or disk
  * corruption.
  */
 public class CorruptRecordException extends RetriableException {
@@ -21,7 +21,7 @@ public class CorruptRecordException extends RetriableException {
     private static final long serialVersionUID = 1L;
 
     public CorruptRecordException() {
-        super("This message has failed it's CRC checksum or is otherwise corrupt.");
+        super("This message has failed its CRC checksum or is otherwise corrupt.");
     }
 
     public CorruptRecordException(String message) {

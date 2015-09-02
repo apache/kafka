@@ -96,6 +96,7 @@ class OffsetManager(val config: OffsetManagerConfig,
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
   private val cleanupOrLoadMutex = new Object
   private val shuttingDown = new AtomicBoolean(false)
+  private val offsetsTopicPartitionCount = getOffsetsTopicPartitionCount
 
   this.logIdent = "[Offset Manager on Broker " + replicaManager.config.brokerId + "]: "
 
@@ -170,7 +171,7 @@ class OffsetManager(val config: OffsetManagerConfig,
   }
 
 
-  def partitionFor(group: String): Int = Utils.abs(group.hashCode) % config.offsetsTopicNumPartitions
+  def partitionFor(group: String): Int = Utils.abs(group.hashCode) % offsetsTopicPartitionCount
 
   /**
    * Fetch the current offset for the given group/topic/partition from the underlying offsets storage.
@@ -436,13 +437,24 @@ class OffsetManager(val config: OffsetManagerConfig,
 
     if (numRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
                              .format(numRemoved, TopicAndPartition(ConsumerCoordinator.OffsetsTopicName, offsetsPartition)))
-
   }
 
   def shutdown() {
     shuttingDown.set(true)
   }
 
+  /**
+   * Gets the partition count of the offsets topic from ZooKeeper.
+   * If the topic does not exist, the configured partition count is returned.
+   */
+  private def getOffsetsTopicPartitionCount = {
+    val topic = ConsumerCoordinator.OffsetsTopicName
+    val topicData = ZkUtils.getPartitionAssignmentForTopics(zkClient, Seq(topic))
+    if (topicData(topic).nonEmpty)
+      topicData(topic).size
+    else
+      config.offsetsTopicNumPartitions
+  }
 }
 
 object OffsetManager {

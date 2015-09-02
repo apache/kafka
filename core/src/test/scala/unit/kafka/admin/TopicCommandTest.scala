@@ -18,16 +18,15 @@ package kafka.admin
 
 import junit.framework.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 import kafka.utils.Logging
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import kafka.server.{ConfigType, OffsetManager, KafkaConfig}
+import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils
 import kafka.coordinator.ConsumerCoordinator
 
-class TopicCommandTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
+class TopicCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testConfigPreservationAcrossPartitionAlteration() {

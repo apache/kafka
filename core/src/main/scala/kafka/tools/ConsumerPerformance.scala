@@ -56,7 +56,7 @@ object ConsumerPerformance {
     var startMs, endMs = 0L
     if(config.useNewConsumer) {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
-      consumer.subscribe(config.topic)
+      consumer.subscribe(List(config.topic))
       startMs = System.currentTimeMillis
       consume(consumer, config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
       endMs = System.currentTimeMillis

@@ -31,7 +31,7 @@ import scala.collection.immutable.Map
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
 object FetchRequest {
-  val CurrentVersion = 0.shortValue
+  val CurrentVersion = 1.shortValue
   val DefaultMaxWait = 0
   val DefaultMinBytes = 0
   val DefaultCorrelationId = 0
@@ -170,7 +170,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
 @nonthreadsafe
 class FetchRequestBuilder() {
   private val correlationId = new AtomicInteger(0)
-  private val versionId = FetchRequest.CurrentVersion
+  private var versionId = FetchRequest.CurrentVersion
   private var clientId = ConsumerConfig.DefaultClientId
   private var replicaId = Request.OrdinaryConsumerId
   private var maxWait = FetchRequest.DefaultMaxWait
@@ -202,6 +202,11 @@ class FetchRequestBuilder() {
 
   def minBytes(minBytes: Int): FetchRequestBuilder = {
     this.minBytes = minBytes
+    this
+  }
+
+  def requestVersion(versionId: Short): FetchRequestBuilder = {
+    this.versionId = versionId
     this
   }
 

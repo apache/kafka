@@ -114,7 +114,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
 
   /**
    * Find the largest offset less than or equal to the given targetOffset 
-   * and return a pair holding this offset and it's corresponding physical file position.
+   * and return a pair holding this offset and its corresponding physical file position.
    * 
    * @param targetOffset The offset to look up.
    * 

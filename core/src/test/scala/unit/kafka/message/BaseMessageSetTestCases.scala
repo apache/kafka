@@ -18,7 +18,7 @@
 package kafka.message
 
 import java.io.RandomAccessFile
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.utils.TestUtils._
 import kafka.log.FileMessageSet
 import org.scalatest.junit.JUnitSuite

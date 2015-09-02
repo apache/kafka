@@ -18,24 +18,22 @@
 package kafka.integration
 
 import org.apache.kafka.common.config.ConfigException
+import org.junit.{Test, After, Before}
 
-import scala.collection.mutable.MutableList
 import scala.util.Random
 import org.apache.log4j.{Level, Logger}
-import org.scalatest.junit.JUnit3Suite
 import java.util.Properties
-import junit.framework.Assert._
 import kafka.admin.AdminUtils
 import kafka.common.FailedToSendMessageException
-import kafka.consumer.{Consumer, ConsumerConfig, ConsumerTimeoutException}
-import kafka.producer.{KeyedMessage, Producer}
+import kafka.consumer.{Consumer, ConsumerConfig}
 import kafka.serializer.StringDecoder
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
+import org.junit.Assert._
 
-class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
+class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
@@ -58,6 +56,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   val syncProducerLogger = Logger.getLogger(classOf[kafka.producer.SyncProducer])
   val eventHandlerLogger = Logger.getLogger(classOf[kafka.producer.async.DefaultEventHandler[Object, Object]])
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -77,6 +76,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     eventHandlerLogger.setLevel(Level.FATAL)
   }
 
+  @After
   override def tearDown() {
     servers.foreach(server => shutdownServer(server))
     servers.foreach(server => CoreUtils.rm(server.config.logDirs))
@@ -99,6 +99,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testUncleanLeaderElectionEnabled {
     // unclean leader election is enabled by default
     startBrokers(Seq(configProps1, configProps2))
@@ -109,10 +110,11 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     verifyUncleanLeaderElectionEnabled
   }
 
+  @Test
   def testUncleanLeaderElectionDisabled {
-	// disable unclean leader election
-	configProps1.put("unclean.leader.election.enable", String.valueOf(false))
-	configProps2.put("unclean.leader.election.enable", String.valueOf(false))
+	  // disable unclean leader election
+	  configProps1.put("unclean.leader.election.enable", String.valueOf(false))
+  	configProps2.put("unclean.leader.election.enable", String.valueOf(false))
     startBrokers(Seq(configProps1, configProps2))
 
     // create topic with 1 partition, 2 replicas, one on each broker
@@ -121,6 +123,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     verifyUncleanLeaderElectionDisabled
   }
 
+  @Test
   def testUncleanLeaderElectionEnabledByTopicOverride {
     // disable unclean leader election globally, but enable for our specific test topic
     configProps1.put("unclean.leader.election.enable", String.valueOf(false))
@@ -136,6 +139,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     verifyUncleanLeaderElectionEnabled
   }
 
+  @Test
   def testCleanLeaderElectionDisabledByTopicOverride {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", String.valueOf(true))
@@ -151,6 +155,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     verifyUncleanLeaderElectionDisabled
   }
 
+  @Test
   def testUncleanLeaderElectionInvalidTopicOverride {
     startBrokers(Seq(configProps1))
 

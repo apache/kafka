@@ -19,17 +19,18 @@ package kafka.integration
 
 import java.util.Arrays
 
-import scala.collection.mutable.Buffer
+import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.{CoreUtils, TestUtils}
-import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
-import kafka.common.KafkaException
+import org.junit.{After, Before}
+
+import scala.collection.mutable.Buffer
 
 /**
  * A test harness that brings up some number of broker nodes
  */
-trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
+trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   var instanceConfigs: Seq[KafkaConfig] = null
   var servers: Buffer[KafkaServer] = null
   var brokerList: String = null
@@ -51,7 +52,7 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
 
   def bootstrapUrl = servers.map(s => s.config.hostName + ":" + s.boundPort()).mkString(",")
 
-  
+  @Before
   override def setUp() {
     super.setUp
     if(configs.size <= 0)
@@ -62,6 +63,7 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
     Arrays.fill(alive, true)
   }
 
+  @After
   override def tearDown() {
     servers.foreach(_.shutdown())
     servers.foreach(_.config.logDirs.foreach(CoreUtils.rm(_)))

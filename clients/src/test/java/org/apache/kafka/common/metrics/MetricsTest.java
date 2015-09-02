@@ -37,9 +37,9 @@ import org.junit.Test;
 public class MetricsTest {
 
     private static final double EPS = 0.000001;
-
-    MockTime time = new MockTime();
-    Metrics metrics = new Metrics(new MetricConfig(), Arrays.asList((MetricsReporter) new JmxReporter()), time);
+    private MockTime time = new MockTime();
+    private MetricConfig config = new MetricConfig();
+    private Metrics metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time);
 
     @Test
     public void testMetricName() {
@@ -77,19 +77,33 @@ public class MetricsTest {
         s2.add(new MetricName("s2.total", "grp1"), new Total());
         s2.record(5.0);
 
-        for (int i = 0; i < 10; i++)
+        int sum = 0;
+        int count = 10;
+        for (int i = 0; i < count; i++) {
             s.record(i);
+            sum += i;
+        }
+        // prior to any time passing
+        double elapsedSecs = (config.timeWindowMs() * (config.samples() - 1)) / 1000.0;
+        assertEquals(String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs), count / elapsedSecs,
+                     metrics.metrics().get(new MetricName("test.occurences", "grp1")).value(), EPS);
 
         // pretend 2 seconds passed...
-        time.sleep(2000);
+        long sleepTimeMs = 2;
+        time.sleep(sleepTimeMs * 1000);
+        elapsedSecs += sleepTimeMs;
 
         assertEquals("s2 reflects the constant value", 5.0, metrics.metrics().get(new MetricName("s2.total", "grp1")).value(), EPS);
         assertEquals("Avg(0...9) = 4.5", 4.5, metrics.metrics().get(new MetricName("test.avg", "grp1")).value(), EPS);
-        assertEquals("Max(0...9) = 9", 9.0, metrics.metrics().get(new MetricName("test.max", "grp1")).value(), EPS);
+        assertEquals("Max(0...9) = 9", count - 1, metrics.metrics().get(new MetricName("test.max", "grp1")).value(), EPS);
         assertEquals("Min(0...9) = 0", 0.0, metrics.metrics().get(new MetricName("test.min", "grp1")).value(), EPS);
-        assertEquals("Rate(0...9) = 22.5", 22.5, metrics.metrics().get(new MetricName("test.rate", "grp1")).value(), EPS);
-        assertEquals("Occurences(0...9) = 5", 5.0, metrics.metrics().get(new MetricName("test.occurences", "grp1")).value(), EPS);
-        assertEquals("Count(0...9) = 10", 10.0, metrics.metrics().get(new MetricName("test.count", "grp1")).value(), EPS);
+        assertEquals("Rate(0...9) = 1.40625",
+                     sum / elapsedSecs, metrics.metrics().get(new MetricName("test.rate", "grp1")).value(), EPS);
+        assertEquals(String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs),
+                     count / elapsedSecs,
+                     metrics.metrics().get(new MetricName("test.occurences", "grp1")).value(), EPS);
+        assertEquals("Count(0...9) = 10",
+                     (double) count, metrics.metrics().get(new MetricName("test.count", "grp1")).value(), EPS);
     }
 
     @Test

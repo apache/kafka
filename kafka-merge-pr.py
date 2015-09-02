@@ -140,7 +140,16 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
         "Enter reviewers in the format of \"name1 <email1>, name2 <email2>\": ").strip()
 
     commits = run_cmd(['git', 'log', 'HEAD..%s' % pr_branch_name,
-                      '--pretty=format:%h [%an] %s']).split("\n\n")
+                      '--pretty=format:%h [%an] %s']).split("\n")
+    
+    if len(commits) > 1:
+        result = raw_input("List pull request commits in squashed commit message? (y/n): ")
+        if result.lower() == "y":
+          should_list_commits = True
+        else:
+          should_list_commits = False
+    else:
+        should_list_commits = False
 
     merge_message_flags = []
 
@@ -165,11 +174,13 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
         merge_message_flags += ["-m", message]
 
     # The string "Closes #%s" string is required for GitHub to correctly close the PR
-    merge_message_flags += [
-        "-m",
-        "Closes #%s from %s and squashes the following commits:" % (pr_num, pr_repo_desc)]
-    for c in commits:
-        merge_message_flags += ["-m", c]
+    close_line = "Closes #%s from %s" % (pr_num, pr_repo_desc)
+    if should_list_commits:
+        close_line += " and squashes the following commits:"
+    merge_message_flags += ["-m", close_line]
+
+    if should_list_commits:
+        merge_message_flags += ["-m", "\n".join(commits)]
 
     run_cmd(['git', 'commit', '--author="%s"' % primary_author] + merge_message_flags)
 

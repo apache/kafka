@@ -19,11 +19,30 @@ package kafka.log
 
 import java.util.Properties
 
+import kafka.server.KafkaConfig
+import kafka.server.KafkaServer
+import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
-import org.scalatest.junit.JUnit3Suite
+import org.junit.Assert._
+import org.scalatest.Assertions._
 
-class LogConfigTest extends JUnit3Suite {
+class LogConfigTest {
+
+  @Test
+  def testKafkaConfigToProps() {
+    val millisInHour = 60L * 60L * 1000L
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
+
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    val logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
+  }
 
   @Test
   def testFromPropsEmpty() {

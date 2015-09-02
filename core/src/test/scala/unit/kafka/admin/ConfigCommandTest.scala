@@ -19,28 +19,23 @@ package kafka.admin
 import junit.framework.Assert._
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 import kafka.utils.Logging
-import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import kafka.server.{ConfigType, OffsetManager, KafkaConfig}
-import kafka.admin.TopicCommand.TopicCommandOptions
-import kafka.utils.ZkUtils
 
-class ConfigCommandTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
+class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testArgumentParse() {
     // Should parse correctly
     var createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
                                                      "--entity-name", "x",
-                                                     "--entity-type", "client",
+                                                     "--entity-type", "clients",
                                                      "--describe"))
     createOpts.checkArgs()
 
     // For --alter and added config
     createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
                                                 "--entity-name", "x",
-                                                "--entity-type", "client",
+                                                "--entity-type", "clients",
                                                 "--alter",
                                                 "--added-config", "a=b,c=d"))
     createOpts.checkArgs()
@@ -48,7 +43,7 @@ class ConfigCommandTest extends JUnit3Suite with ZooKeeperTestHarness with Loggi
     // For alter and deleted config
     createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
                                                 "--entity-name", "x",
-                                                "--entity-type", "client",
+                                                "--entity-type", "clients",
                                                 "--alter",
                                                 "--deleted-config", "a,b,c"))
     createOpts.checkArgs()
@@ -56,7 +51,7 @@ class ConfigCommandTest extends JUnit3Suite with ZooKeeperTestHarness with Loggi
     // For alter and both added, deleted config
     createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
                                                 "--entity-name", "x",
-                                                "--entity-type", "client",
+                                                "--entity-type", "clients",
                                                 "--alter",
                                                 "--added-config", "a=b,c=d",
                                                 "--deleted-config", "a"))

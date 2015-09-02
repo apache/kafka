@@ -30,11 +30,9 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.SerializationException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{After, Before, Test}
 
-
-class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
+class ProducerSendTest extends KafkaServerTestHarness {
   val numServers = 2
 
   val overridingProps = new Properties()
@@ -49,6 +47,7 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
   private val topic = "topic"
   private val numRecords = 100
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -57,6 +56,7 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
     consumer2 = new SimpleConsumer("localhost", servers(1).boundPort(), 100, 1024*1024, "")
   }
 
+  @After
   override def tearDown() {
     consumer1.close()
     consumer2.close()
@@ -74,7 +74,7 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
   def testSendOffset() {
     var producer = TestUtils.createNewProducer(brokerList)
     val partition = new Integer(0)
-    
+
     object callback extends Callback {
       var offset = 0L
       def onCompletion(metadata: RecordMetadata, exception: Exception) {
@@ -298,7 +298,7 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
       }
     }
   }
-  
+
   /**
    * Test that flush immediately sends all accumulated requests.
    */

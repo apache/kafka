@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
+import org.junit.{Test, Before}
 
 import scala.collection.JavaConversions._
 
@@ -52,6 +53,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       .map(KafkaConfig.fromProps(_, serverConfig))
   }
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -59,6 +61,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     TestUtils.createTopic(this.zkClient, topic, 1, serverCount, this.servers)
   }
 
+  @Test
   def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(10)
 
   /*
@@ -72,7 +75,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
     var consumed = 0
     val consumer = this.consumers(0)
-    consumer.subscribe(topic)
+    consumer.subscribe(List(topic))
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
@@ -94,6 +97,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     scheduler.shutdown()
   }
 
+  @Test
   def testSeekAndCommitWithBrokerFailures() = seekAndCommitWithBrokerFailures(5)
 
   def seekAndCommitWithBrokerFailures(numIters: Int) {
@@ -102,7 +106,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     this.producers.foreach(_.close)
 
     val consumer = this.consumers(0)
-    consumer.subscribe(tp)
+    consumer.assign(List(tp))
     consumer.seek(tp, 0)
 
     // wait until all the followers have synced the last HW with leader

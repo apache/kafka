@@ -266,7 +266,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
   /**
    * Invoked on the NewPartition->OnlinePartition state change. When a partition is in the New state, it does not have
-   * a leader and isr path in zookeeper. Once the partition moves to the OnlinePartition state, it's leader and isr
+   * a leader and isr path in zookeeper. Once the partition moves to the OnlinePartition state, its leader and isr
    * path gets initialized and it never goes back to the NewPartition state. From here, it can only go to the
    * OfflinePartition state.
    * @param topicAndPartition   The topic/partition whose leader and isr path is to be initialized

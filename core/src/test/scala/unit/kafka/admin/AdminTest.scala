@@ -18,7 +18,6 @@ package kafka.admin
 
 import junit.framework.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 import java.util.Properties
 import kafka.utils._
 import kafka.log._
@@ -30,7 +29,7 @@ import java.io.File
 import TestUtils._
 
 
-class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
+class AdminTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testReplicaAssignment() {

@@ -112,8 +112,14 @@ public final class Sensor {
             if (config != null) {
                 Quota quota = config.quota();
                 if (quota != null) {
-                    if (!quota.acceptable(metric.value(timeMs)))
-                        throw new QuotaViolationException(metric.metricName() + " is in violation of its quota of " + quota.bound());
+                    double value = metric.value(timeMs);
+                    if (!quota.acceptable(value)) {
+                        throw new QuotaViolationException(String.format(
+                            "(%s) violated quota. Actual: (%f), Threshold: (%f)",
+                            metric.metricName(),
+                            quota.bound(),
+                            value));
+                    }
                 }
             }
         }
@@ -170,5 +176,4 @@ public final class Sensor {
     synchronized List<KafkaMetric> metrics() {
         return Collections.unmodifiableList(this.metrics);
     }
-
 }

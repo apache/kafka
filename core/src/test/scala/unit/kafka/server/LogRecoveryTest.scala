@@ -27,10 +27,10 @@ import kafka.serializer.StringEncoder
 
 import java.io.File
 
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{Test, After, Before}
 import org.junit.Assert._
 
-class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
+class LogRecoveryTest extends ZooKeeperTestHarness {
 
   val replicaLagTimeMaxMs = 5000L
   val replicaLagMaxMessages = 10L
@@ -69,6 +69,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
       keyEncoder = classOf[IntEncoder].getName)
   }
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -86,6 +87,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     updateProducer()
   }
 
+  @After
   override def tearDown() {
     producer.close()
     for(server <- servers) {
@@ -95,6 +97,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     super.tearDown()
   }
 
+  @Test
   def testHWCheckpointNoFailuresSingleLogSegment {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
@@ -111,6 +114,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(numMessages, followerHW)
   }
 
+  @Test
   def testHWCheckpointWithFailuresSingleLogSegment {
     var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 
@@ -161,6 +165,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
   }
 
+  @Test
   def testHWCheckpointNoFailuresMultipleLogSegments {
     sendMessages(20)
     val hw = 20L
@@ -176,6 +181,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(hw, followerHW)
   }
 
+  @Test
   def testHWCheckpointWithFailuresMultipleLogSegments {
     var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 

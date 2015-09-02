@@ -21,7 +21,7 @@ import java.io.ByteArrayOutputStream
 import scala.collection._
 import org.scalatest.junit.JUnitSuite
 import org.junit._
-import junit.framework.Assert._
+import org.junit.Assert._
 
 class MessageCompressionTest extends JUnitSuite {
   
