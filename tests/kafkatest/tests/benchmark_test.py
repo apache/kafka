@@ -37,15 +37,6 @@ class Benchmark(KafkaTest):
             TOPIC_REP_THREE: {'partitions': 6, 'replication-factor': 3}
         })
 
-        if True:
-            # Works on both aws and local
-            self.msgs = 1000000
-            self.msgs_default = 1000000
-        else:
-            # Can use locally on Vagrant VMs, but may use too much memory for aws
-            self.msgs = 50000000
-            self.msgs_default = 50000000
-
         self.msgs_large = 10000000
         self.batch_size = 8*1024
         self.buffer_memory = 64*1024*1024
@@ -70,15 +61,15 @@ class Benchmark(KafkaTest):
         # Always generate the same total amount of data
         nrecords = int(self.target_data_size / message_size)
 
-        self.perf = ProducerPerformanceService(
+        self.producer = ProducerPerformanceService(
             self.test_context, num_producers, self.kafka, topic=topic,
             num_records=nrecords, record_size=message_size,  throughput=-1,
             settings={
                 'acks': acks,
                 'batch.size': self.batch_size,
                 'buffer.memory': self.buffer_memory})
-        self.perf.run()
-        return compute_aggregate_throughput(self.perf)
+        self.producer.run()
+        return compute_aggregate_throughput(self.producer)
 
     def test_long_term_producer_throughput(self):
         """
@@ -89,24 +80,24 @@ class Benchmark(KafkaTest):
 
         (This runs ProducerPerformance.java under the hood)
         """
-        self.perf = ProducerPerformanceService(
+        self.producer = ProducerPerformanceService(
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE, num_records=self.msgs_large, record_size=DEFAULT_RECORD_SIZE,
             throughput=-1, settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory},
             intermediate_stats=True
         )
-        self.perf.run()
+        self.producer.run()
 
         summary = ["Throughput over long run, data > memory:"]
         data = {}
         # FIXME we should be generating a graph too
         # Try to break it into 5 blocks, but fall back to a smaller number if
         # there aren't even 5 elements
-        block_size = max(len(self.perf.stats[0]) / 5, 1)
-        nblocks = len(self.perf.stats[0]) / block_size
+        block_size = max(len(self.producer.stats[0]) / 5, 1)
+        nblocks = len(self.producer.stats[0]) / block_size
 
         for i in range(nblocks):
-            subset = self.perf.stats[0][i*block_size:min((i+1)*block_size, len(self.perf.stats[0]))]
+            subset = self.producer.stats[0][i*block_size:min((i+1)*block_size, len(self.producer.stats[0]))]
             if len(subset) == 0:
                 summary.append(" Time block %d: (empty)" % i)
                 data[i] = None
@@ -142,21 +133,22 @@ class Benchmark(KafkaTest):
     def test_producer_and_consumer(self, new_consumer=False):
         """
         Setup: 1 node zk + 3 node kafka cluster
-        Concurrently produce and consume 1e6 messages with a single producer and a single consumer,
+        Concurrently produce and consume 10e6 messages with a single producer and a single consumer,
         using new consumer if new_consumer == True
 
         Return aggregate throughput statistics for both producer and consumer.
 
         (Under the hood, this runs ProducerPerformance.java, and ConsumerPerformance.scala)
         """
+        num_records = 10 * 1000 * 1000  # 10e6
 
         self.producer = ProducerPerformanceService(
             self.test_context, 1, self.kafka,
-            topic=TOPIC_REP_THREE, num_records=self.msgs_default, record_size=DEFAULT_RECORD_SIZE, throughput=-1,
+            topic=TOPIC_REP_THREE, num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1,
             settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
         )
         self.consumer = ConsumerPerformanceService(
-            self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=self.msgs_default)
+            self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=num_records)
         Service.run_parallel(self.producer, self.consumer)
 
         data = {
@@ -169,27 +161,28 @@ class Benchmark(KafkaTest):
         self.logger.info("\n".join(summary))
         return data
 
-    @matrix(new_consumer=[True, False])
-    @matrix(num_consumers=[1, 3])
+    @matrix(new_consumer=[True, False], num_consumers=[1])
     def test_consumer_throughput(self, new_consumer, num_consumers):
         """
-        Consume 1e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
+        Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
         (using new consumer iff new_consumer == True), and report throughput.
         """
+        num_records = 10 * 1000 * 1000  # 10e6
         # seed kafka w/messages
         self.producer = ProducerPerformanceService(
             self.test_context, 1, self.kafka,
-            topic=TOPIC_REP_THREE, num_records=self.msgs_default, record_size=DEFAULT_RECORD_SIZE, throughput=-1,
+            topic=TOPIC_REP_THREE, num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1,
             settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
         )
         self.producer.run()
 
         # consume
-        self.perf = ConsumerPerformanceService(
+        self.consumer = ConsumerPerformanceService(
             self.test_context, num_consumers, self.kafka,
-            topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=self.msgs_default)
-        self.perf.run()
-        return compute_aggregate_throughput(self.perf)
+            topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=num_records)
+        self.consumer.group = "test-consumer-group"
+        self.consumer.run()
+        return compute_aggregate_throughput(self.consumer)
 
 
 def throughput(records_per_sec, mb_per_sec):
