@@ -882,35 +882,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Overrides the fetch offsets that the consumer will use on the next {@link #poll(long) poll(timeout)}. If this API
      * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
-     *
-     * @param partition The partition to apply the new fetch offset
-     * @param offset The fetch offset that the consumer will use for the partition
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
         acquire();
         try {
-            seek(partition, offset, null);
-        } finally {
-            release();
-        }
-    }
-
-    /**
-     * Overrides the fetch offsets that the consumer will use on the next {@link #poll(long) poll(timeout)}. If this API
-     * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
-     * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
-     *
-     * @param partition The partition to apply the new fetch offset
-     * @param offset The fetch offset that the consumer will use for the partition
-     * @param callback Callback to be executed when the fetch request after the seek finishes
-     */
-    @Override
-    public void seek(TopicPartition partition, long offset, ConsumerSeekCallback callback) {
-        acquire();
-        try {
             log.debug("Seeking to offset {} for partition {}", offset, partition);
-            this.subscriptions.seek(partition, offset, callback);
+            this.subscriptions.seek(partition, offset);
         } finally {
             release();
         }

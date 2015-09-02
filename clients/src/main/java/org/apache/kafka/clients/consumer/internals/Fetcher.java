@@ -407,6 +407,7 @@ public class Fetcher<K, V> {
                     log.debug("Ignoring fetched data for partition {} which is no longer assigned.", tp);
                 } else if (partition.errorCode == Errors.NONE.code()) {
                     long fetchOffset = request.fetchData().get(tp).offset;
+
                     // we are interested in this fetch only if the beginning offset matches the
                     // current consumed position
                     Long consumed = subscriptions.consumed(tp);
@@ -420,7 +421,6 @@ public class Fetcher<K, V> {
                         continue;
                     }
 
-                    subscriptions.invokeConsumerSeekCallback(tp, null);
                     int bytes = 0;
                     ByteBuffer buffer = partition.recordSet;
                     MemoryRecords records = MemoryRecords.readableRecords(buffer);
@@ -445,7 +445,6 @@ public class Fetcher<K, V> {
                     // TODO: this could be optimized by grouping all out-of-range partitions
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
                     subscriptions.needOffsetReset(tp);
-                    subscriptions.invokeConsumerSeekCallback(tp, Errors.OFFSET_OUT_OF_RANGE.exception());
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else {
