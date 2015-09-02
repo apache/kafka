@@ -20,7 +20,7 @@ package kafka.tools
 import java.util.{Arrays, Properties}
 
 import org.apache.kafka.clients.consumer.{CommitType, ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer._
 
 import scala.collection.JavaConversions._
 
@@ -49,6 +49,9 @@ object EndToEndLatency {
     val producerAcks = args(3)
     val messageLen = args(4).toInt
 
+    if(!List("1","all").contains(producerAcks))
+      throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all")
+
     val consumerProps = new Properties()
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
@@ -56,8 +59,7 @@ object EndToEndLatency {
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    consumerProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, "1")
-    consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
+    consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
 
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
     consumer.subscribe(List(topic))
@@ -77,28 +79,43 @@ object EndToEndLatency {
       consumer.close()
     }
 
-    //Ensure we are at latest offset
-    var recordIter = consumer.poll(0).iterator
+    //Ensure we are at latest offset. seekToEnd evaluates lazily, that is to say actually performs the seek only when
+    //a poll() or position() request is issued. Hence we need to poll after we seek to ensure we see our first write.
     consumer.seekToEnd()
+    consumer.poll(0).iterator
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
 
     for (i <- 0 until numMessages) {
-      val message = arrayOfLen(messageLen)
+      val message = randomBytesOfLen(messageLen)
       val begin = System.nanoTime
 
+      //Send message (of random bytes) synchronously then immediately poll for it
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message))
-      recordIter = consumer.poll(Long.MaxValue).iterator
+      val recordIter = consumer.poll(60000).iterator
 
       val elapsed = System.nanoTime - begin
 
-      //Check result matches original record
+      //Check we got results
+      if(!recordIter.hasNext){
+        finalise()
+        throw new RuntimeException("poll() timed out before finding a result")
+      }
+
+      //Check result matches the original record
       val sent = new String(message)
       val read = new String(recordIter.next().value())
       if (!read.equals(sent)) {
         finalise()
         throw new RuntimeException(s"The message read [$read] did not match the message sent [$sent]")
+      }
+
+      //Check we only got the one message
+      if(recordIter.hasNext){
+        val additional = recordIter.next()
+        finalise()
+        throw new RuntimeException(s"Only one result was expected during this test. We found both [$read] and [$additional]")
       }
 
       //Report progress
@@ -119,7 +136,7 @@ object EndToEndLatency {
     finalise()
   }
 
-  def arrayOfLen(len: Int): Array[Byte] = {
+  def randomBytesOfLen(len: Int): Array[Byte] = {
     Array.fill(len)((scala.util.Random.nextInt(26) + 65).toByte)
   }
 }
