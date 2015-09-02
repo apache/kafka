@@ -19,6 +19,8 @@ package kafka.consumer
 
 import java.util.Properties
 
+import kafka.javaapi.consumer.ConsumerRebalanceListener
+
 /**
  * A base consumer used to abstract both old and new consumer
  * this class should be removed (along with BaseProducer) be removed
@@ -28,9 +30,13 @@ trait BaseConsumer {
   def receive(): BaseConsumerRecord
   def stop()
   def cleanup()
+  def commit()
 }
 
 case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: Array[Byte], value: Array[Byte])
+
+trait BaseConsumerRebalanceListener
+  extends ConsumerRebalanceListener with org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 
 class NewShinyConsumer(topic: String, consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -58,6 +64,10 @@ class NewShinyConsumer(topic: String, consumerProps: Properties, val timeoutMs: 
   override def cleanup() {
     this.consumer.close()
   }
+
+  override def commit() {
+    this.consumer.commitSync()
+  }
 }
 
 class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends BaseConsumer {
@@ -80,6 +90,10 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
 
   override def cleanup() {
     this.consumerConnector.shutdown()
+  }
+
+  override def commit() {
+    this.consumerConnector.commitOffsets
   }
 }
 
