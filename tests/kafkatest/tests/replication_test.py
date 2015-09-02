@@ -160,6 +160,3 @@ class ReplicationTest(Test):
 
     def test_hard_bounce(self):
         self.run_with_failure(self.hard_bounce)
-
-
-

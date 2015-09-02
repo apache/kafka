@@ -18,6 +18,7 @@
 package org.apache.kafka.copycat.file;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,15 +50,15 @@ public class FileStreamSinkTaskTest {
         // We do not call task.start() since it would override the output stream
 
         task.put(Arrays.asList(
-                new SinkRecord("topic1", 0, null, "line1", 1)
+                new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), 1L);
         task.flush(offsets);
         assertEquals("line1\n", os.toString());
 
         task.put(Arrays.asList(
-                new SinkRecord("topic1", 0, null, "line2", 2),
-                new SinkRecord("topic2", 0, null, "line3", 1)
+                new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line2", 2),
+                new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line3", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), 2L);
         offsets.put(new TopicPartition("topic2", 0), 1L);

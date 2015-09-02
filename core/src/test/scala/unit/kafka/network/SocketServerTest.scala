@@ -17,21 +17,15 @@
 
 package kafka.network;
 
-import java.io._
+
 import java.net._
 import javax.net.ssl._
 import java.io._
-import java.nio.ByteBuffer
-import java.util.Random
 
-import kafka.api.ProducerRequest
-import kafka.cluster.EndPoint
-import kafka.common.TopicAndPartition
-import kafka.message.ByteBufferMessageSet
-import kafka.producer.SyncProducerConfig
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.NetworkSend
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SystemTime
 import org.junit.Assert._
 import org.junit._
@@ -43,7 +37,6 @@ import java.nio.ByteBuffer
 import kafka.common.TopicAndPartition
 import kafka.message.ByteBufferMessageSet
 import kafka.server.KafkaConfig
-import java.nio.channels.SelectionKey
 import kafka.utils.TestUtils
 
 import scala.collection.Map
@@ -229,5 +222,13 @@ class SocketServerTest extends JUnitSuite {
     processRequest(overrideServer.requestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(sslSocket).toSeq)
     overrideServer.shutdown()
+  }
+
+  @Test
+  def testSessionPrincipal(): Unit = {
+    val socket = connect()
+    val bytes = new Array[Byte](40)
+    sendRequest(socket, 0, bytes)
+    assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest().session.principal)
   }
 }

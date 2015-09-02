@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
@@ -37,21 +38,21 @@ import java.util.concurrent.TimeUnit;
 /**
  * WorkerTask that uses a SinkTask to export data from Kafka.
  */
-class WorkerSinkTask<K, V> implements WorkerTask {
+class WorkerSinkTask implements WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);
 
     private final ConnectorTaskId id;
     private final SinkTask task;
     private final WorkerConfig workerConfig;
     private final Time time;
-    private final Converter<K> keyConverter;
-    private final Converter<V> valueConverter;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
     private WorkerSinkTaskThread workThread;
-    private KafkaConsumer<K, V> consumer;
+    private KafkaConsumer<byte[], byte[]> consumer;
     private final SinkTaskContext context;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
-                          Converter<K> keyConverter, Converter<V> valueConverter, Time time) {
+                          Converter keyConverter, Converter valueConverter, Time time) {
         this.id = id;
         this.task = task;
         this.workerConfig = workerConfig;
@@ -106,7 +107,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
     public void poll(long timeoutMs) {
         try {
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
-            ConsumerRecords<K, V> msgs = consumer.poll(timeoutMs);
+            ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
             log.trace("{} polling returned {} messages", id, msgs.count());
             deliverMessages(msgs);
         } catch (ConsumerWakeupException we) {
@@ -119,8 +120,9 @@ class WorkerSinkTask<K, V> implements WorkerTask {
      * the write commit. This should only be invoked by the WorkerSinkTaskThread.
      **/
     public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
+        log.info("{} Committing offsets", this);
         HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        for (TopicPartition tp : consumer.subscriptions()) {
+        for (TopicPartition tp : consumer.assignment()) {
             offsets.put(tp, consumer.position(tp));
         }
         // We only don't flush the task in one case: when shutting down, the task has already been
@@ -144,15 +146,15 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         consumer.commit(offsets, sync ? CommitType.SYNC : CommitType.ASYNC, cb);
     }
 
-    public Time getTime() {
+    public Time time() {
         return time;
     }
 
-    public WorkerConfig getWorkerConfig() {
+    public WorkerConfig workerConfig() {
         return workerConfig;
     }
 
-    private KafkaConsumer<K, V> createConsumer(Properties taskProps) {
+    private KafkaConsumer<byte[], byte[]> createConsumer(Properties taskProps) {
         String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
             throw new CopycatException("Sink tasks require a list of topics.");
@@ -160,18 +162,16 @@ class WorkerSinkTask<K, V> implements WorkerTask {
 
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
-        Properties props = workerConfig.getUnusedProperties();
+        Properties props = workerConfig.unusedProperties();
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "copycat-" + id.toString());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                workerConfig.getClass(WorkerConfig.KEY_DESERIALIZER_CLASS_CONFIG).getName());
-        props.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                workerConfig.getClass(WorkerConfig.VALUE_DESERIALIZER_CLASS_CONFIG).getName());
+        props.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
-        KafkaConsumer<K, V> newConsumer;
+        KafkaConsumer<byte[], byte[]> newConsumer;
         try {
             newConsumer = new KafkaConsumer<>(props);
         } catch (Throwable t) {
@@ -179,7 +179,7 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         }
 
         log.debug("Task {} subscribing to topics {}", id, topics);
-        newConsumer.subscribe(topics);
+        newConsumer.subscribe(Arrays.asList(topics));
 
         // Seek to any user-provided offsets. This is useful if offsets are tracked in the downstream system (e.g., to
         // enable exactly once delivery to that system).
@@ -187,8 +187,8 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         // To do this correctly, we need to first make sure we have been assigned partitions, which poll() will guarantee.
         // We ask for offsets after this poll to make sure any offsets committed before the rebalance are picked up correctly.
         newConsumer.poll(0);
-        Map<TopicPartition, Long> offsets = context.getOffsets();
-        for (TopicPartition tp : newConsumer.subscriptions()) {
+        Map<TopicPartition, Long> offsets = context.offsets();
+        for (TopicPartition tp : newConsumer.assignment()) {
             Long offset = offsets.get(tp);
             if (offset != null)
                 newConsumer.seek(tp, offset);
@@ -200,16 +200,18 @@ class WorkerSinkTask<K, V> implements WorkerTask {
         return new WorkerSinkTaskThread(this, "WorkerSinkTask-" + id, time, workerConfig);
     }
 
-    private void deliverMessages(ConsumerRecords<K, V> msgs) {
+    private void deliverMessages(ConsumerRecords<byte[], byte[]> msgs) {
         // Finally, deliver this batch to the sink
         if (msgs.count() > 0) {
             List<SinkRecord> records = new ArrayList<>();
-            for (ConsumerRecord<K, V> msg : msgs) {
+            for (ConsumerRecord<byte[], byte[]> msg : msgs) {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
+                SchemaAndValue keyAndSchema = keyConverter.toCopycatData(msg.topic(), msg.key());
+                SchemaAndValue valueAndSchema = valueConverter.toCopycatData(msg.topic(), msg.value());
                 records.add(
                         new SinkRecord(msg.topic(), msg.partition(),
-                                keyConverter.toCopycatData(msg.key()),
-                                valueConverter.toCopycatData(msg.value()),
+                                keyAndSchema.schema(), keyAndSchema.value(),
+                                valueAndSchema.schema(), valueAndSchema.value(),
                                 msg.offset())
                 );
             }

@@ -101,10 +101,33 @@ public class AbstractConfig {
         return keys;
     }
 
+    public Properties unusedProperties() {
+        Set<String> unusedKeys = this.unused();
+        Properties unusedProps = new Properties();
+        for (String key : unusedKeys)
+            unusedProps.put(key, this.originals().get(key));
+        return unusedProps;
+    }
+
     public Map<String, Object> originals() {
         Map<String, Object> copy = new HashMap<String, Object>();
         copy.putAll(originals);
         return copy;
+    }
+
+    /**
+     * Gets all original settings with the given prefix, stripping the prefix before adding it to the output.
+     *
+     * @param prefix the prefix to use as a filter
+     * @return a Map containing the settings with the prefix
+     */
+    public Map<String, Object> originalsWithPrefix(String prefix) {
+        Map<String, Object> result = new HashMap<String, Object>();
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
+                result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+        }
+        return result;
     }
 
     public Map<String, ?> values() {

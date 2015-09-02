@@ -21,7 +21,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.CommitType
@@ -123,9 +123,9 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   def testSimpleConsumption() {
     val numRecords = 10000
     sendRecords(numRecords)
-    assertEquals(0, this.consumers(0).subscriptions.size)
-    this.consumers(0).subscribe(tp)
-    assertEquals(1, this.consumers(0).subscriptions.size)
+    assertEquals(0, this.consumers(0).assignment.size)
+    this.consumers(0).assign(List(tp))
+    assertEquals(1, this.consumers(0).assignment.size)
     this.consumers(0).seek(tp, 0)
     consumeRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
   }
@@ -133,7 +133,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   @Test
   def testAutoOffsetReset() {
     sendRecords(1)
-    this.consumers(0).subscribe(tp)
+    this.consumers(0).assign(List(tp))
     consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
@@ -142,7 +142,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
     val consumer = this.consumers(0)
     val totalRecords = 50L
     sendRecords(totalRecords.toInt)
-    consumer.subscribe(tp)
+    consumer.assign(List(tp))
 
     consumer.seekToEnd(tp)
     assertEquals(totalRecords, consumer.position(tp))
@@ -161,7 +161,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   @Test
   def testGroupConsumption() {
     sendRecords(10)
-    this.consumers(0).subscribe(topic)
+    this.consumers(0).subscribe(List(topic))
     consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
@@ -179,7 +179,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
       this.consumers(0).position(new TopicPartition(topic, 15))
     }
 
-    this.consumers(0).subscribe(tp)
+    this.consumers(0).assign(List(tp))
 
     assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers(0).position(tp))
     this.consumers(0).commit(CommitType.SYNC)
@@ -193,7 +193,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
     sendRecords(1)
 
     // another consumer in the same group should get the same position
-    this.consumers(1).subscribe(tp)
+    this.consumers(1).assign(List(tp))
     consumeRecords(this.consumers(1), 1, 5)
   }
 
@@ -205,19 +205,6 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
     assertNotNull(parts)
     assertEquals(2, parts.length)
     assertNull(this.consumers(0).partitionsFor("non-exist-topic"))
-  }
-
-  private class TestConsumerReassignmentCallback extends ConsumerRebalanceCallback {
-    var callsToAssigned = 0
-    var callsToRevoked = 0
-    def onPartitionsAssigned(consumer: Consumer[_,_], partitions: java.util.Collection[TopicPartition]) {
-      info("onPartitionsAssigned called.")
-      callsToAssigned += 1
-    }
-    def onPartitionsRevoked(consumer: Consumer[_,_], partitions: java.util.Collection[TopicPartition]) {
-      info("onPartitionsRevoked called.")
-      callsToRevoked += 1
-    }
   }
 
   private def sendRecords(numRecords: Int) {

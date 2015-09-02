@@ -17,8 +17,6 @@
 
 package org.apache.kafka.copycat.runtime;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -47,34 +45,36 @@ import java.util.Properties;
  * Since each task has a dedicated thread, this is mainly just a container for them.
  * </p>
  */
-public class Worker<K, V> {
+public class Worker {
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
     private Time time;
     private WorkerConfig config;
-    private Converter<K> keyConverter;
-    private Converter<V> valueConverter;
+    private Converter keyConverter;
+    private Converter valueConverter;
+    private Converter offsetKeyConverter;
+    private Converter offsetValueConverter;
     private OffsetBackingStore offsetBackingStore;
-    private Serializer<K> offsetKeySerializer;
-    private Serializer<V> offsetValueSerializer;
-    private Deserializer<K> offsetKeyDeserializer;
-    private Deserializer<V> offsetValueDeserializer;
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
-    private KafkaProducer<K, V> producer;
+    private KafkaProducer<byte[], byte[]> producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(WorkerConfig config) {
-        this(new SystemTime(), config, null, null, null, null, null);
+        this(new SystemTime(), config, null);
     }
 
     @SuppressWarnings("unchecked")
-    public Worker(Time time, WorkerConfig config, OffsetBackingStore offsetBackingStore,
-                  Serializer offsetKeySerializer, Serializer offsetValueSerializer,
-                  Deserializer offsetKeyDeserializer, Deserializer offsetValueDeserializer) {
+    public Worker(Time time, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
         this.time = time;
         this.config = config;
         this.keyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.keyConverter.configure(config.originalsWithPrefix("key.converter."), true);
         this.valueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.valueConverter.configure(config.originalsWithPrefix("value.converter."), false);
+        this.offsetKeyConverter = config.getConfiguredInstance(WorkerConfig.OFFSET_KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.offsetKeyConverter.configure(config.originalsWithPrefix("offset.key.converter."), true);
+        this.offsetValueConverter = config.getConfiguredInstance(WorkerConfig.OFFSET_VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.offsetValueConverter.configure(config.originalsWithPrefix("offset.value.converter."), false);
 
         if (offsetBackingStore != null) {
             this.offsetBackingStore = offsetBackingStore;
@@ -82,45 +82,17 @@ public class Worker<K, V> {
             this.offsetBackingStore = new FileOffsetBackingStore();
             this.offsetBackingStore.configure(config.originals());
         }
-
-        if (offsetKeySerializer != null) {
-            this.offsetKeySerializer = offsetKeySerializer;
-        } else {
-            this.offsetKeySerializer = config.getConfiguredInstance(WorkerConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
-            this.offsetKeySerializer.configure(config.originals(), true);
-        }
-
-        if (offsetValueSerializer != null) {
-            this.offsetValueSerializer = offsetValueSerializer;
-        } else {
-            this.offsetValueSerializer = config.getConfiguredInstance(WorkerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
-            this.offsetValueSerializer.configure(config.originals(), false);
-        }
-
-        if (offsetKeyDeserializer != null) {
-            this.offsetKeyDeserializer = offsetKeyDeserializer;
-        } else {
-            this.offsetKeyDeserializer = config.getConfiguredInstance(WorkerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-            this.offsetKeyDeserializer.configure(config.originals(), true);
-        }
-
-        if (offsetValueDeserializer != null) {
-            this.offsetValueDeserializer = offsetValueDeserializer;
-        } else {
-            this.offsetValueDeserializer = config.getConfiguredInstance(WorkerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-            this.offsetValueDeserializer.configure(config.originals(), false);
-        }
     }
 
     public void start() {
         log.info("Worker starting");
 
-        Properties unusedConfigs = config.getUnusedProperties();
+        Properties unusedConfigs = config.unusedProperties();
 
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, config.getClass(WorkerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName());
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, config.getClass(WorkerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName());
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         for (String propName : unusedConfigs.stringPropertyNames()) {
             producerProps.put(propName, unusedConfigs.getProperty(propName));
         }
@@ -188,14 +160,14 @@ public class Worker<K, V> {
         final WorkerTask workerTask;
         if (task instanceof SourceTask) {
             SourceTask sourceTask = (SourceTask) task;
-            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl<>(offsetBackingStore, id.getConnector(),
-                    keyConverter, valueConverter, offsetKeySerializer, offsetValueDeserializer);
-            OffsetStorageWriter<K, V> offsetWriter = new OffsetStorageWriter<>(offsetBackingStore, id.getConnector(),
-                    keyConverter, valueConverter, offsetKeySerializer, offsetValueSerializer);
-            workerTask = new WorkerSourceTask<>(id, sourceTask, keyConverter, valueConverter, producer,
+            OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
+                    offsetKeyConverter, offsetValueConverter);
+            OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
+                    offsetKeyConverter, offsetValueConverter);
+            workerTask = new WorkerSourceTask(id, sourceTask, keyConverter, valueConverter, producer,
                     offsetReader, offsetWriter, config, time);
         } else if (task instanceof SinkTask) {
-            workerTask = new WorkerSinkTask<>(id, (SinkTask) task, config, keyConverter, valueConverter, time);
+            workerTask = new WorkerSinkTask(id, (SinkTask) task, config, keyConverter, valueConverter, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new CopycatException("Tasks must be a subclass of either SourceTask or SinkTask");

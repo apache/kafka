@@ -18,7 +18,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ProtoUtils;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
@@ -27,6 +29,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
@@ -63,7 +67,10 @@ public class RequestResponseTest {
                 createOffsetFetchResponse(),
                 createProduceRequest(),
                 createProduceRequest().getErrorResponse(0, new UnknownServerException()),
-                createProduceResponse());
+                createProduceResponse(),
+                createStopReplicaRequest(),
+                createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
+                createStopReplicaResponse());
 
         for (AbstractRequestResponse req: requestResponseList) {
             ByteBuffer buffer = ByteBuffer.allocate(req.sizeOf());
@@ -76,6 +83,37 @@ public class RequestResponseTest {
                     req.hashCode(), deserialized.hashCode());
         }
     }
+
+    @Test
+    public void produceResponseVersionTest() {
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
+        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000));
+
+        ProduceResponse v0Response = new ProduceResponse(responseData);
+        ProduceResponse v1Response = new ProduceResponse(responseData, 10);
+        assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
+        assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
+        assertEquals("Should use schema version 0", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 0), v0Response.toStruct().schema());
+        assertEquals("Should use schema version 1", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 1), v1Response.toStruct().schema());
+        assertEquals("Response data does not match", responseData, v0Response.responses());
+        assertEquals("Response data does not match", responseData, v1Response.responses());
+    }
+
+    @Test
+    public void fetchResponseVersionTest() {
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
+
+        FetchResponse v0Response = new FetchResponse(responseData);
+        FetchResponse v1Response = new FetchResponse(responseData, 10);
+        assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
+        assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
+        assertEquals("Should use schema version 0", ProtoUtils.responseSchema(ApiKeys.FETCH.id, 0), v0Response.toStruct().schema());
+        assertEquals("Should use schema version 1", ProtoUtils.responseSchema(ApiKeys.FETCH.id, 1), v1Response.toStruct().schema());
+        assertEquals("Response data does not match", responseData, v0Response.responseData());
+        assertEquals("Response data does not match", responseData, v1Response.responseData());
+    }
+
 
     private AbstractRequestResponse createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
@@ -103,7 +141,7 @@ public class RequestResponseTest {
     private AbstractRequestResponse createFetchResponse() {
         Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
-        return new FetchResponse(responseData);
+        return new FetchResponse(responseData, 0);
     }
 
     private AbstractRequest createHeartBeatRequest() {
@@ -182,6 +220,17 @@ public class RequestResponseTest {
     private AbstractRequestResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000));
-        return new ProduceResponse(responseData);
+        return new ProduceResponse(responseData, 0);
+    }
+
+    private AbstractRequest createStopReplicaRequest() {
+        Set<TopicPartition> partitions = new HashSet<>(Arrays.asList(new TopicPartition("test", 0)));
+        return new StopReplicaRequest(0, 1, true, partitions);
+    }
+
+    private AbstractRequestResponse createStopReplicaResponse() {
+        Map<TopicPartition, Short> responses = new HashMap<>();
+        responses.put(new TopicPartition("test", 0), Errors.NONE.code());
+        return new StopReplicaResponse(Errors.NONE.code(), responses);
     }
 }

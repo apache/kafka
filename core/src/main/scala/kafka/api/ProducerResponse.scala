@@ -23,6 +23,7 @@ import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.api.ApiUtils._
 
 object ProducerResponse {
+  // readFrom assumes that the response is written using V1 format
   def readFrom(buffer: ByteBuffer): ProducerResponse = {
     val correlationId = buffer.getInt
     val topicCount = buffer.getInt
@@ -37,13 +38,17 @@ object ProducerResponse {
       })
     })
 
-    ProducerResponse(correlationId, Map(statusPairs:_*))
+    val throttleTime = buffer.getInt
+    ProducerResponse(correlationId, Map(statusPairs:_*), ProducerRequest.CurrentVersion, throttleTime)
   }
 }
 
 case class ProducerResponseStatus(var error: Short, offset: Long)
 
-case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, ProducerResponseStatus])
+case class ProducerResponse(correlationId: Int,
+                            status: Map[TopicAndPartition, ProducerResponseStatus],
+                            requestVersion: Int = 0,
+                            throttleTime: Int = 0)
     extends RequestOrResponse() {
 
   /**
@@ -54,6 +59,7 @@ case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, P
   def hasError = status.values.exists(_.error != ErrorMapping.NoError)
 
   val sizeInBytes = {
+    val throttleTimeSize = if (requestVersion > 0) 4 else 0
     val groupedStatus = statusGroupedByTopic
     4 + /* correlation id */
     4 + /* topic count */
@@ -66,7 +72,8 @@ case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, P
         2 + /* error code */
         8 /* offset */
       }
-    })
+    }) +
+    throttleTimeSize
   }
 
   def writeTo(buffer: ByteBuffer) {
@@ -85,6 +92,9 @@ case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, P
           buffer.putLong(nextOffset)
       }
     })
+    // Throttle time is only supported on V1 style requests
+    if (requestVersion > 0)
+      buffer.putInt(throttleTime)
   }
 
   override def describe(details: Boolean):String = { toString }

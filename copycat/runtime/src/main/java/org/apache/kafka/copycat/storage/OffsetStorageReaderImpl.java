@@ -17,8 +17,7 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,39 +33,36 @@ import java.util.Map;
  * directly, the interface is only separate from this implementation because it needs to be
  * included in the public API package.
  */
-public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
+public class OffsetStorageReaderImpl implements OffsetStorageReader {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageReaderImpl.class);
 
     private final OffsetBackingStore backingStore;
     private final String namespace;
-    private final Converter<K> keyConverter;
-    private final Converter<V> valueConverter;
-    private final Serializer<K> keySerializer;
-    private final Deserializer<V> valueDeserializer;
+    private final Converter keyConverter;
+    private final Converter valueConverter;
 
     public OffsetStorageReaderImpl(OffsetBackingStore backingStore, String namespace,
-                                   Converter<K> keyConverter, Converter<V> valueConverter,
-                                   Serializer<K> keySerializer, Deserializer<V> valueDeserializer) {
+                                   Converter keyConverter, Converter valueConverter) {
         this.backingStore = backingStore;
         this.namespace = namespace;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
-        this.keySerializer = keySerializer;
-        this.valueDeserializer = valueDeserializer;
     }
 
     @Override
-    public Object getOffset(Object partition) {
-        return getOffsets(Arrays.asList(partition)).get(partition);
+    public <T> Map<String, Object> offset(Map<String, T> partition) {
+        return offsets(Arrays.asList(partition)).get(partition);
     }
 
     @Override
-    public Map<Object, Object> getOffsets(Collection<Object> partitions) {
+    public <T> Map<Map<String, T>, Map<String, Object>> offsets(Collection<Map<String, T>> partitions) {
         // Serialize keys so backing store can work with them
-        Map<ByteBuffer, Object> serializedToOriginal = new HashMap<>(partitions.size());
-        for (Object key : partitions) {
+        Map<ByteBuffer, Map<String, T>> serializedToOriginal = new HashMap<>(partitions.size());
+        for (Map<String, T> key : partitions) {
             try {
-                byte[] keySerialized = keySerializer.serialize(namespace, keyConverter.fromCopycatData(key));
+                // Offsets are treated as schemaless, their format is only validated here (and the returned value below)
+                OffsetUtils.validateFormat(key);
+                byte[] keySerialized = keyConverter.fromCopycatData(namespace, null, key);
                 ByteBuffer keyBuffer = (keySerialized != null) ? ByteBuffer.wrap(keySerialized) : null;
                 serializedToOriginal.put(keyBuffer, key);
             } catch (Throwable t) {
@@ -86,7 +82,7 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
         }
 
         // Deserialize all the values and map back to the original keys
-        Map<Object, Object> result = new HashMap<>(partitions.size());
+        Map<Map<String, T>, Map<String, Object>> result = new HashMap<>(partitions.size());
         for (Map.Entry<ByteBuffer, ByteBuffer> rawEntry : raw.entrySet()) {
             try {
                 // Since null could be a valid key, explicitly check whether map contains the key
@@ -95,12 +91,12 @@ public class OffsetStorageReaderImpl<K, V> implements OffsetStorageReader {
                             + "store may have returned invalid data", rawEntry.getKey());
                     continue;
                 }
-                Object origKey = serializedToOriginal.get(rawEntry.getKey());
-                Object deserializedValue = valueConverter.toCopycatData(
-                        valueDeserializer.deserialize(namespace, rawEntry.getValue().array())
-                );
+                Map<String, T> origKey = serializedToOriginal.get(rawEntry.getKey());
+                SchemaAndValue deserializedSchemaAndValue = valueConverter.toCopycatData(namespace, rawEntry.getValue().array());
+                Object deserializedValue = deserializedSchemaAndValue.value();
+                OffsetUtils.validateFormat(deserializedValue);
 
-                result.put(origKey, deserializedValue);
+                result.put(origKey, (Map<String, Object>) deserializedValue);
             } catch (Throwable t) {
                 log.error("CRITICAL: Failed to deserialize offset data when getting offsets for task with"
                         + " namespace {}. No value for this data will be returned, which may break the "

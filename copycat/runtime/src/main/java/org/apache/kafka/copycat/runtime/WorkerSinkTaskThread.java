@@ -55,11 +55,11 @@ class WorkerSinkTaskThread extends ShutdownableThread {
             iteration();
         }
         // Make sure any uncommitted data has committed
-        task.commitOffsets(task.getTime().milliseconds(), true, -1, false);
+        task.commitOffsets(task.time().milliseconds(), true, -1, false);
     }
 
     public void iteration() {
-        long now = task.getTime().milliseconds();
+        long now = task.time().milliseconds();
 
         // Maybe commit
         if (!committing && now >= nextCommit) {
@@ -69,11 +69,11 @@ class WorkerSinkTaskThread extends ShutdownableThread {
                 commitStarted = now;
             }
             task.commitOffsets(now, false, commitSeqno, true);
-            nextCommit += task.getWorkerConfig().getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+            nextCommit += task.workerConfig().getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         }
 
         // Check for timed out commits
-        long commitTimeout = commitStarted + task.getWorkerConfig().getLong(
+        long commitTimeout = commitStarted + task.workerConfig().getLong(
                 WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
         if (committing && now >= commitTimeout) {
             log.warn("Commit of {} offsets timed out", this);
@@ -98,7 +98,7 @@ class WorkerSinkTaskThread extends ShutdownableThread {
                     commitFailures++;
                 } else {
                     log.debug("Finished {} offset commit successfully in {} ms",
-                            this, task.getTime().milliseconds() - commitStarted);
+                            this, task.time().milliseconds() - commitStarted);
                     commitFailures = 0;
                 }
                 committing = false;
@@ -106,7 +106,7 @@ class WorkerSinkTaskThread extends ShutdownableThread {
         }
     }
 
-    public int getCommitFailures() {
+    public int commitFailures() {
         return commitFailures;
     }
 }

@@ -17,11 +17,12 @@
 from setuptools import find_packages, setup
 
 setup(name="kafkatest",
-      version="0.8.3-SNAPSHOT",
+      version="0.8.3.dev0",
       description="Apache Kafka System Tests",
       author="Apache Kafka",
       platforms=["any"], 
       license="apache2.0",
       packages=find_packages(),
-      requires=["ducktape(==0.3.0)"]
+      include_package_data=True,
+      install_requires=["ducktape==0.3.2"]
       )
