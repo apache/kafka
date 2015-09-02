@@ -45,19 +45,11 @@ public class RecordCollector {
             }
         }
     };
-    private final Serializer<Object> keySerializer;
-    private final Serializer<Object> valueSerializer;
 
 
-    public RecordCollector(Producer<byte[], byte[]> producer, Serializer<Object> keySerializer, Serializer<Object> valueSerializer) {
+    public RecordCollector(Producer<byte[], byte[]> producer) {
         this.producer = producer;
         this.offsets = new HashMap<>();
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
-    }
-
-    public void send(ProducerRecord<Object, Object> record) {
-        send(record, this.keySerializer, this.valueSerializer);
     }
 
     public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
