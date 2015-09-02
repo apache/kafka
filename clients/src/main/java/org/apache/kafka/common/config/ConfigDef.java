@@ -170,13 +170,13 @@ public class ConfigDef {
             // props map contains setting - assign ConfigKey value
             if (props.containsKey(key.name))
                 value = parseType(key.name, props.get(key.name), key.type);
-                // props map doesn't contain setting, the key is required and no default value specified - it's an error
+                // props map doesn't contain setting, the key is required and no default value specified - its an error
             else if (key.defaultValue == NO_DEFAULT_VALUE && key.required)
                 throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
                 // props map doesn't contain setting, no default value specified and the key is not required - assign it to null
             else if (!key.hasDefault() && !key.required)
                 value = null;
-                // otherwise assign setting it's default value
+                // otherwise assign setting its default value
             else
                 value = key.defaultValue;
             if (key.validator != null)

@@ -162,7 +162,7 @@ public class CopycatSchema implements Schema {
 
 
     /**
-     * Validate that the value can be used with the schema, i.e. that it's type matches the schema type and nullability
+     * Validate that the value can be used with the schema, i.e. that its type matches the schema type and nullability
      * requirements. Throws a DataException if the value is invalid. Returns
      * @param schema Schema to test
      * @param value value to test
@@ -212,7 +212,7 @@ public class CopycatSchema implements Schema {
     }
 
     /**
-     * Validate that the value can be used for this schema, i.e. that it's type matches the schema type and optional
+     * Validate that the value can be used for this schema, i.e. that its type matches the schema type and optional
      * requirements. Throws a DataException if the value is invalid.
      * @param value the value to validate
      */

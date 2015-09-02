@@ -111,7 +111,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * a queue in a traditional messaging system all processes would be part of a single consumer group and hence record
  * delivery would be balanced over the group like with a queue. Unlike a traditional messaging system, though, you can
  * have multiple such groups. To get semantics similar to pub-sub in a traditional messaging system each process would
- * have it's own consumer group, so each process would subscribe to all the records published to the topic.
+ * have its own consumer group, so each process would subscribe to all the records published to the topic.
  * <p>
  * In addition, when offsets are committed they are always committed for a given consumer group.
  * <p>
@@ -158,7 +158,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * consumer will automatically ping the cluster periodically, which let's the cluster know that it is alive. As long as
  * the consumer is able to do this it is considered alive and retains the right to consume from the partitions assigned
  * to it. If it stops heartbeating for a period of time longer than <code>session.timeout.ms</code> then it will be
- * considered dead and it's partitions will be assigned to another process.
+ * considered dead and its partitions will be assigned to another process.
  * <p>
  * The deserializer settings specify how to turn bytes into objects. For example, by specifying string deserializers, we
  * are saying that our record's key and value will just be simple strings.
@@ -241,7 +241,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <h4>Managing Your Own Offsets</h4>
  *
- * The consumer application need not use Kafka's built-in offset storage, it can store offsets in a store of it's own
+ * The consumer application need not use Kafka's built-in offset storage, it can store offsets in a store of its own
  * choosing. The primary use case for this is allowing the application to store both the offset and the results of the
  * consumption in the same system in a way that both the results and offsets are stored atomically. This is not always
  * possible, but when it is it will make the consumption fully atomic and give "exactly once" semantics that are
@@ -261,7 +261,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * from what it has ensuring that no updates are lost.
  * </ul>
  *
- * Each record comes with it's own offset, so to manage your own offset you just need to do the following:
+ * Each record comes with its own offset, so to manage your own offset you just need to do the following:
  * <ol>
  * <li>Configure <code>enable.auto.commit=false</code>
  * <li>Use the offset provided with each {@link ConsumerRecord} to save your position.
@@ -283,8 +283,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <h4>Controlling The Consumer's Position</h4>
  *
- * In most use cases the consumer will simply consume records from beginning to end, periodically committing it's
- * position (either automatically or manually). However Kafka allows the consumer to manually control it's position,
+ * In most use cases the consumer will simply consume records from beginning to end, periodically committing its
+ * position (either automatically or manually). However Kafka allows the consumer to manually control its position,
  * moving forward or backwards in a partition at will. This means a consumer can re-consume older records, or skip to
  * the most recent records without actually consuming the intermediate records.
  * <p>
@@ -294,7 +294,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * attempt to catch up processing all records, but rather just skip to the most recent records.
  * <p>
  * Another use case is for a system that maintains local state as described in the previous section. In such a system
- * the consumer will want to initialize it's position on start-up to whatever is contained in the local store. Likewise
+ * the consumer will want to initialize its position on start-up to whatever is contained in the local store. Likewise
  * if the local state is destroyed (say because the disk is lost) the state may be recreated on a new machine by
  * reconsuming all the data and recreating the state (assuming that Kafka is retaining sufficient history).
  *
@@ -357,7 +357,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <h4>1. One Consumer Per Thread</h4>
  *
- * A simple option is to give each thread it's own consumer instance. Here are the pros and cons of this approach:
+ * A simple option is to give each thread its own consumer instance. Here are the pros and cons of this approach:
  * <ul>
  * <li><b>PRO</b>: It is the easiest to implement
  * <li><b>PRO</b>: It is often the fastest as no inter-thread co-ordination is needed
@@ -387,7 +387,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * that processing is complete for that partition.
  * </ul>
  *
- * There are many possible variations on this approach. For example each processor thread can have it's own queue, and
+ * There are many possible variations on this approach. For example each processor thread can have its own queue, and
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
  *
@@ -955,7 +955,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * another). This offset will be used as the position for the consumer in the event of a failure.
      * <p>
      * This call may block to do a remote call if the partition in question isn't assigned to this consumer or if the
-     * consumer hasn't yet initialized it's cache of committed offsets.
+     * consumer hasn't yet initialized its cache of committed offsets.
      *
      * @param partition The partition to check
      * @return The last committed offset
