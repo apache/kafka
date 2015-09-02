@@ -17,14 +17,6 @@
 
 package org.apache.kafka.streaming.processor;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.processor.internals.ProcessorNode;
-import org.apache.kafka.streaming.processor.internals.ProcessorTopology;
-import org.apache.kafka.streaming.processor.internals.SinkNode;
-import org.apache.kafka.streaming.processor.internals.SourceNode;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,6 +24,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streaming.processor.internals.ProcessorNode;
+import org.apache.kafka.streaming.processor.internals.ProcessorTopology;
+import org.apache.kafka.streaming.processor.internals.SinkNode;
+import org.apache.kafka.streaming.processor.internals.SourceNode;
 
 public class TopologyBuilder {
 
@@ -56,6 +56,7 @@ public class TopologyBuilder {
             this.definition = definition;
         }
 
+        @Override
         public ProcessorNode build() {
             Processor processor = definition.instance();
             return new ProcessorNode(name, processor);
@@ -75,6 +76,7 @@ public class TopologyBuilder {
             this.valDeserializer = valDeserializer;
         }
 
+        @Override
         public ProcessorNode build() {
             return new SourceNode(name, keyDeserializer, valDeserializer);
         }
@@ -94,6 +96,7 @@ public class TopologyBuilder {
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
         }
+        @Override
         public ProcessorNode build() {
             return new SinkNode(name, topic, keySerializer, valSerializer);
         }
@@ -101,11 +104,11 @@ public class TopologyBuilder {
 
     public TopologyBuilder() {}
 
-    public final void addSource(String name, String... topics) {
-        addSource(name, (Deserializer) null, (Deserializer) null, topics);
+    public final TopologyBuilder addSource(String name, String... topics) {
+        return addSource(name, (Deserializer) null, (Deserializer) null, topics);
     }
 
-    public final void addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
+    public final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
 
@@ -118,14 +121,14 @@ public class TopologyBuilder {
 
         nodeNames.add(name);
         nodeFactories.add(new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
+        return this;
     }
 
-    public final void addSink(String name, String topic, String... parentNames) {
-        addSink(name, topic, (Serializer) null, (Serializer) null, parentNames);
+    public final TopologyBuilder addSink(String name, String topic, String... parentNames) {
+        return addSink(name, topic, (Serializer) null, (Serializer) null, parentNames);
     }
 
-    public final void addSink(String name, String topic, Serializer keySerializer, Serializer valSerializer, String... parentNames) {
-
+    public final TopologyBuilder addSink(String name, String topic, Serializer keySerializer, Serializer valSerializer, String... parentNames) {
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
 
@@ -142,9 +145,10 @@ public class TopologyBuilder {
 
         nodeNames.add(name);
         nodeFactories.add(new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
+        return this;
     }
 
-    public final void addProcessor(String name, ProcessorDef definition, String... parentNames) {
+    public final TopologyBuilder addProcessor(String name, ProcessorDef definition, String... parentNames) {
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
 
@@ -161,6 +165,7 @@ public class TopologyBuilder {
 
         nodeNames.add(name);
         nodeFactories.add(new ProcessorNodeFactory(name, parentNames, definition));
+        return this;
     }
 
     /**
