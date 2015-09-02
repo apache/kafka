@@ -40,6 +40,8 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
+import scala.collection._
+import scala.collection.JavaConversions._
 
 /**
  * This class handles the consumers interaction with zookeeper
