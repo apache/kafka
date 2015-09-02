@@ -23,6 +23,11 @@ import signal
 import time
 
 
+TRUNK = "trunk"
+KAFKA_0_8_2_1 = "0.8.2.1"
+KAFKA_VERSIONS = [TRUNK, KAFKA_0_8_2_1]
+
+
 class KafkaService(JmxMixin, Service):
 
     logs = {
@@ -35,7 +40,7 @@ class KafkaService(JmxMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 topics=None, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+                 topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
         """
         :type context
         :type zk: ZookeeperService
@@ -52,7 +57,6 @@ class KafkaService(JmxMixin, Service):
         self.interbroker_security_protocol = interbroker_security_protocol
         self.port = 9092 if security_protocol == SecurityConfig.PLAINTEXT else 9093
         self.topics = topics
-        self.quota_config = quota_config
 
     def start(self):
         Service.start(self)
@@ -66,6 +70,19 @@ class KafkaService(JmxMixin, Service):
                 topic_cfg["topic"] = topic
                 self.create_topic(topic_cfg)
 
+    def update_version(self, version, idx=-1):
+        """Update version on node with idx, or on all nodes if idx < 0
+        Useful for upgrade and compatibility tests.
+        """
+        if idx > 0:
+            self.version[idx] = version
+        else:
+            for idx in self.version:
+                self.version[idx] = version
+
+    def _kafka_dir(self, node):
+        return "/opt/kafka-" + self.version[self.idx(node)]
+
     def start_node(self, node):
         props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node),
             port = self.port, security_protocol = self.security_protocol, quota_config=self.quota_config,
@@ -75,7 +92,8 @@ class KafkaService(JmxMixin, Service):
         node.account.create_file("/mnt/kafka.properties", props_file)
         self.security_config.setup_node(node)
 
-        cmd = "JMX_PORT=%d /opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid" % self.jmx_port
+        cmd = "JMX_PORT=%d " % self.jmx_port
+        cmd += self._kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid"
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log("/mnt/kafka.log") as monitor:
             node.account.ssh(cmd)

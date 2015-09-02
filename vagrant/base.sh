@@ -38,8 +38,25 @@ if [ -z `which javac` ]; then
 fi
 
 chmod a+rw /opt
-if [ ! -e /opt/kafka ]; then
-    ln -s /vagrant /opt/kafka
+if [ -h /opt/kafka-trunk ]; then
+    # reset symlink
+    rm /opt/kafka-trunk
+fi
+ln -s /vagrant /opt/kafka-trunk
+
+version=0.8.2.1
+kafka_dir=/opt/kafka-$version
+url=http://psg.mtu.edu/pub/apache//kafka/$version/kafka_2.10-$version.tgz
+if [ ! -d /opt/kafka-$version ]; then
+    pushd /tmp
+    curl -O $url
+    file_tgz=`basename $url`
+    tar -xzf $file_tgz
+    rm -rf $file_tgz
+
+    file=`basename $file_tgz .tgz`
+    mv $file $kafka_dir
+    popd
 fi
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
