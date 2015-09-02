@@ -47,12 +47,13 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
-    private volatile boolean running;
+    private final AtomicBoolean running;
 
     private final TopologyBuilder builder;
     private final Producer<byte[], byte[]> producer;
@@ -119,7 +120,7 @@ public class StreamThread extends Thread {
 
         this.metrics = new KafkaStreamingMetrics();
 
-        this.running = true;
+        this.running = new AtomicBoolean(true);
     }
 
     /**
@@ -141,8 +142,8 @@ public class StreamThread extends Thread {
     /**
      * Shutdown this streaming thread.
      */
-    public synchronized void close() {
-        running = false;
+    public void close() {
+        running.set(false);
     }
 
     private void shutdown() {
@@ -189,7 +190,7 @@ public class StreamThread extends Thread {
     }
 
     private boolean stillRunning() {
-        if (!running) {
+        if (!running.get()) {
             log.debug("Shutting down at user request.");
             return false;
         }
