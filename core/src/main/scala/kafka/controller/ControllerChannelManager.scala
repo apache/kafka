@@ -371,20 +371,20 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
         val updateMetadataRequest =
           if (version == 0) {
-            val aliveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
+            val liveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
               val brokerEndPoint = broker.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)
               new UpdateMetadataRequest.BrokerEndPoint(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
             }
-            new UpdateMetadataRequest(controllerId, controllerEpoch, aliveBrokers.asJava, partitionStates.asJava)
+            new UpdateMetadataRequest(controllerId, controllerEpoch, liveBrokers.asJava, partitionStates.asJava)
           }
           else {
-            val aliveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
+            val liveBrokers = controllerContext.liveOrShuttingDownBrokers.map { broker =>
               val endPoints = broker.endPoints.map { case (securityProtocol, endPoint) =>
                 securityProtocol -> new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port)
               }
               new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava)
             }
-            new UpdateMetadataRequest(controllerId, controllerEpoch, partitionStates.asJava, aliveBrokers.asJava)
+            new UpdateMetadataRequest(controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava)
           }
 
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, Some(version), updateMetadataRequest, null)

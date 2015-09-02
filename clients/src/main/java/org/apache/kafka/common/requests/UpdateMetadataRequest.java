@@ -83,7 +83,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     private static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
     private static final String PARTITION_STATES_KEY_NAME = "partition_states";
-    private static final String ALIVE_BROKERS_KEY_NAME = "alive_brokers";
+    private static final String LIVE_BROKERS_KEY_NAME = "live_brokers";
 
     // PartitionState key names
     private static final String TOPIC_KEY_NAME = "topic";
@@ -106,16 +106,16 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private final int controllerId;
     private final int controllerEpoch;
     private final Map<TopicPartition, PartitionState> partitionStates;
-    private final Set<Broker> aliveBrokers;
+    private final Set<Broker> liveBrokers;
 
     /**
      * Constructor for version 0.
      */
     @Deprecated
-    public UpdateMetadataRequest(int controllerId, int controllerEpoch, Set<BrokerEndPoint> aliveBrokers,
+    public UpdateMetadataRequest(int controllerId, int controllerEpoch, Set<BrokerEndPoint> liveBrokers,
                                  Map<TopicPartition, PartitionState> partitionStates) {
         this(0, controllerId, controllerEpoch, partitionStates,
-             brokerEndPointsToBrokers(aliveBrokers));
+             brokerEndPointsToBrokers(liveBrokers));
     }
 
     private static Set<Broker> brokerEndPointsToBrokers(Set<BrokerEndPoint> brokerEndPoints) {
@@ -132,12 +132,12 @@ public class UpdateMetadataRequest extends AbstractRequest {
      * Constructor for version 1.
      */
     public UpdateMetadataRequest(int controllerId, int controllerEpoch, Map<TopicPartition,
-            PartitionState> partitionStates, Set<Broker> aliveBrokers) {
-        this(1, controllerId, controllerEpoch, partitionStates, aliveBrokers);
+            PartitionState> partitionStates, Set<Broker> liveBrokers) {
+        this(1, controllerId, controllerEpoch, partitionStates, liveBrokers);
     }
 
     private UpdateMetadataRequest(int version, int controllerId, int controllerEpoch, Map<TopicPartition,
-            PartitionState> partitionStates, Set<Broker> aliveBrokers) {
+            PartitionState> partitionStates, Set<Broker> liveBrokers) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.UPDATE_METADATA_KEY.id, version)));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
@@ -159,9 +159,9 @@ public class UpdateMetadataRequest extends AbstractRequest {
         }
         struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
 
-        List<Struct> brokersData = new ArrayList<>(aliveBrokers.size());
-        for (Broker broker : aliveBrokers) {
-            Struct brokerData = struct.instance(ALIVE_BROKERS_KEY_NAME);
+        List<Struct> brokersData = new ArrayList<>(liveBrokers.size());
+        for (Broker broker : liveBrokers) {
+            Struct brokerData = struct.instance(LIVE_BROKERS_KEY_NAME);
             brokerData.set(BROKER_ID_KEY_NAME, broker.id);
 
             if (version == 0) {
@@ -183,12 +183,12 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
             brokersData.add(brokerData);
         }
-        struct.set(ALIVE_BROKERS_KEY_NAME, brokersData.toArray());
+        struct.set(LIVE_BROKERS_KEY_NAME, brokersData.toArray());
 
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
         this.partitionStates = partitionStates;
-        this.aliveBrokers = aliveBrokers;
+        this.liveBrokers = liveBrokers;
     }
 
     public UpdateMetadataRequest(Struct struct) {
@@ -220,9 +220,9 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
         }
 
-        Set<Broker> aliveBrokers = new HashSet<>();
+        Set<Broker> liveBrokers = new HashSet<>();
 
-        for (Object brokerDataObj : struct.getArray(ALIVE_BROKERS_KEY_NAME)) {
+        for (Object brokerDataObj : struct.getArray(LIVE_BROKERS_KEY_NAME)) {
             Struct brokerData = (Struct) brokerDataObj;
             int brokerId = brokerData.getInt(BROKER_ID_KEY_NAME);
 
@@ -232,7 +232,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 int port = brokerData.getInt(PORT_KEY_NAME);
                 Map<SecurityProtocol, EndPoint> endPoints = new HashMap<>(1);
                 endPoints.put(SecurityProtocol.PLAINTEXT, new EndPoint(host, port));
-                aliveBrokers.add(new Broker(brokerId, endPoints));
+                liveBrokers.add(new Broker(brokerId, endPoints));
             } else { // V1
                 Map<SecurityProtocol, EndPoint> endPoints = new HashMap<>();
                 for (Object endPointDataObj : brokerData.getArray(ENDPOINTS_KEY_NAME)) {
@@ -242,7 +242,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
                     short protocolTypeId = endPointData.getShort(SECURITY_PROTOCOL_TYPE_KEY_NAME);
                     endPoints.put(SecurityProtocol.forId(protocolTypeId), new EndPoint(host, port));
                 }
-                aliveBrokers.add(new Broker(brokerId, endPoints));
+                liveBrokers.add(new Broker(brokerId, endPoints));
             }
 
         }
@@ -250,7 +250,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
         controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
         controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
         this.partitionStates = partitionStates;
-        this.aliveBrokers = aliveBrokers;
+        this.liveBrokers = liveBrokers;
     }
 
     @Override
@@ -277,8 +277,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
         return partitionStates;
     }
 
-    public Set<Broker> aliveBrokers() {
-        return aliveBrokers;
+    public Set<Broker> liveBrokers() {
+        return liveBrokers;
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, int versionId) {

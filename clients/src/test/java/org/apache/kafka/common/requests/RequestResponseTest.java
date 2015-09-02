@@ -307,12 +307,12 @@ public class RequestResponseTest {
                 new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
         if (version == 0) {
-            Set<UpdateMetadataRequest.BrokerEndPoint> aliveBrokers = new HashSet<>(Arrays.asList(
+            Set<UpdateMetadataRequest.BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
                     new UpdateMetadataRequest.BrokerEndPoint(0, "host1", 1223),
                     new UpdateMetadataRequest.BrokerEndPoint(1, "host2", 1234)
             ));
 
-            return new UpdateMetadataRequest(1, 10, aliveBrokers, partitionStates);
+            return new UpdateMetadataRequest(1, 10, liveBrokers, partitionStates);
         } else {
             Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints1 = new HashMap<>();
             endPoints1.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1223));
@@ -321,11 +321,11 @@ public class RequestResponseTest {
             endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
             endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
 
-            Set<UpdateMetadataRequest.Broker> aliveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1),
+            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1),
                     new UpdateMetadataRequest.Broker(1, endPoints2)
             ));
 
-            return new UpdateMetadataRequest(1, 10, partitionStates, aliveBrokers);
+            return new UpdateMetadataRequest(1, 10, partitionStates, liveBrokers);
         }
     }
 

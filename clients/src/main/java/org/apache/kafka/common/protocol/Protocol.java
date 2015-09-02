@@ -530,7 +530,7 @@ public class Protocol {
                                                                        new Field("controller_epoch", INT32, "The controller epoch."),
                                                                        new Field("partition_states",
                                                                                  new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V0)),
-                                                                       new Field("alive_brokers",
+                                                                       new Field("live_brokers",
                                                                                  new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V0)));
 
     public static final Schema UPDATE_METADATA_RESPONSE_V0 = new Schema(new Field("error_code", INT16, "Error code."));
@@ -551,7 +551,7 @@ public class Protocol {
                                                                        new Field("controller_epoch", INT32, "The controller epoch."),
                                                                        new Field("partition_states",
                                                                                  new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V1)),
-                                                                       new Field("alive_brokers",
+                                                                       new Field("live_brokers",
                                                                                  new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V1)));
 
     public static final Schema UPDATE_METADATA_RESPONSE_V1 = UPDATE_METADATA_RESPONSE_V0;
