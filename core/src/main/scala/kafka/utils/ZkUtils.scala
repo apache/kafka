@@ -934,12 +934,10 @@ class ZKWatchedEphemeral(path : String,
                       path : String,
                       ctx : Object,
                       name : String) {
-      info("### Return code for the create: " + Code.get(rc))
       Code.get(rc) match {
         case Code.OK => {
           // check that exists and wait
            checkAndWatch
-           info("#### Created the znode correctly")
            setResult(Code.OK)
         }
         case Code.CONNECTIONLOSS => {
@@ -978,7 +976,8 @@ class ZKWatchedEphemeral(path : String,
                     checkAndWatch
                     setResult(Code.OK)
                 } else {
-                    info("### Someone else created this znode already")
+                    info("An ephemeral node [%s] at %s already exists ".format(data, path)
+                      + "and has been created by someone else")
                     setResult(Code.NODEEXISTS)
                 }
           }
