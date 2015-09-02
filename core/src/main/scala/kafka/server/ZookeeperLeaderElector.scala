@@ -80,6 +80,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
       assert(zkWatchedEphemeral == null)
       zkWatchedEphemeral = new ZKWatchedEphemeral(electionPath,
                                                   electString,
+                                                  brokerId,
+                                                  (controllerString : String, leaderId : Any) => KafkaController.parseControllerId(controllerString) == leaderId.asInstanceOf[Int],
                                                   controllerContext.zkConnection.getZookeeper)
       zkWatchedEphemeral.createAndWatch
       info(brokerId + " successfully elected as leader")

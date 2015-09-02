@@ -40,9 +40,6 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
-import scala.collection._
-import scala.collection.JavaConversions._
-
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -275,9 +272,13 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     assert(zkWatchedEphemeral == null)
     zkWatchedEphemeral = new ZKWatchedEphemeral(dirs.
-                                                 consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo,
+                                                 consumerRegistryDir + "/" + consumerIdString, 
+                                                 consumerRegistrationInfo,
+                                                 null,
+                                                 (consumerZKString, consumer) => true,
                                                  zkConnection.getZookeeper)
     zkWatchedEphemeral.createAndWatch
+
     info("end registering consumer " + consumerIdString + " in ZK")
   }
 

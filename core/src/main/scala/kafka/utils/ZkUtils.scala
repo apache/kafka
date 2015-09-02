@@ -17,11 +17,12 @@
 
 package kafka.utils
 
+import java.util.concurrent.CountDownLatch
 import kafka.cluster._
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.server.ConfigType
 import org.I0Itec.zkclient.{ZkClient,ZkConnection}
-import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException,
+import org.I0Itec.zkclient.exception.{ZkException, ZkNodeExistsException, ZkNoNodeException,
   ZkMarshallingError, ZkBadVersionException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.apache.kafka.common.config.ConfigException
@@ -36,14 +37,15 @@ import kafka.controller.KafkaController
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 
-import org.apache.zookeeper.AsyncCallback.StatCallback
-import org.apache.zookeeper.AsyncCallback.StringCallback
+import org.apache.zookeeper.AsyncCallback.{DataCallback,StatCallback,StringCallback}
 import org.apache.zookeeper.CreateMode
+import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.WatchedEvent
 import org.apache.zookeeper.Watcher
 import org.apache.zookeeper.ZooDefs.Ids
 import org.apache.zookeeper.ZooKeeper
+
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -221,11 +223,13 @@ object ZkUtils extends Logging {
       //createEphemeralPathExpectConflictHandleZKBug(zkClient, brokerIdPath, brokerInfo, expectedBroker,
       //  (brokerString: String, broker: Any) => Broker.createBroker(broker.asInstanceOf[Broker].id, brokerString).equals(broker.asInstanceOf[Broker]),
       //  timeout)
-      val zkWatchedEphemeral = new ZKWatchedEphemeral(brokerIdPath, brokerInfo,
+      val zkWatchedEphemeral = new ZKWatchedEphemeral(brokerIdPath, 
+                                                      brokerInfo,
+                                                      expectedBroker,
+                                                      (brokerString: String, broker: Any) => Broker.createBroker(broker.asInstanceOf[Broker].id, brokerString).equals(broker.asInstanceOf[Broker]),
                                                       zkConnection.getZookeeper)
       zkWatchedEphemeral.createAndWatch
       zkWatchedEphemeral
-
     } catch {
       case e: ZkNodeExistsException =>
         throw new RuntimeException("A broker is already registered on the path " + brokerIdPath
@@ -914,10 +918,15 @@ object ZkPath {
 
 class ZKWatchedEphemeral(path : String,
                           data : String,
+                          expectedCallerData: Any,
+                          checker: (String, Any) => Boolean,
                           zkHandle : ZooKeeper) extends Logging {
   private val createCallback = new CreateCallback
   private val ephemeralWatcher = new EphemeralWatcher
   private val existsCallback = new ExistsCallback
+  private val getDataCallback = new GetDataCallback
+  val latch: CountDownLatch = new CountDownLatch(1)
+  var result: Code = Code.OK
   @volatile
   private var stop : Boolean = false
   private class CreateCallback extends StringCallback {
@@ -925,10 +934,13 @@ class ZKWatchedEphemeral(path : String,
                       path : String,
                       ctx : Object,
                       name : String) {
+      info("### Return code for the create: " + Code.get(rc))
       Code.get(rc) match {
         case Code.OK => {
           // check that exists and wait
            checkAndWatch
+           info("#### Created the znode correctly")
+           setResult(Code.OK)
         }
         case Code.CONNECTIONLOSS => {
           // try again
@@ -936,15 +948,49 @@ class ZKWatchedEphemeral(path : String,
         }
         case Code.NONODE => {
           error("No node for path %s (could be the parent missing)".format(path))
+          setResult(Code.NONODE)
+        }
+        case Code.NODEEXISTS => {
+          zkHandle.getData(path, false, getDataCallback, null)
         }
         case Code.SESSIONEXPIRED => {
           error("Session has expired while creating %s".format(path))
         }
         case _ => {
           info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
+          setResult(Code.get(rc))
         }
       }
     }
+  }
+
+  private class GetDataCallback extends DataCallback {
+      def processResult(rc : Int,
+                 path : String,
+                 ctx : Object,
+                 readData: Array[Byte],
+                 stat : Stat) {
+        Code.get(rc) match {
+          case Code.OK => {
+                  if (checker(ZKStringSerializer.deserialize(readData).asInstanceOf[String], expectedCallerData)) {
+                    info("An ephemeral node [%s] at %s already exists ".format(data, path)
+                      + "it might be because of a past session I have had or connection issues")
+                    checkAndWatch
+                    setResult(Code.OK)
+                } else {
+                    info("### Someone else created this znode already")
+                    setResult(Code.NODEEXISTS)
+                }
+          }
+          case Code.NONODE => {
+            info("The ephemeral node [%s] at %s has gone away while reading it, ".format(data, path))
+            setResult(Code.NONODE)
+          }
+          case _ => {
+            setResult(Code.get(rc))
+          }
+        }
+      }
   }
 
   private class EphemeralWatcher extends Watcher {
@@ -987,7 +1033,7 @@ class ZKWatchedEphemeral(path : String,
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     if(suffix.isEmpty()) {
       zkHandle.create(prefix,
-                  data.getBytes(),
+                  ZKStringSerializer.serialize(data),
                   Ids.OPEN_ACL_UNSAFE,
                   CreateMode.EPHEMERAL,
                   createCallback,
@@ -1016,12 +1062,15 @@ class ZKWatchedEphemeral(path : String,
                             }
                             case Code.NONODE => {
                               error("No node for path %s (could be the parent missing)".format(path))
+                              setResult(Code.get(rc))
                             }
                             case Code.SESSIONEXPIRED => {
                               error("Session has expired while creating %s".format(path))
+                              setResult(Code.get(rc))
                             }
                             case _ => {
                               info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
+                              setResult(Code.get(rc))
                             }
                           }
                         }
@@ -1040,6 +1089,16 @@ class ZKWatchedEphemeral(path : String,
     }
   }
 
+  private def setResult(code: Code) {
+    result = code
+    latch.countDown()
+  }
+
+  private def waitUntilResolved(): Code = {
+    latch.await()
+    result
+  }
+
   def createAndWatch() {
     val index = path.indexOf('/', 1) match {
         case -1 => path.length
@@ -1049,6 +1108,15 @@ class ZKWatchedEphemeral(path : String,
     val suffix = path.substring(index, path.length)
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     createRecursive(prefix, suffix)
+    val result = waitUntilResolved()
+    result match {
+      case Code.OK => {
+        // Nothing to do
+      }
+      case _ => {
+        throw ZkException.create(KeeperException.create(result))
+      }
+    }
   }
 
   def halt() {
