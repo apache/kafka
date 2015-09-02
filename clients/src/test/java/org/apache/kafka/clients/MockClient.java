@@ -77,10 +77,6 @@ public class MockClient implements KafkaClient {
         return true;
     }
 
-    public Set<Integer> ready() {
-        return ready;
-    }
-
     @Override
     public long connectionDelay(Node node, long now) {
         return 0;
