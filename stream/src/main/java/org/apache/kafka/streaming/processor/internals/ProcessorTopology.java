@@ -26,14 +26,14 @@ import java.util.Set;
 
 public class ProcessorTopology {
 
-    private List<ProcessorNode> processors;
+    private List<ProcessorNode> processorNodes;
     private Map<String, SourceNode> sourceByTopics;
     private Map<String, SinkNode> sinkByTopics;
 
-    public ProcessorTopology(List<ProcessorNode> processors,
+    public ProcessorTopology(List<ProcessorNode> processorNodes,
                              Map<String, SourceNode> sourceByTopics,
                              Map<String, SinkNode> sinkByTopics) {
-        this.processors = processors;
+        this.processorNodes = processorNodes;
         this.sourceByTopics = sourceByTopics;
         this.sinkByTopics = sinkByTopics;
     }
@@ -67,18 +67,18 @@ public class ProcessorTopology {
      * such that parents are always initialized before children
      */
     public void init(ProcessorContext context) {
-        for (ProcessorNode node : processors) {
+        for (ProcessorNode node : processorNodes) {
             node.init(context);
         }
     }
 
     public final void close() {
         // close the processors
-        for (ProcessorNode node : processors) {
+        for (ProcessorNode node : processorNodes) {
             node.close();
         }
 
-        processors.clear();
+        processorNodes.clear();
         sourceByTopics.clear();
         sinkByTopics.clear();
     }

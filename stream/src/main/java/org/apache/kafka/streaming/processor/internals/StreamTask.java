@@ -55,6 +55,7 @@ public class StreamTask {
     private final PunctuationQueue punctuationQueue;
     private final ProcessorContext processorContext;
     private final TimestampExtractor timestampExtractor;
+    private final ProcessorTopology topology;
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
@@ -87,6 +88,7 @@ public class StreamTask {
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.timestampExtractor = config.getConfiguredInstance(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+        this.topology = topology;
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
@@ -256,6 +258,7 @@ public class StreamTask {
     public void close() {
         this.partitionGroup.close();
         this.consumedOffsets.clear();
+        this.topology.close();
     }
 
     private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
