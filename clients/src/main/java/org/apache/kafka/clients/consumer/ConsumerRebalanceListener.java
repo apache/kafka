@@ -36,7 +36,7 @@ import org.apache.kafka.common.TopicPartition;
  * consider a case where the consumer is subscribed to a topic containing user page views, and the goal is to count the
  * number of page views per users for each five minute window. Let's say the topic is partitioned by the user id so that
  * all events for a particular user will go to a single consumer instance. The consumer can keep in memory a running
- * tally of actions per user and only flush these out to a remote data store when it's cache gets to big. However if a
+ * tally of actions per user and only flush these out to a remote data store when its cache gets to big. However if a
  * partition is reassigned it may want to automatically trigger a flush of this cache, before the new owner takes over
  * consumption.
  * <p>

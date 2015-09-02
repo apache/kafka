@@ -169,7 +169,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
      * will acquire the write lock and prevent the sensors from being read while they are being created.
      * It should be sufficient to simply check if the sensor is null without acquiring a read lock but the
      * sensor being present doesn't mean that it is fully initialized i.e. all the Metrics may not have been added.
-     * This read lock waits until the writer thread has released it's lock i.e. fully initialized the sensor
+     * This read lock waits until the writer thread has released its lock i.e. fully initialized the sensor
      * at which point it is safe to read
      */
     lock.readLock().lock()
