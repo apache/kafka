@@ -51,6 +51,12 @@ object ErrorMapping {
   val NotEnoughReplicasAfterAppendCode: Short = 20
   // 21: InvalidRequiredAcks
   // 22: IllegalConsumerGeneration
+  // 23: InconsistentPartitionAssignmentStrategy
+  // 24: UnknownPartitionAssignmentStrategy
+  // 25: UnknownConsumerId
+  // 26: InvalidSessionTimeout
+  // 27: CommitingPartitionsNotAssigned
+  // 28: InvalidCommitOffsetSize
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](
