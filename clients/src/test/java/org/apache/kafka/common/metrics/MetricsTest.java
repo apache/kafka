@@ -283,11 +283,11 @@ public class MetricsTest {
         final Quota quota1 = Quota.lessThan(10.5);
         final Quota quota2 = Quota.moreThan(10.5);
 
-        assertFalse(quota1.equals(quota2));
+        assertFalse("Quota with different upper values shouldn't be equal", quota1.equals(quota2));
 
-        Quota quota3 = Quota.moreThan(10.5);
+        final Quota quota3 = Quota.moreThan(10.5);
 
-        assertTrue(quota2.equals(quota3));
+        assertTrue("Quota with same upper and bound values should be equal", quota2.equals(quota3));
     }
 
     @Test
