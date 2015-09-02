@@ -71,9 +71,6 @@ public class KafkaStreaming {
     private final StreamThread[] threads;
 
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
-        if (config.getClass(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG) == null)
-            throw new NullPointerException("timestamp extractor is missing");
-
         this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new StreamThread(builder, config);
