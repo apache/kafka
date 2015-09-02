@@ -54,7 +54,7 @@ import kafka.coordinator.{ConsumerCoordinator}
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
   // I'm listing out individual properties here since the names are slightly different in each Config class...
-  def copyKafkaConfigToLog(kafkaConfig: KafkaConfig): java.util.Map[String, Object] = {
+  private[kafka] def copyKafkaConfigToLog(kafkaConfig: KafkaConfig): java.util.Map[String, Object] = {
     val logProps = new util.HashMap[String, Object]()
     logProps.put(LogConfig.SegmentBytesProp, kafkaConfig.logSegmentBytes)
     logProps.put(LogConfig.SegmentMsProp, kafkaConfig.logRollTimeMillis)

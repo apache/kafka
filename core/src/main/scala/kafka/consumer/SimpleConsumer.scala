@@ -19,6 +19,7 @@ package kafka.consumer
 
 
 import java.nio.channels.{AsynchronousCloseException, ClosedByInterruptException}
+import java.util.concurrent.TimeUnit
 
 import kafka.api._
 import kafka.network._
@@ -135,6 +136,8 @@ class SimpleConsumer(val host: String,
     val fetchedSize = fetchResponse.sizeInBytes
     fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).requestSizeHist.update(fetchedSize)
     fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestSizeHist.update(fetchedSize)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseStats(host, port).throttleTimeStats.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.throttleTimeStats.update(fetchResponse.throttleTimeMs, TimeUnit.MILLISECONDS)
     fetchResponse
   }
 
