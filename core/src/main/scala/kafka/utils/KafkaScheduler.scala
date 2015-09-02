@@ -98,7 +98,9 @@ class KafkaScheduler(val threads: Int,
         }
         // Release the scheduler lock to avoid deadlock with schedule.
         executor.awaitTermination(1, TimeUnit.DAYS)
-        this.executor = null
+        this synchronized {
+          this.executor = null
+        }
       }
     }
   }
@@ -110,7 +112,7 @@ class KafkaScheduler(val threads: Int,
       ensureStarted
       val runnable = CoreUtils.runnable {
         try {
-          trace("Begining execution of scheduled task '%s'.".format(name))
+          trace("Beginning execution of scheduled task '%s'.".format(name))
           fun()
         } catch {
           case t: Throwable => error("Uncaught exception in scheduled task '" + name +"'", t)
@@ -127,7 +129,7 @@ class KafkaScheduler(val threads: Int,
   
   def isStarted: Boolean = {
     this synchronized {
-      executor != null
+      executor != null && !executor.isShutdown
     }
   }
   
