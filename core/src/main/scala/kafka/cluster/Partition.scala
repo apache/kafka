@@ -175,6 +175,11 @@ class Partition(val topic: String,
       // add replicas that are new
       allReplicas.foreach(replica => getOrCreateReplica(replica))
       val newInSyncReplicas = partitionStateInfo.isr.asScala.map(r => getOrCreateReplica(r)).toSet
+
+      // If the ISR size received from a LeaderAndIsrRequest is smaller than the existing ISR size,
+      // mark the isrShrinkRate meter. For example: This can happen if one of the followers is shutdown.
+      if (newInSyncReplicas.size < inSyncReplicas.size) replicaManager.isrShrinkRate.mark()
+
       // remove assigned replicas that have been removed by the controller
       (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
       inSyncReplicas = newInSyncReplicas
