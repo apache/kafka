@@ -127,7 +127,7 @@ public class StreamThread extends Thread {
      * Execute the stream processors
      */
     @Override
-    public synchronized void run() {
+    public void run() {
         log.info("Starting a stream thread");
         try {
             runLoop();
