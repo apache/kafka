@@ -57,6 +57,12 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return HeartbeatRequest.parse(buffer, versionId);
             case STOP_REPLICA:
                 return StopReplicaRequest.parse(buffer, versionId);
+            case CONTROLLED_SHUTDOWN_KEY:
+                return ControlledShutdownRequest.parse(buffer, versionId);
+            case UPDATE_METADATA_KEY:
+                return UpdateMetadataRequest.parse(buffer, versionId);
+            case LEADER_AND_ISR:
+                return LeaderAndIsrRequest.parse(buffer, versionId);
             default:
                 return null;
         }

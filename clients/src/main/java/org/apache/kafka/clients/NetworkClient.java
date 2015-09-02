@@ -48,9 +48,8 @@ public class NetworkClient implements KafkaClient {
 
     /* the selector used to perform network i/o */
     private final Selectable selector;
-
-    /* the current cluster metadata */
-    private final Metadata metadata;
+    
+    private final MetadataUpdater metadataUpdater;
 
     /* the state of each node's connection */
     private final ClusterConnectionStates connectionStates;
@@ -73,12 +72,6 @@ public class NetworkClient implements KafkaClient {
     /* the current correlation id to use when sending requests to servers */
     private int correlation;
 
-    /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
-    private boolean metadataFetchInProgress;
-
-    /* the last timestamp when no broker node is available to connect */
-    private long lastNoNodeAvailableMs;
-
     public NetworkClient(Selectable selector,
                          Metadata metadata,
                          String clientId,
@@ -86,8 +79,43 @@ public class NetworkClient implements KafkaClient {
                          long reconnectBackoffMs,
                          int socketSendBuffer,
                          int socketReceiveBuffer) {
+        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
+                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer);
+    }
+
+    public NetworkClient(Selectable selector,
+                         MetadataUpdater metadataUpdater,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer) {
+        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
+                socketSendBuffer, socketReceiveBuffer);
+    }
+
+    private NetworkClient(MetadataUpdater metadataUpdater,
+                          Metadata metadata,
+                          Selectable selector,
+                          String clientId,
+                          int maxInFlightRequestsPerConnection,
+                          long reconnectBackoffMs,
+                          int socketSendBuffer,
+                          int socketReceiveBuffer) {
+
+        /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
+         * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
+         * super constructor is invoked.
+         */
+        if (metadataUpdater == null) {
+            if (metadata == null)
+                throw new IllegalArgumentException("`metadata` must not be null");
+            this.metadataUpdater = new DefaultMetadataUpdater(metadata);
+        } else {
+            this.metadataUpdater = metadataUpdater;
+        }
+
         this.selector = selector;
-        this.metadata = metadata;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs);
@@ -95,8 +123,6 @@ public class NetworkClient implements KafkaClient {
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
         this.nodeIndexOffset = new Random().nextInt(Integer.MAX_VALUE);
-        this.metadataFetchInProgress = false;
-        this.lastNoNodeAvailableMs = 0;
     }
 
     /**
@@ -116,6 +142,17 @@ public class NetworkClient implements KafkaClient {
             initiateConnect(node, now);
 
         return false;
+    }
+
+    /**
+     * Closes the connection to a particular node (if there is one).
+     *
+     * @param nodeId The id of the node
+     */
+    @Override
+    public void close(String nodeId) {
+        selector.close(nodeId);
+        connectionStates.remove(nodeId);
     }
 
     /**
@@ -154,14 +191,9 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public boolean isReady(Node node, long now) {
-        String nodeId = node.idString();
-        if (!this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0)
-            // if we need to update our metadata now declare all requests unready to make metadata requests first
-            // priority
-            return false;
-        else
-            // otherwise we are ready if we are connected and can send more requests
-            return canSendRequest(nodeId);
+        // if we need to update our metadata now declare all requests unready to make metadata requests first
+        // priority
+        return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString());
     }
 
     /**
@@ -193,7 +225,10 @@ public class NetworkClient implements KafkaClient {
         String nodeId = request.request().destination();
         if (!canSendRequest(nodeId))
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
+        doSend(request);
+    }
 
+    private void doSend(ClientRequest request) {
         this.inFlightRequests.add(request);
         selector.send(request.request());
     }
@@ -207,16 +242,7 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
-        // should we update our metadata?
-        long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-        long timeToNextReconnectAttempt = Math.max(this.lastNoNodeAvailableMs + metadata.refreshBackoff() - now, 0);
-        long waitForMetadataFetch = this.metadataFetchInProgress ? Integer.MAX_VALUE : 0;
-        // if there is no node available to connect, back off refreshing metadata
-        long metadataTimeout = Math.max(Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt),
-                                        waitForMetadataFetch);
-        if (metadataTimeout == 0)
-            maybeUpdateMetadata(now);
-        // do the I/O
+        long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
             this.selector.poll(Math.min(timeout, metadataTimeout));
         } catch (IOException e) {
@@ -224,7 +250,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         // process completed actions
-        List<ClientResponse> responses = new ArrayList<ClientResponse>();
+        List<ClientResponse> responses = new ArrayList<>();
         handleCompletedSends(responses, now);
         handleCompletedReceives(responses, now);
         handleDisconnections(responses, now);
@@ -304,6 +330,18 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Generate a request header for the given API key and version
+     *
+     * @param key The api key
+     * @param version The api version
+     * @return A request header with the appropriate client id and correlation id
+     */
+    @Override
+    public RequestHeader nextRequestHeader(ApiKeys key, short version) {
+        return new RequestHeader(key.id, version, clientId, correlation++);
+    }
+
+    /**
      * Interrupt the client if it is blocked waiting on I/O.
      */
     @Override
@@ -327,8 +365,9 @@ public class NetworkClient implements KafkaClient {
      *
      * @return The node with the fewest in-flight requests.
      */
+    @Override
     public Node leastLoadedNode(long now) {
-        List<Node> nodes = this.metadata.fetch().nodes();
+        List<Node> nodes = this.metadataUpdater.fetchNodes();
         int inflight = Integer.MAX_VALUE;
         Node found = null;
         for (int i = 0; i < nodes.size(); i++) {
@@ -378,30 +417,8 @@ public class NetworkClient implements KafkaClient {
             short apiKey = req.request().header().apiKey();
             Struct body = (Struct) ProtoUtils.currentResponseSchema(apiKey).read(receive.payload());
             correlate(req.request().header(), header);
-            if (apiKey == ApiKeys.METADATA.id && req.isInitiatedByNetworkClient()) {
-                handleMetadataResponse(req.request().header(), body, now);
-            } else {
-                // need to add body/header to response here
+            if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
                 responses.add(new ClientResponse(req, now, false, body));
-            }
-        }
-    }
-
-    private void handleMetadataResponse(RequestHeader header, Struct body, long now) {
-        this.metadataFetchInProgress = false;
-        MetadataResponse response = new MetadataResponse(body);
-        Cluster cluster = response.cluster();
-        // check if any topics metadata failed to get updated
-        if (response.errors().size() > 0) {
-            log.warn("Error while fetching metadata with correlation id {} : {}", header.correlationId(), response.errors());
-        }
-        // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
-        // created which means we will get errors and no nodes until it exists
-        if (cluster.nodes().size() > 0) {
-            this.metadata.update(cluster, now);
-        } else {
-            log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
-            this.metadata.failedUpdate(now);
         }
     }
 
@@ -417,16 +434,13 @@ public class NetworkClient implements KafkaClient {
             log.debug("Node {} disconnected.", node);
             for (ClientRequest request : this.inFlightRequests.clearAll(node)) {
                 log.trace("Cancelled request {} due to node {} being disconnected", request, node);
-                ApiKeys requestKey = ApiKeys.forId(request.request().header().apiKey());
-                if (requestKey == ApiKeys.METADATA)
-                    metadataFetchInProgress = false;
-                else
+                if (!metadataUpdater.maybeHandleDisconnection(request))
                     responses.add(new ClientResponse(request, now, true, null));
             }
         }
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
         if (this.selector.disconnected().size() > 0)
-            this.metadata.requestUpdate();
+            metadataUpdater.requestUpdate();
     }
 
     /**
@@ -449,52 +463,6 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Create a metadata request for the given topics
-     */
-    private ClientRequest metadataRequest(long now, String node, Set<String> topics) {
-        MetadataRequest metadata = new MetadataRequest(new ArrayList<String>(topics));
-        RequestSend send = new RequestSend(node, nextRequestHeader(ApiKeys.METADATA), metadata.toStruct());
-        return new ClientRequest(now, true, send, null, true);
-    }
-
-    /**
-     * Add a metadata request to the list of sends if we can make one
-     */
-    private void maybeUpdateMetadata(long now) {
-        // Beware that the behavior of this method and the computation of timeouts for poll() are
-        // highly dependent on the behavior of leastLoadedNode.
-        Node node = this.leastLoadedNode(now);
-        if (node == null) {
-            log.debug("Give up sending metadata request since no node is available");
-            // mark the timestamp for no node available to connect
-            this.lastNoNodeAvailableMs = now;
-            return;
-        }
-        String nodeConnectionId = node.idString();
-
-        if (canSendRequest(nodeConnectionId)) {
-            Set<String> topics = metadata.topics();
-            this.metadataFetchInProgress = true;
-            ClientRequest metadataRequest = metadataRequest(now, nodeConnectionId, topics);
-            log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-            this.selector.send(metadataRequest.request());
-            this.inFlightRequests.add(metadataRequest);
-        } else if (connectionStates.canConnect(nodeConnectionId, now)) {
-            // we don't have a connection to this node right now, make one
-            log.debug("Initialize connection to node {} for sending metadata request", node.id());
-            initiateConnect(node, now);
-            // If initiateConnect failed immediately, this node will be put into blackout and we
-            // should allow immediately retrying in case there is another candidate node. If it
-            // is still connecting, the worst case is that we end up setting a longer timeout
-            // on the next round and then wait for the response.
-        } else { // connected, but can't send more OR connecting
-            // In either case, we just need to wait for a network event to let us know the selected
-            // connection might be usable again.
-            this.lastNoNodeAvailableMs = now;
-        }
-    }
-
-    /**
      * Initiate a connection to the given node
      */
     private void initiateConnect(Node node, long now) {
@@ -510,9 +478,145 @@ public class NetworkClient implements KafkaClient {
             /* attempt failed, we'll try again after the backoff */
             connectionStates.disconnected(nodeConnectionId);
             /* maybe the problem is our metadata, update it */
-            metadata.requestUpdate();
+            metadataUpdater.requestUpdate();
             log.debug("Error connecting to node {} at {}:{}:", node.id(), node.host(), node.port(), e);
         }
+    }
+
+    class DefaultMetadataUpdater implements MetadataUpdater {
+
+        /* the current cluster metadata */
+        private final Metadata metadata;
+
+        /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
+        private boolean metadataFetchInProgress;
+
+        /* the last timestamp when no broker node is available to connect */
+        private long lastNoNodeAvailableMs;
+
+        DefaultMetadataUpdater(Metadata metadata) {
+            this.metadata = metadata;
+            this.metadataFetchInProgress = false;
+            this.lastNoNodeAvailableMs = 0;
+        }
+
+        @Override
+        public List<Node> fetchNodes() {
+            return metadata.fetch().nodes();
+        }
+
+        @Override
+        public boolean isUpdateDue(long now) {
+            return !this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0;
+        }
+
+        @Override
+        public long maybeUpdate(long now) {
+            // should we update our metadata?
+            long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
+            long timeToNextReconnectAttempt = Math.max(this.lastNoNodeAvailableMs + metadata.refreshBackoff() - now, 0);
+            long waitForMetadataFetch = this.metadataFetchInProgress ? Integer.MAX_VALUE : 0;
+            // if there is no node available to connect, back off refreshing metadata
+            long metadataTimeout = Math.max(Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt),
+                    waitForMetadataFetch);
+
+            if (metadataTimeout == 0) {
+                // Beware that the behavior of this method and the computation of timeouts for poll() are
+                // highly dependent on the behavior of leastLoadedNode.
+                Node node = leastLoadedNode(now);
+                maybeUpdate(now, node);
+            }
+
+            return metadataTimeout;
+        }
+
+        @Override
+        public boolean maybeHandleDisconnection(ClientRequest request) {
+            ApiKeys requestKey = ApiKeys.forId(request.request().header().apiKey());
+
+            if (requestKey == ApiKeys.METADATA) {
+                metadataFetchInProgress = false;
+                return true;
+            }
+
+            return false;
+        }
+
+        @Override
+        public boolean maybeHandleCompletedReceive(ClientRequest req, long now, Struct body) {
+            short apiKey = req.request().header().apiKey();
+            if (apiKey == ApiKeys.METADATA.id && req.isInitiatedByNetworkClient()) {
+                handleResponse(req.request().header(), body, now);
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public void requestUpdate() {
+            this.metadata.requestUpdate();
+        }
+
+        private void handleResponse(RequestHeader header, Struct body, long now) {
+            this.metadataFetchInProgress = false;
+            MetadataResponse response = new MetadataResponse(body);
+            Cluster cluster = response.cluster();
+            // check if any topics metadata failed to get updated
+            if (response.errors().size() > 0) {
+                log.warn("Error while fetching metadata with correlation id {} : {}", header.correlationId(), response.errors());
+            }
+            // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
+            // created which means we will get errors and no nodes until it exists
+            if (cluster.nodes().size() > 0) {
+                this.metadata.update(cluster, now);
+            } else {
+                log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
+                this.metadata.failedUpdate(now);
+            }
+        }
+
+        /**
+         * Create a metadata request for the given topics
+         */
+        private ClientRequest request(long now, String node, Set<String> topics) {
+            MetadataRequest metadata = new MetadataRequest(new ArrayList<>(topics));
+            RequestSend send = new RequestSend(node, nextRequestHeader(ApiKeys.METADATA), metadata.toStruct());
+            return new ClientRequest(now, true, send, null, true);
+        }
+
+        /**
+         * Add a metadata request to the list of sends if we can make one
+         */
+        private void maybeUpdate(long now, Node node) {
+            if (node == null) {
+                log.debug("Give up sending metadata request since no node is available");
+                // mark the timestamp for no node available to connect
+                this.lastNoNodeAvailableMs = now;
+                return;
+            }
+            String nodeConnectionId = node.idString();
+
+            if (canSendRequest(nodeConnectionId)) {
+                Set<String> topics = metadata.topics();
+                this.metadataFetchInProgress = true;
+                ClientRequest metadataRequest = request(now, nodeConnectionId, topics);
+                log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
+                doSend(metadataRequest);
+            } else if (connectionStates.canConnect(nodeConnectionId, now)) {
+                // we don't have a connection to this node right now, make one
+                log.debug("Initialize connection to node {} for sending metadata request", node.id());
+                initiateConnect(node, now);
+                // If initiateConnect failed immediately, this node will be put into blackout and we
+                // should allow immediately retrying in case there is another candidate node. If it
+                // is still connecting, the worst case is that we end up setting a longer timeout
+                // on the next round and then wait for the response.
+            } else { // connected, but can't send more OR connecting
+                // In either case, we just need to wait for a network event to let us know the selected
+                // connection might be usable again.
+                this.lastNoNodeAvailableMs = now;
+            }
+        }
+
     }
 
 }

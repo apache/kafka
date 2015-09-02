@@ -18,13 +18,15 @@ package kafka.controller
 
 
 import kafka.server.ConfigType
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{StopReplicaResponse, AbstractRequestResponse}
 
 import collection.mutable
+import collection.JavaConverters._
 import kafka.utils.{ShutdownableThread, Logging, ZkUtils}
 import kafka.utils.CoreUtils._
 import collection.Set
-import kafka.common.{ErrorMapping, TopicAndPartition}
-import kafka.api.{StopReplicaResponse, RequestOrResponse}
+import kafka.common.TopicAndPartition
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -363,20 +365,20 @@ class TopicDeletionManager(controller: KafkaController,
     startReplicaDeletion(replicasPerPartition)
   }
 
-  private def deleteTopicStopReplicaCallback(stopReplicaResponseObj: RequestOrResponse, replicaId: Int) {
+  private def deleteTopicStopReplicaCallback(stopReplicaResponseObj: AbstractRequestResponse, replicaId: Int) {
     val stopReplicaResponse = stopReplicaResponseObj.asInstanceOf[StopReplicaResponse]
     debug("Delete topic callback invoked for %s".format(stopReplicaResponse))
-    val partitionsInError = if(stopReplicaResponse.errorCode != ErrorMapping.NoError) {
-      stopReplicaResponse.responseMap.keySet
-    } else
-      stopReplicaResponse.responseMap.filter(p => p._2 != ErrorMapping.NoError).map(_._1).toSet
+    val responseMap = stopReplicaResponse.responses.asScala
+    val partitionsInError =
+      if (stopReplicaResponse.errorCode != Errors.NONE.code) responseMap.keySet
+      else responseMap.filter { case (_, error) => error != Errors.NONE.code }.map(_._1).toSet
     val replicasInError = partitionsInError.map(p => PartitionAndReplica(p.topic, p.partition, replicaId))
     inLock(controllerContext.controllerLock) {
       // move all the failed replicas to ReplicaDeletionIneligible
       failReplicaDeletion(replicasInError)
-      if(replicasInError.size != stopReplicaResponse.responseMap.size) {
+      if (replicasInError.size != responseMap.size) {
         // some replicas could have been successfully deleted
-        val deletedReplicas = stopReplicaResponse.responseMap.keySet -- partitionsInError
+        val deletedReplicas = responseMap.keySet -- partitionsInError
         completeReplicaDeletion(deletedReplicas.map(p => PartitionAndReplica(p.topic, p.partition, replicaId)))
       }
     }

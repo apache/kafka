@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.errors.*;
+import org.apache.kafka.common.errors.ControllerMovedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,11 +46,14 @@ public enum Errors {
             new NotLeaderForPartitionException("This server is not the leader for that topic-partition.")),
     REQUEST_TIMED_OUT(7,
             new TimeoutException("The request timed out.")),
-    // TODO: errorCode 8 for BrokerNotAvailable
+    BROKER_NOT_AVAILABLE(8,
+            new BrokerNotAvailableException("The broker is not available.")),
     REPLICA_NOT_AVAILABLE(9,
             new ApiException("The replica is not available for the requested topic-partition")),
     MESSAGE_TOO_LARGE(10,
             new RecordTooLargeException("The request included a message larger than the max message size the server will accept.")),
+    STALE_CONTROLLER_EPOCH(11,
+            new ControllerMovedException("The controller moved to another broker.")),
     OFFSET_METADATA_TOO_LARGE(12,
             new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
     NETWORK_EXCEPTION(13,

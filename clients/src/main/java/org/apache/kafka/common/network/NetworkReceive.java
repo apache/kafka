@@ -107,14 +107,4 @@ public class NetworkReceive implements Receive {
         return this.buffer;
     }
 
-    // Used only by BlockingChannel, so we may be able to get rid of this when/if we get rid of BlockingChannel
-    @Deprecated
-    public long readCompletely(ReadableByteChannel channel) throws IOException {
-        int totalRead = 0;
-        while (!complete()) {
-            totalRead += readFromReadableChannel(channel);
-        }
-        return totalRead;
-    }
-
 }

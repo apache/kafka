@@ -18,6 +18,10 @@ package kafka.controller
 
 import java.util
 
+import org.apache.kafka.clients.NetworkClient
+import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse}
+
 import scala.collection._
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.TimeUnit
@@ -32,9 +36,10 @@ import kafka.utils.ZkUtils._
 import kafka.utils._
 import kafka.utils.CoreUtils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.utils.Time
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kafka.server._
 import kafka.common.TopicAndPartition
@@ -47,12 +52,24 @@ class ControllerContext(val zkClient: ZkClient,
   val brokerShutdownLock: Object = new Object
   var epoch: Int = KafkaController.InitialControllerEpoch - 1
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion - 1
-  val correlationId: AtomicInteger = new AtomicInteger(0)
   var allTopics: Set[String] = Set.empty
   var partitionReplicaAssignment: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map.empty
   var partitionLeadershipInfo: mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
-  var partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap
-  var partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet
+  val partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap
+  val partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet
+
+  /**
+   * This map is used to ensure the following invariant: at most one `NetworkClient`/`Selector` instance should be
+   * created per broker during the lifetime of the `metrics` parameter received by `KafkaController` (which has the same
+   * lifetime as `KafkaController` since they are both shut down during `KafkaServer.shutdown()`).
+   *
+   * If we break this invariant, an exception is thrown during the instantiation of `Selector` due to the usage of
+   * two equal `MetricName` instances for two `Selector` instantiations. This way also helps to maintain the metrics sane.
+   *
+   * In the future, we should consider redesigning `ControllerChannelManager` so that we can use a single
+   * `NetworkClient`/`Selector` for multiple broker connections as that is the intended usage and it may help simplify this code.
+   */
+  private[controller] val networkClientMap = mutable.Map[Int, NetworkClient]()
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
   private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
@@ -117,6 +134,12 @@ class ControllerContext(val zkClient: ZkClient,
     partitionReplicaAssignment = partitionReplicaAssignment.filter{ case (topicAndPartition, _) => topicAndPartition.topic != topic }
     allTopics -= topic
   }
+
+  private[controller] def closeNetworkClients(): Unit = {
+    networkClientMap.values.foreach(_.close())
+    networkClientMap.clear()
+  }
+
 }
 
 
@@ -149,7 +172,7 @@ object KafkaController extends Logging {
   }
 }
 
-class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerState: BrokerState) extends Logging with KafkaMetricsGroup {
+class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerState: BrokerState, time: Time, metrics: Metrics) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private var isRunning = true
   private val stateChangeLogger = KafkaController.stateChangeLogger
@@ -267,7 +290,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
                     brokerRequestBatch.newBatch()
                     brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topicAndPartition.topic,
                       topicAndPartition.partition, deletePartition = false)
-                    brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement)
+                    brokerRequestBatch.sendRequestsToBrokers(epoch)
                   } catch {
                     case e : IllegalStateException => {
                       // Resign if the controller is in an illegal state
@@ -688,10 +711,11 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       isRunning = false
     }
     onControllerResignation()
+    controllerContext.closeNetworkClients()
   }
 
-  def sendRequest(brokerId : Int, request : RequestOrResponse, callback: (RequestOrResponse) => Unit = null) = {
-    controllerContext.controllerChannelManager.sendRequest(brokerId, request, callback)
+  def sendRequest(brokerId: Int, apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest, callback: AbstractRequestResponse => Unit = null) = {
+    controllerContext.controllerChannelManager.sendRequest(brokerId, apiKey, apiVersion, request, callback)
   }
 
   def incrementControllerEpoch(zkClient: ZkClient) = {
@@ -811,7 +835,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
   }
 
   private def startChannelManager() {
-    controllerContext.controllerChannelManager = new ControllerChannelManager(controllerContext, config)
+    controllerContext.controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics)
     controllerContext.controllerChannelManager.startup()
   }
 
@@ -901,7 +925,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
         try {
           brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasToReceiveRequest, topicAndPartition.topic,
             topicAndPartition.partition, updatedLeaderIsrAndControllerEpoch, newAssignedReplicas)
-          brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch, controllerContext.correlationId.getAndIncrement)
+          brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
         } catch {
           case e : IllegalStateException => {
             // Resign if the controller is in an illegal state
@@ -1020,7 +1044,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     try {
       brokerRequestBatch.newBatch()
       brokerRequestBatch.addUpdateMetadataRequestForBrokers(brokers, partitions)
-      brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement)
+      brokerRequestBatch.sendRequestsToBrokers(epoch)
     } catch {
       case e : IllegalStateException => {
         // Resign if the controller is in an illegal state
