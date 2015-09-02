@@ -21,6 +21,7 @@ import java.util.{Arrays, Properties}
 
 import org.apache.kafka.clients.consumer.{CommitType, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConversions._
 
@@ -33,13 +34,14 @@ import scala.collection.JavaConversions._
  * producer_acks = See ProducerConfig.ACKS_DOC
  * message_size_bytes = size of each message in bytes
  *
- *  e.g. [localhost:9092 test 10000 1 20]
+ * e.g. [localhost:9092 test 10000 1 20]
  */
 
 object EndToEndLatency {
   def main(args: Array[String]) {
-    if (args.length != 5) {
-      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes")
+    println(args.length)
+    if (args.length != 5 && args.length != 6) {
+      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] ssl_properties_file")
       System.exit(1)
     }
 
@@ -48,11 +50,12 @@ object EndToEndLatency {
     val numMessages = args(2).toInt
     val producerAcks = args(3)
     val messageLen = args(4).toInt
+    val sslPropsFile = if (args.length == 6) args(5) else ""
 
-    if(!List("1","all").contains(producerAcks))
+    if (!List("1", "all").contains(producerAcks))
       throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all")
 
-    val consumerProps = new Properties()
+    val consumerProps = if (sslPropsFile.equals("")) new Properties() else Utils.loadProps(sslPropsFile)
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -64,7 +67,7 @@ object EndToEndLatency {
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
     consumer.subscribe(List(topic))
 
-    val producerProps = new Properties()
+    val producerProps = if (sslPropsFile.equals("")) new Properties() else Utils.loadProps(sslPropsFile)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0") //ensure writes are synchronous
     producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
@@ -82,7 +85,7 @@ object EndToEndLatency {
     //Ensure we are at latest offset. seekToEnd evaluates lazily, that is to say actually performs the seek only when
     //a poll() or position() request is issued. Hence we need to poll after we seek to ensure we see our first write.
     consumer.seekToEnd()
-    consumer.poll(0).iterator
+    consumer.poll(0)
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
@@ -98,7 +101,7 @@ object EndToEndLatency {
       val elapsed = System.nanoTime - begin
 
       //Check we got results
-      if(!recordIter.hasNext){
+      if (!recordIter.hasNext) {
         finalise()
         throw new RuntimeException("poll() timed out before finding a result")
       }
@@ -112,9 +115,9 @@ object EndToEndLatency {
       }
 
       //Check we only got the one message
-      if(recordIter.hasNext){
+      if (recordIter.hasNext) {
         var count = 1
-        for (elem <- recordIter) count+=1
+        for (elem <- recordIter) count += 1
         Console.err.println(s"Only one result was expected during this test. We found [$count]")
       }
 
