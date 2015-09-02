@@ -66,7 +66,7 @@ object EndToEndLatency {
 
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0")
+    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0") //ensure writes are synchronous
     producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
     producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
@@ -113,9 +113,9 @@ object EndToEndLatency {
 
       //Check we only got the one message
       if(recordIter.hasNext){
-        val additional = recordIter.next()
-        finalise()
-        throw new RuntimeException(s"Only one result was expected during this test. We found both [$read] and [$additional]")
+        var count = 1
+        for (elem <- recordIter) count+=1
+        Console.err.println(s"Only one result was expected during this test. We found [$count]")
       }
 
       //Report progress
