@@ -19,6 +19,15 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A simple implementation of `MetadataUpdater` that returns the cluster nodes set via the constructor or via
+ * `setNodes`.
+ *
+ * This is useful in cases where automatic metadata updates are not required. An example is controller/broker
+ * communication.
+ *
+ * This class is not thread-safe!
+ */
 public class ManualMetadataUpdater implements MetadataUpdater {
 
     private List<Node> nodes;

@@ -18,7 +18,7 @@
 package kafka.utils
 
 import java.io.IOException
-import org.apache.kafka.clients.{ConnectionState, ClientRequest, ClientResponse, NetworkClient}
+import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient}
 import org.apache.kafka.common.Node
 
 import scala.annotation.tailrec
@@ -31,8 +31,29 @@ object NetworkClientBlockingOps {
     new NetworkClientBlockingOps(client)
 }
 
+/**
+ * Provides extension methods for `NetworkClient` that are useful for implementing blocking behaviour. Use with care.
+ *
+ * Example usage:
+ *
+ * {{{
+ * val networkClient: NetworkClient = ...
+ * import NetworkClientBlockingOps._
+ * networkClient.blockingReady(...)
+ * }}}
+ */
 class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
 
+  /**
+   * Invokes `client.ready` followed by 0 or more `client.poll` invocations until the connection to `node` is ready,
+   * the timeout expires or the connection fails.
+   *
+   * It returns `true` if the call completes normally or `false` if the timeout expires. If the connection fails,
+   * an `IOException` is thrown instead.
+   *
+   * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
+   * care.
+   */
   def blockingReady(node: Node, timeout: Long)(implicit time: JTime): Boolean = {
     client.ready(node, time.milliseconds()) || pollUntil(timeout) { (_, now) =>
       if (client.isReady(node, now))
@@ -43,6 +64,16 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
     }
   }
 
+  /**
+   * Invokes `client.send` followed by 1 or more `client.poll` invocations until a response is received,
+   * the timeout expires or a disconnection happens.
+   *
+   * It returns `true` if the call completes normally or `false` if the timeout expires. In the case of a disconnection,
+   * an `IOException` is thrown instead.
+   *
+   * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
+   * care.
+   */
   def blockingSendAndReceive(request: ClientRequest, timeout: Long)(implicit time: JTime): Option[ClientResponse] = {
     client.send(request)
 
@@ -61,6 +92,15 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
 
   }
 
+  /**
+   * Invokes `client.poll` until `predicate` returns `true` or the timeout expires.
+   *
+   * It returns `true` if the call completes normally or `false` if the timeout expires. Exceptions thrown via
+   * `predicate` are not handled and will bubble up.
+   *
+   * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
+   * care.
+   */
   private def pollUntil(timeout: Long)(predicate: (Seq[ClientResponse], Long) => Boolean)(implicit time: JTime): Boolean = {
     pollUntilFound(timeout) { (responses, now) =>
       if (predicate(responses, now)) Some(true)
@@ -68,6 +108,15 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
     }.fold(false)(_ => true)
   }
 
+  /**
+   * Invokes `client.poll` until `collect` returns `Some` or the timeout expires.
+   *
+   * It returns the result of `collect` if the call completes normally or `None` if the timeout expires. Exceptions
+   * thrown via `collect` are not handled and will bubble up.
+   *
+   * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
+   * care.
+   */
   private def pollUntilFound[T](timeout: Long)(collect: (Seq[ClientResponse], Long) => Option[T])(implicit time: JTime): Option[T] = {
 
     val methodStartTime = time.milliseconds()
