@@ -73,13 +73,22 @@ public class ProcessorTopology {
     }
 
     public final void close() {
+        RuntimeException exception = null;
+
         // close the processors
+        // make sure close() is called for each node even when there is a RuntimeException
         for (ProcessorNode node : processorNodes) {
-            node.close();
+            try {
+                node.close();
+            } catch (RuntimeException e) {
+                exception = e;
+            }
         }
 
         processorNodes.clear();
         sourceByTopics.clear();
         sinkByTopics.clear();
+
+        if (exception != null) throw exception;
     }
 }

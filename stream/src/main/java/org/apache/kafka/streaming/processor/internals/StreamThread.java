@@ -148,11 +148,30 @@ public class StreamThread extends Thread {
 
     private void shutdown() {
         log.info("Shutting down a stream thread");
-        commitAll(time.milliseconds());
 
-        producer.close();
-        consumer.close();
-        removePartitions();
+        // Exceptions should not prevent this call from going through all shutdown steps.
+
+        try {
+            commitAll(time.milliseconds());
+        } catch (Throwable e) {
+            // already logged in commitAll()
+        }
+        try {
+            producer.close();
+        } catch (Throwable e) {
+            log.error("failed to close producer: ", e);
+        }
+        try {
+            consumer.close();
+        } catch (Throwable e) {
+            log.error("failed to close consumer: ", e);
+        }
+        try {
+            removePartitions();
+        } catch (Throwable e) {
+            // already logged in removePartition()
+        }
+
         log.info("Stream thread shutdown complete");
     }
 
@@ -218,7 +237,12 @@ public class StreamThread extends Thread {
      */
     private void commitAll(long now) {
         for (StreamTask task : tasks.values()) {
-            task.commit();
+            try {
+                task.commit();
+            } catch (Exception e) {
+                log.error("failed to commit: ", e);
+                throw e;
+            }
         }
 
         metrics.commitTime.record(now - time.milliseconds());
@@ -268,8 +292,12 @@ public class StreamThread extends Thread {
                         partitionsForTask.add(part);
 
                 // create the task
-                task = new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
-
+                try {
+                    task = new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
+                } catch (Exception e) {
+                    log.error("failed to create a task: ", e);
+                    throw e;
+                }
                 tasks.put(id, task);
             }
         }
@@ -285,7 +313,8 @@ public class StreamThread extends Thread {
             try {
                 task.close();
             } catch (Exception e) {
-                throw new KafkaException(e);
+                log.error("failed to close a task: ", e);
+                throw e;
             }
             metrics.processorDestruction.record();
         }
