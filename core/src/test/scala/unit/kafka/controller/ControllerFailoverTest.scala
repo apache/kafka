@@ -25,6 +25,9 @@ import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.requests.{AbstractRequestResponse, AbstractRequest}
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.log4j.{Level, Logger}
 import org.junit.{After, Before, Test}
 
@@ -146,9 +149,9 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   }
 }
 
-class MockChannelManager(private val controllerContext: ControllerContext,
-                           config: KafkaConfig)
-                           extends ControllerChannelManager(controllerContext, config) {
+class MockChannelManager(private val controllerContext: ControllerContext, config: KafkaConfig)
+  extends ControllerChannelManager(controllerContext, config, new SystemTime, new Metrics) {
+
   def stopSendThread(brokerId: Int) {
     val requestThread = brokerStateInfo(brokerId).requestSendThread
     requestThread.isRunning.set(false)
@@ -157,12 +160,9 @@ class MockChannelManager(private val controllerContext: ControllerContext,
   }
 
   def shrinkBlockingQueue(brokerId: Int) {
-    val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, RequestOrResponse => Unit)](1)
+    val messageQueue = new LinkedBlockingQueue[QueueItem](1)
     val brokerInfo = this.brokerStateInfo(brokerId)
-    this.brokerStateInfo.put(brokerId, new ControllerBrokerStateInfo(brokerInfo.channel,
-                                                                      brokerInfo.broker,
-                                                                      messageQueue,
-                                                                      brokerInfo.requestSendThread))
+    this.brokerStateInfo.put(brokerId, brokerInfo.copy(messageQueue = messageQueue))
   }
 
   def resumeSendThread (brokerId: Int) {

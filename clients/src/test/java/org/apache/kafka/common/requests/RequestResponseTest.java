@@ -21,10 +21,12 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -44,6 +46,9 @@ public class RequestResponseTest {
                 createConsumerMetadataRequest(),
                 createConsumerMetadataRequest().getErrorResponse(0, new UnknownServerException()),
                 createConsumerMetadataResponse(),
+                createControlledShutdownRequest(),
+                createControlledShutdownResponse(),
+                createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchRequest(),
                 createFetchRequest().getErrorResponse(0, new UnknownServerException()),
                 createFetchResponse(),
@@ -70,18 +75,37 @@ public class RequestResponseTest {
                 createProduceResponse(),
                 createStopReplicaRequest(),
                 createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
-                createStopReplicaResponse());
+                createStopReplicaResponse(),
+                createUpdateMetadataRequest(1),
+                createUpdateMetadataRequest(1).getErrorResponse(1, new UnknownServerException()),
+                createUpdateMetadataResponse(),
+                createLeaderAndIsrRequest(),
+                createLeaderAndIsrRequest().getErrorResponse(0, new UnknownServerException()),
+                createLeaderAndIsrResponse()
+        );
 
-        for (AbstractRequestResponse req: requestResponseList) {
-            ByteBuffer buffer = ByteBuffer.allocate(req.sizeOf());
-            req.writeTo(buffer);
-            buffer.rewind();
+        for (AbstractRequestResponse req : requestResponseList)
+            checkSerialization(req, null);
+
+        checkSerialization(createUpdateMetadataRequest(0), 0);
+        checkSerialization(createUpdateMetadataRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
+    }
+
+    private void checkSerialization(AbstractRequestResponse req, Integer version) throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(req.sizeOf());
+        req.writeTo(buffer);
+        buffer.rewind();
+        AbstractRequestResponse deserialized;
+        if (version == null) {
             Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class);
-            AbstractRequestResponse deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer);
-            assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should be the same.", req, deserialized);
-            assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should have the same hashcode.",
-                    req.hashCode(), deserialized.hashCode());
+            deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer);
+        } else {
+            Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class, Integer.TYPE);
+            deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer, version);
         }
+        assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should be the same.", req, deserialized);
+        assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should have the same hashcode.",
+                req.hashCode(), deserialized.hashCode());
     }
 
     @Test
@@ -233,4 +257,81 @@ public class RequestResponseTest {
         responses.put(new TopicPartition("test", 0), Errors.NONE.code());
         return new StopReplicaResponse(Errors.NONE.code(), responses);
     }
+
+    private AbstractRequest createControlledShutdownRequest() {
+        return new ControlledShutdownRequest(10);
+    }
+
+    private AbstractRequestResponse createControlledShutdownResponse() {
+        HashSet<TopicPartition> topicPartitions = new HashSet<>(Arrays.asList(
+                new TopicPartition("test2", 5),
+                new TopicPartition("test1", 10)
+        ));
+        return new ControlledShutdownResponse(Errors.NONE.code(), topicPartitions);
+    }
+
+    private AbstractRequest createLeaderAndIsrRequest() {
+        Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
+        List<Integer> isr = Arrays.asList(1, 2);
+        List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
+        partitionStates.put(new TopicPartition("topic5", 105),
+                new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+        partitionStates.put(new TopicPartition("topic5", 1),
+                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+        partitionStates.put(new TopicPartition("topic20", 1),
+                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+
+        Set<LeaderAndIsrRequest.EndPoint> leaders = new HashSet<>(Arrays.asList(
+                new LeaderAndIsrRequest.EndPoint(0, "test0", 1223),
+                new LeaderAndIsrRequest.EndPoint(1, "test1", 1223)
+        ));
+
+        return new LeaderAndIsrRequest(1, 10, partitionStates, leaders);
+    }
+
+    private AbstractRequestResponse createLeaderAndIsrResponse() {
+        Map<TopicPartition, Short> responses = new HashMap<>();
+        responses.put(new TopicPartition("test", 0), Errors.NONE.code());
+        return new LeaderAndIsrResponse(Errors.NONE.code(), responses);
+    }
+
+    private AbstractRequest createUpdateMetadataRequest(int version) {
+        Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
+        List<Integer> isr = Arrays.asList(1, 2);
+        List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
+        partitionStates.put(new TopicPartition("topic5", 105),
+                new UpdateMetadataRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+        partitionStates.put(new TopicPartition("topic5", 1),
+                new UpdateMetadataRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+        partitionStates.put(new TopicPartition("topic20", 1),
+                new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+
+        if (version == 0) {
+            Set<UpdateMetadataRequest.BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
+                    new UpdateMetadataRequest.BrokerEndPoint(0, "host1", 1223),
+                    new UpdateMetadataRequest.BrokerEndPoint(1, "host2", 1234)
+            ));
+
+            return new UpdateMetadataRequest(1, 10, liveBrokers, partitionStates);
+        } else {
+            Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints1 = new HashMap<>();
+            endPoints1.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1223));
+
+            Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints2 = new HashMap<>();
+            endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
+            endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
+
+            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1),
+                    new UpdateMetadataRequest.Broker(1, endPoints2)
+            ));
+
+            return new UpdateMetadataRequest(1, 10, partitionStates, liveBrokers);
+        }
+    }
+
+    private AbstractRequestResponse createUpdateMetadataResponse() {
+        return new UpdateMetadataResponse(Errors.NONE.code());
+    }
+
+
 }

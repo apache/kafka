@@ -57,6 +57,10 @@ public class MockSelector implements Selectable {
     public void close() {
     }
 
+    @Override
+    public void close(String id) {
+    }
+
     public void clear() {
         this.completedSends.clear();
         this.completedReceives.clear();

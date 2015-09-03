@@ -32,8 +32,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{InvalidReceiveException, ChannelBuilder,
-                                        PlaintextChannelBuilder, SSLChannelBuilder}
+import org.apache.kafka.common.network.{ChannelBuilders, InvalidReceiveException, ChannelBuilder, PlaintextChannelBuilder, SSLChannelBuilder}
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
@@ -368,7 +367,7 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-  private val channelBuilder = createChannelBuilder
+  private val channelBuilder = ChannelBuilders.create(protocol, SSLFactory.Mode.SERVER, channelConfigs)
   private val metricTags = new util.HashMap[String, String]()
   metricTags.put("networkProcessor", id.toString)
 
@@ -512,14 +511,6 @@ private[kafka] class Processor(val id: Int,
           error("Processor " + id + " closed connection from " + channel.getRemoteAddress, e)
       }
     }
-  }
-
-  private def createChannelBuilder(): ChannelBuilder = {
-    val channelBuilder: ChannelBuilder = if (protocol == SecurityProtocol.SSL)  new SSLChannelBuilder(SSLFactory.Mode.SERVER)
-                                        else new PlaintextChannelBuilder()
-
-    channelBuilder.configure(channelConfigs)
-    channelBuilder
   }
 
   /**
