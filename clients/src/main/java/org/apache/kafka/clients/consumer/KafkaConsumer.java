@@ -769,7 +769,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         Cluster cluster = this.metadata.fetch();
         fetcher.initFetches(cluster);
         client.poll(timeout);
-        return fetcher.fetchedRecordsOrException();
+        return fetcher.fetchedRecords();
     }
 
     private void scheduleAutoCommitTask(final long interval) {

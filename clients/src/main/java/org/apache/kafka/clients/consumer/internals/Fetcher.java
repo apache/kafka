@@ -263,7 +263,7 @@ public class Fetcher<K, V> {
      * @return The fetched records per partition
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse
      */
-    public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecordsOrException() {
+    public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         if (this.subscriptions.partitionAssignmentNeeded()) {
             return Collections.emptyMap();
         } else {
@@ -419,8 +419,13 @@ public class Fetcher<K, V> {
                 TopicPartition tp = entry.getKey();
                 FetchResponse.PartitionData partition = entry.getValue();
                 long fetchOffset = request.fetchData().get(tp).offset;
-                if (subscriptions.assignedPartitions().contains(tp) && partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code())
-                    offsetOutOfRangePartitions.put(tp, fetchOffset);
+                if (subscriptions.assignedPartitions().contains(tp) && partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
+                    log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
+                    if (subscriptions.hasDefaultOffsetResetPolicy())
+                        subscriptions.needOffsetReset(tp);
+                    else
+                        offsetOutOfRangePartitions.put(tp, fetchOffset);
+                }
             }
             if (!offsetOutOfRangePartitions.isEmpty())
                 this.exceptionFromLastFetch = new OffsetOutOfRangeException(offsetOutOfRangePartitions);
@@ -474,10 +479,6 @@ public class Fetcher<K, V> {
                 } else if (partition.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
                     || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                     this.metadata.requestUpdate();
-                } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                    // TODO: this could be optimized by grouping all out-of-range partitions
-                    log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
-                    subscriptions.needOffsetReset(tp);
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else {

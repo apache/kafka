@@ -115,7 +115,7 @@ public class FetcherTest {
         fetcher.initFetches(cluster);
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
-        records = fetcher.fetchedRecordsOrException().get(tp);
+        records = fetcher.fetchedRecords().get(tp);
         assertEquals(3, records.size());
         assertEquals(4L, (long) subscriptions.fetched(tp)); // this is the next fetching position
         assertEquals(4L, (long) subscriptions.consumed(tp));
@@ -140,7 +140,7 @@ public class FetcherTest {
         consumerClient.poll(0);
 
         // The active fetch should be ignored since its position is no longer valid
-        assertTrue(fetcher.fetchedRecordsOrException().isEmpty());
+        assertTrue(fetcher.fetchedRecords().isEmpty());
     }
 
     @Test
@@ -153,7 +153,7 @@ public class FetcherTest {
 
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
-        assertNull(fetcher.fetchedRecordsOrException().get(tp));
+        assertNull(fetcher.fetchedRecords().get(tp));
     }
 
     @Test
@@ -174,7 +174,7 @@ public class FetcherTest {
         fetcher.initFetches(cluster);
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L, 0));
         consumerClient.poll(0);
-        assertEquals(0, fetcher.fetchedRecordsOrException().size());
+        assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
@@ -186,7 +186,7 @@ public class FetcherTest {
         fetcher.initFetches(cluster);
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), 100L, 0));
         consumerClient.poll(0);
-        assertEquals(0, fetcher.fetchedRecordsOrException().size());
+        assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
@@ -199,7 +199,7 @@ public class FetcherTest {
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
         consumerClient.poll(0);
         assertTrue(subscriptions.isOffsetResetNeeded(tp));
-        assertEquals(0, fetcher.fetchedRecordsOrException().size());
+        assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(null, subscriptions.fetched(tp));
         assertEquals(null, subscriptions.consumed(tp));
     }
@@ -212,7 +212,7 @@ public class FetcherTest {
         fetcher.initFetches(cluster);
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0), true);
         consumerClient.poll(0);
-        assertEquals(0, fetcher.fetchedRecordsOrException().size());
+        assertEquals(0, fetcher.fetchedRecords().size());
 
         // disconnects should have no affect on subscription state
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
@@ -321,7 +321,7 @@ public class FetcherTest {
 
             client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 100 * i));
             consumerClient.poll(0);
-            records = fetcher.fetchedRecordsOrException().get(tp);
+            records = fetcher.fetchedRecords().get(tp);
             assertEquals(3, records.size());
         }
 
