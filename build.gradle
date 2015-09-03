@@ -261,8 +261,8 @@ project(':core') {
     testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
     testCompile project(':clients')
     testCompile project(':clients').sourceSets.test.output
+    testCompile 'org.apache.hadoop:hadoop-minikdc:2.7.0'
     testRuntime "$slf4jlog4j"
-
     zinc 'com.typesafe.zinc:zinc:0.3.7'
   }
 
@@ -275,6 +275,7 @@ project(':core') {
     compile.exclude module: 'jmxtools'
     compile.exclude module: 'mail'
     compile.exclude module: 'netty'
+    testCompile.exclude module: 'api-ldap-schema-data'
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {

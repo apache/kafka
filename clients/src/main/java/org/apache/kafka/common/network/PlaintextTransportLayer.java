@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
 
 public class PlaintextTransportLayer implements TransportLayer {
     private static final Logger log = LoggerFactory.getLogger(PlaintextTransportLayer.class);
-    private final SelectionKey key;
+    public final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Principal principal = KafkaPrincipal.ANONYMOUS;
 
@@ -52,10 +52,7 @@ public class PlaintextTransportLayer implements TransportLayer {
     @Override
     public void finishConnect() throws IOException {
         socketChannel.finishConnect();
-        int ops = key.interestOps();
-        ops &= ~SelectionKey.OP_CONNECT;
-        ops |= SelectionKey.OP_READ;
-        key.interestOps(ops);
+        key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
     }
 
     @Override
@@ -214,4 +211,5 @@ public class PlaintextTransportLayer implements TransportLayer {
     public boolean isMute() {
         return key.isValid() && (key.interestOps() & SelectionKey.OP_READ) == 0;
     }
+
 }

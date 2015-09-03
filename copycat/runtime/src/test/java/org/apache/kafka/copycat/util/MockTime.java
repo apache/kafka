@@ -19,6 +19,7 @@ package org.apache.kafka.copycat.util;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.concurrent.TimeUnit;
+import java.util.Date;
 
 /**
  * A clock that you can manually advance by calling sleep
@@ -44,6 +45,21 @@ public class MockTime implements Time {
     @Override
     public void sleep(long ms) {
         this.nanos += TimeUnit.NANOSECONDS.convert(ms, TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public long currentElapsedTime() {
+        return 0;
+    }
+
+    @Override
+    public long currentWallTime() {
+        return 0;
+    }
+
+    @Override
+    public Date elapsedTimeToDate(long elapsedTime) {
+        return null;
     }
 
 }

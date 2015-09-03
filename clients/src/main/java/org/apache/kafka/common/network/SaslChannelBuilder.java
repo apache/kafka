@@ -17,7 +17,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Map;
 
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.security.kerberos.LoginFactory;
+import org.apache.kafka.common.security.kerberos.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
 import org.apache.kafka.common.config.SSLConfigs;
@@ -29,18 +29,18 @@ import org.slf4j.LoggerFactory;
 
 public class SaslChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
-    private LoginFactory loginFactory;
+    private LoginManager loginManager;
     private PrincipalBuilder principalBuilder;
-    private LoginFactory.Mode mode;
+    private LoginManager.Mode mode;
 
-    public SaslChannelBuilder(LoginFactory.Mode mode) {
+    public SaslChannelBuilder(LoginManager.Mode mode) {
         this.mode = mode;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
-            this.loginFactory = new LoginFactory(mode);
-            this.loginFactory.configure(configs);
+            this.loginManager = LoginManager.getLoginManager(mode);
+            this.loginManager.configure(configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
         } catch (Exception e) {
@@ -54,10 +54,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             TransportLayer transportLayer = new PlaintextTransportLayer(key);
             Authenticator authenticator;
-            if (mode == LoginFactory.Mode.SERVER)
-                authenticator = new SaslServerAuthenticator(loginFactory.subject());
+            if (mode == LoginManager.Mode.SERVER)
+                authenticator = new SaslServerAuthenticator(id, loginManager.subject());
             else
-                authenticator = new SaslClientAuthenticator(loginFactory.subject(), loginFactory.serviceName(), socketChannel.socket().getInetAddress().getHostName());
+                authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(), socketChannel.socket().getInetAddress().getHostName());
             authenticator.configure(transportLayer, this.principalBuilder);
             channel = new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
         } catch (Exception e) {
@@ -69,5 +69,6 @@ public class SaslChannelBuilder implements ChannelBuilder {
 
     public void close()  {
         this.principalBuilder.close();
+        this.loginManager.close();
     }
 }

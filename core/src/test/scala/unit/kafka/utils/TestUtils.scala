@@ -154,18 +154,26 @@ object TestUtils extends Logging {
     servers.map(s => formatAddress(s.config.hostName, s.boundPort(SecurityProtocol.SSL))).mkString(",")
   }
 
+  def getSaslBrokerListStrFromServers(servers: Seq[KafkaServer]): String = {
+    servers.map(s => formatAddress(s.config.hostName, s.boundPort(SecurityProtocol.PLAINTEXTSASL))).mkString(",")
+  }
+
   /**
    * Create a test config for the given node id
    */
   def createBrokerConfig(nodeId: Int, zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false,
-    port: Int = RandomPort, enableSSL: Boolean = false, sslPort: Int = RandomPort, trustStoreFile: Option[File] = None): Properties = {
+    port: Int = RandomPort, enableSasl:Boolean = false, saslPort:Int = RandomPort, enableSSL: Boolean = false,
+    sslPort: Int = RandomPort, trustStoreFile: Option[File] = None): Properties = {
+
     val props = new Properties
     var listeners: String = "PLAINTEXT://localhost:"+port.toString
     if (nodeId >= 0) props.put("broker.id", nodeId.toString)
     if (enableSSL)
       listeners = listeners + "," + "SSL://localhost:"+sslPort.toString
+    if (enableSasl)
+      listeners = listeners + "," + "PLAINTEXTSASL://localhost:" + saslPort.toString
     props.put("listeners", listeners)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("zookeeper.connect", zkConnect)
@@ -402,6 +410,7 @@ object TestUtils extends Logging {
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
+                        enableSasl: Boolean = false,
                         enableSSL: Boolean = false,
                         trustStoreFile: Option[File] = None) : KafkaProducer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.producer.ProducerConfig
@@ -421,6 +430,8 @@ object TestUtils extends Logging {
     if (enableSSL) {
       producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
       producerProps.putAll(addSSLConfigs(SSLFactory.Mode.CLIENT, false, trustStoreFile, "producer"))
+    } else if (enableSasl) {
+      producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXTSASL")
     }
     new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
   }

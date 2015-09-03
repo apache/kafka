@@ -21,8 +21,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.SaslChannelBuilder;
 import org.apache.kafka.common.network.SSLChannelBuilder;
 import org.apache.kafka.common.network.PlaintextChannelBuilder;
+import org.apache.kafka.common.security.kerberos.LoginManager;
 import org.apache.kafka.common.security.ssl.SSLFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -83,6 +85,9 @@ public class ClientUtils {
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder();
+                break;
+            case PLAINTEXTSASL:
+                channelBuilder = new SaslChannelBuilder(LoginManager.Mode.CLIENT);
                 break;
             default:
                 throw new ConfigException("Invalid SecurityProtocol " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG);
