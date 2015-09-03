@@ -38,7 +38,7 @@ public class KStreamJob {
         Map<String, Object> props = new HashMap<>();
         props.put("bootstrap.servers", "localhost:9092");
         props.put("key.serializer", StringSerializer.class);
-        props.put("value.serializer", StringSerializer.class);
+        props.put("value.serializer", IntegerSerializer.class);
         props.put("key.deserializer", StringDeserializer.class);
         props.put("value.deserializer", StringDeserializer.class);
         props.put("timestamp.extractor", WallclockTimestampExtractor.class);
@@ -46,10 +46,7 @@ public class KStreamJob {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        StringSerializer stringSerializer = new StringSerializer();
-        IntegerSerializer intSerializer = new IntegerSerializer();
-
-        KStream<String, String> stream1 = builder.from(new StringDeserializer(), new StringDeserializer(), "topic1");
+        KStream<String, String> stream1 = builder.from("topic1");
 
         KStream<String, Integer> stream2 =
             stream1.map(new KeyValueMapper<String, String, KeyValue<String, Integer>>() {
@@ -68,7 +65,7 @@ public class KStreamJob {
             new Predicate<String, Integer>() {
                 @Override
                 public boolean apply(String key, Integer value) {
-                    return true;
+                    return (value % 2) == 0;
                 }
             },
             new Predicate<String, Integer>() {
@@ -79,8 +76,8 @@ public class KStreamJob {
             }
         );
 
-        streams[0].sendTo("topic2", stringSerializer, intSerializer);
-        streams[1].sendTo("topic3", stringSerializer, intSerializer);
+        streams[0].sendTo("topic2");
+        streams[1].sendTo("topic3");
 
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.start();
@@ -92,6 +89,5 @@ public class KStreamJob {
             return System.currentTimeMillis();
         }
     }
-
 
 }

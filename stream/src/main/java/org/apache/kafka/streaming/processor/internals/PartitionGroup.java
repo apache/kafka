@@ -17,9 +17,10 @@
 
 package org.apache.kafka.streaming.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streaming.processor.TimestampExtractor;
 
 import java.util.Comparator;
 import java.util.Map;
@@ -36,10 +37,12 @@ public class PartitionGroup {
 
     private final PriorityQueue<RecordQueue> queuesByTime;
 
+    private final TimestampExtractor timestampExtractor;
+
     // since task is thread-safe, we do not need to synchronize on local variables
     private int totalBuffered;
 
-    public PartitionGroup(Map<TopicPartition, RecordQueue> partitionQueues) {
+    public PartitionGroup(Map<TopicPartition, RecordQueue> partitionQueues, TimestampExtractor timestampExtractor) {
         this.queuesByTime = new PriorityQueue<>(partitionQueues.size(), new Comparator<RecordQueue>() {
 
             @Override
@@ -54,6 +57,8 @@ public class PartitionGroup {
         });
 
         this.partitionQueues = partitionQueues;
+
+        this.timestampExtractor = timestampExtractor;
 
         this.totalBuffered = 0;
     }
@@ -90,45 +95,26 @@ public class PartitionGroup {
     }
 
     /**
-     * Put a timestamped record associated into its corresponding partition's queues
+     * Adds raw records to this partition group
+     *
+     * @param partition the partition
+     * @param rawRecords  the raw records
+     * @return the queue size for the partition
      */
-    public void putRecord(StampedRecord record, TopicPartition partition) {
-        if (record.partition() != partition.partition() || !record.topic().equals(partition.topic()))
-            throw new KafkaException("The specified partition is different from the record's associated partition.");
-
+    public int addRawRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         RecordQueue recordQueue = partitionQueues.get(partition);
 
-        if (recordQueue == null)
-            throw new KafkaException("Record's partition does not belong to this partition-group.");
-
-        boolean wasEmpty = recordQueue.isEmpty();
-
-        recordQueue.add(record);
-
-        totalBuffered++;
+        int oldSize = recordQueue.size();
+        int newSize = recordQueue.addRawRecords(rawRecords, timestampExtractor);
 
         // add this record queue to be considered for processing in the future if it was empty before
-        if (wasEmpty) {
+        if (oldSize == 0 && newSize > 0) {
             queuesByTime.offer(recordQueue);
         }
-    }
 
-    public Deserializer<?> keyDeserializer(TopicPartition partition) {
-        RecordQueue recordQueue = partitionQueues.get(partition);
+        totalBuffered += newSize - oldSize;
 
-        if (recordQueue == null)
-            throw new KafkaException("Record's partition does not belong to this partition-group.");
-
-        return recordQueue.source().keyDeserializer;
-    }
-
-    public Deserializer<?> valDeserializer(TopicPartition partition) {
-        RecordQueue recordQueue = partitionQueues.get(partition);
-
-        if (recordQueue == null)
-            throw new KafkaException("Record's partition does not belong to this partition-group.");
-
-        return recordQueue.source().valDeserializer;
+        return newSize;
     }
 
     public Set<TopicPartition> partitions() {
@@ -147,7 +133,7 @@ public class PartitionGroup {
         }
     }
 
-    public int numbuffered(TopicPartition partition) {
+    public int numBuffered(TopicPartition partition) {
         RecordQueue recordQueue = partitionQueues.get(partition);
 
         if (recordQueue == null)
@@ -156,7 +142,7 @@ public class PartitionGroup {
         return recordQueue.size();
     }
 
-    public int numbuffered() {
+    public int numBuffered() {
         return totalBuffered;
     }
 

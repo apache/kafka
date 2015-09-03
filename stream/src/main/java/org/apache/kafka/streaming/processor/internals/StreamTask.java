@@ -24,7 +24,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streaming.StreamingConfig;
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
@@ -35,7 +34,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -53,7 +51,6 @@ public class StreamTask {
     private final PartitionGroup partitionGroup;
     private final PunctuationQueue punctuationQueue;
     private final ProcessorContext processorContext;
-    private final TimestampExtractor timestampExtractor;
     private final ProcessorTopology topology;
 
     private final Map<TopicPartition, Long> consumedOffsets;
@@ -86,7 +83,6 @@ public class StreamTask {
         this.consumer = consumer;
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        this.timestampExtractor = config.getConfiguredInstance(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         this.topology = topology;
 
         // create queues for each assigned partition and associate them
@@ -99,7 +95,8 @@ public class StreamTask {
             partitionQueues.put(partition, queue);
         }
 
-        this.partitionGroup = new PartitionGroup(partitionQueues);
+        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+        this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
         // initialize the consumed and produced offset cache
         this.consumedOffsets = new HashMap<>();
@@ -129,33 +126,15 @@ public class StreamTask {
      * Adds records to queues
      *
      * @param partition the partition
-     * @param iterator  the iterator of records
+     * @param records  the records
      */
     @SuppressWarnings("unchecked")
-    public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<byte[], byte[]>> iterator) {
-
-        // get deserializers for this partition
-        Deserializer<?> keyDeserializer = partitionGroup.keyDeserializer(partition);
-        Deserializer<?> valDeserializer = partitionGroup.valDeserializer(partition);
-
-        while (iterator.hasNext()) {
-
-            ConsumerRecord<byte[], byte[]> rawRecord = iterator.next();
-
-            // deserialize the raw record, extract the timestamp and put into the queue
-            Object key = keyDeserializer.deserialize(rawRecord.topic(), rawRecord.key());
-            Object value = valDeserializer.deserialize(rawRecord.topic(), rawRecord.value());
-            long timestamp = timestampExtractor.extract(rawRecord.topic(), key, value);
-
-            StampedRecord stampedRecord = new StampedRecord(new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(), key, value), timestamp);
-
-            partitionGroup.putRecord(stampedRecord, partition);
-        }
-
+    public void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        int queueSize = partitionGroup.addRawRecords(partition, records);
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        if (partitionGroup.numbuffered(partition) > this.maxBufferedSize) {
+        if (queueSize > this.maxBufferedSize) {
             consumer.pause(partition);
         }
     }
@@ -192,7 +171,7 @@ public class StreamTask {
 
             // if after processing this record, its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            if (partitionGroup.numbuffered(queue.partition()) == this.maxBufferedSize) {
+            if (partitionGroup.numBuffered(queue.partition()) == this.maxBufferedSize) {
                 consumer.resume(queue.partition());
             }
 
@@ -201,7 +180,7 @@ public class StreamTask {
             long timestamp = partitionGroup.timestamp();
             punctuationQueue.mayPunctuate(timestamp);
 
-            return partitionGroup.numbuffered();
+            return partitionGroup.numBuffered();
         }
     }
 

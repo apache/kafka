@@ -24,8 +24,8 @@ import org.apache.kafka.streaming.processor.ProcessorContext;
 public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     private final String topic;
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valSerializer;
+    private Serializer<K> keySerializer;
+    private Serializer<V> valSerializer;
 
     private ProcessorContext context;
 
@@ -42,9 +42,12 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
+        if (this.keySerializer == null) this.keySerializer = (Serializer<K>) context.keySerializer();
+        if (this.valSerializer == null) this.valSerializer = (Serializer<V>) context.valueSerializer();
     }
 
     @Override

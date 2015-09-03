@@ -32,6 +32,21 @@ public class KStreamBuilder extends TopologyBuilder {
 
     /**
      * Creates a KStream instance for the specified topic. The stream is added to the default synchronization group.
+     * The default deserializers specified in the config are used.
+     *
+     * @param topics          the topic names, if empty default to all the topics in the config
+     * @return KStream
+     */
+    public <K, V> KStream<K, V> from(String... topics) {
+        String name = KStreamImpl.SOURCE_NAME + KStreamImpl.INDEX.getAndIncrement();
+
+        addSource(name, topics);
+
+        return new KStreamImpl<>(this, name);
+    }
+
+    /**
+     * Creates a KStream instance for the specified topic. The stream is added to the default synchronization group.
      *
      * @param keyDeserializer key deserializer used to read this source KStream,
      *                        if not specified the default deserializer defined in the configs will be used
@@ -40,7 +55,6 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param topics          the topic names, if empty default to all the topics in the config
      * @return KStream
      */
-    @SuppressWarnings("unchecked")
     public <K, V> KStream<K, V> from(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer, String... topics) {
         String name = KStreamImpl.SOURCE_NAME + KStreamImpl.INDEX.getAndIncrement();
 

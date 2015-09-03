@@ -36,7 +36,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
@@ -176,7 +175,7 @@ public class StreamTaskTest {
         assertEquals(consumer.paused().size(), 0);
     }
 
-    private Iterator<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
-        return Arrays.asList(recs).iterator();
+    private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
+        return Arrays.asList(recs);
     }
 }

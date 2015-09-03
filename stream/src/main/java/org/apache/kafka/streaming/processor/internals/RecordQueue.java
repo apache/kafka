@@ -19,6 +19,7 @@ package org.apache.kafka.streaming.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streaming.processor.TimestampExtractor;
 
 import java.util.ArrayDeque;
 
@@ -63,13 +64,26 @@ public class RecordQueue {
     }
 
     /**
-     * Add a {@link StampedRecord} into the queue
+     * Add a batch of {@link ConsumerRecord} into the queue
      *
-     * @param record StampedRecord
+     * @param rawRecords the raw records
+     * @param timestampExtractor TimestampExtractor
+     * @return the size of this queue
      */
-    public void add(StampedRecord record) {
-        fifoQueue.addLast(record);
-        timeTracker.addElement(record);
+    public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords, TimestampExtractor timestampExtractor) {
+        for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
+            // deserialize the raw record, extract the timestamp and put into the queue
+            Object key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
+            Object value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
+            long timestamp = timestampExtractor.extract(rawRecord.topic(), key, value);
+
+            StampedRecord record = new StampedRecord(new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(), key, value), timestamp);
+
+            fifoQueue.addLast(record);
+            timeTracker.addElement(record);
+        }
+
+        return size();
     }
 
     /**

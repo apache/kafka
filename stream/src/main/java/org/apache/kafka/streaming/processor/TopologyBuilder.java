@@ -101,6 +101,10 @@ public class TopologyBuilder {
 
     public TopologyBuilder() {}
 
+    public final void addSource(String name, String... topics) {
+        addSource(name, (Deserializer) null, (Deserializer) null, topics);
+    }
+
     public final void addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
@@ -116,7 +120,12 @@ public class TopologyBuilder {
         nodeFactories.add(new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
     }
 
+    public final void addSink(String name, String topic, String... parentNames) {
+        addSink(name, topic, (Serializer) null, (Serializer) null, parentNames);
+    }
+
     public final void addSink(String name, String topic, Serializer keySerializer, Serializer valSerializer, String... parentNames) {
+
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
 

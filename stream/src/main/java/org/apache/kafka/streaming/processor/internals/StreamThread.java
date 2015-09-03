@@ -170,7 +170,7 @@ public class StreamThread extends Thread {
 
                 for (StreamTask task : tasks.values()) {
                     for (TopicPartition partition : task.partitions()) {
-                        task.addRecords(partition, records.records(partition).iterator());
+                        task.addRecords(partition, records.records(partition));
                     }
                 }
 

@@ -22,9 +22,8 @@ import org.apache.kafka.streaming.processor.ProcessorContext;
 
 public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
-    public Deserializer<K> keyDeserializer;
-    public Deserializer<V> valDeserializer;
-
+    private Deserializer<K> keyDeserializer;
+    private Deserializer<V> valDeserializer;
     private ProcessorContext context;
 
     public SourceNode(String name, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
@@ -34,9 +33,22 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this.valDeserializer = valDeserializer;
     }
 
+    public K deserializeKey(String topic, byte[] data) {
+        return keyDeserializer.deserialize(topic, data);
+    }
+
+    public V deserializeValue(String topic, byte[] data) {
+        return valDeserializer.deserialize(topic, data);
+    }
+
+    @SuppressWarnings("unchecked")
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
+
+        // if serializers are null, get the default ones from the context
+        if (this.keyDeserializer == null) this.keyDeserializer = (Deserializer<K>) context.keyDeserializer();
+        if (this.valDeserializer == null) this.valDeserializer = (Deserializer<V>) context.valueDeserializer();
     }
 
     @Override

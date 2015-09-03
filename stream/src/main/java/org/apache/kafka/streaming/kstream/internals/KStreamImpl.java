@@ -76,7 +76,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public KStream<K, V> filter(Predicate<K, V> predicate) {
         String name = FILTER_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamFilter(predicate, false), this.name);
+        topology.addProcessor(name, new KStreamFilter<>(predicate, false), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -85,7 +85,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public KStream<K, V> filterOut(final Predicate<K, V> predicate) {
         String name = FILTER_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamFilter(predicate, true), this.name);
+        topology.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -94,7 +94,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper) {
         String name = MAP_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamMap(mapper), this.name);
+        topology.addProcessor(name, new KStreamMap<>(mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -103,27 +103,25 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     public <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper) {
         String name = MAPVALUES_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamMapValues(mapper), this.name);
+        topology.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, Iterable<KeyValue<K1, V1>>> mapper) {
         String name = FLATMAP_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamFlatMap(mapper), this.name);
+        topology.addProcessor(name, new KStreamFlatMap<>(mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <V1> KStream<K, V1> flatMapValues(ValueMapper<V, Iterable<V1>> mapper) {
         String name = FLATMAPVALUES_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamFlatMapValues(mapper), this.name);
+        topology.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
 
         return new KStreamImpl<>(topology, name);
     }
@@ -148,15 +146,14 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
         for (int i = 0; i < predicates.length; i++) {
             String childName = BRANCHCHILD_NAME + INDEX.getAndIncrement();
 
-            topology.addProcessor(childName, new KStreamPassThrough(), branchName);
+            topology.addProcessor(childName, new KStreamPassThrough<K, V>(), branchName);
 
-            branchChildren[i] = new KStreamImpl<K, V>(topology, childName);
+            branchChildren[i] = new KStreamImpl<>(topology, childName);
         }
 
         return branchChildren;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K1, V1> KStream<K1, V1> through(String topic,
                                             Serializer<K> keySerializer,
@@ -175,14 +172,19 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    public void sendTo(String topic) {
+        String name = SEND_NAME + INDEX.getAndIncrement();
+
+        topology.addSink(name, topic, this.name);
+    }
+
+    @Override
     public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
         String name = SEND_NAME + INDEX.getAndIncrement();
 
         topology.addSink(name, topic, keySerializer, valSerializer, this.name);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K1, V1> KStream<K1, V1> process(final ProcessorDef processorDef) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();

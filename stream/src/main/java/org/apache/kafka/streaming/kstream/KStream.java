@@ -120,6 +120,13 @@ public interface KStream<K, V> {
     <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer);
 
     /**
+     * Sends key-value to a topic using default serializers specified in the config.
+     *
+     * @param topic         the topic name
+     */
+    void sendTo(String topic);
+
+    /**
      * Sends key-value to a topic.
      *
      * @param topic         the topic name
