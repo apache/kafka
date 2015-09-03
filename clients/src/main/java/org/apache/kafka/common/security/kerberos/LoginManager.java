@@ -34,24 +34,33 @@ public class LoginManager implements Configurable {
     private final String serviceName;
     private final String loginContext;
     private final Mode mode;
+    volatile private static LoginManager instance;
 
-    public LoginManager(Mode mode) throws IOException, LoginException {
+    private LoginManager(Mode mode) throws IOException, LoginException {
         this.mode = mode;
         if (mode == Mode.SERVER)
             this.loginContext = JaasUtils.LOGIN_CONTEXT_SERVER;
         else
             this.loginContext = JaasUtils.LOGIN_CONTEXT_CLIENT;
         this.serviceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
+        login = new Login(loginContext);
+        login.startThreadIfNeeded();
+    }
+
+    public static final LoginManager getLoginManager(Mode mode) throws IOException, LoginException {
+        if (instance != null) {
+            return instance;
+        } else {
+            synchronized (LoginManager.class)  {
+                if (instance == null)
+                    instance = new LoginManager(mode);
+            }
+        }
+        return instance;
     }
 
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
-        try {
-            login = new Login(loginContext);
-            login.startThreadIfNeeded();
-        } catch (Exception e) {
-            throw new KafkaException(e);
-        }
     }
 
     public Subject subject() {

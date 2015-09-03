@@ -119,7 +119,6 @@ public class Login {
             return;
         }
         log.debug("its a krb5ticket");
-
         // Refresh the Ticket Granting Ticket (TGT) periodically. How often to refresh is determined by the
         // TGT's existing expiry date and the configured MIN_TIME_BEFORE_RELOGIN. For testing and development,
         // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running :

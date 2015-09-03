@@ -74,7 +74,7 @@ public class ClientUtils {
      */
     public static ChannelBuilder createChannelBuilder(Map<String, ?> configs) {
         SecurityProtocol securityProtocol = SecurityProtocol.valueOf((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
-        if (securityProtocol != SecurityProtocol.SSL && securityProtocol != SecurityProtocol.PLAINTEXT)
+        if (securityProtocol != SecurityProtocol.SSL && securityProtocol != SecurityProtocol.PLAINTEXT && securityProtocol != SecurityProtocol.PLAINTEXTSASL)
             throw new ConfigException("Invalid SecurityProtocol " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG);
         return ChannelBuilders.create(securityProtocol, SSLFactory.Mode.CLIENT, configs);
     }

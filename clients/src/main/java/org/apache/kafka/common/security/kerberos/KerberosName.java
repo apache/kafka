@@ -74,6 +74,11 @@ public class KerberosName {
         try {
             defaultRealm = JaasUtils.defaultRealm();
         } catch (Exception ke) {
+            defaultRealm = "";
+        }
+        try {
+            setConfiguration();
+        } catch (IOException e) {
             throw new IllegalArgumentException("Could not configure Kerberos principal name mapping.");
         }
     }

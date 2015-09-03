@@ -59,7 +59,7 @@ public class SaslClientAuthenticator implements Authenticator {
     private String servicePrincipal;
     private PrincipalBuilder principalBuilder;
     private String host;
-    private String node = "0";
+    private String node;
     private TransportLayer transportLayer;
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
@@ -71,7 +71,8 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private SaslState saslState = SaslState.INITIAL;
 
-    public SaslClientAuthenticator(Subject subject, String servicePrincipal, String host) throws IOException {
+    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host) throws IOException {
+        this.node = node;
         this.subject = subject;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
@@ -111,34 +112,40 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
+
     public void authenticate() throws IOException {
         if (netOutBuffer != null && !flushNetOutBuffer()) {
             transportLayer.addInterestOps(SelectionKey.OP_WRITE);
             return;
         }
-
-        if (saslClient.isComplete()) {
-            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-            saslState = SaslState.COMPLETE;
-            return;
-        }
-
         byte[] serverToken = new byte[0];
-
-        if (saslState == SaslState.INTERMEDIATE) {
-            if (netInBuffer == null) netInBuffer = new NetworkReceive(node);
-            long readLen = netInBuffer.readFrom(transportLayer);
-            if (readLen != 0 && !netInBuffer.complete()) {
-                netInBuffer.payload().rewind();
-                serverToken = new byte[netInBuffer.payload().remaining()];
-                netInBuffer.payload().get(serverToken, 0, serverToken.length);
-                netInBuffer = null; // reset the networkReceive as we read all the data.
-            }
-        } else if (saslState == SaslState.INITIAL) {
-            saslState = SaslState.INTERMEDIATE;
+        switch (saslState) {
+            case INITIAL:
+                sendSaslToken(serverToken);
+                saslState = SaslState.INTERMEDIATE;
+                break;
+            case INTERMEDIATE:
+                if (netInBuffer == null) netInBuffer = new NetworkReceive(node);
+                long readLen = netInBuffer.readFrom(transportLayer);
+                if (netInBuffer.complete()) {
+                    netInBuffer.payload().rewind();
+                    serverToken = new byte[netInBuffer.payload().remaining()];
+                    netInBuffer.payload().get(serverToken, 0, serverToken.length);
+                    netInBuffer = null; // reset the networkReceive as we read all the data.
+                    sendSaslToken(serverToken);
+                }
+                if (saslClient.isComplete())
+                    saslState = SaslState.COMPLETE;
+                break;
+            case COMPLETE:
+                break;
+            case FAILED:
+                throw new IOException("SASL handshake failed");
         }
+    }
 
-        if (!(saslClient.isComplete())) {
+    private void sendSaslToken(byte[] serverToken) throws IOException {
+        if (!saslClient.isComplete()) {
             try {
                 saslToken = createSaslToken(serverToken);
                 if (saslToken != null) {
@@ -148,7 +155,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
             } catch (SaslException se) {
                 saslState = SaslState.FAILED;
-                throw new IOException("Unable to authenticate using SASL " + se);
+                throw new IOException("Failed to authenticate using SASL " + se);
             }
         }
     }

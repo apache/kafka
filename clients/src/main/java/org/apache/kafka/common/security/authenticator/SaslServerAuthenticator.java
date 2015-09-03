@@ -61,13 +61,8 @@ public class SaslServerAuthenticator implements Authenticator {
     private SaslServerCallbackHandler saslServerCallbackHandler;
     private PrincipalBuilder principalBuilder;
 
-    public enum SaslState {
-        INITIAL, INTERMEDIATE, COMPLETE, FAILED
-    }
-
-    private SaslState saslState = SaslState.INITIAL;
-
-    public SaslServerAuthenticator(final Subject subject) throws IOException {
+    public SaslServerAuthenticator(String node, final Subject subject) throws IOException {
+        this.node = node;
         this.transportLayer = transportLayer;
         this.subject = subject;
         saslServer = createSaslServer();
@@ -141,38 +136,36 @@ public class SaslServerAuthenticator implements Authenticator {
             return;
         }
 
-        if (saslServer.isComplete()) return;
+        if (saslServer.isComplete()) {
+            transportLayer.addInterestOps(SelectionKey.OP_READ);
+            return;
+        }
 
         byte[] clientToken = new byte[0];
 
         if (netInBuffer == null) netInBuffer = new NetworkReceive(node);
 
         long readLen = netInBuffer.readFrom(transportLayer);
-        if (readLen == 0 || !netInBuffer.complete()) {
-            return;
-        } else {
+
+        if (netInBuffer.complete()) {
             netInBuffer.payload().rewind();
             clientToken = new byte[netInBuffer.payload().remaining()];
             netInBuffer.payload().get(clientToken, 0, clientToken.length);
             netInBuffer = null; // reset the networkReceive as we read all the data.
-        }
-
-        try {
-            byte[] response;
-            response = saslServer.evaluateResponse(clientToken);
-            if (response != null) {
-                netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
-                if (!flushNetOutBuffer()) {
-                    transportLayer.addInterestOps(SelectionKey.OP_WRITE);
-                    return;
+            try {
+                byte[] response;
+                response = saslServer.evaluateResponse(clientToken);
+                if (response != null) {
+                    netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
+                    if (!flushNetOutBuffer()) {
+                        transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+                        return;
+                    }
                 }
+            } catch (Exception e) {
+                throw new IOException(e);
             }
-        } catch (Exception e) {
-            throw new IOException(e);
         }
-
-        if (saslServer.isComplete() && !flushNetOutBuffer())
-             transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
 
