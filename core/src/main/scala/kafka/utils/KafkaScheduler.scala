@@ -70,8 +70,7 @@ class KafkaScheduler(val threads: Int,
                      daemon: Boolean = true) extends Scheduler with Logging {
   private var executor: ScheduledThreadPoolExecutor = null
   private val schedulerThreadId = new AtomicInteger(0)
-  private val shutdownLock = new Object
-  
+
   override def startup() {
     debug("Initializing task scheduler.")
     this synchronized {
@@ -89,19 +88,14 @@ class KafkaScheduler(val threads: Int,
   
   override def shutdown() {
     debug("Shutting down task scheduler.")
-    // Synchronize on the shutdownLock to avoid NullPointerException when multiple threads are shutting down scheduler
-    // at same time.
-    shutdownLock synchronized {
-      if (isStarted) {
-        this synchronized {
-          this.executor.shutdown()
-        }
-        // Release the scheduler lock to avoid deadlock with schedule.
-        executor.awaitTermination(1, TimeUnit.DAYS)
-        this synchronized {
-          this.executor = null
-        }
+    // We use the local variable to avoid NullPointerException if another thread shuts down scheduler at same time.
+    val cachedExecutor = this.executor
+    if (cachedExecutor != null) {
+      this synchronized {
+        cachedExecutor.shutdown()
+        this.executor = null
       }
+      cachedExecutor.awaitTermination(1, TimeUnit.DAYS)
     }
   }
 
@@ -112,7 +106,7 @@ class KafkaScheduler(val threads: Int,
       ensureStarted
       val runnable = CoreUtils.runnable {
         try {
-          trace("Beginning execution of scheduled task '%s'.".format(name))
+          trace("Begining execution of scheduled task '%s'.".format(name))
           fun()
         } catch {
           case t: Throwable => error("Uncaught exception in scheduled task '" + name +"'", t)
