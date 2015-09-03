@@ -29,6 +29,7 @@ import java.util.concurrent._
 import atomic.{AtomicInteger, AtomicBoolean}
 import java.io.{IOException, File}
 
+import kafka.security.auth.Authorizer
 import kafka.utils._
 import org.apache.kafka.clients.{ManualMetadataUpdater, ClientRequest, NetworkClient}
 import org.apache.kafka.common.Node
@@ -188,9 +189,18 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         consumerCoordinator = ConsumerCoordinator.create(config, zkClient, replicaManager, kafkaScheduler)
         consumerCoordinator.startup()
 
+        /* Get the authorizer and initialize it if one is specified.*/
+        val authorizer: Option[Authorizer] = if (config.authorizerClassName != null && !config.authorizerClassName.isEmpty) {
+          val authZ: Authorizer = CoreUtils.createObject(config.authorizerClassName)
+          authZ.configure(config.originals())
+          Option(authZ)
+        } else {
+          None
+        }
+
         /* start processing requests */
         apis = new KafkaApis(socketServer.requestChannel, replicaManager, consumerCoordinator,
-          kafkaController, zkClient, config.brokerId, config, metadataCache, metrics)
+          kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer)
         requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
         brokerState.newState(RunningAsBroker)
 
