@@ -14,7 +14,6 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.ssl.SSLFactory;
 
 import java.util.Map;
 

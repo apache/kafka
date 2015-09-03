@@ -23,7 +23,6 @@ import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.security.ssl.SSLFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

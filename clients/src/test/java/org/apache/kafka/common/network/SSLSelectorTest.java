@@ -24,7 +24,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
 import org.apache.kafka.common.config.SSLConfigs;
-import org.apache.kafka.common.security.ssl.SSLFactory;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;

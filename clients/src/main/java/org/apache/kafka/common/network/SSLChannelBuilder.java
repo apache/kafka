@@ -16,7 +16,6 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
 
-import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.ssl.SSLFactory;
 import org.apache.kafka.common.config.SSLConfigs;

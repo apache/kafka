@@ -18,7 +18,6 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.config.SSLConfigs;
-import org.apache.kafka.common.security.ssl.SSLFactory;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.clients.CommonClientConfigs;
 
