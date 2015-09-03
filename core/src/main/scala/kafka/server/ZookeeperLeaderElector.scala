@@ -122,9 +122,9 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
         val amILeaderBeforeDataChange = amILeader
         leaderId = KafkaController.parseControllerId(data.toString)
         info("New leader is %d".format(leaderId))
-        // The old leader need to resign leadership if it is no longer the leader
+        // The old leader needs to resign leadership if it is no longer the leader
         if (amILeaderBeforeDataChange && !amILeader)
-          onResigningAsLeader
+          onResigningAsLeader()
       }
     }
 
