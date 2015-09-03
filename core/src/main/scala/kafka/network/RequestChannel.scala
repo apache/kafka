@@ -84,7 +84,7 @@ object RequestChannel extends Logging {
         header.toString + " -- " + body.toString
     }
 
-    trace("Processor %d received request : %s".format(processor, requestDesc(false)))
+    trace("Processor %d received request : %s".format(processor, requestDesc(true)))
 
     def updateRequestMetrics() {
       val endTimeMs = SystemTime.milliseconds
@@ -118,10 +118,10 @@ object RequestChannel extends Logging {
 
       if(requestLogger.isTraceEnabled)
         requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
-          .format(requestDesc(false), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+          .format(requestDesc(true), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
       else if(requestLogger.isDebugEnabled)
         requestLogger.debug("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
-          .format(requestDesc(true), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+          .format(requestDesc(false), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
     }
   }
   
