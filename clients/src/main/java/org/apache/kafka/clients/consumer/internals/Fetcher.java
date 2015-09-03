@@ -123,6 +123,11 @@ public class Fetcher<K, V> {
      * @param cluster The current cluster metadata
      */
     public void initFetches(Cluster cluster) {
+        // Don't initiate fetch if we already have records available from previous fetchRequest
+        // This may happen when there is OffsetOutOfRange exception from previous fetchRequest
+        if (!records.isEmpty())
+            return;
+
         for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests(cluster).entrySet()) {
             final FetchRequest fetch = fetchEntry.getValue();
             client.send(fetchEntry.getKey(), ApiKeys.FETCH, fetch)
