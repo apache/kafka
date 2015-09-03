@@ -161,7 +161,7 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     public Principal principal() {
-        return new KafkaPrincipal("ANONYMOUS");
+        return KafkaPrincipal.ANONYMOUS;
     }
 
     public boolean complete() {

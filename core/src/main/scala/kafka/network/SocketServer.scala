@@ -32,7 +32,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{InvalidReceiveException, ChannelBuilder,
+import org.apache.kafka.common.network.{Mode, InvalidReceiveException, ChannelBuilders,
                                         PlaintextChannelBuilder, SSLChannelBuilder, SaslChannelBuilder}
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.security.kerberos.LoginManager
@@ -369,7 +369,7 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-  private val channelBuilder = ChannelBuilders.create(protocol, SSLFactory.Mode.SERVER, channelConfigs)
+  private val channelBuilder = ChannelBuilders.create(protocol, Mode.SERVER, channelConfigs)
   private val metricTags = new util.HashMap[String, String]()
   metricTags.put("networkProcessor", id.toString)
 

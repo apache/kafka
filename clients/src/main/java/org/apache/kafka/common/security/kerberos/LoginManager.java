@@ -23,13 +23,13 @@ import javax.security.auth.login.LoginException;
 import java.io.IOException;
 import java.util.Map;
 
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Configurable;
 
 
 public class LoginManager implements Configurable {
-    public enum Mode { CLIENT, SERVER };
     private Login login;
     private final String serviceName;
     private final String loginContext;

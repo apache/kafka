@@ -34,7 +34,7 @@ import kafka.utils._
 import org.apache.kafka.clients.{ManualMetadataUpdater, ClientRequest, NetworkClient}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{Selectable, ChannelBuilders, NetworkReceive, Selector}
+import org.apache.kafka.common.network.{Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
 import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.requests.{ControlledShutdownResponse, ControlledShutdownRequest, RequestSend}
@@ -300,7 +300,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
-          ChannelBuilders.create(config.interBrokerSecurityProtocol, SSLFactory.Mode.CLIENT, config.channelConfigs)
+          ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, config.channelConfigs)
         )
         new NetworkClient(
           selector,
@@ -482,7 +482,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         if (config.interBrokerProtocolVersion.onOrAfter(KAFKA_083))
           networkClientControlledShutdown(config.controlledShutdownMaxRetries.intValue)
         else blockingChannelControlledShutdown(config.controlledShutdownMaxRetries.intValue)
-      
+
       if (!shutdownSucceeded)
         warn("Proceeding to do an unclean shutdown as all the controlled shutdown attempts failed")
 

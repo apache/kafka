@@ -45,7 +45,7 @@ class EchoServer extends Thread {
         this.protocol =  configs.containsKey("security.protocol") ?
             SecurityProtocol.valueOf((String) configs.get("security.protocol")) : SecurityProtocol.PLAINTEXT;
         if (protocol == SecurityProtocol.SSL) {
-            this.sslFactory = new SSLFactory(SSLFactory.Mode.SERVER);
+            this.sslFactory = new SSLFactory(Mode.SERVER);
             this.sslFactory.configure(configs);
             SSLContext sslContext = this.sslFactory.sslContext();
             this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);

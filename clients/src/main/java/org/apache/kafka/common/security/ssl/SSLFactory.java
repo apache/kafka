@@ -25,6 +25,7 @@ import java.security.KeyStore;
 
 import javax.net.ssl.*;
 
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.SSLConfigs;
@@ -32,7 +33,6 @@ import org.apache.kafka.common.config.SSLConfigs;
 
 public class SSLFactory implements Configurable {
 
-    public enum Mode { CLIENT, SERVER };
     private String protocol;
     private String provider;
     private String kmfAlgorithm;

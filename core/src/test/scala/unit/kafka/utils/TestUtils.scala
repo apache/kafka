@@ -50,6 +50,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.config.SSLConfigs
 import org.apache.kafka.test.TestSSLUtils
@@ -183,7 +184,7 @@ object TestUtils extends Logging {
     props.put("delete.topic.enable", enableDeleteTopic.toString)
     props.put("controlled.shutdown.retry.backoff.ms", "100")
     if (enableSSL) {
-      props.putAll(addSSLConfigs(SSLFactory.Mode.SERVER, true, trustStoreFile, "server"+nodeId))
+      props.putAll(addSSLConfigs(Mode.SERVER, true, trustStoreFile, "server"+nodeId))
     }
     props.put("port", port.toString)
     props
@@ -429,7 +430,7 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     if (enableSSL) {
       producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
-      producerProps.putAll(addSSLConfigs(SSLFactory.Mode.CLIENT, false, trustStoreFile, "producer"))
+      producerProps.putAll(addSSLConfigs(Mode.CLIENT, false, trustStoreFile, "producer"))
     } else if (enableSasl) {
       producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXTSASL")
     }
@@ -462,7 +463,7 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeout.toString)
     if (enableSSL) {
       consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
-      consumerProps.putAll(addSSLConfigs(SSLFactory.Mode.CLIENT, false, trustStoreFile, "consumer"))
+      consumerProps.putAll(addSSLConfigs(Mode.CLIENT, false, trustStoreFile, "consumer"))
     }
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
@@ -920,12 +921,12 @@ object TestUtils extends Logging {
     new String(bytes, encoding)
   }
 
-  def addSSLConfigs(mode: SSLFactory.Mode, clientCert: Boolean, trustStoreFile: Option[File],  certAlias: String): Properties = {
+  def addSSLConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File],  certAlias: String): Properties = {
     var sslConfigs: java.util.Map[String, Object] = new java.util.HashMap[String, Object]()
     if (!trustStoreFile.isDefined) {
       throw new Exception("enableSSL set to true but no trustStoreFile provided")
     }
-    if (mode == SSLFactory.Mode.SERVER)
+    if (mode == Mode.SERVER)
       sslConfigs = TestSSLUtils.createSSLConfig(true, true, mode, trustStoreFile.get, certAlias)
     else
       sslConfigs = TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStoreFile.get, certAlias)

@@ -29,7 +29,7 @@ public class ChannelBuilders {
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
-    public static ChannelBuilder create(SecurityProtocol securityProtocol, SSLFactory.Mode mode, Map<String, ?> configs) {
+    public static ChannelBuilder create(SecurityProtocol securityProtocol, Mode mode, Map<String, ?> configs) {
         ChannelBuilder channelBuilder = null;
 
         switch (securityProtocol) {
@@ -37,6 +37,11 @@ public class ChannelBuilders {
                 if (mode == null)
                     throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `SSL`");
                 channelBuilder = new SSLChannelBuilder(mode);
+                break;
+            case PLAINTEXTSASL:
+                if (mode == null)
+                    throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `PLAINTEXTSASL`");
+                channelBuilder = new SaslChannelBuilder(mode);
                 break;
             case PLAINTEXT:
             case TRACE:

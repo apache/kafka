@@ -16,6 +16,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
 
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.ssl.SSLFactory;
 import org.apache.kafka.common.config.SSLConfigs;
@@ -28,9 +29,9 @@ public class SSLChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SSLChannelBuilder.class);
     private SSLFactory sslFactory;
     private PrincipalBuilder principalBuilder;
-    private SSLFactory.Mode mode;
+    private Mode mode;
 
-    public SSLChannelBuilder(SSLFactory.Mode mode) {
+    public SSLChannelBuilder(Mode mode) {
         this.mode = mode;
     }
 

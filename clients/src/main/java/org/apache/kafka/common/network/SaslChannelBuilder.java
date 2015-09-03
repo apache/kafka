@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.kerberos.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
 import org.apache.kafka.common.config.SSLConfigs;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
 
@@ -31,9 +32,9 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
     private LoginManager loginManager;
     private PrincipalBuilder principalBuilder;
-    private LoginManager.Mode mode;
+    private Mode mode;
 
-    public SaslChannelBuilder(LoginManager.Mode mode) {
+    public SaslChannelBuilder(Mode mode) {
         this.mode = mode;
     }
 
@@ -54,7 +55,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             TransportLayer transportLayer = new PlaintextTransportLayer(key);
             Authenticator authenticator;
-            if (mode == LoginManager.Mode.SERVER)
+            if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, loginManager.subject());
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(), socketChannel.socket().getInetAddress().getHostName());

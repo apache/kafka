@@ -171,7 +171,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
 
     public Principal principal() {
-        return new KafkaPrincipal(saslServer.getAuthorizationID());
+        return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslServer.getAuthorizationID());
     }
 
     public boolean complete() {
