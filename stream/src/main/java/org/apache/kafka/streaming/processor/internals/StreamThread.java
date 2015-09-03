@@ -53,7 +53,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
-    private static final AtomicInteger nextThreadNumber = new AtomicInteger(1);
+    private static AtomicInteger nextThreadNumber = new AtomicInteger(1);
 
     private final AtomicBoolean running;
 
@@ -161,12 +161,12 @@ public class StreamThread extends Thread {
         try {
             producer.close();
         } catch (Throwable e) {
-            log.error("failed to close producer in thread [" + this.getName() + "]: ", e);
+            log.error("Failed to close producer in thread [" + this.getName() + "]: ", e);
         }
         try {
             consumer.close();
         } catch (Throwable e) {
-            log.error("failed to close consumer in thread [" + this.getName() + "]: ", e);
+            log.error("Failed to close consumer in thread [" + this.getName() + "]: ", e);
         }
         try {
             removePartitions();
@@ -242,7 +242,7 @@ public class StreamThread extends Thread {
             try {
                 task.commit();
             } catch (Exception e) {
-                log.error("failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+                log.error("Failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
                 throw e;
             }
         }
@@ -297,7 +297,7 @@ public class StreamThread extends Thread {
                 try {
                     task = new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
                 } catch (Exception e) {
-                    log.error("failed to create a task #" + id + " in thread [" + this.getName() + "]: ", e);
+                    log.error("Failed to create a task #" + id + " in thread [" + this.getName() + "]: ", e);
                     throw e;
                 }
                 tasks.put(id, task);
@@ -315,7 +315,7 @@ public class StreamThread extends Thread {
             try {
                 task.close();
             } catch (Exception e) {
-                log.error("failed to close a task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+                log.error("Failed to close a task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
                 throw e;
             }
             metrics.processorDestruction.record();
