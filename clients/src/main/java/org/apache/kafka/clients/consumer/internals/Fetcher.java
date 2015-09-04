@@ -263,6 +263,30 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * If any partition from previous fetchResponse contains OffsetOutOfRange error, throw
+     * OffsetOutOfRangeException and clear the partition list.
+     *
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse
+     */
+    private void throwIfOffsetOutOfRange() throws OffsetOutOfRangeException{
+        Map<TopicPartition, Long> currentOutOfRangePartitions = new HashMap<>();
+
+        // filter offsetOutOfRangePartitions to retain only the fetchable partitions
+        for (Map.Entry<TopicPartition, Long> entry: this.offsetOutOfRangePartitions.entrySet()) {
+            if (!subscriptions.isFetchable(entry.getKey())) {
+                log.debug("Ignoring fetched records for {} since it is no longer fetchable", entry.getKey());
+                continue;
+            }
+            Long consumed = subscriptions.consumed(entry.getKey());
+            if (consumed != null && entry.getValue() == consumed)
+                currentOutOfRangePartitions.put(entry.getKey(), entry.getValue());
+        }
+        this.offsetOutOfRangePartitions.clear();
+        if (!currentOutOfRangePartitions.isEmpty())
+            throw new OffsetOutOfRangeException(currentOutOfRangePartitions);
+    }
+
+    /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
      * @return The fetched records per partition
@@ -273,20 +297,7 @@ public class Fetcher<K, V> {
             return Collections.emptyMap();
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
-            Map<TopicPartition, Long> currentOutOfRangePartitions = new HashMap<>();
-
-            // filter offsetOutOfRangePartitions to retain only the fetchable partitions
-            for (Map.Entry<TopicPartition, Long> entry: this.offsetOutOfRangePartitions.entrySet()) {
-                if (!subscriptions.isFetchable(entry.getKey())) {
-                    log.debug("Ignoring fetched records for {} since it is no longer fetchable", entry.getKey());
-                    continue;
-                }
-                currentOutOfRangePartitions.put(entry.getKey(), entry.getValue());
-            }
-            this.offsetOutOfRangePartitions.clear();
-            if (!currentOutOfRangePartitions.isEmpty())
-                throw new OffsetOutOfRangeException(currentOutOfRangePartitions);
-
+            throwIfOffsetOutOfRange();
 
             for (PartitionRecords<K, V> part : this.records) {
                 if (!subscriptions.isFetchable(part.partition)) {
@@ -427,33 +438,12 @@ public class Fetcher<K, V> {
             int totalCount = 0;
             FetchResponse response = new FetchResponse(resp.responseBody());
 
-            // Look for OffsetOutOfRange error in fetchResponse
-            for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
-                TopicPartition tp = entry.getKey();
-                FetchResponse.PartitionData partition = entry.getValue();
-                long fetchOffset = request.fetchData().get(tp).offset;
-                if (subscriptions.assignedPartitions().contains(tp) && partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                    if (subscriptions.hasDefaultOffsetResetPolicy())
-                        subscriptions.needOffsetReset(tp);
-                    else
-                        this.offsetOutOfRangePartitions.put(tp, fetchOffset);
-                }
-            }
-
             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 FetchResponse.PartitionData partition = entry.getValue();
                 if (!subscriptions.assignedPartitions().contains(tp)) {
                     log.debug("Ignoring fetched data for partition {} which is no longer assigned.", tp);
                 } else if (partition.errorCode == Errors.NONE.code()) {
-
-                    /**
-                     * Don't read data if there is OffsetOutOfRangeException for any partition in the fetchResponse.
-                     * We will fetch the data for all partitions in the fetchRequest again.
-                     */
-                    if (!this.offsetOutOfRangePartitions.isEmpty())
-                        continue;
-
                     long fetchOffset = request.fetchData().get(tp).offset;
 
                     // we are interested in this fetch only if the beginning offset matches the
@@ -492,6 +482,11 @@ public class Fetcher<K, V> {
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
+                    long fetchOffset = request.fetchData().get(tp).offset;
+                    if (subscriptions.hasDefaultOffsetResetPolicy())
+                        subscriptions.needOffsetReset(tp);
+                    else
+                        this.offsetOutOfRangePartitions.put(tp, fetchOffset);
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
                 } else {
                     throw new IllegalStateException("Unexpected error code " + partition.errorCode + " while fetching data");
