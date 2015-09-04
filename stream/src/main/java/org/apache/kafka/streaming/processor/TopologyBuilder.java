@@ -17,6 +17,16 @@
 
 package org.apache.kafka.streaming.processor;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streaming.KafkaStreaming;
+import org.apache.kafka.streaming.StreamingConfig;
+import org.apache.kafka.streaming.processor.internals.ProcessorNode;
+import org.apache.kafka.streaming.processor.internals.ProcessorTopology;
+import org.apache.kafka.streaming.processor.internals.SinkNode;
+import org.apache.kafka.streaming.processor.internals.SourceNode;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -25,14 +35,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streaming.processor.internals.ProcessorNode;
-import org.apache.kafka.streaming.processor.internals.ProcessorTopology;
-import org.apache.kafka.streaming.processor.internals.SinkNode;
-import org.apache.kafka.streaming.processor.internals.SourceNode;
-
+/**
+ * A component that is used to build a {@link ProcessorTopology}. A topology contains an acyclic graph of sources, processors,
+ * and sinks. A {@link SourceNode source} is a node in the graph that consumes one or more Kafka topics and forwards them to
+ * its child nodes. A {@link Processor processor} is a node in the graph that receives input messages from upstream nodes,
+ * processes that message, and optionally forwarding new messages to one or all of its children. Finally, a {@link SinkNode sink}
+ * is a node in the graph that receives messages from upstream nodes and writes them to a Kafka topic. This builder allows you
+ * to construct an acyclic graph of these nodes, and the builder is then passed into a new {@link KafkaStreaming} instance
+ * that will then {@link KafkaStreaming#start() begin consuming, processing, and producing messages}.
+ */
 public class TopologyBuilder {
 
     // list of node factories in a topological order
@@ -102,12 +113,41 @@ public class TopologyBuilder {
         }
     }
 
+    /**
+     * Create a new builder.
+     */
     public TopologyBuilder() {}
 
+    /**
+     * Add a new source that consumes the named topics and forwards the messages to child processor and/or sink nodes.
+     * The source will use the {@link StreamingConfig#KEY_DESERIALIZER_CLASS_CONFIG default key deserializer} and
+     * {@link StreamingConfig#VALUE_DESERIALIZER_CLASS_CONFIG default value deserializer} specified in the
+     * {@link StreamingConfig streaming configuration}.
+     * 
+     * @param name the unique name of the source used to reference this node when
+     * {@link #addProcessor(String, ProcessorDef, String...) adding processor children}.
+     * @param topics the name of one or more Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
+     */
     public final TopologyBuilder addSource(String name, String... topics) {
         return addSource(name, (Deserializer) null, (Deserializer) null, topics);
     }
 
+    /**
+     * Add a new source that consumes the named topics and forwards the messages to child processor and/or sink nodes.
+     * The sink will use the specified key and value deserializers.
+     * 
+     * @param name the unique name of the source used to reference this node when
+     * {@link #addProcessor(String, ProcessorDef, String...) adding processor children}.
+     * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming messages; may be null if the source
+     * should use the {@link StreamingConfig#KEY_DESERIALIZER_CLASS_CONFIG default key deserializer} specified in the
+     * {@link StreamingConfig streaming configuration}
+     * @param valDeserializer the {@link Deserializer value deserializer} used when consuming messages; may be null if the source
+     * should use the {@link StreamingConfig#VALUE_DESERIALIZER_CLASS_CONFIG default value deserializer} specified in the
+     * {@link StreamingConfig streaming configuration}
+     * @param topics the name of one or more Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
+     */
     public final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
@@ -124,10 +164,36 @@ public class TopologyBuilder {
         return this;
     }
 
+    /**
+     * Add a new sink that forwards messages from upstream parent processor and/or source nodes to the named Kafka topic.
+     * The sink will use the {@link StreamingConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} and
+     * {@link StreamingConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
+     * {@link StreamingConfig streaming configuration}.
+     * 
+     * @param name the unique name of the sink
+     * @param topic the name of the Kafka topic to which this sink should write its messages
+     * @return this builder instance so methods can be chained together; never null
+     */
     public final TopologyBuilder addSink(String name, String topic, String... parentNames) {
         return addSink(name, topic, (Serializer) null, (Serializer) null, parentNames);
     }
 
+    /**
+     * Add a new sink that forwards messages from upstream parent processor and/or source nodes to the named Kafka topic.
+     * The sink will use the specified key and value serializers.
+     * 
+     * @param name the unique name of the sink
+     * @param topic the name of the Kafka topic to which this sink should write its messages
+     * @param keySerializer the {@link Serializer key serializer} used when consuming messages; may be null if the sink
+     * should use the {@link StreamingConfig#KEY_SERIALIZER_CLASS_CONFIG default key serializer} specified in the
+     * {@link StreamingConfig streaming configuration}
+     * @param valSerializer the {@link Serializer value serializer} used when consuming messages; may be null if the sink
+     * should use the {@link StreamingConfig#VALUE_SERIALIZER_CLASS_CONFIG default value serializer} specified in the
+     * {@link StreamingConfig streaming configuration}
+     * @param parentNames the name of one or more source or processor nodes whose output message this sink should consume
+     * and write to its topic
+     * @return this builder instance so methods can be chained together; never null
+     */
     public final TopologyBuilder addSink(String name, String topic, Serializer keySerializer, Serializer valSerializer, String... parentNames) {
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
@@ -148,6 +214,15 @@ public class TopologyBuilder {
         return this;
     }
 
+    /**
+     * Add a new processor node that receives and processes messages output by one or more parent source or processor node.
+     * Any new messages output by this processor will be forwarded to its child processor or sink nodes.
+     * @param name the unique name of the processor node
+     * @param definition the supplier used to obtain this node's {@link Processor} instance
+     * @param parentNames the name of one or more source or processor nodes whose output messages this processor should receive
+     * and process
+     * @return this builder instance so methods can be chained together; never null
+     */
     public final TopologyBuilder addProcessor(String name, ProcessorDef definition, String... parentNames) {
         if (nodeNames.contains(name))
             throw new IllegalArgumentException("Processor " + name + " is already added.");
@@ -169,7 +244,10 @@ public class TopologyBuilder {
     }
 
     /**
-     * Build the topology by creating the processors
+     * Build the topology. This is typically called automatically when passing this builder into the
+     * {@link KafkaStreaming#KafkaStreaming(TopologyBuilder, StreamingConfig)} constructor.
+     * 
+     * @see KafkaStreaming#KafkaStreaming(TopologyBuilder, StreamingConfig)
      */
     @SuppressWarnings("unchecked")
     public ProcessorTopology build() {
@@ -211,6 +289,10 @@ public class TopologyBuilder {
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap);
     }
 
+    /**
+     * Get the names of topics that are to be consumed by the source nodes created by this builder.
+     * @return the unmodifiable set of topic names used by source nodes, which changes as new sources are added; never null
+     */
     public Set<String> sourceTopics() {
         return Collections.unmodifiableSet(sourceTopicNames);
     }
