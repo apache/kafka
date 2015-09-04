@@ -268,7 +268,7 @@ public class Fetcher<K, V> {
      *
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse
      */
-    private void throwIfOffsetOutOfRange() throws OffsetOutOfRangeException{
+    private void throwIfOffsetOutOfRange() throws OffsetOutOfRangeException {
         Map<TopicPartition, Long> currentOutOfRangePartitions = new HashMap<>();
 
         // filter offsetOutOfRangePartitions to retain only the fetchable partitions
