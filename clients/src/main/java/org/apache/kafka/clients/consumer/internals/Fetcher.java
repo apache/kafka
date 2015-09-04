@@ -433,7 +433,6 @@ public class Fetcher<K, V> {
                 FetchResponse.PartitionData partition = entry.getValue();
                 long fetchOffset = request.fetchData().get(tp).offset;
                 if (subscriptions.assignedPartitions().contains(tp) && partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                    log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
                     if (subscriptions.hasDefaultOffsetResetPolicy())
                         subscriptions.needOffsetReset(tp);
                     else
@@ -492,6 +491,8 @@ public class Fetcher<K, V> {
                     this.metadata.requestUpdate();
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
+                } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
+                    log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
                 } else {
                     throw new IllegalStateException("Unexpected error code " + partition.errorCode + " while fetching data");
                 }
