@@ -152,6 +152,7 @@ public class NetworkClient implements KafkaClient {
     @Override
     public void close(String nodeId) {
         selector.close(nodeId);
+        inFlightRequests.clearAll(nodeId);
         connectionStates.remove(nodeId);
     }
 
