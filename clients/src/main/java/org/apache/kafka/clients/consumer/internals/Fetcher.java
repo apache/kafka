@@ -61,8 +61,6 @@ import java.util.Set;
  * This class manage the fetching process with the brokers.
  */
 public class Fetcher<K, V> {
-    public static final long EARLIEST_OFFSET_TIMESTAMP = -2L;
-    public static final long LATEST_OFFSET_TIMESTAMP = -1L;
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
@@ -213,9 +211,9 @@ public class Fetcher<K, V> {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
         final long timestamp;
         if (strategy == OffsetResetStrategy.EARLIEST)
-            timestamp = EARLIEST_OFFSET_TIMESTAMP;
+            timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
         else if (strategy == OffsetResetStrategy.LATEST)
-            timestamp = LATEST_OFFSET_TIMESTAMP;
+            timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
         else
             throw new NoOffsetForPartitionException("No offset is set and no reset policy is defined");
 
