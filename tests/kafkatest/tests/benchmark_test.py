@@ -168,6 +168,7 @@ class Benchmark(KafkaTest):
         (using new consumer iff new_consumer == True), and report throughput.
         """
         num_records = 10 * 1000 * 1000  # 10e6
+
         # seed kafka w/messages
         self.producer = ProducerPerformanceService(
             self.test_context, 1, self.kafka,

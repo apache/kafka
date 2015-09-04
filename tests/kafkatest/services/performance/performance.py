@@ -17,6 +17,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 
 class PerformanceService(BackgroundThreadService):
+
     def __init__(self, context, num_nodes):
         super(PerformanceService, self).__init__(context, num_nodes)
         self.results = [None] * self.num_nodes
