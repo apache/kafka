@@ -71,8 +71,8 @@ object ConsumerGroupCommand {
       }
     } catch {
       case e: Throwable =>
-        println("Error while executing consumer group command " + e.getMessage)
-        println(Utils.stackTrace(e))
+        Console.err.println("Error while executing consumer group command " + e.getMessage)
+        Console.err.println(Utils.stackTrace(e))
     } finally {
       consumerGroupService.close()
     }
@@ -159,7 +159,7 @@ object ConsumerGroupCommand {
       val channelRetryBackoffMs = props.getProperty("channelRetryBackoffMsOpt", "300").toInt
       val topics = zkUtils.getTopicsByConsumerGroup(group)
       if (topics.isEmpty)
-        println("No topic available for consumer group provided")
+        Console.err.println("No topic available for consumer group provided")
       printDescribeHeader()
       topics.foreach(topic => describeTopic(group, topic, channelSocketTimeoutMs, channelRetryBackoffMs))
     }
@@ -197,7 +197,7 @@ object ConsumerGroupCommand {
             LogEndOffsetResult.LogEndOffset(logEndOffset)
           }.getOrElse(LogEndOffsetResult.Ignore)
         case None =>
-          println(s"No broker for partition ${new TopicPartition(topic, partition)}")
+          Console.err.println(s"No broker for partition ${new TopicPartition(topic, partition)}")
           LogEndOffsetResult.Ignore
       }
     }
@@ -221,14 +221,14 @@ object ConsumerGroupCommand {
             offsetMap.put(topicAndPartition, offset)
           } catch {
             case z: ZkNoNodeException =>
-              println("Could not fetch offset from zookeeper for group %s partition %s due to missing offset data in zookeeper."
+              Console.err.println("Could not fetch offset from zookeeper for group %s partition %s due to missing offset data in zookeeper."
                 .format(group, topicAndPartition))
           }
         }
         else if (offsetAndMetadata.error == Errors.NONE.code)
           offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
         else
-          println("Could not fetch offset from kafka for group %s partition %s due to %s."
+          Console.err.println("Could not fetch offset from kafka for group %s partition %s due to %s."
             .format(group, topicAndPartition, Errors.forCode(offsetAndMetadata.error).exception))
       }
       channel.disconnect()
@@ -246,7 +246,7 @@ object ConsumerGroupCommand {
         }
         catch {
           case e: ZkNoNodeException =>
-            println("Delete for group %s failed because group does not exist.".format(group))
+            Console.err.println("Delete for group %s failed because group does not exist.".format(group))
         }
       }
     }
@@ -264,7 +264,7 @@ object ConsumerGroupCommand {
         }
         catch {
           case e: ZkNoNodeException =>
-            println("Delete for group %s topic %s failed because group does not exist.".format(group, topic))
+            Console.err.println("Delete for group %s topic %s failed because group does not exist.".format(group, topic))
         }
       }
     }
@@ -294,7 +294,7 @@ object ConsumerGroupCommand {
         }
       } catch {
         case t: Throwable =>
-          println("Could not parse broker info due to " + t.getMessage)
+          Console.err.println("Could not parse broker info due to " + t.getMessage)
           None
       }
     }
