@@ -185,19 +185,23 @@ class ReplicaFetcherThread(name: String,
   }
 
   private def sendRequest(apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest): ClientResponse = {
-
-    def socketTimeoutException = new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
-
     import kafka.utils.NetworkClientBlockingOps._
     val header = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
     try {
       if (!networkClient.blockingReady(sourceNode, socketTimeout)(time))
-        throw socketTimeoutException
+        throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
       else {
         val send = new RequestSend(sourceBroker.id.toString, header, request.toStruct)
         val clientRequest = new ClientRequest(time.milliseconds(), true, send, null)
-        networkClient.blockingSendAndReceive(clientRequest, socketTimeout)(time).getOrElse(throw socketTimeoutException)
+        networkClient.blockingSendAndReceive(clientRequest, socketTimeout)(time).getOrElse {
+          throw new SocketTimeoutException(s"No response received within $socketTimeout ms")
+        }
       }
+    }
+    catch {
+      case e: Throwable =>
+        networkClient.close(sourceBroker.id.toString)
+        throw e
     }
 
   }
