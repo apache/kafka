@@ -162,7 +162,7 @@ abstract class AbstractFetcherThread(name: String,
                 case _ =>
                   if (isRunning.get) {
                     error("Error for partition [%s,%d] to broker %d:%s".format(topic, partitionId, sourceBroker.id,
-                      partitionData.exception))
+                      partitionData.exception.get))
                     partitionsWithError += topicAndPartition
                   }
               }
