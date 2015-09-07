@@ -59,8 +59,8 @@ object ConsumerGroupCommand {
         delete(zkClient, opts)
     } catch {
       case e: Throwable =>
-        System.err.println("Error while executing consumer group command " + e.getMessage)
-        System.err.println(Utils.stackTrace(e))
+        Console.err.println("Error while executing consumer group command " + e.getMessage)
+        Console.err.println(Utils.stackTrace(e))
     } finally {
       zkClient.close()
     }
@@ -77,7 +77,7 @@ object ConsumerGroupCommand {
     val group = opts.options.valueOf(opts.groupOpt)
     val topics = ZkUtils.getTopicsByConsumerGroup(zkClient, group)
     if (topics.isEmpty) {
-      System.err.println("No topic available for consumer group provided")
+      Console.err.println("No topic available for consumer group provided")
     }
     topics.foreach(topic => describeTopic(zkClient, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs))
   }
@@ -186,14 +186,14 @@ object ConsumerGroupCommand {
           offsetMap.put(topicAndPartition, offset)
         } catch {
           case z: ZkNoNodeException =>
-            System.err.println("Could not fetch offset from zookeeper for group %s partition %s due to missing offset data in zookeeper."
+            Console.err.println("Could not fetch offset from zookeeper for group %s partition %s due to missing offset data in zookeeper."
               .format(group, topicAndPartition))
         }
       }
       else if (offsetAndMetadata.error == ErrorMapping.NoError)
         offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
       else
-        System.err.println("Could not fetch offset from kafka for group %s partition %s due to %s."
+        Console.err.println("Could not fetch offset from kafka for group %s partition %s due to %s."
           .format(group, topicAndPartition, ErrorMapping.exceptionFor(offsetAndMetadata.error)))
     }
     channel.disconnect()
@@ -227,7 +227,7 @@ object ConsumerGroupCommand {
           case None => // ignore
         }
       case None =>
-        System.err.println("No broker for partition %s".format(topicAndPartition))
+        Console.err.println("No broker for partition %s".format(topicAndPartition))
     }
   }
 
@@ -249,7 +249,7 @@ object ConsumerGroupCommand {
       }
     } catch {
       case t: Throwable =>
-        System.err.println("Could not parse broker info due to " + t.getMessage)
+        Console.err.println("Could not parse broker info due to " + t.getMessage)
         None
     }
   }
