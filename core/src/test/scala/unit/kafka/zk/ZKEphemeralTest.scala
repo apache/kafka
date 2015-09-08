@@ -50,7 +50,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     val nodeExists = ZkUtils.pathExists(zkClient, "/tmp/zktest")
     Assert.assertFalse(nodeExists)
   }
-  
+
   /*****
    ***** Tests for ZkWatchedEphemeral
    *****/
