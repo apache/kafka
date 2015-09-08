@@ -268,10 +268,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val timestamp = SystemTime.milliseconds.toString
     val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
                                                   "timestamp" -> timestamp))
-
-    //createEphemeralPathExpectConflictHandleZKBug(zkClient, dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, null,
-    //                                             (consumerZKString, consumer) => true, config.zkSessionTimeoutMs)
-
     assert(zkWatchedEphemeral == null)
     zkWatchedEphemeral = new ZKWatchedEphemeral(dirs.
                                                  consumerRegistryDir + "/" + consumerIdString, 

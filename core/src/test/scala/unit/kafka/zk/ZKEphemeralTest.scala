@@ -19,7 +19,13 @@ package kafka.zk
 
 import kafka.consumer.ConsumerConfig
 import kafka.utils.ZkUtils
+import kafka.utils.ZKWatchedEphemeral
 import kafka.utils.TestUtils
+import org.apache.zookeeper.CreateMode
+import org.apache.zookeeper.WatchedEvent
+import org.apache.zookeeper.Watcher
+import org.apache.zookeeper.ZooDefs.Ids
+import org.I0Itec.zkclient.exception.ZkException
 import org.junit.{Test, Assert}
 
 class ZKEphemeralTest extends ZooKeeperTestHarness {
@@ -43,5 +49,141 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
     val nodeExists = ZkUtils.pathExists(zkClient, "/tmp/zktest")
     Assert.assertFalse(nodeExists)
+  }
+  
+  /*****
+   ***** Tests for ZkWatchedEphemeral
+   *****/
+
+  /**
+   * Tests basic creation
+   */
+  @Test
+  def testZkWatchedEphemeral = {
+    val path = "/zwe-test"
+    testCreation(path)
+  }
+
+  /**
+   * Tests recursive creation
+   */
+  @Test
+  def testZkWatchedEphemeralRecursive = {
+    val path = "/zwe-test-parent/zwe-test"
+    testCreation(path)
+  }
+
+  private def testCreation(path: String) {
+    val zk = zkConnection.getZookeeper
+    val zwe = new ZKWatchedEphemeral(path,"", "", (String,  Any) => true, zk)
+    var created = false
+    var counter = 10
+
+    zk.exists(path, new Watcher() {
+      def process(event: WatchedEvent) {
+        if(event.getType == Watcher.Event.EventType.NodeCreated) {
+          created = true
+        }
+      }
+    })
+    zwe.createAndWatch
+    // Waits until the znode is created
+    while(!created && counter > 0) {
+      Thread.sleep(100)
+      counter = counter - 1
+    }
+    // If the znode hasn't been created within the given time,
+    // then fail the test
+    if(counter <= 0)
+      Assert.fail("Failed to create ephemeral znode")
+  }
+
+  /**
+   * Tests that it verifies existing and expected data appropriately
+   */
+  @Test
+  def testExpectedData = {
+    val path = "/zwe-test"
+    val zk = zkConnection.getZookeeper
+    // Try same data
+    var zwe = new ZKWatchedEphemeral(path,
+                                     "test",
+                                     "test",
+                                     (data: String,  expected: Any) => data.equals(expected.asInstanceOf[String]),
+                                     zk)
+    try{
+      zwe.createAndWatch
+    } catch {
+      case e: ZkException => {
+        Assert.fail("Shouldn't have thrown a ZK exception %s".format(e.toString))
+      }
+      case e: Throwable => {
+        Assert.fail("Unexpected exception %s".format(e.toString))
+      }
+    }
+    // Try different data
+    zwe = new ZKWatchedEphemeral(path,
+                                "test",
+                                "test-diff",
+                                (data: String,  expected: Any) => data.equals(expected.asInstanceOf[String]),
+                                zk)
+    try{
+      zwe.createAndWatch
+      Assert.fail("Expected a ZkException")
+    } catch {
+      case e: ZkException => {
+        // Expected exception
+      }
+      case e: Throwable => {
+        Assert.fail("Unexpected exception %s".format(e.toString))
+      }
+    }
+  }
+
+  /**
+   * Tests that it recreates the znode in the presence of an overlapping
+   * session.
+   */
+  @Test
+  def testOverlappingSessions = {
+    val path = "/zwe-test"
+    val zk1 = zkConnection.getZookeeper
+
+    //Creates a second session
+    val (zkClient2, zkConnection2) = ZkUtils.createZkClientAndConnection(zkConnect, zkSessionTimeoutMs, zkConnectionTimeout)
+    val zk2 = zkConnection2.getZookeeper
+    val zwe = new ZKWatchedEphemeral(path,"", "", (String,  Any) => true, zk2)
+    val numIterations = 10
+    var counter = numIterations
+    var deleted = false
+
+    // Creates znode for path in the first session
+    zk1.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
+    // Watches the znode
+    zk2.exists(path, new Watcher() {
+      def process(event: WatchedEvent) {
+        if(event.getType == Watcher.Event.EventType.NodeDeleted) {
+          deleted = true
+        }
+      }
+    })
+    //Bootstraps the ZKWatchedEphemeral object
+    zwe.createAndWatch
+    //Closes the first session
+    zkClient.close
+    while(!deleted && counter > 0) {
+      Thread.sleep(100)
+      counter = counter - 1
+    }
+    counter = numIterations
+    // Waits until the znode is recreated
+    while((zk2.exists(path, false) == null) && counter > 0) {
+      Thread.sleep(100)
+      counter = counter - 1
+    }
+    // If the znode hasn't been created within the given time,
+    // then fail the test
+    if(counter <= 0)
+      Assert.fail("Failed to create ephemeral znode")
   }
 }

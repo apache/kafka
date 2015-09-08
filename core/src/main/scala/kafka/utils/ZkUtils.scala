@@ -220,9 +220,6 @@ object ZkUtils extends Logging {
 
   private def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, brokerIdPath: String, brokerInfo: String, expectedBroker: Broker, timeout: Int): ZKWatchedEphemeral = {
     try {
-      //createEphemeralPathExpectConflictHandleZKBug(zkClient, brokerIdPath, brokerInfo, expectedBroker,
-      //  (brokerString: String, broker: Any) => Broker.createBroker(broker.asInstanceOf[Broker].id, brokerString).equals(broker.asInstanceOf[Broker]),
-      //  timeout)
       val zkWatchedEphemeral = new ZKWatchedEphemeral(brokerIdPath, 
                                                       brokerInfo,
                                                       expectedBroker,
@@ -315,47 +312,6 @@ object ZkUtils extends Logging {
         }
       }
       case e2: Throwable => throw e2
-    }
-  }
-
-  /**
-   * Create an ephemeral node with the given path and data.
-   * Throw NodeExistsException if node already exists.
-   * Handles the following ZK session timeout bug:
-   *
-   * https://issues.apache.org/jira/browse/ZOOKEEPER-1740
-   *
-   * Upon receiving a NodeExistsException, read the data from the conflicted path and
-   * trigger the checker function comparing the read data and the expected data,
-   * If the checker function returns true then the above bug might be encountered, back off and retry;
-   * otherwise re-throw the exception
-   */
-  def createEphemeralPathExpectConflictHandleZKBug(zkClient: ZkClient, path: String, data: String, expectedCallerData: Any, checker: (String, Any) => Boolean, backoffTime: Int): Unit = {
-    while (true) {
-      try {
-        createEphemeralPathExpectConflict(zkClient, path, data)
-        return
-      } catch {
-        case e: ZkNodeExistsException => {
-          // An ephemeral node may still exist even after its corresponding session has expired
-          // due to a Zookeeper bug, in this case we need to retry writing until the previous node is deleted
-          // and hence the write succeeds without ZkNodeExistsException
-          ZkUtils.readDataMaybeNull(zkClient, path)._1 match {
-            case Some(writtenData) => {
-              if (checker(writtenData, expectedCallerData)) {
-                info("I wrote this conflicted ephemeral node [%s] at %s a while back in a different session, ".format(data, path)
-                  + "hence I will backoff for this node to be deleted by Zookeeper and retry")
-
-                Thread.sleep(backoffTime)
-              } else {
-                throw e
-              }
-            }
-            case None => // the node disappeared; retry creating the ephemeral node immediately
-          }
-        }
-        case e2: Throwable => throw e2
-      }
     }
   }
 
@@ -916,6 +872,15 @@ object ZkPath {
   }
 }
 
+/**
+ * Implements an ephemeral znode that is recreated in the case it disappears.
+ * A znode can be deleted in this case if it has been created in a previous session.
+ * Say that the client that created it crashes leaving the session open. In this case,
+ * this client will try to create it and fail, but eventually the ephemeral znode will
+ * be remove and needs to be created and associated to this session.
+ *
+ * It additionally creates the parent path recursively.
+ */
 class ZKWatchedEphemeral(path : String,
                           data : String,
                           expectedCallerData: Any,
