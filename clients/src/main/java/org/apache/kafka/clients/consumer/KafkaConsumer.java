@@ -909,7 +909,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Seek to the last offset for each of the given partitions
+     * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
+     * final offset in all partitions only when poll() or position() are called.
      */
     public void seekToEnd(TopicPartition... partitions) {
         acquire();
