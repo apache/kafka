@@ -176,7 +176,7 @@ public class SubscriptionStateTest {
     @Test
     public void patternSubscription() {
         state.subscribe(Pattern.compile(".*"), listener);
-        state.subscribe(Arrays.asList("test", "test1"), mockSubscriptionListener, true);
+        state.changeSubscription(Arrays.asList("test", "test1"));
 
         assertEquals(
             "Expected subscribed topics count is incorrect", 2, state.subscription().size());
@@ -185,7 +185,7 @@ public class SubscriptionStateTest {
     @Test
     public void patternUnsubscription() {
         state.subscribe(Pattern.compile(".*"), listener);
-        state.subscribe(Arrays.asList("test", "test1"), mockSubscriptionListener, true);
+        state.changeSubscription(Arrays.asList("test", "test1"));
 
         state.unsubscribe();
 

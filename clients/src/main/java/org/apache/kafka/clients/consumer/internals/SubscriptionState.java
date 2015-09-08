@@ -85,22 +85,21 @@ public class SubscriptionState {
     }
 
     public void subscribe(List<String> topics, RebalanceListener listener) {
-        subscribe(topics, listener, false);
-    }
-
-    public void subscribe(List<String> topics, RebalanceListener listener, boolean isSubscribedViaPattern) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        if (!this.userAssignment.isEmpty() ||
-            (!isSubscribedViaPattern && this.subscribedPattern != null))
+        if (!this.userAssignment.isEmpty() || this.subscribedPattern != null)
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
 
         this.listener = listener;
 
-        if (!this.subscription.equals(new HashSet<>(topics))) {
+        changeSubscription(topics);
+    }
+
+    public void changeSubscription(List<String> topicsToSubscribe) {
+        if (!this.subscription.equals(new HashSet<>(topicsToSubscribe))) {
             this.subscription.clear();
-            this.subscription.addAll(topics);
+            this.subscription.addAll(topicsToSubscribe);
             this.needsPartitionAssignment = true;
 
             // Remove any assigned partitions which are no longer subscribed to
@@ -110,6 +109,7 @@ public class SubscriptionState {
                     it.remove();
             }
         }
+
     }
 
     public void needReassignment() {

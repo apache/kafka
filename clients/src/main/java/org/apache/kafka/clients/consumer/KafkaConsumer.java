@@ -646,14 +646,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
      */
     @Override
     public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
-        subscribeTopics(topics, listener, false);
-    }
-
-    private void subscribeTopics(List<String> topics, ConsumerRebalanceListener listener, boolean isSubscribedViaPatternSubscription) {
         acquire();
         try {
             log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
-            this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener), isSubscribedViaPatternSubscription);
+            this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
             metadata.setTopics(topics);
         } finally {
             release();
@@ -1225,7 +1221,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
             if (this.subscriptions.getSubscribedPattern().matcher(topic).matches())
                 topicsToSubscribe.add(topic);
 
-        subscribeTopics(topicsToSubscribe, this.subscriptions.listener().underlying(), true);
+        subscriptions.changeSubscription(topicsToSubscribe);
+        metadata.setTopics(topicsToSubscribe);
     }
 
 }

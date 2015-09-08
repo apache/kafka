@@ -74,18 +74,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                 !subscriptions.subscription().contains(topic))
                 topicsToSubscribe.add(topic);
         }
-        subscribeTopics(topicsToSubscribe, new NoOpConsumerRebalanceListener(), true);
+        ensureNotClosed();
+        this.subscriptions.changeSubscription(topicsToSubscribe);
     }
 
     @Override
     public synchronized void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
-        subscribeTopics(topics, listener, false);
-    }
-
-    private void subscribeTopics(List<String> topics, final ConsumerRebalanceListener listener,
-                            boolean isSubscribedViaPatternSubscription) {
         ensureNotClosed();
-        this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener), isSubscribedViaPatternSubscription);
+        this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
     }
 
     @Override
