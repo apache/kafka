@@ -176,6 +176,7 @@ object Defaults {
   val SSLClientAuthRequested = "requested"
   val SSLClientAuthNone = "none"
   val SSLClientAuth = SSLClientAuthNone
+  val SSLCipherSuites = ""
 
 }
 
@@ -650,6 +651,7 @@ object KafkaConfig {
       .define(SSLKeyManagerAlgorithmProp, STRING, Defaults.SSLKeyManagerAlgorithm, MEDIUM, SSLKeyManagerAlgorithmDoc)
       .define(SSLTrustManagerAlgorithmProp, STRING, Defaults.SSLTrustManagerAlgorithm, MEDIUM, SSLTrustManagerAlgorithmDoc)
       .define(SSLClientAuthProp, STRING, Defaults.SSLClientAuth, in(Defaults.SSLClientAuthRequired, Defaults.SSLClientAuthRequested, Defaults.SSLClientAuthNone), MEDIUM, SSLClientAuthDoc)
+      .define(SSLCipherSuitesProp, LIST, Defaults.SSLCipherSuites, MEDIUM, SSLCipherSuitesDoc)
 
   }
 
@@ -809,6 +811,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val sslKeyManagerAlgorithm = getString(KafkaConfig.SSLKeyManagerAlgorithmProp)
   val sslTrustManagerAlgorithm = getString(KafkaConfig.SSLTrustManagerAlgorithmProp)
   val sslClientAuth = getString(KafkaConfig.SSLClientAuthProp)
+  val sslCipher = getList(KafkaConfig.SSLCipherSuitesProp)
 
   /** ********* Quota Configuration **************/
   val producerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp)
@@ -948,6 +951,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     channelConfigs.put(SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm)
     channelConfigs.put(SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm)
     channelConfigs.put(SSLClientAuthProp, sslClientAuth)
+    channelConfigs.put(SSLCipherSuitesProp, sslCipher)
     channelConfigs
   }
 

@@ -505,6 +505,7 @@ class KafkaConfigTest {
         case KafkaConfig.SSLKeyManagerAlgorithmProp =>
         case KafkaConfig.SSLTrustManagerAlgorithmProp =>
         case KafkaConfig.SSLClientAuthProp => // ignore string
+        case KafkaConfig.SSLCipherSuitesProp => // ignore string
 
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }

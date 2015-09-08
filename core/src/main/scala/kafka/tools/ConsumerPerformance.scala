@@ -20,6 +20,7 @@ package kafka.tools
 import java.util
 
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConversions._
 import java.util.concurrent.atomic.AtomicLong
@@ -50,19 +51,15 @@ object ConsumerPerformance {
     val totalBytesRead = new AtomicLong(0)
     val consumerTimeout = new AtomicBoolean(false)
 
-    if (!config.hideHeader) {
-      if (!config.showDetailedStats)
-        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
-      else
+    if (!config.hideHeader && (config.showDetailedStats || config.showAllStats))
         println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
-    }
 
     var startMs, endMs = 0L
     if(config.useNewConsumer) {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(List(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
+      consume(consumer, List(config.topic), config.numMessages, 5000, config, totalMessagesRead, totalBytesRead)
       endMs = System.currentTimeMillis
       consumer.close()
     } else {
@@ -90,8 +87,12 @@ object ConsumerPerformance {
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
-    if (!config.showDetailedStats) {
-      val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
+    val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
+
+    if(!config.showDetailedStats || config.showAllStats){
+      if (!config.hideHeader  )
+        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+
       println(("%s, %s, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
         totalMBRead, totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
     }
@@ -139,7 +140,7 @@ object ConsumerPerformance {
           bytesRead += record.value.size 
       
         if (messagesRead % config.reportingInterval == 0) {
-          if (config.showDetailedStats)
+          if (config.showDetailedStats || config.showAllStats)
             printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, System.currentTimeMillis, config.dateFormat)
           lastReportTime = System.currentTimeMillis
           lastMessagesRead = messagesRead
@@ -201,7 +202,12 @@ object ConsumerPerformance {
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
-      .defaultsTo(1)
+      .defaultsTo(1)    
+    val propsFileOpt = parser.accepts("consumer.config", "External consumer properties file.")
+      .withRequiredArg
+      .describedAs("consumer properties")
+      .ofType(classOf[java.lang.String])
+      .defaultsTo("")
     val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation.")
 
     val options = parser.parse(args: _*)
@@ -210,7 +216,7 @@ object ConsumerPerformance {
    
     val useNewConsumer = options.has(useNewConsumerOpt)
     
-    val props = new Properties
+    val props = if (options.has(propsFileOpt)) Utils.loadProps(options.valueOf(propsFileOpt)) else new Properties
     if(useNewConsumer) {
       import org.apache.kafka.clients.consumer.ConsumerConfig
       props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
@@ -234,10 +240,13 @@ object ConsumerPerformance {
     val numThreads = options.valueOf(numThreadsOpt).intValue
     val topic = options.valueOf(topicOpt)
     val numMessages = options.valueOf(numMessagesOpt).longValue
-    val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val showDetailedStats = options.has(showDetailedStatsOpt)
+    val showAllStats = options.has(showAllStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
+    var reportingInterval = options.valueOf(reportingIntervalOpt).longValue
+    if(reportingInterval == -1)
+      reportingInterval = numMessages/10
   }
 
   class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Array[Byte], Array[Byte]],
@@ -260,7 +269,7 @@ object ConsumerPerformance {
           bytesRead += messageAndMetadata.message.length
 
           if (messagesRead % config.reportingInterval == 0) {
-            if (config.showDetailedStats)
+            if (config.showDetailedStats || config.showAllStats)
               printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, System.currentTimeMillis, config.dateFormat)
             lastReportTime = System.currentTimeMillis
             lastMessagesRead = messagesRead

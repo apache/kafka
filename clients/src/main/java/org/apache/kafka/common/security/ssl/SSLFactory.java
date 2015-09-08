@@ -60,12 +60,13 @@ public class SSLFactory implements Configurable {
 
         if (configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG) != null) {
             List<String> cipherSuitesList = (List<String>) configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG);
-            this.cipherSuites = (String[]) cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
+            if (!cipherSuitesList.isEmpty())
+                this.cipherSuites = cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
         }
 
         if (configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null) {
             List<String> enabledProtocolsList = (List<String>) configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
-            this.enabledProtocols =  (String[]) enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
+            this.enabledProtocols = enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
         }
 
         if (configs.containsKey(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)) {
