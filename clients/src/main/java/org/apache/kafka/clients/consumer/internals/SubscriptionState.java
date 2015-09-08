@@ -16,6 +16,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -259,7 +260,7 @@ public class SubscriptionState {
     }
 
     public Set<TopicPartition> missingFetchPositions() {
-        Set<TopicPartition> missing = new HashSet<>(this.assignment.keySet());
+        Set<TopicPartition> missing = new HashSet<>();
         for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet())
             if (!entry.getValue().hasValidPosition)
                 missing.add(entry.getKey());
@@ -270,7 +271,7 @@ public class SubscriptionState {
         return this.needsPartitionAssignment;
     }
 
-    public void changePartitionAssignment(List<TopicPartition> assignments) {
+    public void changePartitionAssignment(Collection<TopicPartition> assignments) {
         for (TopicPartition tp : assignments)
             if (!this.subscription.contains(tp.topic()))
                 throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");

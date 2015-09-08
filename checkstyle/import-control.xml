@@ -27,6 +27,9 @@
 	<allow pkg="javax.management" />
 	<allow pkg="org.slf4j" />
 	<allow pkg="org.junit" />
+	<allow pkg="org.easymock" />
+	<allow pkg="org.powermock" />
+
 	<allow pkg="javax.net.ssl" />
 
 	<!-- no one depends on the server -->
@@ -124,6 +127,8 @@
 		<allow pkg="org.apache.kafka.common" />
 		<allow pkg="org.apache.kafka.copycat.data" />
 		<allow pkg="org.apache.kafka.copycat.errors" />
+		<allow pkg="org.apache.kafka.clients" />
+		<allow pkg="org.apache.kafka.clients" />
 
 		<subpackage name="source">
 			<allow pkg="org.apache.kafka.copycat.connector" />
@@ -137,10 +142,6 @@
 
 		<subpackage name="runtime">
 			<allow pkg="org.apache.kafka.copycat" />
-			<allow pkg="org.apache.kafka.clients" />
-			<!-- for tests -->
-			<allow pkg="org.easymock" />
-			<allow pkg="org.powermock" />
 		</subpackage>
 
 		<subpackage name="cli">
@@ -152,9 +153,6 @@
 		<subpackage name="storage">
 			<allow pkg="org.apache.kafka.copycat" />
 			<allow pkg="org.apache.kafka.common.serialization" />
-			<!-- for tests -->
-			<allow pkg="org.easymock" />
-			<allow pkg="org.powermock" />
 		</subpackage>
 
 		<subpackage name="util">
