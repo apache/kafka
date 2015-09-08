@@ -38,6 +38,8 @@ import scala.collection.JavaConversions._
  */
 
 object EndToEndLatency {
+  private val timeout: Long = 60000
+
   def main(args: Array[String]) {
     println(args.length)
     if (args.length != 5 && args.length != 6) {
@@ -95,15 +97,15 @@ object EndToEndLatency {
       val begin = System.nanoTime
 
       //Send message (of random bytes) synchronously then immediately poll for it
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message))
-      val recordIter = consumer.poll(60000).iterator
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).get()
+      val recordIter = consumer.poll(timeout).iterator
 
       val elapsed = System.nanoTime - begin
 
       //Check we got results
       if (!recordIter.hasNext) {
         finalise()
-        throw new RuntimeException("poll() timed out before finding a result")
+        throw new RuntimeException(s"poll() timed out before finding a result (timeout:[$timeout])")
       }
 
       //Check result matches the original record
@@ -118,7 +120,7 @@ object EndToEndLatency {
       if (recordIter.hasNext) {
         var count = 1
         for (elem <- recordIter) count += 1
-        Console.err.println(s"Only one result was expected during this test. We found [$count]")
+        throw new RuntimeException(s"Only one result was expected during this test. We found [$count]")
       }
 
       //Report progress

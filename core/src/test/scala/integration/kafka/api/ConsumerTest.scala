@@ -74,7 +74,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(0, this.consumers(0).assignment.size)
     this.consumers(0).assign(List(tp))
     assertEquals(1, this.consumers(0).assignment.size)
-    
+
     this.consumers(0).seek(tp, 0)
     consumeRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
 
@@ -99,7 +99,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     this.consumers(0).poll(50)
     val pos1 = this.consumers(0).position(tp)
     val pos2 = this.consumers(0).position(tp2)
-    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp, 3L)).asJava, CommitType.SYNC)
+    this.consumers(0).commit(Map[TopicPartition, java.lang.Long]((tp, 3L)).asJava, CommitType.SYNC)
     assertEquals(3, this.consumers(0).committed(tp))
     intercept[NoOffsetForPartitionException] {
       this.consumers(0).committed(tp2)
@@ -107,13 +107,13 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     // positions should not change
     assertEquals(pos1, this.consumers(0).position(tp))
     assertEquals(pos2, this.consumers(0).position(tp2))
-    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp2, 5L)).asJava, CommitType.SYNC)
+    this.consumers(0).commit(Map[TopicPartition, java.lang.Long]((tp2, 5L)).asJava, CommitType.SYNC)
     assertEquals(3, this.consumers(0).committed(tp))
     assertEquals(5, this.consumers(0).committed(tp2))
 
     // Using async should pick up the committed changes after commit completes
     val commitCallback = new CountConsumerCommitCallback()
-    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp2, 7L)).asJava, CommitType.ASYNC, commitCallback)
+    this.consumers(0).commit(Map[TopicPartition, java.lang.Long]((tp2, 7L)).asJava, CommitType.ASYNC, commitCallback)
     awaitCommitCallback(this.consumers(0), commitCallback)
     assertEquals(7, this.consumers(0).committed(tp2))
   }
@@ -144,6 +144,22 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     consumer.seek(tp, mid)
     assertEquals(mid, consumer.position(tp))
     consumeRecords(consumer, numRecords = 1, startingOffset = mid.toInt)
+  }
+
+  @Test
+  def testSeekShouldEvaluateLazily() {
+    val consumer = this.consumers(0)
+
+    //Given
+    sendRecords(5)
+    consumer.assign(List(tp))
+    consumer.seekToEnd(tp)
+
+    //When
+    sendRecords(1)
+
+    //Then - should include record written after seekToEnd()
+    assertEquals(5 + 1, consumer.position(tp))
   }
 
   @Test
@@ -221,24 +237,24 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30");
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
     consumer0.subscribe(List(topic), listener)
-        
+
     // the initial subscription should cause a callback execution
-    while(listener.callsToAssigned == 0)
+    while (listener.callsToAssigned == 0)
       consumer0.poll(50)
-    
+
     // get metadata for the topic
     var parts = consumer0.partitionsFor(ConsumerCoordinator.OffsetsTopicName).asScala
-    while(parts == null)
+    while (parts == null)
       parts = consumer0.partitionsFor(ConsumerCoordinator.OffsetsTopicName).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts(0).leader())
-    
+
     // shutdown the coordinator
     val coordinator = parts(0).leader().id()
     this.servers(coordinator).shutdown()
-    
+
     // this should cause another callback execution
-    while(listener.callsToAssigned < 2)
+    while (listener.callsToAssigned < 2)
       consumer0.poll(50)
 
     assertEquals(2, listener.callsToAssigned)
@@ -341,11 +357,11 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   private class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
     var callsToAssigned = 0
     var callsToRevoked = 0
-    def onPartitionsAssigned(consumer: Consumer[_,_], partitions: java.util.Collection[TopicPartition]) {
+    def onPartitionsAssigned(consumer: Consumer[_, _], partitions: java.util.Collection[TopicPartition]) {
       info("onPartitionsAssigned called.")
       callsToAssigned += 1
     }
-    def onPartitionsRevoked(consumer: Consumer[_,_], partitions: java.util.Collection[TopicPartition]) {
+    def onPartitionsRevoked(consumer: Consumer[_, _], partitions: java.util.Collection[TopicPartition]) {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
     }
@@ -369,7 +385,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     while (records.size < numRecords) {
       for (record <- consumer.poll(50).asScala)
         records.add(record)
-      if(iters > maxIters)
+      if (iters > maxIters)
         throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
       iters += 1
     }
