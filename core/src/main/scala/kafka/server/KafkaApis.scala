@@ -17,24 +17,25 @@
 
 package kafka.server
 
-import kafka.message.MessageSet
-import kafka.security.auth.Topic
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.TopicPartition
-import kafka.api._
 import kafka.admin.AdminUtils
+import kafka.api._
 import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.ConsumerCoordinator
 import kafka.log._
+import kafka.message.MessageSet
+import kafka.network.RequestChannel.{Response, Session}
 import kafka.network._
-import kafka.network.RequestChannel.{Session, Response}
-import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse, HeartbeatRequest, HeartbeatResponse, ResponseHeader, ResponseSend}
-import kafka.utils.{ZkUtils, ZKGroupTopicDirs, SystemTime, Logging}
-import scala.collection._
+import kafka.security.auth.{Authorizer, ClusterAction, ConsumerGroup, Create, Describe, Operation, Read, Resource, Topic, Write}
+import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
-import kafka.security.auth.{Authorizer, Read, Write, Create, ClusterAction, Describe, Resource, Topic, Operation, ConsumerGroup}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, SecurityProtocol}
+import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, ResponseHeader, ResponseSend}
+
+import scala.collection._
 
 
 /**
@@ -98,11 +99,25 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.apiLocalCompleteTimeMs = SystemTime.milliseconds
   }
 
+  //TODO: this method should only use request.header after all the requests are migrated to use client java request class.
+  def validateRequestVersion(request: RequestChannel.Request, apiVersion: Short) {
+    val highestSupportedVersion = ProtoUtils.latestVersion(request.requestId)
+    val requestApiVersion = Option(request.header) match {
+      case Some(header) => header.apiVersion()
+      case None => apiVersion
+    }
+    if (requestApiVersion < 0 || highestSupportedVersion < requestApiVersion)
+      throw new UnsupportedVersionException("Received " + ApiKeys.forId(request.requestId).name + "Request from " +
+        request.session.host + " with request version " + requestApiVersion + " higher than supported version " +
+        highestSupportedVersion)
+  }
+
   def handleLeaderAndIsrRequest(request: RequestChannel.Request) {
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
     val leaderAndIsrRequest = request.requestObj.asInstanceOf[LeaderAndIsrRequest]
+    validateRequestVersion(request, leaderAndIsrRequest.versionId)
 
     authorizeClusterAction(request)
 
@@ -137,6 +152,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
     val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
+    validateRequestVersion(request, stopReplicaRequest.versionId)
 
     authorizeClusterAction(request)
 
@@ -148,6 +164,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request) {
     val updateMetadataRequest = request.requestObj.asInstanceOf[UpdateMetadataRequest]
+    validateRequestVersion(request, updateMetadataRequest.versionId)
 
     authorizeClusterAction(request)
 
@@ -162,6 +179,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
     val controlledShutdownRequest = request.requestObj.asInstanceOf[ControlledShutdownRequest]
+    validateRequestVersion(request, controlledShutdownRequest.versionId)
 
     authorizeClusterAction(request)
 
@@ -177,6 +195,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleOffsetCommitRequest(request: RequestChannel.Request) {
     val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
+    validateRequestVersion(request, offsetCommitRequest.versionId)
 
     // filter non-exist topics
     val invalidRequestsInfo = offsetCommitRequest.requestInfo.filter { case (topicAndPartition, offsetMetadata) =>
@@ -282,6 +301,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleProducerRequest(request: RequestChannel.Request) {
     val produceRequest = request.requestObj.asInstanceOf[ProducerRequest]
+    validateRequestVersion(request, produceRequest.versionId)
     val numBytesAppended = produceRequest.sizeInBytes
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) =  produceRequest.data.partition  {
@@ -359,6 +379,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleFetchRequest(request: RequestChannel.Request) {
     val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
+    validateRequestVersion(request, fetchRequest.versionId)
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) =  fetchRequest.requestInfo.partition {
       case (topicAndPartition, _) => authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
@@ -414,6 +435,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleOffsetRequest(request: RequestChannel.Request) {
     val offsetRequest = request.requestObj.asInstanceOf[OffsetRequest]
+    validateRequestVersion(request, offsetRequest.versionId)
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.requestInfo.partition  {
       case (topicAndPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicAndPartition.topic))
@@ -566,6 +588,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
     val metadataRequest = request.requestObj.asInstanceOf[TopicMetadataRequest]
+    validateRequestVersion(request, metadataRequest.versionId)
 
     //if topics is empty -> fetch all topics metadata but filter out the topic response that are not authorized
     val topics = if (metadataRequest.topics.isEmpty) {
@@ -606,6 +629,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleOffsetFetchRequest(request: RequestChannel.Request) {
     val offsetFetchRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
+    validateRequestVersion(request, offsetFetchRequest.versionId)
 
     val (authorizedTopicPartitions, unauthorizedTopicPartitions) = offsetFetchRequest.requestInfo.partition { topicAndPartition =>
       authorize(request.session, Describe, new Resource(Topic, topicAndPartition.topic)) &&
@@ -660,6 +684,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleConsumerMetadataRequest(request: RequestChannel.Request) {
     val consumerMetadataRequest = request.requestObj.asInstanceOf[ConsumerMetadataRequest]
+    validateRequestVersion(request, consumerMetadataRequest.versionId)
 
     if (!authorize(request.session, Read, new Resource(ConsumerGroup, consumerMetadataRequest.group))) {
       val response = ConsumerMetadataResponse(None, ErrorMapping.AuthorizationCode, consumerMetadataRequest.correlationId)
@@ -686,8 +711,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleJoinGroupRequest(request: RequestChannel.Request) {
-    import JavaConversions._
-
+    import scala.collection.JavaConversions._
+    validateRequestVersion(request, -1)
     val joinGroupRequest = request.body.asInstanceOf[JoinGroupRequest]
     val respHeader = new ResponseHeader(request.header.correlationId)
 
@@ -723,6 +748,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleHeartbeatRequest(request: RequestChannel.Request) {
+    validateRequestVersion(request, -1)
     val heartbeatRequest = request.body.asInstanceOf[HeartbeatRequest]
     val respHeader = new ResponseHeader(request.header.correlationId)
 

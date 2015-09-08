@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -78,6 +79,19 @@ public class RecordTest {
             } catch (InvalidRecordException e) {
                 // this is good
             }
+        }
+    }
+
+    @Test
+    public void testInvalidMagicByte() {
+        Record copy = copyOf(record);
+        copy.buffer().put(Record.MAGIC_OFFSET, new Integer(Record.CURRENT_MAGIC_VALUE + 1).byteValue());
+        copy.buffer().putInt(Record.CRC_OFFSET, (int) (copy.computeChecksum() & 0xffffffffL));
+        try {
+            new Record(copy.buffer()).ensureValid();
+            fail("Should throw unsupportedVersionException");
+        } catch (UnsupportedVersionException e) {
+            // Do nothing
         }
     }
 

@@ -19,13 +19,15 @@ package kafka.message
 
 import java.nio._
 import java.util.HashMap
-import scala.collection._
-import org.junit.Assert._
-import org.scalatest.junit.JUnitSuite
-import org.junit.{Before, Test}
+
 import kafka.utils.TestUtils
-import kafka.utils.CoreUtils
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.utils.Utils
+import org.junit.Assert._
+import org.junit.{Before, Test}
+import org.scalatest.junit.JUnitSuite
+
+import scala.collection._
 
 case class MessageTestVal(val key: Array[Byte], 
                           val payload: Array[Byte], 
@@ -93,6 +95,21 @@ class MessageTest extends JUnitSuite {
       m.put(v.message, v.message)
     for(v <- messages)
       assertEquals(v.message, m.get(v.message))
+  }
+
+  @Test
+  def testInvalidMagicByte() {
+    // Create a message
+    val message = new Message("value".getBytes, "key".getBytes, NoCompressionCodec)
+    message.buffer.put(Message.MagicOffset, (Message.CurrentMagicValue + 1).toByte)
+    message.buffer.putInt(Message.CrcOffset, (message.computeChecksum() & 0xffffffffL).toInt)
+    try {
+      message.ensureValid()
+      fail("Should get UnsupportedVersionException")
+    } catch {
+      case e: UnsupportedVersionException =>
+      case _ : Throwable => fail("Should get UnsupportedVersionException")
+    }
   }
   
 }
