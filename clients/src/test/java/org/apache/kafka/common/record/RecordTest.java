@@ -82,17 +82,12 @@ public class RecordTest {
         }
     }
 
-    @Test
+    @Test (expected = UnsupportedVersionException.class)
     public void testInvalidMagicByte() {
         Record copy = copyOf(record);
         copy.buffer().put(Record.MAGIC_OFFSET, new Integer(Record.CURRENT_MAGIC_VALUE + 1).byteValue());
         copy.buffer().putInt(Record.CRC_OFFSET, (int) (copy.computeChecksum() & 0xffffffffL));
-        try {
-            new Record(copy.buffer()).ensureValid();
-            fail("Should throw unsupportedVersionException");
-        } catch (UnsupportedVersionException e) {
-            // Do nothing
-        }
+        new Record(copy.buffer()).ensureValid();
     }
 
     private Record copyOf(Record record) {

@@ -97,20 +97,13 @@ class MessageTest extends JUnitSuite {
       assertEquals(v.message, m.get(v.message))
   }
 
-  @Test
+  @Test(expected = classOf[UnsupportedVersionException])
   def testInvalidMagicByte() {
     // Create a message
     val message = new Message("value".getBytes, "key".getBytes, NoCompressionCodec)
     message.buffer.put(Message.MagicOffset, (Message.CurrentMagicValue + 1).toByte)
     message.buffer.putInt(Message.CrcOffset, (message.computeChecksum() & 0xffffffffL).toInt)
-    try {
-      message.ensureValid()
-      fail("Should get UnsupportedVersionException")
-    } catch {
-      case e: UnsupportedVersionException =>
-      case _ : Throwable => fail("Should get UnsupportedVersionException")
-    }
+    message.ensureValid()
   }
-  
 }
  	

@@ -100,7 +100,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   //TODO: this method should only use request.header after all the requests are migrated to use client java request class.
-  def validateRequestVersion(request: RequestChannel.Request, apiVersion: Short) {
+  def validateRequestVersion(request: RequestChannel.Request, apiVersion: Short = -1) {
     val highestSupportedVersion = ProtoUtils.latestVersion(request.requestId)
     val requestApiVersion = Option(request.header) match {
       case Some(header) => header.apiVersion()
@@ -712,7 +712,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleJoinGroupRequest(request: RequestChannel.Request) {
     import scala.collection.JavaConversions._
-    validateRequestVersion(request, -1)
+    validateRequestVersion(request)
     val joinGroupRequest = request.body.asInstanceOf[JoinGroupRequest]
     val respHeader = new ResponseHeader(request.header.correlationId)
 
@@ -748,7 +748,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleHeartbeatRequest(request: RequestChannel.Request) {
-    validateRequestVersion(request, -1)
+    validateRequestVersion(request)
     val heartbeatRequest = request.body.asInstanceOf[HeartbeatRequest]
     val respHeader = new ResponseHeader(request.header.correlationId)
 
