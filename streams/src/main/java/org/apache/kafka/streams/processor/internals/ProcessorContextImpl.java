@@ -84,7 +84,6 @@ public class ProcessorContextImpl implements ProcessorContext {
 
         Consumer restoreConsumer = new KafkaConsumer<>(
             config.getConsumerConfigs(),
-            null /* no callback for restore consumer */,
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer());
 

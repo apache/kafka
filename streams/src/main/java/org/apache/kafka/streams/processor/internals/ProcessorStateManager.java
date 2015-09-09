@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -95,10 +96,10 @@ public class ProcessorStateManager {
 
         // subscribe to the store's partition
         TopicPartition storePartition = new TopicPartition(store.name(), id);
-        if (!restoreConsumer.subscriptions().isEmpty()) {
+        if (!restoreConsumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
         }
-        restoreConsumer.subscribe(storePartition);
+        restoreConsumer.assign(Collections.singletonList(storePartition));
 
         // calculate the end offset of the partition
         // TODO: this is a bit hacky to first seek then position to get the end offset
@@ -132,7 +133,7 @@ public class ProcessorStateManager {
         restoredOffsets.put(storePartition, newOffset);
 
         // un-subscribe the change log partition
-        restoreConsumer.unsubscribe(storePartition);
+        restoreConsumer.subscribe(Collections.<String>emptyList());
     }
 
     public StateStore getStore(String name) {

@@ -2,93 +2,45 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="7950ad7e-7aa1-4d14-b584-820ad7549166" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/examples/WallclockTimestampExtractor.java" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java" afterPath="" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/KafkaStreaming.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/KafkaStreaming.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/StreamingConfig.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/StreamingConfig.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/examples/KStreamJob.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/examples/KStreamJob.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/examples/ProcessorJob.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/examples/ProcessorJob.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KStream.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KStream.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KStreamBuilder.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KStreamBuilder.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KStreamWindowed.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KStreamWindowed.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KeyValue.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KeyValue.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KeyValueMapper.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KeyValueMapper.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/Predicate.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/Predicate.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/SlidingWindowDef.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/SlidingWindowDef.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/ValueJoiner.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/ValueJoiner.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/ValueMapper.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/ValueMapper.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/Window.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/Window.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/WindowDef.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/WindowDef.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/FilteredIterator.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/FilteredIterator.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamBranch.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamBranch.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamFilter.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamFilter.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMap.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamFlatMap.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapValues.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamFlatMapValues.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamImpl.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamImpl.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamJoin.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamJoin.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamMap.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamMap.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamMapValues.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamMapValues.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamPassThrough.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamPassThrough.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamProcessor.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamProcessor.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamWindow.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamWindow.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamWindowedImpl.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamWindowedImpl.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/Processor.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/Processor.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/ProcessorContext.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/ProcessorContext.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/ProcessorDef.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/ProcessorDef.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/RestoreFunc.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/RestoreFunc.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/StateStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/StateStore.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/TimestampExtractor.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/TimestampExtractor.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/TopologyBuilder.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/TopologyBuilder.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/MinTimestampTracker.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/MinTimestampTracker.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/PartitionGroup.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/PartitionGroup.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/ProcessorContextImpl.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorContextImpl.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/ProcessorNode.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorNode.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/ProcessorStateManager.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorStateManager.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/ProcessorTopology.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorTopology.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/PunctuationQueue.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/PunctuationQueue.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/PunctuationSchedule.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/PunctuationSchedule.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/RecordCollector.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/RecordCollector.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/RecordQueue.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/RecordQueue.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/SinkNode.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/SinkNode.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/SourceNode.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/SourceNode.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/Stamped.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/Stamped.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/StampedRecord.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StampedRecord.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/StreamTask.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamTask.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/StreamThread.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamThread.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/TimestampTracker.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/TimestampTracker.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/Entry.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/Entry.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/InMemoryKeyValueStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/InMemoryKeyValueStore.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/KeyValueIterator.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/KeyValueIterator.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/KeyValueStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/KeyValueStore.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/MeteredKeyValueStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/MeteredKeyValueStore.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/OffsetCheckpoint.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/OffsetCheckpoint.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/RocksDBKeyValueStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/RocksDBKeyValueStore.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/FilteredIteratorTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/FilteredIteratorTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamBranchTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamBranchTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFilterTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFilterTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFlatMapTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapValuesTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFlatMapValuesTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamJoinTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamJoinTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamMapTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamMapTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamMapValuesTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamMapValuesTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamWindowedTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamWindowedTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/processor/internals/MinTimestampTrackerTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/processor/internals/MinTimestampTrackerTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/processor/internals/StreamTaskTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/processor/internals/StreamTaskTest.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/KStreamTestDriver.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/KStreamTestDriver.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockProcessorDef.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockProcessorDef.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockSourceNode.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockSourceNode.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockTimestampExtractor.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockTimestampExtractor.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/UnlimitedWindowDef.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/UnlimitedWindowDef.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/config/AbstractConfig.java" afterPath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/config/AbstractConfig.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java" afterPath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/producer/KafkaProducer.java" afterPath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/producer/KafkaProducer.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internals/WindowSupport.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internals/WindowSupport.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/WindowSupport.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/WindowSupport.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/build.gradle" afterPath="$PROJECT_DIR$/build.gradle" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/checkstyle/import-control.xml" afterPath="$PROJECT_DIR$/checkstyle/import-control.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/bin/kafka-run-class.sh" afterPath="$PROJECT_DIR$/bin/kafka-run-class.sh" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/settings.gradle" afterPath="$PROJECT_DIR$/settings.gradle" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/KStreamContext.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/KafkaStreaming.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/MapKStreamJob.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/PrintKStreamJob.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/StatefulKStreamJob.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internal/KStreamContextImpl.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internal/ProcessorNode.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internal/Receiver.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internal/RecordQueue.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internal/StreamGroup.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/StreamGroup.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/SlidingWindow.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamBranch.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamFilter.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamFlatMap.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamFlatMapValues.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamImpl.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamJoin.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamMap.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamMapValues.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamSource.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internal/KStreamWindowedImpl.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internals/KStreamThread.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internals/WindowSupport.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/SlidingWindow.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/StreamGroup.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/KStreamBranchTest.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/KStreamJoinTest.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/KStreamMapValuesTest.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/KStreamWindowedTest.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamSourceTest.java" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/processor/internals/StreamGroupTest.java" afterPath="" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFilterTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFilterTest.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/Processor.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/Processor.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorContextImpl.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorContextImpl.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorStateManager.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorStateManager.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamThread.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamThread.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java" afterPath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/kafka-work.iws" afterPath="$PROJECT_DIR$/kafka-work.iws" />
     </list>
     <ignored path="kafka-work.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -171,91 +123,114 @@
   </component>
   <component name="FileEditorManager">
     <leaf>
-      <file leaf-file-name="Utils.java" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="-3.7037036">
-              <caret line="467" column="0" selection-start-line="467" selection-start-column="0" selection-end-line="467" selection-end-column="0" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="README.md" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/README.md">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="-15.925926">
-              <caret line="119" column="46" selection-start-line="119" selection-start-column="46" selection-end-line="119" selection-end-column="46" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="settings.gradle" pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/settings.gradle">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.46617916">
-              <caret line="17" column="72" selection-start-line="17" selection-start-column="72" selection-end-line="17" selection-end-column="72" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="kafka-work.iws" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/kafka-work.iws">
+      <file leaf-file-name="Processor.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/Processor.java">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="89" column="56" selection-start-line="89" selection-start-column="56" selection-end-line="89" selection-end-column="56" />
-              <folding />
+              <caret line="29" column="0" selection-start-line="29" selection-start-column="0" selection-end-line="29" selection-end-column="0" />
+              <folding>
+                <element signature="n#!!doc" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="build.gradle" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/build.gradle">
+      <file leaf-file-name="StreamThread.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamThread.java">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="233" column="0" selection-start-line="233" selection-start-column="0" selection-end-line="233" selection-end-column="0" />
-              <folding />
+              <caret line="59" column="0" selection-start-line="59" selection-start-column="0" selection-end-line="59" selection-end-column="0" />
+              <folding>
+                <element signature="imports" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="checkstyle.xml" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/checkstyle/checkstyle.xml">
+      <file leaf-file-name="ProcessorContextImpl.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorContextImpl.java">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="23" column="35" selection-start-line="23" selection-start-column="35" selection-end-line="23" selection-end-column="35" />
+              <caret line="126" column="6" selection-start-line="126" selection-start-column="6" selection-end-line="126" selection-end-column="6" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="import-control.xml" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/checkstyle/import-control.xml">
+      <file leaf-file-name="ProcessorStateManager.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorStateManager.java">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="78" column="59" selection-start-line="78" selection-start-column="59" selection-end-line="78" selection-end-column="59" />
-              <folding />
+              <caret line="77" column="45" selection-start-line="77" selection-start-column="45" selection-end-line="77" selection-end-column="45" />
+              <folding>
+                <element signature="imports" expanded="true" />
+                <element signature="e#5947#5955#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name=".gitignore" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/.gitignore">
+      <file leaf-file-name="KStreamFilterTest.java" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFilterTest.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="-15.925926">
-              <caret line="36" column="15" selection-start-line="36" selection-start-column="15" selection-end-line="36" selection-end-column="15" />
+            <state vertical-scroll-proportion="0.8915537">
+              <caret line="84" column="5" selection-start-line="84" selection-start-column="5" selection-end-line="84" selection-end-column="5" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="ConsumerRecord.java" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/ConsumerRecord.java">
+      <file leaf-file-name="InFlightRequests.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/InFlightRequests.java">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="34" column="11" selection-start-line="34" selection-start-column="11" selection-end-line="34" selection-end-column="11" />
+              <caret line="119" column="31" selection-start-line="119" selection-start-column="31" selection-end-line="119" selection-end-column="31" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="TopologyBuilder.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/TopologyBuilder.java">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0">
+              <caret line="294" column="51" selection-start-line="294" selection-start-column="51" selection-end-line="294" selection-end-column="51" />
+              <folding>
+                <element signature="e#14400#14401#0" expanded="true" />
+                <element signature="e#14468#14469#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="KafkaConsumer.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="-10.037037">
+              <caret line="439" column="11" selection-start-line="439" selection-start-column="11" selection-end-line="439" selection-end-column="11" />
+              <folding>
+                <element signature="e#26332#26333#0" expanded="true" />
+                <element signature="e#26373#26374#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="Consumer.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/Consumer.java">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0">
+              <caret line="45" column="25" selection-start-line="45" selection-start-column="16" selection-end-line="45" selection-end-column="25" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="ConsumerRebalanceListener.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/ConsumerRebalanceListener.java">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0">
+              <caret line="67" column="42" selection-start-line="67" selection-start-column="17" selection-end-line="67" selection-end-column="42" />
               <folding />
             </state>
           </provider>
@@ -281,11 +256,6 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/UnlimitedWindowDef.java" />
-        <option value="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/RestoreFunc.java" />
-        <option value="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/KafkaStreaming.java" />
-        <option value="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/processor/internals/MinTimestampTrackerTest.java" />
-        <option value="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/Stamped.java" />
         <option value="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/producer/KafkaProducer.java" />
         <option value="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java" />
         <option value="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/config/AbstractConfig.java" />
@@ -325,13 +295,18 @@
         <option value="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/KafkaStreaming.java" />
         <option value="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockProcessorDef.java" />
         <option value="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java" />
-        <option value="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java" />
         <option value="$PROJECT_DIR$/.gitignore" />
         <option value="$PROJECT_DIR$/README.md" />
         <option value="$PROJECT_DIR$/kafka-work.iws" />
         <option value="$PROJECT_DIR$/checkstyle/import-control.xml" />
-        <option value="$PROJECT_DIR$/build.gradle" />
         <option value="$PROJECT_DIR$/settings.gradle" />
+        <option value="$PROJECT_DIR$/build.gradle" />
+        <option value="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java" />
+        <option value="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/Processor.java" />
+        <option value="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamThread.java" />
+        <option value="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorContextImpl.java" />
+        <option value="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorStateManager.java" />
+        <option value="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFilterTest.java" />
       </list>
     </option>
   </component>
@@ -343,10 +318,10 @@
     <order />
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="-2549" />
-    <option name="y" value="527" />
-    <option name="width" value="1440" />
-    <option name="height" value="873" />
+    <option name="x" value="-2560" />
+    <option name="y" value="23" />
+    <option name="width" value="2560" />
+    <option name="height" value="1413" />
   </component>
   <component name="ProjectInspectionProfilesVisibleTreeState">
     <entry key="Project Default">
@@ -380,6 +355,7 @@
     </navigator>
     <panes>
       <pane id="PackagesPane" />
+      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <PATH>
@@ -422,6 +398,54 @@
               <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
             </PATH_ELEMENT>
             <PATH_ELEMENT>
+              <option name="myItemId" value="streams" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="src" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+          </PATH>
+          <PATH>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="kafka-work" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="kafka-work" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="streams" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="src" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="main" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="java" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="streams" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+          </PATH>
+          <PATH>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="kafka-work" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="kafka-work" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
               <option name="myItemId" value="config" />
               <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
             </PATH_ELEMENT>
@@ -443,7 +467,6 @@
         </subPane>
       </pane>
       <pane id="Scratches" />
-      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -843,32 +866,32 @@
     </todo-panel>
   </component>
   <component name="ToolWindowManager">
-    <frame x="-2549" y="527" width="1440" height="873" extended-state="0" />
+    <frame x="-2560" y="23" width="2560" height="1413" extended-state="6" />
     <editor active="true" />
     <layout>
       <window_info id="Palette" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32972974" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
-      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32972974" sideWeight="0.5" order="-1" side_tool="false" content_ui="tabs" />
       <window_info id="Palette&#9;" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Application Servers" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Maven Projects" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32972974" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.43938223" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32972974" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Designer" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.23676682" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
-      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.23841059" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.2366958" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.23783784" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.14878398" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="UI Designer" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="2" side_tool="true" content_ui="tabs" />
-      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.17483443" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
+      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.32972974" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="SLIDING" type="SLIDING" visible="false" weight="0.4" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.4" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.43938223" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="combo" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.17483443" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
     </layout>
     <layout-to-restore>
       <window_info id="Palette" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
@@ -920,10 +943,74 @@
     <option name="FILTER_TARGETS" value="false" />
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java">
+    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
-          <caret line="727" column="0" selection-start-line="727" selection-start-column="0" selection-end-line="727" selection-end-column="0" />
+          <caret line="467" column="0" selection-start-line="467" selection-start-column="0" selection-end-line="467" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="119" column="46" selection-start-line="119" selection-start-column="46" selection-end-line="119" selection-end-column="46" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/settings.gradle">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/kafka-work.iws">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="89" column="56" selection-start-line="89" selection-start-column="56" selection-end-line="89" selection-end-column="56" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/build.gradle">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="233" column="0" selection-start-line="233" selection-start-column="0" selection-end-line="233" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/checkstyle/checkstyle.xml">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="23" column="35" selection-start-line="23" selection-start-column="35" selection-end-line="23" selection-end-column="35" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/checkstyle/import-control.xml">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="78" column="59" selection-start-line="78" selection-start-column="59" selection-end-line="78" selection-end-column="59" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/.gitignore">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="36" column="15" selection-start-line="36" selection-start-column="15" selection-end-line="36" selection-end-column="15" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/ConsumerRecord.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="34" column="11" selection-start-line="34" selection-start-column="11" selection-end-line="34" selection-end-column="11" />
           <folding />
         </state>
       </provider>
@@ -942,7 +1029,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="42" column="0" selection-start-line="42" selection-start-column="0" selection-end-line="42" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -950,7 +1036,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="37" column="0" selection-start-line="37" selection-start-column="0" selection-end-line="37" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -958,7 +1043,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="11" column="37" selection-start-line="11" selection-start-column="37" selection-end-line="11" selection-end-column="37" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -966,9 +1050,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="32" column="0" selection-start-line="32" selection-start-column="0" selection-end-line="32" selection-end-column="0" />
-          <folding>
-            <element signature="e#824#845#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -976,7 +1057,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="-7.2222223">
           <caret line="58" column="53" selection-start-line="58" selection-start-column="53" selection-end-line="58" selection-end-column="53" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -984,9 +1064,7 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="230" column="0" selection-start-line="230" selection-start-column="0" selection-end-line="230" selection-end-column="0" />
-          <folding>
-            <element signature="e#7782#7783#0" expanded="false" />
-          </folding>
+          <folding />
         </state>
       </provider>
     </entry>
@@ -1011,23 +1089,15 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/.gitignore">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="-15.925926">
+        <state vertical-scroll-proportion="0.0">
           <caret line="36" column="15" selection-start-line="36" selection-start-column="15" selection-end-line="36" selection-end-column="15" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="-3.7037036">
-          <caret line="467" column="0" selection-start-line="467" selection-start-column="0" selection-end-line="467" selection-end-column="0" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/README.md">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="-15.925926">
+        <state vertical-scroll-proportion="0.0">
           <caret line="119" column="46" selection-start-line="119" selection-start-column="46" selection-end-line="119" selection-end-column="46" />
           <folding />
         </state>
@@ -1036,7 +1106,7 @@
     <entry file="file://$PROJECT_DIR$/kafka-work.iws">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
-          <caret line="89" column="56" selection-start-line="89" selection-start-column="56" selection-end-line="89" selection-end-column="56" />
+          <caret line="5" column="21" selection-start-line="5" selection-start-column="21" selection-end-line="5" selection-end-column="21" />
           <folding />
         </state>
       </provider>
@@ -1057,18 +1127,119 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/build.gradle">
+    <entry file="file://$PROJECT_DIR$/settings.gradle">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
-          <caret line="233" column="0" selection-start-line="233" selection-start-column="0" selection-end-line="233" selection-end-column="0" />
+          <caret line="17" column="72" selection-start-line="17" selection-start-column="72" selection-end-line="17" selection-end-column="72" />
           <folding />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/settings.gradle">
+    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.46617916">
-          <caret line="17" column="72" selection-start-line="17" selection-start-column="72" selection-end-line="17" selection-end-column="72" />
+        <state vertical-scroll-proportion="0.0">
+          <caret line="517" column="25" selection-start-line="517" selection-start-column="25" selection-end-line="517" selection-end-column="25" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/build.gradle">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-3.851852">
+          <caret line="401" column="38" selection-start-line="401" selection-start-column="38" selection-end-line="401" selection-end-column="38" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/Processor.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="29" column="0" selection-start-line="29" selection-start-column="0" selection-end-line="29" selection-end-column="0" />
+          <folding>
+            <element signature="n#!!doc" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/ConsumerRebalanceListener.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="67" column="42" selection-start-line="67" selection-start-column="17" selection-end-line="67" selection-end-column="42" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-10.037037">
+          <caret line="439" column="11" selection-start-line="439" selection-start-column="11" selection-end-line="439" selection-end-column="11" />
+          <folding>
+            <element signature="e#26332#26333#0" expanded="true" />
+            <element signature="e#26373#26374#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/TopologyBuilder.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="294" column="51" selection-start-line="294" selection-start-column="51" selection-end-line="294" selection-end-column="51" />
+          <folding>
+            <element signature="e#14400#14401#0" expanded="true" />
+            <element signature="e#14468#14469#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamThread.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="59" column="0" selection-start-line="59" selection-start-column="0" selection-end-line="59" selection-end-column="0" />
+          <folding>
+            <element signature="imports" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorContextImpl.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="126" column="6" selection-start-line="126" selection-start-column="6" selection-end-line="126" selection-end-column="6" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/Consumer.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="45" column="25" selection-start-line="45" selection-start-column="16" selection-end-line="45" selection-end-column="25" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/InFlightRequests.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="119" column="31" selection-start-line="119" selection-start-column="31" selection-end-line="119" selection-end-column="31" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorStateManager.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="77" column="45" selection-start-line="77" selection-start-column="45" selection-end-line="77" selection-end-column="45" />
+          <folding>
+            <element signature="imports" expanded="true" />
+            <element signature="e#5947#5955#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFilterTest.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.8915537">
+          <caret line="84" column="5" selection-start-line="84" selection-start-column="5" selection-end-line="84" selection-end-column="5" />
           <folding />
         </state>
       </provider>

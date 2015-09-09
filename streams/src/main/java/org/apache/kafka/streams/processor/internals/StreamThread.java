@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.streams.StreamingConfig;
@@ -43,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -75,7 +76,7 @@ public class StreamThread extends Thread {
     private long lastCommit;
     private long recordsProcessed;
 
-    protected final ConsumerRebalanceCallback rebalanceCallback = new ConsumerRebalanceCallback() {
+    protected final ConsumerRebalanceListener rebalanceCallback = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
             addPartitions(assignment);
@@ -105,7 +106,6 @@ public class StreamThread extends Thread {
         log.info("Creating consumer client for stream thread [" + this.getName() + "]");
 
         this.consumer = new KafkaConsumer<>(config.getConsumerConfigs(),
-            rebalanceCallback,
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer());
 
@@ -186,9 +186,7 @@ public class StreamThread extends Thread {
         try {
             int totalNumBuffered = 0;
 
-            for (String topic : builder.sourceTopics()) {
-                consumer.subscribe(topic);
-            }
+            consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceCallback);
 
             while (stillRunning()) {
                 // try to fetch some records if necessary

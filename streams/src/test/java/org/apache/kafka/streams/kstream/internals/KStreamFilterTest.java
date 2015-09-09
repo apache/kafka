@@ -48,35 +48,10 @@ public class KStreamFilterTest {
         KStreamBuilder builder = new KStreamBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    KStreamTopology initializer = new MockKStreamTopology();
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
->>>>>>> new api model
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl();
->>>>>>> wip
-=======
-    KStreamTopology initializer = new MockKStreamTopology();
->>>>>>> wip
-    KStreamSource<Integer, String> stream;
-    MockProcessor<Integer, String> processor;
-=======
         KStreamTopology initializer = new MockKStreamTopology();
         KStreamSource<Integer, String> stream;
-=======
-        KStream<Integer, String> stream;
-<<<<<<< HEAD
->>>>>>> wip
         MockProcessor<Integer, String> processor;
->>>>>>> compile and test passed
-=======
         MockProcessorDef<Integer, String> processor;
->>>>>>> kstream test fix
 
         processor = new MockProcessorDef<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
@@ -98,32 +73,8 @@ public class KStreamFilterTest {
         KStream<Integer, String> stream;
         MockProcessorDef<Integer, String> processor;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    KStreamTopology initializer = new MockKStreamTopology();
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
->>>>>>> new api model
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl();
->>>>>>> wip
-=======
-    KStreamTopology initializer = new MockKStreamTopology();
->>>>>>> wip
-    KStreamSource<Integer, String> stream;
-    MockProcessor<Integer, String> processor;
-=======
-        processor = new MockProcessor<>();
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-=======
-        processor = new MockProcessorDef<>();
-        stream = builder.from(keyDeserializer, valDeserializer, topicName);
->>>>>>> kstream test fix
+        KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
         stream.filterOut(isMultipleOfThree).process(processor);
->>>>>>> compile and test passed
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {

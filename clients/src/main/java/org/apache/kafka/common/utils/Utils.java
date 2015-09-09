@@ -512,7 +512,6 @@ public class Utils {
     }
 
     /**
-<<<<<<< HEAD
      * Check if the given ByteBuffer capacity
      * @param existingBuffer ByteBuffer capacity to check
      * @param newLength new length for the ByteBuffer.
@@ -528,7 +527,7 @@ public class Utils {
         return existingBuffer;
     }
 
-=======
+    /*
      * Creates a set
      * @param elems the elements
      * @param <T> the type of element
@@ -557,9 +556,6 @@ public class Utils {
             file.delete();
         }
     }
-<<<<<<< HEAD
->>>>>>> removing io.confluent imports: wip
-=======
 
     /**
      * Returns an empty collection if this list is null
@@ -569,5 +565,4 @@ public class Utils {
     public static <T> List<T> safe(List<T> other) {
         return other == null ? Collections.<T>emptyList() : other;
     }
->>>>>>> Refactor Processor and KStream APIs
 }
