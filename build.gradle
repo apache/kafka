@@ -529,9 +529,9 @@ project(':tools') {
     test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':stream') {
+project(':streams') {
     apply plugin: 'checkstyle'
-    archivesBaseName = "kafka-stream"
+    archivesBaseName = "kafka-streams"
 
     dependencies {
         compile project(':clients')
@@ -555,7 +555,7 @@ project(':stream') {
     }
 
     javadoc {
-        include "**/org/apache/kafka/stream/*"
+        include "**/org/apache/kafka/streams/*"
     }
 
     tasks.create(name: "copyDependantLibs", type: Copy) {

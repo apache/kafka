@@ -2,46 +2,93 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="7950ad7e-7aa1-4d14-b584-820ad7549166" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/RecordQueue.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/KafkaSource.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/KafkaSource.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/ProcessorConfig.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/ProcessorConfig.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/RecordQueue.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/RecordQueueImpl.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/Stamped.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/Stamped.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/StampedRecord.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/StampedRecord.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamConfig.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/ProcessorProperties.java" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamThread.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/KStreamThread.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/Chooser.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/Chooser.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamBranch.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamBranch.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/KStreamBranchTest.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/KStreamBranchTest.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamImpl.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamImpl.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/KStreamJob.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/KStreamJob.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamJoin.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamJoin.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/KStreamJoinTest.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/KStreamJoinTest.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/KStreamProcess.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/KStreamProcess.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/KStreamSourceTest.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/KStreamSourceTest.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/KStreamTopology.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/KStreamTopology.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamWindow.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/internals/KStreamWindow.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/KStreamWindowedTest.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/KStreamWindowedTest.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/KafkaProcessor.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/KafkaProcessor.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/MinTimestampTracker.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/MinTimestampTracker.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/MinTimestampTrackerTest.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/stream/MinTimestampTrackerTest.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockProcessor.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockProcessor.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockSource.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockSource.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/PTopology.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/PTopology.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/ProcessorContext.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/ProcessorContext.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/ProcessorContextImpl.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/ProcessorContextImpl.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/PunctuationSchedule.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/PunctuationSchedule.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/RoundRobinChooser.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/RoundRobinChooser.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/SimpleProcessJob.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/SimpleProcessJob.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/SlidingWindow.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/SlidingWindow.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/StatefulProcessJob.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/examples/StatefulProcessJob.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/StreamGroup.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/StreamGroup.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/TimeBasedChooser.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/internals/TimeBasedChooser.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/TimestampTracker.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/clients/processor/TimestampTracker.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/UnlimitedWindow.java" afterPath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/UnlimitedWindow.java" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/examples/WallclockTimestampExtractor.java" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java" afterPath="" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/KafkaStreaming.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/KafkaStreaming.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/StreamingConfig.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/StreamingConfig.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/examples/KStreamJob.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/examples/KStreamJob.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/examples/ProcessorJob.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/examples/ProcessorJob.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KStream.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KStream.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KStreamBuilder.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KStreamBuilder.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KStreamWindowed.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KStreamWindowed.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KeyValue.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KeyValue.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/KeyValueMapper.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/KeyValueMapper.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/Predicate.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/Predicate.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/SlidingWindowDef.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/SlidingWindowDef.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/ValueJoiner.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/ValueJoiner.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/ValueMapper.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/ValueMapper.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/Window.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/Window.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/WindowDef.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/WindowDef.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/FilteredIterator.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/FilteredIterator.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamBranch.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamBranch.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamFilter.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamFilter.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMap.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamFlatMap.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapValues.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamFlatMapValues.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamImpl.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamImpl.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamJoin.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamJoin.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamMap.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamMap.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamMapValues.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamMapValues.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamPassThrough.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamPassThrough.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamProcessor.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamProcessor.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamWindow.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamWindow.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/kstream/internals/KStreamWindowedImpl.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/KStreamWindowedImpl.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/Processor.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/Processor.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/ProcessorContext.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/ProcessorContext.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/ProcessorDef.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/ProcessorDef.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/RestoreFunc.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/RestoreFunc.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/StateStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/StateStore.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/TimestampExtractor.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/TimestampExtractor.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/TopologyBuilder.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/TopologyBuilder.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/MinTimestampTracker.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/MinTimestampTracker.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/PartitionGroup.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/PartitionGroup.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/ProcessorContextImpl.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorContextImpl.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/ProcessorNode.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorNode.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/ProcessorStateManager.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorStateManager.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/ProcessorTopology.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/ProcessorTopology.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/PunctuationQueue.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/PunctuationQueue.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/PunctuationSchedule.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/PunctuationSchedule.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/RecordCollector.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/RecordCollector.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/RecordQueue.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/RecordQueue.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/SinkNode.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/SinkNode.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/SourceNode.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/SourceNode.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/Stamped.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/Stamped.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/StampedRecord.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StampedRecord.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/StreamTask.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamTask.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/StreamThread.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamThread.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/processor/internals/TimestampTracker.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/processor/internals/TimestampTracker.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/Entry.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/Entry.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/InMemoryKeyValueStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/InMemoryKeyValueStore.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/KeyValueIterator.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/KeyValueIterator.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/KeyValueStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/KeyValueStore.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/MeteredKeyValueStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/MeteredKeyValueStore.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/OffsetCheckpoint.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/OffsetCheckpoint.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/streaming/state/RocksDBKeyValueStore.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/state/RocksDBKeyValueStore.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/FilteredIteratorTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/FilteredIteratorTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamBranchTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamBranchTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFilterTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFilterTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFlatMapTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapValuesTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamFlatMapValuesTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamJoinTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamJoinTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamMapTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamMapTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamMapValuesTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamMapValuesTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamWindowedTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/kstream/internals/KStreamWindowedTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/processor/internals/MinTimestampTrackerTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/processor/internals/MinTimestampTrackerTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/streaming/processor/internals/StreamTaskTest.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/streams/processor/internals/StreamTaskTest.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/KStreamTestDriver.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/KStreamTestDriver.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockProcessorDef.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockProcessorDef.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockSourceNode.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockSourceNode.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/MockTimestampExtractor.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockTimestampExtractor.java" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/stream/src/test/java/org/apache/kafka/test/UnlimitedWindowDef.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/UnlimitedWindowDef.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/config/AbstractConfig.java" afterPath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/config/AbstractConfig.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java" afterPath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/producer/KafkaProducer.java" afterPath="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/clients/producer/KafkaProducer.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java" afterPath="$PROJECT_DIR$/streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internals/WindowSupport.java" afterPath="$PROJECT_DIR$/stream/src/main/java/org/apache/kafka/stream/topology/internals/WindowSupport.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/WindowSupport.java" afterPath="$PROJECT_DIR$/streams/src/main/java/org/apache/kafka/streams/kstream/internals/WindowSupport.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/build.gradle" afterPath="$PROJECT_DIR$/build.gradle" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/checkstyle/import-control.xml" afterPath="$PROJECT_DIR$/checkstyle/import-control.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/kafka-work.iws" afterPath="$PROJECT_DIR$/kafka-work.iws" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/bin/kafka-run-class.sh" afterPath="$PROJECT_DIR$/bin/kafka-run-class.sh" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/settings.gradle" afterPath="$PROJECT_DIR$/settings.gradle" />
     </list>
     <ignored path="kafka-work.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -127,8 +174,8 @@
       <file leaf-file-name="Utils.java" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="-2.5925925">
-              <caret line="465" column="0" selection-start-line="465" selection-start-column="0" selection-end-line="465" selection-end-column="0" />
+            <state vertical-scroll-proportion="-3.7037036">
+              <caret line="467" column="0" selection-start-line="467" selection-start-column="0" selection-end-line="467" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -144,11 +191,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="settings.gradle" pinned="false" current-in-tab="false">
+      <file leaf-file-name="settings.gradle" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/settings.gradle">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0">
-              <caret line="16" column="129" selection-start-line="16" selection-start-column="129" selection-end-line="16" selection-end-column="129" />
+            <state vertical-scroll-proportion="0.46617916">
+              <caret line="17" column="72" selection-start-line="17" selection-start-column="72" selection-end-line="17" selection-end-column="72" />
               <folding />
             </state>
           </provider>
@@ -158,7 +205,7 @@
         <entry file="file://$PROJECT_DIR$/kafka-work.iws">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="42" column="56" selection-start-line="42" selection-start-column="56" selection-end-line="42" selection-end-column="56" />
+              <caret line="89" column="56" selection-start-line="89" selection-start-column="56" selection-end-line="89" selection-end-column="56" />
               <folding />
             </state>
           </provider>
@@ -168,7 +215,7 @@
         <entry file="file://$PROJECT_DIR$/build.gradle">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="230" column="1" selection-start-line="230" selection-start-column="1" selection-end-line="230" selection-end-column="1" />
+              <caret line="233" column="0" selection-start-line="233" selection-start-column="0" selection-end-line="233" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -184,11 +231,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="import-control.xml" pinned="false" current-in-tab="true">
+      <file leaf-file-name="import-control.xml" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/checkstyle/import-control.xml">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="1.4533821">
-              <caret line="102" column="0" selection-start-line="102" selection-start-column="0" selection-end-line="102" selection-end-column="0" />
+            <state vertical-scroll-proportion="0.0">
+              <caret line="78" column="59" selection-start-line="78" selection-start-column="59" selection-end-line="78" selection-end-column="59" />
               <folding />
             </state>
           </provider>
@@ -281,10 +328,10 @@
         <option value="$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java" />
         <option value="$PROJECT_DIR$/.gitignore" />
         <option value="$PROJECT_DIR$/README.md" />
-        <option value="$PROJECT_DIR$/settings.gradle" />
         <option value="$PROJECT_DIR$/kafka-work.iws" />
-        <option value="$PROJECT_DIR$/build.gradle" />
         <option value="$PROJECT_DIR$/checkstyle/import-control.xml" />
+        <option value="$PROJECT_DIR$/build.gradle" />
+        <option value="$PROJECT_DIR$/settings.gradle" />
       </list>
     </option>
   </component>
@@ -938,7 +985,7 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="230" column="0" selection-start-line="230" selection-start-column="0" selection-end-line="230" selection-end-column="0" />
           <folding>
-            <element signature="e#7577#7578#0" expanded="false" />
+            <element signature="e#7782#7783#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -972,8 +1019,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/clients/src/main/java/org/apache/kafka/common/utils/Utils.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="-2.5925925">
-          <caret line="465" column="0" selection-start-line="465" selection-start-column="0" selection-end-line="465" selection-end-column="0" />
+        <state vertical-scroll-proportion="-3.7037036">
+          <caret line="467" column="0" selection-start-line="467" selection-start-column="0" selection-end-line="467" selection-end-column="0" />
           <folding />
         </state>
       </provider>
@@ -986,26 +1033,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/settings.gradle">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="16" column="129" selection-start-line="16" selection-start-column="129" selection-end-line="16" selection-end-column="129" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/kafka-work.iws">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
-          <caret line="42" column="56" selection-start-line="42" selection-start-column="56" selection-end-line="42" selection-end-column="56" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/build.gradle">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="230" column="1" selection-start-line="230" selection-start-column="1" selection-end-line="230" selection-end-column="1" />
+          <caret line="89" column="56" selection-start-line="89" selection-start-column="56" selection-end-line="89" selection-end-column="56" />
           <folding />
         </state>
       </provider>
@@ -1020,8 +1051,24 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/checkstyle/import-control.xml">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="1.4533821">
-          <caret line="102" column="0" selection-start-line="102" selection-start-column="0" selection-end-line="102" selection-end-column="0" />
+        <state vertical-scroll-proportion="0.0">
+          <caret line="78" column="59" selection-start-line="78" selection-start-column="59" selection-end-line="78" selection-end-column="59" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/build.gradle">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="233" column="0" selection-start-line="233" selection-start-column="0" selection-end-line="233" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/settings.gradle">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.46617916">
+          <caret line="17" column="72" selection-start-line="17" selection-start-column="72" selection-end-line="17" selection-end-column="72" />
           <folding />
         </state>
       </provider>

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.DelayedTask;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -546,6 +547,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         Deserializer.class);
                 this.keyDeserializer.configure(config.originals(), true);
             } else {
+                config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
                 this.keyDeserializer = keyDeserializer;
             }
             if (valueDeserializer == null) {
@@ -553,6 +555,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         Deserializer.class);
                 this.valueDeserializer.configure(config.originals(), false);
             } else {
+                config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
                 this.valueDeserializer = valueDeserializer;
             }
             this.fetcher = new Fetcher<K, V>(this.client,

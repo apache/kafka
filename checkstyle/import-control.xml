@@ -108,14 +108,14 @@
 		</subpackage>
 	</subpackage>
 
-	<subpackage name="streaming">
+	<subpackage name="streams">
 		<allow pkg="org.apache.kafka.common"/>
 		<allow pkg="org.apache.kafka.test"/>
 		<allow pkg="org.apache.kafka.clients"/>
 		<allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
 		<allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
 
-		<allow pkg="org.apache.kafka.streaming"/>
+		<allow pkg="org.apache.kafka.streams"/>
 
 		<subpackage name="state">
 			<allow pkg="org.rocksdb" />

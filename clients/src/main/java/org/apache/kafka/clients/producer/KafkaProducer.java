@@ -259,6 +259,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         Serializer.class);
                 this.keySerializer.configure(config.originals(), true);
             } else {
+                config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
                 this.keySerializer = keySerializer;
             }
             if (valueSerializer == null) {
@@ -266,6 +267,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         Serializer.class);
                 this.valueSerializer.configure(config.originals(), false);
             } else {
+                config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
                 this.valueSerializer = valueSerializer;
             }
             config.logUnused();

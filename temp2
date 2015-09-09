@@ -1,6 +1,6 @@
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFilterTest.java
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapTest.java
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapValuesTest.java
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamMapTest.java
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamSourceTest.java
-stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java
+build.gradle
+settings.gradle
+stream/src/main/java/org/apache/kafka/stream/topology/internals/WindowSupport.java
+stream/src/main/java/org/apache/kafka/streaming/kstream/internals/WindowSupport.java
+streams/src/main/java/org/apache/kafka/streams/kstream/internals/WindowSupport.java
+streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java

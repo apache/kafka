@@ -1,6 +1,6 @@
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFilterTest.java: needs merge
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapTest.java: needs merge
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamFlatMapValuesTest.java: needs merge
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamMapTest.java: needs merge
-stream/src/test/java/org/apache/kafka/streaming/kstream/internals/KStreamSourceTest.java: needs merge
-stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java: needs merge
+build.gradle: needs merge
+settings.gradle: needs merge
+stream/src/main/java/org/apache/kafka/stream/topology/internals/WindowSupport.java: needs merge
+stream/src/main/java/org/apache/kafka/streaming/kstream/internals/WindowSupport.java: needs merge
+streams/src/main/java/org/apache/kafka/streams/kstream/internals/WindowSupport.java: needs merge
+streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java: needs merge
