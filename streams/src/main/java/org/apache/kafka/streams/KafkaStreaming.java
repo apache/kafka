@@ -22,6 +22,9 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
@@ -68,12 +71,12 @@ public class KafkaStreaming {
     private static final int STOPPED = 2;
     private int state = CREATED;
 
-    private final StreamThread[] threads;
+    private final List<StreamThread> threads;
 
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
-        this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
-        for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config);
+        this.threads = new ArrayList<>(config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG));
+        for (int i = 0; i < this.threads.size(); i++) {
+            this.threads.add(new StreamThread(builder, config));
         }
     }
 
@@ -86,13 +89,13 @@ public class KafkaStreaming {
         if (state == CREATED) {
             for (StreamThread thread : threads)
                 thread.start();
+
+            state = RUNNING;
+
+            log.info("Started Kafka Stream process");
         } else {
             throw new IllegalStateException("This process was already started.");
         }
-
-        state = RUNNING;
-
-        log.info("Started Kafka Stream process");
     }
 
     /**
@@ -114,12 +117,12 @@ public class KafkaStreaming {
                     Thread.interrupted();
                 }
             }
+
+            state = STOPPED;
+
+            log.info("Stopped Kafka Stream process");
         } else {
             throw new IllegalStateException("This process has not started yet.");
         }
-
-        state = STOPPED;
-
-        log.info("Stopped Kafka Stream process");
     }
 }

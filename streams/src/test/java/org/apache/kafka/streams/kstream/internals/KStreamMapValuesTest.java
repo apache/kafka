@@ -47,7 +47,7 @@ public class KStreamMapValuesTest {
                 }
             };
 
-        final int[] expectedKeys = new int[]{1, 10, 100, 1000};
+        final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, String> stream;
         MockProcessorDef<Integer, Integer> processor = new MockProcessorDef<>();
@@ -61,7 +61,7 @@ public class KStreamMapValuesTest {
 
         assertEquals(4, processor.processed.size());
 
-        String[] expected = new String[]{"1:1", "10:2", "100:3", "1000:4"};
+        String[] expected = {"1:1", "10:2", "100:3", "1000:4"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));

@@ -271,7 +271,7 @@ public class StreamThread extends Thread {
                         Integer id = Integer.parseInt(dir.getName());
                         if (!tasks.containsKey(id)) {
                             log.info("Deleting obsolete state directory {} after delayed {} ms.", dir.getAbsolutePath(), cleanTimeMs);
-                            Utils.rm(dir);
+                            Utils.delete(dir);
                         }
                     } catch (NumberFormatException e) {
                         // there may be some unknown files that sits in the same directory,

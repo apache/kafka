@@ -45,7 +45,7 @@ public class UnlimitedWindowDef<K, V> implements WindowDef<K, V> {
 
     public class UnlimitedWindow implements Window<K, V> {
 
-        private LinkedList<Stamped<KeyValue<K, V>>> list = new LinkedList<>();
+        private final LinkedList<Stamped<KeyValue<K, V>>> list = new LinkedList<>();
 
         @Override
         public void init(ProcessorContext context) {

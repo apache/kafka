@@ -54,7 +54,7 @@ public class KStreamFlatMapTest {
                 }
             };
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = {0, 1, 2, 3};
 
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -116,7 +116,7 @@ public class KStreamFlatMapTest {
 
         assertEquals(6, processor.processed.size());
 
-        String[] expected = new String[]{"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
+        String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));

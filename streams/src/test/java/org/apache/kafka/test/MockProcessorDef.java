@@ -22,11 +22,12 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorDef;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class MockProcessorDef<K, V> implements ProcessorDef {
 
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    public final List<String> processed = new ArrayList<>();
+    public final List<Long> punctuated = new ArrayList<>();
 
     public Processor instance() {
         return new MockProcessor();

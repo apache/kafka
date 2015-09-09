@@ -223,7 +223,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     public Set<TopicPartition> paused() {
-        return paused;
+        return Collections.unmodifiableSet(new HashSet<>(paused));
     }
 
     private void ensureNotClosed() {

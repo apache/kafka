@@ -543,14 +543,14 @@ public class Utils {
      *
      * @param file The root file at which to begin deleting
      */
-    public static void rm(File file) {
+    public static void delete(File file) {
         if (file == null) {
             return;
         } else if (file.isDirectory()) {
             File[] files = file.listFiles();
             if (files != null) {
                 for (File f : files)
-                    rm(f);
+                    delete(f);
             }
             file.delete();
         } else {
@@ -562,12 +562,12 @@ public class Utils {
 =======
 
     /**
-     * Returns an empty collection if this list is empty
+     * Returns an empty collection if this list is null
      * @param other
      * @return
      */
     public static <T> List<T> safe(List<T> other) {
-        return other == null ? Collections.EMPTY_LIST : other;
+        return other == null ? Collections.<T>emptyList() : other;
     }
 >>>>>>> Refactor Processor and KStream APIs
 }

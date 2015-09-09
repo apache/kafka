@@ -94,7 +94,8 @@ public class RecordQueue {
     public StampedRecord poll() {
         StampedRecord elem = fifoQueue.pollFirst();
 
-        if (elem == null) return null;
+        if (elem == null)
+            return null;
 
         timeTracker.removeElement(elem);
 
