@@ -13,14 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define the root logger with appender file
-log4j.rootLogger = {{ log_level|default("INFO") }}, FILE
+from ducktape.services.background_thread import BackgroundThreadService
 
-log4j.appender.FILE=org.apache.log4j.FileAppender
-log4j.appender.FILE.File={{ log_file }}
-log4j.appender.FILE.ImmediateFlush=true
-log4j.appender.FILE.Threshold=debug
-# Set the append to false, overwrite
-log4j.appender.FILE.Append=false
-log4j.appender.FILE.layout=org.apache.log4j.PatternLayout
-log4j.appender.FILE.layout.conversionPattern=[%d] %p %m (%c)%n
+
+class PerformanceService(BackgroundThreadService):
+
+    def __init__(self, context, num_nodes):
+        super(PerformanceService, self).__init__(context, num_nodes)
+        self.results = [None] * self.num_nodes
+        self.stats = [[] for x in range(self.num_nodes)]
+
+    def clean_node(self, node):
+        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
+        node.account.ssh("rm -rf /mnt/*", allow_fail=False)
+
