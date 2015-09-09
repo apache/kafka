@@ -22,7 +22,7 @@ vagrant_version=`vagrant --version | egrep -o "\d+\.\d+\.\d+"`
 bad_vagrant=false
 if [ "$(version $vagrant_version)" -lt "$(version 1.6.4)" ]; then
     echo "Found Vagrant version $vagrant_version. Please upgrade to 1.6.4 or higher (see http://www.vagrantup.com for details)"
-    bad_vagrant=false
+    bad_vagrant=true
 else
     echo "Vagrant installation looks good."
 fi
@@ -48,6 +48,7 @@ fi
 echo "Creating and packaging a reusable base box for Vagrant..."
 vagrant/package-base-box.sh
 
+# Set up Vagrantfile.local if necessary
 if [ ! -e Vagrantfile.local ]; then
     echo "Creating Vagrantfile.local..."
     cp vagrant/system-test-Vagrantfile.local Vagrantfile.local

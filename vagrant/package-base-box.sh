@@ -31,6 +31,11 @@ vagrant up
 up_success=$?
 if [ $up_sucess != 0 ]; then
     echo "Failed to bring up a template vm, please try running again."
+    # restore original Vagrantfile.local
+    rm -f $local_vagrantfile
+    if [ -e $backup_vagrantfile ]; then
+        mv $backup_vagrantfile $local_vagrantfile
+    fi
     exit $up_success
 fi
 
@@ -43,7 +48,7 @@ vagrant box add $base_box package.box
 echo "Cleaning up..."
 vagrant destroy -f
 rm -f package.box
-# restore the original vagrantfile.local
+# restore the original Vagrantfile.local
 rm -f $local_vagrantfile
 if [ -e $backup_vagrantfile ]; then
     mv $backup_vagrantfile $local_vagrantfile
