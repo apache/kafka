@@ -35,7 +35,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     }
 
     public PunctuationSchedule next() {
-        return new PunctuationSchedule(value, timestamp , interval);
+        return new PunctuationSchedule(value, timestamp, interval);
     }
 
 }
