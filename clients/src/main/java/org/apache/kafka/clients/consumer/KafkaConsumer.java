@@ -706,24 +706,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
     }
 
     /**
-     * Unsubscribe from topics subscribed via pattern subscription
-     *
-     * @param pattern Pattern to unsubscribe from, must match the pattern subscribed to
+     * Unsubscribe from topics currently subscribed to
      */
-    public void unsubscribe(Pattern pattern) {
+    public void unsubscribe() {
         acquire();
         try {
-            final Pattern subscribedPattern = this.subscriptions.getSubscribedPattern();
-
-            if (subscribedPattern.pattern().equals(pattern.pattern())) {
-                log.debug("Unsubscribed from pattern: {}", subscribedPattern);
-                this.subscriptions.unsubscribe();
-                this.metadata.needMetadataForAllTopics(false);
-                this.metadata.removeListener(this);
-            } else {
-                log.debug("Could not unsubscribe from pattern {} as it is not subscribed to",
-                    subscribedPattern);
-            }
+            this.subscriptions.unsubscribe();
+            this.metadata.needMetadataForAllTopics(false);
+            this.metadata.removeListener(this);
         } finally {
             release();
         }

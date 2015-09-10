@@ -141,7 +141,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       this.consumers(0).assignment() == subscriptions.asJava
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment()}")
 
-    this.consumers(0).unsubscribe(pattern)
+    this.consumers(0).unsubscribe()
     assertEquals(0, this.consumers(0).assignment().size)
   }
 
@@ -171,7 +171,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       this.consumers(0).assignment() == subscriptions.asJava
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment()}")
 
-    this.consumers(0).unsubscribe(Pattern.compile("t.*c"))
+    this.consumers(0).unsubscribe()
     assertEquals(0, this.consumers(0).assignment().size)
   }
 

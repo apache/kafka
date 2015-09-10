@@ -62,9 +62,9 @@ public interface Consumer<K, V> extends Closeable {
     public void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
 
     /**
-     * @see KafkaConsumer#unsubscribe(Pattern)
+     * @see KafkaConsumer#unsubscribe()
      */
-    public void unsubscribe(Pattern pattern);
+    public void unsubscribe();
 
     /**
      * @see KafkaConsumer#poll(long)

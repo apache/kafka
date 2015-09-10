@@ -91,11 +91,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void unsubscribe(Pattern pattern) {
+    public void unsubscribe() {
         ensureNotClosed();
-        if (subscriptions.getSubscribedPattern() != null &&
-            subscriptions.getSubscribedPattern().equals(pattern))
-            subscriptions.unsubscribe();
+        subscriptions.unsubscribe();
     }
 
     @Override
