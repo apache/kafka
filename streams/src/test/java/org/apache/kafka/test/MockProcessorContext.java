@@ -17,85 +17,10 @@
 
 package org.apache.kafka.test;
 
-<<<<<<< HEAD:stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD:stream/src/test/java/org/apache/kafka/test/MockKStreamContext.java
-<<<<<<< HEAD
-<<<<<<< HEAD
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.Processor;
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-import io.confluent.streaming.PunctuationScheduler;
->>>>>>> new api model
-=======
->>>>>>> removed ProcessorContext
-import io.confluent.streaming.RecordCollector;
-<<<<<<< HEAD
-import io.confluent.streaming.StorageEngine;
-=======
-import io.confluent.streaming.StateStore;
-<<<<<<< HEAD
-<<<<<<< HEAD
-import io.confluent.streaming.Coordinator;
->>>>>>> wip
-import io.confluent.streaming.internal.StreamGroup;
-=======
-import io.confluent.streaming.internal.PunctuationQueue;
-=======
-import io.confluent.streaming.internal.PunctuationQueue;
-<<<<<<< HEAD
-import io.confluent.streaming.internal.PunctuationSchedulerImpl;
->>>>>>> new api model
-=======
->>>>>>> removed ProcessorContext
-import io.confluent.streaming.kv.internals.RestoreFunc;
->>>>>>> new api model
-=======
-import org.apache.kafka.stream.topology.Processor;
-=======
-import org.apache.kafka.stream.Processor;
->>>>>>> wip
-import org.apache.kafka.stream.KStreamContext;
-<<<<<<< HEAD
-import org.apache.kafka.stream.RecordCollector;
-import org.apache.kafka.stream.RestoreFunc;
-import org.apache.kafka.stream.StateStore;
->>>>>>> removing io.confluent imports: wip
-=======
-=======
-import org.apache.kafka.clients.processor.KafkaProcessor;
-import org.apache.kafka.clients.processor.ProcessorContext;
->>>>>>> wip:stream/src/test/java/org/apache/kafka/test/MockProcessorContext.java
-import org.apache.kafka.clients.processor.RecordCollector;
-import org.apache.kafka.clients.processor.RestoreFunc;
-import org.apache.kafka.clients.processor.StateStore;
->>>>>>> wip
-=======
-import org.apache.kafka.stream.processor.KafkaProcessor;
-import org.apache.kafka.stream.processor.ProcessorContext;
-import org.apache.kafka.stream.processor.RecordCollector;
-import org.apache.kafka.stream.processor.RestoreFunc;
-import org.apache.kafka.stream.processor.StateStore;
->>>>>>> Refactor Processor and KStream APIs
-=======
-import org.apache.kafka.streaming.processor.KafkaProcessor;
-=======
-import org.apache.kafka.streaming.processor.Processor;
->>>>>>> wip: refactor StreamTask and ProcessorContext, fix RecordQueue timestamp tracking
-import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.RestoreFunc;
-import org.apache.kafka.streaming.processor.StateStore;
->>>>>>> Some package and class renaming, fix KafkaSource constrcution at builder
-=======
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RestoreFunc;
 import org.apache.kafka.streams.processor.StateStore;
->>>>>>> fix ProcessorJob; rename streaming to streams:streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -109,115 +34,12 @@ import java.util.Map;
 
 public class MockProcessorContext implements ProcessorContext {
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-  Serializer serializer;
-  Deserializer deserializer;
-  private final PunctuationQueue punctuationQueue = new PunctuationQueue();
-
-  public MockKStreamContext(Serializer<?> serializer, Deserializer<?> deserializer) {
-    this.serializer = serializer;
-    this.deserializer = deserializer;
-  }
-
-  @Override
-  public int id() { return -1; }
-
-  @Override
-  public Serializer<?> keySerializer() { return serializer; }
-
-  @Override
-  public Serializer<?> valueSerializer() { return serializer; }
-
-  @Override
-  public Deserializer<?> keyDeserializer() { return deserializer; }
-
-  @Override
-  public Deserializer<?> valueDeserializer() { return deserializer; }
-
-  @Override
-  public RecordCollector recordCollector() { throw new UnsupportedOperationException("recordCollector() not supported."); }
-
-  @Override
-  public Map<String, Object> getContext() { throw new UnsupportedOperationException("getContext() not supported."); }
-
-  @Override
-  public File stateDir() { throw new UnsupportedOperationException("stateDir() not supported."); }
-
-  @Override
-  public Metrics metrics() { throw new UnsupportedOperationException("metrics() not supported."); }
-
-  @Override
-<<<<<<< HEAD
-  public void restore(StateStore store, RestoreFunc func) { throw new UnsupportedOperationException("restore() not supported."); }
-<<<<<<< HEAD
-
-  public void register(StateStore store) { throw new UnsupportedOperationException("restore() not supported."); }
-=======
->>>>>>> new api model
-
-  public void register(StateStore store) { throw new UnsupportedOperationException("restore() not supported."); }
-=======
-  public void register(StateStore store, RestoreFunc func) { throw new UnsupportedOperationException("restore() not supported."); }
->>>>>>> removing io.confluent imports: wip
-
-  @Override
-  public void flush() { throw new UnsupportedOperationException("flush() not supported."); }
-
-  @Override
-<<<<<<< HEAD
-<<<<<<< HEAD
-  public void restore(StateStore engine) throws Exception { throw new UnsupportedOperationException("restore() not supported."); }
-=======
-  public void send(String topic, Object key, Object value) { throw new UnsupportedOperationException("send() not supported."); }
->>>>>>> new api model
-=======
-  public void send(String topic, Object key, Object value) { throw new UnsupportedOperationException("send() not supported."); }
->>>>>>> new api model
-
-  @Override
-  public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) { throw new UnsupportedOperationException("send() not supported."); }
-
-  @Override
-<<<<<<< HEAD
-<<<<<<< HEAD
-  public void schedule(Processor processor, long interval) {
-    throw new UnsupportedOperationException("schedule() not supported");
-=======
-  public PunctuationScheduler getPunctuationScheduler(Processor processor) {
-    return new PunctuationSchedulerImpl(punctuationQueue, processor);
->>>>>>> new api model
-=======
-  public void schedule(Processor processor, long interval) {
-    throw new UnsupportedOperationException("schedule() not supported");
->>>>>>> removed ProcessorContext
-  }
-
-  @Override
-  public void commit() { throw new UnsupportedOperationException("commit() not supported."); }
-
-  @Override
-  public String topic() { throw new UnsupportedOperationException("topic() not supported."); }
-
-  @Override
-  public int partition() { throw new UnsupportedOperationException("partition() not supported."); }
-
-  @Override
-  public long offset() { throw new UnsupportedOperationException("offset() not supported."); }
-
-  @Override
-  public long timestamp() { throw new UnsupportedOperationException("timestamp() not supported."); }
-=======
-    Serializer serializer;
-    Deserializer deserializer;
-=======
     private Serializer serializer;
     private Deserializer deserializer;
     private ProcessorNode node;
     private final ArrayDeque<ProcessorNode> nodeStack = new ArrayDeque<ProcessorNode>();
 
     private Map<String, StateStore> storeMap = new HashMap<>();
->>>>>>> kstream test fix
 
     long timestamp = -1L;
 
@@ -334,7 +156,6 @@ public class MockProcessorContext implements ProcessorContext {
     public long timestamp() {
         return this.timestamp;
     }
->>>>>>> compile and test passed
 
     public void pushNode(ProcessorNode node) {
         nodeStack.push(node);

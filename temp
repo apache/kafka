@@ -1,6 +1,0 @@
-build.gradle: needs merge
-settings.gradle: needs merge
-stream/src/main/java/org/apache/kafka/stream/topology/internals/WindowSupport.java: needs merge
-stream/src/main/java/org/apache/kafka/streaming/kstream/internals/WindowSupport.java: needs merge
-streams/src/main/java/org/apache/kafka/streams/kstream/internals/WindowSupport.java: needs merge
-streams/src/test/java/org/apache/kafka/test/MockProcessorContext.java: needs merge

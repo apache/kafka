@@ -82,7 +82,7 @@ public class StreamTaskTest {
 
     @Before
     public void setup() {
-        consumer.subscribe(partition1, partition2);
+        consumer.assign(Arrays.asList(partition1, partition2));
     }
 
     @SuppressWarnings("unchecked")

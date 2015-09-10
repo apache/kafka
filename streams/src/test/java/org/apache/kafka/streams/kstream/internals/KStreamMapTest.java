@@ -50,35 +50,8 @@ public class KStreamMapTest {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    KStreamTopology initializer = new MockKStreamTopology();
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
->>>>>>> new api model
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl();
->>>>>>> wip
-=======
-    KStreamTopology initializer = new MockKStreamTopology();
->>>>>>> wip
-    KStreamSource<Integer, String> stream;
-    MockProcessor<String, Integer> processor;
-=======
-        KStreamTopology initializer = new MockKStreamTopology();
-        KStreamSource<Integer, String> stream;
-=======
         KStream<Integer, String> stream;
-<<<<<<< HEAD
->>>>>>> wip
-        MockProcessor<String, Integer> processor;
->>>>>>> compile and test passed
-=======
         MockProcessorDef<String, Integer> processor;
->>>>>>> kstream test fix
 
         processor = new MockProcessorDef<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);

@@ -54,35 +54,8 @@ public class KStreamFlatMapValuesTest {
 
         final int[] expectedKeys = {0, 1, 2, 3};
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    KStreamTopology initializer = new MockKStreamTopology();
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
->>>>>>> new api model
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl();
->>>>>>> wip
-=======
-    KStreamTopology initializer = new MockKStreamTopology();
->>>>>>> wip
-    KStreamSource<Integer, String> stream;
-    MockProcessor<Integer, String> processor;
-=======
-        KStreamTopology initializer = new MockKStreamTopology();
-        KStreamSource<Integer, String> stream;
-=======
         KStream<Integer, String> stream;
-<<<<<<< HEAD
->>>>>>> wip
-        MockProcessor<Integer, String> processor;
->>>>>>> compile and test passed
-=======
         MockProcessorDef<Integer, String> processor;
->>>>>>> kstream test fix
 
         processor = new MockProcessorDef<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
