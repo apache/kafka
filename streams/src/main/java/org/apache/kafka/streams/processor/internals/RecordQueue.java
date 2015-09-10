@@ -75,12 +75,14 @@ public class RecordQueue {
             // deserialize the raw record, extract the timestamp and put into the queue
             Object key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
             Object value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
-            long timestamp = timestampExtractor.extract(rawRecord.topic(), key, value);
 
-            StampedRecord record = new StampedRecord(new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(), key, value), timestamp);
+            ConsumerRecord<Object, Object> record = new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(), key, value);
+            long timestamp = timestampExtractor.extract(record);
 
-            fifoQueue.addLast(record);
-            timeTracker.addElement(record);
+            StampedRecord stampedRecord = new StampedRecord(record, timestamp);
+
+            fifoQueue.addLast(stampedRecord);
+            timeTracker.addElement(stampedRecord);
         }
 
         return size();
