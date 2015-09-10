@@ -12,11 +12,11 @@
  */
 package kafka.api
 
-import java.{util, lang}
+import java.util.regex.Pattern
+import java.{lang, util}
 
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.TopicPartition
 
@@ -57,6 +57,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+  this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
 
   @Before
   override def setUp() {
@@ -86,6 +87,92 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     Thread.sleep(10)
     assertEquals(0, commitCallback.count)
     awaitCommitCallback(this.consumers(0), commitCallback)
+  }
+
+  @Test
+  def testPatternSubscription() {
+    val numRecords = 10000
+    sendRecords(numRecords)
+
+    val topic1: String = "tblablac" // matches subscribed pattern
+    TestUtils.createTopic(this.zkClient, topic1, 2, serverCount, this.servers)
+    sendRecords(1000, new TopicPartition(topic1, 0))
+    sendRecords(1000, new TopicPartition(topic1, 1))
+
+    val topic2: String = "tblablak" // does not match subscribed pattern
+    TestUtils.createTopic(this.zkClient, topic2, 2, serverCount, this.servers)
+    sendRecords(1000, new TopicPartition(topic2, 0))
+    sendRecords(1000, new TopicPartition(topic2, 1))
+
+    val topic3: String = "tblab1" // does not match subscribed pattern
+    TestUtils.createTopic(this.zkClient, topic3, 2, serverCount, this.servers)
+    sendRecords(1000, new TopicPartition(topic3, 0))
+    sendRecords(1000, new TopicPartition(topic3, 1))
+
+    assertEquals(0, this.consumers(0).assignment().size)
+
+    val pattern: Pattern = Pattern.compile("t.*c")
+    this.consumers(0).subscribe(pattern, new TestConsumerReassignmentListener)
+    this.consumers(0).poll(50)
+
+    var subscriptions = Set(
+      new TopicPartition(topic, 0),
+      new TopicPartition(topic, 1),
+      new TopicPartition(topic1, 0),
+      new TopicPartition(topic1, 1))
+
+    TestUtils.waitUntilTrue(() => {
+      this.consumers(0).poll(50)
+      this.consumers(0).assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment()}")
+
+    val topic4: String = "tsomec" // matches subscribed pattern
+    TestUtils.createTopic(this.zkClient, topic4, 2, serverCount, this.servers)
+    sendRecords(1000, new TopicPartition(topic4, 0))
+    sendRecords(1000, new TopicPartition(topic4, 1))
+
+    subscriptions = subscriptions ++ Set(
+      new TopicPartition(topic4, 0),
+      new TopicPartition(topic4, 1))
+
+
+    TestUtils.waitUntilTrue(() => {
+      this.consumers(0).poll(50)
+      this.consumers(0).assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment()}")
+
+    this.consumers(0).unsubscribe()
+    assertEquals(0, this.consumers(0).assignment().size)
+  }
+
+  @Test
+  def testPatternUnsubscription() {
+    val numRecords = 10000
+    sendRecords(numRecords)
+
+    val topic1: String = "tblablac" // matches subscribed pattern
+    TestUtils.createTopic(this.zkClient, topic1, 2, serverCount, this.servers)
+    sendRecords(1000, new TopicPartition(topic1, 0))
+    sendRecords(1000, new TopicPartition(topic1, 1))
+
+    assertEquals(0, this.consumers(0).assignment().size)
+
+    this.consumers(0).subscribe(Pattern.compile("t.*c"), new TestConsumerReassignmentListener)
+    this.consumers(0).poll(50)
+
+    val subscriptions = Set(
+      new TopicPartition(topic, 0),
+      new TopicPartition(topic, 1),
+      new TopicPartition(topic1, 0),
+      new TopicPartition(topic1, 1))
+
+    TestUtils.waitUntilTrue(() => {
+      this.consumers(0).poll(50)
+      this.consumers(0).assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment()}")
+
+    this.consumers(0).unsubscribe()
+    assertEquals(0, this.consumers(0).assignment().size)
   }
 
   @Test
