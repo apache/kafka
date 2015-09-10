@@ -88,7 +88,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     debug("Controller %d trying to connect to broker %d".format(config.brokerId, broker.id))
     val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
     val brokerNode = new Node(broker.id, brokerEndPoint.host, brokerEndPoint.port)
-    val networkClient = controllerContext.networkClientMap.getOrElseUpdate(broker.id, {
+    val networkClient = {
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
         config.connectionsMaxIdleMs,
@@ -108,7 +108,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE
       )
-    })
+    }
     val requestThread = new RequestSendThread(config.brokerId, controllerContext, broker, messageQueue, networkClient, brokerNode, config, time)
     requestThread.setDaemon(false)
     brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(networkClient, brokerNode, broker, messageQueue, requestThread))
@@ -116,7 +116,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
 
   private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
     try {
-      brokerState.networkClient.close(brokerState.brokerNode.idString)
+      brokerState.networkClient.close()
       brokerState.messageQueue.clear()
       brokerState.requestSendThread.shutdown()
       brokerStateInfo.remove(brokerState.broker.id)
