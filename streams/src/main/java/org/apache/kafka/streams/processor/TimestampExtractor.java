@@ -17,18 +17,18 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+
 /**
  * An interface that allows the KStream framework to extract a timestamp from a key-value pair
  */
 public interface TimestampExtractor {
 
     /**
-     * Extracts a timestamp from a key-value pair from a topic
+     * Extracts a timestamp from a message
      *
-     * @param topic the topic name
-     * @param key   the key object
-     * @param value the value object
+     * @param record ConsumerRecord
      * @return timestamp
      */
-    long extract(String topic, Object key, Object value);
+    long extract(ConsumerRecord<Object, Object> record);
 }

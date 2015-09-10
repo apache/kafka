@@ -17,11 +17,12 @@
 
 package org.apache.kafka.streams.examples;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 public class WallclockTimestampExtractor implements TimestampExtractor {
     @Override
-    public long extract(String topic, Object key, Object value) {
+    public long extract(ConsumerRecord<Object, Object> record) {
         return System.currentTimeMillis();
     }
 }

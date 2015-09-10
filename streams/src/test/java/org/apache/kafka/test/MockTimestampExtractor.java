@@ -17,12 +17,13 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 public class MockTimestampExtractor implements TimestampExtractor {
 
     @Override
-    public long extract(String topic, Object key, Object value) {
-        return ((Integer) key).longValue();
+    public long extract(ConsumerRecord<Object, Object> record) {
+        return ((Integer) record.key()).longValue();
     }
 }
