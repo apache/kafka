@@ -17,36 +17,8 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.PriorityQueue;
+public interface Punctuator {
 
-public class PunctuationQueue {
-
-    private PriorityQueue<PunctuationSchedule> pq = new PriorityQueue<>();
-
-    public void schedule(PunctuationSchedule sched) {
-        synchronized (pq) {
-            pq.add(sched);
-        }
-    }
-
-    public void close() {
-        synchronized (pq) {
-            pq.clear();
-        }
-    }
-
-    public void mayPunctuate(long streamTime, Punctuator punctuator) {
-        synchronized (pq) {
-            PunctuationSchedule top = pq.peek();
-            while (top != null && top.timestamp <= streamTime) {
-                PunctuationSchedule sched = top;
-                pq.poll();
-                punctuator.punctuate(sched.node(), streamTime);
-                pq.add(sched.next());
-
-                top = pq.peek();
-            }
-        }
-    }
+    void punctuate(ProcessorNode node, long streamTime);
 
 }

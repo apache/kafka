@@ -31,15 +31,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
  */
-public class StreamTask {
+public class StreamTask implements Punctuator {
 
     private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
 
@@ -59,6 +61,8 @@ public class StreamTask {
     private boolean commitOffsetNeeded = false;
     private StampedRecord currRecord = null;
     private ProcessorNode currNode = null;
+    private final ArrayDeque<ProcessorNode> nodeStack = new ArrayDeque<>();
+
 
     /**
      * Create {@link StreamTask} with its assigned partitions
@@ -80,7 +84,7 @@ public class StreamTask {
 
         this.id = id;
         this.consumer = consumer;
-        this.punctuationQueue = new PunctuationQueue(this);
+        this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.topology = topology;
 
@@ -183,10 +187,17 @@ public class StreamTask {
             // possibly trigger registered punctuation functions if
             // partition group's time has reached the defined stamp
             long timestamp = partitionGroup.timestamp();
-            punctuationQueue.mayPunctuate(timestamp);
+            punctuationQueue.mayPunctuate(timestamp, this);
 
             return partitionGroup.numBuffered();
         }
+    }
+
+    @Override
+    public void punctuate(ProcessorNode node, long streamTime) {
+        pushNode(node);
+        node.processor().punctuate(streamTime);
+        popNode();
     }
 
     public StampedRecord record() {
@@ -196,6 +207,17 @@ public class StreamTask {
     public ProcessorNode node() {
         return this.currNode;
     }
+
+    private void pushNode(ProcessorNode node) {
+        nodeStack.push(node);
+        currNode = node;
+    }
+
+    private void popNode() {
+        nodeStack.pop();
+        currNode = nodeStack.peek();
+    }
+
 
     public void node(ProcessorNode node) {
         this.currNode = node;
@@ -249,4 +271,28 @@ public class StreamTask {
     private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
         return new RecordQueue(partition, source);
     }
+
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value) {
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) currNode.children()) {
+            pushNode(childNode);
+            try {
+                childNode.process(key, value);
+            } finally {
+                popNode();
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, int childIndex) {
+        ProcessorNode childNode = (ProcessorNode<K, V>) currNode.children().get(childIndex);
+        pushNode(childNode);
+        try {
+            childNode.process(key, value);
+        } finally {
+            popNode();
+        }
+    }
+
 }
