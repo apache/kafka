@@ -767,6 +767,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         // init any new fetches (won't resend pending fetches)
         Cluster cluster = this.metadata.fetch();
+        Map records = fetcher.fetchedRecords();
+        if (!records.isEmpty()) {
+            client.poll(0);
+            return records;
+        }
         fetcher.initFetches(cluster);
         client.poll(timeout);
         return fetcher.fetchedRecords();
