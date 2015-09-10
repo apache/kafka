@@ -434,7 +434,6 @@ public class Fetcher<K, V> {
             int totalBytes = 0;
             int totalCount = 0;
             FetchResponse response = new FetchResponse(resp.responseBody());
-
             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 FetchResponse.PartitionData partition = entry.getValue();
@@ -476,8 +475,6 @@ public class Fetcher<K, V> {
                 } else if (partition.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
                     || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                     this.metadata.requestUpdate();
-                } else if (partition.errorCode == Errors.UNKNOWN.code()) {
-                    log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
                     long fetchOffset = request.fetchData().get(tp).offset;
                     if (subscriptions.hasDefaultOffsetResetPolicy())
@@ -485,6 +482,8 @@ public class Fetcher<K, V> {
                     else
                         this.offsetOutOfRangePartitions.put(tp, fetchOffset);
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
+                } else if (partition.errorCode == Errors.UNKNOWN.code()) {
+                    log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else {
                     throw new IllegalStateException("Unexpected error code " + partition.errorCode + " while fetching data");
                 }
