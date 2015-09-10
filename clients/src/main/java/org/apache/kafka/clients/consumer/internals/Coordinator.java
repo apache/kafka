@@ -13,8 +13,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.CommitType;
-import org.apache.kafka.clients.consumer.ConsumerCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -71,10 +70,10 @@ public final class Coordinator {
     private final CoordinatorMetrics sensors;
     private final long requestTimeoutMs;
     private final long retryBackoffMs;
+    private final OffsetCommitCallback defaultOffsetCommitCallback;
     private Node consumerCoordinator;
     private String consumerId;
     private int generation;
-
 
     /**
      * Initialize the coordination manager.
@@ -90,8 +89,8 @@ public final class Coordinator {
                        Map<String, String> metricTags,
                        Time time,
                        long requestTimeoutMs,
-                       long retryBackoffMs) {
-
+                       long retryBackoffMs,
+                       OffsetCommitCallback defaultOffsetCommitCallback) {
         this.client = client;
         this.time = time;
         this.generation = -1;
@@ -106,6 +105,7 @@ public final class Coordinator {
         this.sensors = new CoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
+        this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
     }
 
     /**
@@ -213,21 +213,6 @@ public final class Coordinator {
             if (future.failed())
                 client.awaitMetadataUpdate();
         }
-    }
-
-    /**
-     * Commit offsets. This call blocks (regardless of commitType) until the coordinator
-     * can receive the commit request. Once the request has been made, however, only the
-     * synchronous commits will wait for a successful response from the coordinator.
-     * @param offsets Offsets to commit.
-     * @param commitType Commit policy
-     * @param callback Callback to be executed when the commit request finishes
-     */
-    public void commitOffsets(Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback) {
-        if (commitType == CommitType.ASYNC)
-            commitOffsetsAsync(offsets, callback);
-        else
-            commitOffsetsSync(offsets, callback);
     }
 
     private class HeartbeatTask implements DelayedTask {
@@ -363,25 +348,24 @@ public final class Coordinator {
         }
     }
 
-    private void commitOffsetsAsync(final Map<TopicPartition, Long> offsets, final ConsumerCommitCallback callback) {
+    public void commitOffsetsAsync(final Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
         this.subscriptions.needRefreshCommits();
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-        if (callback != null) {
-            future.addListener(new RequestFutureListener<Void>() {
-                @Override
-                public void onSuccess(Void value) {
-                    callback.onComplete(offsets, null);
-                }
+        final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
+        future.addListener(new RequestFutureListener<Void>() {
+            @Override
+            public void onSuccess(Void value) {
+                cb.onComplete(offsets, null);
+            }
 
-                @Override
-                public void onFailure(RuntimeException e) {
-                    callback.onComplete(offsets, e);
-                }
-            });
-        }
+            @Override
+            public void onFailure(RuntimeException e) {
+                cb.onComplete(offsets, e);
+            }
+        });
     }
 
-    private void commitOffsetsSync(Map<TopicPartition, Long> offsets, ConsumerCommitCallback callback) {
+    public void commitOffsetsSync(Map<TopicPartition, Long> offsets) {
         while (true) {
             ensureCoordinatorKnown();
             ensurePartitionAssignment();
@@ -390,17 +374,11 @@ public final class Coordinator {
             client.poll(future);
 
             if (future.succeeded()) {
-                if (callback != null)
-                    callback.onComplete(offsets, null);
                 return;
             }
 
             if (!future.isRetriable()) {
-                if (callback == null)
-                    throw future.exception();
-                else
-                    callback.onComplete(offsets, future.exception());
-                return;
+                throw future.exception();
             }
 
             Utils.sleep(retryBackoffMs);
@@ -437,6 +415,13 @@ public final class Coordinator {
                 .compose(new OffsetCommitResponseHandler(offsets));
     }
 
+    public static class DefaultOffsetCommitCallback implements OffsetCommitCallback {
+        @Override
+        public void onComplete(Map<TopicPartition, Long> offsets, Exception exception) {
+            if (exception != null)
+                log.error("Offset commit failed.", exception);
+        }
+    }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
 
