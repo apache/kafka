@@ -48,9 +48,7 @@ public class KStreamFilterTest {
         KStreamBuilder builder = new KStreamBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
-        KStreamTopology initializer = new MockKStreamTopology();
-        KStreamSource<Integer, String> stream;
-        MockProcessor<Integer, String> processor;
+        KStream<Integer, String> stream;
         MockProcessorDef<Integer, String> processor;
 
         processor = new MockProcessorDef<>();
@@ -73,7 +71,8 @@ public class KStreamFilterTest {
         KStream<Integer, String> stream;
         MockProcessorDef<Integer, String> processor;
 
-        KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
+        processor = new MockProcessorDef<>();
+        stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.filterOut(isMultipleOfThree).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
@@ -83,5 +82,4 @@ public class KStreamFilterTest {
 
         assertEquals(5, processor.processed.size());
     }
-
 }
