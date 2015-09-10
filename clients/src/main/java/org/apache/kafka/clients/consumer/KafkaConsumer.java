@@ -43,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -57,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 /**
  * A Kafka client that consumes records from a Kafka cluster.
@@ -155,7 +157,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * called <i>test</i> as described above.
  * <p>
  * The broker will automatically detect failed processes in the <i>test</i> group by using a heartbeat mechanism. The
- * consumer will automatically ping the cluster periodically, which let's the cluster know that it is alive. As long as
+ * consumer will automatically ping the cluster periodically, which lets the cluster know that it is alive. As long as
  * the consumer is able to do this it is considered alive and retains the right to consume from the partitions assigned
  * to it. If it stops heartbeating for a period of time longer than <code>session.timeout.ms</code> then it will be
  * considered dead and its partitions will be assigned to another process.
@@ -393,7 +395,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  */
 @InterfaceStability.Unstable
-public class KafkaConsumer<K, V> implements Consumer<K, V> {
+public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
@@ -674,6 +676,50 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Subscribes to topics matching specified pattern and uses the consumer's group
+     * management functionality. The pattern matching will be done periodically against topics
+     * existing at the time of check.
+     * <p>
+     * As part of group management, the consumer will keep track of the list of consumers that
+     * belong to a particular group and will trigger a rebalance operation if one of the
+     * following events trigger -
+     * <ul>
+     * <li>Number of partitions change for any of the subscribed list of topics
+     * <li>Topic is created or deleted
+     * <li>An existing member of the consumer group dies
+     * <li>A new member is added to an existing consumer group via the join API
+     * </ul>
+     *
+     * @param pattern Pattern to subscribe to
+     */
+    @Override
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+        acquire();
+        try {
+            log.debug("Subscribed to pattern: {}", pattern);
+            this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
+            this.metadata.needMetadataForAllTopics(true);
+            this.metadata.addListener(this);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Unsubscribe from topics currently subscribed to
+     */
+    public void unsubscribe() {
+        acquire();
+        try {
+            this.subscriptions.unsubscribe();
+            this.metadata.needMetadataForAllTopics(false);
+            this.metadata.removeListener(this);
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Assign a list of partition to this consumer. This interface does not allow for incremental assignment
      * and will replace the previous assignment (if there is one).
      * <p>
@@ -909,7 +955,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Seek to the last offset for each of the given partitions
+     * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
+     * final offset in all partitions only when poll() or position() are called.
      */
     public void seekToEnd(TopicPartition... partitions) {
         acquire();
@@ -1155,4 +1202,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
     }
+
+    @Override
+    public void onMetadataUpdate(Cluster cluster) {
+        final List<String> topicsToSubscribe = new ArrayList<>();
+
+        for (String topic : cluster.topics())
+            if (this.subscriptions.getSubscribedPattern().matcher(topic).matches())
+                topicsToSubscribe.add(topic);
+
+        subscriptions.changeSubscription(topicsToSubscribe);
+        metadata.setTopics(topicsToSubscribe);
+    }
+
 }

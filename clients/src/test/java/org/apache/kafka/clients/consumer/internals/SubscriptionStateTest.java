@@ -22,7 +22,9 @@ import static org.junit.Assert.assertTrue;
 import static java.util.Arrays.asList;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.regex.Pattern;
 
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
@@ -34,6 +36,8 @@ public class SubscriptionStateTest {
     private final SubscriptionState state = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private final TopicPartition tp0 = new TopicPartition("test", 0);
     private final TopicPartition tp1 = new TopicPartition("test", 1);
+    private final MockSubscriptionListener mockSubscriptionListener = new
+        MockSubscriptionListener();
 
     @Test
     public void partitionAssignment() {
@@ -143,6 +147,71 @@ public class SubscriptionStateTest {
         assertEquals(offset, state.committed(tp));
         assertEquals(offset, state.fetched(tp));
         assertEquals(offset, state.consumed(tp));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void cantSubscribeTopicAndPattern() {
+        state.subscribe(Arrays.asList("test"), mockSubscriptionListener);
+        state.subscribe(Pattern.compile(".*"), listener);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void cantSubscribePartitionAndPattern() {
+        state.assign(Arrays.asList(new TopicPartition("test", 0)));
+        state.subscribe(Pattern.compile(".*"), listener);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void cantSubscribePatternAndTopic() {
+        state.subscribe(Pattern.compile(".*"), listener);
+        state.subscribe(Arrays.asList("test"), mockSubscriptionListener);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void cantSubscribePatternAndPartition() {
+        state.subscribe(Pattern.compile(".*"), listener);
+        state.assign(Arrays.asList(new TopicPartition("test", 0)));
+    }
+
+    @Test
+    public void patternSubscription() {
+        state.subscribe(Pattern.compile(".*"), listener);
+        state.changeSubscription(Arrays.asList("test", "test1"));
+
+        assertEquals(
+            "Expected subscribed topics count is incorrect", 2, state.subscription().size());
+    }
+
+    @Test
+    public void patternUnsubscription() {
+        state.subscribe(Pattern.compile(".*"), listener);
+        state.changeSubscription(Arrays.asList("test", "test1"));
+
+        state.unsubscribe();
+
+        assertEquals(
+            "Expected subscribed topics count is incorrect", 0, state.subscription().size());
+    }
+
+    private static class MockSubscriptionListener extends SubscriptionState.RebalanceListener {
+        public Collection<TopicPartition> revoked;
+        public Collection<TopicPartition> assigned;
+        public int revokedCount = 0;
+        public int assignedCount = 0;
+
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            this.assigned = partitions;
+            assignedCount++;
+        }
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            this.revoked = partitions;
+            revokedCount++;
+        }
+
     }
     
 }

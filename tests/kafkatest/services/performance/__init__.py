@@ -13,14 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define the root logger with appender file
-log4j.rootLogger = {{ log_level|default("INFO") }}, FILE
-
-log4j.appender.FILE=org.apache.log4j.FileAppender
-log4j.appender.FILE.File={{ log_file }}
-log4j.appender.FILE.ImmediateFlush=true
-log4j.appender.FILE.Threshold=debug
-# Set the append to false, overwrite
-log4j.appender.FILE.Append=false
-log4j.appender.FILE.layout=org.apache.log4j.PatternLayout
-log4j.appender.FILE.layout.conversionPattern=[%d] %p %m (%c)%n
+from performance import PerformanceService
+from end_to_end_latency import EndToEndLatencyService
+from producer_performance import ProducerPerformanceService
+from consumer_performance import ConsumerPerformanceService

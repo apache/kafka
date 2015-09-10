@@ -172,12 +172,8 @@ public class Fetcher<K, V> {
         long startTime = time.milliseconds();
 
         while (time.milliseconds() - startTime < timeout) {
-            final Node node = client.leastLoadedNode();
-            if (node != null) {
-                MetadataRequest metadataRequest = new MetadataRequest(Collections.<String>emptyList());
-                final RequestFuture<ClientResponse> requestFuture =
-                    client.send(node, ApiKeys.METADATA, metadataRequest);
-
+            RequestFuture<ClientResponse> requestFuture = sendMetadataRequest();
+            if (requestFuture != null) {
                 client.poll(requestFuture);
 
                 if (requestFuture.succeeded()) {
@@ -199,6 +195,17 @@ public class Fetcher<K, V> {
         }
 
         return topicsPartitionInfos;
+    }
+
+    /**
+     * Send Metadata Request to least loaded node in Kafka cluster asynchronously
+     * @return A future that indicates result of sent metadata request
+     */
+    public RequestFuture<ClientResponse> sendMetadataRequest() {
+        final Node node = client.leastLoadedNode();
+        return node == null ? null :
+            client.send(
+                node, ApiKeys.METADATA, new MetadataRequest(Collections.<String>emptyList()));
     }
 
     /**
