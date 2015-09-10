@@ -162,7 +162,7 @@ public class Metrics implements Closeable {
         if (sensor != null) {
             for (KafkaMetric metric : sensor.metrics())
                 removeMetric(metric.metricName());
-            List<Sensor> childSensors = childrenSensors.get(name);
+            List<Sensor> childSensors = childrenSensors.remove(name);
             if (childSensors != null) {
                 for (Sensor childSensor : childSensors)
                     removeSensor(childSensor.name());
@@ -234,6 +234,10 @@ public class Metrics implements Closeable {
      */
     public Map<MetricName, KafkaMetric> metrics() {
         return this.metrics;
+    }
+
+    ConcurrentMap<String, List<Sensor>> childrenSensors() {
+        return childrenSensors;
     }
 
     /**
