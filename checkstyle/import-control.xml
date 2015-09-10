@@ -128,7 +128,6 @@
 		<allow pkg="org.apache.kafka.copycat.data" />
 		<allow pkg="org.apache.kafka.copycat.errors" />
 		<allow pkg="org.apache.kafka.clients" />
-		<allow pkg="org.apache.kafka.clients" />
 
 		<subpackage name="source">
 			<allow pkg="org.apache.kafka.copycat.connector" />
@@ -146,6 +145,7 @@
 
 		<subpackage name="cli">
 			<allow pkg="org.apache.kafka.copycat.runtime" />
+			<allow pkg="org.apache.kafka.copycat.storage" />
 			<allow pkg="org.apache.kafka.copycat.util" />
 			<allow pkg="org.apache.kafka.common" />
 		</subpackage>
