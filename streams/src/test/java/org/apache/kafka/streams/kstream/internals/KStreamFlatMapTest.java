@@ -56,58 +56,12 @@ public class KStreamFlatMapTest {
 
         final int[] expectedKeys = {0, 1, 2, 3};
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    KStreamTopology topology = new MockKStreamTopology();
-
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl(null, null, null, null);
->>>>>>> new api model
-=======
-    KStreamInitializer initializer = new KStreamInitializerImpl();
->>>>>>> wip
-=======
-    KStreamTopology topology = new MockKStreamTopology();
-
->>>>>>> wip
-    KStreamSource<Integer, String> stream;
-    MockProcessor<String, String> processor;
-
-<<<<<<< HEAD
-    processor = new TestProcessor<>();
-<<<<<<< HEAD
-<<<<<<< HEAD
-    stream = new KStreamSource<>(null, topology);
-=======
-    stream = new KStreamSource<>(null, initializer);
->>>>>>> new api model
-=======
-=======
-    processor = new MockProcessor<>();
->>>>>>> removing io.confluent imports: wip
-    stream = new KStreamSource<>(null, topology);
->>>>>>> wip
-    stream.flatMap(mapper).process(processor);
-=======
-        KStreamTopology topology = new MockKStreamTopology();
-
-        KStreamSource<Integer, String> stream;
-=======
         KStream<Integer, String> stream;
-<<<<<<< HEAD
->>>>>>> wip
-        MockProcessor<String, String> processor;
-=======
         MockProcessorDef<String, String> processor;
->>>>>>> kstream test fix
 
         processor = new MockProcessorDef<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.flatMap(mapper).process(processor);
->>>>>>> compile and test passed
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
