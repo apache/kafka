@@ -16,11 +16,14 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import java.io.IOException;
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
+
+import javax.net.ssl.SSLEngine;
 
 import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.security.ssl.SSLFactory;
@@ -44,6 +47,7 @@ public class SSLSelectorTest {
     private EchoServer server;
     private Selector selector;
     private ChannelBuilder channelBuilder;
+    private Map<String, Object> sslClientConfigs;
 
     @Before
     public void setup() throws Exception {
@@ -53,7 +57,7 @@ public class SSLSelectorTest {
         sslServerConfigs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         this.server = new EchoServer(sslServerConfigs);
         this.server.start();
-        Map<String, Object> sslClientConfigs = TestSSLUtils.createSSLConfig(false, false, SSLFactory.Mode.SERVER, trustStoreFile, "client");
+        sslClientConfigs = TestSSLUtils.createSSLConfig(false, false, SSLFactory.Mode.SERVER, trustStoreFile, "client");
         sslClientConfigs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
 
         this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
@@ -199,6 +203,49 @@ public class SSLSelectorTest {
         }
     }
 
+
+    /**
+     * Tests handling of BUFFER_UNDERFLOW during unwrap when network read buffer is smaller than SSL session packet buffer size.
+     */
+    @Test
+    public void testNetReadBufferResize() throws Exception {
+        String node = "0";
+        createSelector(10, 0, 0);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        String requestPrefix = TestUtils.randomString(64000);
+        sendAndReceive(node, requestPrefix, 0, 10);
+    }
+    
+    /**
+     * Tests handling of BUFFER_OVERFLOW during wrap when network write buffer is smaller than SSL session packet buffer size.
+     */
+    @Test
+    public void testNetWriteBufferResize() throws Exception {
+        String node = "0";
+        createSelector(0, 10, 0);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        String requestPrefix = TestUtils.randomString(64000);
+        sendAndReceive(node, requestPrefix, 0, 10);
+    }
+
+    /**
+     * Tests handling of BUFFER_OVERFLOW during unwrap when application read buffer is smaller than SSL session application buffer size.
+     */
+    @Test
+    public void testApplicationBufferResize() throws Exception {
+        String node = "0";
+        createSelector(0, 0, 10);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        String requestPrefix = TestUtils.randomString(64000);
+        sendAndReceive(node, requestPrefix, 0, 10);
+    }
+    
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         while (true) {
@@ -251,6 +298,86 @@ public class SSLSelectorTest {
             for (int i = 0; i < selector.completedSends().size() && requests < endIndex && selector.isChannelReady(node); i++, requests++) {
                 selector.send(createSend(node, requestPrefix + "-" + requests));
             }
+        }
+    }
+
+    private void createSelector(final int netReadBufSize, final int netWriteBufSize, final int appBufSize) {
+        
+        if (this.selector != null)
+            this.selector.close();
+        this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT) {
+
+            @Override
+            protected SSLTransportLayer buildTransportLayer(SSLFactory sslFactory, String id, SelectionKey key) throws IOException {
+                SocketChannel socketChannel = (SocketChannel) key.channel();
+                SSLEngine sslEngine = sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
+                                socketChannel.socket().getPort());
+                return new TestSSLTransportLayer(id, key, sslEngine, netReadBufSize, netWriteBufSize, appBufSize);
+            }
+
+
+        };
+        this.channelBuilder.configure(sslClientConfigs);
+        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
+    }
+
+    /**
+     * SSLTransportLayer with overrides for packet and application buffer size to test buffer resize
+     * code path. The overridden buffer size starts with a small value and increases in size when the buffer
+     * size is retrieved to handle overflow/underflow, until the actual session buffer size is reached.
+     */
+    private static class TestSSLTransportLayer extends SSLTransportLayer {
+
+        private int netReadBufSizeOverride;
+        private int netWriteBufSizeOverride;
+        private int appBufSizeOverride;
+        private boolean isInitialized;
+
+        public TestSSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, 
+                int netReadBufSize, int netWriteBufSize, int appBufSize) throws IOException {
+            super(channelId, key, sslEngine);
+            this.netReadBufSizeOverride = netReadBufSize;
+            this.netWriteBufSizeOverride = netWriteBufSize;
+            this.appBufSizeOverride = appBufSize;
+            this.isInitialized = true;
+        }
+        
+        @Override
+        protected int netReadBufferSize() {
+            int size = super.netReadBufferSize();
+            if (!isInitialized) {
+                size = 10;
+            } else if (netReadBufSizeOverride != 0) {
+                if (!netReadBuffer().hasRemaining()) {
+                    netReadBufSizeOverride = Math.min(netReadBufSizeOverride * 2, size);
+                }
+                size = netReadBufSizeOverride;
+            }
+            return size;
+        }
+        
+        @Override
+        protected int netWriteBufferSize() {
+            int size = super.netWriteBufferSize();
+            if (!isInitialized) {
+                size = 10;
+            } else if (netWriteBufSizeOverride != 0) {
+                netWriteBufSizeOverride = Math.min(netWriteBufSizeOverride * 2, size);
+                size = netWriteBufSizeOverride;
+            }
+            return size;
+        }
+
+        @Override
+        protected int applicationBufferSize() {
+            int size = super.applicationBufferSize();
+            if (!isInitialized) {
+                size = 10;
+            } else if (appBufSizeOverride != 0) {
+                appBufSizeOverride = Math.min(appBufSizeOverride * 2, size);
+                size = appBufSizeOverride;
+            }
+            return size;
         }
     }
 
