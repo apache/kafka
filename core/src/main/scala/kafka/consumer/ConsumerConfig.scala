@@ -181,6 +181,10 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   /** Select a strategy for assigning partitions to consumer streams. Possible values: range, roundrobin */
   val partitionAssignmentStrategy = props.getString("partition.assignment.strategy", DefaultPartitionAssignmentStrategy)
   
+  
+  /** commit offset after consumed */
+  val commitAfterConsumed  = props.getBoolean("manual.commit.after.consumed",false);
+  
   validate(this)
 }
 

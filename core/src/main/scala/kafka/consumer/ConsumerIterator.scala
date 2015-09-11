@@ -23,6 +23,13 @@ import kafka.serializer.Decoder
 import java.util.concurrent.atomic.AtomicReference
 import kafka.message.{MessageAndOffset, MessageAndMetadata}
 import kafka.common.{KafkaException, MessageSizeTooLargeException}
+import kafka.common.TopicAndPartition
+import kafka.utils.Pool
+import kafka.common.TopicAndPartition
+import kafka.common.TopicAndPartition
+import org.apache.kafka.common.TopicPartition
+import kafka.common.TopicAndPartition
+import kafka.common.TopicAndPartition
 
 
 /**
@@ -34,19 +41,26 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
                              consumerTimeoutMs: Int,
                              private val keyDecoder: Decoder[K],
                              private val valueDecoder: Decoder[V],
-                             val clientId: String)
+                             val clientId: String,val commitAfterConsumed: Boolean)
   extends IteratorTemplate[MessageAndMetadata[K, V]] with Logging {
 
   private var current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
   private var currentTopicInfo: PartitionTopicInfo = null
   private var consumedOffset: Long = -1L
   private val consumerTopicStats = ConsumerTopicStatsRegistry.getConsumerTopicStat(clientId)
+  private val topicPartition2Info = new Pool[TopicAndPartition, PartitionTopicInfo]
+	private val iteratorOffsetMap = new Pool[TopicAndPartition, Long]
 
   override def next(): MessageAndMetadata[K, V] = {
     val item = super.next()
     if(consumedOffset < 0)
       throw new KafkaException("Offset returned by the message set is invalid %d".format(consumedOffset))
-    currentTopicInfo.resetConsumeOffset(consumedOffset)
+    if(!commitAfterConsumed){
+      currentTopicInfo.resetConsumeOffset(consumedOffset)
+    }else{
+      iteratorOffsetMap.put(TopicAndPartition(item.topic,item.partition), consumedOffset);
+    }
+    topicPartition2Info.put(TopicAndPartition(currentTopicInfo.topic,currentTopicInfo.partitionId), currentTopicInfo);
     val topic = currentTopicInfo.topic
     trace("Setting %s consumed offset to %d".format(topic, consumedOffset))
     consumerTopicStats.getConsumerTopicStats(topic).messageRate.mark()
@@ -77,9 +91,11 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
         val cdcFetchOffset = currentDataChunk.fetchOffset
         val ctiConsumeOffset = currentTopicInfo.getConsumeOffset
         if (ctiConsumeOffset < cdcFetchOffset) {
-          error("consumed offset: %d doesn't match fetch offset: %d for %s;\n Consumer may lose data"
+//          error("consumed offset: %d doesn't match fetch offset: %d for %s;\n Consumer may lose data"
+//            .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
+//          currentTopicInfo.resetConsumeOffset(cdcFetchOffset)
+          info("consumed offset: %d doesn't match fetch offset: %d for %s;\n "
             .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
-          currentTopicInfo.resetConsumeOffset(cdcFetchOffset)
         }
         localCurrent = currentDataChunk.messages.iterator
 
@@ -93,7 +109,9 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
     }
     var item = localCurrent.next()
     // reject the messages that have already been consumed
-    while (item.offset < currentTopicInfo.getConsumeOffset && localCurrent.hasNext) {
+
+    var iteratorOffset = iteratorOffsetMap.get(TopicAndPartition(currentTopicInfo.topic, currentTopicInfo.partitionId));
+    while (item.offset < iteratorOffset && localCurrent.hasNext) {
       item = localCurrent.next()
     }
     consumedOffset = item.nextOffset
@@ -109,6 +127,19 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
       current.set(null)
     }
   }
+  
+  def resetConsumeOffset(topic:String,partitionId:Int,offset:Long) {
+    if (commitAfterConsumed) {
+       val targetTopicPartitionInfo = topicPartition2Info.get(TopicAndPartition(topic,partitionId));
+       targetTopicPartitionInfo.resetConsumeOffset(offset);
+    } 
+  }
+  
+  def resetConsumeOffset() {
+    if (!commitAfterConsumed)
+      currentTopicInfo.resetConsumeOffset(consumedOffset)
+   }
+  
 }
 
 class ConsumerTimeoutException() extends RuntimeException()

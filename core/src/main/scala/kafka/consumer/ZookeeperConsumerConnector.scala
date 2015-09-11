@@ -230,7 +230,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       threadIdSet.map(_ => {
         val queue =  new LinkedBlockingQueue[FetchedDataChunk](config.queuedMaxMessages)
         val stream = new KafkaStream[K,V](
-          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.clientId)
+          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.clientId,config.commitAfterConsumed)
         (queue, stream)
       })
     ).flatten.toList
@@ -279,6 +279,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   def commitOffsetToZooKeeper(topicPartition: TopicAndPartition, offset: Long) {
     if (checkpointedZkOffsets.get(topicPartition) != offset) {
+      info("offset commiting " + topicPartition +" offset = "+ offset.toString());
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topicPartition.topic)
       updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + topicPartition.partition, offset.toString)
       checkpointedZkOffsets.put(topicPartition, offset)
@@ -922,7 +923,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                           config.consumerTimeoutMs,
                                           keyDecoder,
                                           valueDecoder,
-                                          config.clientId)
+                                          config.clientId,config.commitAfterConsumed)
         (queue, stream)
     }).toList
 
