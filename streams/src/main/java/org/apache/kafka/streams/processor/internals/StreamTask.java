@@ -225,15 +225,16 @@ public class StreamTask implements Punctuator {
         // 1) flush local state
         ((ProcessorContextImpl) processorContext).stateManager().flush();
 
-        // 2) commit consumed offsets if it is dirty already
+        // 2) flush produced records in the downstream
+        // TODO: this will actually block on all produced records across the tasks
+        recordCollector.flush();
+
+        // 3) commit consumed offsets if it is dirty already
         if (commitOffsetNeeded) {
             consumer.commit(consumedOffsets, CommitType.SYNC);
             commitOffsetNeeded = false;
         }
-
-        // 3) flush produced records in the downstream
-        // TODO: this will actually block on all produced records across the tasks
-        recordCollector.flush();
+        commitRequested = false;
     }
 
     /**
