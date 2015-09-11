@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -61,8 +60,6 @@ public class StreamTask implements Punctuator {
     private boolean commitOffsetNeeded = false;
     private StampedRecord currRecord = null;
     private ProcessorNode currNode = null;
-    private final ArrayDeque<ProcessorNode> nodeStack = new ArrayDeque<>();
-
 
     /**
      * Create {@link StreamTask} with its assigned partitions
@@ -158,46 +155,55 @@ public class StreamTask implements Punctuator {
             if (queue == null)
                 return 0;
 
-            // get a record from the queue and process it
-            // by passing to the source node of the topology
-            this.currRecord = partitionGroup.getRecord(queue);
-            this.currNode = queue.source();
+            try {
+                // get a record from the queue and process it
+                // by passing to the source node of the topology
+                this.currRecord = partitionGroup.getRecord(queue);
+                this.currNode = queue.source();
 
-            log.debug("Start processing one record [" + currRecord + "]");
+                log.debug("Start processing one record [" + currRecord + "]");
 
-            this.currNode.process(currRecord.key(), currRecord.value());
+                this.currNode.process(currRecord.key(), currRecord.value());
 
-            log.debug("Completed processing one record [" + currRecord + "]");
+                log.debug("Completed processing one record [" + currRecord + "]");
 
-            // update the consumed offset map after processing is done
-            consumedOffsets.put(queue.partition(), currRecord.offset());
-            commitOffsetNeeded = true;
+                // update the consumed offset map after processing is done
+                consumedOffsets.put(queue.partition(), currRecord.offset());
+                commitOffsetNeeded = true;
 
-            // commit the current task state if requested during the processing
-            if (commitRequested) {
-                commit();
+                // commit the current task state if requested during the processing
+                if (commitRequested) {
+                    commit();
+                }
+
+                // if after processing this record, its partition queue's buffered size has been
+                // decreased to the threshold, we can then resume the consumption on this partition
+                if (partitionGroup.numBuffered(queue.partition()) == this.maxBufferedSize) {
+                    consumer.resume(queue.partition());
+                }
+
+                // possibly trigger registered punctuation functions if
+                // partition group's time has reached the defined stamp
+                long timestamp = partitionGroup.timestamp();
+                punctuationQueue.mayPunctuate(timestamp, this);
+            } finally {
+                this.currRecord = null;
+                this.currNode = null;
             }
-
-            // if after processing this record, its partition queue's buffered size has been
-            // decreased to the threshold, we can then resume the consumption on this partition
-            if (partitionGroup.numBuffered(queue.partition()) == this.maxBufferedSize) {
-                consumer.resume(queue.partition());
-            }
-
-            // possibly trigger registered punctuation functions if
-            // partition group's time has reached the defined stamp
-            long timestamp = partitionGroup.timestamp();
-            punctuationQueue.mayPunctuate(timestamp, this);
-
             return partitionGroup.numBuffered();
         }
     }
 
     @Override
     public void punctuate(ProcessorNode node, long streamTime) {
-        pushNode(node);
-        node.processor().punctuate(streamTime);
-        popNode();
+        if (currNode != null) throw new IllegalStateException("Current node is not null");
+
+        currNode = node;
+        try {
+            node.processor().punctuate(streamTime);
+        } finally {
+            currNode = null;
+        }
     }
 
     public StampedRecord record() {
@@ -206,21 +212,6 @@ public class StreamTask implements Punctuator {
 
     public ProcessorNode node() {
         return this.currNode;
-    }
-
-    private void pushNode(ProcessorNode node) {
-        nodeStack.push(node);
-        currNode = node;
-    }
-
-    private void popNode() {
-        nodeStack.pop();
-        currNode = nodeStack.peek();
-    }
-
-
-    public void node(ProcessorNode node) {
-        this.currNode = node;
     }
 
     public ProcessorTopology topology() {
@@ -274,24 +265,26 @@ public class StreamTask implements Punctuator {
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) currNode.children()) {
-            pushNode(childNode);
+        ProcessorNode thisNode = currNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            currNode = childNode;
             try {
                 childNode.process(key, value);
             } finally {
-                popNode();
+                currNode = thisNode;
             }
         }
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode childNode = (ProcessorNode<K, V>) currNode.children().get(childIndex);
-        pushNode(childNode);
+        ProcessorNode thisNode = currNode;
+        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
+        currNode = childNode;
         try {
             childNode.process(key, value);
         } finally {
-            popNode();
+            currNode = thisNode;
         }
     }
 
