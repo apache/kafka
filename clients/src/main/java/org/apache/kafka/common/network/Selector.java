@@ -558,6 +558,8 @@ public class Selector implements Selectable {
         public final Sensor bytesReceived;
         public final Sensor selectTime;
         public final Sensor ioTime;
+
+        /* Names of metrics that are not registered through sensors */
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
         private final List<Sensor> sensors = new ArrayList<>();
 

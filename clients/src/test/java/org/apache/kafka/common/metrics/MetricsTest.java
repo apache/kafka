@@ -165,28 +165,28 @@ public class MetricsTest {
 
         metrics.removeSensor("test.parent1");
         assertNull(metrics.getSensor("test.parent1"));
-        assertNull(metrics.metrics().get("test.parent1.count"));
+        assertNull(metrics.metrics().get(new MetricName("test.parent1.count", "grp1")));
         assertNull(metrics.getSensor("test.child1"));
         assertNull(metrics.childrenSensors().get("test.child1"));
-        assertNull(metrics.metrics().get("test.child1.count"));
+        assertNull(metrics.metrics().get(new MetricName("test.child1.count", "grp1")));
 
         assertNotNull(metrics.getSensor("test.gchild2"));
         metrics.removeSensor("test.gchild2");
         assertNull(metrics.getSensor("test.gchild2"));
         assertNull(metrics.childrenSensors().get("test.gchild2"));
-        assertNull(metrics.metrics().get("test.gchild2.count"));
+        assertNull(metrics.metrics().get(new MetricName("test.gchild2.count", "grp1")));
 
         assertNotNull(metrics.getSensor("test.child2"));
         metrics.removeSensor("test.child2");
         assertNull(metrics.getSensor("test.child2"));
         assertNull(metrics.childrenSensors().get("test.child2"));
-        assertNull(metrics.metrics().get("test.child2.count"));
+        assertNull(metrics.metrics().get(new MetricName("test.child2.count", "grp1")));
 
         assertNotNull(metrics.getSensor("test.parent2"));
         metrics.removeSensor("test.parent2");
         assertNull(metrics.getSensor("test.parent2"));
         assertNull(metrics.childrenSensors().get("test.parent2"));
-        assertNull(metrics.metrics().get("test.parent2.count"));
+        assertNull(metrics.metrics().get(new MetricName("test.parent2.count", "grp1")));
 
         assertEquals(0, metrics.metrics().size());
     }

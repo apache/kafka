@@ -28,8 +28,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
-import scala.collection.{JavaConverters, mutable, Set, Map}
-import JavaConverters._
+import scala.collection.{mutable, Set, Map}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 

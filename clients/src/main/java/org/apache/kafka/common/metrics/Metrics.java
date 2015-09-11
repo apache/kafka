@@ -14,6 +14,7 @@ package org.apache.kafka.common.metrics;
 
 import java.io.Closeable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
@@ -236,8 +237,9 @@ public class Metrics implements Closeable {
         return this.metrics;
     }
 
-    ConcurrentMap<String, List<Sensor>> childrenSensors() {
-        return childrenSensors;
+    /* For testing use only. */
+    Map<String, List<Sensor>> childrenSensors() {
+        return Collections.unmodifiableMap(childrenSensors);
     }
 
     /**
