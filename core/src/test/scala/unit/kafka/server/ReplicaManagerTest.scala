@@ -24,7 +24,9 @@ import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.junit.Test
@@ -42,7 +44,9 @@ class ReplicaManagerTest {
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
-    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
+    val jTime = new JMockTime
+    val rm = new ReplicaManager(config, new Metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false))
     val partition = rm.getOrCreatePartition(topic, 1)
     partition.getOrCreateReplica(1)
     rm.checkpointHighWatermarks()
@@ -59,7 +63,9 @@ class ReplicaManagerTest {
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
-    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
+    val jTime = new JMockTime
+    val rm = new ReplicaManager(config, new Metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false))
     val partition = rm.getOrCreatePartition(topic, 1)
     partition.getOrCreateReplica(1)
     rm.checkpointHighWatermarks()
@@ -75,7 +81,9 @@ class ReplicaManagerTest {
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
-    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
+    val jTime = new JMockTime
+    val rm = new ReplicaManager(config, new Metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false))
     val produceRequest = new ProducerRequest(1, "client 1", 3, 1000, SerializationTestUtils.topicDataProducerRequest)
     def callback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) = {
       assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS.code)

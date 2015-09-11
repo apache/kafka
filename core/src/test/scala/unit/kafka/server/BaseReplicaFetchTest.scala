@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.io.File
+
 import org.junit.{Test, After, Before}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
@@ -25,17 +27,20 @@ import kafka.serializer.StringEncoder
 import kafka.utils.{TestUtils}
 import kafka.common._
 
-class ReplicaFetchTest extends ZooKeeperTestHarness  {
+abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"
 
+  /* If this is `Some`, SSL will be enabled */
+  protected def trustStoreFile: Option[File]
+
   @Before
   override def setUp() {
     super.setUp()
-    brokers = createBrokerConfigs(2, zkConnect, false)
+    brokers = createBrokerConfigs(2, zkConnect, enableControlledShutdown = false, enableSSL = trustStoreFile.isDefined, trustStoreFile = trustStoreFile)
       .map(KafkaConfig.fromProps)
-      .map(config => TestUtils.createServer(config))
+      .map(TestUtils.createServer(_))
   }
 
   @After
