@@ -76,7 +76,8 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
                                                     consumerConfig.consumerTimeoutMs,
                                                     new StringDecoder(), 
                                                     new StringDecoder(),
-                                                    clientId = "")
+                                                    clientId = "",
+                                                    false)
     val receivedMessages = (0 until 5).map(i => iter.next.message).toList
 
     assertFalse(iter.hasNext)
@@ -99,7 +100,8 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
       ConsumerConfig.ConsumerTimeoutMs,
       new FailDecoder(),
       new FailDecoder(),
-      clientId = "")
+      clientId = "",
+      false)
 
     val receivedMessages = (0 until 5).map{ i =>
       assertTrue(iter.hasNext)
