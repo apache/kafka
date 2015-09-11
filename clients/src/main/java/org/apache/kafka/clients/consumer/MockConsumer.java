@@ -67,7 +67,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
-        this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
+        this.subscriptions.subscribe(pattern, listener);
         List<String> topicsToSubscribe = new ArrayList<>();
         for (String topic: partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
@@ -81,7 +81,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
-        this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
+        this.subscriptions.subscribe(topics, listener);
     }
 
     @Override

@@ -107,10 +107,10 @@ object ConsumerPerformance {
     val joinTimeout = 10000
     val isAssigned = new AtomicBoolean(false)
     consumer.subscribe(topics, new ConsumerRebalanceListener {
-      def onPartitionsAssigned(consumer: org.apache.kafka.clients.consumer.Consumer[_, _], partitions: util.Collection[TopicPartition]) {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(true)
       }
-      def onPartitionsRevoked(consumer: org.apache.kafka.clients.consumer.Consumer[_, _], partitions: util.Collection[TopicPartition]) {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(false)
       }})
     val joinStart = System.currentTimeMillis()
