@@ -158,15 +158,31 @@ public class Metrics implements Closeable {
      *
      * @param name The name of the sensor to be removed
      */
-    public synchronized void removeSensor(String name) {
-        Sensor sensor = sensors.remove(name);
-        if (sensor != null) {
+    public void removeSensor(String name) {
+        List<Sensor> removedSensors = new ArrayList<>();
+
+        synchronized (this) {
+            removeSensor(name, removedSensors);
+        }
+
+        /*
+         * Because `Sensor.metrics` acquires a lock on `sensor` and `Sensor.add` calls methods on `Metrics` that
+         * acquire a lock on the metrics instance, it is important to do the `sensor.metrics` calls below outside
+         * the `synchronized(this)` above.
+         */
+        for (Sensor sensor : removedSensors)
             for (KafkaMetric metric : sensor.metrics())
                 removeMetric(metric.metricName());
+    }
+
+    private void removeSensor(String name, List<Sensor> removedSensors) {
+        Sensor sensor = sensors.remove(name);
+        if (sensor != null) {
+            removedSensors.add(sensor);
             List<Sensor> childSensors = childrenSensors.remove(name);
             if (childSensors != null) {
                 for (Sensor childSensor : childSensors)
-                    removeSensor(childSensor.name());
+                    removeSensor(childSensor.name(), removedSensors);
             }
         }
     }
