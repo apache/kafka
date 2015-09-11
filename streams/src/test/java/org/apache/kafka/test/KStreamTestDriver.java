@@ -21,12 +21,16 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+
+import java.util.List;
 
 public class KStreamTestDriver {
 
     private final ProcessorTopology topology;
     private final MockProcessorContext context;
+    private ProcessorNode currNode;
 
     public KStreamTestDriver(KStreamBuilder builder) {
         this(builder, null, null);
@@ -34,13 +38,25 @@ public class KStreamTestDriver {
 
     public KStreamTestDriver(KStreamBuilder builder, Serializer<?> serializer, Deserializer<?> deserializer) {
         this.topology = builder.build();
-        this.context = new MockProcessorContext(serializer, deserializer);
+        this.context = new MockProcessorContext(this, serializer, deserializer);
 
-        this.topology.init(context);
+        for (ProcessorNode node : topology.processors()) {
+            currNode = node;
+            try {
+                node.init(context);
+            } finally {
+                currNode = null;
+            }
+        }
     }
 
     public void process(String topicName, Object key, Object value) {
-        context.process(topology, topicName, key, value);
+        currNode = topology.source(topicName);
+        try {
+            forward(key, value);
+        } finally {
+            currNode = null;
+        }
     }
 
     public void setTime(long timestamp) {
@@ -49,6 +65,31 @@ public class KStreamTestDriver {
 
     public StateStore getStateStore(String name) {
         return context.getStateStore(name);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value) {
+        ProcessorNode thisNode = currNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            currNode = childNode;
+            try {
+                childNode.process(key, value);
+            } finally {
+                currNode = thisNode;
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <K, V> void forward(K key, V value, int childIndex) {
+        ProcessorNode thisNode = currNode;
+        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
+        currNode = childNode;
+        try {
+            childNode.process(key, value);
+        } finally {
+            currNode = thisNode;
+        }
     }
 
 }
