@@ -484,15 +484,14 @@ class Log(val dir: File,
     // do the read on the segment with a base offset less than the target offset
     // but if that segment doesn't contain any messages with an offset greater than that
     // continue to read from successive segments until we get some messages or we reach the end of the log
-    val maxAvailableOffset = nextOffsetMetadata.messageOffset
     while(entry != null) {
-      val maxOffsetOpt = {
+      val maxPosition = {
         if (entry == segments.lastEntry())
-          Option(Math.min(maxAvailableOffset, maxOffset.getOrElse(Long.MaxValue)))
+          Option(nextOffsetMetadata.relativePositionInSegment.toLong)
         else
-          maxOffset
+          None
       }
-      val fetchInfo = entry.getValue.read(startOffset, maxOffsetOpt, maxLength)
+      val fetchInfo = entry.getValue.read(startOffset, maxOffset, maxLength, maxPosition)
       if(fetchInfo == null) {
         entry = segments.higherEntry(entry.getKey)
       } else {

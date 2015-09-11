@@ -112,12 +112,13 @@ class LogSegment(val log: FileMessageSet,
    * @param startOffset A lower bound on the first offset to include in the message set we read
    * @param maxSize The maximum number of bytes to include in the message set we read
    * @param maxOffset An optional maximum offset for the message set we read
+   * @param maxPosition The maximum position in the log segment that should be exposed for read.
    * 
    * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
    *         or null if the startOffset is larger than the largest offset in this log
    */
   @threadsafe
-  def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int): FetchDataInfo = {
+  def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Option[Long] = None): FetchDataInfo = {
     if(maxSize < 0)
       throw new IllegalArgumentException("Invalid max size for log read (%d)".format(maxSize))
 
@@ -138,8 +139,8 @@ class LogSegment(val log: FileMessageSet,
     val length = 
       maxOffset match {
         case None =>
-          // no max offset, just use the max size they gave unmolested
-          maxSize
+          // no max offset, just read until the max position
+          (maxPosition.getOrElse(size) - startPosition.position).toInt
         case Some(offset) => {
           // there is a max offset, translate it to a file position and use that to calculate the max read size
           if(offset < startOffset)
