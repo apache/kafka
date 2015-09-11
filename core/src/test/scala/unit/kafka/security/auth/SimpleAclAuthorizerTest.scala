@@ -29,7 +29,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{Test, Before}
 
-class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
+  class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   val simpleAclAuthorizer = new SimpleAclAuthorizer
   val testPrincipal = Acl.WildCardPrincipal
@@ -174,7 +174,6 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     assertEquals(Set(acl1, acl2), simpleAclAuthorizer.getAcls(user1))
 
-    //Following assertions fails transiently due to consistency issues.
     //test remove a single acl from existing acls.
     simpleAclAuthorizer.removeAcls(Set(acl1, acl5), resource)
     assertEquals(Set(acl2, acl3, acl4), simpleAclAuthorizer.getAcls(resource))

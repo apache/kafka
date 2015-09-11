@@ -17,14 +17,16 @@
 package kafka.security.auth
 
 import java.util
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
+import org.apache.zookeeper.Watcher.Event.KeeperState
+
 
 import kafka.network.RequestChannel.Session
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
+import org.I0Itec.zkclient.{IZkStateListener, IZkDataListener, ZkClient}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
 
@@ -36,15 +38,30 @@ object SimpleAclAuthorizer {
   //If set to true when no acls are found for a resource , authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
 
+  /**
+   * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, ConsumerGroup).
+   * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
+   * list of its acls as a json object. Following gives an example:
+   *
+   * <pre>
+   * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+   * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+   * /kafka-acl/ConsumerGroup/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+   * </pre>
+   */
   val AclZkPath = "/kafka-acl"
+
+  //notification node which gets updated with the resource name when acl on a resource is changed.
   val AclChangedZkPath = "/kafka-acl-changed"
+
+  val AclChangedPrefix = "aclChanged"
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
-  private var superUsers: Set[KafkaPrincipal] = Set.empty
-  private var shouldAllowEveryoneIfNoAclIsFound = false
-  private var zkClient: ZkClient = null
-  private val scheduler: KafkaScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "authorizer")
+  private var superUsers = Set.empty[KafkaPrincipal]
+  private var shouldAllowEveryoneIfNoAclIsFound: Boolean = _
+  private var zkClient: ZkClient = _
+  private var aclChangeListener: ZkNodeChangeNotificationListener = _
 
   private val aclCache: scala.collection.mutable.HashMap[Resource, Set[Acl]] = new scala.collection.mutable.HashMap[Resource, Set[Acl]]
   private val lock = new ReentrantReadWriteLock()
@@ -61,6 +78,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     superUsers = configs.get(SimpleAclAuthorizer.SuperUsersProp) match {
       case null => Set.empty[KafkaPrincipal]
       case (str: String) => if (!str.isEmpty) str.split(",").map(s => KafkaPrincipal.fromString(s.trim)).toSet else Set.empty
+      case _ => Set.empty
     }
 
     shouldAllowEveryoneIfNoAclIsFound = if (config.contains(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp))
@@ -71,12 +89,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     zkClient = ZkUtils.createZkClient(zkUrl, Integer2int(kafkaConfig.zkConnectionTimeoutMs), Integer2int(kafkaConfig.zkConnectionTimeoutMs))
     ZkUtils.makeSurePersistentPathExists(zkClient, SimpleAclAuthorizer.AclZkPath)
-    ZkUtils.makeSurePersistentPathExists(zkClient, SimpleAclAuthorizer.AclChangedZkPath)
-    zkClient.subscribeDataChanges(SimpleAclAuthorizer.AclChangedZkPath, AclChangeListener)
 
-    //we still invalidate the cache every hour in case we missed any watch notifications due to re-connections.
-    scheduler.startup()
-    scheduler.schedule("sync-acls", syncAcls, delay = 0l, period = 1l, unit = TimeUnit.HOURS)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificaitonHandler)
+    aclChangeListener.startup()
+
+    zkClient.subscribeStateChanges(ZkStateChangeListener)
 
     loadCache
   }
@@ -115,36 +132,34 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       return true
 
     //We have some acls defined and they do not specify any allow ACL for the current session, reject request.
-    debug("principal = %s from host = %s is not allowed to perform operation = %s  on resource = %s as no explicit acls were defined to allow the operation".format(principal, host, operation, resource))
+    debug(s"principal = $principal from host = $host is not allowed to perform operation = $operation  on resource = $resource as no explicit acls were defined to allow the operation")
     false
   }
 
+//  private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
+//    for (acl <- acls) {
+//      if (acl.permissionType.equals(permissionType)
+//        && (acl.principal.equals(principal) || acl.principal.equals(Acl.WildCardPrincipal))
+//        && (operations.equals(acl.operation) || acl.operation.equals(All))
+//        && (acl.host.equals(host) || acl.host.equals(Acl.WildCardHost))) {
+//        debug(s"operation = $operations on resource = $resource from host = $host is $permissionType.name based on acl = $acl")
+//        return true
+//      }
+//    }
+//    false
+//  }
+
   private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
-    for (acl: Acl <- acls) {
+    for (acl <- acls) {
       if (acl.permissionType.equals(permissionType)
-        && (acl.principal.equals(principal) || acl.principal.equals(Acl.WildCardPrincipal))
-        && (operations.equals(acl.operation) || acl.operation.equals(All))
-        && (acl.host.contains(host) || acl.host.contains(Acl.WildCardHost))) {
+        && (acl.principal == principal || acl.principal == Acl.WildCardPrincipal)
+        && (operations == acl.operation || acl.operation == All)
+        && (acl.host == host || acl.host == Acl.WildCardHost)) {
         debug(s"operation = $operations on resource = $resource from host = $host is $permissionType.name based on acl = $acl")
         return true
       }
     }
     false
-  }
-
-  def syncAcls(): Unit = {
-    debug("Syncing the acl cache for all resources that are currently in cache ")
-    var resources: collection.Set[Resource] = Set.empty
-    inReadLock(lock) {
-      resources = aclCache.keySet
-    }
-
-    for (resource: Resource <- resources) {
-      val resourceAcls: Set[Acl] = getAcls(resource)
-      inWriteLock(lock) {
-        aclCache.put(resource, resourceAcls)
-      }
-    }
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource): Unit = {
@@ -166,12 +181,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     updateAclChangedFlag(resource)
   }
 
-  override def removeAcls(acls: Set[Acl], resource: Resource): Boolean = {
+  override def removeAcls(aclsTobeRemoved: Set[Acl], resource: Resource): Boolean = {
     if (!ZkUtils.pathExists(zkClient, toResourcePath(resource)))
       return false
 
     val existingAcls: Set[Acl] = getAcls(resource)
-    val filteredAcls: Set[Acl] = existingAcls.filter((acl: Acl) => !acls.contains(acl))
+    val filteredAcls: Set[Acl] = existingAcls.filter((acl: Acl) => !aclsTobeRemoved.contains(acl))
     if (existingAcls.equals(filteredAcls))
       return false
 
@@ -200,23 +215,19 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def getAcls(resource: Resource): Set[Acl] = {
     inReadLock(lock) {
-      if (aclCache.contains(resource))
-        return aclCache.get(resource).get
+      aclCache.get(resource).getOrElse(Set.empty[Acl])
     }
+  }
 
-    val aclJson: Option[String] = ZkUtils.readDataMaybeNull(zkClient, toResourcePath(resource))._1
-    val acls: Set[Acl] = aclJson map ((x: String) => Acl.fromJson(x)) getOrElse Set.empty
-
-    inWriteLock(lock) {
-      aclCache.put(resource, acls)
-    }
-    acls
+  def getAclsFromZk(resource: Resource): Set[Acl] = {
+    val aclJson = ZkUtils.readDataMaybeNull(zkClient, toResourcePath(resource))._1
+    aclJson.map(Acl.fromJson).getOrElse(Set.empty)
   }
 
   override def getAcls(principal: KafkaPrincipal): Set[Acl] = {
     val aclSets = aclCache.values
     var acls = Set.empty[Acl]
-    for(aclSet: Set[Acl]  <- aclSets) {
+    for(aclSet  <- aclSets) {
       acls ++= aclSet.filter(acl => acl.principal.equals(principal))
     }
     acls.toSet[Acl]
@@ -241,23 +252,34 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   def updateAclChangedFlag(resource: Resource): Unit = {
-      ZkUtils.updatePersistentPath(zkClient, SimpleAclAuthorizer.AclChangedZkPath, resource.toString)
+    ZkUtils.createSequentialPersistentPath(zkClient, SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
   }
 
-  object AclChangeListener extends IZkDataListener {
-    override def handleDataChange(dataPath: String, data: Object): Unit = {
-      val resource: Resource = Resource.fromString(data.toString)
-      //invalidate the cache entry
-      inWriteLock(lock) {
-        aclCache.remove(resource)
-      }
+  object AclChangedNotificaitonHandler extends NotificationHandler {
 
-      //repopulate the cache which is a side effect of calling getAcls with a resource that is not part of cache.
-      getAcls(resource)
+    override def processNotification(notificationMessage: Option[String]): Unit = {
+      val resource: Resource = Resource.fromString(notificationMessage.get)
+      val acls = getAclsFromZk(resource)
+
+      inWriteLock(lock) {
+        aclCache.put(resource, acls)
+      }
+    }
+  }
+
+  object ZkStateChangeListener extends IZkStateListener {
+
+    var reconnection = false;
+    override def handleNewSession(): Unit = {
+      aclChangeListener.processAllNotifications
     }
 
-    override def handleDataDeleted(dataPath: String): Unit = {
-      //no op.
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      fatal("Could not establish session with zookeeper", error)
+    }
+
+    override def handleStateChanged(state: KeeperState): Unit = {
+      //no op
     }
   }
 
