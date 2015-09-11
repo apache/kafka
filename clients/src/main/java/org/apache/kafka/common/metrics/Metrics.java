@@ -53,7 +53,7 @@ public class Metrics implements Closeable {
     private final MetricConfig config;
     private final ConcurrentMap<MetricName, KafkaMetric> metrics;
     private final ConcurrentMap<String, Sensor> sensors;
-    private final ConcurrentMap<String, List<Sensor>> childrenSensors;
+    private final ConcurrentMap<Sensor, List<Sensor>> childrenSensors;
     private final List<MetricsReporter> reporters;
     private final Time time;
 
@@ -144,7 +144,7 @@ public class Metrics implements Closeable {
                     List<Sensor> children = childrenSensors.get(parent.name());
                     if (children == null) {
                         children = new ArrayList<>();
-                        childrenSensors.put(parent.name(), children);
+                        childrenSensors.put(parent, children);
                     }
                     children.add(s);
                 }
@@ -159,30 +159,21 @@ public class Metrics implements Closeable {
      * @param name The name of the sensor to be removed
      */
     public void removeSensor(String name) {
-        List<Sensor> removedSensors = new ArrayList<>();
-
-        synchronized (this) {
-            removeSensor(name, removedSensors);
-        }
-
-        /*
-         * Because `Sensor.metrics` acquires a lock on `sensor` and `Sensor.add` calls methods on `Metrics` that
-         * acquire a lock on the metrics instance, it is important to do the `sensor.metrics` calls below outside
-         * the `synchronized(this)` above.
-         */
-        for (Sensor sensor : removedSensors)
-            for (KafkaMetric metric : sensor.metrics())
-                removeMetric(metric.metricName());
-    }
-
-    private void removeSensor(String name, List<Sensor> removedSensors) {
-        Sensor sensor = sensors.remove(name);
+        Sensor sensor = sensors.get(name);
         if (sensor != null) {
-            removedSensors.add(sensor);
-            List<Sensor> childSensors = childrenSensors.remove(name);
+            List<Sensor> childSensors = null;
+            synchronized (sensor) {
+                synchronized (this) {
+                    if (sensors.remove(name, sensor)) {
+                        for (KafkaMetric metric : sensor.metrics())
+                            removeMetric(metric.metricName());
+                        childSensors = childrenSensors.remove(sensor);
+                    }
+                }
+            }
             if (childSensors != null) {
                 for (Sensor childSensor : childSensors)
-                    removeSensor(childSensor.name(), removedSensors);
+                    removeSensor(childSensor.name());
             }
         }
     }
@@ -254,7 +245,7 @@ public class Metrics implements Closeable {
     }
 
     /* For testing use only. */
-    Map<String, List<Sensor>> childrenSensors() {
+    Map<Sensor, List<Sensor>> childrenSensors() {
         return Collections.unmodifiableMap(childrenSensors);
     }
 

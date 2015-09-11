@@ -163,29 +163,34 @@ public class MetricsTest {
         Sensor grandChild1 = metrics.sensor("test.gchild2", child2);
         grandChild1.add(new MetricName("test.gchild2.count", "grp1"), new Count());
 
+        Sensor sensor = metrics.getSensor("test.parent1");
+        assertNotNull(sensor);
         metrics.removeSensor("test.parent1");
         assertNull(metrics.getSensor("test.parent1"));
         assertNull(metrics.metrics().get(new MetricName("test.parent1.count", "grp1")));
         assertNull(metrics.getSensor("test.child1"));
-        assertNull(metrics.childrenSensors().get("test.child1"));
+        assertNull(metrics.childrenSensors().get(sensor));
         assertNull(metrics.metrics().get(new MetricName("test.child1.count", "grp1")));
 
-        assertNotNull(metrics.getSensor("test.gchild2"));
+        sensor = metrics.getSensor("test.gchild2");
+        assertNotNull(sensor);
         metrics.removeSensor("test.gchild2");
         assertNull(metrics.getSensor("test.gchild2"));
-        assertNull(metrics.childrenSensors().get("test.gchild2"));
+        assertNull(metrics.childrenSensors().get(sensor));
         assertNull(metrics.metrics().get(new MetricName("test.gchild2.count", "grp1")));
 
-        assertNotNull(metrics.getSensor("test.child2"));
+        sensor = metrics.getSensor("test.child2");
+        assertNotNull(sensor);
         metrics.removeSensor("test.child2");
         assertNull(metrics.getSensor("test.child2"));
-        assertNull(metrics.childrenSensors().get("test.child2"));
+        assertNull(metrics.childrenSensors().get(sensor));
         assertNull(metrics.metrics().get(new MetricName("test.child2.count", "grp1")));
 
-        assertNotNull(metrics.getSensor("test.parent2"));
+        sensor = metrics.getSensor("test.parent2");
+        assertNotNull(sensor);
         metrics.removeSensor("test.parent2");
         assertNull(metrics.getSensor("test.parent2"));
-        assertNull(metrics.childrenSensors().get("test.parent2"));
+        assertNull(metrics.childrenSensors().get(sensor));
         assertNull(metrics.metrics().get(new MetricName("test.parent2.count", "grp1")));
 
         assertEquals(0, metrics.metrics().size());
