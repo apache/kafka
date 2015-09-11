@@ -112,7 +112,14 @@ public class StreamTask implements Punctuator {
         }
 
         // initialize the task by initializing all its processor nodes in the topology
-        this.topology.init(this.processorContext);
+        for (ProcessorNode node : this.topology.processors()) {
+            this.currNode = node;
+            try {
+                node.init(this.processorContext);
+            } finally {
+                this.currNode = null;
+            }
+        }
     }
 
     public int id() {
@@ -256,7 +263,21 @@ public class StreamTask implements Punctuator {
     public void close() {
         this.partitionGroup.close();
         this.consumedOffsets.clear();
-        this.topology.close();
+
+        // close the processors
+        // make sure close() is called for each node even when there is a RuntimeException
+        RuntimeException exception = null;
+        for (ProcessorNode node : this.topology.processors()) {
+            currNode = node;
+            try {
+                node.close();
+            } catch (RuntimeException e) {
+                exception = e;
+            } finally {
+                currNode = null;
+            }
+        }
+        if (exception != null) throw exception;
     }
 
     private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
