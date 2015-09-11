@@ -405,10 +405,11 @@ public class Fetcher<K, V> {
                     fetchable.put(node, fetch);
                 }
 
-                long offset = this.subscriptions.fetched(partition);
+                long fetched = this.subscriptions.fetched(partition);
                 long consumed = this.subscriptions.consumed(partition);
-                if (consumed == offset)
-                    fetch.put(partition, new FetchRequest.PartitionData(offset, this.fetchSize));
+                // Only fetch data for partitions whose previously fetched data has been consumed
+                if (consumed == fetched)
+                    fetch.put(partition, new FetchRequest.PartitionData(fetched, this.fetchSize));
             }
         }
 
