@@ -40,12 +40,7 @@ public class KStreamTestDriver {
     }
 
     public void process(String topicName, Object key, Object value) {
-        context.pushNode(topology.source(topicName));
-        try {
-            context.forward(key, value);
-        } finally {
-            context.popNode();
-        }
+        context.process(topology, topicName, key, value);
     }
 
     public void setTime(long timestamp) {

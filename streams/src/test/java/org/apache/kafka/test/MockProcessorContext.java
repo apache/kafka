@@ -25,9 +25,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 
 import java.io.File;
-import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,8 +36,7 @@ public class MockProcessorContext implements ProcessorContext {
 
     private Serializer serializer;
     private Deserializer deserializer;
-    private ProcessorNode node;
-    private final ArrayDeque<ProcessorNode> nodeStack = new ArrayDeque<ProcessorNode>();
+    private ProcessorNode currNode;
 
     private Map<String, StateStore> storeMap = new HashMap<>();
 
@@ -110,12 +109,13 @@ public class MockProcessorContext implements ProcessorContext {
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) node().children()) {
-            pushNode(childNode);
+        ProcessorNode thisNode = currNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            currNode = childNode;
             try {
                 childNode.process(key, value);
             } finally {
-                popNode();
+                currNode = thisNode;
             }
         }
     }
@@ -123,12 +123,13 @@ public class MockProcessorContext implements ProcessorContext {
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode childNode = (ProcessorNode<K, V>) node().children().get(childIndex);
-        pushNode(childNode);
+        ProcessorNode thisNode = currNode;
+        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
+        currNode = childNode;
         try {
             childNode.process(key, value);
         } finally {
-            popNode();
+            currNode = thisNode;
         }
     }
 
@@ -157,18 +158,13 @@ public class MockProcessorContext implements ProcessorContext {
         return this.timestamp;
     }
 
-    public void pushNode(ProcessorNode node) {
-        nodeStack.push(node);
-        this.node = node;
+    public void process(ProcessorTopology topology, String topicName, Object key, Object value) {
+        currNode = topology.source(topicName);
+        try {
+            forward(key, value);
+        } finally {
+            currNode = null;
+        }
     }
 
-    public ProcessorNode popNode() {
-        ProcessorNode node = nodeStack.pop();
-        this.node = nodeStack.peek();
-        return node;
-    }
-
-    private ProcessorNode node() {
-        return this.node;
-    }
 }
