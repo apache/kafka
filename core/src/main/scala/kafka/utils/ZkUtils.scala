@@ -935,7 +935,7 @@ class ZKWatchedEphemeral(path : String,
                  stat : Stat) {
         Code.get(rc) match {
           case Code.OK => {
-                  if (checker(ZKStringSerializer.deserialize(readData).asInstanceOf[String], expectedCallerData)) {
+                if (checker(ZKStringSerializer.deserialize(readData).asInstanceOf[String], expectedCallerData)) {
                     info("An ephemeral node [%s] at %s already exists ".format(data, path)
                       + "it might be because of a past session I have had or connection issues")
                     checkAndWatch
@@ -1073,6 +1073,7 @@ class ZKWatchedEphemeral(path : String,
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     createRecursive(prefix, suffix)
     val result = waitUntilResolved()
+    info("Result of znode creation is: %s".format(result))
     result match {
       case Code.OK => {
         // Nothing to do
