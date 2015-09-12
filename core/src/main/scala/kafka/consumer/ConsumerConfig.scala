@@ -182,7 +182,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   val partitionAssignmentStrategy = props.getString("partition.assignment.strategy", DefaultPartitionAssignmentStrategy)
   
   
-  /** commit offset after consumed */
+  /** commit offset after consumed switch,default false*/
   val commitAfterConsumed  = props.getBoolean("manual.commit.after.consumed",false);
   
   validate(this)
