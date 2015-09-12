@@ -91,11 +91,14 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
         val cdcFetchOffset = currentDataChunk.fetchOffset
         val ctiConsumeOffset = currentTopicInfo.getConsumeOffset
         if (ctiConsumeOffset < cdcFetchOffset) {
-//          error("consumed offset: %d doesn't match fetch offset: %d for %s;\n Consumer may lose data"
-//            .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
-//          currentTopicInfo.resetConsumeOffset(cdcFetchOffset)
-          info("consumed offset: %d doesn't match fetch offset: %d for %s;\n "
-            .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
+          if (!commitAfterConsumed) {
+            error("consumed offset: %d doesn't match fetch offset: %d for %s;\n Consumer may lose data"
+              .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
+            currentTopicInfo.resetConsumeOffset(cdcFetchOffset)
+          } else {
+            info("consumed offset: %d doesn't match fetch offset: %d for %s;\n "
+              .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
+          }
         }
         localCurrent = currentDataChunk.messages.iterator
 
@@ -110,7 +113,10 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
     var item = localCurrent.next()
     // reject the messages that have already been consumed
 
-    var iteratorOffset = iteratorOffsetMap.get(TopicAndPartition(currentTopicInfo.topic, currentTopicInfo.partitionId));
+     var iteratorOffset = iteratorOffsetMap.get(TopicAndPartition(currentTopicInfo.topic, currentTopicInfo.partitionId));
+     if(!commitAfterConsumed){
+          iteratorOffset  =  currentTopicInfo.getConsumeOffset;
+     }
     while (item.offset < iteratorOffset && localCurrent.hasNext) {
       item = localCurrent.next()
     }
