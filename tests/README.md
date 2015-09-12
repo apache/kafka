@@ -14,9 +14,9 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 
 * Install Virtual Box from [https://www.virtualbox.org/](https://www.virtualbox.org/) (run `$ vboxmanage --version` to check if it's installed).
 * Install Vagrant >= 1.6.4 from [http://www.vagrantup.com/](http://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
-* Install ducktape (system testing command-line tool and library)
+* Install system test dependiences, including ducktape, a command-line tool and library for testing distributed systems.
 
-        $ pip install ducktape
+        $ python tests/setup.py develop
 
 * Run the bootstrap script to set up Vagrant for testing
 
@@ -28,11 +28,10 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 
 * Build the desired branch of Kafka
        
-        $ cd kafka
         $ git checkout $BRANCH
-        $ gradle
+        $ gradle  # (only if necessary)
         $ ./gradlew jar
-      
+     
 * Run the system tests using ducktape:
 
         $ cd tests
