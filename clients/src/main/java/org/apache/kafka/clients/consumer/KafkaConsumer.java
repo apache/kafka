@@ -208,11 +208,11 @@ import java.util.regex.Pattern;
  *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(100);
  *         for (ConsumerRecord&lt;String, String&gt; record : records) {
  *             buffer.add(record);
- *             if (buffer.size() &gt;= commitInterval) {
- *                 insertIntoDb(buffer);
- *                 consumer.commitSync();
- *                 buffer.clear();
- *             }
+ *         }
+ *         if (buffer.size() &gt;= commitInterval) {
+ *             insertIntoDb(buffer);
+ *             consumer.commitSync();
+ *             buffer.clear();
  *         }
  *     }
  * </pre>
