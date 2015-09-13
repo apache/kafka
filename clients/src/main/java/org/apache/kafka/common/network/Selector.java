@@ -326,7 +326,7 @@ public class Selector implements Selectable {
                     if (e instanceof EOFException || e instanceof ConnectException)
                         log.debug("Connection {} disconnected", desc);
                     else
-                        log.warn("Error in I/O with connection to {}", desc, e);
+                        log.debug("Error in I/O with connection to {}", desc, e);
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
