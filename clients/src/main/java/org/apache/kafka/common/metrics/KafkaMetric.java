@@ -53,6 +53,11 @@ public final class KafkaMetric implements Metric {
         }
     }
 
+    public Measurable measurable() {
+        return this.measurable;
+    }
+
+
     double value(long timeMs) {
         return this.measurable.measure(config, timeMs);
     }

@@ -59,10 +59,14 @@ public class Rate implements MeasurableStat {
     @Override
     public double measure(MetricConfig config, long now) {
         double value = stat.measure(config, now);
+        return value / convert(windowSize(config, now));
+    }
+
+    public long windowSize(MetricConfig config, long now) {
         // the elapsed time is always N-1 complete windows plus whatever fraction of the final window is complete
-        long elapsedCurrentWindowMs = now - stat.current(now).lastWindowMs;
+        long elapsedCurrentWindowMs = (now - stat.oldest(now).lastWindowMs) % config.timeWindowMs();
         long elapsedPriorWindowsMs = config.timeWindowMs() * (config.samples() - 1);
-        return value / convert(elapsedCurrentWindowMs + elapsedPriorWindowsMs);
+        return  elapsedCurrentWindowMs + elapsedPriorWindowsMs;
     }
 
     private double convert(long timeMs) {
