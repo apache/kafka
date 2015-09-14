@@ -12,9 +12,7 @@
  */
 package org.apache.kafka.common.network;
 
-import java.io.EOFException;
 import java.io.IOException;
-import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.*;
