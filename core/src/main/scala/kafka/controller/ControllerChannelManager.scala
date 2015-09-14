@@ -253,7 +253,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
         "new one. Some UpdateMetadata state changes %s might be lost ".format(updateMetadataRequestMap.toString()))
   }
-  
+
   def clear() {
     leaderAndIsrRequestMap.clear
     stopReplicaRequestMap.clear
