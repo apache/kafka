@@ -323,10 +323,7 @@ public class Selector implements Selectable {
                     }
                 } catch (IOException e) {
                     String desc = channel.socketDescription();
-                    if (e instanceof EOFException || e instanceof ConnectException)
-                        log.debug("Connection {} disconnected", desc);
-                    else
-                        log.warn("Error in I/O with connection to {}", desc, e);
+                    log.debug("Connection with {} disconnected", desc, e);
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
