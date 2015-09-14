@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -53,12 +53,12 @@ public class ProcessorTopology {
         return sinkByTopics.get(topic);
     }
 
-    public Collection<SourceNode> sources() {
-        return sourceByTopics.values();
+    public Set<SourceNode> sources() {
+        return new HashSet<>(sourceByTopics.values());
     }
 
-    public Collection<SinkNode> sinks() {
-        return sinkByTopics.values();
+    public Set<SinkNode> sinks() {
+        return new HashSet<>(sinkByTopics.values());
     }
 
     public List<ProcessorNode> processors() {

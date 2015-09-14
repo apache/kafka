@@ -49,6 +49,7 @@ public class TopologyBuilder {
 
     private Set<String> nodeNames = new HashSet<>();
     private Set<String> sourceTopicNames = new HashSet<>();
+    private Set<String> sinkTopicNames = new HashSet<>();
 
     private interface NodeFactory {
         ProcessorNode build();
@@ -148,11 +149,11 @@ public class TopologyBuilder {
      */
     public final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
         if (nodeNames.contains(name))
-            throw new IllegalArgumentException("Processor " + name + " is already added.");
+            throw new TopologyException("Processor " + name + " is already added.");
 
         for (String topic : topics) {
             if (sourceTopicNames.contains(topic))
-                throw new IllegalArgumentException("Topic " + topic + " has already been registered by another processor.");
+                throw new TopologyException("Topic " + topic + " has already been registered by another source.");
 
             sourceTopicNames.add(topic);
         }
@@ -194,19 +195,23 @@ public class TopologyBuilder {
      */
     public final TopologyBuilder addSink(String name, String topic, Serializer keySerializer, Serializer valSerializer, String... parentNames) {
         if (nodeNames.contains(name))
-            throw new IllegalArgumentException("Processor " + name + " is already added.");
+            throw new TopologyException("Processor " + name + " is already added.");
+
+        if (sinkTopicNames.contains(topic))
+            throw new TopologyException("Topic " + topic + " has already been registered by another sink.");
 
         if (parentNames != null) {
             for (String parent : parentNames) {
                 if (parent.equals(name)) {
-                    throw new IllegalArgumentException("Processor " + name + " cannot be a parent of itself");
+                    throw new TopologyException("Processor " + name + " cannot be a parent of itself.");
                 }
                 if (!nodeNames.contains(parent)) {
-                    throw new IllegalArgumentException("Parent processor " + parent + " is not added yet.");
+                    throw new TopologyException("Parent processor " + parent + " is not added yet.");
                 }
             }
         }
 
+        sinkTopicNames.add(topic);
         nodeNames.add(name);
         nodeFactories.add(new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
         return this;
@@ -223,15 +228,15 @@ public class TopologyBuilder {
      */
     public final TopologyBuilder addProcessor(String name, ProcessorDef definition, String... parentNames) {
         if (nodeNames.contains(name))
-            throw new IllegalArgumentException("Processor " + name + " is already added.");
+            throw new TopologyException("Processor " + name + " is already added.");
 
         if (parentNames != null) {
             for (String parent : parentNames) {
                 if (parent.equals(name)) {
-                    throw new IllegalArgumentException("Processor " + name + " cannot be a parent of itself");
+                    throw new TopologyException("Processor " + name + " cannot be a parent of itself.");
                 }
                 if (!nodeNames.contains(parent)) {
-                    throw new IllegalArgumentException("Parent processor " + parent + " is not added yet.");
+                    throw new TopologyException("Parent processor " + parent + " is not added yet.");
                 }
             }
         }
@@ -277,7 +282,7 @@ public class TopologyBuilder {
                         processorMap.get(parent).addChild(node);
                     }
                 } else {
-                    throw new IllegalStateException("unknown definition class: " + factory.getClass().getName());
+                    throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                 }
             }
         } catch (Exception e) {
