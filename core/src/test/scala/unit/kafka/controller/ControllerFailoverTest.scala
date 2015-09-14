@@ -17,7 +17,6 @@
 
 package kafka.controller
 
-
 import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
 
@@ -149,7 +148,6 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     }
   }
 }
-
 
 class MockChannelManager(private val controllerContext: ControllerContext, config: KafkaConfig)
   extends ControllerChannelManager(controllerContext, config, new SystemTime, new Metrics) {
