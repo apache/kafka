@@ -51,10 +51,9 @@ public class ProcessorStateManager {
         this.stores = new HashMap<>();
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
-        this.checkpointedOffsets = new HashMap<>();
 
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
-        this.checkpointedOffsets.putAll(checkpoint.read());
+        this.checkpointedOffsets = new HashMap<>(checkpoint.read());
 
         // delete the checkpoint file after finish loading its stored offsets
         checkpoint.delete();
@@ -167,17 +166,23 @@ public class ProcessorStateManager {
                 entry.getValue().close();
             }
 
-            Map<TopicPartition, Long> checkpointOffsets = new HashMap<TopicPartition, Long>(restoredOffsets);
+            Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
             for (String storeName : stores.keySet()) {
                 TopicPartition part = new TopicPartition(storeName, id);
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {
-                    if (ackedOffsets.containsKey(part))
-                        // store the last ack'd offset + 1 (the log position after restoration)
-                        checkpointOffsets.put(part, ackedOffsets.get(part) + 1);
-                } else {
-                    checkpointOffsets.remove(part);
+                    Long offset = ackedOffsets.get(part);
+
+                    if (offset == null) {
+                        // if no record was produced. we need to check the restored offset.
+                        offset = restoredOffsets.get(part);
+                    }
+
+                    if (offset != null) {
+                        // store the last offset + 1 (the log position after restoration)
+                        checkpointOffsets.put(part, offset + 1);
+                    }
                 }
             }
 
