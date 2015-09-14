@@ -78,6 +78,28 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
+    @Override
+    public void metricRemoval(KafkaMetric metric) {
+        synchronized (LOCK) {
+            KafkaMbean mbean = removeAttribute(metric);
+            if (mbean != null) {
+                if (mbean.metrics.isEmpty())
+                    unregister(mbean);
+                else
+                    reregister(mbean);
+            }
+        }
+    }
+
+    private KafkaMbean removeAttribute(KafkaMetric metric) {
+        MetricName metricName = metric.metricName();
+        String mBeanName = getMBeanName(metricName);
+        KafkaMbean mbean = this.mbeans.get(mBeanName);
+        if (mbean != null)
+            mbean.removeAttribute(metricName.name());
+        return mbean;
+    }
+
     private KafkaMbean addAttribute(KafkaMetric metric) {
         try {
             MetricName metricName = metric.metricName();
@@ -174,6 +196,10 @@ public class JmxReporter implements MetricsReporter {
                 log.error("Error getting JMX attribute: ", e);
                 return new AttributeList();
             }
+        }
+
+        public KafkaMetric removeAttribute(String name) {
+            return this.metrics.remove(name);
         }
 
         @Override

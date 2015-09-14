@@ -18,19 +18,18 @@ package kafka.admin
 
 import junit.framework.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
 import java.util.Properties
 import kafka.utils._
 import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{Logging, ZkUtils, TestUtils}
 import kafka.common.{InvalidTopicException, TopicExistsException, TopicAndPartition}
-import kafka.server.{KafkaServer, KafkaConfig}
+import kafka.server.{ConfigType, KafkaServer, KafkaConfig}
 import java.io.File
 import TestUtils._
 
 
-class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
+class AdminTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testReplicaAssignment() {
@@ -407,12 +406,16 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       checkConfig(maxMessageSize, retentionMs)
 
       // now double the config values for the topic and check that it is applied
+      val newConfig: Properties = makeConfig(2*maxMessageSize, 2 * retentionMs)
       AdminUtils.changeTopicConfig(server.zkClient, topic, makeConfig(2*maxMessageSize, 2 * retentionMs))
       checkConfig(2*maxMessageSize, 2 * retentionMs)
+
+      // Verify that the same config can be read from ZK
+      val configInZk = AdminUtils.fetchEntityConfig(server.zkClient, ConfigType.Topic, topic)
+      assertEquals(newConfig, configInZk)
     } finally {
       server.shutdown()
       server.config.logDirs.foreach(CoreUtils.rm(_))
     }
   }
-
 }

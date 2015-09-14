@@ -16,20 +16,21 @@ package org.apache.kafka.clients.consumer.internals;
  * A helper class for managing the heartbeat to the coordinator
  */
 public final class Heartbeat {
-    
-    /* The number of heartbeats to attempt to complete per session timeout interval.
-     * so, e.g., with a session timeout of 3 seconds we would attempt a heartbeat
-     * once per second.
-     */
-    public final static int HEARTBEATS_PER_SESSION_INTERVAL = 3;
-
     private final long timeout;
+    private final long interval;
+
     private long lastHeartbeatSend;
     private long lastHeartbeatReceive;
     private long lastSessionReset;
 
-    public Heartbeat(long timeout, long now) {
+    public Heartbeat(long timeout,
+                     long interval,
+                     long now) {
+        if (interval >= timeout)
+            throw new IllegalArgumentException("Heartbeat must be set lower than the session timeout");
+
         this.timeout = timeout;
+        this.interval = interval;
         this.lastSessionReset = now;
     }
 
@@ -52,11 +53,10 @@ public final class Heartbeat {
     public long timeToNextHeartbeat(long now) {
         long timeSinceLastHeartbeat = now - Math.max(lastHeartbeatSend, lastSessionReset);
 
-        long hbInterval = timeout / HEARTBEATS_PER_SESSION_INTERVAL;
-        if (timeSinceLastHeartbeat > hbInterval)
+        if (timeSinceLastHeartbeat > interval)
             return 0;
         else
-            return hbInterval - timeSinceLastHeartbeat;
+            return interval - timeSinceLastHeartbeat;
     }
 
     public boolean sessionTimeoutExpired(long now) {
@@ -64,7 +64,7 @@ public final class Heartbeat {
     }
 
     public long interval() {
-        return timeout / HEARTBEATS_PER_SESSION_INTERVAL;
+        return interval;
     }
 
     public void resetSessionTimeout(long now) {

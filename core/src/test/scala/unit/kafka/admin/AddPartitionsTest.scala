@@ -17,17 +17,17 @@
 
 package kafka.admin
 
+import org.junit.Assert._
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
-import junit.framework.Assert._
 import kafka.utils.{ZkUtils, CoreUtils, TestUtils}
 import kafka.cluster.Broker
 import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
+import org.junit.{Test, After, Before}
 
-class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
+class AddPartitionsTest extends ZooKeeperTestHarness {
   var configs: Seq[KafkaConfig] = null
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
   var brokers: Seq[Broker] = Seq.empty[Broker]
@@ -39,13 +39,14 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   val topic3 = "new-topic3"
   val topic4 = "new-topic4"
 
+  @Before
   override def setUp() {
     super.setUp()
 
     configs = (0 until 4).map(i => KafkaConfig.fromProps(TestUtils.createBrokerConfig(i, zkConnect, enableControlledShutdown = false)))
     // start all the servers
     servers = configs.map(c => TestUtils.createServer(c))
-    brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.boundPort))
+    brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.boundPort()))
 
     // create topics first
     createTopic(zkClient, topic1, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
@@ -54,12 +55,14 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     createTopic(zkClient, topic4, partitionReplicaAssignment = Map(0->Seq(0,3)), servers = servers)
   }
 
+  @After
   override def tearDown() {
     servers.foreach(_.shutdown())
     servers.foreach(server => CoreUtils.rm(server.config.logDirs))
     super.tearDown()
   }
 
+  @Test
   def testTopicDoesNotExist {
     try {
       AdminUtils.addPartitions(zkClient, "Blah", 1)
@@ -70,6 +73,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testWrongReplicaCount {
     try {
       AdminUtils.addPartitions(zkClient, topic1, 2, "0:1,0:1:2")
@@ -80,6 +84,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  @Test
   def testIncrementPartitions {
     AdminUtils.addPartitions(zkClient, topic1, 3)
     // wait until leader is elected
@@ -105,6 +110,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     assert(replicas.contains(partitionDataForTopic1(1).leader.get))
   }
 
+  @Test
   def testManualAssignmentOfReplicas {
     AdminUtils.addPartitions(zkClient, topic2, 3, "1:2,0:1,2:3")
     // wait until leader is elected
@@ -131,6 +137,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     assert(replicas(1).id == 0 || replicas(1).id == 1)
   }
 
+  @Test
   def testReplicaPlacement {
     AdminUtils.addPartitions(zkClient, topic3, 7)
 

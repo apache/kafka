@@ -9,13 +9,17 @@ result reporter and utilities to pull up and tear down services.)
 Local Quickstart
 ----------------
 This quickstart will help you run the Kafka system tests on your local machine.
+For a tutorial on how to setup and run the Kafka system tests, see 
+https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafka+system+tests+with+ducktape
 
 * Install Virtual Box from [https://www.virtualbox.org/](https://www.virtualbox.org/) (run `$ vboxmanage --version` to check if it's installed).
 * Install Vagrant >= 1.6.4 from [http://www.vagrantup.com/](http://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
 * Install Vagrant Plugins:
 
         # Required
-        $ vagrant plugin install vagrant-hostmanager vagrant-cachier
+        # Note that vagrant-hostmanager v1.6.0 and up breaks our Vagrant scripts
+        $ vagrant plugin install vagrant-hostmanager --plugin-version 1.5.0
+        $ vagrant plugin install vagrant-cachier
 
 * Build a specific branch of Kafka
        

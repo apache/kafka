@@ -17,7 +17,7 @@
 
 package kafka.common
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import collection.mutable.ArrayBuffer
 import org.junit.Test
 

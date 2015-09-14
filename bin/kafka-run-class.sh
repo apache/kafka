@@ -22,15 +22,6 @@ fi
 
 base_dir=$(dirname $0)/..
 
-# create logs directory
-if [ "x$LOG_DIR" = "x" ]; then
-    LOG_DIR="$base_dir/logs"
-fi
-
-if [ ! -d "$LOG_DIR" ]; then
-    mkdir -p "$LOG_DIR"
-fi
-
 if [ -z "$SCALA_VERSION" ]; then
 	SCALA_VERSION=2.10.5
 fi
@@ -75,6 +66,14 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for cc_pkg in "api" "runtime" "file" "json"
+do
+  for file in $base_dir/copycat/${cc_pkg}/build/libs/copycat-${cc_pkg}*.jar $base_dir/copycat/${cc_pkg}/build/dependant-libs/*.jar;
+  do
+    CLASSPATH=$CLASSPATH:$file
+  done
+done
+
 # classpath addition for release
 for file in $base_dir/libs/*.jar;
 do
@@ -96,9 +95,20 @@ if [  $JMX_PORT ]; then
   KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
 fi
 
+# Log directory to use
+if [ "x$LOG_DIR" = "x" ]; then
+    LOG_DIR="$base_dir/logs"
+fi
+
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
+  # Log to console. This is a tool.
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/tools-log4j.properties"
+else
+  # create logs directory
+  if [ ! -d "$LOG_DIR" ]; then
+    mkdir -p "$LOG_DIR"
+  fi
 fi
 
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"

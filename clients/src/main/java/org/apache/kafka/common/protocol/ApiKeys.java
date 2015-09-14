@@ -49,7 +49,7 @@ public enum ApiKeys {
         MAX_API_KEY = maxKey;
     }
 
-    /** the perminant and immutable id of an API--this can't change ever */
+    /** the permanent and immutable id of an API--this can't change ever */
     public final short id;
 
     /** an english description of the api--this is for debugging and can change */

@@ -12,6 +12,13 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,12 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.MetricName;
+import java.util.regex.Pattern;
 
 /**
  * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka. This class is <i> not
@@ -48,34 +50,50 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
     
     @Override
-    public synchronized Set<TopicPartition> subscriptions() {
+    public synchronized Set<TopicPartition> assignment() {
         return this.subscriptions.assignedPartitions();
     }
 
     @Override
-    public synchronized void subscribe(String... topics) {
-        ensureNotClosed();
-        for (String topic : topics)
-            this.subscriptions.subscribe(topic);
+    public synchronized Set<String> subscription() {
+        return this.subscriptions.subscription();
     }
 
     @Override
-    public synchronized void subscribe(TopicPartition... partitions) {
-        ensureNotClosed();
-        for (TopicPartition partition : partitions)
-            this.subscriptions.subscribe(partition);
+    public synchronized void subscribe(List<String> topics) {
+        subscribe(topics, new NoOpConsumerRebalanceListener());
     }
 
-    public synchronized void unsubscribe(String... topics) {
+    @Override
+    public void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
-        for (String topic : topics)
-            this.subscriptions.unsubscribe(topic);
+        this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
+        List<String> topicsToSubscribe = new ArrayList<>();
+        for (String topic: partitions.keySet()) {
+            if (pattern.matcher(topic).matches() &&
+                !subscriptions.subscription().contains(topic))
+                topicsToSubscribe.add(topic);
+        }
+        ensureNotClosed();
+        this.subscriptions.changeSubscription(topicsToSubscribe);
     }
 
-    public synchronized void unsubscribe(TopicPartition... partitions) {
+    @Override
+    public synchronized void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
-        for (TopicPartition partition : partitions)
-            this.subscriptions.unsubscribe(partition);
+        this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
+    }
+
+    @Override
+    public synchronized void assign(List<TopicPartition> partitions) {
+        ensureNotClosed();
+        this.subscriptions.assign(partitions);
+    }
+
+    @Override
+    public void unsubscribe() {
+        ensureNotClosed();
+        subscriptions.unsubscribe();
     }
 
     @Override
@@ -83,9 +101,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         // update the consumed offset
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
-            List<ConsumerRecord<K, V>> recs = entry.getValue();
-            if (!recs.isEmpty())
-                this.subscriptions.consumed(entry.getKey(), recs.get(recs.size() - 1).offset());
+            if (!subscriptions.isPaused(entry.getKey())) {
+                List<ConsumerRecord<K, V>> recs = entry.getValue();
+                if (!recs.isEmpty())
+                    this.subscriptions.consumed(entry.getKey(), recs.get(recs.size() - 1).offset());
+            }
         }
 
         ConsumerRecords<K, V> copy = new ConsumerRecords<K, V>(this.records);
@@ -96,7 +116,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void addRecord(ConsumerRecord<K, V> record) {
         ensureNotClosed();
         TopicPartition tp = new TopicPartition(record.topic(), record.partition());
-        this.subscriptions.assignedPartitions().add(tp);
+        ArrayList<TopicPartition> currentAssigned = new ArrayList<>(this.subscriptions.assignedPartitions());
+        if (!currentAssigned.contains(tp)) {
+            currentAssigned.add(tp);
+            this.subscriptions.changePartitionAssignment(currentAssigned);
+        }
+        subscriptions.seek(tp, record.offset());
         List<ConsumerRecord<K, V>> recs = this.records.get(tp);
         if (recs == null) {
             recs = new ArrayList<ConsumerRecord<K, V>>();
@@ -106,7 +131,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void commit(Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback) {
+    public synchronized void commitAsync(Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
         for (Entry<TopicPartition, Long> entry : offsets.entrySet())
             subscriptions.committed(entry.getKey(), entry.getValue());
@@ -116,19 +141,24 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void commit(Map<TopicPartition, Long> offsets, CommitType commitType) {
-        commit(offsets, commitType, null);
+    public synchronized void commitSync(Map<TopicPartition, Long> offsets) {
+        commitAsync(offsets, null);
     }
 
     @Override
-    public synchronized void commit(CommitType commitType, ConsumerCommitCallback callback) {
+    public synchronized void commitAsync() {
+        commitAsync(null);
+    }
+
+    @Override
+    public synchronized void commitAsync(OffsetCommitCallback callback) {
         ensureNotClosed();
-        commit(this.subscriptions.allConsumed(), commitType, callback);
+        commitAsync(this.subscriptions.allConsumed(), callback);
     }
 
     @Override
-    public synchronized void commit(CommitType commitType) {
-        commit(commitType, null);
+    public synchronized void commitSync() {
+        commitSync(this.subscriptions.allConsumed());
     }
 
     @Override
@@ -186,6 +216,18 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void updatePartitions(String topic, List<PartitionInfo> partitions) {
         ensureNotClosed();
         this.partitions.put(topic, partitions);
+    }
+
+    @Override
+    public void pause(TopicPartition... partitions) {
+        for (TopicPartition partition : partitions)
+            subscriptions.pause(partition);
+    }
+
+    @Override
+    public void resume(TopicPartition... partitions) {
+        for (TopicPartition partition : partitions)
+            subscriptions.resume(partition);
     }
 
     @Override

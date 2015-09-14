@@ -24,6 +24,7 @@ kafka.ipr
 kafka.iws
 .vagrant
 Vagrantfile.local
+/logs
 
 config/server-*
 config/zookeeper-*

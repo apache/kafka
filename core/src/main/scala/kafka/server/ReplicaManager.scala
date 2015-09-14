@@ -16,29 +16,25 @@
  */
 package kafka.server
 
-import kafka.api._
-import kafka.common._
-import kafka.utils._
-import kafka.cluster.{BrokerEndPoint, Partition, Replica}
-import kafka.log.{LogAppendInfo, LogManager}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.controller.KafkaController
-import kafka.message.{ByteBufferMessageSet, MessageSet}
-import kafka.api.ProducerResponseStatus
-import kafka.common.TopicAndPartition
-import kafka.api.PartitionFetchInfo
-
-import org.apache.kafka.common.protocol.Errors
-
-import java.util.concurrent.atomic.AtomicBoolean
-import java.io.{IOException, File}
+import java.io.{File, IOException}
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
-import scala.Some
-import scala.collection._
-
-import org.I0Itec.zkclient.ZkClient
 import com.yammer.metrics.core.Gauge
+import kafka.api._
+import kafka.cluster.{BrokerEndPoint, Partition, Replica}
+import kafka.common._
+import kafka.controller.KafkaController
+import kafka.log.{LogAppendInfo, LogManager}
+import kafka.message.{ByteBufferMessageSet, MessageSet}
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils._
+import org.I0Itec.zkclient.ZkClient
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.{Time => JTime}
+
+import scala.collection._
 
 /*
  * Result metadata of a log append operation on the log
@@ -100,22 +96,25 @@ object ReplicaManager {
 }
 
 class ReplicaManager(val config: KafkaConfig,
-                     private val time: Time,
+                     metrics: Metrics,
+                     time: Time,
+                     jTime: JTime,
                      val zkClient: ZkClient,
                      scheduler: Scheduler,
                      val logManager: LogManager,
-                     val isShuttingDown: AtomicBoolean ) extends Logging with KafkaMetricsGroup {
+                     val isShuttingDown: AtomicBoolean) extends Logging with KafkaMetricsGroup {
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
   private val allPartitions = new Pool[(String, Int), Partition]
   private val replicaStateChangeLock = new Object
-  val replicaFetcherManager = new ReplicaFetcherManager(config, this)
+  val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   val highWatermarkCheckpoints = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
   private var hwThreadInitialized = false
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
   val stateChangeLogger = KafkaController.stateChangeLogger
+  private val isrChangeSet: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
 
   val delayedProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
@@ -154,6 +153,21 @@ class ReplicaManager(val config: KafkaConfig,
       scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
   }
 
+  def recordIsrChange(topicAndPartition: TopicAndPartition) {
+    isrChangeSet synchronized {
+      isrChangeSet += topicAndPartition
+    }
+  }
+
+  def maybePropagateIsrChanges() {
+    isrChangeSet synchronized {
+      if (isrChangeSet.nonEmpty) {
+        ReplicationUtils.propagateIsrChanges(zkClient, isrChangeSet)
+        isrChangeSet.clear()
+      }
+    }
+  }
+
   /**
    * Try to complete some delayed produce requests with the request key;
    * this can be triggered when:
@@ -181,6 +195,7 @@ class ReplicaManager(val config: KafkaConfig,
   def startup() {
     // start ISR expiration thread
     scheduler.schedule("isr-expiration", maybeShrinkIsr, period = config.replicaLagTimeMaxMs, unit = TimeUnit.MILLISECONDS)
+    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = 5000, unit = TimeUnit.MILLISECONDS)
   }
 
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
@@ -292,7 +307,6 @@ class ReplicaManager(val config: KafkaConfig,
                      responseCallback: Map[TopicAndPartition, ProducerResponseStatus] => Unit) {
 
     if (isValidRequiredAcks(requiredAcks)) {
-
       val sTime = SystemTime.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
@@ -429,7 +443,6 @@ class ReplicaManager(val config: KafkaConfig,
                     fetchMinBytes: Int,
                     fetchInfo: immutable.Map[TopicAndPartition, PartitionFetchInfo],
                     responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit) {
-
     val isFromFollower = replicaId >= 0
     val fetchOnlyFromLeader: Boolean = replicaId != Request.DebuggingConsumerId
     val fetchOnlyCommitted: Boolean = ! Request.isValidBrokerId(replicaId)

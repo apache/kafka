@@ -19,39 +19,36 @@ package kafka.log
 
 import java.util.Properties
 
+import kafka.server.KafkaConfig
+import kafka.server.KafkaServer
+import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
-import org.scalatest.junit.JUnit3Suite
+import org.junit.Assert._
+import org.scalatest.Assertions._
 
-class LogConfigTest extends JUnit3Suite {
+class LogConfigTest {
+
+  @Test
+  def testKafkaConfigToProps() {
+    val millisInHour = 60L * 60L * 1000L
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
+
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    val logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
+  }
 
   @Test
   def testFromPropsEmpty() {
     val p = new Properties()
     val config = LogConfig(p)
     Assert.assertEquals(LogConfig(), config)
-  }
-
-  @Test
-  def testFromPropsToProps() {
-    import scala.util.Random._
-    val expected = new Properties()
-    LogConfig.configNames().foreach((name) => {
-      name match {
-        case LogConfig.UncleanLeaderElectionEnableProp => expected.setProperty(name, randFrom("true", "false"))
-        case LogConfig.CompressionTypeProp => expected.setProperty(name, randFrom("producer", "uncompressed", "gzip"))
-        case LogConfig.CleanupPolicyProp => expected.setProperty(name, randFrom(LogConfig.Compact, LogConfig.Delete))
-        case LogConfig.MinCleanableDirtyRatioProp => expected.setProperty(name, "%.1f".format(nextDouble * .9 + .1))
-        case LogConfig.MinInSyncReplicasProp => expected.setProperty(name, (nextInt(Int.MaxValue - 1) + 1).toString)
-        case LogConfig.RetentionBytesProp => expected.setProperty(name, nextInt().toString)
-        case LogConfig.RetentionMsProp => expected.setProperty(name, nextLong().toString)
-        case LogConfig.PreAllocateEnableProp => expected.setProperty(name, randFrom("true", "false"))
-        case positiveIntProperty => expected.setProperty(name, nextInt(Int.MaxValue).toString)
-      }
-    })
-
-    val actual = LogConfig(expected).originals
-    Assert.assertEquals(expected, actual)
   }
 
   @Test

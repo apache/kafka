@@ -253,6 +253,8 @@ public class Sender implements Runnable {
                     completeBatch(batch, error, partResp.baseOffset, correlationId, now);
                 }
                 this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
+                this.sensors.recordThrottleTime(response.request().request().destination(),
+                                                produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (RecordBatch batch : batches.values())
@@ -352,6 +354,7 @@ public class Sender implements Runnable {
         public final Sensor batchSizeSensor;
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
+        public final Sensor produceThrottleTimeSensor;
 
         public SenderMetrics(Metrics metrics) {
             this.metrics = metrics;
@@ -380,6 +383,12 @@ public class Sender implements Runnable {
             this.requestTimeSensor.add(m, new Avg());
             m = new MetricName("request-latency-max", metricGrpName, "The maximum request latency in ms", metricTags);
             this.requestTimeSensor.add(m, new Max());
+
+            this.produceThrottleTimeSensor = metrics.sensor("produce-throttle-time");
+            m = new MetricName("produce-throttle-time-avg", metricGrpName, "The average throttle time in ms", metricTags);
+            this.produceThrottleTimeSensor.add(m, new Avg());
+            m = new MetricName("produce-throttle-time-max", metricGrpName, "The maximum throttle time in ms", metricTags);
+            this.produceThrottleTimeSensor.add(m, new Max());
 
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
             m = new MetricName("record-send-rate", metricGrpName, "The average number of records sent per second.", metricTags);
@@ -515,6 +524,11 @@ public class Sender implements Runnable {
                     nodeRequestTime.record(latency, now);
             }
         }
+
+        public void recordThrottleTime(String node, long throttleTimeMs) {
+            this.produceThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
+        }
+
     }
 
 }

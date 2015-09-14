@@ -13,6 +13,8 @@
 package org.apache.kafka.common.metrics;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import java.util.Arrays;
@@ -37,9 +39,9 @@ import org.junit.Test;
 public class MetricsTest {
 
     private static final double EPS = 0.000001;
-
-    MockTime time = new MockTime();
-    Metrics metrics = new Metrics(new MetricConfig(), Arrays.asList((MetricsReporter) new JmxReporter()), time);
+    private MockTime time = new MockTime();
+    private MetricConfig config = new MetricConfig();
+    private Metrics metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time);
 
     @Test
     public void testMetricName() {
@@ -77,19 +79,33 @@ public class MetricsTest {
         s2.add(new MetricName("s2.total", "grp1"), new Total());
         s2.record(5.0);
 
-        for (int i = 0; i < 10; i++)
+        int sum = 0;
+        int count = 10;
+        for (int i = 0; i < count; i++) {
             s.record(i);
+            sum += i;
+        }
+        // prior to any time passing
+        double elapsedSecs = (config.timeWindowMs() * (config.samples() - 1)) / 1000.0;
+        assertEquals(String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs), count / elapsedSecs,
+                     metrics.metrics().get(new MetricName("test.occurences", "grp1")).value(), EPS);
 
         // pretend 2 seconds passed...
-        time.sleep(2000);
+        long sleepTimeMs = 2;
+        time.sleep(sleepTimeMs * 1000);
+        elapsedSecs += sleepTimeMs;
 
         assertEquals("s2 reflects the constant value", 5.0, metrics.metrics().get(new MetricName("s2.total", "grp1")).value(), EPS);
         assertEquals("Avg(0...9) = 4.5", 4.5, metrics.metrics().get(new MetricName("test.avg", "grp1")).value(), EPS);
-        assertEquals("Max(0...9) = 9", 9.0, metrics.metrics().get(new MetricName("test.max", "grp1")).value(), EPS);
+        assertEquals("Max(0...9) = 9", count - 1, metrics.metrics().get(new MetricName("test.max", "grp1")).value(), EPS);
         assertEquals("Min(0...9) = 0", 0.0, metrics.metrics().get(new MetricName("test.min", "grp1")).value(), EPS);
-        assertEquals("Rate(0...9) = 22.5", 22.5, metrics.metrics().get(new MetricName("test.rate", "grp1")).value(), EPS);
-        assertEquals("Occurences(0...9) = 5", 5.0, metrics.metrics().get(new MetricName("test.occurences", "grp1")).value(), EPS);
-        assertEquals("Count(0...9) = 10", 10.0, metrics.metrics().get(new MetricName("test.count", "grp1")).value(), EPS);
+        assertEquals("Rate(0...9) = 1.40625",
+                     sum / elapsedSecs, metrics.metrics().get(new MetricName("test.rate", "grp1")).value(), EPS);
+        assertEquals(String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs),
+                     count / elapsedSecs,
+                     metrics.metrics().get(new MetricName("test.occurences", "grp1")).value(), EPS);
+        assertEquals("Count(0...9) = 10",
+                     (double) count, metrics.metrics().get(new MetricName("test.count", "grp1")).value(), EPS);
     }
 
     @Test
@@ -120,18 +136,79 @@ public class MetricsTest {
 
         /* each metric should have a count equal to one + its children's count */
         assertEquals(1.0, gc, EPS);
-        assertEquals(1.0 + gc, child1.metrics().get(0).value(), EPS);
+        assertEquals(1.0 + gc, c1, EPS);
         assertEquals(1.0, c2, EPS);
         assertEquals(1.0 + c1, p2, EPS);
         assertEquals(1.0 + c1 + c2, p1, EPS);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testBadSensorHiearchy() {
+    public void testBadSensorHierarchy() {
         Sensor p = metrics.sensor("parent");
         Sensor c1 = metrics.sensor("child1", p);
         Sensor c2 = metrics.sensor("child2", p);
         metrics.sensor("gc", c1, c2); // should fail
+    }
+
+    @Test
+    public void testRemoveSensor() {
+        Sensor parent1 = metrics.sensor("test.parent1");
+        parent1.add(new MetricName("test.parent1.count", "grp1"), new Count());
+        Sensor parent2 = metrics.sensor("test.parent2");
+        parent2.add(new MetricName("test.parent2.count", "grp1"), new Count());
+        Sensor child1 = metrics.sensor("test.child1", parent1, parent2);
+        child1.add(new MetricName("test.child1.count", "grp1"), new Count());
+        Sensor child2 = metrics.sensor("test.child2", parent2);
+        child2.add(new MetricName("test.child2.count", "grp1"), new Count());
+        Sensor grandChild1 = metrics.sensor("test.gchild2", child2);
+        grandChild1.add(new MetricName("test.gchild2.count", "grp1"), new Count());
+
+        Sensor sensor = metrics.getSensor("test.parent1");
+        assertNotNull(sensor);
+        metrics.removeSensor("test.parent1");
+        assertNull(metrics.getSensor("test.parent1"));
+        assertNull(metrics.metrics().get(new MetricName("test.parent1.count", "grp1")));
+        assertNull(metrics.getSensor("test.child1"));
+        assertNull(metrics.childrenSensors().get(sensor));
+        assertNull(metrics.metrics().get(new MetricName("test.child1.count", "grp1")));
+
+        sensor = metrics.getSensor("test.gchild2");
+        assertNotNull(sensor);
+        metrics.removeSensor("test.gchild2");
+        assertNull(metrics.getSensor("test.gchild2"));
+        assertNull(metrics.childrenSensors().get(sensor));
+        assertNull(metrics.metrics().get(new MetricName("test.gchild2.count", "grp1")));
+
+        sensor = metrics.getSensor("test.child2");
+        assertNotNull(sensor);
+        metrics.removeSensor("test.child2");
+        assertNull(metrics.getSensor("test.child2"));
+        assertNull(metrics.childrenSensors().get(sensor));
+        assertNull(metrics.metrics().get(new MetricName("test.child2.count", "grp1")));
+
+        sensor = metrics.getSensor("test.parent2");
+        assertNotNull(sensor);
+        metrics.removeSensor("test.parent2");
+        assertNull(metrics.getSensor("test.parent2"));
+        assertNull(metrics.childrenSensors().get(sensor));
+        assertNull(metrics.metrics().get(new MetricName("test.parent2.count", "grp1")));
+
+        assertEquals(0, metrics.metrics().size());
+    }
+
+    @Test
+    public void testRemoveMetric() {
+        metrics.addMetric(new MetricName("test1", "grp1"), new Count());
+        metrics.addMetric(new MetricName("test2", "grp1"), new Count());
+
+        assertNotNull(metrics.removeMetric(new MetricName("test1", "grp1")));
+        assertNull(metrics.metrics().get(new MetricName("test1", "grp1")));
+        assertNotNull(metrics.metrics().get(new MetricName("test2", "grp1")));
+
+        assertNotNull(metrics.removeMetric(new MetricName("test2", "grp1")));
+        assertNull(metrics.metrics().get(new MetricName("test2", "grp1")));
+
+        assertEquals(0, metrics.metrics().size());
     }
 
     @Test

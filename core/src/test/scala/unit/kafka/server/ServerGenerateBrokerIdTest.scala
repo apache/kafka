@@ -20,18 +20,18 @@ import java.util.Properties
 
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{TestUtils, CoreUtils}
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
-import junit.framework.Assert._
+import org.junit.{Before, Test}
+import org.junit.Assert._
 import java.io.File
 
-class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
+class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   var props1: Properties = null
   var config1: KafkaConfig = null
   var props2: Properties = null
   var config2: KafkaConfig = null
   val brokerMetaPropsFile = "meta.properties"
 
+  @Before
   override def setUp() {
     super.setUp()
     props1 = TestUtils.createBrokerConfig(-1, zkConnect)

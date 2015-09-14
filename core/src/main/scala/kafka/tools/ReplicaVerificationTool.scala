@@ -92,7 +92,7 @@ object ReplicaVerificationTool extends Logging {
                          .describedAs("ms")
                          .ofType(classOf[java.lang.Long])
                          .defaultsTo(30 * 1000L)
-                         
+
    if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
 
@@ -329,7 +329,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
     if (currentTimeMs - lastReportTime > reportInterval) {
       println(ReplicaVerificationTool.dateFormat.format(new Date(currentTimeMs)) + ": max lag is "
         + maxLag + " for partition " + maxLagTopicAndPartition + " at offset " + offsetWithMaxLag
-        + " among " + messageSetCache.size + " paritions")
+        + " among " + messageSetCache.size + " partitions")
       lastReportTime = currentTimeMs
     }
   }

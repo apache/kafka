@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
+import org.junit.{Test, Before}
 
 import scala.collection.JavaConversions._
 
@@ -43,7 +44,8 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
-  this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "20")
+  this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100")
+  this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
   override def generateConfigs() = {
@@ -51,6 +53,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       .map(KafkaConfig.fromProps(_, serverConfig))
   }
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -58,6 +61,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     TestUtils.createTopic(this.zkClient, topic, 1, serverCount, this.servers)
   }
 
+  @Test
   def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(10)
 
   /*
@@ -71,7 +75,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
     var consumed = 0
     val consumer = this.consumers(0)
-    consumer.subscribe(topic)
+    consumer.subscribe(List(topic))
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
@@ -82,7 +86,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         consumed += 1
       }
 
-      consumer.commit(CommitType.SYNC)
+      consumer.commitSync()
       assertEquals(consumer.position(tp), consumer.committed(tp))
 
       if (consumer.position(tp) == numRecords) {
@@ -93,6 +97,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     scheduler.shutdown()
   }
 
+  @Test
   def testSeekAndCommitWithBrokerFailures() = seekAndCommitWithBrokerFailures(5)
 
   def seekAndCommitWithBrokerFailures(numIters: Int) {
@@ -101,8 +106,13 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     this.producers.foreach(_.close)
 
     val consumer = this.consumers(0)
-    consumer.subscribe(tp)
+    consumer.assign(List(tp))
     consumer.seek(tp, 0)
+
+    // wait until all the followers have synced the last HW with leader
+    TestUtils.waitUntilTrue(() => servers.forall(server =>
+      server.replicaManager.getReplica(tp.topic(), tp.partition()).get.highWatermark.messageOffset == numRecords
+    ), "Failed to update high watermark for followers after timeout")
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
@@ -120,7 +130,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         assertEquals(pos, consumer.position(tp))
       } else if (coin == 2) {
         info("Committing offset.")
-        consumer.commit(CommitType.SYNC)
+        consumer.commitSync()
         assertEquals(consumer.position(tp), consumer.committed(tp))
       }
     }

@@ -18,15 +18,14 @@
 package kafka.zk
 
 import kafka.consumer.ConsumerConfig
-import org.I0Itec.zkclient.ZkClient
 import kafka.utils.ZkUtils
 import kafka.utils.TestUtils
-import org.junit.Assert
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{Test, Assert}
 
-class ZKEphemeralTest extends JUnit3Suite with ZooKeeperTestHarness {
+class ZKEphemeralTest extends ZooKeeperTestHarness {
   var zkSessionTimeoutMs = 1000
 
+  @Test
   def testEphemeralNodeCleanup = {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)

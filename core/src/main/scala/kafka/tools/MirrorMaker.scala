@@ -18,8 +18,8 @@
 package kafka.tools
 
 import java.util
-import java.util.concurrent.{TimeUnit, CountDownLatch}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Collections, Properties}
 
 import com.yammer.metrics.core.Gauge
@@ -29,7 +29,7 @@ import kafka.javaapi.consumer.ConsumerRebalanceListener
 import kafka.message.MessageAndMetadata
 import kafka.metrics.KafkaMetricsGroup
 import kafka.serializer.DefaultDecoder
-import kafka.utils.{CommandLineUtils, Logging, CoreUtils}
+import kafka.utils.{CommandLineUtils, CoreUtils, Logging}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.utils.Utils
@@ -185,6 +185,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     maybeSetDefaultProperty(producerProps, ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
     maybeSetDefaultProperty(producerProps, ProducerConfig.ACKS_CONFIG, "all")
     maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+    // Always set producer key and value serializer to ByteArraySerializer.
+    producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producer = new MirrorMakerProducer(producerProps)
 
     // Create consumer connector

@@ -20,7 +20,7 @@ package kafka.coordinator
 import kafka.server.KafkaConfig
 import kafka.utils.{ZkUtils, TestUtils}
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock

@@ -19,7 +19,7 @@ package kafka.server
 import kafka.log._
 import java.io.File
 import org.I0Itec.zkclient.ZkClient
-import org.scalatest.junit.JUnit3Suite
+import org.apache.kafka.common.metrics.Metrics
 import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
@@ -27,8 +27,9 @@ import kafka.common._
 import kafka.cluster.Replica
 import kafka.utils.{SystemTime, KafkaScheduler, TestUtils, MockTime, CoreUtils}
 import java.util.concurrent.atomic.AtomicBoolean
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
 
-class HighwatermarkPersistenceTest extends JUnit3Suite {
+class HighwatermarkPersistenceTest {
 
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
@@ -44,6 +45,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
       CoreUtils.rm(dir)
   }
 
+  @Test
   def testHighWatermarkPersistenceSinglePartition() {
     // mock zkclient
     val zkClient = EasyMock.createMock(classOf[ZkClient])
@@ -53,7 +55,8 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     val scheduler = new KafkaScheduler(2)
     scheduler.startup
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler, logManagers(0), new AtomicBoolean(false))
+    val replicaManager = new ReplicaManager(configs.head, new Metrics, new MockTime, new JMockTime, zkClient, scheduler,
+      logManagers(0), new AtomicBoolean(false))
     replicaManager.startup()
     replicaManager.checkpointHighWatermarks()
     var fooPartition0Hw = hwmFor(replicaManager, topic, 0)
@@ -79,6 +82,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     replicaManager.shutdown(false)
   }
 
+  @Test
   def testHighWatermarkPersistenceMultiplePartitions() {
     val topic1 = "foo1"
     val topic2 = "foo2"
@@ -89,7 +93,8 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     val scheduler = new KafkaScheduler(2)
     scheduler.startup
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler, logManagers(0), new AtomicBoolean(false))
+    val replicaManager = new ReplicaManager(configs.head, new Metrics, new MockTime(), new JMockTime, zkClient,
+      scheduler, logManagers(0), new AtomicBoolean(false))
     replicaManager.startup()
     replicaManager.checkpointHighWatermarks()
     var topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)

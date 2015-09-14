@@ -46,8 +46,11 @@ object Defaults {
   val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
 }
 
-case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props) {
-
+case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
+  /**
+   * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
+   * should also go in copyKafkaConfigToLog.
+   */
   val segmentSize = getInt(LogConfig.SegmentBytesProp)
   val segmentMs = getLong(LogConfig.SegmentMsProp)
   val segmentJitterMs = getLong(LogConfig.SegmentJitterMsProp)

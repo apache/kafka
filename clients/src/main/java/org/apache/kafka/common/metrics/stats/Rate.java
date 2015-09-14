@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
+
 /**
  * The rate of the given quantity. By default this is the total observed over a set of samples from a sampled statistic
  * divided by the elapsed time over the sample windows. Alternative {@link SampledStat} implementations can be provided,
@@ -58,26 +59,28 @@ public class Rate implements MeasurableStat {
     @Override
     public double measure(MetricConfig config, long now) {
         double value = stat.measure(config, now);
-        double elapsed = convert(now - stat.oldest(now).lastWindowMs);
-        return value / elapsed;
+        // the elapsed time is always N-1 complete windows plus whatever fraction of the final window is complete
+        long elapsedCurrentWindowMs = now - stat.current(now).lastWindowMs;
+        long elapsedPriorWindowsMs = config.timeWindowMs() * (config.samples() - 1);
+        return value / convert(elapsedCurrentWindowMs + elapsedPriorWindowsMs);
     }
 
-    private double convert(long time) {
+    private double convert(long timeMs) {
         switch (unit) {
             case NANOSECONDS:
-                return time * 1000.0 * 1000.0;
+                return timeMs * 1000.0 * 1000.0;
             case MICROSECONDS:
-                return time * 1000.0;
+                return timeMs * 1000.0;
             case MILLISECONDS:
-                return time;
+                return timeMs;
             case SECONDS:
-                return time / 1000.0;
+                return timeMs / 1000.0;
             case MINUTES:
-                return time / (60.0 * 1000.0);
+                return timeMs / (60.0 * 1000.0);
             case HOURS:
-                return time / (60.0 * 60.0 * 1000.0);
+                return timeMs / (60.0 * 60.0 * 1000.0);
             case DAYS:
-                return time / (24.0 * 60.0 * 60.0 * 1000.0);
+                return timeMs / (24.0 * 60.0 * 60.0 * 1000.0);
             default:
                 throw new IllegalStateException("Unknown unit: " + unit);
         }

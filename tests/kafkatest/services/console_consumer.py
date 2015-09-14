@@ -14,6 +14,10 @@
 # limitations under the License.
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
+
+import os
+import subprocess
 
 
 def is_int(msg):
@@ -25,7 +29,6 @@ def is_int(msg):
         return int(msg)
     except:
         return None
-
 
 """
 0.8.2.1 ConsoleConsumer options
@@ -69,13 +72,28 @@ Option                                  Description
 
 
 class ConsoleConsumer(BackgroundThreadService):
+    # Root directory for persistent output
+    PERSISTENT_ROOT = "/mnt/console_consumer"
+    STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stdout")
+    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stderr")
+    LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
+    LOG_FILE = os.path.join(LOG_DIR, "console_consumer.log")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "console_consumer.properties")
+
     logs = {
+        "consumer_stdout": {
+            "path": STDOUT_CAPTURE,
+            "collect_default": False},
+        "consumer_stderr": {
+            "path": STDERR_CAPTURE,
+            "collect_default": False},
         "consumer_log": {
-            "path": "/mnt/consumer.log",
+            "path": LOG_FILE,
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, message_validator=is_int, from_beginning=True, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, kafka, topic, message_validator=None, from_beginning=True, consumer_timeout_ms=None):
         """
         Args:
             context:                    standard context
@@ -104,18 +122,37 @@ class ConsoleConsumer(BackgroundThreadService):
     @property
     def start_cmd(self):
         args = self.args.copy()
-        args.update({'zk_connect': self.kafka.zk.connect_setting()})
-        cmd = "/opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s --zookeeper %(zk_connect)s" \
-              " --consumer.config /mnt/console_consumer.properties" % args
+        args['zk_connect'] = self.kafka.zk.connect_setting()
+        args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
+        args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
+        args['config_file'] = ConsoleConsumer.CONFIG_FILE
+
+        cmd = "export LOG_DIR=%s;" % ConsoleConsumer.LOG_DIR
+        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsoleConsumer.LOG4J_CONFIG
+        cmd += " /opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s --zookeeper %(zk_connect)s" \
+            " --consumer.config %(config_file)s" % args
 
         if self.from_beginning:
             cmd += " --from-beginning"
 
-        cmd += " 2>> /mnt/consumer.log | tee -a /mnt/consumer.log &"
+        cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd
 
+    def pids(self, node):
+        try:
+            cmd = "ps ax | grep -i console_consumer | grep java | grep -v grep | awk '{print $1}'"
+            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
+            return pid_arr
+        except (subprocess.CalledProcessError, ValueError) as e:
+            return []
+
+    def alive(self, node):
+        return len(self.pids(node)) > 0
+
     def _worker(self, idx, node):
-        # form config file
+        node.account.ssh("mkdir -p %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
+
+        # Create and upload config file
         if self.consumer_timeout_ms is not None:
             prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms)
         else:
@@ -123,24 +160,34 @@ class ConsoleConsumer(BackgroundThreadService):
 
         self.logger.info("console_consumer.properties:")
         self.logger.info(prop_file)
-        node.account.create_file("/mnt/console_consumer.properties", prop_file)
+        node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
+
+        # Create and upload log properties
+        log_config = self.render('tools_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
+        node.account.create_file(ConsoleConsumer.LOG4J_CONFIG, log_config)
 
         # Run and capture output
         cmd = self.start_cmd
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
-        for line in node.account.ssh_capture(cmd):
+        for line in node.account.ssh_capture(cmd, allow_fail=False):
             msg = line.strip()
-            msg = self.message_validator(msg)
+            if self.message_validator is not None:
+                msg = self.message_validator(msg)
             if msg is not None:
-                self.logger.debug("consumed a message: " + str(msg))
                 self.messages_consumed[idx].append(msg)
 
     def start_node(self, node):
         super(ConsoleConsumer, self).start_node(node)
 
     def stop_node(self, node):
-        node.account.kill_process("java", allow_fail=False)
+        node.account.kill_process("java", allow_fail=True)
+        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.2,
+                   err_msg="Timed out waiting for consumer to stop.")
 
     def clean_node(self, node):
-        node.account.ssh("rm -rf /mnt/console_consumer.properties /mnt/consumer.log", allow_fail=False)
+        if self.alive(node):
+            self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
+                             (self.__class__.__name__, node.account))
+        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
+        node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
 

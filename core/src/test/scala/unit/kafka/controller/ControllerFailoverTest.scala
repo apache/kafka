@@ -17,28 +17,21 @@
 
 package kafka.controller
 
-import java.util.concurrent.LinkedBlockingQueue
+
 import java.util.Properties
-
-import junit.framework.Assert._
-import org.scalatest.junit.JUnit3Suite
-
-import org.junit.{Test, After, Before}
-import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, ZkClient}
-import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.apache.log4j.{Logger, Level}
+import java.util.concurrent.LinkedBlockingQueue
 
 import kafka.api.RequestOrResponse
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.BrokerState
-import kafka.server.KafkaConfig
-import kafka.server.KafkaServer
-import kafka.server.RunningAsController
+import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
-import kafka.utils.TestUtils._
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.requests.{AbstractRequestResponse, AbstractRequest}
+import org.apache.kafka.common.utils.SystemTime
+import org.apache.log4j.{Level, Logger}
+import org.junit.{After, Before, Test}
 
-import scala.collection.Map
 import scala.collection.mutable
 
 
@@ -54,10 +47,12 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   override def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
+  @Before
   override def setUp() {
     super.setUp()
   }
 
+  @After
   override def tearDown() {
     super.tearDown()
   }
@@ -66,6 +61,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
    * See @link{https://issues.apache.org/jira/browse/KAFKA-2300}
    * for the background of this test case
    */
+  @Test
   def testMetadataUpdate() {
     log.setLevel(Level.INFO)
     var controller: KafkaServer = this.servers.head;
@@ -154,9 +150,10 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   }
 }
 
-class MockChannelManager(private val controllerContext: ControllerContext,
-                           config: KafkaConfig)
-                           extends ControllerChannelManager(controllerContext, config) {
+
+class MockChannelManager(private val controllerContext: ControllerContext, config: KafkaConfig)
+  extends ControllerChannelManager(controllerContext, config, new SystemTime, new Metrics) {
+
   def stopSendThread(brokerId: Int) {
     val requestThread = brokerStateInfo(brokerId).requestSendThread
     requestThread.isRunning.set(false)
@@ -165,12 +162,9 @@ class MockChannelManager(private val controllerContext: ControllerContext,
   }
 
   def shrinkBlockingQueue(brokerId: Int) {
-    val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, RequestOrResponse => Unit)](1)
+    val messageQueue = new LinkedBlockingQueue[QueueItem](1)
     val brokerInfo = this.brokerStateInfo(brokerId)
-    this.brokerStateInfo.put(brokerId, new ControllerBrokerStateInfo(brokerInfo.channel,
-                                                                      brokerInfo.broker,
-                                                                      messageQueue,
-                                                                      brokerInfo.requestSendThread))
+    this.brokerStateInfo.put(brokerId, brokerInfo.copy(messageQueue = messageQueue))
   }
 
   def resumeSendThread (brokerId: Int) {
