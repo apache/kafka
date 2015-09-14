@@ -32,7 +32,10 @@ import scala.collection.JavaConverters._
 
 object SimpleAclAuthorizer {
   //the zookeeper cluster where acls will be stored, defaults to value specified for "zkConnect"
-  val ZkUrlProp = "zookeeper.url"
+  val ZkUrlProp = "authorizer.zk.url"
+  val ZkConnectionTimeOutProp = "authorizer.zk.connection.timeout.ms"
+  val ZkSessionTimeOutProp = "authorizer.zk.session.timeout.ms"
+
   //List of users that will be treated as super users and will have access to all the resources for all actions from all hosts, defaults to no super users.
   val SuperUsersProp = "super.users"
   //If set to true when no acls are found for a resource , authorizer allows access to everyone. Defaults to false.
@@ -52,16 +55,16 @@ object SimpleAclAuthorizer {
   val AclZkPath = "/kafka-acl"
 
   //notification node which gets updated with the resource name when acl on a resource is changed.
-  val AclChangedZkPath = "/kafka-acl-changed"
+  val AclChangedZkPath = "/kafka-acl-changes"
 
-  val AclChangedPrefix = "aclChanged"
+  val AclChangedPrefix = "acl_changes_"
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
   private var superUsers = Set.empty[KafkaPrincipal]
-  private var shouldAllowEveryoneIfNoAclIsFound: Boolean = _
-  private var zkClient: ZkClient = _
-  private var aclChangeListener: ZkNodeChangeNotificationListener = _
+  private var shouldAllowEveryoneIfNoAclIsFound = false
+  private var zkClient: ZkClient = null
+  private var aclChangeListener: ZkNodeChangeNotificationListener = null
 
   private val aclCache: scala.collection.mutable.HashMap[Resource, Set[Acl]] = new scala.collection.mutable.HashMap[Resource, Set[Acl]]
   private val lock = new ReentrantReadWriteLock()
@@ -69,25 +72,27 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   /**
    * Guaranteed to be called before any authorize call is made.
    */
-  override def configure(configs: util.Map[String, _]): Unit = {
-    val config = configs.asScala
+  override def configure(javaConfigs: util.Map[String, _]): Unit = {
+    val config = javaConfigs.asScala
     val props = new java.util.Properties()
     config foreach { case (key, value) => props.put(key, value.toString) }
     val kafkaConfig = KafkaConfig.fromProps(props)
 
-    superUsers = configs.get(SimpleAclAuthorizer.SuperUsersProp) match {
+    superUsers = javaConfigs.get(SimpleAclAuthorizer.SuperUsersProp) match {
       case null => Set.empty[KafkaPrincipal]
-      case (str: String) => if (!str.isEmpty) str.split(",").map(s => KafkaPrincipal.fromString(s.trim)).toSet else Set.empty
+      case (str: String) => if (!str.isEmpty) str.split(",").map(s => KafkaPrincipal.fromString(s.trim)).toSet else Set.empty[KafkaPrincipal]
       case _ => Set.empty
     }
 
     shouldAllowEveryoneIfNoAclIsFound = if (config.contains(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp))
-      configs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).toString.toBoolean
+      javaConfigs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).toString.toBoolean
     else false
 
     val zkUrl = config.getOrElse(SimpleAclAuthorizer.ZkUrlProp, kafkaConfig.zkConnect).toString
+    val zkConnectionTimeoutMs = config.getOrElse(SimpleAclAuthorizer.ZkConnectionTimeOutProp, kafkaConfig.zkConnectionTimeoutMs).toString.toInt
+    val zkSessionTimeOutMs = config.getOrElse(SimpleAclAuthorizer.ZkSessionTimeOutProp, kafkaConfig.zkSessionTimeoutMs).toString.toInt
 
-    zkClient = ZkUtils.createZkClient(zkUrl, Integer2int(kafkaConfig.zkConnectionTimeoutMs), Integer2int(kafkaConfig.zkConnectionTimeoutMs))
+    zkClient = ZkUtils.createZkClient(zkUrl, zkConnectionTimeoutMs, zkSessionTimeOutMs)
     ZkUtils.makeSurePersistentPathExists(zkClient, SimpleAclAuthorizer.AclZkPath)
 
     aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificaitonHandler)
@@ -135,19 +140,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     debug(s"principal = $principal from host = $host is not allowed to perform operation = $operation  on resource = $resource as no explicit acls were defined to allow the operation")
     false
   }
-
-//  private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
-//    for (acl <- acls) {
-//      if (acl.permissionType.equals(permissionType)
-//        && (acl.principal.equals(principal) || acl.principal.equals(Acl.WildCardPrincipal))
-//        && (operations.equals(acl.operation) || acl.operation.equals(All))
-//        && (acl.host.equals(host) || acl.host.equals(Acl.WildCardHost))) {
-//        debug(s"operation = $operations on resource = $resource from host = $host is $permissionType.name based on acl = $acl")
-//        return true
-//      }
-//    }
-//    false
-//  }
 
   private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
     for (acl <- acls) {
@@ -219,7 +211,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  def getAclsFromZk(resource: Resource): Set[Acl] = {
+  private def getAclsFromZk(resource: Resource): Set[Acl] = {
     val aclJson = ZkUtils.readDataMaybeNull(zkClient, toResourcePath(resource))._1
     aclJson.map(Acl.fromJson).getOrElse(Set.empty)
   }
@@ -233,7 +225,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     acls.toSet[Acl]
   }
 
-  def loadCache: Set[Acl] = {
+  private def loadCache: Set[Acl] = {
     var acls = Set.empty[Acl]
     val resourceTypes = ZkUtils.getChildren(zkClient, SimpleAclAuthorizer.AclZkPath)
     for (rType <- resourceTypes) {
@@ -247,11 +239,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
 
-  def toResourcePath(resource: Resource): String = {
+  private def toResourcePath(resource: Resource): String = {
     SimpleAclAuthorizer.AclZkPath + "/" + resource.resourceType + "/" + resource.name
   }
 
-  def updateAclChangedFlag(resource: Resource): Unit = {
+  private def updateAclChangedFlag(resource: Resource): Unit = {
     ZkUtils.createSequentialPersistentPath(zkClient, SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
   }
 

@@ -35,7 +35,7 @@ trait NotificationHandler {
  *
  * The caller/user of this class should ensure that they use zkClient.subscribeStateChanges and call processAllNotifications
  * method of this class from ZkStateChangeListener's handleNewSession() method. This is necessary to ensure that if zk session
- * is terminated and reestablished any missed notification will be processed immeditatly.
+ * is terminated and reestablished any missed notification will be processed immediately.
  * @param zkClient
  * @param seqNodeRoot
  * @param seqNodePrefix
@@ -99,12 +99,9 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
    * @param notifications
    */
   private def purgeObsoleteNotifications(now: Long, notifications: Seq[String]) {
-    println("purging notifications" + notifications)
     for (notification <- notifications.sorted) {
       val notificationNode = seqNodeRoot + "/" + notification
       val (data, stat) = ZkUtils.readDataMaybeNull(zkClient, notificationNode)
-      println(s" data = $data , stat = $stat , now = $now , expiration = $changeExpirationMs")
-      println("now - ctime " + (now - stat.getCtime))
       if (data.isDefined) {
         if (now - stat.getCtime > changeExpirationMs) {
           debug(s"Purging change notification $notificationNode")
@@ -128,7 +125,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
         import scala.collection.JavaConverters._
         processNotifications(notifications.asScala.sorted)
       } catch {
-        case e: Exception => error("Error processing config change:", e)
+        case e: Exception => error(s"Error processing notification change for path = $path and notification= $notifications :", e)
       }
     }
   }

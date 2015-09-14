@@ -22,10 +22,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.{TestUtils, ZkUtils}
 import org.junit.Test
 
-
-/**
- * Created by pbrahmbhatt on 9/11/15.
- */
 class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
 
   override def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
@@ -33,8 +29,8 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
   @Test
   def testProcessNotification {
     val notificationHandler = new NotificationHandler {
-      var notification: String = _
-      var invocationCount: Integer = 0
+      @volatile var notification: String = _
+      @volatile var invocationCount: Integer = 0
       override def processNotification(notificationMessage: Option[String]): Unit = {
         notification = notificationMessage.get
         invocationCount += 1
