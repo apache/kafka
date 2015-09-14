@@ -33,7 +33,6 @@ import org.junit.Test;
 import org.junit.Before;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Properties;
@@ -60,9 +59,7 @@ public class StreamTaskTest {
                 put("topic1", source1);
                 put("topic2", source2);
             }
-        },
-        Collections.<String, SinkNode>emptyMap()
-    );
+        });
 
     private final StreamingConfig config = new StreamingConfig(new Properties() {
         {

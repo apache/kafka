@@ -280,6 +280,12 @@ public class StreamTask implements Punctuator {
             }
         }
         if (exception != null) throw exception;
+
+        try {
+            ((ProcessorContextImpl) processorContext).stateManager().close(recordCollector.offsets());
+        } catch (IOException e) {
+            throw new KafkaException("Error while closing the state manager in processor context", e);
+        }
     }
 
     private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
