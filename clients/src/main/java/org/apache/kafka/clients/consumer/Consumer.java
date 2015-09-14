@@ -16,6 +16,7 @@ import java.io.Closeable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
@@ -56,29 +57,44 @@ public interface Consumer<K, V> extends Closeable {
     public void assign(List<TopicPartition> partitions);
 
     /**
+    * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
+    */
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
+
+    /**
+     * @see KafkaConsumer#unsubscribe()
+     */
+    public void unsubscribe();
+
+    /**
      * @see KafkaConsumer#poll(long)
      */
     public ConsumerRecords<K, V> poll(long timeout);
 
     /**
-     * @see KafkaConsumer#commit(CommitType)
+     * @see KafkaConsumer#commitSync()
      */
-    public void commit(CommitType commitType);
+    public void commitSync();
 
     /**
-     * @see KafkaConsumer#commit(CommitType, ConsumerCommitCallback)
+     * @see KafkaConsumer#commitSync(Map)
      */
-    public void commit(CommitType commitType, ConsumerCommitCallback callback);
+    public void commitSync(Map<TopicPartition, Long> offsets);
 
     /**
-     * @see KafkaConsumer#commit(Map, CommitType)
+     * @see KafkaConsumer#commitAsync()
      */
-    public void commit(Map<TopicPartition, Long> offsets, CommitType commitType);
+    public void commitAsync();
 
     /**
-     * @see KafkaConsumer#commit(Map, CommitType, ConsumerCommitCallback)
+     * @see KafkaConsumer#commitAsync(OffsetCommitCallback)
      */
-    public void commit(Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback);
+    public void commitAsync(OffsetCommitCallback callback);
+
+    /**
+     * @see KafkaConsumer#commitAsync(Map, OffsetCommitCallback)
+     */
+    public void commitAsync(Map<TopicPartition, Long> offsets, OffsetCommitCallback callback);
 
     /**
      * @see KafkaConsumer#seek(TopicPartition, long)

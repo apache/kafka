@@ -18,7 +18,6 @@ package kafka.controller
 
 import java.util
 
-import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse}
 
@@ -58,19 +57,6 @@ class ControllerContext(val zkClient: ZkClient,
   var partitionLeadershipInfo: mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
   val partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap
   val partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet
-
-  /**
-   * This map is used to ensure the following invariant: at most one `NetworkClient`/`Selector` instance should be
-   * created per broker during the lifetime of the `metrics` parameter received by `KafkaController` (which has the same
-   * lifetime as `KafkaController` since they are both shut down during `KafkaServer.shutdown()`).
-   *
-   * If we break this invariant, an exception is thrown during the instantiation of `Selector` due to the usage of
-   * two equal `MetricName` instances for two `Selector` instantiations. This way also helps to maintain the metrics sane.
-   *
-   * In the future, we should consider redesigning `ControllerChannelManager` so that we can use a single
-   * `NetworkClient`/`Selector` for multiple broker connections as that is the intended usage and it may help simplify this code.
-   */
-  private[controller] val networkClientMap = mutable.Map[Int, NetworkClient]()
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
   private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
@@ -134,11 +120,6 @@ class ControllerContext(val zkClient: ZkClient,
     partitionLeadershipInfo = partitionLeadershipInfo.filter{ case (topicAndPartition, _) => topicAndPartition.topic != topic }
     partitionReplicaAssignment = partitionReplicaAssignment.filter{ case (topicAndPartition, _) => topicAndPartition.topic != topic }
     allTopics -= topic
-  }
-
-  private[controller] def closeNetworkClients(): Unit = {
-    networkClientMap.values.foreach(_.close())
-    networkClientMap.clear()
   }
 
 }
@@ -712,7 +693,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, zkConnection
       isRunning = false
     }
     onControllerResignation()
-    controllerContext.closeNetworkClients()
   }
 
   def sendRequest(brokerId: Int, apiKey: ApiKeys, apiVersion: Option[Short], request: AbstractRequest, callback: AbstractRequestResponse => Unit = null) = {

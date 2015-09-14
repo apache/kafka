@@ -20,7 +20,7 @@ import java.util.Map;
  * A callback interface that the user can implement to trigger custom actions when a commit request completes. The callback
  * may be executed in any thread calling {@link Consumer#poll(long) poll()}.
  */
-public interface ConsumerCommitCallback {
+public interface OffsetCommitCallback {
 
     /**
      * A callback method the user can implement to provide asynchronous handling of commit request completion.

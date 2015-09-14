@@ -94,6 +94,25 @@ public class NetworkClientTest {
         checkSimpleRequestResponse(clientWithStaticNodes);
     }
 
+    @Test
+    public void testClose() {
+        client.ready(node, time.milliseconds());
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+
+        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
+        RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
+        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
+        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, null);
+        client.send(request);
+        assertEquals("There should be 1 in-flight request after send", 1, client.inFlightRequestCount(node.idString()));
+
+        client.close(node.idString());
+        assertEquals("There should be no in-flight request after close", 0, client.inFlightRequestCount(node.idString()));
+        assertFalse("Connection should not be ready after close", client.isReady(node, 0));
+    }
+
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
         RequestHeader reqHeader = networkClient.nextRequestHeader(ApiKeys.PRODUCE);

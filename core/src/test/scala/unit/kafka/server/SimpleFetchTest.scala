@@ -22,6 +22,8 @@ import kafka.cluster.Replica
 import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.message.{MessageSet, ByteBufferMessageSet, Message}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.junit.{Test, After, Before}
 
 import java.util.{Properties, Collections}
@@ -46,6 +48,8 @@ class SimpleFetchTest {
 
   // set the replica manager with the partition
   val time = new MockTime
+  val jTime = new JMockTime
+  val metrics = new Metrics
   val leaderLEO = 20L
   val followerLEO = 15L
   val partitionHW = 5
@@ -94,7 +98,8 @@ class SimpleFetchTest {
     EasyMock.replay(logManager)
 
     // create the replica manager
-    replicaManager = new ReplicaManager(configs.head, time, zkClient, scheduler, logManager, new AtomicBoolean(false))
+    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkClient, scheduler, logManager,
+      new AtomicBoolean(false))
 
     // add the partition with two replicas, both in ISR
     val partition = replicaManager.getOrCreatePartition(topic, partitionId)
