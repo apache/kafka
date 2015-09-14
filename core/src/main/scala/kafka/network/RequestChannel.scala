@@ -69,8 +69,16 @@ object RequestChannel extends Logging {
       } else
         null
     val body: AbstractRequest =
-      if (requestObj == null)
-        AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+      if (requestObj == null) {
+        try {
+          // If the request version is higher than supported version, ArrayIndexOutOfBoundaryException might be thrown,
+          // we ignore it here and let KafkaApis to handle it.
+          AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+        } catch {
+          case e : ArrayIndexOutOfBoundsException =>
+            null
+        }
+      }
       else
         null
 
