@@ -61,8 +61,6 @@ import java.util.Set;
  * This class manage the fetching process with the brokers.
  */
 public class Fetcher<K, V> {
-    public static final long EARLIEST_OFFSET_TIMESTAMP = -2L;
-    public static final long LATEST_OFFSET_TIMESTAMP = -1L;
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
@@ -174,12 +172,8 @@ public class Fetcher<K, V> {
         long startTime = time.milliseconds();
 
         while (time.milliseconds() - startTime < timeout) {
-            final Node node = client.leastLoadedNode();
-            if (node != null) {
-                MetadataRequest metadataRequest = new MetadataRequest(Collections.<String>emptyList());
-                final RequestFuture<ClientResponse> requestFuture =
-                    client.send(node, ApiKeys.METADATA, metadataRequest);
-
+            RequestFuture<ClientResponse> requestFuture = sendMetadataRequest();
+            if (requestFuture != null) {
                 client.poll(requestFuture);
 
                 if (requestFuture.succeeded()) {
@@ -204,6 +198,17 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * Send Metadata Request to least loaded node in Kafka cluster asynchronously
+     * @return A future that indicates result of sent metadata request
+     */
+    public RequestFuture<ClientResponse> sendMetadataRequest() {
+        final Node node = client.leastLoadedNode();
+        return node == null ? null :
+            client.send(
+                node, ApiKeys.METADATA, new MetadataRequest(Collections.<String>emptyList()));
+    }
+
+    /**
      * Reset offsets for the given partition using the offset reset strategy.
      *
      * @param partition The given partition that needs reset offset
@@ -213,9 +218,9 @@ public class Fetcher<K, V> {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
         final long timestamp;
         if (strategy == OffsetResetStrategy.EARLIEST)
-            timestamp = EARLIEST_OFFSET_TIMESTAMP;
+            timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
         else if (strategy == OffsetResetStrategy.LATEST)
-            timestamp = LATEST_OFFSET_TIMESTAMP;
+            timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
         else
             throw new NoOffsetForPartitionException("No offset is set and no reset policy is defined");
 

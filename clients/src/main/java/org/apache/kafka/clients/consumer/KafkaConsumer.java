@@ -43,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -57,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 /**
  * A Kafka client that consumes records from a Kafka cluster.
@@ -79,10 +81,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * out. It will be one larger than the highest offset the consumer has seen in that partition. It automatically advances
  * every time the consumer receives data calls {@link #poll(long)} and receives messages.
  * <p>
- * The {@link #commit(CommitType) committed position} is the last offset that has been saved securely. Should the
+ * The {@link #commitSync() committed position} is the last offset that has been saved securely. Should the
  * process fail and restart, this is the offset that it will recover to. The consumer can either automatically commit
  * offsets periodically, or it can choose to control this committed position manually by calling
- * {@link #commit(CommitType) commit}.
+ * {@link #commitSync() commit}.
  * <p>
  * This distinction gives the consumer control over when a record is considered consumed. It is discussed in further
  * detail below.
@@ -111,7 +113,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * a queue in a traditional messaging system all processes would be part of a single consumer group and hence record
  * delivery would be balanced over the group like with a queue. Unlike a traditional messaging system, though, you can
  * have multiple such groups. To get semantics similar to pub-sub in a traditional messaging system each process would
- * have it's own consumer group, so each process would subscribe to all the records published to the topic.
+ * have its own consumer group, so each process would subscribe to all the records published to the topic.
  * <p>
  * In addition, when offsets are committed they are always committed for a given consumer group.
  * <p>
@@ -155,10 +157,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * called <i>test</i> as described above.
  * <p>
  * The broker will automatically detect failed processes in the <i>test</i> group by using a heartbeat mechanism. The
- * consumer will automatically ping the cluster periodically, which let's the cluster know that it is alive. As long as
+ * consumer will automatically ping the cluster periodically, which lets the cluster know that it is alive. As long as
  * the consumer is able to do this it is considered alive and retains the right to consume from the partitions assigned
  * to it. If it stops heartbeating for a period of time longer than <code>session.timeout.ms</code> then it will be
- * considered dead and it's partitions will be assigned to another process.
+ * considered dead and its partitions will be assigned to another process.
  * <p>
  * The deserializer settings specify how to turn bytes into objects. For example, by specifying string deserializers, we
  * are saying that our record's key and value will just be simple strings.
@@ -196,7 +198,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *             buffer.add(record);
  *             if (buffer.size() &gt;= commitInterval) {
  *                 insertIntoDb(buffer);
- *                 consumer.commit(CommitType.SYNC);
+ *                 consumer.commitSync();
  *                 buffer.clear();
  *             }
  *         }
@@ -241,7 +243,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <h4>Managing Your Own Offsets</h4>
  *
- * The consumer application need not use Kafka's built-in offset storage, it can store offsets in a store of it's own
+ * The consumer application need not use Kafka's built-in offset storage, it can store offsets in a store of its own
  * choosing. The primary use case for this is allowing the application to store both the offset and the results of the
  * consumption in the same system in a way that both the results and offsets are stored atomically. This is not always
  * possible, but when it is it will make the consumption fully atomic and give "exactly once" semantics that are
@@ -261,7 +263,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * from what it has ensuring that no updates are lost.
  * </ul>
  *
- * Each record comes with it's own offset, so to manage your own offset you just need to do the following:
+ * Each record comes with its own offset, so to manage your own offset you just need to do the following:
  * <ol>
  * <li>Configure <code>enable.auto.commit=false</code>
  * <li>Use the offset provided with each {@link ConsumerRecord} to save your position.
@@ -283,8 +285,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <h4>Controlling The Consumer's Position</h4>
  *
- * In most use cases the consumer will simply consume records from beginning to end, periodically committing it's
- * position (either automatically or manually). However Kafka allows the consumer to manually control it's position,
+ * In most use cases the consumer will simply consume records from beginning to end, periodically committing its
+ * position (either automatically or manually). However Kafka allows the consumer to manually control its position,
  * moving forward or backwards in a partition at will. This means a consumer can re-consume older records, or skip to
  * the most recent records without actually consuming the intermediate records.
  * <p>
@@ -294,7 +296,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * attempt to catch up processing all records, but rather just skip to the most recent records.
  * <p>
  * Another use case is for a system that maintains local state as described in the previous section. In such a system
- * the consumer will want to initialize it's position on start-up to whatever is contained in the local store. Likewise
+ * the consumer will want to initialize its position on start-up to whatever is contained in the local store. Likewise
  * if the local state is destroyed (say because the disk is lost) the state may be recreated on a new machine by
  * reconsuming all the data and recreating the state (assuming that Kafka is retaining sufficient history).
  *
@@ -357,7 +359,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <h4>1. One Consumer Per Thread</h4>
  *
- * A simple option is to give each thread it's own consumer instance. Here are the pros and cons of this approach:
+ * A simple option is to give each thread its own consumer instance. Here are the pros and cons of this approach:
  * <ul>
  * <li><b>PRO</b>: It is the easiest to implement
  * <li><b>PRO</b>: It is often the fastest as no inter-thread co-ordination is needed
@@ -387,13 +389,13 @@ import java.util.concurrent.atomic.AtomicReference;
  * that processing is complete for that partition.
  * </ul>
  *
- * There are many possible variations on this approach. For example each processor thread can have it's own queue, and
+ * There are many possible variations on this approach. For example each processor thread can have its own queue, and
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
  *
  */
 @InterfaceStability.Unstable
-public class KafkaConsumer<K, V> implements Consumer<K, V> {
+public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
@@ -540,7 +542,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metricsTags,
                     this.time,
                     requestTimeoutMs,
-                    retryBackoffMs);
+                    retryBackoffMs,
+                    new Coordinator.DefaultOffsetCommitCallback());
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                         Deserializer.class);
@@ -674,6 +677,50 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Subscribes to topics matching specified pattern and uses the consumer's group
+     * management functionality. The pattern matching will be done periodically against topics
+     * existing at the time of check.
+     * <p>
+     * As part of group management, the consumer will keep track of the list of consumers that
+     * belong to a particular group and will trigger a rebalance operation if one of the
+     * following events trigger -
+     * <ul>
+     * <li>Number of partitions change for any of the subscribed list of topics
+     * <li>Topic is created or deleted
+     * <li>An existing member of the consumer group dies
+     * <li>A new member is added to an existing consumer group via the join API
+     * </ul>
+     *
+     * @param pattern Pattern to subscribe to
+     */
+    @Override
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+        acquire();
+        try {
+            log.debug("Subscribed to pattern: {}", pattern);
+            this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
+            this.metadata.needMetadataForAllTopics(true);
+            this.metadata.addListener(this);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Unsubscribe from topics currently subscribed to
+     */
+    public void unsubscribe() {
+        acquire();
+        try {
+            this.subscriptions.unsubscribe();
+            this.metadata.needMetadataForAllTopics(false);
+            this.metadata.removeListener(this);
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Assign a list of partition to this consumer. This interface does not allow for incremental assignment
      * and will replace the previous assignment (if there is one).
      * <p>
@@ -706,8 +753,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * The offset used for fetching the data is governed by whether or not {@link #seek(TopicPartition, long)} is used.
      * If {@link #seek(TopicPartition, long)} is used, it will use the specified offsets on startup and on every
      * rebalance, to consume data from that offset sequentially on every poll. If not, it will use the last checkpointed
-     * offset using {@link #commit(Map, CommitType) commit(offsets, sync)} for the subscribed list of partitions.
-     *
+     * offset using {@link #commitSync(Map) commit(offsets)} for the subscribed list of partitions.
+     * 
      * @param timeout The time, in milliseconds, spent waiting in poll if data is not available. If 0, returns
      *            immediately with any records available now. Must not be negative.
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
@@ -775,7 +822,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void scheduleAutoCommitTask(final long interval) {
         DelayedTask task = new DelayedTask() {
             public void run(long now) {
-                commit(CommitType.ASYNC);
+                commitAsync(new OffsetCommitCallback() {
+                    @Override
+                    public void onComplete(Map<TopicPartition, Long> offsets, Exception exception) {
+                        if (exception != null)
+                            log.error("Auto offset commit failed.", exception);
+                    }
+                });
                 client.schedule(this, now + interval);
             }
         };
@@ -783,24 +836,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Commits the specified offsets for the specified list of topics and partitions to Kafka.
+     * Commits offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
      * <p>
-     * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
-     * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
+     * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
-     * commit are silently discarded. If you need to determine the result of an asynchronous commit, you should use
-     * {@link #commit(Map, CommitType, ConsumerCommitCallback)}. Synchronous commits (i.e. {@link CommitType#SYNC})
-     * block until either the commit succeeds or an unrecoverable error is encountered (in which case it is thrown
-     * to the caller).
-     *
-     * @param offsets The list of offsets per partition that should be committed to Kafka.
-     * @param commitType Control whether the commit is blocking
+     * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
+     * encountered (in which case it is thrown to the caller).
      */
     @Override
-    public void commit(final Map<TopicPartition, Long> offsets, CommitType commitType) {
-        commit(offsets, commitType, null);
+    public void commitSync() {
+        acquire();
+        try {
+            commitSync(subscriptions.allConsumed());
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -810,24 +862,27 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
-     * commit are either passed to the callback (if provided) or silently discarded. Synchronous commits (i.e.
-     * {@link CommitType#SYNC}) block until either the commit succeeds or an unrecoverable error is encountered. In
-     * this case, the error is either passed to the callback (if provided) or thrown to the caller.
+     * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
+     * encountered (in which case it is thrown to the caller).
      *
      * @param offsets The list of offsets per partition that should be committed to Kafka.
-     * @param commitType Control whether the commit is blocking
-     * @param callback Callback to invoke when the commit completes
      */
     @Override
-    public void commit(final Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback) {
+    public void commitSync(final Map<TopicPartition, Long> offsets) {
         acquire();
         try {
-            log.debug("Committing offsets ({}): {} ", commitType.toString().toLowerCase(), offsets);
-            coordinator.commitOffsets(offsets, commitType, callback);
+            coordinator.commitOffsetsSync(offsets);
         } finally {
             release();
         }
+    }
+
+    /**
+     * Convenient method. Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
+     */
+    @Override
+    public void commitAsync() {
+        commitAsync(null);
     }
 
     /**
@@ -837,42 +892,43 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
-     * commit are either passed to the callback (if provided) or silently discarded. Synchronous commits (i.e.
-     * {@link CommitType#SYNC}) block until either the commit succeeds or an unrecoverable error is encountered. In
-     * this case, the error is either passed to the callback (if provided) or thrown to the caller.
+     * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
+     * (if provided) or discarded.
      *
-     * @param commitType Whether or not the commit should block until it is acknowledged.
      * @param callback Callback to invoke when the commit completes
      */
     @Override
-    public void commit(CommitType commitType, ConsumerCommitCallback callback) {
+    public void commitAsync(OffsetCommitCallback callback) {
         acquire();
         try {
-            commit(subscriptions.allConsumed(), commitType, callback);
+            commitAsync(subscriptions.allConsumed(), callback);
         } finally {
             release();
         }
     }
 
     /**
-     * Commits offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
+     * Commits the specified offsets for the specified list of topics and partitions to Kafka.
      * <p>
-     * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
-     * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
+     * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * Asynchronous commits (i.e. {@link CommitType#ASYNC} will not block. Any errors encountered during an asynchronous
-     * commit are silently discarded. If you need to determine the result of an asynchronous commit, you should use
-     * {@link #commit(CommitType, ConsumerCommitCallback)}. Synchronous commits (i.e. {@link CommitType#SYNC})
-     * block until either the commit succeeds or an unrecoverable error is encountered (in which case it is thrown
-     * to the caller).
+     * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
+     * (if provided) or discarded.
      *
-     * @param commitType Whether or not the commit should block until it is acknowledged.
+     * @param offsets The list of offsets per partition that should be committed to Kafka.
+     * @param callback Callback to invoke when the commit completes
      */
     @Override
-    public void commit(CommitType commitType) {
-        commit(commitType, null);
+    public void commitAsync(final Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
+        acquire();
+        try {
+            log.debug("Committing offsets: {} ", offsets);
+            coordinator.commitOffsetsAsync(offsets, callback);
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -909,7 +965,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Seek to the last offset for each of the given partitions
+     * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
+     * final offset in all partitions only when poll() or position() are called.
      */
     public void seekToEnd(TopicPartition... partitions) {
         acquire();
@@ -955,7 +1012,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * another). This offset will be used as the position for the consumer in the event of a failure.
      * <p>
      * This call may block to do a remote call if the partition in question isn't assigned to this consumer or if the
-     * consumer hasn't yet initialized it's cache of committed offsets.
+     * consumer hasn't yet initialized its cache of committed offsets.
      *
      * @param partition The partition to check
      * @return The last committed offset
@@ -1155,4 +1212,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
     }
+
+    @Override
+    public void onMetadataUpdate(Cluster cluster) {
+        final List<String> topicsToSubscribe = new ArrayList<>();
+
+        for (String topic : cluster.topics())
+            if (this.subscriptions.getSubscribedPattern().matcher(topic).matches())
+                topicsToSubscribe.add(topic);
+
+        subscriptions.changeSubscription(topicsToSubscribe);
+        metadata.setTopics(topicsToSubscribe);
+    }
+
 }
