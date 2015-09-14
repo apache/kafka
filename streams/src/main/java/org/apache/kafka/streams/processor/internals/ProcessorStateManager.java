@@ -64,7 +64,7 @@ public class ProcessorStateManager {
         // try to acquire the exclusive lock on the state directory
         directoryLock = lockStateDirectory(baseDir);
         if (directoryLock == null) {
-            throw new IOException("failed to lock the state directory: " + baseDir.getCanonicalPath());
+            throw new IOException("Failed to lock the state directory: " + baseDir.getCanonicalPath());
         }
 
         // load the checkpoint information

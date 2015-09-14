@@ -281,7 +281,7 @@ public class StreamThread extends Thread {
                                 Utils.delete(dir);
                             }
                         } catch (IOException e) {
-                            log.error("Failed to lock the state directory", e);
+                            log.error("Failed to lock the state directory due to an unexpected exception", e);
                         } finally {
                             if (directoryLock != null) {
                                 try {
