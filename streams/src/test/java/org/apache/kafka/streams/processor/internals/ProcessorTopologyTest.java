@@ -43,21 +43,13 @@ public class ProcessorTopologyTest {
 
         assertEquals(2, topology.sources().size());
 
-        assertEquals(2, topology.sinks().size());
-
         assertEquals(3, topology.sourceTopics().size());
-
-        assertEquals(2, topology.sinkTopics().size());
 
         assertNotNull(topology.source("topic-1"));
 
         assertNotNull(topology.source("topic-2"));
 
         assertNotNull(topology.source("topic-3"));
-
-        assertNotNull(topology.sink("topic-3"));
-
-        assertNotNull(topology.sink("topic-4"));
 
         assertEquals(topology.source("topic-2"), topology.source("topic-3"));
     }

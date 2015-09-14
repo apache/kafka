@@ -49,7 +49,6 @@ public class TopologyBuilder {
 
     private Set<String> nodeNames = new HashSet<>();
     private Set<String> sourceTopicNames = new HashSet<>();
-    private Set<String> sinkTopicNames = new HashSet<>();
 
     private interface NodeFactory {
         ProcessorNode build();
@@ -197,9 +196,6 @@ public class TopologyBuilder {
         if (nodeNames.contains(name))
             throw new TopologyException("Processor " + name + " is already added.");
 
-        if (sinkTopicNames.contains(topic))
-            throw new TopologyException("Topic " + topic + " has already been registered by another sink.");
-
         if (parentNames != null) {
             for (String parent : parentNames) {
                 if (parent.equals(name)) {
@@ -211,7 +207,6 @@ public class TopologyBuilder {
             }
         }
 
-        sinkTopicNames.add(topic);
         nodeNames.add(name);
         nodeFactories.add(new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
         return this;
@@ -257,7 +252,6 @@ public class TopologyBuilder {
         List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
-        Map<String, SinkNode> topicSinkMap = new HashMap<>();
 
         try {
             // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
@@ -275,9 +269,6 @@ public class TopologyBuilder {
                         topicSourceMap.put(topic, (SourceNode) node);
                     }
                 } else if (factory instanceof SinkNodeFactory) {
-                    String topic = ((SinkNodeFactory) factory).topic;
-                    topicSinkMap.put(topic, (SinkNode) node);
-
                     for (String parent : ((SinkNodeFactory) factory).parents) {
                         processorMap.get(parent).addChild(node);
                     }
@@ -289,7 +280,7 @@ public class TopologyBuilder {
             throw new KafkaException("ProcessorNode construction failed: this should not happen.");
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap);
+        return new ProcessorTopology(processorNodes, topicSourceMap);
     }
 
     /**

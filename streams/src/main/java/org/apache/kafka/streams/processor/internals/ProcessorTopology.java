@@ -27,38 +27,23 @@ public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
     private final Map<String, SourceNode> sourceByTopics;
-    private final Map<String, SinkNode> sinkByTopics;
 
     public ProcessorTopology(List<ProcessorNode> processorNodes,
-                             Map<String, SourceNode> sourceByTopics,
-                             Map<String, SinkNode> sinkByTopics) {
+                             Map<String, SourceNode> sourceByTopics) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
-        this.sinkByTopics = Collections.unmodifiableMap(sinkByTopics);
     }
 
     public Set<String> sourceTopics() {
         return sourceByTopics.keySet();
     }
 
-    public Set<String> sinkTopics() {
-        return sinkByTopics.keySet();
-    }
-
     public SourceNode source(String topic) {
         return sourceByTopics.get(topic);
     }
 
-    public SinkNode sink(String topic) {
-        return sinkByTopics.get(topic);
-    }
-
     public Set<SourceNode> sources() {
         return new HashSet<>(sourceByTopics.values());
-    }
-
-    public Set<SinkNode> sinks() {
-        return new HashSet<>(sinkByTopics.values());
     }
 
     public List<ProcessorNode> processors() {
