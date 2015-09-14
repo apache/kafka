@@ -17,25 +17,24 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
-
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public class ProcessorTopology {
 
-    private List<ProcessorNode> processorNodes;
-    private Map<String, SourceNode> sourceByTopics;
-    private Map<String, SinkNode> sinkByTopics;
+    private final List<ProcessorNode> processorNodes;
+    private final Map<String, SourceNode> sourceByTopics;
+    private final Map<String, SinkNode> sinkByTopics;
 
     public ProcessorTopology(List<ProcessorNode> processorNodes,
                              Map<String, SourceNode> sourceByTopics,
                              Map<String, SinkNode> sinkByTopics) {
-        this.processorNodes = processorNodes;
-        this.sourceByTopics = sourceByTopics;
-        this.sinkByTopics = sinkByTopics;
+        this.processorNodes = Collections.unmodifiableList(processorNodes);
+        this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
+        this.sinkByTopics = Collections.unmodifiableMap(sinkByTopics);
     }
 
     public Set<String> sourceTopics() {
@@ -66,32 +65,4 @@ public class ProcessorTopology {
         return processorNodes;
     }
 
-    /**
-     * Initialize the processors
-     */
-    public void init(ProcessorContext context) {
-        for (ProcessorNode node : processorNodes) {
-            node.init(context);
-        }
-    }
-
-    public final void close() {
-        RuntimeException exception = null;
-
-        // close the processors
-        // make sure close() is called for each node even when there is a RuntimeException
-        for (ProcessorNode node : processorNodes) {
-            try {
-                node.close();
-            } catch (RuntimeException e) {
-                exception = e;
-            }
-        }
-
-        processorNodes.clear();
-        sourceByTopics.clear();
-        sinkByTopics.clear();
-
-        if (exception != null) throw exception;
-    }
 }

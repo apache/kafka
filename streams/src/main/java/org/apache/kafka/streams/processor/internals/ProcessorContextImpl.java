@@ -28,9 +28,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.RestoreFunc;
-
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -227,13 +225,7 @@ public class ProcessorContextImpl implements ProcessorContext {
     }
 
     @Override
-    public void schedule(Processor processor, long interval) {
-        // find the processor node corresponding to this processor
-        for (ProcessorNode node : task.topology().processors()) {
-            if (node.processor().equals(processor)) {
-                task.schedule(node, interval);
-                break;
-            }
-        }
+    public void schedule(long interval) {
+        task.schedule(interval);
     }
 }

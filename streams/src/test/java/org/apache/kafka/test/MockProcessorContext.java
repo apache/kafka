@@ -17,32 +17,29 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RestoreFunc;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 
 import java.io.File;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class MockProcessorContext implements ProcessorContext {
 
-    private Serializer serializer;
-    private Deserializer deserializer;
-    private ProcessorNode currNode;
+    private final KStreamTestDriver driver;
+    private final Serializer serializer;
+    private final Deserializer deserializer;
 
     private Map<String, StateStore> storeMap = new HashMap<>();
 
     long timestamp = -1L;
 
-    public MockProcessorContext(Serializer<?> serializer, Deserializer<?> deserializer) {
+    public MockProcessorContext(KStreamTestDriver driver, Serializer<?> serializer, Deserializer<?> deserializer) {
+        this.driver = driver;
         this.serializer = serializer;
         this.deserializer = deserializer;
     }
@@ -92,7 +89,7 @@ public class MockProcessorContext implements ProcessorContext {
 
     @Override
     public void register(StateStore store, RestoreFunc func) {
-        if (func != null) new UnsupportedOperationException("RestoreFunc not supported.");
+        if (func != null) throw new UnsupportedOperationException("RestoreFunc not supported.");
         storeMap.put(store.name(), store);
     }
 
@@ -102,35 +99,20 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public void schedule(Processor processor, long interval) {
+    public void schedule(long interval) {
         throw new UnsupportedOperationException("schedule() not supported");
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            currNode = childNode;
-            try {
-                childNode.process(key, value);
-            } finally {
-                currNode = thisNode;
-            }
-        }
+        driver.forward(key, value);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode thisNode = currNode;
-        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
-        currNode = childNode;
-        try {
-            childNode.process(key, value);
-        } finally {
-            currNode = thisNode;
-        }
+        driver.forward(key, value, childIndex);
     }
 
     @Override
@@ -156,15 +138,6 @@ public class MockProcessorContext implements ProcessorContext {
     @Override
     public long timestamp() {
         return this.timestamp;
-    }
-
-    public void process(ProcessorTopology topology, String topicName, Object key, Object value) {
-        currNode = topology.source(topicName);
-        try {
-            forward(key, value);
-        } finally {
-            currNode = null;
-        }
     }
 
 }

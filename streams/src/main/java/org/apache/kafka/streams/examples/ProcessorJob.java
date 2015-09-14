@@ -48,7 +48,7 @@ public class ProcessorJob {
                 @Override
                 public void init(ProcessorContext context) {
                     this.context = context;
-                    this.context.schedule(this, 1000);
+                    this.context.schedule(1000);
                     this.kvStore = new InMemoryKeyValueStore<>("local-state", context);
                 }
 
