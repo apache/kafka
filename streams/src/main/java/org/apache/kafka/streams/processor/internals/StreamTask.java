@@ -108,7 +108,7 @@ public class StreamTask implements Punctuator {
         try {
             this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, new Metrics());
         } catch (IOException e) {
-            throw new KafkaException("Error while creating the state manager in processor context.");
+            throw new KafkaException("Error while creating the state manager in processor context", e);
         }
 
         // initialize the task by initializing all its processor nodes in the topology

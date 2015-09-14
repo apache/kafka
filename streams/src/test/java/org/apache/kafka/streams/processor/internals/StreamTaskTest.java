@@ -78,7 +78,6 @@ public class StreamTaskTest {
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
-    private final StreamTask task = new StreamTask(0, consumer, producer, partitions, topology, config);
 
     @Before
     public void setup() {
@@ -88,6 +87,8 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testProcessOrder() {
+        StreamTask task = new StreamTask(0, consumer, producer, partitions, topology, config);
+
         byte[] recordValue = intSerializer.serialize(null, 10);
 
         task.addRecords(partition1, records(
@@ -125,11 +126,15 @@ public class StreamTaskTest {
         assertEquals(task.process(), 0);
         assertEquals(source1.numReceived, 3);
         assertEquals(source2.numReceived, 3);
+
+        task.close();
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() {
+        StreamTask task = new StreamTask(1, consumer, producer, partitions, topology, config);
+
         byte[] recordValue = intSerializer.serialize(null, 10);
 
         task.addRecords(partition1, records(
@@ -173,6 +178,8 @@ public class StreamTaskTest {
         assertEquals(source2.numReceived, 1);
 
         assertEquals(consumer.paused().size(), 0);
+
+        task.close();
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

@@ -29,6 +29,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,9 +41,11 @@ public class ProcessorStateManager {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorStateManager.class);
     private static final String CHECKPOINT_FILE_NAME = ".checkpoint";
+    public static final String LOCK_FILE_NAME = ".lock";
 
     private final int id;
     private final File baseDir;
+    private final FileLock directoryLock;
     private final Map<String, StateStore> stores;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Map<TopicPartition, Long> restoredOffsets;
@@ -52,11 +58,37 @@ public class ProcessorStateManager {
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
 
+        // create the state directory for this task if missing (we won't create the parent directory)
+        createStateDirectory(baseDir);
+
+        // try to acquire the exclusive lock on the state directory
+        directoryLock = lockStateDirectory(baseDir);
+        if (directoryLock == null) {
+            throw new IOException("failed to lock the state directory: " + baseDir.getCanonicalPath());
+        }
+
+        // load the checkpoint information
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
         this.checkpointedOffsets = new HashMap<>(checkpoint.read());
 
         // delete the checkpoint file after finish loading its stored offsets
         checkpoint.delete();
+    }
+
+    private static void createStateDirectory(File stateDir) throws IOException {
+        if (!stateDir.exists()) {
+            stateDir.mkdir();
+        }
+    }
+
+    public static FileLock lockStateDirectory(File stateDir) throws IOException {
+        File lockFile = new File(stateDir, ProcessorStateManager.LOCK_FILE_NAME);
+        FileChannel channel = new RandomAccessFile(lockFile, "rw").getChannel();
+        try {
+            return channel.tryLock();
+        } catch (OverlappingFileLockException e) {
+            return null;
+        }
     }
 
     public File baseDir() {
@@ -193,6 +225,9 @@ public class ProcessorStateManager {
 
         // close the restore consumer
         restoreConsumer.close();
+
+        // release the state directory directoryLock
+        directoryLock.release();
     }
 
 }
