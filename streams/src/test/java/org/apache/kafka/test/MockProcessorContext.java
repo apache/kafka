@@ -17,7 +17,6 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RestoreFunc;
 import org.apache.kafka.streams.processor.StateStore;
@@ -100,7 +99,7 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public void schedule(Processor processor, long interval) {
+    public void schedule(long interval) {
         throw new UnsupportedOperationException("schedule() not supported");
     }
 

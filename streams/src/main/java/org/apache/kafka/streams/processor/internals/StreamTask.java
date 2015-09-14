@@ -254,11 +254,12 @@ public class StreamTask implements Punctuator {
     /**
      * Schedules a punctuation for the processor
      *
-     * @param node the processor node requesting scheduler
      * @param interval  the interval in milliseconds
      */
-    public void schedule(ProcessorNode node, long interval) {
-        punctuationQueue.schedule(new PunctuationSchedule(node, interval));
+    public void schedule(long interval) {
+        if (currNode == null) throw new IllegalStateException("Current node is null");
+
+        punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }
 
     public void close() {

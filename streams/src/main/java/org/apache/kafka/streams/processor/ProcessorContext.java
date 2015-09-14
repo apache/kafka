@@ -88,7 +88,7 @@ public interface ProcessorContext {
 
     StateStore getStateStore(String name);
 
-    void schedule(Processor processor, long interval);
+    void schedule(long interval);
 
     <K, V> void forward(K key, V value);
 
