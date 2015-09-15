@@ -13,11 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.utils.util import wait_until
+
 from kafkatest.services.performance.jmx_mixin import JmxMixin
 from kafkatest.services.performance import PerformanceService
 from kafkatest.utils.security_config import SecurityConfig
+
+from kafkatest.services.kafka import TRUNK
 
 import os
 import subprocess
@@ -97,7 +99,7 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         }
 
     def __init__(self, context, num_nodes, kafka, topic, security_protocol=None, new_consumer=None, message_validator=None,
-                 from_beginning=True, consumer_timeout_ms=None, client_id="console-consumer", jmx_object_names=None, jmx_attributes=[]):
+                 from_beginning=True, consumer_timeout_ms=None, version=TRUNK, client_id="console-consumer", jmx_object_names=None, jmx_attributes=[]):
         """
         Args:
             context:                    standard context
@@ -122,18 +124,28 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         }
 
         self.consumer_timeout_ms = consumer_timeout_ms
+        for node in self.nodes:
+            node.version = version
 
         self.from_beginning = from_beginning
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
         self.client_id = client_id
+        self.security_protocol = security_protocol
 
+    def _kafka_dir(self, node):
+        if node.version == TRUNK:
+            return "/opt/kafka"
+        else:
+            return "/opt/kafka-" + node.version
+
+    def start_cmd(self, node):
         # Process client configuration
         self.prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms, client_id=self.client_id)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
-        self.security_config = SecurityConfig(security_protocol, self.prop_file)
+        self.security_config = SecurityConfig(self.security_protocol, self.prop_file)
         self.security_protocol = self.security_config.security_protocol
         if self.new_consumer is None:
             self.new_consumer = self.security_protocol == SecurityConfig.SSL
@@ -141,8 +153,6 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
             raise Exception("SSL protocol is supported only with the new consumer")
         self.prop_file += str(self.security_config)
 
-    @property
-    def start_cmd(self):
         args = self.args.copy()
         args['zk_connect'] = self.kafka.zk.connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
@@ -151,6 +161,9 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         args['jmx_port'] = self.jmx_port
 
         cmd = "export LOG_DIR=%s;" % ConsoleConsumer.LOG_DIR
+        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ConsoleConsumer.LOG4J_CONFIG
+        cmd += self._kafka_dir(node) + "/bin/kafka-console-consumer.sh"
+        cmd += " --topic %(topic)s --zookeeper %(zk_connect)s --consumer.config %(config_file)s" % args
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsoleConsumer.LOG4J_CONFIG
         cmd += " JMX_PORT=%(jmx_port)d /opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s" \
             " --consumer.config %(config_file)s" % args
@@ -192,7 +205,7 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         node.account.create_file(ConsoleConsumer.LOG4J_CONFIG, log_config)
 
         # Run and capture output
-        cmd = self.start_cmd
+        cmd = self.start_cmd(node)
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
 
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
