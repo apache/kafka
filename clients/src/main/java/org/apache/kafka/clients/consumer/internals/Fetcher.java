@@ -567,11 +567,9 @@ public class Fetcher<K, V> {
             getSensor("topic." + topic + ".records-fetched").record(records);
         }
 
-        private Sensor getSensor(String name1) {
-            Sensor topic = this.metrics.getSensor(name1);
-            if (topic == null)
-                topic = this.metrics.sensor(name1);
-            return topic;
+        private Sensor getSensor(String name) {
+            Sensor topic = this.metrics.getSensor(name);
+            return (topic == null) ? this.metrics.sensor(name) : topic;
         }
     }
 }
