@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -113,7 +113,7 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
-        this.sensors = new SenderMetrics(metrics);
+        this.sensors = new SenderMetrics(metrics, client, metadata);
         this.requestTimeout = requestTimeout;
     }
 
@@ -160,7 +160,7 @@ public class Sender implements Runnable {
 
     /**
      * Run a single iteration of sending
-     * 
+     *
      * @param now
      *            The current POSIX time in milliseconds
      */
@@ -206,9 +206,9 @@ public class Sender implements Runnable {
         List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
         // update sensors
         for (RecordBatch expiredBatch : expiredBatches)
-            this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
+            this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount, now);
 
-        sensors.updateProduceRequestMetrics(batches);
+        sensors.updateProduceRequestMetrics(batches, now);
 
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
         // loop and try sending more data. Otherwise, the timeout is determined by nodes that have partitions with data
@@ -268,8 +268,8 @@ public class Sender implements Runnable {
                     RecordBatch batch = batches.get(tp);
                     completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
                 }
-                this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
-                this.sensors.recordThrottleTime(produceResponse.getThrottleTime());
+                this.sensors.recordLatency(response.destination(), response.requestLatencyMs(), now);
+                this.sensors.recordThrottleTime(produceResponse.getThrottleTime(), now);
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (RecordBatch batch : batches.values())
@@ -280,7 +280,7 @@ public class Sender implements Runnable {
 
     /**
      * Complete or retry the given batch of records.
-     * 
+     *
      * @param batch The record batch
      * @param error The error (or null if none)
      * @param baseOffset The base offset assigned to the records if successful
@@ -297,7 +297,7 @@ public class Sender implements Runnable {
                      this.retries - batch.attempts - 1,
                      error);
             this.accumulator.reenqueue(batch, now);
-            this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
+            this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount, now);
         } else {
             RuntimeException exception;
             if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
@@ -308,7 +308,7 @@ public class Sender implements Runnable {
             batch.done(baseOffset, timestamp, exception);
             this.accumulator.deallocate(batch);
             if (error != Errors.NONE)
-                this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
+                this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount, now);
         }
         if (error.exception() instanceof InvalidMetadataException) {
             if (error.exception() instanceof UnknownTopicOrPartitionException)
@@ -374,20 +374,20 @@ public class Sender implements Runnable {
     /**
      * A collection of sensors for the sender
      */
-    private class SenderMetrics {
+    private static class SenderMetrics {
 
         private final Metrics metrics;
-        public final Sensor retrySensor;
-        public final Sensor errorSensor;
-        public final Sensor queueTimeSensor;
-        public final Sensor requestTimeSensor;
-        public final Sensor recordsPerRequestSensor;
-        public final Sensor batchSizeSensor;
-        public final Sensor compressionRateSensor;
-        public final Sensor maxRecordSizeSensor;
-        public final Sensor produceThrottleTimeSensor;
+        private final Sensor retrySensor;
+        private final Sensor errorSensor;
+        private final Sensor queueTimeSensor;
+        private final Sensor requestTimeSensor;
+        private final Sensor recordsPerRequestSensor;
+        private final Sensor batchSizeSensor;
+        private final Sensor compressionRateSensor;
+        private final Sensor maxRecordSizeSensor;
+        private final Sensor produceThrottleTimeSensor;
 
-        public SenderMetrics(Metrics metrics) {
+        SenderMetrics(final Metrics metrics, final KafkaClient client, final Metadata metadata) {
             this.metrics = metrics;
             String metricGrpName = "producer-metrics";
 
@@ -488,8 +488,7 @@ public class Sender implements Runnable {
             }
         }
 
-        public void updateProduceRequestMetrics(Map<Integer, List<RecordBatch>> batches) {
-            long now = time.milliseconds();
+        public void updateProduceRequestMetrics(Map<Integer, List<RecordBatch>> batches, long now) {
             for (List<RecordBatch> nodeBatch : batches.values()) {
                 int records = 0;
                 for (RecordBatch batch : nodeBatch) {
@@ -523,8 +522,7 @@ public class Sender implements Runnable {
             }
         }
 
-        public void recordRetries(String topic, int count) {
-            long now = time.milliseconds();
+        void recordRetries(String topic, int count, long now) {
             this.retrySensor.record(count, now);
             String topicRetryName = "topic." + topic + ".record-retries";
             Sensor topicRetrySensor = this.metrics.getSensor(topicRetryName);
@@ -532,8 +530,7 @@ public class Sender implements Runnable {
                 topicRetrySensor.record(count, now);
         }
 
-        public void recordErrors(String topic, int count) {
-            long now = time.milliseconds();
+        void recordErrors(String topic, int count, long now) {
             this.errorSensor.record(count, now);
             String topicErrorName = "topic." + topic + ".record-errors";
             Sensor topicErrorSensor = this.metrics.getSensor(topicErrorName);
@@ -541,8 +538,7 @@ public class Sender implements Runnable {
                 topicErrorSensor.record(count, now);
         }
 
-        public void recordLatency(String node, long latency) {
-            long now = time.milliseconds();
+        public void recordLatency(String node, long latency, long now) {
             this.requestTimeSensor.record(latency, now);
             if (!node.isEmpty()) {
                 String nodeTimeName = "node-" + node + ".latency";
@@ -552,8 +548,8 @@ public class Sender implements Runnable {
             }
         }
 
-        public void recordThrottleTime(long throttleTimeMs) {
-            this.produceThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
+        void recordThrottleTime(long throttleTimeMs, long now) {
+            this.produceThrottleTimeSensor.record(throttleTimeMs, now);
         }
 
     }
