@@ -39,7 +39,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Implementation of OffsetBackingStore that uses a Kafka topic to store offset data.
+ * <p>
+ *     Implementation of OffsetBackingStore that uses a Kafka topic to store offset data.
+ * </p>
+ * <p>
+ *     Internally, this implementation both produces to and consumes from a Kafka topic which stores the offsets.
+ *     It accepts producer and consumer overrides via its configuration but forces some settings to specific values
+ *     to ensure correct behavior (e.g. acks, auto.offset.reset).
+ * </p>
  */
 public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaOffsetBackingStore.class);
