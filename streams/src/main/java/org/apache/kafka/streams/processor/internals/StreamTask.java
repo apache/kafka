@@ -49,6 +49,7 @@ public class StreamTask implements Punctuator {
 
     private final Consumer consumer;
     private final PartitionGroup partitionGroup;
+    private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
     private final ProcessorContext processorContext;
     private final ProcessorTopology topology;
@@ -155,18 +156,19 @@ public class StreamTask implements Punctuator {
     @SuppressWarnings("unchecked")
     public int process() {
         synchronized (this) {
-            // get the next record queue to process
-            RecordQueue queue = partitionGroup.nextQueue();
-
-            // if there is no queues that have any data, return immediately
-            if (queue == null)
-                return 0;
-
             try {
+                // get the next record to process
+                StampedRecord record = partitionGroup.nextRecord(recordInfo);
+
+                // if there is no record to process, return immediately
+                if (record == null)
+                    return 0;
+
                 // get a record from the queue and process it
                 // by passing to the source node of the topology
-                this.currRecord = partitionGroup.getRecord(queue);
-                this.currNode = queue.source();
+                this.currRecord = record;
+                this.currNode = recordInfo.node();
+                TopicPartition partition = recordInfo.partition();
 
                 log.debug("Start processing one record [" + currRecord + "]");
 
@@ -175,7 +177,7 @@ public class StreamTask implements Punctuator {
                 log.debug("Completed processing one record [" + currRecord + "]");
 
                 // update the consumed offset map after processing is done
-                consumedOffsets.put(queue.partition(), currRecord.offset());
+                consumedOffsets.put(partition, currRecord.offset());
                 commitOffsetNeeded = true;
 
                 // commit the current task state if requested during the processing
@@ -185,8 +187,8 @@ public class StreamTask implements Punctuator {
 
                 // if after processing this record, its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
-                if (partitionGroup.numBuffered(queue.partition()) == this.maxBufferedSize) {
-                    consumer.resume(queue.partition());
+                if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
+                    consumer.resume(partition);
                 }
 
                 // possibly trigger registered punctuation functions if
