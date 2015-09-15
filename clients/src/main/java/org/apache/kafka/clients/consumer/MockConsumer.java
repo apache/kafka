@@ -109,8 +109,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public void assign(List<TopicPartition> partitions) {
         ensureNotClosed();
         this.subscriptions.assign(partitions);
-        for (TopicPartition tp : partitions)
-            this.subscriptions.needOffsetReset(tp);
     }
 
     @Override
@@ -144,16 +142,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
 
         // Handle seeks that need to wait for a poll() call to be processed
-        for (TopicPartition tp : subscriptions.missingFetchPositions()) {
-            if (subscriptions.isOffsetResetNeeded(tp)) {
-                resetOffsetPosition(tp);
-            } else if (subscriptions.committed(tp) == null) {
-                subscriptions.needOffsetReset(tp);
-                resetOffsetPosition(tp);
-            } else {
-                subscriptions.seek(tp, subscriptions.committed(tp));
-            }
-        }
+        for (TopicPartition tp : subscriptions.missingFetchPositions())
+            updateFetchPosition(tp);
 
         // update the consumed offset
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
@@ -237,7 +227,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
         Long offset = this.subscriptions.consumed(partition);
         if (offset == null) {
-            resetOffsetPosition(partition);
+            updateFetchPosition(partition);
             offset = this.subscriptions.consumed(partition);
         }
         return offset;
@@ -341,6 +331,17 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private void ensureNotClosed() {
         if (this.closed)
             throw new IllegalStateException("This consumer has already been closed.");
+    }
+
+    private void updateFetchPosition(TopicPartition tp) {
+        if (subscriptions.isOffsetResetNeeded(tp)) {
+            resetOffsetPosition(tp);
+        } else if (subscriptions.committed(tp) == null) {
+            subscriptions.needOffsetReset(tp);
+            resetOffsetPosition(tp);
+        } else {
+            subscriptions.seek(tp, subscriptions.committed(tp));
+        }
     }
 
     private void resetOffsetPosition(TopicPartition tp) {
