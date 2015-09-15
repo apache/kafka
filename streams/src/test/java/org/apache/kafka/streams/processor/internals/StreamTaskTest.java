@@ -76,6 +76,10 @@ public class StreamTaskTest {
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
 
+    private final byte[] recordValue = intSerializer.serialize(null, 10);
+    private final byte[] recordKey = intSerializer.serialize(null, 1);
+
+
     @Before
     public void setup() {
         consumer.assign(Arrays.asList(partition1, partition2));
@@ -86,18 +90,16 @@ public class StreamTaskTest {
     public void testProcessOrder() {
         StreamTask task = new StreamTask(0, consumer, producer, partitions, topology, config);
 
-        byte[] recordValue = intSerializer.serialize(null, 10);
-
         task.addRecords(partition1, records(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 1, intSerializer.serialize(partition1.topic(), 10), recordValue),
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 2, intSerializer.serialize(partition1.topic(), 20), recordValue),
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 3, intSerializer.serialize(partition1.topic(), 30), recordValue)
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, recordKey, recordValue),
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, recordKey, recordValue)
         ));
 
         task.addRecords(partition2, records(
-            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 1, intSerializer.serialize(partition1.topic(), 25), recordValue),
-            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 2, intSerializer.serialize(partition1.topic(), 35), recordValue),
-            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 3, intSerializer.serialize(partition1.topic(), 45), recordValue)
+            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, recordKey, recordValue),
+            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, recordKey, recordValue),
+            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, recordKey, recordValue)
         ));
 
         assertEquals(task.process(), 5);
@@ -132,18 +134,16 @@ public class StreamTaskTest {
     public void testPauseResume() {
         StreamTask task = new StreamTask(1, consumer, producer, partitions, topology, config);
 
-        byte[] recordValue = intSerializer.serialize(null, 10);
-
         task.addRecords(partition1, records(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 1, intSerializer.serialize(partition1.topic(), 10), recordValue),
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 2, intSerializer.serialize(partition1.topic(), 20), recordValue)
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, recordKey, recordValue)
         ));
 
         task.addRecords(partition2, records(
-            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 3, intSerializer.serialize(partition1.topic(), 35), recordValue),
-            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 4, intSerializer.serialize(partition1.topic(), 45), recordValue),
-            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 5, intSerializer.serialize(partition1.topic(), 55), recordValue),
-            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 6, intSerializer.serialize(partition1.topic(), 65), recordValue)
+            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, recordKey, recordValue),
+            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, recordKey, recordValue),
+            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 55, recordKey, recordValue),
+            new ConsumerRecord<>(partition2.topic(), partition2.partition(), 65, recordKey, recordValue)
         ));
 
         assertEquals(task.process(), 5);
@@ -154,9 +154,9 @@ public class StreamTaskTest {
         assertTrue(consumer.paused().contains(partition2));
 
         task.addRecords(partition1, records(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 3, intSerializer.serialize(partition1.topic(), 30), recordValue),
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 4, intSerializer.serialize(partition1.topic(), 40), recordValue),
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 5, intSerializer.serialize(partition1.topic(), 50), recordValue)
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, recordKey, recordValue),
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, recordKey, recordValue),
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 50, recordKey, recordValue)
         ));
 
         assertEquals(consumer.paused().size(), 2);
