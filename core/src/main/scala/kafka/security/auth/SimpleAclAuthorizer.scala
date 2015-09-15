@@ -26,15 +26,17 @@ import kafka.network.RequestChannel.Session
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.{IZkStateListener, IZkDataListener, ZkClient}
+import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
+import org.apache.log4j.Logger
 
 object SimpleAclAuthorizer {
-  //the zookeeper cluster where acls will be stored, defaults to value specified for "zkConnect"
-  val ZkUrlProp = "authorizer.zk.url"
-  val ZkConnectionTimeOutProp = "authorizer.zk.connection.timeout.ms"
-  val ZkSessionTimeOutProp = "authorizer.zk.session.timeout.ms"
+  //optional override zookeeper cluster configuration where acls will be stored, if not specified acls will be stored in
+  //same zookeeper where all other kafka broker info is stored.
+  val ZkUrlProp = "authorizer.zookeeper.url"
+  val ZkConnectionTimeOutProp = "authorizer.zookeeper.connection.timeout.ms"
+  val ZkSessionTimeOutProp = "authorizer.zookeeper.session.timeout.ms"
 
   //List of users that will be treated as super users and will have access to all the resources for all actions from all hosts, defaults to no super users.
   val SuperUsersProp = "super.users"
@@ -57,10 +59,12 @@ object SimpleAclAuthorizer {
   //notification node which gets updated with the resource name when acl on a resource is changed.
   val AclChangedZkPath = "/kafka-acl-changes"
 
+  //prefix of all the change notificiation sequence node.
   val AclChangedPrefix = "acl_changes_"
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
+  private val authorizerLogger = Logger.getLogger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
   private var zkClient: ZkClient = null
@@ -73,9 +77,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
    * Guaranteed to be called before any authorize call is made.
    */
   override def configure(javaConfigs: util.Map[String, _]): Unit = {
-    val config = javaConfigs.asScala
+    val configs = javaConfigs.asScala
     val props = new java.util.Properties()
-    config foreach { case (key, value) => props.put(key, value.toString) }
+    configs foreach { case (key, value) => props.put(key, value.toString) }
     val kafkaConfig = KafkaConfig.fromProps(props)
 
     superUsers = javaConfigs.get(SimpleAclAuthorizer.SuperUsersProp) match {
@@ -84,13 +88,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       case _ => Set.empty
     }
 
-    shouldAllowEveryoneIfNoAclIsFound = if (config.contains(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp))
+    shouldAllowEveryoneIfNoAclIsFound = if (configs.contains(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp))
       javaConfigs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).toString.toBoolean
     else false
 
-    val zkUrl = config.getOrElse(SimpleAclAuthorizer.ZkUrlProp, kafkaConfig.zkConnect).toString
-    val zkConnectionTimeoutMs = config.getOrElse(SimpleAclAuthorizer.ZkConnectionTimeOutProp, kafkaConfig.zkConnectionTimeoutMs).toString.toInt
-    val zkSessionTimeOutMs = config.getOrElse(SimpleAclAuthorizer.ZkSessionTimeOutProp, kafkaConfig.zkSessionTimeoutMs).toString.toInt
+    val zkUrl = configs.getOrElse(SimpleAclAuthorizer.ZkUrlProp, kafkaConfig.zkConnect).toString
+    val zkConnectionTimeoutMs = configs.getOrElse(SimpleAclAuthorizer.ZkConnectionTimeOutProp, kafkaConfig.zkConnectionTimeoutMs).toString.toInt
+    val zkSessionTimeOutMs = configs.getOrElse(SimpleAclAuthorizer.ZkSessionTimeOutProp, kafkaConfig.zkSessionTimeoutMs).toString.toInt
 
     zkClient = ZkUtils.createZkClient(zkUrl, zkConnectionTimeoutMs, zkSessionTimeOutMs)
     ZkUtils.makeSurePersistentPathExists(zkClient, SimpleAclAuthorizer.AclZkPath)
@@ -107,16 +111,16 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val principal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, session.principal.getName)
     val host = session.host
 
-    trace(s"Authorizer invoked to authorize principal = $principal from host = $host on resource = $resource for operation = $resource")
+    authorizerLogger.trace(s"Authorizer invoked to authorize principal = $principal from host = $host on resource = $resource for operation = $resource")
 
     if (superUsers.contains(principal)) {
-      debug(s"principal = $principal is a super user, allowing operation without checking acls.")
+      authorizerLogger.debug(s"principal = $principal is a super user, allowing operation without checking acls.")
       return true
     }
 
     val acls: Set[Acl] = getAcls(resource)
     if (acls.isEmpty) {
-      debug(s"No acl found for resource $resource , authorized = $shouldAllowEveryoneIfNoAclIsFound")
+      authorizerLogger.debug(s"No acl found for resource $resource , authorized = $shouldAllowEveryoneIfNoAclIsFound")
       return shouldAllowEveryoneIfNoAclIsFound
     }
 
@@ -137,7 +141,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       return true
 
     //We have some acls defined and they do not specify any allow ACL for the current session, reject request.
-    debug(s"principal = $principal from host = $host is not allowed to perform operation = $operation  on resource = $resource as no explicit acls were defined to allow the operation")
+    authorizerLogger.debug(s"principal = $principal from host = $host is not allowed to perform operation = $operation  " +
+      s"on resource = $resource as no explicit acls were defined to allow the operation")
     false
   }
 
@@ -147,7 +152,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         && (acl.principal == principal || acl.principal == Acl.WildCardPrincipal)
         && (operations == acl.operation || acl.operation == All)
         && (acl.host == host || acl.host == Acl.WildCardHost)) {
-        debug(s"operation = $operations on resource = $resource from host = $host is $permissionType.name based on acl = $acl")
+        authorizerLogger.debug(s"operation = $operations on resource = $resource from host = $host is $permissionType.name based on acl = $acl")
         return true
       }
     }
