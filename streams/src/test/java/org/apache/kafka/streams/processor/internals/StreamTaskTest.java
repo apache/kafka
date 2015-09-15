@@ -75,7 +75,6 @@ public class StreamTaskTest {
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
-    private final StreamTask task = new StreamTask(0, consumer, producer, partitions, topology, config);
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -89,6 +88,8 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testProcessOrder() {
+        StreamTask task = new StreamTask(0, consumer, producer, partitions, topology, config);
+
         task.addRecords(partition1, records(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, recordKey, recordValue),
@@ -124,11 +125,15 @@ public class StreamTaskTest {
         assertEquals(task.process(), 0);
         assertEquals(source1.numReceived, 3);
         assertEquals(source2.numReceived, 3);
+
+        task.close();
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() {
+        StreamTask task = new StreamTask(1, consumer, producer, partitions, topology, config);
+
         task.addRecords(partition1, records(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, recordKey, recordValue)
@@ -170,6 +175,8 @@ public class StreamTaskTest {
         assertEquals(source2.numReceived, 1);
 
         assertEquals(consumer.paused().size(), 0);
+
+        task.close();
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

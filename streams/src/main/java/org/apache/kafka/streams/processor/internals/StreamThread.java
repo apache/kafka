@@ -43,6 +43,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -80,12 +82,14 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
             addPartitions(assignment);
+            lastClean = time.milliseconds(); // start the cleaning cycle
         }
 
         @Override
         public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
             commitAll(time.milliseconds());
             removePartitions();
+            lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
         }
     };
 
@@ -120,7 +124,7 @@ public class StreamThread extends Thread {
         this.cleanTimeMs = config.getLong(StreamingConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
         this.totalRecordsToProcess = config.getLong(StreamingConfig.TOTAL_RECORDS_TO_PROCESS);
 
-        this.lastClean = 0;
+        this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommit = 0;
         this.recordsProcessed = 0;
         this.time = new SystemTime();
@@ -267,9 +271,25 @@ public class StreamThread extends Thread {
                 for (File dir : stateDirs) {
                     try {
                         Integer id = Integer.parseInt(dir.getName());
-                        if (!tasks.containsKey(id)) {
-                            log.info("Deleting obsolete state directory {} after delayed {} ms.", dir.getAbsolutePath(), cleanTimeMs);
-                            Utils.delete(dir);
+
+                        // try to acquire the exclusive lock on the state directory
+                        FileLock directoryLock = null;
+                        try {
+                            directoryLock = ProcessorStateManager.lockStateDirectory(dir);
+                            if (directoryLock != null) {
+                                log.info("Deleting obsolete state directory {} after delayed {} ms.", dir.getAbsolutePath(), cleanTimeMs);
+                                Utils.delete(dir);
+                            }
+                        } catch (IOException e) {
+                            log.error("Failed to lock the state directory due to an unexpected exception", e);
+                        } finally {
+                            if (directoryLock != null) {
+                                try {
+                                    directoryLock.release();
+                                } catch (IOException e) {
+                                    log.error("Failed to release the state directory lock");
+                                }
+                            }
                         }
                     } catch (NumberFormatException e) {
                         // there may be some unknown files that sits in the same directory,
