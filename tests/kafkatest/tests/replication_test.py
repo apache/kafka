@@ -15,7 +15,6 @@
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize
 from ducktape.mark import matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -30,7 +29,14 @@ import time
 class ReplicationTest(Test):
     """Replication tests.
     These tests verify that replication provides simple durability guarantees by checking that data acked by
-    brokers is still available for consumption in the face of various failure scenarios."""
+    brokers is still available for consumption in the face of various failure scenarios.
+
+    The steps are:
+        - Produce messages in the background while driving some failure condition
+        - When done driving failures, immediately stop producing
+        - Consume all messages
+        - Validate that messages acked by brokers were consumed
+    """
 
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
@@ -52,12 +58,6 @@ class ReplicationTest(Test):
     def run_with_failure(self, failure, interbroker_security_protocol):
         """This is the top-level test template.
 
-        The steps are:
-            Produce messages in the background while driving some failure condition
-            When done driving failures, immediately stop producing
-            Consume all messages
-            Validate that messages acked by brokers were consumed
-
         Note that consuming is a bit tricky, at least with console consumer. The goal is to consume all messages
         (foreach partition) in the topic. In this case, waiting for the last message may cause the consumer to stop
         too soon since console consumer is consuming multiple partitions from a single thread and therefore we lose
@@ -71,7 +71,7 @@ class ReplicationTest(Test):
         indicator that nothing is left to consume.
 
         """
-        security_protocol='PLAINTEXT'
+        security_protocol = 'PLAINTEXT'
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, 
                                   security_protocol=security_protocol,
                                   interbroker_security_protocol=interbroker_security_protocol,
@@ -81,13 +81,18 @@ class ReplicationTest(Test):
                                                "min.insync.replicas": 2}
                                          })
         self.kafka.start()
-        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, security_protocol=security_protocol, throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, security_protocol=security_protocol, new_consumer=False, consumer_timeout_ms=3000, message_validator=is_int)
+        self.producer = VerifiableProducer(
+            self.test_context, self.num_producers, self.kafka, self.topic, security_protocol=security_protocol,
+            throughput=self.producer_throughput)
+        self.consumer = ConsoleConsumer(
+            self.test_context, self.num_consumers, self.kafka, self.topic, security_protocol=security_protocol,
+            new_consumer=False, consumer_timeout_ms=10000, message_validator=is_int)
 
         # Produce in a background thread while driving broker failures
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
              err_msg="Producer failed to start in a reasonable amount of time.")
+        self.consumer.start()
         failure()
         self.producer.stop()
 
@@ -97,7 +102,6 @@ class ReplicationTest(Test):
         self.logger.info("num acked:     %d" % self.producer.num_acked)
 
         # Consume all messages
-        self.consumer.start()
         self.consumer.wait()
         self.consumed = self.consumer.messages_consumed[1]
         self.logger.info("num consumed:  %d" % len(self.consumed))

@@ -38,11 +38,11 @@ if [ -z `which javac` ]; then
 fi
 
 chmod a+rw /opt
-if [ -h /opt/kafka-trunk ]; then
+if [ -h /opt/kafka ]; then
     # reset symlink
-    rm /opt/kafka-trunk
+    rm /opt/kafka
 fi
-ln -s /vagrant /opt/kafka-trunk
+ln -s /vagrant /opt/kafka
 
 version=0.8.2.1
 kafka_dir=/opt/kafka-$version

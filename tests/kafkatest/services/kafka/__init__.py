@@ -12,17 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# see kafka.server.KafkaConfig for additional details and defaults
 
-from setuptools import find_packages, setup
+from kafka import KafkaService, KafkaVersion
+from kafka_config import KafkaConfig
 
-setup(name="kafkatest",
-      version="0.9.0.dev0",
-      description="Apache Kafka System Tests",
-      author="Apache Kafka",
-      platforms=["any"], 
-      license="apache2.0",
-      packages=find_packages(),
-      include_package_data=True,
-      install_requires=["ducktape==0.3.3"]
-      )

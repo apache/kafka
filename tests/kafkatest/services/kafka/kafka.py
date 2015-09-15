@@ -15,17 +15,22 @@
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
+
+from kafka_config import KafkaConfig
+from kafkatest.services.kafka import kafka_prop
+
 from kafkatest.services.performance.jmx_mixin import JmxMixin
 from kafkatest.utils.security_config import SecurityConfig
 import json
 import re
 import signal
+import subprocess
 import time
 
 
-TRUNK = "trunk"
-KAFKA_0_8_2_1 = "0.8.2.1"
-KAFKA_VERSIONS = [TRUNK, KAFKA_0_8_2_1]
+class KafkaVersion(object):
+    TRUNK = "trunk"
+    V_0_8_2_1 = "0.8.2.1"
 
 
 class KafkaService(JmxMixin, Service):
@@ -34,13 +39,16 @@ class KafkaService(JmxMixin, Service):
         "kafka_log": {
             "path": "/mnt/kafka.log",
             "collect_default": True},
+        "kafka_operational_logs": {
+            "path": "/mnt/kafka-operational-logs",
+            "collect_default": True},
         "kafka_data": {
-            "path": "/mnt/kafka-logs",
+            "path": "/mnt/kafka-data-logs",
             "collect_default": False}
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+                 topics=None, version=KafkaVersion.TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
         """
         :type context
         :type zk: ZookeeperService
@@ -48,7 +56,10 @@ class KafkaService(JmxMixin, Service):
         """
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
+
         self.zk = zk
+        self.quota_config = quota_config
+
         if security_protocol == SecurityConfig.SSL or interbroker_security_protocol == SecurityConfig.SSL:
             self.security_config = SecurityConfig(SecurityConfig.SSL)
         else:
@@ -57,6 +68,10 @@ class KafkaService(JmxMixin, Service):
         self.interbroker_security_protocol = interbroker_security_protocol
         self.port = 9092 if security_protocol == SecurityConfig.PLAINTEXT else 9093
         self.topics = topics
+
+        for node in self.nodes:
+            node.version = version  # associate config w/version?
+            node.config = KafkaConfig(**{kafka_prop.BROKER_ID: self.idx(node)})
 
     def start(self):
         Service.start(self)
@@ -70,43 +85,48 @@ class KafkaService(JmxMixin, Service):
                 topic_cfg["topic"] = topic
                 self.create_topic(topic_cfg)
 
-    def update_version(self, version, idx=-1):
-        """Update version on node with idx, or on all nodes if idx < 0
-        Useful for upgrade and compatibility tests.
-        """
-        if idx > 0:
-            self.version[idx] = version
-        else:
-            for idx in self.version:
-                self.version[idx] = version
-
-    def _kafka_dir(self, node):
-        return "/opt/kafka-" + self.version[self.idx(node)]
-
     def start_node(self, node):
-        props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node),
-            port = self.port, security_protocol = self.security_protocol, quota_config=self.quota_config,
+        cfg = KafkaConfig(**node.config)
+        cfg[kafka_prop.ADVERTISED_HOSTNAME] = node.account.hostname
+        cfg[kafka_prop.ZOOKEEPER_CONNECT] = self.zk.connect_setting()
+
+        # TODO - clean up duplicate configuration logic
+        props_file = cfg.render()
+        props_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
+            port=self.port, security_protocol=self.security_protocol, quota_config=self.quota_config,
             interbroker_security_protocol=self.interbroker_security_protocol)
+
         self.logger.info("kafka.properties:")
         self.logger.info(props_file)
         node.account.create_file("/mnt/kafka.properties", props_file)
         self.security_config.setup_node(node)
 
         cmd = "JMX_PORT=%d " % self.jmx_port
-        cmd += self._kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid"
+        cmd += "export LOG_DIR=/mnt/kafka-operational-logs/; "
+        cmd += self._kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
+
         with node.account.monitor_log("/mnt/kafka.log") as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
+
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
             raise Exception("No process ids recorded on node %s" % str(node))
 
+    def _kafka_dir(self, node):
+        if node.version == KafkaVersion.TRUNK:
+            return "/opt/kafka"
+        else:
+            return "/opt/kafka-" + node.version
+
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            return [pid for pid in node.account.ssh_capture("cat /mnt/kafka.pid", callback=int)]
-        except:
+            cmd = "ps ax | grep -i kafka.properties | grep java | grep -v grep | awk '{print $1}'"
+            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
+            return pid_arr
+        except (subprocess.CalledProcessError, ValueError) as e:
             return []
 
     def signal_node(self, node, sig=signal.SIGTERM):
@@ -124,14 +144,15 @@ class KafkaService(JmxMixin, Service):
 
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=False)
-
-        node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=False)
+        wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=20, err_msg="Kafka node failed to stop")
+        # node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=False)
 
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
         node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log /mnt/kafka.pid", allow_fail=False)
         self.security_config.clean_node(node)
+        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log", allow_fail=False)
 
     def create_topic(self, topic_cfg):
         node = self.nodes[0] # any node is fine here
@@ -262,9 +283,12 @@ class KafkaService(JmxMixin, Service):
         return self.get_node(leader_idx)
 
     def bootstrap_servers(self):
-        """Get the broker list to connect to Kafka using the specified security protocol
+        """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
+        using the port for the configured security protocol.
+
+        This is the format expected by many config files.
         """
-        return ','.join([node.account.hostname + ":" + `self.port` for node in self.nodes])
+        return ','.join([node.account.hostname + ":" + str(self.port) for node in self.nodes])
 
     def read_jmx_output_all_nodes(self):
         for node in self.nodes:
