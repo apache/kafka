@@ -103,7 +103,9 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             Utils.sleep(Math.min(time.milliseconds() - started, 1000));
         }
         if (partitionInfos == null)
-            throw new CopycatException("Offset topic wasn't created within the allotted period");
+            throw new CopycatException("Could not look up partition metadata for offset backing store topic in" +
+                    " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
+                    " this is your first use of the topic it may have taken too long to create.");
 
         for (PartitionInfo partition : partitionInfos)
             partitions.add(new TopicPartition(partition.topic(), partition.partition()));
