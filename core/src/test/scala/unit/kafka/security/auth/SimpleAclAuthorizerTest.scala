@@ -120,7 +120,7 @@ import org.junit.{Test, Before}
     val allowAllAcl = Acl.AllowAllAcl
     simpleAclAuthorizer.addAcls(Set[Acl](allowAllAcl), resource)
 
-    val session = new Session(new UserPrincipal("random"), "random.host")
+    val session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "random"), "random.host")
     assertTrue("allow all acl should allow access to all.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
 
@@ -129,8 +129,8 @@ import org.junit.{Test, Before}
     val denyAllAcl = new Acl(Acl.WildCardPrincipal, Deny, WildCardHost, All)
     simpleAclAuthorizer.addAcls(Set[Acl](denyAllAcl), resource)
 
-    val session1 = new Session(new UserPrincipal("superuser1"), "random.host")
-    val session2 = new Session(new UserPrincipal("superuser2"), "random.host")
+    val session1 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), "random.host")
+    val session2 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser2"), "random.host")
 
     assertTrue("superuser always has access, no matter what acls.", simpleAclAuthorizer.authorize(session1, Read, resource))
     assertTrue("superuser always has access, no matter what acls.", simpleAclAuthorizer.authorize(session2, Read, resource))

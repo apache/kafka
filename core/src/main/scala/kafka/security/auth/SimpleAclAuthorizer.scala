@@ -108,7 +108,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    val principal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, session.principal.getName)
+    val principal: KafkaPrincipal = session.principal
     val host = session.host
 
     authorizerLogger.trace(s"Authorizer invoked to authorize principal = $principal from host = $host on resource = $resource for operation = $resource")
