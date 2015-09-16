@@ -156,16 +156,15 @@ public class StreamTask implements Punctuator {
     @SuppressWarnings("unchecked")
     public int process() {
         synchronized (this) {
+            // get the next record to process
+            StampedRecord record = partitionGroup.nextRecord(recordInfo);
+
+            // if there is no record to process, return immediately
+            if (record == null)
+                return 0;
+
             try {
-                // get the next record to process
-                StampedRecord record = partitionGroup.nextRecord(recordInfo);
-
-                // if there is no record to process, return immediately
-                if (record == null)
-                    return 0;
-
-                // get a record from the queue and process it
-                // by passing to the source node of the topology
+                // process the record by passing to the source node of the topology
                 this.currRecord = record;
                 this.currNode = recordInfo.node();
                 TopicPartition partition = recordInfo.partition();
@@ -185,20 +184,21 @@ public class StreamTask implements Punctuator {
                     commit();
                 }
 
-                // if after processing this record, its partition queue's buffered size has been
+                // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
                 if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
                     consumer.resume(partition);
                 }
-
-                // possibly trigger registered punctuation functions if
-                // partition group's time has reached the defined stamp
-                long timestamp = partitionGroup.timestamp();
-                punctuationQueue.mayPunctuate(timestamp, this);
             } finally {
                 this.currRecord = null;
                 this.currNode = null;
             }
+
+            // possibly trigger registered punctuation functions if
+            // partition group's time has reached the defined stamp
+            long timestamp = partitionGroup.timestamp();
+            punctuationQueue.mayPunctuate(timestamp, this);
+
             return partitionGroup.numBuffered();
         }
     }
