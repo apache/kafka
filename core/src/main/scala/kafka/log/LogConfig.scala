@@ -19,9 +19,10 @@ package kafka.log
 
 import java.util.Properties
 import kafka.server.KafkaConfig
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
 import scala.collection._
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
+import org.apache.kafka.common.config.{ConfigException, AbstractConfig, ConfigDef}
 import kafka.message.BrokerCompressionCodec
 import kafka.message.Message
 
@@ -44,7 +45,7 @@ object Defaults {
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
   val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
-  val Owners = kafka.server.Defaults.Owners
+  val Owners = KafkaPrincipal.ANONYMOUS.toString
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -128,14 +129,14 @@ object LogConfig {
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
   val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
-  val OwnersDoc="Comma separated list of owners of this log."
+  val OwnersDoc="Comma separated list of owners of this log. The owners need to be specified as string representation of " +
+    "KafkaPrincipal which is principalType:name e.g. User:alice,User:bob"
 
   private val configDef = {
     import ConfigDef.Range._
     import ConfigDef.ValidString._
     import ConfigDef.Type._
     import ConfigDef.Importance._
-    import java.util.Arrays.asList
 
     new ConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(Message.MinHeaderSize), MEDIUM, SegmentSizeDoc)
@@ -193,11 +194,21 @@ object LogConfig {
       require(names.contains(name), "Unknown configuration \"%s\".".format(name))
   }
 
+  def validateOwners(props: Properties): Unit = {
+    if(props.containsKey(OwnersProp)) {
+      try {
+        props.getProperty(OwnersProp).split(",").map(owner => KafkaPrincipal.fromString(owner.trim))
+      } catch {
+        case e: IllegalArgumentException => throw new ConfigException("owners must be a comma separated list of kafka principal strings e.g. User:alice,User:bob")
+      }
+    }
+  }
   /**
    * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
    */
   def validate(props: Properties) {
     validateNames(props)
+    validateOwners(props)
     configDef.parse(props)
   }
 

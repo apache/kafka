@@ -17,6 +17,7 @@
 package kafka.admin
 
 import junit.framework.Assert._
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Test
 import java.util.Properties
 import kafka.utils._
@@ -121,7 +122,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     val config: Properties = AdminUtils.fetchEntityConfig(zkClient, ConfigType.Topic, topic)
-    assertEquals(System.getProperty("user.name"), config.getProperty(LogConfig.OwnersProp))
+    assertEquals(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, System.getProperty("user.name")).toString, config.getProperty(LogConfig.OwnersProp))
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
     val actualReplicaList = leaderForPartitionMap.keys.toArray.map(p => (p -> ZkUtils.getReplicasForPartition(zkClient, topic, p))).toMap

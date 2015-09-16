@@ -28,6 +28,7 @@ import kafka.api.{TopicMetadata, PartitionMetadata}
 import java.util.Random
 import java.util.Properties
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 
 import scala.Predef._
 import scala.collection._
@@ -261,7 +262,7 @@ object AdminUtils extends Logging {
 
       //by default we make user that issues topic creation as the owner.
       if (!config.containsKey(LogConfig.OwnersProp)) {
-        config.put(LogConfig.OwnersProp, System.getProperty("user.name"))
+        config.put(LogConfig.OwnersProp, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, System.getProperty("user.name")).toString)
       }
     }
 

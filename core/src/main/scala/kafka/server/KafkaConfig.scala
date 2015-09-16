@@ -97,7 +97,6 @@ object Defaults {
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
-  val Owners = "Dr. Who?"
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = 30000

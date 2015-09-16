@@ -67,6 +67,13 @@ class LogConfigTest {
     })
    }
 
+  @Test(expected = classOf[ConfigException])
+  def testInvalidOwner(): Unit = {
+    val p = new Properties()
+    p.setProperty(LogConfig.OwnersProp, "invalid")
+    LogConfig.validate(p)
+  }
+
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
     values.foreach((value) => {
       val props = new Properties
