@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.common
+package kafka.common
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.integration.KafkaServerTestHarness

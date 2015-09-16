@@ -14,22 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.security.auth
+package kafka.security.auth
 
 import java.util.UUID
 
-import com.sun.security.auth.UserPrincipal
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
-import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
-import org.junit.{Test, Before}
+import org.junit.{Before, Test}
 
-  class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
+class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   val simpleAclAuthorizer = new SimpleAclAuthorizer
   val testPrincipal = Acl.WildCardPrincipal
@@ -38,6 +36,7 @@ import org.junit.{Test, Before}
   var resource: Resource = null
   val superUsers = "User:superuser1, User:superuser2"
   val username = "alice"
+  var config: KafkaConfig = null
 
   @Before
   override def setUp() {
@@ -46,7 +45,7 @@ import org.junit.{Test, Before}
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(SimpleAclAuthorizer.SuperUsersProp, superUsers)
 
-    val config = KafkaConfig.fromProps(props)
+    config = KafkaConfig.fromProps(props)
     simpleAclAuthorizer.configure(config.originals)
     resource = new Resource(Topic, UUID.randomUUID().toString)
   }
@@ -78,7 +77,11 @@ import org.junit.{Test, Before}
     //user3 has WRITE access from all hosts.
     val acl7 = new Acl(user3, Allow, WildCardHost, Write)
 
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1, acl2, acl3, acl4, acl5, acl6, acl7), resource)
+    val acls = Set[Acl](acl1, acl2, acl3, acl4, acl5, acl6, acl7)
+
+    simpleAclAuthorizer.addAcls(acls, resource)
+
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
 
     val host1Session = new Session(user1, host1)
     val host2Session = new Session(user1, host2)
@@ -93,7 +96,6 @@ import org.junit.{Test, Before}
     assertFalse("User1 should not have edit access from host2", simpleAclAuthorizer.authorize(host2Session, Alter, resource))
 
     //test if user has READ and write access they also get describe access
-
     val user2Session = new Session(user2, host1)
     val user3Session = new Session(user3, host1)
     assertTrue("User2 should have DESCRIBE access from host1", simpleAclAuthorizer.authorize(user2Session, Describe, resource))
@@ -110,7 +112,10 @@ import org.junit.{Test, Before}
 
     val allowAll = Acl.AllowAllAcl
     val denyAcl = new Acl(user, Deny, host, All)
-    simpleAclAuthorizer.addAcls(Set[Acl](allowAll, denyAcl), resource)
+    val acls = Set[Acl](allowAll, denyAcl)
+    simpleAclAuthorizer.addAcls(acls, resource)
+
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
 
     assertFalse("deny should take precedence over allow.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
@@ -120,6 +125,8 @@ import org.junit.{Test, Before}
     val allowAllAcl = Acl.AllowAllAcl
     simpleAclAuthorizer.addAcls(Set[Acl](allowAllAcl), resource)
 
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == Set[Acl](allowAllAcl), "changes not propagated in timeout period.")
+
     val session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "random"), "random.host")
     assertTrue("allow all acl should allow access to all.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
@@ -128,6 +135,8 @@ import org.junit.{Test, Before}
   def testSuperUserHasAccess(): Unit = {
     val denyAllAcl = new Acl(Acl.WildCardPrincipal, Deny, WildCardHost, All)
     simpleAclAuthorizer.addAcls(Set[Acl](denyAllAcl), resource)
+
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == Set[Acl](denyAllAcl), "changes not propagated in timeout period.")
 
     val session1 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), "random.host")
     val session2 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser2"), "random.host")
@@ -164,22 +173,46 @@ import org.junit.{Test, Before}
     val acl3 = new Acl(user2, Allow, host2, Read)
     val acl4 = new Acl(user2, Allow, host2, Write)
 
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1, acl2, acl3, acl4), resource)
-    assertEquals(Set(acl1, acl2, acl3, acl4), simpleAclAuthorizer.getAcls(resource))
+    var acls = Set[Acl](acl1, acl2, acl3, acl4)
+    simpleAclAuthorizer.addAcls(acls, resource)
+
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
 
     //test addAcl is additive
     val acl5: Acl = new Acl(user2, Allow, WildCardHost, Read)
     simpleAclAuthorizer.addAcls(Set[Acl](acl5), resource)
-    assertEquals(Set(acl1, acl2, acl3, acl4, acl5), simpleAclAuthorizer.getAcls(resource))
 
+    acls += acl5
+
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
+
+    //test get by principal name.
     assertEquals(Set(acl1, acl2), simpleAclAuthorizer.getAcls(user1))
 
-    //test remove a single acl from existing acls.
+    //test remove acl from existing acls.
     simpleAclAuthorizer.removeAcls(Set(acl1, acl5), resource)
-    assertEquals(Set(acl2, acl3, acl4), simpleAclAuthorizer.getAcls(resource))
+    acls -= acl1
+    acls -= acl5
+
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
 
     //test remove all acls for resource
     simpleAclAuthorizer.removeAcls(resource)
-    assertTrue(simpleAclAuthorizer.getAcls(resource).isEmpty)
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == Set.empty[Acl], "changes not propagated in timeout period.")
   }
+
+    @Test
+    def testLoadCache(): Unit = {
+      val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+      val host1 = "host1"
+
+      val acl1 = new Acl(user1, Allow, host1, Read)
+      val acl2 = new Acl(user1, Allow, host1, Write)
+      val acls = Set[Acl](acl1, acl2)
+      simpleAclAuthorizer.addAcls(acls, resource)
+
+      val authorizer = new SimpleAclAuthorizer
+      authorizer.configure(config.originals)
+      assertEquals(acls, simpleAclAuthorizer.getAcls(resource))
+    }
 }

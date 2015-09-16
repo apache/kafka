@@ -18,6 +18,8 @@ package kafka.common
 
 import kafka.utils.{Time, SystemTime, ZkUtils, Logging}
 import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
+import scala.collection.JavaConversions
+import JavaConversions._
 
 /**
  * Handle the notificationMessage.
@@ -66,18 +68,14 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
   def processAllNotifications() {
     val changes = zkClient.getChildren(seqNodeRoot)
 
-    import scala.collection.JavaConversions
-    import JavaConversions._
-    import scala.collection.mutable
-
-    processNotifications((changes: mutable.Buffer[String]).sorted)
+    processNotifications(changes.sorted)
   }
 
   /**
    * Process the given list of notifications
    */
   private def processNotifications(notifications: Seq[String]) {
-    if (notifications.size > 0) {
+    if (notifications.nonEmpty) {
       info(s"Processing notification(s) to $seqNodeRoot")
       val now = time.milliseconds
       for (notification <- notifications) {
