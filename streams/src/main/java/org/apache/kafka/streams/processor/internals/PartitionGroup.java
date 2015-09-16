@@ -39,6 +39,18 @@ public class PartitionGroup {
 
     private final TimestampExtractor timestampExtractor;
 
+    public static class RecordInfo {
+        public RecordQueue queue;
+
+        public ProcessorNode node() {
+            return queue.source();
+        }
+
+        public TopicPartition partition() {
+            return queue.partition();
+        }
+    }
+
     // since task is thread-safe, we do not need to synchronize on local variables
     private int totalBuffered;
 
@@ -64,34 +76,27 @@ public class PartitionGroup {
     }
 
     /**
-     * Get one record from the specified partition queue
+     * Get the next record and queue
      *
      * @return StampedRecord
      */
-    public StampedRecord getRecord(RecordQueue queue) {
-        // get the first record from this queue.
-        StampedRecord record = queue.poll();
+    public StampedRecord nextRecord(RecordInfo info) {
+        StampedRecord record = null;
 
-        // update the partition's timestamp and re-order it against other partitions.
-        queuesByTime.remove(queue);
+        RecordQueue queue = queuesByTime.poll();
+        if (queue != null) {
+            // get the first record from this queue.
+            record = queue.poll();
 
-        if (queue.size() > 0) {
-            queuesByTime.offer(queue);
+            if (queue.size() > 0) {
+                queuesByTime.offer(queue);
+            }
         }
+        info.queue = queue;
 
-        totalBuffered--;
+        if (record != null) totalBuffered--;
 
         return record;
-    }
-
-    /**
-     * Get the next partition queue that has the lowest timestamp to process
-     *
-     * @return RecordQueue
-     */
-    public RecordQueue nextQueue() {
-        // get the partition with the lowest timestamp
-        return queuesByTime.peek();
     }
 
     /**
