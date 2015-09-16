@@ -24,6 +24,7 @@ public final class ClientRequest {
     private final RequestSend request;
     private final RequestCompletionHandler callback;
     private final boolean isInitiatedByNetworkClient;
+    private long sendMs;
 
     /**
      * @param createdMs The unix timestamp in milliseconds for the time at which this request was created.
@@ -86,4 +87,11 @@ public final class ClientRequest {
         return isInitiatedByNetworkClient;
     }
 
+    public long getSendMs() {
+        return sendMs;
+    }
+
+    public void setSendMs(long sendMs) {
+        this.sendMs = sendMs;
+    }
 }

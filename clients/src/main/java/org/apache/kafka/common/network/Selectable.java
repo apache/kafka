@@ -38,11 +38,6 @@ public interface Selectable {
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
 
     /**
-     * Begin disconnecting the connection identified by the given id
-     */
-    public void disconnect(String id);
-
-    /**
      * Wakeup this selector if it is blocked on I/O
      */
     public void wakeup();
