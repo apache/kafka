@@ -96,7 +96,7 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
               .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
             currentTopicInfo.resetConsumeOffset(cdcFetchOffset)
           } else {
-            info("consumed offset: %d doesn't match fetch offset: %d for %s;\n "
+            debug("consumed offset: %d doesn't match fetch offset: %d for %s;\n "
               .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
           }
         }
