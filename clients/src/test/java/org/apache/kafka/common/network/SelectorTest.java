@@ -85,6 +85,23 @@ public class SelectorTest {
     }
 
     /**
+     * Validate that the client can intentionally disconnect and reconnect
+     */
+    @Test
+    public void testClientDisconnect() throws Exception {
+        String node = "0";
+        blockingConnect(node);
+        selector.disconnect(node);
+        selector.send(createSend(node, "hello1"));
+        selector.poll(10);
+        assertEquals("Request should not have succeeded", 0, selector.completedSends().size());
+        assertEquals("There should be a disconnect", 1, selector.disconnected().size());
+        assertTrue("The disconnect should be from our node", selector.disconnected().contains(node));
+        blockingConnect(node);
+        assertEquals("hello2", blockingRequest(node, "hello2"));
+    }
+
+    /**
      * Sending a request with one already in flight should result in an exception
      */
     @Test(expected = IllegalStateException.class)

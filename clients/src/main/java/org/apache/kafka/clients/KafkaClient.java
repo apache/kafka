@@ -68,9 +68,8 @@ public interface KafkaClient extends Closeable {
      * Queue up the given request for sending. Requests can only be sent on ready connections.
      * 
      * @param request The request
-     * @param now The current timestamp
      */
-    public void send(ClientRequest request, long now);
+    public void send(ClientRequest request);
 
     /**
      * Do actual reads and writes from sockets.

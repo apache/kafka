@@ -144,6 +144,49 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
+   * 1. With ack=0, the future metadata should not be blocked.
+   * 2. With ack=1, the future metadata should block,
+   *    and subsequent calls will eventually cause buffer full
+   */
+  @Test
+  def testNoResponse() {
+    // create topic
+    TestUtils.createTopic(zkClient, topic1, 1, numServers, servers)
+
+    // first send a message to make sure the metadata is refreshed
+    val record1 = new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, "key".getBytes, "value".getBytes)
+    producer1.send(record1).get
+    producer2.send(record1).get
+
+    // stop IO threads and request handling, but leave networking operational
+    // any requests should be accepted and queue up, but not handled
+    servers.foreach(server => server.requestHandlerPool.shutdown())
+
+    producer1.send(record1).get(5000, TimeUnit.MILLISECONDS)
+
+    intercept[TimeoutException] {
+      producer2.send(record1).get(5000, TimeUnit.MILLISECONDS)
+    }
+
+    // TODO: expose producer configs after creating them
+    // send enough messages to get buffer full
+    val tooManyRecords = 10
+    val msgSize = producerBufferSize / tooManyRecords
+    val value = new Array[Byte](msgSize)
+    new Random().nextBytes(value)
+    val record2 = new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, "key".getBytes, value)
+
+    intercept[KafkaException] {
+      for (i <- 1 to tooManyRecords)
+        producer2.send(record2)
+    }
+
+    // do not close produce2 since it will block
+    // TODO: can we do better?
+    producer2 = null
+  }
+
+  /**
    *  The send call with invalid partition id should throw KafkaException caused by IllegalArgumentException
    */
   @Test
@@ -244,8 +287,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     } catch {
       case e: ExecutionException =>
         if (!e.getCause.isInstanceOf[NotEnoughReplicasException]  &&
-            !e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException] &&
-            !e.getCause.isInstanceOf[TimeoutException]) {
+            !e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException]) {
           fail("Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
             "with fewer brokers than min.insync.replicas, but saw " + e.getCause)
         }
