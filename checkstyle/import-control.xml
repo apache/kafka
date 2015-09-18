@@ -74,12 +74,21 @@
 			<allow pkg="org.apache.kafka.common.record" />
 		</subpackage>
 
-		<subpackage name="requests">
-			<allow pkg="org.apache.kafka.common.protocol" />
-			<allow pkg="org.apache.kafka.common.network" />
-			<!-- for testing -->
-			<allow pkg="org.apache.kafka.common.errors" />
-		</subpackage>
+
+        <subpackage name="requests">
+            <allow pkg="org.apache.kafka.common.protocol"/>
+            <allow pkg="org.apache.kafka.common.network"/>
+            <!-- for testing -->
+            <allow pkg="org.apache.kafka.common.errors"/>
+
+
+            <allow pkg="org.apache.kafka.common.requests.admin"/>
+
+            <subpackage name="admin">
+                <allow pkg="org.apache.kafka.common.requests"/>
+            </subpackage>
+
+        </subpackage>
 
 		<subpackage name="serialization">
 			<allow class="org.apache.kafka.common.errors.SerializationException" />

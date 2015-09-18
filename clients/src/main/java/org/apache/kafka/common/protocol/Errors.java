@@ -88,7 +88,19 @@ public enum Errors {
             new ApiException("Some of the committing partitions are not assigned the committer")),
     INVALID_COMMIT_OFFSET_SIZE(28,
             new ApiException("The committing offset data size is not valid")),
-    AUTHORIZATION_FAILED(29, new ApiException("Request is not authorized."));
+    AUTHORIZATION_FAILED(29, new ApiException("Request is not authorized.")),
+    TOPIC_ALREADY_EXISTS(30,
+            new ApiException("Topic with this name already exists.")),
+    INVALID_PARTITIONS(31,
+            new ApiException("Number of partitions is invalid.")),
+    INVALID_REPLICATION_FACTOR(32,
+            new ApiException("Replication-factor is invalid.")),
+    INVALID_REPLICA_ASSIGNMENT(33,
+            new ApiException("Replica assignment is invalid.")),
+    INVALID_ENTITY_CONFIG(34,
+            new ApiException("Entity configuration is invalid.")),
+    REASSIGN_PARTITIONS_IN_PROGRESS(35,
+            new ApiException("Reassign partition process is already in progress."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

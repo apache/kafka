@@ -49,6 +49,9 @@ public class Protocol {
                                                              INT32,
                                                              "The port on which the broker accepts requests."));
 
+    public static final Schema CONFIG_ENTRY = new Schema(new Field("config_key", STRING, "Configuration key name"),
+                                                        new Field("config_value", STRING, "Configuration value"));
+
     public static final Schema PARTITION_METADATA_V0 = new Schema(new Field("partition_error_code",
                                                                             INT16,
                                                                             "The error code for the partition, if any."),
@@ -461,6 +464,88 @@ public class Protocol {
     public static final Schema[] HEARTBEAT_REQUEST = new Schema[] {HEARTBEAT_REQUEST_V0};
     public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0};
 
+    /* Admin requests commons */
+    public static final Schema TOPIC_ERROR_CODE = new Schema(new Field("topic", STRING), new Field("error_code", INT16));
+
+    public static final Schema PARTITION_REPLICA_ASSIGNMENT_ENTRY = new Schema(
+            new Field("partition_id", INT32),
+            new Field("replicas", new ArrayOf(INT32)));
+
+    /* Create topic request api */
+    public static final Schema SINGLE_CREATE_TOPIC_REQUEST = new Schema(
+            new Field("topic",
+                    STRING,
+                    "Name for newly created topic."),
+            new Field("partitions",
+                    INT32,
+                    "Number of partitions to be created."),
+            new Field("replication_factor",
+                    INT32,
+                    "Replication factor for the topic."),
+            new Field("replica_assignment",
+                    new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
+                    "Replica assignment among kafka brokers for this topic partitions."),
+            new Field("configs",
+                    new ArrayOf(CONFIG_ENTRY),
+                    "Topic level configuration for topic to be set."));
+
+    public static final Schema CREATE_TOPIC_REQUEST_V0 = new Schema(
+            new Field("create_topic_requests",
+                    new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST),
+                    "An array of single topic creation requests."));
+
+    public static final Schema CREATE_TOPIC_RESPONSE_V0 = new Schema(
+            new Field("topic_error_codes",
+                    new ArrayOf(TOPIC_ERROR_CODE),
+                    "An array of per topic error codes."));
+
+
+    public static final Schema[] CREATE_TOPIC_REQUEST = new Schema[] {CREATE_TOPIC_REQUEST_V0};
+    public static final Schema[] CREATE_TOPIC_RESPONSE = new Schema[] {CREATE_TOPIC_RESPONSE_V0};
+
+    /* Alter topic request api */
+    public static final Schema SINGLE_ALTER_TOPIC_REQUEST = new Schema(
+            new Field("topic",
+                    STRING,
+                    "Topic to be updated."),
+            new Field("partitions",
+                    INT32,
+                    "Number of partitions in updated topic (increase only)."),
+            new Field("replication_factor",
+                    INT32,
+                    "New replication factor for the topic"),
+            new Field("replica_assignment",
+                    new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
+                    "Manual replica assignment among kafka brokers."));
+
+    public static final Schema ALTER_TOPIC_REQUEST_V0 = new Schema(
+            new Field("alter_topic_requests",
+                    new ArrayOf(SINGLE_ALTER_TOPIC_REQUEST),
+                    "An array of single topic alteration requests."));
+
+    public static final Schema ALTER_TOPIC_RESPONSE_V0 = new Schema(
+            new Field("topic_error_codes",
+                    new ArrayOf(TOPIC_ERROR_CODE),
+                    "An array of per topic error codes."));
+
+
+    public static final Schema[] ALTER_TOPIC_REQUEST = new Schema[] {ALTER_TOPIC_REQUEST_V0};
+    public static final Schema[] ALTER_TOPIC_RESPONSE = new Schema[] {ALTER_TOPIC_RESPONSE_V0};
+
+    /* Delete topic request api */
+    public static final Schema DELETE_TOPIC_REQUEST_V0 = new Schema(
+            new Field("topics",
+                    new ArrayOf(STRING),
+                    "An array of topics to be deleted."));
+
+    public static final Schema DELETE_TOPIC_RESPONSE_V0 = new Schema(
+            new Field("topic_error_codes",
+                    new ArrayOf(TOPIC_ERROR_CODE),
+                    "An array of per topic error codes."));
+
+    public static final Schema[] DELETE_TOPIC_REQUEST = new Schema[] {DELETE_TOPIC_REQUEST_V0};
+    public static final Schema[] DELETE_TOPIC_RESPONSE = new Schema[] {DELETE_TOPIC_RESPONSE_V0};
+
     /* Leader and ISR api */
     public static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0 =
             new Schema(new Field("topic", STRING, "Topic name."),
@@ -581,6 +666,9 @@ public class Protocol {
         REQUESTS[ApiKeys.CONSUMER_METADATA.id] = CONSUMER_METADATA_REQUEST;
         REQUESTS[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_REQUEST;
         REQUESTS[ApiKeys.HEARTBEAT.id] = HEARTBEAT_REQUEST;
+        REQUESTS[ApiKeys.CREATE_TOPIC.id] = CREATE_TOPIC_REQUEST;
+        REQUESTS[ApiKeys.ALTER_TOPIC.id] = ALTER_TOPIC_REQUEST;
+        REQUESTS[ApiKeys.DELETE_TOPIC.id] = DELETE_TOPIC_REQUEST;
 
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
@@ -596,6 +684,9 @@ public class Protocol {
         RESPONSES[ApiKeys.CONSUMER_METADATA.id] = CONSUMER_METADATA_RESPONSE;
         RESPONSES[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_RESPONSE;
         RESPONSES[ApiKeys.HEARTBEAT.id] = HEARTBEAT_RESPONSE;
+        RESPONSES[ApiKeys.CREATE_TOPIC.id] = CREATE_TOPIC_RESPONSE;
+        RESPONSES[ApiKeys.ALTER_TOPIC.id] = ALTER_TOPIC_RESPONSE;
+        RESPONSES[ApiKeys.DELETE_TOPIC.id] = DELETE_TOPIC_RESPONSE;
 
         /* set the maximum version of each api */
         for (ApiKeys api : ApiKeys.values())

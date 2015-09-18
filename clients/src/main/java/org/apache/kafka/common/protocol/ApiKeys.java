@@ -32,7 +32,10 @@ public enum ApiKeys {
     OFFSET_FETCH(9, "OffsetFetch"),
     CONSUMER_METADATA(10, "ConsumerMetadata"),
     JOIN_GROUP(11, "JoinGroup"),
-    HEARTBEAT(12, "Heartbeat");
+    HEARTBEAT(12, "Heartbeat"),
+    CREATE_TOPIC(13, "CreateTopic"),
+    ALTER_TOPIC(14, "AlterTopic"),
+    DELETE_TOPIC(15, "DeleteTopic");
 
     private static ApiKeys[] codeToType;
     public static final int MAX_API_KEY;

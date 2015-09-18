@@ -23,6 +23,7 @@ import kafka.utils._
 import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{Logging, ZkUtils, TestUtils}
+import kafka.common.{InvalidReplicationFactorException, InvalidReplicaAssignmentException, TopicExistsException, TopicAndPartition}
 import kafka.common.{InvalidTopicException, TopicExistsException, TopicAndPartition}
 import kafka.server.{ConfigType, KafkaServer, KafkaConfig}
 import java.io.File
@@ -36,12 +37,12 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
     val brokerList = List(0, 1, 2, 3, 4)
 
     // test 0 replication factor
-    intercept[AdminOperationException] {
+    intercept[InvalidReplicationFactorException] {
       AdminUtils.assignReplicasToBrokers(brokerList, 10, 0)
     }
 
     // test wrong replication factor
-    intercept[AdminOperationException] {
+    intercept[InvalidReplicationFactorException] {
       AdminUtils.assignReplicasToBrokers(brokerList, 10, 6)
     }
 
@@ -69,12 +70,12 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     // duplicate brokers
-    intercept[IllegalArgumentException] {
+    intercept[InvalidReplicaAssignmentException] {
       AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, "test", Map(0->Seq(0,0)))
     }
 
     // inconsistent replication factor
-    intercept[IllegalArgumentException] {
+    intercept[InvalidReplicaAssignmentException] {
       AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, "test", Map(0->Seq(0,1), 1->Seq(0)))
     }
 
@@ -323,6 +324,34 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
     val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = Some(currentLeader)).get
     assertEquals("Preferred replica election failed", preferredReplica, newLeader)
     servers.foreach(_.shutdown())
+  }
+
+  @Test
+  def testAddPartitions() {
+    val brokers = List(0, 1, 2, 3, 4)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val assignment = Map(0 -> List(0, 1, 2), 1 -> List(1, 2, 3))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, "test1", assignment, update = false)
+
+    val addedPartitions_Duplicates = Map(2 -> List(2, 2, 4), 3 -> List(3, 4, 0))
+    val addedPartitions_ReplicationFactor = Map(2 -> List(2, 4), 3 -> List(3, 4))
+    val addedPartitions_UnknownBroker = Map(2 -> List(0, 2, 3), 3 -> List(5, 2, 3))
+    val addedPartitions_ExistingPartition = Map(1 -> List(0, 2, 3), 3 -> List(0, 1, 2))
+
+    List(addedPartitions_Duplicates, addedPartitions_ReplicationFactor,
+      addedPartitions_UnknownBroker, addedPartitions_ExistingPartition).foreach {
+      testAssignment =>
+        intercept[InvalidReplicaAssignmentException] {
+          AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, "test1", Map(0 -> Seq(0, 1), 1 -> Seq(0)))
+        }
+    }
+
+    val addedPartitions = Map(2 -> List(2, 3, 4), 3 -> List(3, 4, 0))
+    AdminUtils.addPartitions(zkClient, "test1", checkBrokerAvailable = true ,assignment, addedPartitions)
+
+    val found = ZkUtils.getPartitionAssignmentForTopics(zkClient, Seq("test1"))
+    assertEquals(assignment ++ addedPartitions, found("test1"))
   }
 
   @Test
