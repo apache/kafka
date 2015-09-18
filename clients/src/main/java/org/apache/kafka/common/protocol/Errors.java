@@ -88,7 +88,9 @@ public enum Errors {
             new ApiException("Some of the committing partitions are not assigned the committer")),
     INVALID_COMMIT_OFFSET_SIZE(28,
             new ApiException("The committing offset data size is not valid")),
-    AUTHORIZATION_FAILED(29, new ApiException("Request is not authorized."));
+    AUTHORIZATION_FAILED(29, new ApiException("Request is not authorized.")),
+    REBALANCE_IN_PROGRESS(30,
+            new ApiException("The group is rebalancing, so a rejoin is needed."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

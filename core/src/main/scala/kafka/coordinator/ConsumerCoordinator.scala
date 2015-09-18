@@ -210,8 +210,10 @@ class ConsumerCoordinator(val brokerId: Int,
             responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
           } else if (!group.has(consumerId)) {
             responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
-          } else if (generationId != group.generationId || !group.is(Stable)) {
+          } else if (generationId != group.generationId) {
             responseCallback(Errors.ILLEGAL_GENERATION.code)
+          } else if (!group.is(Stable)) {
+            responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
           } else {
             val consumer = group.get(consumerId)
             completeAndScheduleNextHeartbeatExpiration(group, consumer)
