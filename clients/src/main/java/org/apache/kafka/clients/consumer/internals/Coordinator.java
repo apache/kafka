@@ -134,7 +134,6 @@ public final class Coordinator {
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions) {
         while (true) {
             ensureCoordinatorKnown();
-            ensurePartitionAssignment();
 
             // contact coordinator to fetch committed offsets
             RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
@@ -368,9 +367,11 @@ public final class Coordinator {
     }
 
     public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        if (offsets.isEmpty())
+            return;
+
         while (true) {
             ensureCoordinatorKnown();
-            ensurePartitionAssignment();
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future);
