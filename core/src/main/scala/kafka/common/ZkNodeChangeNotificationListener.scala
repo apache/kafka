@@ -18,8 +18,7 @@ package kafka.common
 
 import kafka.utils.{Time, SystemTime, ZkUtils, Logging}
 import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
-import scala.collection.JavaConversions
-import JavaConversions._
+import scala.collection.JavaConversions._
 
 /**
  * Handle the notificationMessage.
@@ -104,8 +103,6 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
         if (now - stat.getCtime > changeExpirationMs) {
           debug(s"Purging change notification $notificationNode")
           ZkUtils.deletePath(zkClient, notificationNode)
-        } else {
-          return
         }
       }
     }

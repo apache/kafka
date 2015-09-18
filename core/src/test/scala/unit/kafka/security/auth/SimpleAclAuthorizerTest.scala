@@ -79,9 +79,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     val acls = Set[Acl](acl1, acl2, acl3, acl4, acl5, acl6, acl7)
 
-    simpleAclAuthorizer.addAcls(acls, resource)
-
-    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
+    addAclAndVerify(acls)
 
     val host1Session = new Session(user1, host1)
     val host2Session = new Session(user1, host2)
@@ -113,9 +111,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val allowAll = Acl.AllowAllAcl
     val denyAcl = new Acl(user, Deny, host, All)
     val acls = Set[Acl](allowAll, denyAcl)
-    simpleAclAuthorizer.addAcls(acls, resource)
 
-    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
+    addAclAndVerify(acls)
 
     assertFalse("deny should take precedence over allow.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
@@ -123,9 +120,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testAllowAllAccess(): Unit = {
     val allowAllAcl = Acl.AllowAllAcl
-    simpleAclAuthorizer.addAcls(Set[Acl](allowAllAcl), resource)
 
-    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == Set[Acl](allowAllAcl), "changes not propagated in timeout period.")
+    addAclAndVerify(Set[Acl](allowAllAcl))
 
     val session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "random"), "random.host")
     assertTrue("allow all acl should allow access to all.", simpleAclAuthorizer.authorize(session, Read, resource))
@@ -134,9 +130,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testSuperUserHasAccess(): Unit = {
     val denyAllAcl = new Acl(Acl.WildCardPrincipal, Deny, WildCardHost, All)
-    simpleAclAuthorizer.addAcls(Set[Acl](denyAllAcl), resource)
 
-    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == Set[Acl](denyAllAcl), "changes not propagated in timeout period.")
+    addAclAndVerify(Set[Acl](denyAllAcl))
 
     val session1 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), "random.host")
     val session2 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser2"), "random.host")
@@ -174,9 +169,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val acl4 = new Acl(user2, Allow, host2, Write)
 
     var acls = Set[Acl](acl1, acl2, acl3, acl4)
-    simpleAclAuthorizer.addAcls(acls, resource)
 
-    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
+    addAclAndVerify(acls)
 
     //test addAcl is additive
     val acl5: Acl = new Acl(user2, Allow, WildCardHost, Read)
@@ -201,18 +195,24 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == Set.empty[Acl], "changes not propagated in timeout period.")
   }
 
-    @Test
-    def testLoadCache(): Unit = {
-      val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-      val host1 = "host1"
+  @Test
+  def testLoadCache(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val host1 = "host1"
 
-      val acl1 = new Acl(user1, Allow, host1, Read)
-      val acl2 = new Acl(user1, Allow, host1, Write)
-      val acls = Set[Acl](acl1, acl2)
-      simpleAclAuthorizer.addAcls(acls, resource)
+    val acl1 = new Acl(user1, Allow, host1, Read)
+    val acl2 = new Acl(user1, Allow, host1, Write)
+    val acls = Set[Acl](acl1, acl2)
+    simpleAclAuthorizer.addAcls(acls, resource)
 
-      val authorizer = new SimpleAclAuthorizer
-      authorizer.configure(config.originals)
-      assertEquals(acls, simpleAclAuthorizer.getAcls(resource))
-    }
+    val authorizer = new SimpleAclAuthorizer
+    authorizer.configure(config.originals)
+    assertEquals(acls, simpleAclAuthorizer.getAcls(resource))
+  }
+
+  private def addAclAndVerify(acls: Set[Acl]) {
+    simpleAclAuthorizer.addAcls(acls, resource)
+
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
+  }
 }

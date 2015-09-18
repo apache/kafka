@@ -61,7 +61,6 @@ object SimpleAclAuthorizer {
 
   //prefix of all the change notificiation sequence node.
   val AclChangedPrefix = "acl_changes_"
-
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
@@ -111,90 +110,83 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
     val principal: KafkaPrincipal = session.principal
     val host = session.host
-
-    if (superUsers.contains(principal)) {
-      authorizerLogger.debug(s"principal = $principal is a super user, allowing operation without checking acls.")
-      logAuditMessage(principal, authorized = true, operation, resource, host)
-      return true
-    }
-
     val acls: Set[Acl] = getAcls(resource)
-    if (acls.isEmpty) {
-      authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
-      logAuditMessage(principal, authorized = shouldAllowEveryoneIfNoAclIsFound, operation, resource, host)
-      return shouldAllowEveryoneIfNoAclIsFound
-    }
 
-    //first check if there is any Deny acl match that would disallow this operation.
-    if (aclMatch(session, operation, resource, principal, host, Deny, acls)) {
-      logAuditMessage(principal, authorized = false, operation, resource, host)
-      return false
-    }
+    //check if there is any Deny acl match that would disallow this operation.
+    val denyMatch = aclMatch(session, operation, resource, principal, host, Deny, acls)
 
-    /**
-     * if principal is allowed to read or write we allow describe by default, the reverse does not apply to Deny.
-     */
+    //if principal is allowed to read or write we allow describe by default, the reverse does not apply to Deny.
     val ops: Set[Operation] = if (Describe == operation)
       Set[Operation](operation, Read, Write)
     else
       Set[Operation](operation)
 
     //now check if there is any allow acl that will allow this operation.
-    if (ops.exists(operation => aclMatch(session, operation, resource, principal, host, Allow, acls))) {
-      logAuditMessage(principal, authorized = true, operation, resource, host)
-      return true
-    }
+    val allowMatch = ops.find(operation => aclMatch(session, operation, resource, principal, host, Allow, acls)).map(_ => true).getOrElse(false)
 
-    //We have some acls defined and they do not specify any allow ACL for the current session, reject request.
-    authorizerLogger.debug(s"principal = $principal from host = $host is not allowed to perform operation = $operation  " +
-      s"on resource = $resource as no explicit acls were defined to allow the operation")
-    logAuditMessage(principal, authorized = false, operation, resource, host)
-    false
+    //we allow an operation if a user is a super user or if no acls are found and user has configured to allow all users
+    //when no acls are found or if no deny acls are found and at least one allow acls matches.
+    val authorized = isSuperUser(operation, resource, principal, host) ||
+      isEmptyAcl(operation, resource, principal, host, acls).getOrElse(false) ||
+      (!denyMatch && allowMatch)
+
+    logAuditMessage(principal, authorized, operation, resource, host)
+    authorized
+  }
+
+  def isEmptyAcl(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String, acls: Set[Acl]): Option[Boolean] = {
+    if (acls.isEmpty) {
+      authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
+      Some(shouldAllowEveryoneIfNoAclIsFound)
+    } else None
+  }
+
+  def isSuperUser(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String): Boolean = {
+    superUsers.find (user => user == principal).map {
+      _ =>
+      authorizerLogger.debug(s"principal = $principal is a super user, allowing operation without checking acls.")
+      true
+    }.getOrElse(false)
   }
 
   private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
-    val acl = acls.find ( acl =>
+    acls.find ( acl =>
       acl.permissionType == permissionType
-      && (acl.principal == principal || acl.principal == Acl.WildCardPrincipal)
-      && (operations == acl.operation || acl.operation == All)
-      && (acl.host == host || acl.host == Acl.WildCardHost)
-    ).map{ acl: Acl =>
-      debug(s"operation = $operations on resource = $resource from host = $host is $permissionType based on acl = $acl")
-      return true
-    }
-    false
+        && (acl.principal == principal || acl.principal == Acl.WildCardPrincipal)
+        && (operations == acl.operation || acl.operation == All)
+        && (acl.host == host || acl.host == Acl.WildCardHost)
+    ).map { acl: Acl =>
+      authorizerLogger.debug(s"operation = $operations on resource = $resource from host = $host is $permissionType based on acl = $acl")
+      true
+    }.getOrElse(false)
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource): Unit = {
-    if (acls == null || acls.isEmpty)
-      return
+    if (acls != null && acls.nonEmpty) {
+      val updatedAcls: Set[Acl] = getAcls(resource) ++ acls
+      val path: String = toResourcePath(resource)
 
-    val updatedAcls: Set[Acl] = getAcls(resource) ++ acls
-    val path: String = toResourcePath(resource)
+      if (ZkUtils.pathExists(zkClient, path))
+        ZkUtils.updatePersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
+      else
+        ZkUtils.createPersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
 
-    if (ZkUtils.pathExists(zkClient, path))
-      ZkUtils.updatePersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
-    else
-      ZkUtils.createPersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
-
-    updateAclChangedFlag(resource)
+      updateAclChangedFlag(resource)
+    }
   }
 
   override def removeAcls(aclsTobeRemoved: Set[Acl], resource: Resource): Boolean = {
-    if (!ZkUtils.pathExists(zkClient, toResourcePath(resource)))
-      return false
+    if (ZkUtils.pathExists(zkClient, toResourcePath(resource))) {
+      val existingAcls: Set[Acl] = getAcls(resource)
+      val filteredAcls: Set[Acl] = existingAcls.filter((acl: Acl) => !aclsTobeRemoved.contains(acl))
 
-    val existingAcls: Set[Acl] = getAcls(resource)
-    val filteredAcls: Set[Acl] = existingAcls.filter((acl: Acl) => !aclsTobeRemoved.contains(acl))
-    if (existingAcls == filteredAcls)
-      return false
+      val path: String = toResourcePath(resource)
+      ZkUtils.updatePersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(filteredAcls)))
 
-    val path: String = toResourcePath(resource)
-    ZkUtils.updatePersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(filteredAcls)))
+      updateAclChangedFlag(resource)
 
-    updateAclChangedFlag(resource)
-
-    true
+      true
+    } else false
   }
 
   override def removeAcls(resource: Resource): Boolean = {
@@ -219,7 +211,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def getAcls(principal: KafkaPrincipal): Set[Acl] = {
     val aclSets = aclCache.values
     var acls = Set.empty[Acl]
-    for(aclSet  <- aclSets) {
+    for (aclSet <- aclSets) {
       acls ++= aclSet.filter(acl => acl.principal == principal)
     }
     acls
@@ -232,10 +224,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       val resourceType = ResourceType.fromString(rType)
       val resourceTypePath = SimpleAclAuthorizer.AclZkPath + "/" + resourceType.name
       val resourceNames = ZkUtils.getChildren(zkClient, resourceTypePath)
-      for (resourceName <- resourceNames) {
-        for (resourceName <- resourceNames)
-          acls ++= getAclsFromZk(Resource(resourceType, resourceName.toString))
-      }
+      for (resourceName <- resourceNames)
+        acls ++= getAclsFromZk(Resource(resourceType, resourceName.toString))
     }
     acls
   }
@@ -245,7 +235,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     SimpleAclAuthorizer.AclZkPath + "/" + resource.resourceType + "/" + resource.name
   }
 
-  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) : Unit = {
+  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String): Unit = {
     val permissionType = if (authorized) "Allowed" else "Denied"
     authorizerLogger.debug(s"Principal = $principal is $permissionType Operation = $operation from host = $host on resource = $resource")
   }
@@ -260,11 +250,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       val resource: Resource = Resource.fromString(notificationMessage.get)
       val acls = getAclsFromZk(resource)
 
-        inWriteLock(lock) {
-          if (acls.nonEmpty)
-            aclCache.put(resource, acls)
-          else
-            aclCache.remove(resource)
+      inWriteLock(lock) {
+        if (acls.nonEmpty)
+          aclCache.put(resource, acls)
+        else
+          aclCache.remove(resource)
       }
     }
   }
@@ -272,6 +262,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   object ZkStateChangeListener extends IZkStateListener {
 
     var reconnection = false
+
     override def handleNewSession(): Unit = {
       aclChangeListener.processAllNotifications
     }
