@@ -29,7 +29,7 @@ buildscript {
 
 def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
 def slf4japi="org.slf4j:slf4j-api:1.7.6"
-def junit='junit:junit:4.6'
+def junit='junit:junit:4.11'
 def easymock='org.easymock:easymock:3.3.1'
 def powermock='org.powermock:powermock-module-junit4:1.6.2'
 def powermock_easymock='org.powermock:powermock-api-easymock:1.6.2'
@@ -43,6 +43,7 @@ allprojects {
 
 ext {
     gradleVersion = "2.4"
+    buildVersionFileName = "kafka-version.properties"
 
     skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
     shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
@@ -168,7 +169,7 @@ subprojects {
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
-      jvmArgs = ['-XX:MaxPermSize=512m']
+      jvmArgs = ['-XX:MaxPermSize=512m', '-Xss2m']
     }
   }
 }
@@ -213,7 +214,7 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
   }
 }
 
-def copycatPkgs = ['copycat:data', 'copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
+def copycatPkgs = ['copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
 def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools'] + copycatPkgs
 
 tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
@@ -245,7 +246,7 @@ project(':core') {
     compile project(':log4j-appender')
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
-    compile 'com.101tec:zkclient:0.5'
+    compile 'com.101tec:zkclient:0.6'
     compile 'com.yammer.metrics:metrics-core:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
     if (scalaVersion.startsWith('2.11')) {
@@ -256,9 +257,10 @@ project(':core') {
     testCompile "$junit"
     testCompile "$easymock"
     testCompile 'org.objenesis:objenesis:1.2'
+    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
     testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
-    testCompile project(path: ':clients', configuration: 'archives')
-
+    testCompile project(':clients')
+    testCompile project(':clients').sourceSets.test.output
     testRuntime "$slf4jlog4j"
 
     zinc 'com.typesafe.zinc:zinc:0.3.7'
@@ -390,8 +392,52 @@ project(':clients') {
     compile 'org.xerial.snappy:snappy-java:1.1.1.7'
     compile 'net.jpountz.lz4:lz4:1.2.0'
 
+    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
     testCompile "$junit"
     testRuntime "$slf4jlog4j"
+  }
+
+  task determineCommitId {
+    ext.commitId = "unknown"
+    def takeFromHash = 16
+    if (file("../.git/HEAD").exists()) {
+      def headRef = file("../.git/HEAD").text
+      if (headRef.contains('ref: ')) {
+        headRef = headRef.replaceAll('ref: ', '').trim()
+        commitId = file("../.git/$headRef").text.trim().take(takeFromHash)
+      } else {
+        commitId = headRef.trim().take(takeFromHash)
+      }
+    } else {
+      commitId
+    }
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+        commitId: determineCommitId.commitId,
+        version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+        include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
   }
 
   task testJar(type: Jar) {
@@ -512,56 +558,13 @@ project(':log4j-appender') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:data') {
-  apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-data"
-
-  dependencies {
-    compile project(':clients')
-    compile "$slf4japi"
-
-    testCompile "$junit"
-    testRuntime "$slf4jlog4j"
-  }
-
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
-  }
-
-  javadoc {
-    include "**/org/apache/kafka/copycat/data/*"
-  }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom (testCompile)
-  }
-
-  /* FIXME Re-enable this with KAFKA-2367 when the placeholder data API is replaced
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest') */
-}
-
 project(':copycat:api') {
   apply plugin: 'checkstyle'
   archivesBaseName = "copycat-api"
 
   dependencies {
-    compile project(':copycat:data')
     compile "$slf4japi"
+    compile project(':clients')
 
     testCompile "$junit"
     testRuntime "$slf4jlog4j"

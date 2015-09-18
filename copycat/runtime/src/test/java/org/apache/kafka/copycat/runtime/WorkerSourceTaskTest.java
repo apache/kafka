@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.source.SourceTaskContext;
@@ -43,11 +44,7 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -57,33 +54,36 @@ import static org.junit.Assert.*;
 
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
-    private static final byte[] PARTITION_BYTES = "partition".getBytes();
-    private static final byte[] OFFSET_BYTES = "offset-1".getBytes();
+    private static final String TOPIC = "topic";
+    private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
+    private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
 
     // Copycat-format data
+    private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
     private static final Integer KEY = -1;
+    private static final Schema RECORD_SCHEMA = Schema.INT64_SCHEMA;
     private static final Long RECORD = 12L;
-    // Native-formatted data. The actual format of this data doesn't matter -- we just want to see that the right version
+    // Serialized data. The actual format of this data doesn't matter -- we just want to see that the right version
     // is used in the right place.
-    private static final ByteBuffer CONVERTED_KEY = ByteBuffer.wrap("converted-key".getBytes());
-    private static final String CONVERTED_RECORD = "converted-record";
+    private static final byte[] SERIALIZED_KEY = "converted-key".getBytes();
+    private static final byte[] SERIALIZED_RECORD = "converted-record".getBytes();
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private WorkerConfig config;
     @Mock private SourceTask sourceTask;
-    @Mock private Converter<ByteBuffer> keyConverter;
-    @Mock private Converter<String> valueConverter;
-    @Mock private KafkaProducer<ByteBuffer, String> producer;
+    @Mock private Converter keyConverter;
+    @Mock private Converter valueConverter;
+    @Mock private KafkaProducer<byte[], byte[]> producer;
     @Mock private OffsetStorageReader offsetReader;
-    @Mock private OffsetStorageWriter<ByteBuffer, String> offsetWriter;
-    private WorkerSourceTask<ByteBuffer, String> workerTask;
+    @Mock private OffsetStorageWriter offsetWriter;
+    private WorkerSourceTask workerTask;
     @Mock private Future<RecordMetadata> sendFuture;
 
     private Capture<org.apache.kafka.clients.producer.Callback> producerCallbacks;
 
     private static final Properties EMPTY_TASK_PROPS = new Properties();
     private static final List<SourceRecord> RECORDS = Arrays.asList(
-            new SourceRecord(PARTITION_BYTES, OFFSET_BYTES, "topic", null, KEY, RECORD)
+            new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
 
     @Override
@@ -92,16 +92,16 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Properties workerProps = new Properties();
         workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("key.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
-        workerProps.setProperty("value.serializer", "org.apache.kafka.copycat.json.JsonSerializer");
-        workerProps.setProperty("key.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
-        workerProps.setProperty("value.deserializer", "org.apache.kafka.copycat.json.JsonDeserializer");
+        workerProps.setProperty("offset.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("offset.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("offset.key.converter.schemas.enable", "false");
+        workerProps.setProperty("offset.value.converter.schemas.enable", "false");
         config = new WorkerConfig(workerProps);
         producerCallbacks = EasyMock.newCapture();
     }
 
     private void createWorkerTask() {
-        workerTask = new WorkerSourceTask<>(taskId, sourceTask, keyConverter, valueConverter, producer,
+        workerTask = new WorkerSourceTask(taskId, sourceTask, keyConverter, valueConverter, producer,
                 offsetReader, offsetWriter, config, new SystemTime());
     }
 
@@ -195,15 +195,15 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         List<SourceRecord> records = new ArrayList<>();
         // Can just use the same record for key and value
-        records.add(new SourceRecord(PARTITION_BYTES, OFFSET_BYTES, "topic", null, KEY, RECORD));
+        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD));
 
-        Capture<ProducerRecord<ByteBuffer, String>> sent = expectSendRecord();
+        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord();
 
         PowerMock.replayAll();
 
         Whitebox.invokeMethod(workerTask, "sendRecords", records);
-        assertEquals(CONVERTED_KEY, sent.getValue().key());
-        assertEquals(CONVERTED_RECORD, sent.getValue().value());
+        assertEquals(SERIALIZED_KEY, sent.getValue().key());
+        assertEquals(SERIALIZED_RECORD, sent.getValue().value());
 
         PowerMock.verifyAll();
     }
@@ -227,11 +227,11 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return latch;
     }
 
-    private Capture<ProducerRecord<ByteBuffer, String>> expectSendRecord() throws InterruptedException {
-        EasyMock.expect(keyConverter.fromCopycatData(KEY)).andStubReturn(CONVERTED_KEY);
-        EasyMock.expect(valueConverter.fromCopycatData(RECORD)).andStubReturn(CONVERTED_RECORD);
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord() throws InterruptedException {
+        EasyMock.expect(keyConverter.fromCopycatData(TOPIC, KEY_SCHEMA, KEY)).andStubReturn(SERIALIZED_KEY);
+        EasyMock.expect(valueConverter.fromCopycatData(TOPIC, RECORD_SCHEMA, RECORD)).andStubReturn(SERIALIZED_RECORD);
 
-        Capture<ProducerRecord<ByteBuffer, String>> sent = EasyMock.newCapture();
+        Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
         // 1. Converted data passed to the producer, which will need callbacks invoked for flush to work
         EasyMock.expect(
                 producer.send(EasyMock.capture(sent),
@@ -249,7 +249,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                     }
                 });
         // 2. Offset data is passed to the offset storage.
-        offsetWriter.setOffset(PARTITION_BYTES, OFFSET_BYTES);
+        offsetWriter.offset(PARTITION, OFFSET);
         PowerMock.expectLastCall().anyTimes();
 
         return sent;

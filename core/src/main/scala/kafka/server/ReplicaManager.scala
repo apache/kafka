@@ -30,8 +30,9 @@ import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.{Time => JTime}
 
 import scala.collection._
 
@@ -95,7 +96,9 @@ object ReplicaManager {
 }
 
 class ReplicaManager(val config: KafkaConfig,
-                     private val time: Time,
+                     metrics: Metrics,
+                     time: Time,
+                     jTime: JTime,
                      val zkClient: ZkClient,
                      scheduler: Scheduler,
                      val logManager: LogManager,
@@ -105,7 +108,7 @@ class ReplicaManager(val config: KafkaConfig,
   private val localBrokerId = config.brokerId
   private val allPartitions = new Pool[(String, Int), Partition]
   private val replicaStateChangeLock = new Object
-  val replicaFetcherManager = new ReplicaFetcherManager(config, this)
+  val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   val highWatermarkCheckpoints = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
   private var hwThreadInitialized = false
@@ -304,7 +307,6 @@ class ReplicaManager(val config: KafkaConfig,
                      responseCallback: Map[TopicAndPartition, ProducerResponseStatus] => Unit) {
 
     if (isValidRequiredAcks(requiredAcks)) {
-
       val sTime = SystemTime.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))

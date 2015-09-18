@@ -19,21 +19,20 @@ package kafka.server
 
 
 import java.util.Collections
-import java.util.concurrent.{TimeUnit, DelayQueue}
+import java.util.concurrent.{DelayQueue, TimeUnit}
 
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
-import org.junit.{AfterClass, Before, Assert, Test}
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{Assert, Before, Test}
 
-class ThrottledResponseExpirationTest extends JUnit3Suite {
+class ThrottledResponseExpirationTest {
   private val time = new MockTime
   private var numCallbacks: Int = 0
   private val metrics = new org.apache.kafka.common.metrics.Metrics(new MetricConfig(),
                                                                     Collections.emptyList(),
                                                                     time)
 
-  def callback {
+  def callback(delayTimeMs: Int) {
     numCallbacks += 1
   }
 
@@ -76,9 +75,9 @@ class ThrottledResponseExpirationTest extends JUnit3Suite {
     val t1: ThrottledResponse = new ThrottledResponse(time, 10, callback)
     val t2: ThrottledResponse = new ThrottledResponse(time, 20, callback)
     val t3: ThrottledResponse = new ThrottledResponse(time, 20, callback)
-    Assert.assertEquals(10, t1.delayTimeMs)
-    Assert.assertEquals(20, t2.delayTimeMs)
-    Assert.assertEquals(20, t3.delayTimeMs)
+    Assert.assertEquals(10, t1.throttleTimeMs)
+    Assert.assertEquals(20, t2.throttleTimeMs)
+    Assert.assertEquals(20, t3.throttleTimeMs)
 
     for(itr <- 0 to 2) {
       Assert.assertEquals(10 - 10*itr, t1.getDelay(TimeUnit.MILLISECONDS))

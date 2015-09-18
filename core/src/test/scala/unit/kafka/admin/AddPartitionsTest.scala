@@ -46,7 +46,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     configs = (0 until 4).map(i => KafkaConfig.fromProps(TestUtils.createBrokerConfig(i, zkConnect, enableControlledShutdown = false)))
     // start all the servers
     servers = configs.map(c => TestUtils.createServer(c))
-    brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.boundPort))
+    brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.boundPort()))
 
     // create topics first
     createTopic(zkClient, topic1, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)

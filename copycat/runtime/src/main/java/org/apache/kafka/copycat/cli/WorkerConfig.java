@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
 import java.util.Properties;
-import java.util.Set;
 
 /**
  * Configuration for standalone workers.
@@ -33,8 +32,7 @@ import java.util.Set;
 public class WorkerConfig extends AbstractConfig {
 
     public static final String CLUSTER_CONFIG = "cluster";
-    private static final String
-            CLUSTER_CONFIG_DOC =
+    private static final String CLUSTER_CONFIG_DOC =
             "ID for this cluster, which is used to provide a namespace so multiple Copycat clusters "
                     + "or instances may co-exist while sharing a single Kafka cluster.";
     public static final String CLUSTER_DEFAULT = "copycat";
@@ -59,21 +57,13 @@ public class WorkerConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_DOC =
             "Converter class for value Copycat data that implements the <code>Converter</code> interface.";
 
-    public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
-    public static final String KEY_SERIALIZER_CLASS_DOC =
-            "Serializer class for key that implements the <code>Serializer</code> interface.";
+    public static final String OFFSET_KEY_CONVERTER_CLASS_CONFIG = "offset.key.converter";
+    public static final String OFFSET_KEY_CONVERTER_CLASS_DOC =
+            "Converter class for offset key Copycat data that implements the <code>Converter</code> interface.";
 
-    public static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
-    public static final String VALUE_SERIALIZER_CLASS_DOC =
-            "Serializer class for value that implements the <code>Serializer</code> interface.";
-
-    public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
-    public static final String KEY_DESERIALIZER_CLASS_DOC =
-            "Serializer class for key that implements the <code>Deserializer</code> interface.";
-
-    public static final String VALUE_DESERIALIZER_CLASS_CONFIG = "value.deserializer";
-    public static final String VALUE_DESERIALIZER_CLASS_DOC =
-            "Deserializer class for value that implements the <code>Deserializer</code> interface.";
+    public static final String OFFSET_VALUE_CONVERTER_CLASS_CONFIG = "offset.value.converter";
+    public static final String OFFSET_VALUE_CONVERTER_CLASS_DOC =
+            "Converter class for offset value Copycat data that implements the <code>Converter</code> interface.";
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -105,14 +95,10 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
-                .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, KEY_SERIALIZER_CLASS_DOC)
-                .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, VALUE_SERIALIZER_CLASS_DOC)
-                .define(KEY_DESERIALIZER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, KEY_DESERIALIZER_CLASS_DOC)
-                .define(VALUE_DESERIALIZER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, VALUE_DESERIALIZER_CLASS_DOC)
+                .define(OFFSET_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        Importance.HIGH, OFFSET_KEY_CONVERTER_CLASS_DOC)
+                .define(OFFSET_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        Importance.HIGH, OFFSET_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)
@@ -128,14 +114,5 @@ public class WorkerConfig extends AbstractConfig {
 
     public WorkerConfig(Properties props) {
         super(config, props);
-    }
-
-    public Properties getUnusedProperties() {
-        Set<String> unusedKeys = this.unused();
-        Properties unusedProps = new Properties();
-        for (String key : unusedKeys) {
-            unusedProps.put(key, this.originals().get(key));
-        }
-        return unusedProps;
     }
 }

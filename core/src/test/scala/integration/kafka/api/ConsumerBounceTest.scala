@@ -75,7 +75,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
     var consumed = 0
     val consumer = this.consumers(0)
-    consumer.subscribe(topic)
+    consumer.subscribe(List(topic))
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
@@ -86,7 +86,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         consumed += 1
       }
 
-      consumer.commit(CommitType.SYNC)
+      consumer.commitSync()
       assertEquals(consumer.position(tp), consumer.committed(tp))
 
       if (consumer.position(tp) == numRecords) {
@@ -106,7 +106,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     this.producers.foreach(_.close)
 
     val consumer = this.consumers(0)
-    consumer.subscribe(tp)
+    consumer.assign(List(tp))
     consumer.seek(tp, 0)
 
     // wait until all the followers have synced the last HW with leader
@@ -130,7 +130,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         assertEquals(pos, consumer.position(tp))
       } else if (coin == 2) {
         info("Committing offset.")
-        consumer.commit(CommitType.SYNC)
+        consumer.commitSync()
         assertEquals(consumer.position(tp), consumer.committed(tp))
       }
     }

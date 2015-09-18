@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.file;
 
+import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
@@ -24,16 +25,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * FileStreamSourceTask reads from stdin or a file.
  */
 public class FileStreamSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(FileStreamSourceTask.class);
+    public static final String FILENAME_FIELD = "filename";
+    public  static final String POSITION_FIELD = "position";
+    private static final Schema VALUE_SCHEMA = Schema.STRING_SCHEMA;
 
+    private String filename;
     private InputStream stream;
     private BufferedReader reader = null;
     private char[] buffer = new char[1024];
@@ -44,42 +47,55 @@ public class FileStreamSourceTask extends SourceTask {
 
     @Override
     public void start(Properties props) {
-        String filename = props.getProperty(FileStreamSourceConnector.FILE_CONFIG);
-        if (filename == null) {
+        filename = props.getProperty(FileStreamSourceConnector.FILE_CONFIG);
+        if (filename == null || filename.isEmpty()) {
             stream = System.in;
             // Tracking offset for stdin doesn't make sense
             streamOffset = null;
-        } else {
-            try {
-                stream = new FileInputStream(filename);
-                Long lastRecordedOffset = (Long) context.getOffsetStorageReader().getOffset(null);
-                if (lastRecordedOffset != null) {
-                    log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
-                    long skipLeft = lastRecordedOffset;
-                    while (skipLeft > 0) {
-                        try {
-                            long skipped = stream.skip(skipLeft);
-                            skipLeft -= skipped;
-                        } catch (IOException e) {
-                            log.error("Error while trying to seek to previous offset in file: ", e);
-                            throw new CopycatException(e);
-                        }
-                    }
-                    log.debug("Skipped to offset {}", lastRecordedOffset);
-                }
-                streamOffset = (lastRecordedOffset != null) ? lastRecordedOffset : 0L;
-            } catch (FileNotFoundException e) {
-                throw new CopycatException("Couldn't find file for FileStreamSourceTask: {}", e);
-            }
         }
         topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
         if (topic == null)
             throw new CopycatException("ConsoleSourceTask config missing topic setting");
-        reader = new BufferedReader(new InputStreamReader(stream));
     }
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
+        if (stream == null) {
+            try {
+                stream = new FileInputStream(filename);
+                Map<String, Object> offset = context.offsetStorageReader().offset(Collections.singletonMap(FILENAME_FIELD, filename));
+                if (offset != null) {
+                    Object lastRecordedOffset = offset.get(POSITION_FIELD);
+                    if (lastRecordedOffset != null && !(lastRecordedOffset instanceof Long))
+                        throw new CopycatException("Offset position is the incorrect type");
+                    if (lastRecordedOffset != null) {
+                        log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
+                        long skipLeft = (Long) lastRecordedOffset;
+                        while (skipLeft > 0) {
+                            try {
+                                long skipped = stream.skip(skipLeft);
+                                skipLeft -= skipped;
+                            } catch (IOException e) {
+                                log.error("Error while trying to seek to previous offset in file: ", e);
+                                throw new CopycatException(e);
+                            }
+                        }
+                        log.debug("Skipped to offset {}", lastRecordedOffset);
+                    }
+                    streamOffset = (lastRecordedOffset != null) ? (Long) lastRecordedOffset : 0L;
+                } else {
+                    streamOffset = 0L;
+                }
+                reader = new BufferedReader(new InputStreamReader(stream));
+            } catch (FileNotFoundException e) {
+                log.warn("Couldn't find file for FileStreamSourceTask, sleeping to wait for it to be created");
+                synchronized (this) {
+                    this.wait(1000);
+                }
+                return null;
+            }
+        }
+
         // Unfortunately we can't just use readLine() because it blocks in an uninterruptible way.
         // Instead we have to manage splitting lines ourselves, using simple backoff when no new data
         // is available.
@@ -111,7 +127,7 @@ public class FileStreamSourceTask extends SourceTask {
                         if (line != null) {
                             if (records == null)
                                 records = new ArrayList<>();
-                            records.add(new SourceRecord(null, streamOffset, topic, line));
+                            records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, VALUE_SCHEMA, line));
                         }
                         new ArrayList<SourceRecord>();
                     } while (line != null);
@@ -119,7 +135,9 @@ public class FileStreamSourceTask extends SourceTask {
             }
 
             if (nread <= 0)
-                Thread.sleep(1);
+                synchronized (this) {
+                    this.wait(1000);
+                }
 
             return records;
         } catch (IOException e) {
@@ -169,8 +187,15 @@ public class FileStreamSourceTask extends SourceTask {
             } catch (IOException e) {
                 log.error("Failed to close ConsoleSourceTask stream: ", e);
             }
-            reader = null;
-            stream = null;
+            this.notify();
         }
+    }
+
+    private Map<String, String> offsetKey(String filename) {
+        return Collections.singletonMap(FILENAME_FIELD, filename);
+    }
+
+    private Map<String, Long> offsetValue(Long pos) {
+        return Collections.singletonMap(POSITION_FIELD, pos);
     }
 }

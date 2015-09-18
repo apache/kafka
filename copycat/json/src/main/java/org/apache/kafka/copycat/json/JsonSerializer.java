@@ -28,12 +28,7 @@ import java.util.Map;
  * structured data without corresponding Java classes. This serializer also supports Copycat schemas.
  */
 public class JsonSerializer implements Serializer<JsonNode> {
-
-    private static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
-    private static final boolean SCHEMAS_ENABLE_DEFAULT = true;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private boolean enableSchemas = SCHEMAS_ENABLE_DEFAULT;
 
     /**
      * Default constructor needed by Kafka
@@ -44,21 +39,14 @@ public class JsonSerializer implements Serializer<JsonNode> {
 
     @Override
     public void configure(Map<String, ?> config, boolean isKey) {
-        Object enableConfigsVal = config.get(SCHEMAS_ENABLE_CONFIG);
-        if (enableConfigsVal != null)
-            enableSchemas = enableConfigsVal.toString().equals("true");
     }
 
     @Override
     public byte[] serialize(String topic, JsonNode data) {
-        // This serializer works for Copycat data that requires a schema to be included, so we expect it to have a
-        // specific format: { "schema": {...}, "payload": ... }.
-        if (!data.isObject() || data.size() != 2 || !data.has("schema") || !data.has("payload"))
-            throw new SerializationException("JsonSerializer requires \"schema\" and \"payload\" fields and may not contain additional fields");
+        if (data == null)
+            return null;
 
         try {
-            if (!enableSchemas)
-                data = data.get("payload");
             return objectMapper.writeValueAsBytes(data);
         } catch (Exception e) {
             throw new SerializationException("Error serializing JSON message", e);

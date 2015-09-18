@@ -19,13 +19,19 @@ package org.apache.kafka.copycat.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.apache.kafka.copycat.data.Schema;
+import org.apache.kafka.copycat.data.SchemaAndValue;
+import org.apache.kafka.copycat.data.SchemaBuilder;
+import org.apache.kafka.copycat.data.Struct;
+import org.apache.kafka.copycat.errors.DataException;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -33,35 +39,61 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class JsonConverterTest {
+    private static final String TOPIC = "topic";
 
     ObjectMapper objectMapper = new ObjectMapper();
     JsonConverter converter = new JsonConverter();
 
+    // Schema metadata
+
+    @Test
+    public void testCopycatSchemaMetadataTranslation() {
+        // this validates the non-type fields are translated and handled properly
+        assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA, null), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": true }, \"payload\": null }".getBytes()));
+        assertEquals(new SchemaAndValue(SchemaBuilder.bool().defaultValue(true).build(), true),
+                converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"default\": true }, \"payload\": null }".getBytes()));
+        assertEquals(new SchemaAndValue(SchemaBuilder.bool().required().name("bool").version(2).doc("the documentation").build(), true),
+                converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 2, \"doc\": \"the documentation\"}, \"payload\": true }".getBytes()));
+    }
+
+    // Schema types
+
     @Test
     public void booleanToCopycat() {
-        assertEquals(true, converter.toCopycatData(parse("{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }")));
-        assertEquals(false, converter.toCopycatData(parse("{ \"schema\": { \"type\": \"boolean\" }, \"payload\": false }")));
+        assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, false), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": false }".getBytes()));
+    }
+
+    @Test
+    public void byteToCopycat() {
+        assertEquals(new SchemaAndValue(Schema.INT8_SCHEMA, (byte) 12), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"int8\" }, \"payload\": 12 }".getBytes()));
+    }
+
+    @Test
+    public void shortToCopycat() {
+        assertEquals(new SchemaAndValue(Schema.INT16_SCHEMA, (short) 12), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"int16\" }, \"payload\": 12 }".getBytes()));
     }
 
     @Test
     public void intToCopycat() {
-        assertEquals(12, converter.toCopycatData(parse("{ \"schema\": { \"type\": \"int\" }, \"payload\": 12 }")));
+        assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 12), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"int32\" }, \"payload\": 12 }".getBytes()));
     }
 
     @Test
     public void longToCopycat() {
-        assertEquals(12L, converter.toCopycatData(parse("{ \"schema\": { \"type\": \"long\" }, \"payload\": 12 }")));
-        assertEquals(4398046511104L, converter.toCopycatData(parse("{ \"schema\": { \"type\": \"long\" }, \"payload\": 4398046511104 }")));
+        assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 12L), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"int64\" }, \"payload\": 12 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 4398046511104L), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"int64\" }, \"payload\": 4398046511104 }".getBytes()));
     }
 
     @Test
     public void floatToCopycat() {
-        assertEquals(12.34f, converter.toCopycatData(parse("{ \"schema\": { \"type\": \"float\" }, \"payload\": 12.34 }")));
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 12.34f), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"float\" }, \"payload\": 12.34 }".getBytes()));
     }
 
     @Test
     public void doubleToCopycat() {
-        assertEquals(12.34, converter.toCopycatData(parse("{ \"schema\": { \"type\": \"double\" }, \"payload\": 12.34 }")));
+        assertEquals(new SchemaAndValue(Schema.FLOAT64_SCHEMA, 12.34), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"double\" }, \"payload\": 12.34 }".getBytes()));
     }
 
 
@@ -69,89 +101,343 @@ public class JsonConverterTest {
     public void bytesToCopycat() throws UnsupportedEncodingException {
         ByteBuffer reference = ByteBuffer.wrap("test-string".getBytes("UTF-8"));
         String msg = "{ \"schema\": { \"type\": \"bytes\" }, \"payload\": \"dGVzdC1zdHJpbmc=\" }";
-        ByteBuffer converted = ByteBuffer.wrap((byte[]) converter.toCopycatData(parse(msg)));
+        SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, msg.getBytes());
+        ByteBuffer converted = ByteBuffer.wrap((byte[]) schemaAndValue.value());
         assertEquals(reference, converted);
     }
 
     @Test
     public void stringToCopycat() {
-        assertEquals("foo-bar-baz", converter.toCopycatData(parse("{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }")));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
     @Test
     public void arrayToCopycat() {
-        JsonNode arrayJson = parse("{ \"schema\": { \"type\": \"array\", \"items\": { \"type\" : \"int\" } }, \"payload\": [1, 2, 3] }");
-        assertEquals(Arrays.asList(1, 2, 3), converter.toCopycatData(arrayJson));
+        byte[] arrayJson = "{ \"schema\": { \"type\": \"array\", \"items\": { \"type\" : \"int32\" } }, \"payload\": [1, 2, 3] }".getBytes();
+        assertEquals(new SchemaAndValue(SchemaBuilder.array(Schema.INT32_SCHEMA).build(), Arrays.asList(1, 2, 3)), converter.toCopycatData(TOPIC, arrayJson));
     }
 
+    @Test
+    public void mapToCopycatStringKeys() {
+        byte[] mapJson = "{ \"schema\": { \"type\": \"map\", \"keys\": { \"type\" : \"string\" }, \"values\": { \"type\" : \"int32\" } }, \"payload\": { \"key1\": 12, \"key2\": 15} }".getBytes();
+        Map<String, Integer> expected = new HashMap<>();
+        expected.put("key1", 12);
+        expected.put("key2", 15);
+        assertEquals(new SchemaAndValue(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build(), expected), converter.toCopycatData(TOPIC, mapJson));
+    }
+
+    @Test
+    public void mapToCopycatNonStringKeys() {
+        byte[] mapJson = "{ \"schema\": { \"type\": \"map\", \"keys\": { \"type\" : \"int32\" }, \"values\": { \"type\" : \"int32\" } }, \"payload\": [ [1, 12], [2, 15] ] }".getBytes();
+        Map<Integer, Integer> expected = new HashMap<>();
+        expected.put(1, 12);
+        expected.put(2, 15);
+        assertEquals(new SchemaAndValue(SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build(), expected), converter.toCopycatData(TOPIC, mapJson));
+    }
+
+    @Test
+    public void structToCopycat() {
+        byte[] structJson = "{ \"schema\": { \"type\": \"struct\", \"fields\": [{ \"field\": \"field1\", \"type\": \"boolean\" }, { \"field\": \"field2\", \"type\": \"string\" }] }, \"payload\": { \"field1\": true, \"field2\": \"string\" } }".getBytes();
+        Schema expectedSchema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA).field("field2", Schema.STRING_SCHEMA).build();
+        Struct expected = new Struct(expectedSchema).put("field1", true).put("field2", "string");
+        SchemaAndValue converted = converter.toCopycatData(TOPIC, structJson);
+        assertEquals(new SchemaAndValue(expectedSchema, expected), converted);
+    }
+
+    @Test(expected = DataException.class)
+    public void nullToCopycat() {
+        // When schemas are enabled, trying to decode a null should be an error -- we should *always* have the envelope
+        assertEquals(SchemaAndValue.NULL, converter.toCopycatData(TOPIC, null));
+    }
+
+    @Test
+    public void nullSchemaPrimitiveToCopycat() {
+        SchemaAndValue converted = converter.toCopycatData(TOPIC, "{ \"schema\": null, \"payload\": null }".getBytes());
+        assertEquals(SchemaAndValue.NULL, converted);
+
+        converted = converter.toCopycatData(TOPIC, "{ \"schema\": null, \"payload\": true }".getBytes());
+        assertEquals(new SchemaAndValue(null, true), converted);
+
+        // Integers: Copycat has more data types, and JSON unfortunately mixes all number types. We try to preserve
+        // info as best we can, so we always use the largest integer and floating point numbers we can and have Jackson
+        // determine if it's an integer or not
+        converted = converter.toCopycatData(TOPIC, "{ \"schema\": null, \"payload\": 12 }".getBytes());
+        assertEquals(new SchemaAndValue(null, 12L), converted);
+
+        converted = converter.toCopycatData(TOPIC, "{ \"schema\": null, \"payload\": 12.24 }".getBytes());
+        assertEquals(new SchemaAndValue(null, 12.24), converted);
+
+        converted = converter.toCopycatData(TOPIC, "{ \"schema\": null, \"payload\": \"a string\" }".getBytes());
+        assertEquals(new SchemaAndValue(null, "a string"), converted);
+
+        converted = converter.toCopycatData(TOPIC, "{ \"schema\": null, \"payload\": [1, \"2\", 3] }".getBytes());
+        assertEquals(new SchemaAndValue(null, Arrays.asList(1L, "2", 3L)), converted);
+
+        converted = converter.toCopycatData(TOPIC, "{ \"schema\": null, \"payload\": { \"field1\": 1, \"field2\": 2} }".getBytes());
+        Map<String, Long> obj = new HashMap<>();
+        obj.put("field1", 1L);
+        obj.put("field2", 2L);
+        assertEquals(new SchemaAndValue(null, obj), converted);
+    }
+
+    // Schema metadata
+
+    @Test
+    public void testJsonSchemaMetadataTranslation() {
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.BOOLEAN_SCHEMA, true));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+
+        converted = parse(converter.fromCopycatData(TOPIC, Schema.OPTIONAL_BOOLEAN_SCHEMA, null));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": true }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isNull());
+
+        converted = parse(converter.fromCopycatData(TOPIC, SchemaBuilder.bool().defaultValue(true).build(), true));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"default\": true }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+
+        converted = parse(converter.fromCopycatData(TOPIC, SchemaBuilder.bool().required().name("bool").version(3).doc("the documentation").build(), true));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 3, \"doc\": \"the documentation\"}"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+    }
+
+    // Schema types
 
     @Test
     public void booleanToJson() {
-        JsonNode converted = converter.fromCopycatData(true);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.BOOLEAN_SCHEMA, true));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"boolean\" }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
     }
 
     @Test
-    public void intToJson() {
-        JsonNode converted = converter.fromCopycatData(12);
+    public void byteToJson() {
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.INT8_SCHEMA, (byte) 12));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"int\" }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(parse("{ \"type\": \"int8\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(12, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).intValue());
+    }
+
+    @Test
+    public void shortToJson() {
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.INT16_SCHEMA, (short) 12));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"int16\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(12, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).intValue());
+    }
+
+    @Test
+    public void intToJson() {
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.INT32_SCHEMA, 12));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"int32\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(12, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).intValue());
     }
 
     @Test
     public void longToJson() {
-        JsonNode converted = converter.fromCopycatData(4398046511104L);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.INT64_SCHEMA, 4398046511104L));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"long\" }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(parse("{ \"type\": \"int64\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(4398046511104L, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).longValue());
     }
 
     @Test
     public void floatToJson() {
-        JsonNode converted = converter.fromCopycatData(12.34f);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.FLOAT32_SCHEMA, 12.34f));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"float\" }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(parse("{ \"type\": \"float\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(12.34f, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).floatValue(), 0.001);
     }
 
     @Test
     public void doubleToJson() {
-        JsonNode converted = converter.fromCopycatData(12.34);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.FLOAT64_SCHEMA, 12.34));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"double\" }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(parse("{ \"type\": \"double\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(12.34, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).doubleValue(), 0.001);
     }
 
     @Test
     public void bytesToJson() throws IOException {
-        JsonNode converted = converter.fromCopycatData("test-string".getBytes());
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.BYTES_SCHEMA, "test-string".getBytes()));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"bytes\" }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(ByteBuffer.wrap("test-string".getBytes()),
                 ByteBuffer.wrap(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue()));
     }
 
     @Test
     public void stringToJson() {
-        JsonNode converted = converter.fromCopycatData("test-string");
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Schema.STRING_SCHEMA, "test-string"));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"string\" }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(parse("{ \"type\": \"string\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals("test-string", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).textValue());
     }
 
     @Test
     public void arrayToJson() {
-        JsonNode converted = converter.fromCopycatData(Arrays.asList(1, 2, 3));
+        Schema int32Array = SchemaBuilder.array(Schema.INT32_SCHEMA).build();
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, int32Array, Arrays.asList(1, 2, 3)));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"array\", \"items\": { \"type\": \"int\" } }"),
+        assertEquals(parse("{ \"type\": \"array\", \"items\": { \"type\": \"int32\", \"optional\": false }, \"optional\": false }"),
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(JsonNodeFactory.instance.arrayNode().add(1).add(2).add(3),
                 converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
+    @Test
+    public void mapToJsonStringKeys() {
+        Schema stringIntMap = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build();
+        Map<String, Integer> input = new HashMap<>();
+        input.put("key1", 12);
+        input.put("key2", 15);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, stringIntMap, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"map\", \"keys\": { \"type\" : \"string\", \"optional\": false }, \"values\": { \"type\" : \"int32\", \"optional\": false }, \"optional\": false }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode().put("key1", 12).put("key2", 15),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    @Test
+    public void mapToJsonNonStringKeys() {
+        Schema intIntMap = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build();
+        Map<Integer, Integer> input = new HashMap<>();
+        input.put(1, 12);
+        input.put(2, 15);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, intIntMap, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"map\", \"keys\": { \"type\" : \"int32\", \"optional\": false }, \"values\": { \"type\" : \"int32\", \"optional\": false }, \"optional\": false }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isArray());
+        ArrayNode payload = (ArrayNode) converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
+        assertEquals(2, payload.size());
+        Set<JsonNode> payloadEntries = new HashSet<>();
+        for (JsonNode elem : payload)
+            payloadEntries.add(elem);
+        assertEquals(new HashSet<>(Arrays.asList(JsonNodeFactory.instance.arrayNode().add(1).add(12),
+                        JsonNodeFactory.instance.arrayNode().add(2).add(15))),
+                payloadEntries
+        );
+    }
+
+    @Test
+    public void structToJson() {
+        Schema schema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA).field("field2", Schema.STRING_SCHEMA).build();
+        Struct input = new Struct(schema).put("field1", true).put("field2", "string");
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, schema, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"struct\", \"optional\": false, \"fields\": [{ \"field\": \"field1\", \"type\": \"boolean\", \"optional\": false }, { \"field\": \"field2\", \"type\": \"string\", \"optional\": false }] }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode()
+                        .put("field1", true)
+                        .put("field2", "string"),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+
+    @Test
+    public void nullSchemaAndPrimitiveToJson() {
+        // This still needs to do conversion of data, null schema means "anything goes"
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, null, true));
+        validateEnvelopeNullSchema(converted);
+        assertTrue(converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
+        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+    }
+
+    @Test
+    public void nullSchemaAndArrayToJson() {
+        // This still needs to do conversion of data, null schema means "anything goes". Make sure we mix and match
+        // types to verify conversion still works.
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, null, Arrays.asList(1, "string", true)));
+        validateEnvelopeNullSchema(converted);
+        assertTrue(converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
+        assertEquals(JsonNodeFactory.instance.arrayNode().add(1).add("string").add(true),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    @Test
+    public void nullSchemaAndMapToJson() {
+        // This still needs to do conversion of data, null schema means "anything goes". Make sure we mix and match
+        // types to verify conversion still works.
+        Map<String, Object> input = new HashMap<>();
+        input.put("key1", 12);
+        input.put("key2", "string");
+        input.put("key3", true);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, null, input));
+        validateEnvelopeNullSchema(converted);
+        assertTrue(converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
+        assertEquals(JsonNodeFactory.instance.objectNode().put("key1", 12).put("key2", "string").put("key3", true),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    @Test
+    public void nullSchemaAndMapNonStringKeysToJson() {
+        // This still needs to do conversion of data, null schema means "anything goes". Make sure we mix and match
+        // types to verify conversion still works.
+        Map<Object, Object> input = new HashMap<>();
+        input.put("string", 12);
+        input.put(52, "string");
+        input.put(false, true);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, null, input));
+        validateEnvelopeNullSchema(converted);
+        assertTrue(converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isArray());
+        ArrayNode payload = (ArrayNode) converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
+        assertEquals(3, payload.size());
+        Set<JsonNode> payloadEntries = new HashSet<>();
+        for (JsonNode elem : payload)
+            payloadEntries.add(elem);
+        assertEquals(new HashSet<>(Arrays.asList(JsonNodeFactory.instance.arrayNode().add("string").add(12),
+                        JsonNodeFactory.instance.arrayNode().add(52).add("string"),
+                        JsonNodeFactory.instance.arrayNode().add(false).add(true))),
+                payloadEntries
+        );
+    }
+
+
+    @Test(expected = DataException.class)
+    public void mismatchSchemaJson() {
+        // If we have mismatching schema info, we should properly convert to a DataException
+        converter.fromCopycatData(TOPIC, Schema.FLOAT64_SCHEMA, true);
+    }
+
+
+
+    @Test
+    public void noSchemaToCopycat() {
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
+        converter.configure(props, true);
+        assertEquals(new SchemaAndValue(null, true), converter.toCopycatData(TOPIC, "true".getBytes()));
+    }
+
+    @Test
+    public void noSchemaToJson() {
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
+        converter.configure(props, true);
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, null, true));
+        assertTrue(converted.isBoolean());
+        assertEquals(true, converted.booleanValue());
+    }
+
+
+
+    private JsonNode parse(byte[] json) {
+        try {
+            return objectMapper.readTree(json);
+        } catch (IOException e) {
+            fail("IOException during JSON parse: " + e.getMessage());
+            throw new RuntimeException("failed");
+        }
+    }
 
     private JsonNode parse(String json) {
         try {
@@ -168,6 +454,15 @@ public class JsonConverterTest {
         assertEquals(2, env.size());
         assertTrue(env.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertTrue(env.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isObject());
+        assertTrue(env.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    private void validateEnvelopeNullSchema(JsonNode env) {
+        assertNotNull(env);
+        assertTrue(env.isObject());
+        assertEquals(2, env.size());
+        assertTrue(env.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertTrue(env.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
         assertTrue(env.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 }

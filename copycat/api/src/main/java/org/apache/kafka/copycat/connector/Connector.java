@@ -99,7 +99,7 @@ public abstract class Connector {
     /**
      * Returns the Task implementation for this Connector.
      */
-    public abstract Class<? extends Task> getTaskClass();
+    public abstract Class<? extends Task> taskClass();
 
     /**
      * Returns a set of configurations for Tasks based on the current configuration,
@@ -108,7 +108,7 @@ public abstract class Connector {
      * @param maxTasks maximum number of configurations to generate
      * @return configurations for Tasks
      */
-    public abstract List<Properties> getTaskConfigs(int maxTasks);
+    public abstract List<Properties> taskConfigs(int maxTasks);
 
     /**
      * Stop this connector.

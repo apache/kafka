@@ -55,7 +55,7 @@ public class FileStreamSourceConnectorTest {
         PowerMock.replayAll();
 
         connector.start(sourceProperties);
-        List<Properties> taskConfigs = connector.getTaskConfigs(1);
+        List<Properties> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertEquals(FILENAME,
                 taskConfigs.get(0).getProperty(FileStreamSourceConnector.FILE_CONFIG));
@@ -63,7 +63,7 @@ public class FileStreamSourceConnectorTest {
                 taskConfigs.get(0).getProperty(FileStreamSourceConnector.TOPIC_CONFIG));
 
         // Should be able to return fewer than requested #
-        taskConfigs = connector.getTaskConfigs(2);
+        taskConfigs = connector.taskConfigs(2);
         assertEquals(1, taskConfigs.size());
         assertEquals(FILENAME,
                 taskConfigs.get(0).getProperty(FileStreamSourceConnector.FILE_CONFIG));
@@ -79,7 +79,7 @@ public class FileStreamSourceConnectorTest {
 
         sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
         connector.start(sourceProperties);
-        List<Properties> taskConfigs = connector.getTaskConfigs(1);
+        List<Properties> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertNull(taskConfigs.get(0).getProperty(FileStreamSourceConnector.FILE_CONFIG));
 
@@ -97,7 +97,7 @@ public class FileStreamSourceConnectorTest {
         PowerMock.replayAll();
 
         connector.start(sourceProperties);
-        assertEquals(FileStreamSourceTask.class, connector.getTaskClass());
+        assertEquals(FileStreamSourceTask.class, connector.taskClass());
 
         PowerMock.verifyAll();
     }

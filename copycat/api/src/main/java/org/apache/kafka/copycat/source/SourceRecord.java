@@ -19,6 +19,9 @@ package org.apache.kafka.copycat.source;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.CopycatRecord;
+import org.apache.kafka.copycat.data.Schema;
+
+import java.util.Map;
 
 /**
  * <p>
@@ -40,29 +43,32 @@ import org.apache.kafka.copycat.connector.CopycatRecord;
  */
 @InterfaceStability.Unstable
 public class SourceRecord extends CopycatRecord {
-    private final Object sourcePartition;
-    private final Object sourceOffset;
+    private final Map<String, ?> sourcePartition;
+    private final Map<String, ?> sourceOffset;
 
-    public SourceRecord(Object sourcePartition, Object sourceOffset, String topic, Integer partition, Object value) {
-        this(sourcePartition, sourceOffset, topic, partition, null, value);
+    public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
+                        String topic, Integer partition, Schema valueSchema, Object value) {
+        this(sourcePartition, sourceOffset, topic, partition, null, null, valueSchema, value);
     }
 
-    public SourceRecord(Object sourcePartition, Object sourceOffset, String topic, Object value) {
-        this(sourcePartition, sourceOffset, topic, null, null, value);
+    public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
+                        String topic, Schema valueSchema, Object value) {
+        this(sourcePartition, sourceOffset, topic, null, null, null, valueSchema, value);
     }
 
-    public SourceRecord(Object sourcePartition, Object sourceOffset, String topic, Integer partition,
-                        Object key, Object value) {
-        super(topic, partition, key, value);
+    public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
+                        String topic, Integer partition,
+                        Schema keySchema, Object key, Schema valueSchema, Object value) {
+        super(topic, partition, keySchema, key, valueSchema, value);
         this.sourcePartition = sourcePartition;
         this.sourceOffset = sourceOffset;
     }
 
-    public Object getSourcePartition() {
+    public Map<String, ?> sourcePartition() {
         return sourcePartition;
     }
 
-    public Object getSourceOffset() {
+    public Map<String, ?> sourceOffset() {
         return sourceOffset;
     }
 
@@ -77,9 +83,9 @@ public class SourceRecord extends CopycatRecord {
 
         SourceRecord that = (SourceRecord) o;
 
-        if (sourceOffset != null ? !sourceOffset.equals(that.sourceOffset) : that.sourceOffset != null)
-            return false;
         if (sourcePartition != null ? !sourcePartition.equals(that.sourcePartition) : that.sourcePartition != null)
+            return false;
+        if (sourceOffset != null ? !sourceOffset.equals(that.sourceOffset) : that.sourceOffset != null)
             return false;
 
         return true;

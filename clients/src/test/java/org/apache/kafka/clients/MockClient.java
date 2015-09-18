@@ -201,11 +201,21 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
+    public RequestHeader nextRequestHeader(ApiKeys key, short version) {
+        return new RequestHeader(key.id, version, "mock", correlation++);
+    }
+
+    @Override
     public void wakeup() {
     }
 
     @Override
     public void close() {
+    }
+
+    @Override
+    public void close(String nodeId) {
+        ready.remove(Integer.valueOf(nodeId));
     }
 
     @Override

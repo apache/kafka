@@ -23,7 +23,6 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
 import java.util.Properties;
-import java.util.Set;
 
 /**
  * <p>
@@ -64,24 +63,11 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(TOPICS_CONFIG, Type.LIST, TOPICS_DEFAULT, Importance.HIGH, TOPICS_DOC);
     }
 
-    private Properties originalProperties;
-
     public ConnectorConfig() {
         this(new Properties());
     }
 
     public ConnectorConfig(Properties props) {
         super(config, props);
-        this.originalProperties = props;
     }
-
-    public Properties getUnusedProperties() {
-        Set<String> unusedKeys = this.unused();
-        Properties unusedProps = new Properties();
-        for (String key : unusedKeys) {
-            unusedProps.setProperty(key, originalProperties.getProperty(key));
-        }
-        return unusedProps;
-    }
-
 }

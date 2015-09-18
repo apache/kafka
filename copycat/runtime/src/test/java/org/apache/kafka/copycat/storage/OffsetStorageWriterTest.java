@@ -17,7 +17,6 @@
 
 package org.apache.kafka.copycat.storage;
 
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
 import org.easymock.Capture;
@@ -32,9 +31,7 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -45,11 +42,9 @@ import static org.junit.Assert.assertTrue;
 public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
     // Copycat format - any types should be accepted here
-    private static final List<String> OFFSET_KEY = Arrays.asList("key", "key");
-    private static final String OFFSET_VALUE = "value";
-    // Native objects - must match serializer types
-    private static final int OFFSET_KEY_CONVERTED = 12;
-    private static final String OFFSET_VALUE_CONVERTED = "value-converted";
+    private static final Map<String, String> OFFSET_KEY = Collections.singletonMap("key", "key");
+    private static final Map<String, Integer> OFFSET_VALUE = Collections.singletonMap("key", 12);
+
     // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
@@ -58,11 +53,9 @@ public class OffsetStorageWriterTest {
             ByteBuffer.wrap(OFFSET_VALUE_SERIALIZED));
 
     @Mock private OffsetBackingStore store;
-    @Mock private Converter<Integer> keyConverter;
-    @Mock private Converter<String> valueConverter;
-    @Mock private Serializer<Integer> keySerializer;
-    @Mock private Serializer<String> valueSerializer;
-    private OffsetStorageWriter<Integer, String> writer;
+    @Mock private Converter keyConverter;
+    @Mock private Converter valueConverter;
+    private OffsetStorageWriter writer;
 
     private static Exception exception = new RuntimeException("error");
 
@@ -70,7 +63,7 @@ public class OffsetStorageWriterTest {
 
     @Before
     public void setup() {
-        writer = new OffsetStorageWriter<>(store, NAMESPACE, keyConverter, valueConverter, keySerializer, valueSerializer);
+        writer = new OffsetStorageWriter(store, NAMESPACE, keyConverter, valueConverter);
         service = Executors.newFixedThreadPool(1);
     }
 
@@ -87,7 +80,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.offset(OFFSET_KEY, OFFSET_VALUE);
 
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
@@ -123,7 +116,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         assertTrue(writer.beginFlush());
@@ -143,7 +136,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush());
         writer.doFlush(callback);
         assertTrue(writer.beginFlush()); // should throw
@@ -155,7 +148,7 @@ public class OffsetStorageWriterTest {
     public void testCancelBeforeAwaitFlush() {
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush());
         writer.cancelFlush();
 
@@ -173,7 +166,7 @@ public class OffsetStorageWriterTest {
 
         PowerMock.replayAll();
 
-        writer.setOffset(OFFSET_KEY, OFFSET_VALUE);
+        writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush());
         // Start the flush, then immediately cancel before allowing the mocked store request to finish
         Future<Void> flushFuture = writer.doFlush(callback);
@@ -202,10 +195,8 @@ public class OffsetStorageWriterTest {
     private void expectStore(final Callback<Void> callback,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
-        EasyMock.expect(keyConverter.fromCopycatData(OFFSET_KEY)).andReturn(OFFSET_KEY_CONVERTED);
-        EasyMock.expect(keySerializer.serialize(NAMESPACE, OFFSET_KEY_CONVERTED)).andReturn(OFFSET_KEY_SERIALIZED);
-        EasyMock.expect(valueConverter.fromCopycatData(OFFSET_VALUE)).andReturn(OFFSET_VALUE_CONVERTED);
-        EasyMock.expect(valueSerializer.serialize(NAMESPACE, OFFSET_VALUE_CONVERTED)).andReturn(OFFSET_VALUE_SERIALIZED);
+        EasyMock.expect(keyConverter.fromCopycatData(NAMESPACE, null, OFFSET_KEY)).andReturn(OFFSET_KEY_SERIALIZED);
+        EasyMock.expect(valueConverter.fromCopycatData(NAMESPACE, null, OFFSET_VALUE)).andReturn(OFFSET_VALUE_SERIALIZED);
 
         final Capture<Callback<Void>> storeCallback = Capture.newInstance();
         EasyMock.expect(store.set(EasyMock.eq(NAMESPACE), EasyMock.eq(OFFSETS_SERIALIZED),

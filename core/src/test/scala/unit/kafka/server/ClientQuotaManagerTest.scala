@@ -18,21 +18,19 @@ package kafka.server
 
 import java.util.Collections
 
-import kafka.api.RequestKeys
 import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics.{Metrics, Quota, MetricConfig}
+import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
-import org.scalatest.junit.JUnit3Suite
-import org.junit.{Before, Test, Assert}
+import org.junit.{Assert, Before, Test}
 
-class ClientQuotaManagerTest extends JUnit3Suite {
+class ClientQuotaManagerTest {
   private val time = new MockTime
 
   private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
                                                 quotaBytesPerSecondOverrides = "p1=2000,p2=4000")
 
   var numCallbacks: Int = 0
-  def callback {
+  def callback(delayTimeMs: Int) {
     numCallbacks += 1
   }
 

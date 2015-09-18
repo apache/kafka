@@ -13,8 +13,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.CommitType;
-import org.apache.kafka.clients.consumer.ConsumerCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -46,7 +45,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -72,11 +70,10 @@ public final class Coordinator {
     private final CoordinatorMetrics sensors;
     private final long requestTimeoutMs;
     private final long retryBackoffMs;
-    private final RebalanceCallback rebalanceCallback;
+    private final OffsetCommitCallback defaultOffsetCommitCallback;
     private Node consumerCoordinator;
     private String consumerId;
     private int generation;
-
 
     /**
      * Initialize the coordination manager.
@@ -93,8 +90,7 @@ public final class Coordinator {
                        Time time,
                        long requestTimeoutMs,
                        long retryBackoffMs,
-                       RebalanceCallback rebalanceCallback) {
-
+                       OffsetCommitCallback defaultOffsetCommitCallback) {
         this.client = client;
         this.time = time;
         this.generation = -1;
@@ -109,7 +105,7 @@ public final class Coordinator {
         this.sensors = new CoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
-        this.rebalanceCallback = rebalanceCallback;
+        this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
     }
 
     /**
@@ -159,25 +155,27 @@ public final class Coordinator {
         if (!subscriptions.partitionAssignmentNeeded())
             return;
 
-        // execute the user's callback before rebalance
+        SubscriptionState.RebalanceListener listener = subscriptions.listener();
+
+        // execute the user's listener before rebalance
         log.debug("Revoking previously assigned partitions {}", this.subscriptions.assignedPartitions());
         try {
-            Set<TopicPartition> revoked = new HashSet<TopicPartition>(subscriptions.assignedPartitions());
-            rebalanceCallback.onPartitionsRevoked(revoked);
+            Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
+            listener.onPartitionsRevoked(revoked);
         } catch (Exception e) {
-            log.error("User provided callback " + this.rebalanceCallback.getClass().getName()
+            log.error("User provided listener " + listener.underlying().getClass().getName()
                     + " failed on partition revocation: ", e);
         }
 
         reassignPartitions();
 
-        // execute the user's callback after rebalance
+        // execute the user's listener after rebalance
         log.debug("Setting newly assigned partitions {}", this.subscriptions.assignedPartitions());
         try {
-            Set<TopicPartition> assigned = new HashSet<TopicPartition>(subscriptions.assignedPartitions());
-            rebalanceCallback.onPartitionsAssigned(assigned);
+            Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
+            listener.onPartitionsAssigned(assigned);
         } catch (Exception e) {
-            log.error("User provided callback " + this.rebalanceCallback.getClass().getName()
+            log.error("User provided listener " + listener.underlying().getClass().getName()
                     + " failed on partition assignment: ", e);
         }
     }
@@ -215,21 +213,6 @@ public final class Coordinator {
             if (future.failed())
                 client.awaitMetadataUpdate();
         }
-    }
-
-    /**
-     * Commit offsets. This call blocks (regardless of commitType) until the coordinator
-     * can receive the commit request. Once the request has been made, however, only the
-     * synchronous commits will wait for a successful response from the coordinator.
-     * @param offsets Offsets to commit.
-     * @param commitType Commit policy
-     * @param callback Callback to be executed when the commit request finishes
-     */
-    public void commitOffsets(Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback) {
-        if (commitType == CommitType.ASYNC)
-            commitOffsetsAsync(offsets, callback);
-        else
-            commitOffsetsSync(offsets, callback);
     }
 
     private class HeartbeatTask implements DelayedTask {
@@ -293,7 +276,7 @@ public final class Coordinator {
             return RequestFuture.coordinatorNotAvailable();
 
         // send a join group request to the coordinator
-        List<String> subscribedTopics = new ArrayList<String>(subscriptions.subscribedTopics());
+        List<String> subscribedTopics = new ArrayList<String>(subscriptions.subscription());
         log.debug("(Re-)joining group {} with subscribed topics {}", groupId, subscribedTopics);
 
         JoinGroupRequest request = new JoinGroupRequest(groupId,
@@ -365,25 +348,24 @@ public final class Coordinator {
         }
     }
 
-    private void commitOffsetsAsync(final Map<TopicPartition, Long> offsets, final ConsumerCommitCallback callback) {
+    public void commitOffsetsAsync(final Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
         this.subscriptions.needRefreshCommits();
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-        if (callback != null) {
-            future.addListener(new RequestFutureListener<Void>() {
-                @Override
-                public void onSuccess(Void value) {
-                    callback.onComplete(offsets, null);
-                }
+        final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
+        future.addListener(new RequestFutureListener<Void>() {
+            @Override
+            public void onSuccess(Void value) {
+                cb.onComplete(offsets, null);
+            }
 
-                @Override
-                public void onFailure(RuntimeException e) {
-                    callback.onComplete(offsets, e);
-                }
-            });
-        }
+            @Override
+            public void onFailure(RuntimeException e) {
+                cb.onComplete(offsets, e);
+            }
+        });
     }
 
-    private void commitOffsetsSync(Map<TopicPartition, Long> offsets, ConsumerCommitCallback callback) {
+    public void commitOffsetsSync(Map<TopicPartition, Long> offsets) {
         while (true) {
             ensureCoordinatorKnown();
             ensurePartitionAssignment();
@@ -392,17 +374,11 @@ public final class Coordinator {
             client.poll(future);
 
             if (future.succeeded()) {
-                if (callback != null)
-                    callback.onComplete(offsets, null);
                 return;
             }
 
             if (!future.isRetriable()) {
-                if (callback == null)
-                    throw future.exception();
-                else
-                    callback.onComplete(offsets, future.exception());
-                return;
+                throw future.exception();
             }
 
             Utils.sleep(retryBackoffMs);
@@ -439,6 +415,13 @@ public final class Coordinator {
                 .compose(new OffsetCommitResponseHandler(offsets));
     }
 
+    public static class DefaultOffsetCommitCallback implements OffsetCommitCallback {
+        @Override
+        public void onComplete(Map<TopicPartition, Long> offsets, Exception exception) {
+            if (exception != null)
+                log.error("Offset commit failed.", exception);
+        }
+    }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
 
@@ -713,10 +696,6 @@ public final class Coordinator {
         }
     }
 
-    public interface RebalanceCallback {
-        void onPartitionsAssigned(Collection<TopicPartition> partitions);
-        void onPartitionsRevoked(Collection<TopicPartition> partitions);
-    }
 
     private class CoordinatorMetrics {
         public final Metrics metrics;

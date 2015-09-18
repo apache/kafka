@@ -3,14 +3,15 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.network;
+
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -20,6 +21,11 @@ import java.util.List;
  * An interface for asynchronous, multi-channel network I/O
  */
 public interface Selectable {
+
+    /**
+     * See {@link #connect(String, InetSocketAddress, int, int) connect()}
+     */
+    public static final int USE_DEFAULT_BUFFER_SIZE = -1;
 
     /**
      * Begin establishing a socket connection to the given address identified by the given address
@@ -47,7 +53,12 @@ public interface Selectable {
     public void close();
 
     /**
-     * Queue the given request for sending in the subsequent {@poll(long)} calls
+     * Close the connection identified by the given id
+     */
+    public void close(String nodeId);
+
+    /**
+     * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
      * @param send The request to send
      */
     public void send(Send send);
@@ -60,23 +71,23 @@ public interface Selectable {
     public void poll(long timeout) throws IOException;
 
     /**
-     * The list of sends that completed on the last {@link #poll(long, List) poll()} call.
+     * The list of sends that completed on the last {@link #poll(long) poll()} call.
      */
     public List<Send> completedSends();
 
     /**
-     * The list of receives that completed on the last {@link #poll(long, List) poll()} call.
+     * The list of receives that completed on the last {@link #poll(long) poll()} call.
      */
     public List<NetworkReceive> completedReceives();
 
     /**
-     * The list of connections that finished disconnecting on the last {@link #poll(long, List) poll()}
+     * The list of connections that finished disconnecting on the last {@link #poll(long) poll()}
      * call.
      */
     public List<String> disconnected();
 
     /**
-     * The list of connections that completed their connection on the last {@link #poll(long, List) poll()}
+     * The list of connections that completed their connection on the last {@link #poll(long) poll()}
      * call.
      */
     public List<String> connected();
@@ -103,4 +114,9 @@ public interface Selectable {
      */
     public void unmuteAll();
 
+    /**
+     * returns true  if a channel is ready
+     * @param id The id for the connection
+     */
+    public boolean isChannelReady(String id);
 }

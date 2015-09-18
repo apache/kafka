@@ -18,15 +18,21 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
@@ -40,6 +46,9 @@ public class RequestResponseTest {
                 createConsumerMetadataRequest(),
                 createConsumerMetadataRequest().getErrorResponse(0, new UnknownServerException()),
                 createConsumerMetadataResponse(),
+                createControlledShutdownRequest(),
+                createControlledShutdownResponse(),
+                createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
                 createFetchRequest(),
                 createFetchRequest().getErrorResponse(0, new UnknownServerException()),
                 createFetchResponse(),
@@ -63,19 +72,72 @@ public class RequestResponseTest {
                 createOffsetFetchResponse(),
                 createProduceRequest(),
                 createProduceRequest().getErrorResponse(0, new UnknownServerException()),
-                createProduceResponse());
+                createProduceResponse(),
+                createStopReplicaRequest(),
+                createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
+                createStopReplicaResponse(),
+                createUpdateMetadataRequest(1),
+                createUpdateMetadataRequest(1).getErrorResponse(1, new UnknownServerException()),
+                createUpdateMetadataResponse(),
+                createLeaderAndIsrRequest(),
+                createLeaderAndIsrRequest().getErrorResponse(0, new UnknownServerException()),
+                createLeaderAndIsrResponse()
+        );
 
-        for (AbstractRequestResponse req: requestResponseList) {
-            ByteBuffer buffer = ByteBuffer.allocate(req.sizeOf());
-            req.writeTo(buffer);
-            buffer.rewind();
-            Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class);
-            AbstractRequestResponse deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer);
-            assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should be the same.", req, deserialized);
-            assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should have the same hashcode.",
-                    req.hashCode(), deserialized.hashCode());
-        }
+        for (AbstractRequestResponse req : requestResponseList)
+            checkSerialization(req, null);
+
+        checkSerialization(createUpdateMetadataRequest(0), 0);
+        checkSerialization(createUpdateMetadataRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
     }
+
+    private void checkSerialization(AbstractRequestResponse req, Integer version) throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(req.sizeOf());
+        req.writeTo(buffer);
+        buffer.rewind();
+        AbstractRequestResponse deserialized;
+        if (version == null) {
+            Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class);
+            deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer);
+        } else {
+            Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class, Integer.TYPE);
+            deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer, version);
+        }
+        assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should be the same.", req, deserialized);
+        assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should have the same hashcode.",
+                req.hashCode(), deserialized.hashCode());
+    }
+
+    @Test
+    public void produceResponseVersionTest() {
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
+        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000));
+
+        ProduceResponse v0Response = new ProduceResponse(responseData);
+        ProduceResponse v1Response = new ProduceResponse(responseData, 10);
+        assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
+        assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
+        assertEquals("Should use schema version 0", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 0), v0Response.toStruct().schema());
+        assertEquals("Should use schema version 1", ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 1), v1Response.toStruct().schema());
+        assertEquals("Response data does not match", responseData, v0Response.responses());
+        assertEquals("Response data does not match", responseData, v1Response.responses());
+    }
+
+    @Test
+    public void fetchResponseVersionTest() {
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
+
+        FetchResponse v0Response = new FetchResponse(responseData);
+        FetchResponse v1Response = new FetchResponse(responseData, 10);
+        assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
+        assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
+        assertEquals("Should use schema version 0", ProtoUtils.responseSchema(ApiKeys.FETCH.id, 0), v0Response.toStruct().schema());
+        assertEquals("Should use schema version 1", ProtoUtils.responseSchema(ApiKeys.FETCH.id, 1), v1Response.toStruct().schema());
+        assertEquals("Response data does not match", responseData, v0Response.responseData());
+        assertEquals("Response data does not match", responseData, v1Response.responseData());
+    }
+
 
     private AbstractRequestResponse createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
@@ -103,7 +165,7 @@ public class RequestResponseTest {
     private AbstractRequestResponse createFetchResponse() {
         Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
-        return new FetchResponse(responseData);
+        return new FetchResponse(responseData, 0);
     }
 
     private AbstractRequest createHeartBeatRequest() {
@@ -182,6 +244,94 @@ public class RequestResponseTest {
     private AbstractRequestResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000));
-        return new ProduceResponse(responseData);
+        return new ProduceResponse(responseData, 0);
     }
+
+    private AbstractRequest createStopReplicaRequest() {
+        Set<TopicPartition> partitions = new HashSet<>(Arrays.asList(new TopicPartition("test", 0)));
+        return new StopReplicaRequest(0, 1, true, partitions);
+    }
+
+    private AbstractRequestResponse createStopReplicaResponse() {
+        Map<TopicPartition, Short> responses = new HashMap<>();
+        responses.put(new TopicPartition("test", 0), Errors.NONE.code());
+        return new StopReplicaResponse(Errors.NONE.code(), responses);
+    }
+
+    private AbstractRequest createControlledShutdownRequest() {
+        return new ControlledShutdownRequest(10);
+    }
+
+    private AbstractRequestResponse createControlledShutdownResponse() {
+        HashSet<TopicPartition> topicPartitions = new HashSet<>(Arrays.asList(
+                new TopicPartition("test2", 5),
+                new TopicPartition("test1", 10)
+        ));
+        return new ControlledShutdownResponse(Errors.NONE.code(), topicPartitions);
+    }
+
+    private AbstractRequest createLeaderAndIsrRequest() {
+        Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
+        List<Integer> isr = Arrays.asList(1, 2);
+        List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
+        partitionStates.put(new TopicPartition("topic5", 105),
+                new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+        partitionStates.put(new TopicPartition("topic5", 1),
+                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+        partitionStates.put(new TopicPartition("topic20", 1),
+                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+
+        Set<LeaderAndIsrRequest.EndPoint> leaders = new HashSet<>(Arrays.asList(
+                new LeaderAndIsrRequest.EndPoint(0, "test0", 1223),
+                new LeaderAndIsrRequest.EndPoint(1, "test1", 1223)
+        ));
+
+        return new LeaderAndIsrRequest(1, 10, partitionStates, leaders);
+    }
+
+    private AbstractRequestResponse createLeaderAndIsrResponse() {
+        Map<TopicPartition, Short> responses = new HashMap<>();
+        responses.put(new TopicPartition("test", 0), Errors.NONE.code());
+        return new LeaderAndIsrResponse(Errors.NONE.code(), responses);
+    }
+
+    private AbstractRequest createUpdateMetadataRequest(int version) {
+        Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
+        List<Integer> isr = Arrays.asList(1, 2);
+        List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
+        partitionStates.put(new TopicPartition("topic5", 105),
+                new UpdateMetadataRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+        partitionStates.put(new TopicPartition("topic5", 1),
+                new UpdateMetadataRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+        partitionStates.put(new TopicPartition("topic20", 1),
+                new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+
+        if (version == 0) {
+            Set<UpdateMetadataRequest.BrokerEndPoint> liveBrokers = new HashSet<>(Arrays.asList(
+                    new UpdateMetadataRequest.BrokerEndPoint(0, "host1", 1223),
+                    new UpdateMetadataRequest.BrokerEndPoint(1, "host2", 1234)
+            ));
+
+            return new UpdateMetadataRequest(1, 10, liveBrokers, partitionStates);
+        } else {
+            Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints1 = new HashMap<>();
+            endPoints1.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1223));
+
+            Map<SecurityProtocol, UpdateMetadataRequest.EndPoint> endPoints2 = new HashMap<>();
+            endPoints2.put(SecurityProtocol.PLAINTEXT, new UpdateMetadataRequest.EndPoint("host1", 1244));
+            endPoints2.put(SecurityProtocol.SSL, new UpdateMetadataRequest.EndPoint("host2", 1234));
+
+            Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(Arrays.asList(new UpdateMetadataRequest.Broker(0, endPoints1),
+                    new UpdateMetadataRequest.Broker(1, endPoints2)
+            ));
+
+            return new UpdateMetadataRequest(1, 10, partitionStates, liveBrokers);
+        }
+    }
+
+    private AbstractRequestResponse createUpdateMetadataResponse() {
+        return new UpdateMetadataResponse(Errors.NONE.code());
+    }
+
+
 }
