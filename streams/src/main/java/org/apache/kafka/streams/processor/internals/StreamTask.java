@@ -205,7 +205,8 @@ public class StreamTask implements Punctuator {
 
     @Override
     public void punctuate(ProcessorNode node, long streamTime) {
-        if (currNode != null) throw new IllegalStateException("Current node is not null");
+        if (currNode != null)
+            throw new IllegalStateException("Current node is not null");
 
         currNode = node;
         try {
@@ -259,7 +260,8 @@ public class StreamTask implements Punctuator {
      * @param interval  the interval in milliseconds
      */
     public void schedule(long interval) {
-        if (currNode == null) throw new IllegalStateException("Current node is null");
+        if (currNode == null)
+            throw new IllegalStateException("Current node is null");
 
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }
@@ -281,7 +283,9 @@ public class StreamTask implements Punctuator {
                 currNode = null;
             }
         }
-        if (exception != null) throw exception;
+
+        if (exception != null)
+            throw exception;
 
         try {
             ((ProcessorContextImpl) processorContext).stateManager().close(recordCollector.offsets());

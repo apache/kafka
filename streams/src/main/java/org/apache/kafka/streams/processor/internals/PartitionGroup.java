@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -123,7 +124,7 @@ public class PartitionGroup {
     }
 
     public Set<TopicPartition> partitions() {
-        return partitionQueues.keySet();
+        return new HashSet<>(partitionQueues.keySet());
     }
 
     /**
