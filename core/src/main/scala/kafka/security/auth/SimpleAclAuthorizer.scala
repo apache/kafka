@@ -180,7 +180,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       val filteredAcls = existingAcls.filter((acl: Acl) => !aclsTobeRemoved.contains(acl))
 
       val aclNeedsRemoval = (existingAcls != filteredAcls)
-      if(aclNeedsRemoval) {
+      if (aclNeedsRemoval) {
         val path: String = toResourcePath(resource)
         if(filteredAcls.nonEmpty)
           ZkUtils.updatePersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(filteredAcls)))
@@ -262,8 +262,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   object ZkStateChangeListener extends IZkStateListener {
-
-    var reconnection = false
 
     override def handleNewSession(): Unit = {
       aclChangeListener.processAllNotifications
