@@ -276,8 +276,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
                     case e : IllegalStateException => {
                       // Resign if the controller is in an illegal state
                       error("Forcing the controller to resign")
-                      brokerRequestBatch.clear
-                      controllerElector.resign
+                      brokerRequestBatch.clear()
+                      controllerElector.resign()
 
                       throw e
                     }
@@ -911,7 +911,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
           case e : IllegalStateException => {
             // Resign if the controller is in an illegal state
             error("Forcing the controller to resign")
-            brokerRequestBatch.clear
+            brokerRequestBatch.clear()
             controllerElector.resign()
 
             throw e
@@ -1031,7 +1031,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       case e : IllegalStateException => {
         // Resign if the controller is in an illegal state
         error("Forcing the controller to resign")
-        brokerRequestBatch.clear
+        brokerRequestBatch.clear()
         controllerElector.resign()
 
         throw e
