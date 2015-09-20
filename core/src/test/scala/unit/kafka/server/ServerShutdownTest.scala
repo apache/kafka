@@ -149,13 +149,8 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     val threadName = Option(t.getClass.getCanonicalName)
       .getOrElse(t.getClass.getName())
       .toLowerCase
-    val retValue = !t.isDaemon && t.isAlive && threadName.startsWith("kafka")
-    if(retValue) {
-      info("### Thread name: %s %s".format(threadName, t.getStackTrace))
-      t.interrupt()
-    }
       
-    retValue
+    !t.isDaemon && t.isAlive && threadName.startsWith("kafka")
   }
 
   def verifyNonDaemonThreadsStatus() {
