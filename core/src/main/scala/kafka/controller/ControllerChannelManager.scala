@@ -255,9 +255,9 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
   }
 
   def clear() {
-    leaderAndIsrRequestMap.clear
-    stopReplicaRequestMap.clear
-    updateMetadataRequestMap.clear
+    leaderAndIsrRequestMap.clear()
+    stopReplicaRequestMap.clear()
+    updateMetadataRequestMap.clear()
   }
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int,
