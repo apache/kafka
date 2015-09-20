@@ -85,7 +85,7 @@ object KafkaServer {
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
-class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
+class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, testName: Option[String] = None) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
@@ -183,7 +183,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         replicaManager.startup()
 
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, brokerState, kafkaMetricsTime, metrics)
+        kafkaController = new KafkaController(config, zkClient, brokerState, kafkaMetricsTime, metrics, testName)
         kafkaController.startup()
 
         /* start kafka coordinator */

@@ -46,7 +46,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
 
   @Test
   def testCleanShutdown() {
-    var server = new KafkaServer(config)
+    var server = new KafkaServer(config, testName = Option(this.getClass.getName))
     server.startup()
     var producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromServers(Seq(server)),
       encoder = classOf[StringEncoder].getName,
@@ -109,7 +109,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty("delete.topic.enable", "true")
     val newConfig = KafkaConfig.fromProps(newProps)
-    val server = new KafkaServer(newConfig)
+    val server = new KafkaServer(newConfig, testName = Option(this.getClass.getName))
     server.startup()
     server.shutdown()
     server.awaitShutdown()
@@ -122,7 +122,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty("zookeeper.connect", "fakehostthatwontresolve:65535")
     val newConfig = KafkaConfig.fromProps(newProps)
-    val server = new KafkaServer(newConfig)
+    val server = new KafkaServer(newConfig, testName = Option(this.getClass.getName))
     try {
       server.startup()
       fail("Expected KafkaServer setup to fail, throw exception")
@@ -146,11 +146,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   }
 
   private[this] def isNonDaemonKafkaThread(t: Thread): Boolean = {
-    val threadName = Option(t.getClass.getCanonicalName)
-      .getOrElse(t.getClass.getName())
-      .toLowerCase
-
-    !t.isDaemon && t.isAlive && threadName.startsWith("kafka")
+    !t.isDaemon && t.isAlive && t.getName.startsWith(this.getClass.getName)
   }
 
   def verifyNonDaemonThreadsStatus() {
