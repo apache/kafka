@@ -23,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
@@ -72,7 +73,7 @@ public class CoordinatorTest {
     private Metrics metrics;
     private Map<String, String> metricTags = new LinkedHashMap<String, String>();
     private ConsumerNetworkClient consumerClient;
-    private MockSubscriptionListener subscriptionListener;
+    private MockRebalanceListener subscriptionListener;
     private MockCommitCallback defaultOffsetCommitCallback;
     private Coordinator coordinator;
 
@@ -84,7 +85,7 @@ public class CoordinatorTest {
         this.metadata = new Metadata(0, Long.MAX_VALUE);
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
         this.metrics = new Metrics(time);
-        this.subscriptionListener = new MockSubscriptionListener();
+        this.subscriptionListener = new MockRebalanceListener();
         this.defaultOffsetCommitCallback = new MockCommitCallback();
 
         client.setNode(node);
@@ -533,7 +534,7 @@ public class CoordinatorTest {
         }
     }
 
-    private static class MockSubscriptionListener extends SubscriptionState.RebalanceListener {
+    private static class MockRebalanceListener implements ConsumerRebalanceListener {
         public Collection<TopicPartition> revoked;
         public Collection<TopicPartition> assigned;
         public int revokedCount = 0;
