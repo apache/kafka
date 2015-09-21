@@ -61,19 +61,19 @@ public class StreamThread extends Thread {
 
     private final AtomicBoolean running;
 
-    private final TopologyBuilder builder;
-    private final Producer<byte[], byte[]> producer;
-    private final Consumer<byte[], byte[]> consumer;
+    protected final StreamingConfig config;
+    protected final TopologyBuilder builder;
+    protected final Producer<byte[], byte[]> producer;
+    protected final Consumer<byte[], byte[]> consumer;
+
     private final Map<Integer, StreamTask> tasks;
     private final Time time;
-
     private final File stateDir;
     private final long pollTimeMs;
     private final long cleanTimeMs;
     private final long commitTimeMs;
     private final long totalRecordsToProcess;
     private final KafkaStreamingMetrics metrics;
-    private final StreamingConfig config;
 
     private long lastClean;
     private long lastCommit;
@@ -248,7 +248,7 @@ public class StreamThread extends Thread {
         return true;
     }
 
-    private void maybeCommit() {
+    protected void maybeCommit() {
         long now = time.milliseconds();
 
         if (commitTimeMs >= 0 && lastCommit + commitTimeMs < now) {
@@ -319,6 +319,10 @@ public class StreamThread extends Thread {
         }
     }
 
+    protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+        return new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
+    }
+
     private void addPartitions(Collection<TopicPartition> assignment) {
         HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
@@ -335,7 +339,7 @@ public class StreamThread extends Thread {
 
                 // create the task
                 try {
-                    task = new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
+                    task = createStreamTask(id, partitionsForTask);
                 } catch (Exception e) {
                     log.error("Failed to create a task #" + id + " in thread [" + this.getName() + "]: ", e);
                     throw e;
