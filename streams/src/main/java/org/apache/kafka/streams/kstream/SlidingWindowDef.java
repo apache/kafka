@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RestoreFunc;
 import org.apache.kafka.streams.processor.internals.Stamped;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -113,7 +114,7 @@ public class SlidingWindowDef<K, V> implements WindowDef<K, V> {
             final ValueList<V> values = map.get(key);
 
             if (values == null) {
-                return null;
+                return Collections.emptyIterator();
             } else {
                 return new FilteredIterator<V, Value<V>>(values.iterator()) {
                     @Override
