@@ -248,18 +248,18 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     SimpleAclAuthorizer.AclZkPath + "/" + resource.resourceType + "/" + resource.name
   }
 
-  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) = {
+  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
     val permissionType = if (authorized) "Allowed" else "Denied"
     authorizerLogger.debug(s"Principal = $principal is $permissionType Operation = $operation from host = $host on resource = $resource")
   }
 
-  private def updateAclChangedFlag(resource: Resource) = {
+  private def updateAclChangedFlag(resource: Resource) {
     ZkUtils.createSequentialPersistentPath(zkClient, SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
   }
 
   object AclChangedNotificaitonHandler extends NotificationHandler {
 
-    override def processNotification(notificationMessage: String) = {
+    override def processNotification(notificationMessage: String) {
       val resource: Resource = Resource.fromString(notificationMessage)
       val acls = getAclsFromZk(resource)
       updateCache(resource, acls)
@@ -272,11 +272,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       aclChangeListener.processAllNotifications
     }
 
-    override def handleSessionEstablishmentError(error: Throwable) = {
+    override def handleSessionEstablishmentError(error: Throwable) {
       fatal("Could not establish session with zookeeper", error)
     }
 
-    override def handleStateChanged(state: KeeperState) = {
+    override def handleStateChanged(state: KeeperState) {
       //no op
     }
   }

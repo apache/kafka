@@ -51,7 +51,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testTopicAcl(): Unit = {
+  def testTopicAcl() {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
     val user3 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "batman")
@@ -103,7 +103,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDenyTakesPrecedence(): Unit = {
+  def testDenyTakesPrecedence() {
     val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val host = "random-host"
     val session = new Session(user, host)
@@ -118,7 +118,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAllowAllAccess(): Unit = {
+  def testAllowAllAccess() {
     val allowAllAcl = Acl.AllowAllAcl
 
     changeAclAndVerify(Set.empty[Acl], Set[Acl](allowAllAcl), Set.empty[Acl])
@@ -128,7 +128,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testSuperUserHasAccess(): Unit = {
+  def testSuperUserHasAccess() {
     val denyAllAcl = new Acl(Acl.WildCardPrincipal, Deny, WildCardHost, All)
 
     changeAclAndVerify(Set.empty[Acl], Set[Acl](denyAllAcl), Set.empty[Acl])
@@ -141,12 +141,12 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testNoAclFound(): Unit = {
+  def testNoAclFound() {
     assertFalse("when acls = [],  authorizer should fail close.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
 
   @Test
-  def testNoAclFoundOverride(): Unit = {
+  def testNoAclFoundOverride() {
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.put(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
@@ -157,7 +157,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAclManagementAPIs(): Unit = {
+  def testAclManagementAPIs() {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
     val host1 = "host1"
@@ -193,7 +193,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testLoadCache(): Unit = {
+  def testLoadCache() {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val acl1 = new Acl(user1, Allow, "host-1", Read)
     val acls = Set[Acl](acl1)

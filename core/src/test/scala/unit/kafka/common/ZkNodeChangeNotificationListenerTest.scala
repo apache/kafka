@@ -26,7 +26,7 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
   override def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
-  def testProcessNotification {
+  def testProcessNotification() {
     val notificationHandler = new NotificationHandler {
       @volatile var notification: String = _
       @volatile var invocationCount: Integer = 0
