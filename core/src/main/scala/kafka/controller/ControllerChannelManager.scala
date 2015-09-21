@@ -147,7 +147,7 @@ class RequestSendThread(val controllerId: Int,
                         val brokerNode: Node,
                         val config: KafkaConfig,
                         val time: Time,
-                        val name: String)
+                        name: String)
   extends ShutdownableThread(name = name) {
 
   private val lock = new Object()
