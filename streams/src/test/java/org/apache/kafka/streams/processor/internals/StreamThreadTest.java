@@ -196,6 +196,9 @@ public class StreamThreadTest {
             List<TopicPartition> revokedPartitions;
             List<TopicPartition> assignedPartitions;
 
+            //
+            // Assign t1p1 and t1p2. This should create Task 1 & 2
+            //
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
 
@@ -221,12 +224,9 @@ public class StreamThreadTest {
             assertFalse(stateDir3.exists());
             assertTrue(extraDir.exists());
 
-            revokedPartitions = Collections.emptyList();
-            assignedPartitions = Arrays.asList(t1p1, t1p2);
-
-            rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-            rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
-
+            //
+            // Revoke t1p1 and t1p2. This should remove Task 1 & 2
+            //
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
 
