@@ -47,6 +47,7 @@ import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -78,7 +79,7 @@ public class StreamThread extends Thread {
     private long lastCommit;
     private long recordsProcessed;
 
-    protected final ConsumerRebalanceListener rebalanceCallback = new ConsumerRebalanceListener() {
+    final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
             addPartitions(assignment);
@@ -93,25 +94,22 @@ public class StreamThread extends Thread {
         }
     };
 
-    @SuppressWarnings("unchecked")
     public StreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
+        this(builder, config, null , null);
+    }
+
+    @SuppressWarnings("unchecked")
+    StreamThread(TopologyBuilder builder, StreamingConfig config,
+                 Producer<byte[], byte[]> producer,
+                 Consumer<byte[], byte[]> consumer) throws Exception {
         super("StreamThread-" + nextThreadNumber.getAndIncrement());
 
         this.config = config;
         this.builder = builder;
 
-        // create the producer and consumer clients
-        log.info("Creating producer client for stream thread [" + this.getName() + "]");
-
-        this.producer = new KafkaProducer<>(config.getProducerConfigs(),
-            new ByteArraySerializer(),
-            new ByteArraySerializer());
-
-        log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-
-        this.consumer = new KafkaConsumer<>(config.getConsumerConfigs(),
-            new ByteArrayDeserializer(),
-            new ByteArrayDeserializer());
+        // set the producer and consumer clients
+        this.producer = (producer != null) ? producer : createProducer();
+        this.consumer = (consumer != null) ? consumer : createConsumer();
 
         // initialize the task list
         this.tasks = new HashMap<>();
@@ -132,6 +130,20 @@ public class StreamThread extends Thread {
         this.metrics = new KafkaStreamingMetrics();
 
         this.running = new AtomicBoolean(true);
+    }
+
+    private Producer<byte[], byte[]> createProducer() {
+        log.info("Creating producer client for stream thread [" + this.getName() + "]");
+        return new KafkaProducer<>(config.getProducerConfigs(),
+                new ByteArraySerializer(),
+                new ByteArraySerializer());
+    }
+
+    private Consumer<byte[], byte[]> createConsumer() {
+        log.info("Creating consumer client for stream thread [" + this.getName() + "]");
+        return new KafkaConsumer<>(config.getConsumerConfigs(),
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer());
     }
 
     /**
@@ -156,6 +168,10 @@ public class StreamThread extends Thread {
      */
     public void close() {
         running.set(false);
+    }
+
+    public Map<Integer, StreamTask> tasks() {
+        return Collections.unmodifiableMap(tasks);
     }
 
     private void shutdown() {
@@ -190,7 +206,7 @@ public class StreamThread extends Thread {
         try {
             int totalNumBuffered = 0;
 
-            consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceCallback);
+            consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceListener);
 
             while (stillRunning()) {
                 // try to fetch some records if necessary
