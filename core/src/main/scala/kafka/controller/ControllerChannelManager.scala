@@ -36,7 +36,7 @@ import kafka.common.{KafkaException, TopicAndPartition}
 import collection.Set
 import collection.JavaConverters._
 
-class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics, testName: Option[String] = None) extends Logging {
+class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging {
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
@@ -109,7 +109,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         Selectable.USE_DEFAULT_BUFFER_SIZE
       )
     }
-    val threadName = testName match {
+    val threadName = threadNamePrefix match {
       case None => "Controller-%d-to-broker-%d-send-thread".format(config.brokerId, broker.id)
       case Some(name) => "%s:Controller-%d-to-broker-%d-send-thread".format(name,config.brokerId, broker.id)
     }
@@ -147,8 +147,8 @@ class RequestSendThread(val controllerId: Int,
                         val brokerNode: Node,
                         val config: KafkaConfig,
                         val time: Time,
-                        val threadName: String)
-  extends ShutdownableThread(threadName) {
+                        val name: String)
+  extends ShutdownableThread(name = name) {
 
   private val lock = new Object()
   private val stateChangeLogger = KafkaController.stateChangeLogger
