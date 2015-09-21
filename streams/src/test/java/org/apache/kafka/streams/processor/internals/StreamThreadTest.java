@@ -225,6 +225,9 @@ public class StreamThreadTest {
             List<TopicPartition> assignedPartitions;
             Map<Integer, StreamTask> prevTasks;
 
+            //
+            // Assign t1p1 and t1p2. This should create Task 1 & 2
+            //
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
             prevTasks = new HashMap(thread.tasks());
@@ -254,6 +257,9 @@ public class StreamThreadTest {
             assertFalse(stateDir3.exists());
             assertTrue(extraDir.exists());
 
+            //
+            // Revoke t1p1 and t1p2. This should remove Task 1 & 2
+            //
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
             prevTasks = new HashMap(thread.tasks());
