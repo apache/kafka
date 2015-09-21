@@ -40,7 +40,8 @@ import java.util.Map;
 public class ProcessorStateManager {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorStateManager.class);
-    private static final String CHECKPOINT_FILE_NAME = ".checkpoint";
+
+    public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     public static final String LOCK_FILE_NAME = ".lock";
 
     private final int id;
@@ -148,7 +149,7 @@ public class ProcessorStateManager {
         // restore its state from changelog records; while restoring the log end offset
         // should not change since it is only written by this thread.
         while (true) {
-            for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100)) {
+            for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100).records(storePartition)) {
                 restoreFunc.apply(record.key(), record.value());
             }
 
@@ -163,8 +164,8 @@ public class ProcessorStateManager {
         long newOffset = restoreConsumer.position(storePartition);
         restoredOffsets.put(storePartition, newOffset);
 
-        // un-subscribe the change log partition
-        restoreConsumer.subscribe(Collections.<String>emptyList());
+        // un-assign the change log partition
+        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
     }
 
     public StateStore getStore(String name) {
@@ -184,8 +185,8 @@ public class ProcessorStateManager {
     public void flush() {
         if (!this.stores.isEmpty()) {
             log.debug("Flushing stores.");
-            for (StateStore engine : this.stores.values())
-                engine.flush();
+            for (StateStore store : this.stores.values())
+                store.flush();
         }
     }
 
