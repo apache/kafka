@@ -15,6 +15,7 @@ package org.apache.kafka.clients;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -152,7 +153,8 @@ public class NetworkClient implements KafkaClient {
     @Override
     public void close(String nodeId) {
         selector.close(nodeId);
-        inFlightRequests.clearAll(nodeId);
+        for (ClientRequest request : inFlightRequests.clearAll(nodeId))
+            metadataUpdater.maybeHandleDisconnection(request);
         connectionStates.remove(nodeId);
     }
 
@@ -598,7 +600,7 @@ public class NetworkClient implements KafkaClient {
             String nodeConnectionId = node.idString();
 
             if (canSendRequest(nodeConnectionId)) {
-                Set<String> topics = metadata.topics();
+                Set<String> topics = metadata.needMetadataForAllTopics() ? new HashSet<String>() : metadata.topics();
                 this.metadataFetchInProgress = true;
                 ClientRequest metadataRequest = request(now, nodeConnectionId, topics);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());

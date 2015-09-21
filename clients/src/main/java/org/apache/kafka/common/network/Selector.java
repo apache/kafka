@@ -12,9 +12,7 @@
  */
 package org.apache.kafka.common.network;
 
-import java.io.EOFException;
 import java.io.IOException;
-import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.*;
@@ -202,8 +200,8 @@ public class Selector implements Selectable {
      */
     @Override
     public void close() {
-        List<String> connections = new LinkedList<String>(channels.keySet());
-        for (String id: connections)
+        List<String> connections = new ArrayList<>(channels.keySet());
+        for (String id : connections)
             close(id);
         try {
             this.nioSelector.close();
@@ -212,6 +210,7 @@ public class Selector implements Selectable {
         } catch (SecurityException se) {
             log.error("Exception closing nioSelector:", se);
         }
+        sensors.close();
     }
 
     /**
@@ -322,10 +321,7 @@ public class Selector implements Selectable {
                     }
                 } catch (IOException e) {
                     String desc = channel.socketDescription();
-                    if (e instanceof EOFException || e instanceof ConnectException)
-                        log.debug("Connection {} disconnected", desc);
-                    else
-                        log.warn("Error in I/O with connection to {}", desc, e);
+                    log.debug("Connection with {} disconnected", desc, e);
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
@@ -558,6 +554,10 @@ public class Selector implements Selectable {
         public final Sensor selectTime;
         public final Sensor ioTime;
 
+        /* Names of metrics that are not registered through sensors */
+        private final List<MetricName> topLevelMetricNames = new ArrayList<>();
+        private final List<Sensor> sensors = new ArrayList<>();
+
         public SelectorMetrics(Metrics metrics) {
             this.metrics = metrics;
             String metricGrpName = metricGrpPrefix + "-metrics";
@@ -569,19 +569,19 @@ public class Selector implements Selectable {
                 tagsSuffix.append(tag.getValue());
             }
 
-            this.connectionClosed = this.metrics.sensor("connections-closed:" + tagsSuffix.toString());
+            this.connectionClosed = sensor("connections-closed:" + tagsSuffix.toString());
             MetricName metricName = new MetricName("connection-close-rate", metricGrpName, "Connections closed per second in the window.", metricTags);
             this.connectionClosed.add(metricName, new Rate());
 
-            this.connectionCreated = this.metrics.sensor("connections-created:" + tagsSuffix.toString());
+            this.connectionCreated = sensor("connections-created:" + tagsSuffix.toString());
             metricName = new MetricName("connection-creation-rate", metricGrpName, "New connections established per second in the window.", metricTags);
             this.connectionCreated.add(metricName, new Rate());
 
-            this.bytesTransferred = this.metrics.sensor("bytes-sent-received:" + tagsSuffix.toString());
+            this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix.toString());
             metricName = new MetricName("network-io-rate", metricGrpName, "The average number of network operations (reads or writes) on all connections per second.", metricTags);
             bytesTransferred.add(metricName, new Rate(new Count()));
 
-            this.bytesSent = this.metrics.sensor("bytes-sent:" + tagsSuffix.toString(), bytesTransferred);
+            this.bytesSent = sensor("bytes-sent:" + tagsSuffix.toString(), bytesTransferred);
             metricName = new MetricName("outgoing-byte-rate", metricGrpName, "The average number of outgoing bytes sent per second to all servers.", metricTags);
             this.bytesSent.add(metricName, new Rate());
             metricName = new MetricName("request-rate", metricGrpName, "The average number of requests sent per second.", metricTags);
@@ -591,13 +591,13 @@ public class Selector implements Selectable {
             metricName = new MetricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", metricTags);
             this.bytesSent.add(metricName, new Max());
 
-            this.bytesReceived = this.metrics.sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
+            this.bytesReceived = sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
             metricName = new MetricName("incoming-byte-rate", metricGrpName, "Bytes/second read off all sockets", metricTags);
             this.bytesReceived.add(metricName, new Rate());
             metricName = new MetricName("response-rate", metricGrpName, "Responses received sent per second.", metricTags);
             this.bytesReceived.add(metricName, new Rate(new Count()));
 
-            this.selectTime = this.metrics.sensor("select-time:" + tagsSuffix.toString());
+            this.selectTime = sensor("select-time:" + tagsSuffix.toString());
             metricName = new MetricName("select-rate", metricGrpName, "Number of times the I/O layer checked for new I/O to perform per second", metricTags);
             this.selectTime.add(metricName, new Rate(new Count()));
             metricName = new MetricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
@@ -605,18 +605,25 @@ public class Selector implements Selectable {
             metricName = new MetricName("io-wait-ratio", metricGrpName, "The fraction of time the I/O thread spent waiting.", metricTags);
             this.selectTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
 
-            this.ioTime = this.metrics.sensor("io-time:" + tagsSuffix.toString());
+            this.ioTime = sensor("io-time:" + tagsSuffix.toString());
             metricName = new MetricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
             metricName = new MetricName("io-ratio", metricGrpName, "The fraction of time the I/O thread spent doing I/O", metricTags);
             this.ioTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
 
             metricName = new MetricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
+            topLevelMetricNames.add(metricName);
             this.metrics.addMetric(metricName, new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return channels.size();
                 }
             });
+        }
+
+        private Sensor sensor(String name, Sensor... parents) {
+            Sensor sensor = metrics.sensor(name, parents);
+            sensors.add(sensor);
+            return sensor;
         }
 
         public void maybeRegisterConnectionMetrics(String connectionId) {
@@ -631,7 +638,7 @@ public class Selector implements Selectable {
                     Map<String, String> tags = new LinkedHashMap<String, String>(metricTags);
                     tags.put("node-id", "node-" + connectionId);
 
-                    nodeRequest = this.metrics.sensor(nodeRequestName);
+                    nodeRequest = sensor(nodeRequestName);
                     MetricName metricName = new MetricName("outgoing-byte-rate", metricGrpName, tags);
                     nodeRequest.add(metricName, new Rate());
                     metricName = new MetricName("request-rate", metricGrpName, "The average number of requests sent per second.", tags);
@@ -642,14 +649,14 @@ public class Selector implements Selectable {
                     nodeRequest.add(metricName, new Max());
 
                     String nodeResponseName = "node-" + connectionId + ".bytes-received";
-                    Sensor nodeResponse = this.metrics.sensor(nodeResponseName);
+                    Sensor nodeResponse = sensor(nodeResponseName);
                     metricName = new MetricName("incoming-byte-rate", metricGrpName, tags);
                     nodeResponse.add(metricName, new Rate());
                     metricName = new MetricName("response-rate", metricGrpName, "The average number of responses received per second.", tags);
                     nodeResponse.add(metricName, new Rate(new Count()));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
-                    Sensor nodeRequestTime = this.metrics.sensor(nodeTimeName);
+                    Sensor nodeRequestTime = sensor(nodeTimeName);
                     metricName = new MetricName("request-latency-avg", metricGrpName, tags);
                     nodeRequestTime.add(metricName, new Avg());
                     metricName = new MetricName("request-latency-max", metricGrpName, tags);
@@ -678,6 +685,13 @@ public class Selector implements Selectable {
                 if (nodeRequest != null)
                     nodeRequest.record(bytes, now);
             }
+        }
+
+        public void close() {
+            for (MetricName metricName : topLevelMetricNames)
+                metrics.removeMetric(metricName);
+            for (Sensor sensor : sensors)
+                metrics.removeSensor(sensor.name());
         }
     }
 
