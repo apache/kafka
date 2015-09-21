@@ -76,7 +76,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   /**
    * Guaranteed to be called before any authorize call is made.
    */
-  override def configure(javaConfigs: util.Map[String, _]): Unit = {
+  override def configure(javaConfigs: util.Map[String, _]) {
     val configs = javaConfigs.asScala
     val props = new java.util.Properties()
     configs foreach { case (key, value) => props.put(key, value.toString) }
@@ -157,7 +157,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }.getOrElse(false)
   }
 
-  override def addAcls(acls: Set[Acl], resource: Resource): Unit = {
+  override def addAcls(acls: Set[Acl], resource: Resource) {
     if (acls != null && acls.nonEmpty) {
       val updatedAcls = getAcls(resource) ++ acls
       val path = toResourcePath(resource)
@@ -221,7 +221,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }.toMap
   }
 
-  private def loadCache() = {
+  private def loadCache()  {
     var acls = Set.empty[Acl]
     val resourceTypes = ZkUtils.getChildren(zkClient, SimpleAclAuthorizer.AclZkPath)
     for (rType <- resourceTypes) {
@@ -235,7 +235,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  private def updateCache(resource: Resource, acls: Set[Acl]) = {
+  private def updateCache(resource: Resource, acls: Set[Acl]) {
     inWriteLock(lock) {
       if (acls.nonEmpty)
         aclCache.put(resource, acls)
@@ -268,7 +268,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   object ZkStateChangeListener extends IZkStateListener {
 
-    override def handleNewSession() = {
+    override def handleNewSession() {
       aclChangeListener.processAllNotifications
     }
 
