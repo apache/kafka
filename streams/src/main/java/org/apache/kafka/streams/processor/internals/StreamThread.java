@@ -248,7 +248,7 @@ public class StreamThread extends Thread {
         return true;
     }
 
-    private void maybeCommit() {
+    protected void maybeCommit() {
         long now = time.milliseconds();
 
         if (commitTimeMs >= 0 && lastCommit + commitTimeMs < now) {

@@ -295,7 +295,86 @@ public class StreamThreadTest {
 
         } finally {
             Utils.delete(baseDir);
+        }
+    }
 
+    @Test
+    public void testMaybeCommit() throws Exception {
+        File baseDir = Files.createTempDirectory("test").toFile();
+        try {
+            final long commitInterval = 1000L;
+            Properties props = configProps();
+            props.setProperty(StreamingConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
+            props.setProperty(StreamingConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+
+            StreamingConfig config = new StreamingConfig(props);
+
+            MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
+            MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+            MockTime mockTime = new MockTime();
+
+            TopologyBuilder builder = new TopologyBuilder();
+            builder.addSource("source1", "topic1");
+
+            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockTime) {
+                @Override
+                public void maybeCommit() {
+                    super.maybeCommit();
+                }
+                @Override
+                protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+                    return new TestStreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
+                }
+            };
+
+            ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
+
+            List<TopicPartition> revokedPartitions;
+            List<TopicPartition> assignedPartitions;
+
+            //
+            // Assign t1p1 and t1p2. This should create Task 1 & 2
+            //
+            revokedPartitions = Collections.emptyList();
+            assignedPartitions = Arrays.asList(t1p1, t1p2);
+
+            rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
+            rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+
+            assertEquals(2, thread.tasks().size());
+
+            // no task is committed before the commit interval
+            mockTime.sleep(commitInterval - 10L);
+            thread.maybeCommit();
+            for (StreamTask task : thread.tasks().values()) {
+                assertFalse(((TestStreamTask) task).committed);
+            }
+
+            // all tasks are committed after the commit interval
+            mockTime.sleep(11L);
+            thread.maybeCommit();
+            for (StreamTask task : thread.tasks().values()) {
+                assertTrue(((TestStreamTask) task).committed);
+                ((TestStreamTask) task).committed = false;
+            }
+
+            // no task is committed before the commit interval, again
+            mockTime.sleep(commitInterval - 10L);
+            thread.maybeCommit();
+            for (StreamTask task : thread.tasks().values()) {
+                assertFalse(((TestStreamTask) task).committed);
+            }
+
+            // all tasks are committed after the commit interval, again
+            mockTime.sleep(11L);
+            thread.maybeCommit();
+            for (StreamTask task : thread.tasks().values()) {
+                assertTrue(((TestStreamTask) task).committed);
+                ((TestStreamTask) task).committed = false;
+            }
+
+        } finally {
+            Utils.delete(baseDir);
         }
     }
 }
