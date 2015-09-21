@@ -15,7 +15,7 @@
  * limitations under the License.
  **/
 
-package org.apache.kafka.copycat.runtime.standalone;
+package org.apache.kafka.copycat.runtime;
 
 import org.apache.kafka.copycat.connector.ConnectorContext;
 
@@ -23,12 +23,12 @@ import org.apache.kafka.copycat.connector.ConnectorContext;
  * ConnectorContext for use with the StandaloneHerder, which maintains all connectors and tasks
  * in a single process.
  */
-class StandaloneConnectorContext implements ConnectorContext {
+public class HerderConnectorContext implements ConnectorContext {
 
-    private StandaloneHerder herder;
+    private Herder herder;
     private String connectorName;
 
-    public StandaloneConnectorContext(StandaloneHerder herder, String connectorName) {
+    public HerderConnectorContext(Herder herder, String connectorName) {
         this.herder = herder;
         this.connectorName = connectorName;
     }

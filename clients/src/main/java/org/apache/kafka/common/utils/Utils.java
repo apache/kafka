@@ -25,7 +25,9 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Properties;
@@ -414,6 +416,17 @@ public class Utils {
                 propStream.close();
         }
         return props;
+    }
+
+    /**
+     * Converts a Properties object to a Map<String, String>, calling {@link #toString} to ensure all keys and values
+     * are Strings.
+     */
+    public static Map<String, String> propsToStringMap(Properties props) {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<Object, Object> entry : props.entrySet())
+            result.put(entry.getKey().toString(), entry.getValue().toString());
+        return result;
     }
 
     /**

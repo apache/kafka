@@ -92,10 +92,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Properties workerProps = new Properties();
         workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("offset.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("offset.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("offset.key.converter.schemas.enable", "false");
-        workerProps.setProperty("offset.value.converter.schemas.enable", "false");
+        workerProps.setProperty("internal.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.setProperty("internal.key.converter.schemas.enable", "false");
+        workerProps.setProperty("internal.value.converter.schemas.enable", "false");
         config = new WorkerConfig(workerProps);
         producerCallbacks = EasyMock.newCapture();
     }

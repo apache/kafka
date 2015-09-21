@@ -25,6 +25,9 @@ import java.util.Map;
 
 public class OffsetUtils {
     public static void validateFormat(Object offsetData) {
+        if (offsetData == null)
+            return;
+
         if (!(offsetData instanceof Map))
             throw new DataException("Offsets must be specified as a Map");
         validateFormat((Map<Object, Object>) offsetData);
