@@ -165,7 +165,7 @@ public class ProcessorStateManager {
         restoredOffsets.put(storePartition, newOffset);
 
         // un-assign the change log partition
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        restoreConsumer.unsubscribe();
     }
 
     public StateStore getStore(String name) {
