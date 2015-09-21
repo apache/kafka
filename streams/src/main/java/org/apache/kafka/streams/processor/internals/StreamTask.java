@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.CommitType;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Producer;
@@ -241,7 +240,7 @@ public class StreamTask implements Punctuator {
 
         // 3) commit consumed offsets if it is dirty already
         if (commitOffsetNeeded) {
-            consumer.commit(consumedOffsets, CommitType.SYNC);
+            consumer.commitSync(consumedOffsets);
             commitOffsetNeeded = false;
         }
         commitRequested = false;

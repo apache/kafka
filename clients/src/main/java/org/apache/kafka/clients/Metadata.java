@@ -12,14 +12,16 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -41,6 +43,8 @@ public final class Metadata {
     private Cluster cluster;
     private boolean needUpdate;
     private final Set<String> topics;
+    private final List<Listener> listeners;
+    private boolean needMetadataForAllTopics;
 
     /**
      * Create a metadata instance with reasonable defaults
@@ -64,6 +68,8 @@ public final class Metadata {
         this.cluster = Cluster.empty();
         this.needUpdate = false;
         this.topics = new HashSet<String>();
+        this.listeners = new ArrayList<>();
+        this.needMetadataForAllTopics = false;
     }
 
     /**
@@ -153,11 +159,17 @@ public final class Metadata {
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.version += 1;
-        this.cluster = cluster;
+
+        for (Listener listener: listeners)
+            listener.onMetadataUpdate(cluster);
+
+        // Do this after notifying listeners as subscribed topics' list can be changed by listeners
+        this.cluster = this.needMetadataForAllTopics ? getClusterForCurrentTopics(cluster) : cluster;
+
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
     }
-    
+
     /**
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
@@ -185,5 +197,51 @@ public final class Metadata {
      */
     public long refreshBackoff() {
         return refreshBackoffMs;
+    }
+
+    /**
+     * Set state to indicate if metadata for all topics in Kafka cluster is required or not.
+     * @param needMetadaForAllTopics boolean indicating need for metadata of all topics in cluster.
+     */
+    public void needMetadataForAllTopics(boolean needMetadaForAllTopics) {
+        this.needMetadataForAllTopics = needMetadaForAllTopics;
+    }
+
+    /**
+     * Get whether metadata for all topics is needed or not
+     */
+    public boolean needMetadataForAllTopics() {
+        return this.needMetadataForAllTopics;
+    }
+
+    /**
+     * Add a Metadata listener that gets notified of metadata updates
+     */
+    public void addListener(Listener listener) {
+        this.listeners.add(listener);
+    }
+
+    /**
+     * Stop notifying the listener of metadata updates
+     */
+    public void removeListener(Listener listener) {
+        this.listeners.remove(listener);
+    }
+
+    /**
+     * MetadataUpdate Listener
+     */
+    public interface Listener {
+        void onMetadataUpdate(Cluster cluster);
+    }
+
+    private Cluster getClusterForCurrentTopics(Cluster cluster) {
+        Collection<PartitionInfo> partitionInfos = new ArrayList<>();
+        if (cluster != null) {
+            for (String topic : this.topics) {
+                partitionInfos.addAll(cluster.partitionsForTopic(topic));
+            }
+        }
+        return new Cluster(cluster.nodes(), partitionInfos);
     }
 }

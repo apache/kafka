@@ -17,22 +17,8 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.Time
+import java.io.File
 
-class ReplicaFetcherManager(brokerConfig: KafkaConfig, replicaMgr: ReplicaManager, metrics: Metrics, time: Time)
-        extends AbstractFetcherManager("ReplicaFetcherManager on broker " + brokerConfig.brokerId,
-                                       "Replica", brokerConfig.numReplicaFetchers) {
-
-  override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-    new ReplicaFetcherThread("ReplicaFetcherThread-%d-%d".format(fetcherId, sourceBroker.id), sourceBroker, brokerConfig,
-      replicaMgr, metrics, time)
-  }
-
-  def shutdown() {
-    info("shutting down")
-    closeAllFetchers()
-    info("shutdown completed")
-  }  
+class SslReplicaFetchTest extends BaseReplicaFetchTest {
+  protected def trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 }

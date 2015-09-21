@@ -14,51 +14,29 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 
 * Install Virtual Box from [https://www.virtualbox.org/](https://www.virtualbox.org/) (run `$ vboxmanage --version` to check if it's installed).
 * Install Vagrant >= 1.6.4 from [http://www.vagrantup.com/](http://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
-* Install Vagrant Plugins:
+* Install system test dependiences, including ducktape, a command-line tool and library for testing distributed systems.
 
-        # Required
-        # Note that vagrant-hostmanager v1.6.0 and up breaks our Vagrant scripts
-        $ vagrant plugin install vagrant-hostmanager --plugin-version 1.5.0
-        $ vagrant plugin install vagrant-cachier
+        $ python tests/setup.py develop
 
-* Build a specific branch of Kafka
-       
-        $ cd kafka
-        $ git checkout $BRANCH
-        $ gradle
-        $ ./gradlew jar
-      
-* Setup a testing cluster with Vagrant. Configure your Vagrant setup by creating the file 
-   `Vagrantfile.local` in the directory of your Kafka checkout. For testing purposes,
-  `num_brokers` and `num_kafka` should be 0, and `num_workers` should be set high enough
-  to run all of you tests. An example resides in kafka/vagrant/system-test-Vagrantfile.local
+* Run the bootstrap script to set up Vagrant for testing
 
-        # Example Vagrantfile.local for use on local machine
-        # Vagrantfile.local should reside in the base Kafka directory
-        num_zookeepers = 0
-        num_kafka = 0
-        num_workers = 9
+        $ tests/bootstrap-test-env.sh
 
-* Bring up the cluster (note that the initial provisioning process can be slow since it involves
-installing dependencies and updates on every vm.):
+* Bring up the test cluster
 
         $ vagrant up
 
-* Install ducktape:
+* Build the desired branch of Kafka
        
-        $ pip install ducktape
-
+        $ git checkout $BRANCH
+        $ gradle  # (only if necessary)
+        $ ./gradlew jar
+     
 * Run the system tests using ducktape:
 
         $ cd tests
         $ ducktape kafkatest/tests
 
-* If you make changes to your Kafka checkout, you'll need to rebuild and resync to your Vagrant cluster:
-
-        $ cd kafka
-        $ ./gradlew jar
-        $ vagrant rsync # Re-syncs build output to cluster
-        
 EC2 Quickstart
 --------------
 This quickstart will help you run the Kafka system tests on EC2. In this setup, all logic is run

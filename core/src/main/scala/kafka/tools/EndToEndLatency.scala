@@ -79,7 +79,7 @@ object EndToEndLatency {
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
     def finalise() {
-      consumer.commit(CommitType.SYNC)
+      consumer.commitSync()
       producer.close()
       consumer.close()
     }

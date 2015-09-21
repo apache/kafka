@@ -178,7 +178,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         socketServer.startup()
 
         /* start replica manager */
-        replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
+        replicaManager = new ReplicaManager(config, metrics, time, kafkaMetricsTime, zkClient, kafkaScheduler, logManager,
+          isShuttingDown)
         replicaManager.startup()
 
         /* start kafka controller */

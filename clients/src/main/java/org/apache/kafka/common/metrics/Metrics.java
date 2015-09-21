@@ -14,6 +14,7 @@ package org.apache.kafka.common.metrics;
 
 import java.io.Closeable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
@@ -52,6 +53,7 @@ public class Metrics implements Closeable {
     private final MetricConfig config;
     private final ConcurrentMap<MetricName, KafkaMetric> metrics;
     private final ConcurrentMap<String, Sensor> sensors;
+    private final ConcurrentMap<Sensor, List<Sensor>> childrenSensors;
     private final List<MetricsReporter> reporters;
     private final Time time;
 
@@ -86,8 +88,9 @@ public class Metrics implements Closeable {
      */
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time) {
         this.config = defaultConfig;
-        this.sensors = new CopyOnWriteMap<String, Sensor>();
-        this.metrics = new CopyOnWriteMap<MetricName, KafkaMetric>();
+        this.sensors = new CopyOnWriteMap<>();
+        this.metrics = new CopyOnWriteMap<>();
+        this.childrenSensors = new CopyOnWriteMap<>();
         this.reporters = Utils.notNull(reporters);
         this.time = time;
         for (MetricsReporter reporter : reporters)
@@ -136,8 +139,43 @@ public class Metrics implements Closeable {
         if (s == null) {
             s = new Sensor(this, name, parents, config == null ? this.config : config, time);
             this.sensors.put(name, s);
+            if (parents != null) {
+                for (Sensor parent : parents) {
+                    List<Sensor> children = childrenSensors.get(parent.name());
+                    if (children == null) {
+                        children = new ArrayList<>();
+                        childrenSensors.put(parent, children);
+                    }
+                    children.add(s);
+                }
+            }
         }
         return s;
+    }
+
+    /**
+     * Remove a sensor (if it exists), associated metrics and its children.
+     *
+     * @param name The name of the sensor to be removed
+     */
+    public void removeSensor(String name) {
+        Sensor sensor = sensors.get(name);
+        if (sensor != null) {
+            List<Sensor> childSensors = null;
+            synchronized (sensor) {
+                synchronized (this) {
+                    if (sensors.remove(name, sensor)) {
+                        for (KafkaMetric metric : sensor.metrics())
+                            removeMetric(metric.metricName());
+                        childSensors = childrenSensors.remove(sensor);
+                    }
+                }
+            }
+            if (childSensors != null) {
+                for (Sensor childSensor : childSensors)
+                    removeSensor(childSensor.name());
+            }
+        }
     }
 
     /**
@@ -167,10 +205,26 @@ public class Metrics implements Closeable {
     }
 
     /**
+     * Remove a metric if it exists and return it. Return null otherwise. If a metric is removed, `metricRemoval`
+     * will be invoked for each reporter.
+     *
+     * @param metricName The name of the metric
+     * @return the removed `KafkaMetric` or null if no such metric exists
+     */
+    public synchronized KafkaMetric removeMetric(MetricName metricName) {
+        KafkaMetric metric = this.metrics.remove(metricName);
+        if (metric != null) {
+            for (MetricsReporter reporter : reporters)
+                reporter.metricRemoval(metric);
+        }
+        return metric;
+    }
+
+    /**
      * Add a MetricReporter
      */
     public synchronized void addReporter(MetricsReporter reporter) {
-        Utils.notNull(reporter).init(new ArrayList<KafkaMetric>(metrics.values()));
+        Utils.notNull(reporter).init(new ArrayList<>(metrics.values()));
         this.reporters.add(reporter);
     }
 
@@ -188,6 +242,11 @@ public class Metrics implements Closeable {
      */
     public Map<MetricName, KafkaMetric> metrics() {
         return this.metrics;
+    }
+
+    /* For testing use only. */
+    Map<Sensor, List<Sensor>> childrenSensors() {
+        return Collections.unmodifiableMap(childrenSensors);
     }
 
     /**
