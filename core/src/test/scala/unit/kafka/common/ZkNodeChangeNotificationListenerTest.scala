@@ -16,7 +16,6 @@
  */
 package kafka.common
 
-import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestUtils, ZkUtils}
