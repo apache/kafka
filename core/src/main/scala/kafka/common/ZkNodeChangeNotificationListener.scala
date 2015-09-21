@@ -117,7 +117,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
     override def handleChildChange(path: String, notifications: java.util.List[String]) {
       try {
         import scala.collection.JavaConverters._
-        if(notifications != null)
+        if (notifications != null)
           processNotifications(notifications.asScala.sorted)
       } catch {
         case e: Exception => error(s"Error processing notification change for path = $path and notification= $notifications :", e)

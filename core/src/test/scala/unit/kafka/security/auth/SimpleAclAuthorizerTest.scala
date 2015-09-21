@@ -195,17 +195,22 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testLoadCache(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val host1 = "host1"
-
-    val acl1 = new Acl(user1, Allow, host1, Read)
-    val acl2 = new Acl(user1, Allow, host1, Write)
-    val acls = Set[Acl](acl1, acl2)
+    val acl1 = new Acl(user1, Allow, "host-1", Read)
+    val acls = Set[Acl](acl1)
     simpleAclAuthorizer.addAcls(acls, resource)
+
+    val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
+    val resource1 = new Resource(Topic, "test-2")
+    val acl2 = new Acl(user2, Deny, "host3", Read)
+    val acls1 = Set[Acl](acl2)
+    simpleAclAuthorizer.addAcls(acls1, resource1)
 
     ZkUtils.deletePathRecursive(zkClient, SimpleAclAuthorizer.AclChangedZkPath)
     val authorizer = new SimpleAclAuthorizer
     authorizer.configure(config.originals)
+
     assertEquals(acls, authorizer.getAcls(resource))
+    assertEquals(acls1, authorizer.getAcls(resource1))
   }
 
   private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl]): Set[Acl] = {
