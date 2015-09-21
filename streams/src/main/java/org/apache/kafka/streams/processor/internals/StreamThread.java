@@ -95,13 +95,14 @@ public class StreamThread extends Thread {
     };
 
     public StreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
-        this(builder, config, null , null);
+        this(builder, config, null , null, new SystemTime());
     }
 
     @SuppressWarnings("unchecked")
     StreamThread(TopologyBuilder builder, StreamingConfig config,
                  Producer<byte[], byte[]> producer,
-                 Consumer<byte[], byte[]> consumer) throws Exception {
+                 Consumer<byte[], byte[]> consumer,
+                 Time time) throws Exception {
         super("StreamThread-" + nextThreadNumber.getAndIncrement());
 
         this.config = config;
@@ -125,7 +126,7 @@ public class StreamThread extends Thread {
         this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommit = 0;
         this.recordsProcessed = 0;
-        this.time = new SystemTime();
+        this.time = time;
 
         this.metrics = new KafkaStreamingMetrics();
 
@@ -278,10 +279,10 @@ public class StreamThread extends Thread {
     /**
      * Cleanup any states of the tasks that have been removed from this thread
      */
-    private void maybeClean() {
+    protected void maybeClean() {
         long now = time.milliseconds();
 
-        if (now > lastClean) {
+        if (now > lastClean + cleanTimeMs) {
             File[] stateDirs = stateDir.listFiles();
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
@@ -343,7 +344,7 @@ public class StreamThread extends Thread {
             }
         }
 
-        lastClean = time.milliseconds() + cleanTimeMs;
+        lastClean = time.milliseconds();
     }
 
     private void removePartitions() {

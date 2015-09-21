@@ -23,10 +23,15 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.junit.Test;
 
+import java.io.File;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -35,6 +40,7 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class StreamThreadTest {
@@ -44,23 +50,27 @@ public class StreamThreadTest {
     private TopicPartition t2p1 = new TopicPartition("topic2", 1);
     private TopicPartition t2p2 = new TopicPartition("topic2", 2);
 
-    private final StreamingConfig config = new StreamingConfig(new Properties() {
-        {
-            setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-            setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-            setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
-            setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
-            setProperty(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
-        }
-    });
+    private Properties configProps() {
+        return new Properties() {
+            {
+                setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+                setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+                setProperty(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+                setProperty(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+                setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, "org.apache.kafka.test.MockTimestampExtractor");
+                setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
+                setProperty(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
+            }
+        };
+    }
 
     private ByteArraySerializer serializer = new ByteArraySerializer();
 
     @SuppressWarnings("unchecked")
     @Test
     public void testPartitionAssignmentChange() throws Exception {
+        StreamingConfig config = new StreamingConfig(configProps());
+
         MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
@@ -68,7 +78,7 @@ public class StreamThreadTest {
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
 
-        StreamThread thread = new StreamThread(builder, config, producer, consumer);
+        StreamThread thread = new StreamThread(builder, config, producer, consumer, new SystemTime());
 
         ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
 
@@ -136,5 +146,115 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
 
         assertTrue(thread.tasks().isEmpty());
+    }
+
+    @Test
+    public void testMaybeClean() throws Exception {
+        File baseDir = Files.createTempDirectory("test").toFile();
+        try {
+            final long cleanupDelay = 1000L;
+            Properties props = configProps();
+            props.setProperty(StreamingConfig.STATE_CLEANUP_DELAY_MS_CONFIG, Long.toString(cleanupDelay));
+            props.setProperty(StreamingConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
+
+            StreamingConfig config = new StreamingConfig(props);
+
+            File stateDir1 = new File(baseDir, "1");
+            File stateDir2 = new File(baseDir, "2");
+            File stateDir3 = new File(baseDir, "3");
+            File extraDir = new File(baseDir, "X");
+            stateDir1.mkdir();
+            stateDir2.mkdir();
+            stateDir3.mkdir();
+            extraDir.mkdir();
+
+            MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
+            MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+            MockTime mockTime = new MockTime();
+
+            TopologyBuilder builder = new TopologyBuilder();
+            builder.addSource("source1", "topic1");
+
+            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockTime) {
+                @Override
+                public void maybeClean() {
+                    super.maybeClean();
+                }
+            };
+
+            ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
+
+            assertTrue(thread.tasks().isEmpty());
+            mockTime.sleep(cleanupDelay);
+
+            // all directories exist since an assignment didn't happen
+            assertTrue(stateDir1.exists());
+            assertTrue(stateDir2.exists());
+            assertTrue(stateDir3.exists());
+            assertTrue(extraDir.exists());
+
+            List<TopicPartition> revokedPartitions;
+            List<TopicPartition> assignedPartitions;
+
+            revokedPartitions = Collections.emptyList();
+            assignedPartitions = Arrays.asList(t1p1, t1p2);
+
+            rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
+            rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+
+            // task 1 & 2 are created
+            assertEquals(2, thread.tasks().size());
+
+            // all directories should still exit before the cleanup delay time
+            mockTime.sleep(cleanupDelay - 10L);
+            thread.maybeClean();
+            assertTrue(stateDir1.exists());
+            assertTrue(stateDir2.exists());
+            assertTrue(stateDir3.exists());
+            assertTrue(extraDir.exists());
+
+            // all state directories except for task 1 & 2 will be removed. the extra directory should still exists
+            mockTime.sleep(11L);
+            thread.maybeClean();
+            assertTrue(stateDir1.exists());
+            assertTrue(stateDir2.exists());
+            assertFalse(stateDir3.exists());
+            assertTrue(extraDir.exists());
+
+            revokedPartitions = Collections.emptyList();
+            assignedPartitions = Arrays.asList(t1p1, t1p2);
+
+            rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
+            rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+
+            revokedPartitions = assignedPartitions;
+            assignedPartitions = Collections.emptyList();
+
+            rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
+            rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+
+            // no task
+            assertTrue(thread.tasks().isEmpty());
+
+            // all state directories for task 1 & 2 still exist before the cleanup delay time
+            mockTime.sleep(cleanupDelay - 10L);
+            thread.maybeClean();
+            assertTrue(stateDir1.exists());
+            assertTrue(stateDir2.exists());
+            assertFalse(stateDir3.exists());
+            assertTrue(extraDir.exists());
+
+            // all state directories for task 1 & 2 are removed
+            mockTime.sleep(11L);
+            thread.maybeClean();
+            assertFalse(stateDir1.exists());
+            assertFalse(stateDir2.exists());
+            assertFalse(stateDir3.exists());
+            assertTrue(extraDir.exists());
+
+        } finally {
+            Utils.delete(baseDir);
+
+        }
     }
 }
