@@ -61,7 +61,7 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testPartitionAssignmentChange() throws Exception {
-        MockProducer<byte[], byte[]> producer = new MockProducer(true, serializer, serializer);
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
         TopologyBuilder builder = new TopologyBuilder();
