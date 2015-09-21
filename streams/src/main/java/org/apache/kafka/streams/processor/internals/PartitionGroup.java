@@ -22,8 +22,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
+import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -124,7 +124,7 @@ public class PartitionGroup {
     }
 
     public Set<TopicPartition> partitions() {
-        return new HashSet<>(partitionQueues.keySet());
+        return Collections.unmodifiableSet(partitionQueues.keySet());
     }
 
     /**
