@@ -23,7 +23,7 @@ import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
  * Handle the notificationMessage.
  */
 trait NotificationHandler {
-  def processNotification(notificationMessage: Option[String])
+  def processNotification(notificationMessage: String)
 }
 
 /**
@@ -54,7 +54,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
   /**
    * create seqNodeRoot and begin watching for any new children nodes.
    */
-  def startup() {
+  def init() {
     ZkUtils.makeSurePersistentPathExists(zkClient, seqNodeRoot)
     zkClient.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
     processAllNotifications()
@@ -82,7 +82,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
         if (changeId > lastExecutedChange) {
           val changeZnode = seqNodeRoot + "/" + notification
           val (data, stat) = ZkUtils.readDataMaybeNull(zkClient, changeZnode)
-          notificationHandler.processNotification(data)
+          data map (notificationHandler.processNotification(_)) getOrElse(logger.warn(s"read null data from $changeZnode when processing notification $notification"))
         }
         lastExecutedChange = changeId
       }
@@ -118,7 +118,8 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
     override def handleChildChange(path: String, notifications: java.util.List[String]) {
       try {
         import scala.collection.JavaConverters._
-        processNotifications(notifications.asScala.sorted)
+        if(notifications != null)
+          processNotifications(notifications.asScala.sorted)
       } catch {
         case e: Exception => error(s"Error processing notification change for path = $path and notification= $notifications :", e)
       }

@@ -175,8 +175,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     acls = changeAclAndVerify(acls, Set[Acl](acl5), Set.empty[Acl])
 
     //test get by principal name.
-    assertEquals(Map(resource -> Set(acl1, acl2)), simpleAclAuthorizer.getAcls(user1))
-    assertEquals(Map(resource -> Set(acl3, acl4, acl5)), simpleAclAuthorizer.getAcls(user2))
+    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl1, acl2)) == simpleAclAuthorizer.getAcls(user1), "changes not propogated in timeout period")
+    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl3, acl4, acl5)) == simpleAclAuthorizer.getAcls(user2), "changes not propogated in timeout period")
 
     //test remove acl from existing acls.
     changeAclAndVerify(acls, Set.empty[Acl], Set(acl1, acl5))
@@ -202,9 +202,10 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val acls = Set[Acl](acl1, acl2)
     simpleAclAuthorizer.addAcls(acls, resource)
 
+    ZkUtils.deletePathRecursive(zkClient, SimpleAclAuthorizer.AclChangedZkPath)
     val authorizer = new SimpleAclAuthorizer
     authorizer.configure(config.originals)
-    assertEquals(acls, simpleAclAuthorizer.getAcls(resource))
+    assertEquals(acls, authorizer.getAcls(resource))
   }
 
   private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl]): Set[Acl] = {

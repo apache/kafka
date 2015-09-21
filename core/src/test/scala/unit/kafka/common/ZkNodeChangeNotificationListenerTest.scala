@@ -31,8 +31,8 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
     val notificationHandler = new NotificationHandler {
       @volatile var notification: String = _
       @volatile var invocationCount: Integer = 0
-      override def processNotification(notificationMessage: Option[String]): Unit = {
-        notification = notificationMessage.get
+      override def processNotification(notificationMessage: String): Unit = {
+        notification = notificationMessage
         invocationCount += 1
       }
     }
@@ -45,7 +45,7 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
     val changeExpirationMs = 100
 
     val notificationListener = new ZkNodeChangeNotificationListener(zkClient, seqNodeRoot, seqNodePrefix, notificationHandler, changeExpirationMs)
-    notificationListener.startup()
+    notificationListener.init()
 
     ZkUtils.createSequentialPersistentPath(zkClient, seqNodePath, notificationMessage1)
 
