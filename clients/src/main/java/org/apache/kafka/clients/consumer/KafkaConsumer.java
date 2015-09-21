@@ -395,7 +395,7 @@ import java.util.regex.Pattern;
  *
  */
 @InterfaceStability.Unstable
-public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
+public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
@@ -417,6 +417,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
     private final boolean autoCommit;
     private final long autoCommitIntervalMs;
     private boolean closed = false;
+    private Metadata.Listener metadataListener;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
@@ -698,9 +699,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
         acquire();
         try {
             log.debug("Subscribed to pattern: {}", pattern);
+            metadataListener = new Metadata.Listener() {
+                @Override
+                public void onMetadataUpdate(Cluster cluster) {
+                    final List<String> topicsToSubscribe = new ArrayList<>();
+
+                    for (String topic : cluster.topics())
+                        if (subscriptions.getSubscribedPattern().matcher(topic).matches())
+                            topicsToSubscribe.add(topic);
+
+                    subscriptions.changeSubscription(topicsToSubscribe);
+                    metadata.setTopics(topicsToSubscribe);
+                }
+            };
             this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
             this.metadata.needMetadataForAllTopics(true);
-            this.metadata.addListener(this);
+            this.metadata.addListener(metadataListener);
         } finally {
             release();
         }
@@ -714,7 +728,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
         try {
             this.subscriptions.unsubscribe();
             this.metadata.needMetadataForAllTopics(false);
-            this.metadata.removeListener(this);
+            this.metadata.removeListener(metadataListener);
         } finally {
             release();
         }
@@ -1212,17 +1226,4 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
     }
-
-    @Override
-    public void onMetadataUpdate(Cluster cluster) {
-        final List<String> topicsToSubscribe = new ArrayList<>();
-
-        for (String topic : cluster.topics())
-            if (this.subscriptions.getSubscribedPattern().matcher(topic).matches())
-                topicsToSubscribe.add(topic);
-
-        subscriptions.changeSubscription(topicsToSubscribe);
-        metadata.setTopics(topicsToSubscribe);
-    }
-
 }
