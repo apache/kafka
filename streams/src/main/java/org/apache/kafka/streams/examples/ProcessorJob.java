@@ -65,7 +65,7 @@ public class ProcessorJob {
                 }
 
                 @Override
-                public void punctuate(long streamTime) {
+                public void punctuate(long timestamp) {
                     KeyValueIterator<String, Integer> iter = this.kvStore.all();
 
                     while (iter.hasNext()) {
@@ -87,6 +87,7 @@ public class ProcessorJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
+        props.put(StreamingConfig.CLIENT_ID_CONFIG, "Example-Processor-Job");
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);

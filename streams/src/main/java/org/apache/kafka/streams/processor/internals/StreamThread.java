@@ -50,6 +50,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -73,7 +74,7 @@ public class StreamThread extends Thread {
     private final long cleanTimeMs;
     private final long commitTimeMs;
     private final long totalRecordsToProcess;
-    private final KafkaStreamingMetrics metrics;
+    private final StreamingMetrics metrics;
 
     private long lastClean;
     private long lastCommit;
@@ -88,7 +89,7 @@ public class StreamThread extends Thread {
 
         @Override
         public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
-            commitAll(time.milliseconds());
+            commitAll();
             removePartitions();
             lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
         }
@@ -124,11 +125,11 @@ public class StreamThread extends Thread {
         this.totalRecordsToProcess = config.getLong(StreamingConfig.TOTAL_RECORDS_TO_PROCESS);
 
         this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
-        this.lastCommit = 0;
+        this.lastCommit = time.milliseconds();
         this.recordsProcessed = 0;
         this.time = time;
 
-        this.metrics = new KafkaStreamingMetrics();
+        this.metrics = new StreamingMetrics();
 
         this.running = new AtomicBoolean(true);
     }
@@ -180,7 +181,7 @@ public class StreamThread extends Thread {
 
         // Exceptions should not prevent this call from going through all shutdown steps.
         try {
-            commitAll(time.milliseconds());
+            commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
         }
@@ -210,6 +211,8 @@ public class StreamThread extends Thread {
             consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceListener);
 
             while (stillRunning()) {
+                long startPoll = time.milliseconds();
+
                 // try to fetch some records if necessary
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
 
@@ -219,13 +222,21 @@ public class StreamThread extends Thread {
                     }
                 }
 
+                long endPoll = time.milliseconds();
+                metrics.pollTimeSensor.record(endPoll - startPoll);
+
                 // try to process one record from each task
                 totalNumBuffered = 0;
 
                 for (StreamTask task : tasks.values()) {
+                    long startProcess = time.milliseconds();
+
                     totalNumBuffered += task.process();
+
+                    metrics.processTimeSensor.record(time.milliseconds() - startProcess);
                 }
 
+                maybePunctuate();
                 maybeClean();
                 maybeCommit();
             }
@@ -248,32 +259,68 @@ public class StreamThread extends Thread {
         return true;
     }
 
-    protected void maybeCommit() {
-        long now = time.milliseconds();
-
-        if (commitTimeMs >= 0 && lastCommit + commitTimeMs < now) {
-            log.trace("Committing processor instances because the commit interval has elapsed.");
-            commitAll(now);
-        }
-    }
-
-    /**
-     * Commit the states of all its tasks
-     * @param now
-     */
-    private void commitAll(long now) {
+    private void maybePunctuate() {
         for (StreamTask task : tasks.values()) {
             try {
-                task.commit();
+                long now = time.milliseconds();
+
+                if (task.maybePunctuate(now))
+                    metrics.punctuateTimeSensor.record(time.milliseconds() - now);
+
             } catch (Exception e) {
                 log.error("Failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
                 throw e;
             }
         }
+    }
 
-        metrics.commitTime.record(now - time.milliseconds());
+    protected void maybeCommit() {
+        long now = time.milliseconds();
 
-        lastCommit = now;
+        if (commitTimeMs >= 0 && lastCommit + commitTimeMs < now) {
+            log.trace("Committing processor instances because the commit interval has elapsed.");
+
+            commitAll();
+            lastCommit = now;
+        } else {
+            for (StreamTask task : tasks.values()) {
+                try {
+                    if (task.commitNeeded())
+                        commitOne(task, time.milliseconds());
+                } catch (Exception e) {
+                    log.error("Failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+                    throw e;
+                }
+            }
+        }
+    }
+
+    /**
+     * Commit the states of all its tasks
+     */
+    private void commitAll() {
+        for (StreamTask task : tasks.values()) {
+            try {
+                commitOne(task, time.milliseconds());
+            } catch (Exception e) {
+                log.error("Failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Commit the state of a task
+     */
+    private void commitOne(StreamTask task, long now) {
+        try {
+            task.commit();
+        } catch (Exception e) {
+            log.error("Failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+            throw e;
+        }
+
+        metrics.commitTimeSensor.record(time.milliseconds() - now);
     }
 
     /**
@@ -320,6 +367,8 @@ public class StreamThread extends Thread {
     }
 
     protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+        metrics.taskCreationSensor.record();
+
         return new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
     }
 
@@ -362,45 +411,53 @@ public class StreamThread extends Thread {
                 log.error("Failed to close a task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
                 throw e;
             }
-            metrics.processorDestruction.record();
+            metrics.taskDestructionSensor.record();
         }
         tasks.clear();
     }
 
-    private class KafkaStreamingMetrics {
+    private class StreamingMetrics {
         final Metrics metrics;
 
-        final Sensor commitTime;
-        final Sensor processTime;
-        final Sensor windowTime;
-        final Sensor processorCreation;
-        final Sensor processorDestruction;
+        final Sensor commitTimeSensor;
+        final Sensor pollTimeSensor;
+        final Sensor processTimeSensor;
+        final Sensor punctuateTimeSensor;
+        final Sensor taskCreationSensor;
+        final Sensor taskDestructionSensor;
 
-        public KafkaStreamingMetrics() {
-            String group = "kafka-streaming";
+        public StreamingMetrics() {
+            String metricGrpName = "streaming-metrics";
 
             this.metrics = new Metrics();
+            Map<String, String> metricTags = new LinkedHashMap<String, String>();
+            metricTags.put("client-id", config.getString(StreamingConfig.CLIENT_ID_CONFIG) + "-" + getName());
 
-            this.commitTime = metrics.sensor("commit-time");
-            this.commitTime.add(new MetricName(group, "commit-time-avg-ms"), new Avg());
-            this.commitTime.add(new MetricName(group, "commit-time-max-ms"), new Max());
-            this.commitTime.add(new MetricName(group, "commit-per-second"), new Rate(new Count()));
+            this.commitTimeSensor = metrics.sensor("commit-time");
+            this.commitTimeSensor.add(new MetricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
+            this.commitTimeSensor.add(new MetricName("commit-time-max", metricGrpName, "The maximum commit time in ms", metricTags), new Max());
+            this.commitTimeSensor.add(new MetricName("commit-calls-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
 
-            this.processTime = metrics.sensor("process-time");
-            this.processTime.add(new MetricName(group, "process-time-avg-ms"), new Avg());
-            this.processTime.add(new MetricName(group, "process-time-max-ms"), new Max());
-            this.processTime.add(new MetricName(group, "process-calls-per-second"), new Rate(new Count()));
+            this.pollTimeSensor = metrics.sensor("poll-time");
+            this.pollTimeSensor.add(new MetricName("poll-time-avg", metricGrpName, "The average poll time in ms", metricTags), new Avg());
+            this.pollTimeSensor.add(new MetricName("poll-time-max", metricGrpName, "The maximum poll time in ms", metricTags), new Max());
+            this.pollTimeSensor.add(new MetricName("poll-calls-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
 
-            this.windowTime = metrics.sensor("window-time");
-            this.windowTime.add(new MetricName(group, "window-time-avg-ms"), new Avg());
-            this.windowTime.add(new MetricName(group, "window-time-max-ms"), new Max());
-            this.windowTime.add(new MetricName(group, "window-calls-per-second"), new Rate(new Count()));
+            this.processTimeSensor = metrics.sensor("process-time");
+            this.processTimeSensor.add(new MetricName("process-time-avg-ms", metricGrpName, "The average process time in ms", metricTags), new Avg());
+            this.processTimeSensor.add(new MetricName("process-time-max-ms", metricGrpName, "The maximum process time in ms", metricTags), new Max());
+            this.processTimeSensor.add(new MetricName("process-calls-rate", metricGrpName, "The average per-second number of process calls", metricTags), new Rate(new Count()));
 
-            this.processorCreation = metrics.sensor("processor-creation");
-            this.processorCreation.add(new MetricName(group, "processor-creation"), new Rate(new Count()));
+            this.punctuateTimeSensor = metrics.sensor("punctuate-time");
+            this.punctuateTimeSensor.add(new MetricName("punctuate-time-avg", metricGrpName, "The average punctuate time in ms", metricTags), new Avg());
+            this.punctuateTimeSensor.add(new MetricName("punctuate-time-max", metricGrpName, "The maximum punctuate time in ms", metricTags), new Max());
+            this.punctuateTimeSensor.add(new MetricName("punctuate-calls-rate", metricGrpName, "The average per-second number of punctuate calls", metricTags), new Rate(new Count()));
 
-            this.processorDestruction = metrics.sensor("processor-destruction");
-            this.processorDestruction.add(new MetricName(group, "processor-destruction"), new Rate(new Count()));
+            this.taskCreationSensor = metrics.sensor("task-creation");
+            this.taskCreationSensor.add(new MetricName("task-creation-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
+
+            this.taskDestructionSensor = metrics.sensor("task-destruction");
+            this.taskDestructionSensor.add(new MetricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
         }
     }
 }

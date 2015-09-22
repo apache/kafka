@@ -164,7 +164,7 @@ public class StreamTask implements Punctuator {
     }
 
     /**
-     * Processes one record
+     * Process one record
      *
      * @return number of records left in the buffer of this task's partition group after the processing is done
      */
@@ -194,11 +194,6 @@ public class StreamTask implements Punctuator {
                 consumedOffsets.put(partition, currRecord.offset());
                 commitOffsetNeeded = true;
 
-                // commit the current task state if requested during the processing
-                if (commitRequested) {
-                    commit();
-                }
-
                 // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
                 if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
@@ -209,23 +204,28 @@ public class StreamTask implements Punctuator {
                 this.currNode = null;
             }
 
-            // possibly trigger registered punctuation functions if
-            // partition group's time has reached the defined stamp
-            long timestamp = partitionGroup.timestamp();
-            punctuationQueue.mayPunctuate(timestamp, this);
-
             return partitionGroup.numBuffered();
         }
     }
 
+    /**
+     * Possibly trigger registered punctuation functions if
+     * current time has reached the defined stamp
+     *
+     * @param timestamp
+     */
+    public boolean maybePunctuate(long timestamp) {
+        return punctuationQueue.mayPunctuate(timestamp, this);
+    }
+
     @Override
-    public void punctuate(ProcessorNode node, long streamTime) {
+    public void punctuate(ProcessorNode node, long timestamp) {
         if (currNode != null)
             throw new IllegalStateException("Current node is not null");
 
         currNode = node;
         try {
-            node.processor().punctuate(streamTime);
+            node.processor().punctuate(timestamp);
         } finally {
             currNode = null;
         }
@@ -259,7 +259,15 @@ public class StreamTask implements Punctuator {
             consumer.commitSync(consumedOffsets);
             commitOffsetNeeded = false;
         }
+
         commitRequested = false;
+    }
+
+    /**
+     * Whether or not a request has been made to commit the current state
+     */
+    public boolean commitNeeded() {
+        return this.commitRequested;
     }
 
     /**
