@@ -53,10 +53,12 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
+    private static AtomicInteger nextThreadNumber = new AtomicInteger(1);
 
     private final AtomicBoolean running;
 
@@ -65,7 +67,6 @@ public class StreamThread extends Thread {
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
 
-    private final int threadId;
     private final Map<Integer, StreamTask> tasks;
     private final Time time;
     private final File stateDir;
@@ -94,19 +95,17 @@ public class StreamThread extends Thread {
         }
     };
 
-    public StreamThread(int threadId, TopologyBuilder builder, StreamingConfig config) throws Exception {
-        this(threadId, builder, config, null , null, new SystemTime());
+    public StreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
+        this(builder, config, null , null, new SystemTime());
     }
 
     @SuppressWarnings("unchecked")
-    StreamThread(int threadId,
-                 TopologyBuilder builder, StreamingConfig config,
+    StreamThread(TopologyBuilder builder, StreamingConfig config,
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
                  Time time) throws Exception {
-        super("StreamThread-" + threadId);
+        super("StreamThread-" + nextThreadNumber.getAndIncrement());
 
-        this.threadId = threadId;
         this.config = config;
         this.builder = builder;
 
@@ -432,7 +431,7 @@ public class StreamThread extends Thread {
 
             this.metrics = new Metrics();
             Map<String, String> metricTags = new LinkedHashMap<String, String>();
-            metricTags.put("client-id", config.getString(StreamingConfig.CLIENT_ID_CONFIG) + "-thread" + threadId);
+            metricTags.put("client-id", config.getString(StreamingConfig.CLIENT_ID_CONFIG) + "-" + getName());
 
             this.commitTimeSensor = metrics.sensor("commit-time");
             this.commitTimeSensor.add(new MetricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());

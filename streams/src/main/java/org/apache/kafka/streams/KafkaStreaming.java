@@ -73,7 +73,7 @@ public class KafkaStreaming {
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
         this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(i, builder, config);
+            this.threads[i] = new StreamThread(builder, config);
         }
     }
 
