@@ -406,15 +406,12 @@ project(':clients') {
         headRef = headRef.replaceAll('ref: ', '').trim()
         if (file("../.git/$headRef").exists()) {
           commitId = file("../.git/$headRef").text.trim().take(takeFromHash)
-        } else {
-          commitId
-        }
+        } 
       } else {
         commitId = headRef.trim().take(takeFromHash)
       }
-    } else {
-      commitId
-    }
+    } 
+    commitId
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
