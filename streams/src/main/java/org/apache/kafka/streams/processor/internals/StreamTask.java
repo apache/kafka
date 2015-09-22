@@ -178,11 +178,6 @@ public class StreamTask implements Punctuator {
                 consumedOffsets.put(partition, currRecord.offset());
                 commitOffsetNeeded = true;
 
-                // commit the current task state if requested during the processing
-                if (commitRequested) {
-                    commit();
-                }
-
                 // after processing this record, if its partition queue's buffered size has been
                 // decreased to the threshold, we can then resume the consumption on this partition
                 if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
@@ -243,7 +238,15 @@ public class StreamTask implements Punctuator {
             consumer.commitSync(consumedOffsets);
             commitOffsetNeeded = false;
         }
+
         commitRequested = false;
+    }
+
+    /**
+     * Whether or not a request has been made to commit the current state
+     */
+    public boolean commitNeeded() {
+        return this.commitOffsetNeeded;
     }
 
     /**
