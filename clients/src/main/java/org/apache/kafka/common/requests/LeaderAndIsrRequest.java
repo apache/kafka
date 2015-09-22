@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
-import java.nio.ByteBuffer;;
+import java.nio.ByteBuffer;
 import java.util.*;
 
 public class LeaderAndIsrRequest extends AbstractRequest {
