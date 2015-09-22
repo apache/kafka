@@ -49,7 +49,7 @@ class KafkaHealthcheck(private val brokerId: Int,
   }
 
   def shutdown() {
-    if(zkWatchedEphemeral != null) {
+    if (zkWatchedEphemeral != null) {
       zkWatchedEphemeral.halt
       zkWatchedEphemeral = null
     }
@@ -80,8 +80,7 @@ class KafkaHealthcheck(private val brokerId: Int,
   class SessionExpireListener() extends IZkStateListener {
     @throws(classOf[Exception])
     def handleStateChanged(state: KeeperState) {
-      // do nothing, since zkclient will do reconnect for us.
-      if(state == KeeperState.Expired)
+      if (state == KeeperState.Expired)
         shutdown()
     }
 

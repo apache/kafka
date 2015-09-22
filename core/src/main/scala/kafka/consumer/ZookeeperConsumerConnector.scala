@@ -179,7 +179,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def connectZk() {
     info("Connecting to zookeeper instance at " + config.zkConnect)
-    var (client, connection) = ZkUtils.createZkClientAndConnection(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
+    val (client, connection) = ZkUtils.createZkClientAndConnection(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
     zkClient = client
     zkConnection = connection
   }
@@ -215,7 +215,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           if (config.autoCommitEnable)
             commitOffsets(true)
           if (zkClient != null) {
-            if(zkWatchedEphemeral != null) {
+            if (zkWatchedEphemeral != null) {
               zkWatchedEphemeral.halt
               zkWatchedEphemeral = null
             }
@@ -262,7 +262,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   // this API is used by unit tests only
   def getTopicRegistry: Pool[String, Pool[Int, PartitionTopicInfo]] = topicRegistry
-  private var zkWatchedEphemeral : ZKWatchedEphemeral = null
+  private var zkWatchedEphemeral: ZKWatchedEphemeral = null
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) {
     info("begin registering consumer " + consumerIdString + " in ZK")
     val timestamp = SystemTime.milliseconds.toString

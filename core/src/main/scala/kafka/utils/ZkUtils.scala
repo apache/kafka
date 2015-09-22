@@ -980,7 +980,7 @@ class ZKWatchedEphemeral(path : String,
           error("Session has expired while creating %s".format(path))
         }
         case _ => {
-          info("ZooKeeper event while checking if registration node exists %s %s".format(path, Code.get(rc)))
+          info("ZooKeeper event while checking if registration node exists %s (return code %s)".format(path, Code.get(rc)))
         }
       }
     }

@@ -165,7 +165,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         kafkaScheduler.startup()
 
         /* setup zookeeper */
-        var (client, connection) = initZk()
+        val (client, connection) = initZk()
         zkClient = client
         zkConnection = connection
 

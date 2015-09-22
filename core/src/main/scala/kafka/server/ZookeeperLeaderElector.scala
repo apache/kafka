@@ -74,9 +74,6 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     }
 
     try {
-      //createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, brokerId,
-      //  (controllerString : String, leaderId : Any) => KafkaController.parseControllerId(controllerString) == leaderId.asInstanceOf[Int],
-      //  controllerContext.zkSessionTimeout)
       assert(zkWatchedEphemeral == null)
       zkWatchedEphemeral = new ZKWatchedEphemeral(electionPath,
                                                   electString,
@@ -112,7 +109,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
 
   def resign() = {
     leaderId = -1
-    if(zkWatchedEphemeral != null) {
+    if (zkWatchedEphemeral != null) {
       zkWatchedEphemeral.halt
       zkWatchedEphemeral = null
     }
