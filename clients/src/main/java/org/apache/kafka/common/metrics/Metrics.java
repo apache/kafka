@@ -18,12 +18,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A registry of sensors and metrics.
@@ -56,6 +61,8 @@ public class Metrics implements Closeable {
     private final ConcurrentMap<Sensor, List<Sensor>> childrenSensors;
     private final List<MetricsReporter> reporters;
     private final Time time;
+    private final ScheduledExecutorService scheduler;
+    private static final Logger log = LoggerFactory.getLogger(Metrics.class);
 
     /**
      * Create a metrics repository with no metric reporters and default configuration.
@@ -95,6 +102,8 @@ public class Metrics implements Closeable {
         this.time = time;
         for (MetricsReporter reporter : reporters)
             reporter.init(new ArrayList<KafkaMetric>());
+        this.scheduler = Executors.newScheduledThreadPool(1);
+        this.scheduler.scheduleAtFixedRate(new ExpireSensorTask(), 30, 30, TimeUnit.SECONDS);
     }
 
     /**
@@ -135,9 +144,23 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+        return sensor(name, config, Long.MAX_VALUE, parents);
+    }
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor.
+     * @param name The name of the sensor
+     * @param config A default configuration to use for this sensor for metrics that don't have their own config
+     * @param expireInactiveSensorTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     *                                        it is eligible for removal
+     * @param parents The parent sensors
+     * @return The sensor that is created
+     */
+    public synchronized Sensor sensor(String name, MetricConfig config, long expireInactiveSensorTimeSeconds, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time);
+            s = new Sensor(this, name, parents, config == null ? this.config : config, time, expireInactiveSensorTimeSeconds);
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
@@ -150,6 +173,7 @@ public class Metrics implements Closeable {
                 }
             }
         }
+        log.debug("Added sensor with name {}", name);
         return s;
     }
 
@@ -171,6 +195,7 @@ public class Metrics implements Closeable {
                     }
                 }
             }
+            log.debug("Removed sensor with name {}", name);
             if (childSensors != null) {
                 for (Sensor childSensor : childSensors)
                     removeSensor(childSensor.name());
@@ -244,6 +269,24 @@ public class Metrics implements Closeable {
         return this.metrics;
     }
 
+    /**
+     * This iterates over every Sensor and triggers a removeSensor if it has expired
+     * Package private for testing
+     */
+    class ExpireSensorTask implements Runnable {
+        public void run() {
+            for (Map.Entry<String, Sensor> sensor : sensors.entrySet()) {
+                // removeSensor also locks the sensor object. This is fine because synchronized is reentrant
+                synchronized (sensor.getValue()) {
+                    if (sensor.getValue().isExpired()) {
+                        log.debug("Removing expired sensor {}", sensor.getKey());
+                        removeSensor(sensor.getKey());
+                    }
+                }
+            }
+        }
+    }
+
     /* For testing use only. */
     Map<Sensor, List<Sensor>> childrenSensors() {
         return Collections.unmodifiableMap(childrenSensors);
@@ -254,6 +297,13 @@ public class Metrics implements Closeable {
      */
     @Override
     public void close() {
+        this.scheduler.shutdown();
+        try {
+            this.scheduler.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException ex) {
+            // ignore and continue shutdown
+        }
+
         for (MetricsReporter reporter : this.reporters)
             reporter.close();
     }

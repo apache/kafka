@@ -34,6 +34,13 @@ import org.junit.Test;
  */
 public class SSLSelectorTest extends SelectorTest {
 
+    private static final int BUFFER_SIZE = 4 * 1024;
+
+    private EchoServer server;
+    private Selector selector;
+    private ChannelBuilder channelBuilder;
+    private Metrics metrics;
+
     @Before
     public void setup() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
@@ -48,6 +55,7 @@ public class SSLSelectorTest extends SelectorTest {
 
         this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
+        this.metrics = new Metrics();
         this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
@@ -55,6 +63,7 @@ public class SSLSelectorTest extends SelectorTest {
     public void teardown() throws Exception {
         this.selector.close();
         this.server.close();
+        this.metrics.close();
     }
 
     /**

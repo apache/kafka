@@ -44,6 +44,7 @@ public class SelectorTest {
     protected Time time;
     protected Selectable selector;
     protected ChannelBuilder channelBuilder;
+    private Metrics metrics;
 
     @Before
     public void setup() throws Exception {
@@ -54,13 +55,15 @@ public class SelectorTest {
         this.time = new MockTime();
         this.channelBuilder = new PlaintextChannelBuilder();
         this.channelBuilder.configure(configs);
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
+        this.metrics = new Metrics();
+        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
     @After
     public void teardown() throws Exception {
         this.selector.close();
         this.server.close();
+        this.metrics.close();
     }
 
     /**

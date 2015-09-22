@@ -45,14 +45,18 @@ class ReplicaManagerTest {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
-    val rm = new ReplicaManager(config, new Metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+    val metrics = new Metrics
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
-    val partition = rm.getOrCreatePartition(topic, 1)
-    partition.getOrCreateReplica(1)
-    rm.checkpointHighWatermarks()
-
-    // shutdown the replica manager upon test completion
-    rm.shutdown(false)
+    try {
+      val partition = rm.getOrCreatePartition(topic, 1)
+      partition.getOrCreateReplica(1)
+      rm.checkpointHighWatermarks()
+    } finally {
+      // shutdown the replica manager upon test completion
+      rm.shutdown(false)
+      metrics.close()
+    }
   }
 
   @Test
@@ -64,14 +68,18 @@ class ReplicaManagerTest {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
-    val rm = new ReplicaManager(config, new Metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+    val metrics = new Metrics
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
-    val partition = rm.getOrCreatePartition(topic, 1)
-    partition.getOrCreateReplica(1)
-    rm.checkpointHighWatermarks()
-
-    // shutdown the replica manager upon test completion
-    rm.shutdown(false)
+    try {
+      val partition = rm.getOrCreatePartition(topic, 1)
+      partition.getOrCreateReplica(1)
+      rm.checkpointHighWatermarks()
+    } finally {
+      // shutdown the replica manager upon test completion
+      rm.shutdown(false)
+      metrics.close()
+    }
   }
 
   @Test
@@ -82,18 +90,20 @@ class ReplicaManagerTest {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
-    val rm = new ReplicaManager(config, new Metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+    val metrics = new Metrics
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), Option(this.getClass.getName))
-    val produceRequest = new ProducerRequest(1, "client 1", 3, 1000, SerializationTestUtils.topicDataProducerRequest)
-    def callback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) = {
-      assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS.code)
+    try {
+      val produceRequest = new ProducerRequest(1, "client 1", 3, 1000, SerializationTestUtils.topicDataProducerRequest)
+      def callback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) = {
+        assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS.code)
+      }
+      rm.appendMessages(timeout = 0, requiredAcks = 3, internalTopicsAllowed = false, messagesPerPartition = produceRequest.data, responseCallback = callback)
+    } finally {
+      rm.shutdown(false)
+      metrics.close()
     }
 
-    rm.appendMessages(timeout = 0, requiredAcks = 3, internalTopicsAllowed = false, messagesPerPartition = produceRequest.data, responseCallback = callback)
-
-    rm.shutdown(false)
-
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
-
+    TestUtils.verifyNonDaemonThreadsStatus
   }
 }
