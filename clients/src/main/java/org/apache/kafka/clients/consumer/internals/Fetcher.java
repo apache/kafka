@@ -79,7 +79,7 @@ public class Fetcher<K, V> {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
-    private Map<TopicPartition, Long> offsetOutOfRangePartitions;
+    private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,

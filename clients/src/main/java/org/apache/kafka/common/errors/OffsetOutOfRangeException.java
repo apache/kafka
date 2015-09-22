@@ -22,7 +22,7 @@ import java.util.Map;
 public class OffsetOutOfRangeException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
-    Map<TopicPartition, Long> offsetOutOfRangePartitions = null;
+    private Map<TopicPartition, Long> offsetOutOfRangePartitions = null;
 
     public OffsetOutOfRangeException() {
     }
@@ -43,7 +43,7 @@ public class OffsetOutOfRangeException extends RetriableException {
         super(message, cause);
     }
 
-    public Map<TopicPartition, Long> getOutOfRangePartitions() {
+    public Map<TopicPartition, Long> offsetOutOfRangePartitions() {
         return offsetOutOfRangePartitions;
     }
 
