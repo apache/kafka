@@ -21,6 +21,7 @@ import kafka.message.MessageSet
 import kafka.security.auth.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.requests.admin._
 import org.apache.kafka.common.TopicPartition
 import kafka.api._
 import kafka.admin.AdminUtils
@@ -76,6 +77,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.ConsumerMetadataKey => handleConsumerMetadataRequest(request)
         case RequestKeys.JoinGroupKey => handleJoinGroupRequest(request)
         case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
+        case RequestKeys.CreateTopicKey => handleCreateTopicRequest(request)
+        case RequestKeys.AlterTopicKey => handleAlterTopicRequest(request)
+        case RequestKeys.DeleteTopicKey => handleDeleteTopicRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -771,6 +775,54 @@ class KafkaApis(val requestChannel: RequestChannel,
               new ClientQuotaManager(consumerQuotaManagerCfg, metrics, RequestKeys.nameForKey(RequestKeys.FetchKey), new org.apache.kafka.common.utils.SystemTime)
     )
     quotaManagers
+  }
+
+  def handleCreateTopicRequest(request: RequestChannel.Request) {
+    import JavaConverters._
+
+    val createTopicRequest = request.body.asInstanceOf[CreateTopicRequest]
+    val respHeader = new ResponseHeader(request.header.correlationId)
+
+    val resultMap = TopicCommandHelper.createTopics(zkClient, createTopicRequest.createTopicArguments().asScala)
+
+    val responseBody = new CreateTopicResponse(resultMap.asJava)
+
+    trace("Sending create topics response %s for correlation id %d to client %s."
+      .format(responseBody, request.header.correlationId(), request.header.clientId()))
+
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
+  }
+
+  def handleAlterTopicRequest(request: RequestChannel.Request) {
+    import JavaConverters._
+
+    val alterTopicRequest = request.body.asInstanceOf[AlterTopicRequest]
+    val respHeader = new ResponseHeader(request.header.correlationId)
+
+    val resultMap = TopicCommandHelper.alterTopics(zkClient, alterTopicRequest.alterTopicArguments().asScala)
+
+    val responseBody = new AlterTopicResponse(resultMap.asJava)
+
+    trace("Sending alter topics response %s for correlation id %d to client %s."
+      .format(responseBody, request.header.correlationId(), request.header.clientId()))
+
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
+  }
+
+  def handleDeleteTopicRequest(request: RequestChannel.Request) {
+    import JavaConverters._
+
+    val deleteTopicRequest = request.body.asInstanceOf[DeleteTopicRequest]
+    val respHeader = new ResponseHeader(request.header.correlationId)
+
+    val resultMap = TopicCommandHelper.deleteTopics(zkClient, deleteTopicRequest.topics().asScala)
+
+    val responseBody = new DeleteTopicResponse(resultMap.asJava)
+
+    trace("Sending delete topics response %s for correlation id %d to client %s."
+      .format(responseBody, request.header.correlationId(), request.header.clientId()))
+
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
   }
 
   def close() {

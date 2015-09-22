@@ -69,11 +69,11 @@ object AdminUtils extends Logging {
                               startPartitionId: Int = -1)
   : Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
-      throw new AdminOperationException("number of partitions must be larger than 0")
+      throw new InvalidPartitionsException("number of partitions must be larger than 0")
     if (replicationFactor <= 0)
-      throw new AdminOperationException("replication factor must be larger than 0")
+      throw new InvalidReplicationFactorException("replication factor must be larger than 0")
     if (replicationFactor > brokerList.size)
-      throw new AdminOperationException("replication factor: " + replicationFactor +
+      throw new InvalidReplicationFactorException("replication factor: " + replicationFactor +
         " larger than available brokers: " + brokerList.size)
     val ret = new mutable.HashMap[Int, List[Int]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
@@ -93,6 +93,50 @@ object AdminUtils extends Logging {
     ret.toMap
   }
 
+  /**
+   * Add partitions to a topic by a predefined replica assignment
+   *
+   * @param zkClient Zookeeper client
+   * @param topic Topic for adding partitions to
+   * @param currentReplicaAssignment current partitions replica assignment to validate target assignment
+   * @param addedPartitionsReplicaAssignment replica assignment for a newly added partitions
+   */
+  def addPartitions(zkClient: ZkClient,
+                    topic: String,
+                    checkBrokerAvailable: Boolean,
+                    currentReplicaAssignment: Map[Int, Seq[Int]],
+                    addedPartitionsReplicaAssignment: Map[Int, Seq[Int]]) {
+
+    if (addedPartitionsReplicaAssignment.isEmpty)
+      throw new InvalidReplicaAssignmentException("The number of partitions for a topic can only be increased")
+
+    if (checkBrokerAvailable) {
+      val brokerList = ZkUtils.getSortedBrokerList(zkClient)
+      addedPartitionsReplicaAssignment.foreach {
+        case (p, replicas) =>
+          val unknownBrokers = replicas.diff(brokerList)
+          if (unknownBrokers.nonEmpty)
+            throw new InvalidReplicaAssignmentException(("Target replica assignment for new partition %d topic %s contains dead or" +
+              " unknown brokers %s").format(p, topic, unknownBrokers))
+      }
+    }
+
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, currentReplicaAssignment ++ addedPartitionsReplicaAssignment, update = true)
+  }
+
+
+  /**
+   * Create reassign partitions path. Throw ReassignPartitionsInProgress if it's already in progress
+   */
+  def triggerReassignPartitions(zkClient: ZkClient, replicaAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
+    try {
+      val jsonReassignmentData = ZkUtils.getPartitionReassignmentZkData(replicaAssignment)
+      ZkUtils.createPersistentPath(zkClient, ZkUtils.ReassignPartitionsPath, jsonReassignmentData)
+    } catch {
+      case e: ZkNodeExistsException =>
+        throw new ReassignPartitionsInProgressException(e)
+    }
+  }
 
  /**
   * Add partitions to existing topic with optional replica assignment
@@ -158,7 +202,7 @@ object AdminUtils extends Logging {
     }
     ret.toMap
   }
-  
+
   def deleteTopic(zkClient: ZkClient, topic: String) {
     try {
       ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
@@ -168,7 +212,7 @@ object AdminUtils extends Logging {
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
-  
+
   def isConsumerGroupActive(zkClient: ZkClient, group: String) = {
     ZkUtils.getConsumersInGroup(zkClient, group).nonEmpty
   }
@@ -223,13 +267,13 @@ object AdminUtils extends Logging {
     groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkClient, group, topic))
   }
 
-  def topicExists(zkClient: ZkClient, topic: String): Boolean = 
+  def topicExists(zkClient: ZkClient, topic: String): Boolean =
     zkClient.exists(ZkUtils.getTopicPath(topic))
-    
+
   def createTopic(zkClient: ZkClient,
                   topic: String,
-                  partitions: Int, 
-                  replicationFactor: Int, 
+                  partitions: Int,
+                  replicationFactor: Int,
                   topicConfig: Properties = new Properties) {
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor)
@@ -243,7 +287,14 @@ object AdminUtils extends Logging {
                                                      update: Boolean = false) {
     // validate arguments
     Topic.validate(topic)
-    require(partitionReplicaAssignment.values.map(_.size).toSet.size == 1, "All partitions should have the same number of replicas.")
+
+    if (partitionReplicaAssignment.values.map(_.size).toSet.size != 1)
+      throw new InvalidReplicaAssignmentException("All partitions should have the same number of replicas")
+
+    partitionReplicaAssignment.values.foreach(reps =>
+      if (reps.size != reps.toSet.size)
+        throw new InvalidReplicaAssignmentException("Duplicate replica assignment found: " + partitionReplicaAssignment)
+    )
 
     val topicPath = ZkUtils.getTopicPath(topic)
 
@@ -258,8 +309,6 @@ object AdminUtils extends Logging {
         }
       }
     }
-
-    partitionReplicaAssignment.values.foreach(reps => require(reps.size == reps.toSet.size, "Duplicate replica assignment found: "  + partitionReplicaAssignment))
 
     // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
     if (!update) {
@@ -344,7 +393,7 @@ object AdminUtils extends Logging {
     val map = Map("version" -> 1, "config" -> configMap)
     ZkUtils.updatePersistentPath(zkClient, ZkUtils.getEntityConfigPath(entityType, entityName), Json.encode(map))
   }
-  
+
   /**
    * Read the entity (topic or client) config (if any) from zk
    */

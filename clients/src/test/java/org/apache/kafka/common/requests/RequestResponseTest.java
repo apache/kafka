@@ -14,12 +14,15 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ConfigEntry;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.PartitionReplicaAssignment;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.admin.*;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.junit.Test;
@@ -28,10 +31,12 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashSet;
+
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -73,6 +78,15 @@ public class RequestResponseTest {
                 createProduceRequest(),
                 createProduceRequest().getErrorResponse(0, new UnknownServerException()),
                 createProduceResponse(),
+                createCreateTopicRequest(),
+                createCreateTopicRequest().getErrorResponse(0, new UnknownServerException()),
+                createCreateTopicResponse(),
+                createAlterTopicRequest(),
+                createAlterTopicRequest().getErrorResponse(0, new UnknownServerException()),
+                createAlterTopicResponse(),
+                createDeleteTopicRequest(),
+                createDeleteTopicRequest().getErrorResponse(0, new UnknownServerException()),
+                createDeleteTopicResponse(),
                 createStopReplicaRequest(),
                 createStopReplicaRequest().getErrorResponse(0, new UnknownServerException()),
                 createStopReplicaResponse(),
@@ -182,6 +196,63 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createJoinGroupResponse() {
         return new JoinGroupResponse(Errors.NONE.code(), 1, "consumer1", Arrays.asList(new TopicPartition("test11", 1), new TopicPartition("test2", 1)));
+    }
+
+    private AbstractRequest createCreateTopicRequest() {
+        CreateTopicRequest.CreateTopicArguments request1 = new CreateTopicRequest.CreateTopicArguments(
+                3, 5, Collections.<PartitionReplicaAssignment>emptyList(), Collections.<ConfigEntry>emptyList());
+        CreateTopicRequest.CreateTopicArguments request2 = new CreateTopicRequest.CreateTopicArguments(
+                CreateTopicRequest.NO_PARTITIONS_SIGN, CreateTopicRequest.NO_REPLICATION_FACTOR_SIGN,
+                Arrays.asList(
+                        new PartitionReplicaAssignment(1, Arrays.asList(1, 2, 3)),
+                        new PartitionReplicaAssignment(2, Arrays.asList(2, 3, 4))),
+                Arrays.asList(new ConfigEntry("config1", "value1"))
+        );
+        Map<String, CreateTopicRequest.CreateTopicArguments> request = new HashMap<String, CreateTopicRequest.CreateTopicArguments>();
+        request.put("my_t1", request1);
+        request.put("my_t2", request2);
+        return new CreateTopicRequest(request);
+    }
+
+    private AbstractRequestResponse createCreateTopicResponse() {
+        Map<String, Errors> errors = new HashMap<String, Errors>();
+        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
+        errors.put("t2", Errors.LEADER_NOT_AVAILABLE);
+        return new CreateTopicResponse(errors);
+    }
+
+    private AbstractRequest createAlterTopicRequest() {
+        AlterTopicRequest.AlterTopicArguments request1 = new AlterTopicRequest.AlterTopicArguments(
+                3, 2, Collections.<PartitionReplicaAssignment>emptyList());
+        AlterTopicRequest.AlterTopicArguments request2 = new AlterTopicRequest.AlterTopicArguments(
+                AlterTopicRequest.NO_PARTITIONS_SIGN,
+                AlterTopicRequest.NO_REPLICATION_FACTOR_SIGN,
+                Arrays.asList(
+                        new PartitionReplicaAssignment(1, Arrays.asList(1, 2, 3)),
+                        new PartitionReplicaAssignment(2, Arrays.asList(2, 3, 4)))
+        );
+        Map<String, AlterTopicRequest.AlterTopicArguments> request = new HashMap<String, AlterTopicRequest.AlterTopicArguments>();
+        request.put("my_t1", request1);
+        request.put("my_t2", request2);
+        return new AlterTopicRequest(request);
+    }
+
+    private AbstractRequestResponse createAlterTopicResponse() {
+        Map<String, Errors> errors = new HashMap<String, Errors>();
+        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
+        errors.put("t2", Errors.LEADER_NOT_AVAILABLE);
+        return new AlterTopicResponse(errors);
+    }
+
+    private AbstractRequest createDeleteTopicRequest() {
+        return new DeleteTopicRequest(new HashSet<String>(Arrays.asList("my_t1", "my_t2")));
+    }
+
+    private AbstractRequestResponse createDeleteTopicResponse() {
+        Map<String, Errors> errors = new HashMap<String, Errors>();
+        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
+        errors.put("t2", Errors.LEADER_NOT_AVAILABLE);
+        return new DeleteTopicResponse(errors);
     }
 
     private AbstractRequest createListOffsetRequest() {

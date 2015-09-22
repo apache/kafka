@@ -18,6 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.admin.AlterTopicRequest;
+import org.apache.kafka.common.requests.admin.CreateTopicRequest;
+import org.apache.kafka.common.requests.admin.DeleteTopicRequest;
 
 import java.nio.ByteBuffer;
 
@@ -55,6 +58,12 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return JoinGroupRequest.parse(buffer, versionId);
             case HEARTBEAT:
                 return HeartbeatRequest.parse(buffer, versionId);
+            case CREATE_TOPIC:
+                return CreateTopicRequest.parse(buffer, versionId);
+            case ALTER_TOPIC:
+                return AlterTopicRequest.parse(buffer, versionId);
+            case DELETE_TOPIC:
+                return DeleteTopicRequest.parse(buffer, versionId);
             case STOP_REPLICA:
                 return StopReplicaRequest.parse(buffer, versionId);
             case CONTROLLED_SHUTDOWN_KEY:
