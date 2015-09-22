@@ -26,7 +26,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +52,7 @@ public class StreamTask implements Punctuator {
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
-    private final ProcessorContext processorContext;
+    private final ProcessorContextImpl processorContext;
     private final ProcessorTopology topology;
 
     private final Map<TopicPartition, Long> consumedOffsets;
@@ -135,6 +134,8 @@ public class StreamTask implements Punctuator {
                 this.currNode = null;
             }
         }
+
+        this.processorContext.initialized();
     }
 
     public int id() {

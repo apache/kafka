@@ -79,6 +79,10 @@ public class ProcessorContextImpl implements ProcessorContext {
         return this.collector;
     }
 
+    public void initialized() {
+        this.initialized = true;
+    }
+
     @Override
     public boolean joinable() {
         Set<TopicPartition> partitions = this.task.partitions();
