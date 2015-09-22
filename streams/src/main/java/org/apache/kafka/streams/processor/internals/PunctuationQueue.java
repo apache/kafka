@@ -35,17 +35,21 @@ public class PunctuationQueue {
         }
     }
 
-    public void mayPunctuate(long streamTime, Punctuator punctuator) {
+    public boolean mayPunctuate(long timestamp, Punctuator punctuator) {
         synchronized (pq) {
+            boolean punctuated = false;
             PunctuationSchedule top = pq.peek();
-            while (top != null && top.timestamp <= streamTime) {
+            while (top != null && top.timestamp <= timestamp) {
                 PunctuationSchedule sched = top;
                 pq.poll();
-                punctuator.punctuate(sched.node(), streamTime);
+                punctuator.punctuate(sched.node(), timestamp);
                 pq.add(sched.next());
+                punctuated = true;
 
                 top = pq.peek();
             }
+
+            return punctuated;
         }
     }
 

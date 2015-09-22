@@ -65,7 +65,7 @@ public class ProcessorJob {
                 }
 
                 @Override
-                public void punctuate(long streamTime) {
+                public void punctuate(long timestamp) {
                     KeyValueIterator<String, Integer> iter = this.kvStore.all();
 
                     while (iter.hasNext()) {

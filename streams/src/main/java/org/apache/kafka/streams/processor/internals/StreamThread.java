@@ -73,7 +73,7 @@ public class StreamThread extends Thread {
     private final long cleanTimeMs;
     private final long commitTimeMs;
     private final long totalRecordsToProcess;
-    private final KafkaStreamingMetrics metrics;
+    private final StreamingMetrics metrics;
 
     private long lastClean;
     private long lastCommit;
@@ -126,11 +126,11 @@ public class StreamThread extends Thread {
         this.totalRecordsToProcess = config.getLong(StreamingConfig.TOTAL_RECORDS_TO_PROCESS);
 
         this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
-        this.lastCommit = 0;
+        this.lastCommit = time.milliseconds();
         this.recordsProcessed = 0;
         this.time = time;
 
-        this.metrics = new KafkaStreamingMetrics();
+        this.metrics = new StreamingMetrics();
 
         this.running = new AtomicBoolean(true);
     }
@@ -237,6 +237,7 @@ public class StreamThread extends Thread {
                     metrics.processTimeSensor.record(time.milliseconds() - startProcess);
                 }
 
+                maybePunctuate();
                 maybeClean();
                 maybeCommit();
             }
@@ -260,12 +261,13 @@ public class StreamThread extends Thread {
     }
 
     private void maybePunctuate() {
-        long now = time.milliseconds();
-
         for (StreamTask task : tasks.values()) {
             try {
-                if (task.commitNeeded())
-                    commitOne(task, time.milliseconds());
+                long now = time.milliseconds();
+
+                if (task.maybePunctuate(now))
+                    metrics.punctuateTimeSensor.record(time.milliseconds() - now);
+
             } catch (Exception e) {
                 log.error("Failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
                 throw e;
@@ -366,6 +368,8 @@ public class StreamThread extends Thread {
     }
 
     protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+        metrics.taskCreationSensor.record();
+
         return new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
     }
 
@@ -413,7 +417,7 @@ public class StreamThread extends Thread {
         tasks.clear();
     }
 
-    private class KafkaStreamingMetrics {
+    private class StreamingMetrics {
         final Metrics metrics;
 
         final Sensor commitTimeSensor;
@@ -423,7 +427,7 @@ public class StreamThread extends Thread {
         final Sensor taskCreationSensor;
         final Sensor taskDestructionSensor;
 
-        public KafkaStreamingMetrics() {
+        public StreamingMetrics() {
             String metricGrpName = "streaming-metrics";
 
             this.metrics = new Metrics();
@@ -436,9 +440,9 @@ public class StreamThread extends Thread {
             this.commitTimeSensor.add(new MetricName("commit-calls-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
 
             this.pollTimeSensor = metrics.sensor("poll-time");
-            this.commitTimeSensor.add(new MetricName("poll-time-avg", metricGrpName, "The average poll time in ms", metricTags), new Avg());
-            this.commitTimeSensor.add(new MetricName("poll-time-max", metricGrpName, "The maximum poll time in ms", metricTags), new Max());
-            this.commitTimeSensor.add(new MetricName("poll-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
+            this.pollTimeSensor.add(new MetricName("poll-time-avg", metricGrpName, "The average poll time in ms", metricTags), new Avg());
+            this.pollTimeSensor.add(new MetricName("poll-time-max", metricGrpName, "The maximum poll time in ms", metricTags), new Max());
+            this.pollTimeSensor.add(new MetricName("poll-calls-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
 
             this.processTimeSensor = metrics.sensor("process-time");
             this.processTimeSensor.add(new MetricName("process-time-avg-ms", metricGrpName, "The average process time in ms", metricTags), new Avg());
