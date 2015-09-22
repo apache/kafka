@@ -76,6 +76,8 @@ public class ProcessorJob {
 
                         context.forward(entry.key(), entry.value());
                     }
+
+                    iter.close();
                 }
 
                 @Override
