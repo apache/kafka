@@ -44,7 +44,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -73,26 +72,26 @@ public class FetcherTest {
     private Node node = cluster.nodes().get(0);
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private Metrics metrics = new Metrics(time);
-    private Map<String, String> metricTags = new LinkedHashMap<String, String>();
+    private Map<String, String> metricTags = new LinkedHashMap<>();
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
 
     private MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
 
-    private Fetcher<byte[], byte[]> fetcher = new Fetcher<byte[], byte[]>(consumerClient,
-                                                                          minBytes,
-                                                                          maxWaitMs,
-                                                                          fetchSize,
-                                                                          true, // check crc
-                                                                          new ByteArrayDeserializer(),
-                                                                          new ByteArrayDeserializer(),
-                                                                          metadata,
-                                                                          subscriptions,
-                                                                          metrics,
-                                                                          "consumer" + groupId,
-                                                                          metricTags,
-                                                                          time,
-                                                                          retryBackoffMs);
+    private Fetcher<byte[], byte[]> fetcher = new Fetcher<>(consumerClient,
+            minBytes,
+            maxWaitMs,
+            fetchSize,
+            true, // check crc
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer(),
+            metadata,
+            subscriptions,
+            metrics,
+            "consumer" + groupId,
+            metricTags,
+            time,
+            retryBackoffMs);
 
     @Before
     public void setup() throws Exception {
@@ -109,7 +108,7 @@ public class FetcherTest {
     @Test
     public void testFetchNormal() {
         List<ConsumerRecord<byte[], byte[]>> records;
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         // normal fetch
@@ -129,14 +128,14 @@ public class FetcherTest {
 
     @Test
     public void testFetchDuringRebalance() {
-        subscriptions.subscribe(Arrays.asList(topicName), listener);
-        subscriptions.changePartitionAssignment(Arrays.asList(tp));
+        subscriptions.subscribe(Collections.singletonList(topicName), listener);
+        subscriptions.changePartitionAssignment(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
 
         // Now the rebalance happens and fetch positions are cleared
-        subscriptions.changePartitionAssignment(Arrays.asList(tp));
+        subscriptions.changePartitionAssignment(Collections.singletonList(tp));
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
 
@@ -146,7 +145,7 @@ public class FetcherTest {
 
     @Test
     public void testInFlightFetchOnPausedPartition() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -159,7 +158,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchOnPausedPartition() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         subscriptions.pause(tp);
@@ -169,7 +168,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchNotLeaderForPartition() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -181,7 +180,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchUnknownTopicOrPartition() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -193,7 +192,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchOffsetOutOfRange() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -207,7 +206,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchDisconnected() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -226,7 +225,7 @@ public class FetcherTest {
     public void testUpdateFetchPositionToCommitted() {
         // unless a specific reset is expected, the default behavior is to reset to the committed
         // position if one is present
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.committed(tp, 5);
 
         fetcher.updateFetchPositions(Collections.singleton(tp));
@@ -237,11 +236,11 @@ public class FetcherTest {
 
     @Test
     public void testUpdateFetchPositionResetToDefaultOffset() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         // with no commit position, we should reset using the default strategy defined above (EARLIEST)
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)));
+                               listOffsetResponse(Errors.NONE, Collections.singletonList(5L)));
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -251,11 +250,11 @@ public class FetcherTest {
 
     @Test
     public void testUpdateFetchPositionResetToLatestOffset() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)));
+                               listOffsetResponse(Errors.NONE, Collections.singletonList(5L)));
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -265,11 +264,11 @@ public class FetcherTest {
 
     @Test
     public void testUpdateFetchPositionResetToEarliestOffset() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)));
+                               listOffsetResponse(Errors.NONE, Collections.singletonList(5L)));
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -279,16 +278,16 @@ public class FetcherTest {
 
     @Test
     public void testUpdateFetchPositionDisconnect() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
 
         // First request gets a disconnect
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)), true);
+                               listOffsetResponse(Errors.NONE, Collections.singletonList(5L)), true);
 
         // Next one succeeds
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)));
+                               listOffsetResponse(Errors.NONE, Collections.singletonList(5L)));
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -313,7 +312,7 @@ public class FetcherTest {
     @Test
     public void testQuotaMetrics() throws Exception {
         List<ConsumerRecord<byte[], byte[]>> records;
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assign(Collections.singletonList(tp));
         subscriptions.seek(tp, 0);
 
         // normal fetch
