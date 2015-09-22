@@ -52,6 +52,8 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     private static final String WINDOWED_NAME = "KAFKA-WINDOWED-";
 
+    private static final String SINK_NAME = "KAFKA-SINK-";
+
     public static final String JOINTHIS_NAME = "KAFKA-JOINTHIS-";
 
     public static final String JOINOTHER_NAME = "KAFKA-JOINOTHER-";
@@ -60,12 +62,10 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     public static final String SOURCE_NAME = "KAFKA-SOURCE-";
 
-    public static final String SEND_NAME = "KAFKA-SEND-";
-
     public static final AtomicInteger INDEX = new AtomicInteger(1);
 
-    protected TopologyBuilder topology;
-    protected String name;
+    protected final TopologyBuilder topology;
+    protected final String name;
 
     public KStreamImpl(TopologyBuilder topology, String name) {
         this.topology = topology;
@@ -160,7 +160,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
                                             Serializer<V> valSerializer,
                                             Deserializer<K1> keyDeserializer,
                                             Deserializer<V1> valDeserializer) {
-        String sendName = SEND_NAME + INDEX.getAndIncrement();
+        String sendName = SINK_NAME + INDEX.getAndIncrement();
 
         topology.addSink(sendName, topic, keySerializer, valSerializer, this.name);
 
@@ -178,14 +178,14 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @Override
     public void to(String topic) {
-        String name = SEND_NAME + INDEX.getAndIncrement();
+        String name = SINK_NAME + INDEX.getAndIncrement();
 
         topology.addSink(name, topic, this.name);
     }
 
     @Override
     public void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
-        String name = SEND_NAME + INDEX.getAndIncrement();
+        String name = SINK_NAME + INDEX.getAndIncrement();
 
         topology.addSink(name, topic, keySerializer, valSerializer, this.name);
     }
