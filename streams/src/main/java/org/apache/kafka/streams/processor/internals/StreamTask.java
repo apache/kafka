@@ -19,16 +19,19 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -55,6 +58,7 @@ public class StreamTask implements Punctuator {
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
+    private final ProcessorStateManager stateMgr;
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
@@ -104,12 +108,23 @@ public class StreamTask implements Punctuator {
         // create the record recordCollector that maintains the produced offsets
         this.recordCollector = new RecordCollector(producer);
 
-        // initialize the topology with its own context
+        log.info("Creating restoration consumer client for stream task [" + id + "]");
+
+        Consumer restoreConsumer = new KafkaConsumer<>(
+                config.getConsumerConfigs(),
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer());
+
+        // create the processor state manager
         try {
-            this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, new Metrics());
+            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(id));
+            this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
         } catch (IOException e) {
-            throw new KafkaException("Error while creating the state manager in processor context", e);
+            throw new KafkaException("Error while creating the state manager", e);
         }
+
+        // initialize the topology with its own context
+        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, new Metrics());
 
         // initialize the task by initializing all its processor nodes in the topology
         for (ProcessorNode node : this.topology.processors()) {
@@ -232,7 +247,7 @@ public class StreamTask implements Punctuator {
      */
     public void commit() {
         // 1) flush local state
-        ((ProcessorContextImpl) processorContext).stateManager().flush();
+        stateMgr.flush();
 
         // 2) flush produced records in the downstream
         // TODO: this will actually block on all produced records across the tasks
@@ -287,7 +302,7 @@ public class StreamTask implements Punctuator {
             throw exception;
 
         try {
-            ((ProcessorContextImpl) processorContext).stateManager().close(recordCollector.offsets());
+            stateMgr.close(recordCollector.offsets());
         } catch (IOException e) {
             throw new KafkaException("Error while closing the state manager in processor context", e);
         }
