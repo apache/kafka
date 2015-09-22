@@ -28,13 +28,12 @@ import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Properties;
 
 public class KStreamJob {
 
     public static void main(String[] args) throws Exception {
-        Map<String, Object> props = new HashMap<>();
+        Properties props = new Properties();
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);

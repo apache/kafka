@@ -101,7 +101,17 @@ public interface KStream<K, V> {
 
     /**
      * Sends key-value to a topic, also creates a new stream from the topic.
-     * The created stream is added to the default synchronization group.
+     * This is equivalent to calling sendTo(topic) and from(topic).
+     *
+     * @param topic           the topic name
+     * @param <K1>            the key type of the new stream
+     * @param <V1>            the value type of the new stream
+     * @return KStream
+     */
+    <K1, V1> KStream<K1, V1> through(String topic);
+
+    /**
+     * Sends key-value to a topic, also creates a new stream from the topic.
      * This is equivalent to calling sendTo(topic) and from(topic).
      *
      * @param topic           the topic name

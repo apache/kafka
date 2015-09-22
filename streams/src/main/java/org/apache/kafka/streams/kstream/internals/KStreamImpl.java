@@ -172,6 +172,11 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
+    public <K1, V1> KStream<K1, V1> through(String topic) {
+        return through(topic, (Serializer<K>) null, (Serializer<V>) null, (Deserializer<K1>) null, (Deserializer<V1>) null);
+    }
+
+    @Override
     public void sendTo(String topic) {
         String name = SEND_NAME + INDEX.getAndIncrement();
 
