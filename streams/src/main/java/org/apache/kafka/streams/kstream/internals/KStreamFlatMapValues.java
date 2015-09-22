@@ -25,7 +25,6 @@ class KStreamFlatMapValues<K1, V1, V2> implements ProcessorDef {
 
     private final ValueMapper<V1, ? extends Iterable<V2>> mapper;
 
-    @SuppressWarnings("unchecked")
     KStreamFlatMapValues(ValueMapper<V1, ? extends Iterable<V2>> mapper) {
         this.mapper = mapper;
     }
