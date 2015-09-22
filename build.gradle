@@ -71,8 +71,7 @@ rat {
     'gradlew.bat',
     '**/README.md',
     '.reviewboardrc',
-    'system_test/**',
-    'docs/**'
+    'system_test/**'
   ])
 }
 
@@ -314,6 +313,12 @@ project(':core') {
     from sourceSets.test.output
   }
 
+  task publishDocs(type: Jar) {
+    classifier = 'docs'
+    from project.file("../docs")
+    into 'docs'
+  }
+
   test {
     testLogging {
         events "passed", "skipped", "failed"
@@ -323,6 +328,7 @@ project(':core') {
 
   artifacts {
     archives testJar
+    archives publishDocs
   }
 }
 
