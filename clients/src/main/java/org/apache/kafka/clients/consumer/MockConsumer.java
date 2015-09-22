@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka. This class is <i> not
@@ -64,6 +65,20 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
+        ensureNotClosed();
+        this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
+        List<String> topicsToSubscribe = new ArrayList<>();
+        for (String topic: partitions.keySet()) {
+            if (pattern.matcher(topic).matches() &&
+                !subscriptions.subscription().contains(topic))
+                topicsToSubscribe.add(topic);
+        }
+        ensureNotClosed();
+        this.subscriptions.changeSubscription(topicsToSubscribe);
+    }
+
+    @Override
     public synchronized void subscribe(List<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
@@ -73,6 +88,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void assign(List<TopicPartition> partitions) {
         ensureNotClosed();
         this.subscriptions.assign(partitions);
+    }
+
+    @Override
+    public void unsubscribe() {
+        ensureNotClosed();
+        subscriptions.unsubscribe();
     }
 
     @Override
@@ -110,7 +131,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void commit(Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback) {
+    public synchronized void commitAsync(Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
         for (Entry<TopicPartition, Long> entry : offsets.entrySet())
             subscriptions.committed(entry.getKey(), entry.getValue());
@@ -120,19 +141,24 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void commit(Map<TopicPartition, Long> offsets, CommitType commitType) {
-        commit(offsets, commitType, null);
+    public synchronized void commitSync(Map<TopicPartition, Long> offsets) {
+        commitAsync(offsets, null);
     }
 
     @Override
-    public synchronized void commit(CommitType commitType, ConsumerCommitCallback callback) {
+    public synchronized void commitAsync() {
+        commitAsync(null);
+    }
+
+    @Override
+    public synchronized void commitAsync(OffsetCommitCallback callback) {
         ensureNotClosed();
-        commit(this.subscriptions.allConsumed(), commitType, callback);
+        commitAsync(this.subscriptions.allConsumed(), callback);
     }
 
     @Override
-    public synchronized void commit(CommitType commitType) {
-        commit(commitType, null);
+    public synchronized void commitSync() {
+        commitSync(this.subscriptions.allConsumed());
     }
 
     @Override

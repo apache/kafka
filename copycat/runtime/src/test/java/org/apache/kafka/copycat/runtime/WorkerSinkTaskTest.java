@@ -328,7 +328,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         return capturedRecords;
     }
 
-    private Capture<ConsumerCommitCallback> expectOffsetFlush(final long expectedMessages,
+    private Capture<OffsetCommitCallback> expectOffsetFlush(final long expectedMessages,
                                                               final RuntimeException flushError,
                                                               final Exception consumerCommitError,
                                                               final long consumerCommitDelayMs,
@@ -353,10 +353,9 @@ public class WorkerSinkTaskTest extends ThreadedTest {
             return null;
         }
 
-        final Capture<ConsumerCommitCallback> capturedCallback = EasyMock.newCapture();
+        final Capture<OffsetCommitCallback> capturedCallback = EasyMock.newCapture();
         final Map<TopicPartition, Long> offsets = Collections.singletonMap(TOPIC_PARTITION, finalOffset);
-        consumer.commit(EasyMock.eq(offsets),
-                EasyMock.eq(CommitType.ASYNC),
+        consumer.commitAsync(EasyMock.eq(offsets),
                 EasyMock.capture(capturedCallback));
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override

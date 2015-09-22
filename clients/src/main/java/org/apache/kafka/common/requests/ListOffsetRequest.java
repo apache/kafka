@@ -31,6 +31,9 @@ import java.util.List;
 import java.util.Map;
 
 public class ListOffsetRequest extends AbstractRequest {
+
+    public static final long EARLIEST_TIMESTAMP = -2L;
+    public static final long LATEST_TIMESTAMP = -1L;
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LIST_OFFSETS.id);
     private static final String REPLICA_ID_KEY_NAME = "replica_id";

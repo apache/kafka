@@ -19,10 +19,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.network.SSLChannelBuilder;
-import org.apache.kafka.common.network.PlaintextChannelBuilder;
 import org.apache.kafka.common.security.ssl.SSLFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -71,25 +70,13 @@ public class ClientUtils {
 
     /**
      * @param configs client/server configs
-     * returns ChannelBuilder configured channelBuilder based on the configs.
+     * @return configured ChannelBuilder based on the configs.
      */
     public static ChannelBuilder createChannelBuilder(Map<String, ?> configs) {
         SecurityProtocol securityProtocol = SecurityProtocol.valueOf((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
-        ChannelBuilder channelBuilder = null;
-
-        switch (securityProtocol) {
-            case SSL:
-                channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
-                break;
-            case PLAINTEXT:
-                channelBuilder = new PlaintextChannelBuilder();
-                break;
-            default:
-                throw new ConfigException("Invalid SecurityProtocol " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG);
-        }
-
-        channelBuilder.configure(configs);
-        return channelBuilder;
+        if (securityProtocol != SecurityProtocol.SSL && securityProtocol != SecurityProtocol.PLAINTEXT)
+            throw new ConfigException("Invalid SecurityProtocol " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG);
+        return ChannelBuilders.create(securityProtocol, SSLFactory.Mode.CLIENT, configs);
     }
 
 }
