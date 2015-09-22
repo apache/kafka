@@ -101,7 +101,7 @@ public interface KStream<K, V> {
 
     /**
      * Sends key-value to a topic, also creates a new stream from the topic.
-     * This is equivalent to calling sendTo(topic) and from(topic).
+     * This is equivalent to calling to(topic) and from(topic).
      *
      * @param topic           the topic name
      * @param <K1>            the key type of the new stream
@@ -112,7 +112,7 @@ public interface KStream<K, V> {
 
     /**
      * Sends key-value to a topic, also creates a new stream from the topic.
-     * This is equivalent to calling sendTo(topic) and from(topic).
+     * This is equivalent to calling to(topic) and from(topic).
      *
      * @param topic           the topic name
      * @param keySerializer   key serializer used to send key-value pairs,
@@ -134,7 +134,7 @@ public interface KStream<K, V> {
      *
      * @param topic         the topic name
      */
-    void sendTo(String topic);
+    void to(String topic);
 
     /**
      * Sends key-value to a topic.
@@ -145,7 +145,7 @@ public interface KStream<K, V> {
      * @param valSerializer value serializer used to send key-value pairs,
      *                      if not specified the default serializer defined in the configs will be used
      */
-    void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
+    void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
 
     /**
      * Processes all elements in this stream by applying a processor.

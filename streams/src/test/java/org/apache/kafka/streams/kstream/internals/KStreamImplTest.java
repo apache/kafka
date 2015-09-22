@@ -117,9 +117,9 @@ public class KStreamImplTest {
                 }
             });
 
-        stream4.sendTo("topic-5");
+        stream4.to("topic-5");
 
-        stream5.through("topic-6").process(new MockProcessorDef<>()).sendTo("topic-7");
+        stream5.through("topic-6").process(new MockProcessorDef<>()).to("topic-7");
 
         assertEquals(2 + // sources
             2 + // stream1
@@ -129,10 +129,10 @@ public class KStreamImplTest {
             1 + 2 + // streams3
             2 + 3 + // stream4
             2 + 3 + // stream5
-            1 + // sendTo
+            1 + // to
             2 + // through
             1 + // process
-            1, // sendTo
+            1, // to
             builder.build().processors().size());
     }
 }

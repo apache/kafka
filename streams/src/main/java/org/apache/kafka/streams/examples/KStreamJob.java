@@ -74,8 +74,8 @@ public class KStreamJob {
             }
         );
 
-        streams[0].sendTo("topic2");
-        streams[1].sendTo("topic3");
+        streams[0].to("topic2");
+        streams[1].to("topic3");
 
         KafkaStreaming kstream = new KafkaStreaming(builder, config);
         kstream.start();

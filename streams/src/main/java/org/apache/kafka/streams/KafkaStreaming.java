@@ -51,7 +51,7 @@ import org.slf4j.LoggerFactory;
  *    StreamingConfig config = new StreamingConfig(props);
  *
  *    KStreamBuilder builder = new KStreamBuilder();
- *    builder.from("topic1").mapValue(value -&gt; value.length()).sendTo("topic2");
+ *    builder.from("topic1").mapValue(value -&gt; value.length()).to("topic2");
  *
  *    KafkaStreaming streaming = new KafkaStreaming(builder, config);
  *    streaming.start();

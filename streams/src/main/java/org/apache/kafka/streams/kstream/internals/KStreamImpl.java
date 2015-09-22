@@ -177,14 +177,14 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public void sendTo(String topic) {
+    public void to(String topic) {
         String name = SEND_NAME + INDEX.getAndIncrement();
 
         topology.addSink(name, topic, this.name);
     }
 
     @Override
-    public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
+    public void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) {
         String name = SEND_NAME + INDEX.getAndIncrement();
 
         topology.addSink(name, topic, keySerializer, valSerializer, this.name);
