@@ -83,7 +83,7 @@ class ReplicaManagerTest {
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
     val rm = new ReplicaManager(config, new Metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false))
+      new AtomicBoolean(false), Option(this.getClass.getName))
     val produceRequest = new ProducerRequest(1, "client 1", 3, 1000, SerializationTestUtils.topicDataProducerRequest)
     def callback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) = {
       assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS.code)
@@ -93,7 +93,7 @@ class ReplicaManagerTest {
 
     rm.shutdown(false)
 
-    TestUtils.verifyNonDaemonThreadsStatus
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
 
   }
 }

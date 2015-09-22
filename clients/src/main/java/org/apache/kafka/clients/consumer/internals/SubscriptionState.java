@@ -12,12 +12,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -70,7 +68,8 @@ public class SubscriptionState {
     private final OffsetResetStrategy defaultResetStrategy;
 
     /* Listener to be invoked when assignment changes */
-    private RebalanceListener listener;
+    private ConsumerRebalanceListener listener;
+
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
         "Subscription to topics, partitions and pattern are mutually exclusive";
 
@@ -84,7 +83,7 @@ public class SubscriptionState {
         this.subscribedPattern = null;
     }
 
-    public void subscribe(List<String> topics, RebalanceListener listener) {
+    public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
@@ -130,7 +129,7 @@ public class SubscriptionState {
         this.assignment.keySet().retainAll(this.userAssignment);
     }
 
-    public void subscribe(Pattern pattern, RebalanceListener listener) {
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
@@ -305,7 +304,7 @@ public class SubscriptionState {
         this.assignment.put(tp, new TopicPartitionState());
     }
 
-    public RebalanceListener listener() {
+    public ConsumerRebalanceListener listener() {
         return listener;
     }
 
@@ -374,47 +373,5 @@ public class SubscriptionState {
         }
 
     }
-
-    public static RebalanceListener wrapListener(final Consumer<?, ?> consumer,
-                                                 final ConsumerRebalanceListener listener) {
-        if (listener == null)
-            throw new IllegalArgumentException("ConsumerRebalanceLister must not be null");
-
-        return new RebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                listener.onPartitionsAssigned(consumer, partitions);
-            }
-
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                listener.onPartitionsRevoked(consumer, partitions);
-            }
-
-            @Override
-            public ConsumerRebalanceListener underlying() {
-                return listener;
-            }
-        };
-    }
-
-    /**
-     * Wrapper around {@link ConsumerRebalanceListener} to get around the need to provide a reference
-     * to the consumer in this class.
-     */
-    public static class RebalanceListener {
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-
-        }
-
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-
-        }
-
-        public ConsumerRebalanceListener underlying() {
-            return null;
-        }
-    }
-
 
 }

@@ -46,7 +46,7 @@ object RequestChannel extends Logging {
     byteBuffer
   }
 
-  case class Session(principal: Principal, host: String)
+  case class Session(principal: KafkaPrincipal, host: String)
 
   case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
     @volatile var requestDequeueTimeMs = -1L

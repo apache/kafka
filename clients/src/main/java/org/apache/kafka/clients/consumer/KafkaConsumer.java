@@ -271,14 +271,13 @@ import java.util.regex.Pattern;
  * </ol>
  *
  * This type of usage is simplest when the partition assignment is also done manually (this would be likely in the
- * search index use case described above). If the partition assignment is done automatically special care will also be
- * needed to handle the case where partition assignments change. This can be handled using a special callback specified
- * using <code>rebalance.callback.class</code>, which specifies an implementation of the interface
- * {@link ConsumerRebalanceListener}. When partitions are taken from a consumer the consumer will want to commit its
- * offset for those partitions by implementing
- * {@link ConsumerRebalanceListener#onPartitionsRevoked(Consumer, Collection)}. When partitions are assigned to a
+ * search index use case described above). If the partition assignment is done automatically special care is
+ * needed to handle the case where partition assignments change. This can be done by providing a
+ * {@link ConsumerRebalanceListener} instance in the call to {@link #subscribe(List, ConsumerRebalanceListener)}.
+ * When partitions are taken from a consumer the consumer will want to commit its offset for those partitions by
+ * implementing {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}. When partitions are assigned to a
  * consumer, the consumer will want to look up the offset for those new partitions an correctly initialize the consumer
- * to that position by implementing {@link ConsumerRebalanceListener#onPartitionsAssigned(Consumer, Collection)}.
+ * to that position by implementing {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}.
  * <p>
  * Another common use for {@link ConsumerRebalanceListener} is to flush any caches the application maintains for
  * partitions that are moved elsewhere.
@@ -395,7 +394,7 @@ import java.util.regex.Pattern;
  *
  */
 @InterfaceStability.Unstable
-public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
+public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
@@ -417,6 +416,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
     private final boolean autoCommit;
     private final long autoCommitIntervalMs;
     private boolean closed = false;
+    private Metadata.Listener metadataListener;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
@@ -650,7 +650,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
         acquire();
         try {
             log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
-            this.subscriptions.subscribe(topics, SubscriptionState.wrapListener(this, listener));
+            this.subscriptions.subscribe(topics, listener);
             metadata.setTopics(topics);
         } finally {
             release();
@@ -698,9 +698,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
         acquire();
         try {
             log.debug("Subscribed to pattern: {}", pattern);
-            this.subscriptions.subscribe(pattern, SubscriptionState.wrapListener(this, listener));
+            metadataListener = new Metadata.Listener() {
+                @Override
+                public void onMetadataUpdate(Cluster cluster) {
+                    final List<String> topicsToSubscribe = new ArrayList<>();
+
+                    for (String topic : cluster.topics())
+                        if (subscriptions.getSubscribedPattern().matcher(topic).matches())
+                            topicsToSubscribe.add(topic);
+
+                    subscriptions.changeSubscription(topicsToSubscribe);
+                    metadata.setTopics(topicsToSubscribe);
+                }
+            };
+            this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
-            this.metadata.addListener(this);
+            this.metadata.addListener(metadataListener);
         } finally {
             release();
         }
@@ -714,7 +727,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
         try {
             this.subscriptions.unsubscribe();
             this.metadata.needMetadataForAllTopics(false);
-            this.metadata.removeListener(this);
+            this.metadata.removeListener(metadataListener);
         } finally {
             release();
         }
@@ -1212,17 +1225,4 @@ public class KafkaConsumer<K, V> implements Consumer<K, V>, Metadata.Listener {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
     }
-
-    @Override
-    public void onMetadataUpdate(Cluster cluster) {
-        final List<String> topicsToSubscribe = new ArrayList<>();
-
-        for (String topic : cluster.topics())
-            if (this.subscriptions.getSubscribedPattern().matcher(topic).matches())
-                topicsToSubscribe.add(topic);
-
-        subscriptions.changeSubscription(topicsToSubscribe);
-        metadata.setTopics(topicsToSubscribe);
-    }
-
 }
