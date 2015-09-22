@@ -17,12 +17,9 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamingConfig;
@@ -34,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -63,41 +59,28 @@ public class ProcessorContextImpl implements ProcessorContext {
                                 StreamTask task,
                                 StreamingConfig config,
                                 RecordCollector collector,
-                                Metrics metrics) throws IOException {
+                                ProcessorStateManager stateMgr,
+                                Metrics metrics) {
         this.id = id;
         this.task = task;
         this.metrics = metrics;
         this.collector = collector;
+        this.stateMgr = stateMgr;
 
         this.keySerializer = config.getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
         this.valSerializer = config.getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
         this.keyDeserializer = config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
         this.valDeserializer = config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
 
-        File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(id));
-
-        log.info("Creating restoration consumer client for stream task [" + task.id() + "]");
-
-        Consumer restoreConsumer = new KafkaConsumer<>(
-            config.getConsumerConfigs(),
-            new ByteArrayDeserializer(),
-            new ByteArrayDeserializer());
-
-        this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
-
         this.initialized = false;
-    }
-
-    public ProcessorStateManager stateManager() {
-        return this.stateMgr;
     }
 
     public RecordCollector recordCollector() {
         return this.collector;
     }
 
-    public StreamTask task() {
-        return this.task;
+    public void initialized() {
+        this.initialized = true;
     }
 
     @Override
