@@ -572,6 +572,14 @@ project(':streams') {
         dependsOn 'copyDependantLibs'
     }
 
+    artifacts {
+      archives testJar
+    }
+
+    configurations {
+      archives.extendsFrom (testCompile)
+    }
+
     checkstyle {
         configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     }
