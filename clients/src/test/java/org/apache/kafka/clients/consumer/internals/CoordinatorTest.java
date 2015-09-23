@@ -65,6 +65,8 @@ public class CoordinatorTest {
     private int heartbeatIntervalMs = 2;
     private long retryBackoffMs = 100;
     private long requestTimeoutMs = 5000;
+    private boolean autoCommitEnabled = false;
+    private long autoCommitIntervalMs = 5000;
     private String rebalanceStrategy = "not-matter";
     private MockTime time;
     private MockClient client;
@@ -104,7 +106,9 @@ public class CoordinatorTest {
                 time,
                 requestTimeoutMs,
                 retryBackoffMs,
-                defaultOffsetCommitCallback);
+                defaultOffsetCommitCallback,
+                autoCommitEnabled,
+                autoCommitIntervalMs);
     }
 
     @Test

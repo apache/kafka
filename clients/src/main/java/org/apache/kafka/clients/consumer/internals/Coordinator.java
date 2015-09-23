@@ -47,6 +47,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,7 +59,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * This class manages the coordination process with the consumer coordinator.
  */
-public final class Coordinator {
+public final class Coordinator implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
 
@@ -74,6 +75,8 @@ public final class Coordinator {
     private final long requestTimeoutMs;
     private final long retryBackoffMs;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
+    private final boolean autoCommitEnabled;
+
     private Node consumerCoordinator;
     private String consumerId;
     private int generation;
@@ -93,7 +96,9 @@ public final class Coordinator {
                        Time time,
                        long requestTimeoutMs,
                        long retryBackoffMs,
-                       OffsetCommitCallback defaultOffsetCommitCallback) {
+                       OffsetCommitCallback defaultOffsetCommitCallback,
+                       boolean autoCommitEnabled,
+                       long autoCommitIntervalMs) {
         this.client = client;
         this.time = time;
         this.generation = -1;
@@ -109,6 +114,10 @@ public final class Coordinator {
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
+        this.autoCommitEnabled = autoCommitEnabled;
+
+        if (autoCommitEnabled)
+            scheduleAutoCommitTask(autoCommitIntervalMs);
     }
 
     /**
@@ -156,6 +165,9 @@ public final class Coordinator {
     public void ensurePartitionAssignment() {
         if (!subscriptions.partitionAssignmentNeeded())
             return;
+
+        // commit offsets prior to rebalance if auto-commit enabled
+        maybeAutoCommitOffsetsSync();
 
         ConsumerRebalanceListener listener = subscriptions.listener();
 
@@ -217,6 +229,13 @@ public final class Coordinator {
             if (future.failed())
                 client.awaitMetadataUpdate();
         }
+    }
+
+
+    @Override
+    public void close() {
+        // commit offsets prior to closing if auto-commit enabled
+        maybeAutoCommitOffsetsSync();
     }
 
     private class HeartbeatTask implements DelayedTask {
@@ -388,6 +407,33 @@ public final class Coordinator {
             }
 
             Utils.sleep(retryBackoffMs);
+        }
+    }
+
+    private void scheduleAutoCommitTask(final long interval) {
+        DelayedTask task = new DelayedTask() {
+            public void run(long now) {
+                commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
+                    @Override
+                    public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                        if (exception != null)
+                            log.error("Auto offset commit failed.", exception);
+                    }
+                });
+                client.schedule(this, now + interval);
+            }
+        };
+        client.schedule(task, time.milliseconds() + interval);
+    }
+
+    private void maybeAutoCommitOffsetsSync() {
+        if (autoCommitEnabled) {
+            try {
+                commitOffsetsSync(subscriptions.allConsumed());
+            } catch (Exception e) {
+                // consistent with async auto-commit failures, we do not propagate the exception
+                log.error("Auto offset commit failed.", e);
+            }
         }
     }
 
