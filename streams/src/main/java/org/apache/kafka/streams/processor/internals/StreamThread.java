@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
@@ -38,6 +37,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,12 +97,13 @@ public class StreamThread extends Thread {
     };
 
     public StreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
-        this(builder, config, null , null, new SystemTime());
+        this(builder, config, null , null, null, new SystemTime());
     }
 
     StreamThread(TopologyBuilder builder, StreamingConfig config,
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
+                 Consumer<byte[], byte[]> restoreConsumer,
                  Time time) throws Exception {
         super("StreamThread-" + nextThreadNumber.getAndIncrement());
 
@@ -112,7 +113,7 @@ public class StreamThread extends Thread {
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
         this.consumer = (consumer != null) ? consumer : createConsumer();
-        this.restoreConsumer = createRestoreConsumer();
+        this.restoreConsumer = (restoreConsumer != null) ? restoreConsumer : createRestoreConsumer();
 
         // initialize the task list
         this.tasks = new HashMap<>();
