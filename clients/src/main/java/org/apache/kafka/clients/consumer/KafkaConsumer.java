@@ -828,6 +828,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         // init any new fetches (won't resend pending fetches)
         Cluster cluster = this.metadata.fetch();
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
+        // Avoid block waiting for response if we already have data available, e.g. from another API call to commit.
+        if (!records.isEmpty()) {
+            client.poll(0);
+            return records;
+        }
         fetcher.initFetches(cluster);
         client.poll(timeout);
         return fetcher.fetchedRecords();

@@ -244,6 +244,10 @@ public class SubscriptionState {
         needOffsetReset(partition, defaultResetStrategy);
     }
 
+    public boolean hasDefaultOffsetResetPolicy() {
+        return defaultResetStrategy != OffsetResetStrategy.NONE;
+    }
+
     public boolean isOffsetResetNeeded(TopicPartition partition) {
         return assignedState(partition).awaitingReset;
     }
