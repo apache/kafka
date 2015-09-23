@@ -173,14 +173,16 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void delete(K key) {
+    public V delete(K key) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.delete(key);
+            V value = this.inner.delete(key);
 
             this.dirty.add(key);
             if (this.dirty.size() > this.maxDirty)
                 logChange();
+
+            return value;
         } finally {
             recordLatency(this.deleteTime, startNs, time.nanoseconds());
         }

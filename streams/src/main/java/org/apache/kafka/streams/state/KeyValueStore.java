@@ -61,9 +61,10 @@ public interface KeyValueStore<K, V> extends StateStore {
      * Delete the value from the store (if there is one)
      *
      * @param key The key
+     * @return The old value or null if there is no such key.
      * @throws NullPointerException If null is used for key.
      */
-    abstract public void delete(K key);
+    abstract public V delete(K key);
 
     /**
      * Get an iterator over a given range of keys. This iterator MUST be closed after use.

@@ -84,8 +84,8 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         }
 
         @Override
-        public void delete(K key) {
-            put(key, null);
+        public V delete(K key) {
+            return this.map.remove(key);
         }
 
         @Override
