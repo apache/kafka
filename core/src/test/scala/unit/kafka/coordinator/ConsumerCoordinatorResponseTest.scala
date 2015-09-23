@@ -232,7 +232,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   }
 
   @Test
-  def testHeartbeatDuringRebalanceCausesIllegalGeneration() {
+  def testHeartbeatDuringRebalanceCausesRebalanceInProgress() {
     val groupId = "groupId"
     val partitionAssignmentStrategy = "range"
 
@@ -249,10 +249,10 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_CONSUMER_ID, partitionAssignmentStrategy,
       DefaultSessionTimeout, isCoordinatorForGroup = true)
 
-    // We should be in the middle of a rebalance, so the heartbeat should return illegal generation
+    // We should be in the middle of a rebalance, so the heartbeat should return rebalance in progress
     EasyMock.reset(offsetManager)
     val heartbeatResult = heartbeat(groupId, assignedConsumerId, initialGenerationId, isCoordinatorForGroup = true)
-    assertEquals(Errors.ILLEGAL_GENERATION.code, heartbeatResult)
+    assertEquals(Errors.REBALANCE_IN_PROGRESS.code, heartbeatResult)
   }
 
   @Test
