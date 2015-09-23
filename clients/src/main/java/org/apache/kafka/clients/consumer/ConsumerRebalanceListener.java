@@ -29,7 +29,7 @@ import org.apache.kafka.common.TopicPartition;
  * administratively adjusted).
  * <p>
  * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
- * the {@link #onPartitionsRevoked(Consumer, Collection)} call we can ensure that any time partition assignment changes
+ * the {@link #onPartitionsRevoked(Collection)}, call we can ensure that any time partition assignment changes
  * the offset gets saved.
  * <p>
  * Another use is flushing out any kind of cache of intermediate results the consumer may be keeping. For example,
@@ -42,21 +42,27 @@ import org.apache.kafka.common.TopicPartition;
  * <p>
  * This callback will execute in the user thread as part of the {@link Consumer#poll(long) poll(long)} call whenever partition assignment changes.
  * <p>
- * It is guaranteed that all consumer processes will invoke {@link #onPartitionsRevoked(Consumer, Collection) onPartitionsRevoked} prior to 
- * any process invoking {@link #onPartitionsAssigned(Consumer, Collection) onPartitionsAssigned}. So if offsets or other state is saved in the 
- * {@link #onPartitionsRevoked(Consumer, Collection) onPartitionsRevoked} call it is guaranteed to be saved by the time the process taking over that
- * partition has their {@link #onPartitionsAssigned(Consumer, Collection) onPartitionsAssigned} callback called to load the state.
+ * It is guaranteed that all consumer processes will invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} prior to
+ * any process invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned}. So if offsets or other state is saved in the
+ * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call it is guaranteed to be saved by the time the process taking over that
+ * partition has their {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback called to load the state.
  * <p>
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
  * {@code
  *   public class SaveOffsetsOnRebalance implements ConsumerRebalanceListener {
- *       public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {
+ *       private Consumer<?,?> consumer;
+ *
+ *       public SaveOffsetsOnRebalance(Consumer<?,?> consumer) {
+ *           this.consumer = consumer;
+ *       }
+ *
+ *       public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
  *           // read the offsets from an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
  *              consumer.seek(partition, readOffsetFromExternalStore(partition));
  *       }      
- *       public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {
+ *       public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
  *           // save the offsets in an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
  *              saveOffsetInExternalStore(consumer.position(partition));
@@ -69,18 +75,17 @@ public interface ConsumerRebalanceListener {
 
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
-     * partition re-assignement. This method will be called after an offset re-assignement completes and before the
+     * partition re-assignment. This method will be called after an offset re-assignment completes and before the
      * consumer starts fetching data.
      * <p>
      * It is guaranteed that all the processes in a consumer group will execute their
-     * {@link #onPartitionsRevoked(Consumer, Collection)} callback before any instance executes its
-     * {@link #onPartitionsAssigned(Consumer, Collection)} callback.
+     * {@link #onPartitionsRevoked(Collection)} callback before any instance executes its
+     * {@link #onPartitionsAssigned(Collection)} callback.
      *
-     * @param consumer Reference to the consumer for convenience
      * @param partitions The list of partitions that are now assigned to the consumer (may include partitions previously
      *            assigned to the consumer)
      */
-    public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> partitions);
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions);
 
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store on the start
@@ -90,8 +95,7 @@ public interface ConsumerRebalanceListener {
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}
      *
-     * @param consumer  Reference to the consumer for convenience
      * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
      */
-    public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> partitions);
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions);
 }

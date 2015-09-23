@@ -756,10 +756,10 @@ object TestUtils extends Logging {
     ZkUtils.pathExists(zkClient, ZkUtils.ReassignPartitionsPath)
   }
 
-  def verifyNonDaemonThreadsStatus() {
+  def verifyNonDaemonThreadsStatus(threadNamePrefix: String) {
     assertEquals(0, Thread.getAllStackTraces.keySet().toArray
       .map(_.asInstanceOf[Thread])
-      .count(t => !t.isDaemon && t.isAlive && t.getClass.getCanonicalName.toLowerCase.startsWith("kafka")))
+      .count(t => !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)))
   }
 
   /**
