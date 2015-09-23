@@ -105,7 +105,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * for use on both the keys and values. Your test logic can then verify whether these output records are correct.
  * <p>
  * Finally, when completed, make sure your tests {@link #close()} the driver to release all resources and
- * {@link org.apache.kafka.streaming.processor.Processor}s.
+ * {@link org.apache.kafka.streams.processor.Processor}s.
  * 
  * <h2>Processor state</h2>
  * <p>
