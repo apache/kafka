@@ -131,6 +131,7 @@
 		</subpackage>
 
 		<subpackage name="sink">
+		        <allow pkg="org.apache.kafka.clients.consumer" />
 			<allow pkg="org.apache.kafka.copycat.connector" />
 			<allow pkg="org.apache.kafka.copycat.storage" />
 		</subpackage>
@@ -170,6 +171,7 @@
 
 		<subpackage name="file">
 			<allow pkg="org.apache.kafka.copycat" />
+		        <allow pkg="org.apache.kafka.clients.consumer" />
 			<!-- for tests -->
 			<allow pkg="org.easymock" />
 			<allow pkg="org.powermock" />

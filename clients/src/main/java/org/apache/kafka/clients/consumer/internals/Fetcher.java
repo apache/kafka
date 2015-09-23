@@ -152,9 +152,9 @@ public class Fetcher<K, V> {
                 subscriptions.needOffsetReset(tp);
                 resetOffset(tp);
             } else {
-                log.debug("Resetting offset for partition {} to the committed offset {}",
-                        tp, subscriptions.committed(tp));
-                subscriptions.seek(tp, subscriptions.committed(tp));
+                long committed = subscriptions.committed(tp).offset();
+                log.debug("Resetting offset for partition {} to the committed offset {}", tp, committed);
+                subscriptions.seek(tp, committed);
             }
         }
     }

@@ -183,12 +183,12 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
 
     assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers(0).position(tp))
     this.consumers(0).commitSync()
-    assertEquals(0L, this.consumers(0).committed(tp))
+    assertEquals(0L, this.consumers(0).committed(tp).offset)
 
     consumeRecords(this.consumers(0), 5, 0)
     assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers(0).position(tp))
     this.consumers(0).commitSync()
-    assertEquals("Committed offset should be returned", 5L, this.consumers(0).committed(tp))
+    assertEquals("Committed offset should be returned", 5L, this.consumers(0).committed(tp).offset)
 
     sendRecords(1)
 

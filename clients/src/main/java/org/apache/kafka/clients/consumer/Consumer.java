@@ -79,7 +79,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#commitSync(Map)
      */
-    public void commitSync(Map<TopicPartition, Long> offsets);
+    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets);
 
     /**
      * @see KafkaConsumer#commitAsync()
@@ -94,7 +94,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#commitAsync(Map, OffsetCommitCallback)
      */
-    public void commitAsync(Map<TopicPartition, Long> offsets, OffsetCommitCallback callback);
+    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback);
 
     /**
      * @see KafkaConsumer#seek(TopicPartition, long)
@@ -119,7 +119,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#committed(TopicPartition)
      */
-    public long committed(TopicPartition partition);
+    public OffsetAndMetadata committed(TopicPartition partition);
 
     /**
      * @see KafkaConsumer#metrics()

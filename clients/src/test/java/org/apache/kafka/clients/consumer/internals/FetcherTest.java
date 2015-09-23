@@ -21,6 +21,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -227,7 +228,7 @@ public class FetcherTest {
         // unless a specific reset is expected, the default behavior is to reset to the committed
         // position if one is present
         subscriptions.assign(Arrays.asList(tp));
-        subscriptions.committed(tp, 5);
+        subscriptions.committed(tp, new OffsetAndMetadata(5));
 
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertTrue(subscriptions.isFetchable(tp));
