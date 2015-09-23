@@ -104,7 +104,7 @@ public class StreamThreadTest {
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
 
-        StreamThread thread = new StreamThread(builder, config, producer, consumer, new SystemTime()) {
+        StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, new SystemTime()) {
             @Override
             protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
                 return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
@@ -207,7 +207,7 @@ public class StreamThreadTest {
             TopologyBuilder builder = new TopologyBuilder();
             builder.addSource("source1", "topic1");
 
-            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockTime) {
+            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, mockTime) {
                 @Override
                 public void maybeClean() {
                     super.maybeClean();
@@ -325,7 +325,7 @@ public class StreamThreadTest {
             TopologyBuilder builder = new TopologyBuilder();
             builder.addSource("source1", "topic1");
 
-            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockTime) {
+            StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, mockTime) {
                 @Override
                 public void maybeCommit() {
                     super.maybeCommit();
