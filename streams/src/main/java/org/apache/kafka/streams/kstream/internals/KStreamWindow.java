@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorDef;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -40,7 +41,7 @@ public class KStreamWindow<K, V> implements ProcessorDef {
         return new KStreamWindowProcessor();
     }
 
-    private class KStreamWindowProcessor extends KStreamProcessor<K, V> {
+    private class KStreamWindowProcessor extends AbstractProcessor<K, V> {
 
         private Window<K, V> window;
 
@@ -51,12 +52,11 @@ public class KStreamWindow<K, V> implements ProcessorDef {
             this.window.init(context);
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public void process(K key, V value) {
             synchronized (this) {
-                window.put(key, value, context.timestamp());
-                context.forward(key, value);
+                window.put(key, value, context().timestamp());
+                context().forward(key, value);
             }
         }
 

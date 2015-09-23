@@ -75,7 +75,8 @@ public class StreamTaskTest {
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
-
+    private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+ 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
@@ -88,7 +89,7 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testProcessOrder() {
-        StreamTask task = new StreamTask(0, consumer, producer, partitions, topology, config);
+        StreamTask task = new StreamTask(0, consumer, producer, restoreStateConsumer, partitions, topology, config);
 
         task.addRecords(partition1, records(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),
@@ -132,7 +133,7 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() {
-        StreamTask task = new StreamTask(1, consumer, producer, partitions, topology, config);
+        StreamTask task = new StreamTask(1, consumer, producer, restoreStateConsumer, partitions, topology, config);
 
         task.addRecords(partition1, records(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),

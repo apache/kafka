@@ -17,13 +17,43 @@
 
 package org.apache.kafka.streams.processor;
 
+/**
+ * A processor of messages.
+ *
+ * @param <K> the type of keys
+ * @param <V> the type of values
+ */
 public interface Processor<K, V> {
 
+    /**
+     * Initialize this processor with the given context. The framework ensures this is called once per processor when the topology
+     * that contains it is initialized.
+     * <p>
+     * If this processor is to be {@link #punctuate(long) called periodically} by the framework, then this method should
+     * {@link ProcessorContext#schedule(long) schedule itself} with the provided context.
+     * 
+     * @param context the context; may not be null
+     */
     void init(ProcessorContext context);
 
+    /**
+     * Process the message with the given key and value.
+     * 
+     * @param key the key for the message
+     * @param value the value for the message
+     */
     void process(K key, V value);
 
+    /**
+     * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
+     * during {@link #init(ProcessorContext) initialization}.
+     * 
+     * @param timestamp the stream time when this method is being called
+     */
     void punctuate(long timestamp);
 
+    /**
+     * Close this processor and clean up any resources.
+     */
     void close();
 }

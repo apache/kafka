@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
@@ -38,6 +37,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +66,7 @@ public class StreamThread extends Thread {
     protected final TopologyBuilder builder;
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
+    protected final Consumer<byte[], byte[]> restoreConsumer;
 
     private final Map<Integer, StreamTask> tasks;
     private final Time time;
@@ -96,13 +97,13 @@ public class StreamThread extends Thread {
     };
 
     public StreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
-        this(builder, config, null , null, new SystemTime());
+        this(builder, config, null , null, null, new SystemTime());
     }
 
-    @SuppressWarnings("unchecked")
     StreamThread(TopologyBuilder builder, StreamingConfig config,
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
+                 Consumer<byte[], byte[]> restoreConsumer,
                  Time time) throws Exception {
         super("StreamThread-" + nextThreadNumber.getAndIncrement());
 
@@ -112,6 +113,7 @@ public class StreamThread extends Thread {
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
         this.consumer = (consumer != null) ? consumer : createConsumer();
+        this.restoreConsumer = (restoreConsumer != null) ? restoreConsumer : createRestoreConsumer();
 
         // initialize the task list
         this.tasks = new HashMap<>();
@@ -143,6 +145,13 @@ public class StreamThread extends Thread {
 
     private Consumer<byte[], byte[]> createConsumer() {
         log.info("Creating consumer client for stream thread [" + this.getName() + "]");
+        return new KafkaConsumer<>(config.getConsumerConfigs(),
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer());
+    }
+    
+    private Consumer<byte[], byte[]> createRestoreConsumer() {
+        log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
         return new KafkaConsumer<>(config.getConsumerConfigs(),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
@@ -194,6 +203,11 @@ public class StreamThread extends Thread {
             consumer.close();
         } catch (Throwable e) {
             log.error("Failed to close consumer in thread [" + this.getName() + "]: ", e);
+        }
+        try {
+            restoreConsumer.close();
+        } catch (Throwable e) {
+            log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
         try {
             removePartitions();
@@ -369,7 +383,7 @@ public class StreamThread extends Thread {
     protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
         metrics.taskCreationSensor.record();
 
-        return new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
+        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, builder.build(), config);
     }
 
     private void addPartitions(Collection<TopicPartition> assignment) {

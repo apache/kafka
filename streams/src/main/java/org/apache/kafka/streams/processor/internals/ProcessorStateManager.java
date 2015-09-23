@@ -224,9 +224,6 @@ public class ProcessorStateManager {
             checkpoint.write(checkpointOffsets);
         }
 
-        // close the restore consumer
-        restoreConsumer.close();
-
         // release the state directory directoryLock
         directoryLock.release();
     }
