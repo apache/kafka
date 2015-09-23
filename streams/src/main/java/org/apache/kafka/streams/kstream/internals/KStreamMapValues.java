@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorDef;
@@ -34,11 +35,11 @@ class KStreamMapValues<K1, V1, V2> implements ProcessorDef {
         return new KStreamMapProcessor();
     }
 
-    private class KStreamMapProcessor extends KStreamProcessor<K1, V1> {
+    private class KStreamMapProcessor extends AbstractProcessor<K1, V1> {
         @Override
         public void process(K1 key, V1 value) {
             V2 newValue = mapper.apply(value);
-            context.forward(key, newValue);
+            context().forward(key, newValue);
         }
     }
 }

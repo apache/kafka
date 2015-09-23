@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorDef;
 
@@ -27,10 +28,10 @@ class KStreamPassThrough<K, V> implements ProcessorDef {
         return new KStreamPassThroughProcessor();
     }
 
-    public class KStreamPassThroughProcessor<K, V> extends KStreamProcessor<K, V> {
+    public class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
-            context.forward(key, value);
+            context().forward(key, value);
         }
     }
 }

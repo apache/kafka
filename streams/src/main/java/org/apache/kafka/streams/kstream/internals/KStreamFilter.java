@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.ProcessorDef;
@@ -36,11 +37,11 @@ class KStreamFilter<K, V> implements ProcessorDef {
         return new KStreamFilterProcessor();
     }
 
-    private class KStreamFilterProcessor extends KStreamProcessor<K, V> {
+    private class KStreamFilterProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
             if (filterOut ^ predicate.apply(key, value)) {
-                context.forward(key, value);
+                context().forward(key, value);
             }
         }
     }

@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorDef;
@@ -233,48 +234,23 @@ public class ProcessorTopologyTest {
     /**
      * A processor that simply forwards all messages to all children.
      */
-    protected static abstract class FauxProcessor implements Processor<String, String> {
-        
-        protected ProcessorContext context;
-        
-        @Override
-        public void init(ProcessorContext context) {
-            this.context = context;
-        }
-
-        @Override
-        public void punctuate(long streamTime) {
-        }
-        
-        @Override
-        public void close() {
-        }
-    }
-
-    /**
-     * A processor that simply forwards all messages to all children.
-     */
-    protected static class ForwardingProcessor extends FauxProcessor {
-        @Override
-        public void init(ProcessorContext context) {
-            super.init(context);
-        }
+    protected static class ForwardingProcessor extends AbstractProcessor<String, String> {
 
         @Override
         public void process(String key, String value) {
-            this.context.forward(key, value);
+            context().forward(key, value);
         }
 
         @Override
         public void punctuate(long streamTime) {
-            this.context.forward(Long.toString(streamTime), "punctuate");
+            context().forward(Long.toString(streamTime), "punctuate");
         }
     }
 
     /**
      * A processor that forwards slightly-modified messages to each child.
      */
-    protected static class MultiplexingProcessor extends FauxProcessor {
+    protected static class MultiplexingProcessor extends AbstractProcessor<String, String> {
 
         private final int numChildren;
 
@@ -283,21 +259,16 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void init(ProcessorContext context) {
-            super.init(context);
-        }
-
-        @Override
         public void process(String key, String value) {
             for (int i = 0; i != numChildren; ++i) {
-                this.context.forward(key, value + "(" + (i + 1) + ")", i);
+                context().forward(key, value + "(" + (i + 1) + ")", i);
             }
         }
 
         @Override
         public void punctuate(long streamTime) {
             for (int i = 0; i != numChildren; ++i) {
-                this.context.forward(Long.toString(streamTime), "punctuate(" + (i + 1) + ")", i);
+                context().forward(Long.toString(streamTime), "punctuate(" + (i + 1) + ")", i);
             }
         }
     }
@@ -306,7 +277,7 @@ public class ProcessorTopologyTest {
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context. When
      * {@link #punctuate(long)} is called, it outputs the total number of entries in the store.
      */
-    protected static class StatefulProcessor extends FauxProcessor {
+    protected static class StatefulProcessor extends AbstractProcessor<String, String> {
 
         private KeyValueStore<String, String> store;
         private final String storeName;
@@ -333,7 +304,7 @@ public class ProcessorTopologyTest {
                 iter.next();
                 ++count;
             }
-            this.context.forward(Long.toString(streamTime), count);
+            context().forward(Long.toString(streamTime), count);
         }
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorDef;
@@ -44,7 +45,7 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
         return new KStreamJoinProcessor(windowName);
     }
 
-    private class KStreamJoinProcessor extends KStreamProcessor<K, V1> {
+    private class KStreamJoinProcessor extends AbstractProcessor<K, V1> {
 
         private final String windowName;
         protected Finder<K, V2> finder;
@@ -73,11 +74,11 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
 
         @Override
         public void process(K key, V1 value) {
-            long timestamp = context.timestamp();
+            long timestamp = context().timestamp();
             Iterator<V2> iter = finder.find(key, timestamp);
             if (iter != null) {
                 while (iter.hasNext()) {
-                    context.forward(key, joiner.apply(value, iter.next()));
+                    context().forward(key, joiner.apply(value, iter.next()));
                 }
             }
         }
