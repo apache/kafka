@@ -117,8 +117,8 @@ public class StreamThreadTest {
         assignedPartitions = Collections.singletonList(t1p1);
         expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
 
-        rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-        rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+        rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertTrue(thread.tasks().containsKey(1));
         assertEquals(expectedGroup1, thread.tasks().get(1).partitions());
@@ -128,8 +128,8 @@ public class StreamThreadTest {
         assignedPartitions = Collections.singletonList(t1p2);
         expectedGroup2 = new HashSet<>(Arrays.asList(t1p2));
 
-        rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-        rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+        rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertTrue(thread.tasks().containsKey(2));
         assertEquals(expectedGroup2, thread.tasks().get(2).partitions());
@@ -140,8 +140,8 @@ public class StreamThreadTest {
         expectedGroup1 = new HashSet<>(Collections.singleton(t1p1));
         expectedGroup2 = new HashSet<>(Collections.singleton(t1p2));
 
-        rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-        rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+        rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertTrue(thread.tasks().containsKey(1));
         assertTrue(thread.tasks().containsKey(2));
@@ -154,8 +154,8 @@ public class StreamThreadTest {
         expectedGroup1 = new HashSet<>(Arrays.asList(t1p1, t2p1));
         expectedGroup2 = new HashSet<>(Arrays.asList(t1p2, t2p2));
 
-        rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-        rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+        rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertTrue(thread.tasks().containsKey(1));
         assertTrue(thread.tasks().containsKey(2));
@@ -166,8 +166,8 @@ public class StreamThreadTest {
         revokedPartitions = assignedPartitions;
         assignedPartitions = Collections.emptyList();
 
-        rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-        rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+        rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertTrue(thread.tasks().isEmpty());
     }
@@ -232,8 +232,8 @@ public class StreamThreadTest {
             assignedPartitions = Arrays.asList(t1p1, t1p2);
             prevTasks = new HashMap(thread.tasks());
 
-            rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-            rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+            rebalanceListener.onPartitionsRevoked(revokedPartitions);
+            rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
             // there shouldn't be any previous task
             assertTrue(prevTasks.isEmpty());
@@ -264,8 +264,8 @@ public class StreamThreadTest {
             assignedPartitions = Collections.emptyList();
             prevTasks = new HashMap(thread.tasks());
 
-            rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-            rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+            rebalanceListener.onPartitionsRevoked(revokedPartitions);
+            rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
             // previous tasks should be committed
             assertEquals(2, prevTasks.size());
@@ -338,8 +338,8 @@ public class StreamThreadTest {
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
 
-            rebalanceListener.onPartitionsRevoked(consumer, revokedPartitions);
-            rebalanceListener.onPartitionsAssigned(consumer, assignedPartitions);
+            rebalanceListener.onPartitionsRevoked(revokedPartitions);
+            rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
             assertEquals(2, thread.tasks().size());
 
