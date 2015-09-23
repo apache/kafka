@@ -17,6 +17,10 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -43,10 +47,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class StreamThreadTest {
 
@@ -75,10 +75,11 @@ public class StreamThreadTest {
         public TestStreamTask(int id,
                               Consumer<byte[], byte[]> consumer,
                               Producer<byte[], byte[]> producer,
+                              Consumer<byte[], byte[]> restoreConsumer,
                               Collection<TopicPartition> partitions,
                               ProcessorTopology topology,
                               StreamingConfig config) {
-            super(id, consumer, producer, partitions, topology, config);
+            super(id, consumer, producer, restoreConsumer, partitions, topology, config);
         }
 
         @Override
@@ -97,12 +98,18 @@ public class StreamThreadTest {
 
         MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
 
         TopologyBuilder builder = new TopologyBuilder();
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
 
-        StreamThread thread = new StreamThread(builder, config, producer, consumer, new SystemTime());
+        StreamThread thread = new StreamThread(builder, config, producer, consumer, new SystemTime()) {
+            @Override
+            protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+                return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
+            }
+        };
 
         ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
 
@@ -194,6 +201,7 @@ public class StreamThreadTest {
 
             MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
             MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+            final MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
             MockTime mockTime = new MockTime();
 
             TopologyBuilder builder = new TopologyBuilder();
@@ -206,7 +214,7 @@ public class StreamThreadTest {
                 }
                 @Override
                 protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
-                    return new TestStreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
+                    return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
                 }
             };
 
@@ -311,6 +319,7 @@ public class StreamThreadTest {
 
             MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
             MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+            final MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
             MockTime mockTime = new MockTime();
 
             TopologyBuilder builder = new TopologyBuilder();
@@ -323,7 +332,7 @@ public class StreamThreadTest {
                 }
                 @Override
                 protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
-                    return new TestStreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
+                    return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
                 }
             };
 

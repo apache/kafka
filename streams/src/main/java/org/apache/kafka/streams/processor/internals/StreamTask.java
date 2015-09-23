@@ -19,13 +19,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,14 +69,15 @@ public class StreamTask implements Punctuator {
      * @param id                    the ID of this task
      * @param consumer              the instance of {@link Consumer}
      * @param producer              the instance of {@link Producer}
+     * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param config                the {@link StreamingConfig} specified by the user
      */
-    @SuppressWarnings("unchecked")
     public StreamTask(int id,
                       Consumer<byte[], byte[]> consumer,
                       Producer<byte[], byte[]> producer,
+                      Consumer<byte[], byte[]> restoreConsumer,
                       Collection<TopicPartition> partitions,
                       ProcessorTopology topology,
                       StreamingConfig config) {
@@ -108,11 +108,6 @@ public class StreamTask implements Punctuator {
         this.recordCollector = new RecordCollector(producer);
 
         log.info("Creating restoration consumer client for stream task [" + id + "]");
-
-        Consumer restoreConsumer = new KafkaConsumer<>(
-                config.getConsumerConfigs(),
-                new ByteArrayDeserializer(),
-                new ByteArrayDeserializer());
 
         // create the processor state manager
         try {
@@ -344,6 +339,10 @@ public class StreamTask implements Punctuator {
         } finally {
             currNode = thisNode;
         }
+    }
+    
+    public ProcessorContext context() {
+        return processorContext;
     }
 
 }
