@@ -13,18 +13,17 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Collection;
-
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
+
+import java.util.Collection;
 
 public class NoOpConsumerRebalanceListener implements ConsumerRebalanceListener {
 
     @Override
-    public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {}
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
 
     @Override
-    public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {}
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
 
 }

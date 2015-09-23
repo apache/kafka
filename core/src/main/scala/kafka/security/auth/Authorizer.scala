@@ -74,8 +74,8 @@ trait Authorizer extends Configurable {
   /**
    * get the acls for this principal.
    * @param principal
-   * @return empty set if no acls exist for this principal, otherwise the acls for the principal.
+   * @return empty Map if no acls exist for this principal, otherwise a map of resource -> acls for the principal.
    */
-  def getAcls(principal: KafkaPrincipal): Set[Acl]
+  def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]]
 }
 

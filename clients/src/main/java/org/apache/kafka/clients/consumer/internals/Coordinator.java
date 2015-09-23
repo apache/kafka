@@ -13,6 +13,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -155,7 +156,7 @@ public final class Coordinator {
         if (!subscriptions.partitionAssignmentNeeded())
             return;
 
-        SubscriptionState.RebalanceListener listener = subscriptions.listener();
+        ConsumerRebalanceListener listener = subscriptions.listener();
 
         // execute the user's listener before rebalance
         log.debug("Revoking previously assigned partitions {}", this.subscriptions.assignedPartitions());
@@ -163,7 +164,7 @@ public final class Coordinator {
             Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsRevoked(revoked);
         } catch (Exception e) {
-            log.error("User provided listener " + listener.underlying().getClass().getName()
+            log.error("User provided listener " + listener.getClass().getName()
                     + " failed on partition revocation: ", e);
         }
 
@@ -175,7 +176,7 @@ public final class Coordinator {
             Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsAssigned(assigned);
         } catch (Exception e) {
-            log.error("User provided listener " + listener.underlying().getClass().getName()
+            log.error("User provided listener " + listener.getClass().getName()
                     + " failed on partition assignment: ", e);
         }
     }
@@ -641,6 +642,10 @@ public final class Coordinator {
                 log.info("Attempt to heart beat failed since coordinator is either not started or not valid, marking it as dead.");
                 coordinatorDead();
                 future.raise(Errors.forCode(error));
+            } else if (error == Errors.REBALANCE_IN_PROGRESS.code()) {
+                log.info("Attempt to heart beat failed since the group is rebalancing, try to re-join group.");
+                subscriptions.needReassignment();
+                future.raise(Errors.REBALANCE_IN_PROGRESS);
             } else if (error == Errors.ILLEGAL_GENERATION.code()) {
                 log.info("Attempt to heart beat failed since generation id is not legal, try to re-join group.");
                 subscriptions.needReassignment();

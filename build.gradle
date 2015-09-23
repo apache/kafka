@@ -538,7 +538,7 @@ project(':streams') {
         compile "$slf4jlog4j"
         compile 'org.rocksdb:rocksdbjni:3.10.1'
 
-        testCompile '$junit'
+        testCompile "$junit"
         testCompile project(path: ':clients', configuration: 'archives')
     }
 

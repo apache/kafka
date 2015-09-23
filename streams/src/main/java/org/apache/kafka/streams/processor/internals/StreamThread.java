@@ -82,13 +82,13 @@ public class StreamThread extends Thread {
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
-        public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
+        public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
             addPartitions(assignment);
             lastClean = time.milliseconds(); // start the cleaning cycle
         }
 
         @Override
-        public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
+        public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             commitAll();
             removePartitions();
             lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
