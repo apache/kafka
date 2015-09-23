@@ -162,8 +162,10 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         }
 
         @Override
-        public void delete(byte[] key) {
+        public byte[] delete(byte[] key) {
+            byte[] value = get(key);
             put(key, null);
+            return value;
         }
 
         @Override
