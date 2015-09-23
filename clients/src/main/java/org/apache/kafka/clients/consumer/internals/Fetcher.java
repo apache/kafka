@@ -278,6 +278,7 @@ public class Fetcher<K, V> {
                 continue;
             }
             Long consumed = subscriptions.consumed(entry.getKey());
+            // ignore partition if its consumed offset != offset in fetchResponse, e.g. after seek()
             if (consumed != null && entry.getValue() == consumed)
                 currentOutOfRangePartitions.put(entry.getKey(), entry.getValue());
         }
