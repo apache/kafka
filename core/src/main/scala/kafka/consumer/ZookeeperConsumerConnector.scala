@@ -34,7 +34,7 @@ import kafka.network.BlockingChannel
 import kafka.serializer._
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ZkUtils._
-import kafka.utils.ZKWatchedEphemeral
+import kafka.utils.ZKCheckedEphemeral
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
@@ -215,10 +215,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           if (config.autoCommitEnable)
             commitOffsets(true)
           if (zkClient != null) {
-            if (zkWatchedEphemeral != null) {
-              zkWatchedEphemeral.halt
-              zkWatchedEphemeral = null
-            }
             zkClient.close()
             zkClient = null
           }
@@ -262,20 +258,16 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   // this API is used by unit tests only
   def getTopicRegistry: Pool[String, Pool[Int, PartitionTopicInfo]] = topicRegistry
-  private var zkWatchedEphemeral: ZKWatchedEphemeral = null
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) {
     info("begin registering consumer " + consumerIdString + " in ZK")
     val timestamp = SystemTime.milliseconds.toString
     val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
                                                   "timestamp" -> timestamp))
-    assert(zkWatchedEphemeral == null)
-    zkWatchedEphemeral = new ZKWatchedEphemeral(dirs.
+    val zkWatchedEphemeral = new ZKCheckedEphemeral(dirs.
                                                  consumerRegistryDir + "/" + consumerIdString, 
                                                  consumerRegistrationInfo,
-                                                 null,
-                                                 (consumerZKString, consumer) => true,
                                                  zkConnection.getZookeeper)
-    zkWatchedEphemeral.createAndWatch
+    zkWatchedEphemeral.create
 
     info("end registering consumer " + consumerIdString + " in ZK")
   }

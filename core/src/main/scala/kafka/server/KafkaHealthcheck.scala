@@ -41,19 +41,14 @@ class KafkaHealthcheck(private val brokerId: Int,
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
   val sessionExpireListener = new SessionExpireListener
-  var zkWatchedEphemeral: ZKWatchedEphemeral = null
 
   def startup() {
     zkClient.subscribeStateChanges(sessionExpireListener)
     register()
   }
 
-  def shutdown() {
-    if (zkWatchedEphemeral != null) {
-      zkWatchedEphemeral.halt
-      zkWatchedEphemeral = null
-    }
-  }
+  def shutdown() {}
+
   /**
    * Register this broker as "alive" in zookeeper
    */
@@ -70,7 +65,7 @@ class KafkaHealthcheck(private val brokerId: Int,
     // only PLAINTEXT is supported as default
     // if the broker doesn't listen on PLAINTEXT protocol, an empty endpoint will be registered and older clients will be unable to connect
     val plaintextEndpoint = updatedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
-    zkWatchedEphemeral = ZkUtils.registerBrokerInZk(zkClient, zkConnection, brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, zkSessionTimeoutMs, jmxPort)
+    ZkUtils.registerBrokerInZk(zkClient, zkConnection, brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, zkSessionTimeoutMs, jmxPort)
   }
 
   /**
