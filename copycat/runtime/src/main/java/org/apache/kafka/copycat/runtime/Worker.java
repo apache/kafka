@@ -132,7 +132,7 @@ public class Worker {
         long timeoutMs = limit - time.milliseconds();
         sourceTaskOffsetCommitter.close(timeoutMs);
 
-        offsetBackingStore.start();
+        offsetBackingStore.stop();
 
         log.info("Worker stopped");
     }
