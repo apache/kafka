@@ -15,33 +15,12 @@
 
 
 from ducktape.tests.test import Test
-from ducktape.utils.util import wait_until
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.mirror_maker import MirrorMaker
-
-import time
-
-
-def file_exists(node, file):
-    """Quick and dirty check for existence of remote file."""
-    try:
-        node.account.ssh("cat " + file, allow_fail=False)
-        return True
-    except:
-        return False
-
-
-def line_count(node, file):
-    """Return the line count of file on node"""
-    out = [line for line in node.account.ssh_capture("wc -l %s" % file)]
-    if len(out) != 1:
-        raise Exception("Expected single line of output from wc -l")
-
-    return int(out[0].strip().split(" ")[0])
 
 
 class TestMirrorMakerService(Test):
@@ -98,29 +77,14 @@ class TestMirrorMakerService(Test):
             "grep \"consumer\.timeout\.ms\" %s" % MirrorMaker.CONSUMER_CONFIG, allow_fail=False)
 
         self.producer.start()
-        self.producer.wait()
-
-        t0 = time.time()
+        self.producer.wait(10)
         self.consumer.start()
-        node = self.consumer.nodes[0]
+        self.consumer.wait(10)
 
-        wait_until(lambda: self.consumer.alive(node),
-            timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
-        self.logger.info("consumer started in %s seconds " % str(time.time() - t0))
-
-        # Verify that log output is happening
-        wait_until(lambda: file_exists(node, ConsoleConsumer.LOG_FILE), timeout_sec=10,
-                   err_msg="Timed out waiting for logging to start.")
-        assert line_count(node, ConsoleConsumer.LOG_FILE) > 0
-
-        # Verify consumed messages count
-        num_produced = self.producer.num_acked
-        wait_until(lambda: len(self.consumer.messages_consumed[1]) == num_produced, timeout_sec=10,
-                   err_msg="Timed out waiting to consume expected number of messages.")
         num_consumed = len(self.consumer.messages_consumed[1])
+        num_produced = self.producer.num_acked
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
         assert num_produced == num_consumed, "num_produced: %d, num_consumed: %d" % (num_produced, num_consumed)
 
-        self.consumer.stop_node(node)
         self.mirror_maker.stop()
 
