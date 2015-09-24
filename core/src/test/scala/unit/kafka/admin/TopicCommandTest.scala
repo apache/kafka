@@ -36,7 +36,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
     val cleanupVal = "compact"
     // create brokers
     val brokers = List(0, 1, 2)
-    TestUtils.createBrokersInZk(zkClient, brokers)
+    TestUtils.createBrokersInZk(zkClient, zkConnection, brokers)
     // create the topic
     val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
       "--replication-factor", "1",
@@ -67,7 +67,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
 
     // create brokers
     val brokers = List(0, 1, 2)
-    TestUtils.createBrokersInZk(zkClient, brokers)
+    TestUtils.createBrokersInZk(zkClient, zkConnection, brokers)
 
     // create the NormalTopic
     val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,

@@ -19,7 +19,13 @@ package kafka.zk
 
 import kafka.consumer.ConsumerConfig
 import kafka.utils.ZkUtils
+import kafka.utils.ZKCheckedEphemeral
 import kafka.utils.TestUtils
+import org.apache.zookeeper.CreateMode
+import org.apache.zookeeper.WatchedEvent
+import org.apache.zookeeper.Watcher
+import org.apache.zookeeper.ZooDefs.Ids
+import org.I0Itec.zkclient.exception.{ZkException,ZkNodeExistsException}
 import org.junit.{Test, Assert}
 
 class ZKEphemeralTest extends ZooKeeperTestHarness {
@@ -43,5 +49,97 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
     val nodeExists = ZkUtils.pathExists(zkClient, "/tmp/zktest")
     Assert.assertFalse(nodeExists)
+  }
+
+  /*****
+   ***** Tests for ZkWatchedEphemeral
+   *****/
+
+  /**
+   * Tests basic creation
+   */
+  @Test
+  def testZkWatchedEphemeral = {
+    val path = "/zwe-test"
+    testCreation(path)
+  }
+
+  /**
+   * Tests recursive creation
+   */
+  @Test
+  def testZkWatchedEphemeralRecursive = {
+    val path = "/zwe-test-parent/zwe-test"
+    testCreation(path)
+  }
+
+  private def testCreation(path: String) {
+    val zk = zkConnection.getZookeeper
+    val zwe = new ZKCheckedEphemeral(path, "", zk)
+    var created = false
+    var counter = 10
+
+    zk.exists(path, new Watcher() {
+      def process(event: WatchedEvent) {
+        if(event.getType == Watcher.Event.EventType.NodeCreated) {
+          created = true
+        }
+      }
+    })
+    zwe.create()
+    // Waits until the znode is created
+    TestUtils.waitUntilTrue(() => ZkUtils.pathExists(zkClient, path),
+                            "Znode %s wasn't created".format(path))
+  }
+
+  /**
+   * Tests that it fails in the presence of an overlapping
+   * session.
+   */
+  @Test
+  def testOverlappingSessions = {
+    val path = "/zwe-test"
+    val zk1 = zkConnection.getZookeeper
+
+    //Creates a second session
+    val (_, zkConnection2) = ZkUtils.createZkClientAndConnection(zkConnect, zkSessionTimeoutMs, zkConnectionTimeout)
+    val zk2 = zkConnection2.getZookeeper
+    var zwe = new ZKCheckedEphemeral(path, "", zk2)
+
+    // Creates znode for path in the first session
+    zk1.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
+    
+    //Bootstraps the ZKWatchedEphemeral object
+    var gotException = false;
+    try {
+      zwe.create()
+    } catch {
+      case e: ZkNodeExistsException =>
+        gotException = true
+    }
+    Assert.assertTrue(gotException)
+  }
+  
+  /**
+   * Tests if succeeds with znode from the same session
+   * 
+   */
+  @Test
+  def testSameSession = {
+    val path = "/zwe-test"
+    val zk = zkConnection.getZookeeper
+    // Creates znode for path in the first session
+    zk.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
+    
+    var zwe = new ZKCheckedEphemeral(path, "", zk)
+    //Bootstraps the ZKWatchedEphemeral object
+    var gotException = false;
+    try {
+      zwe.create()
+    } catch {
+      case e: ZkNodeExistsException =>
+        gotException = true
+    }
+    Assert.assertFalse(gotException)
   }
 }
