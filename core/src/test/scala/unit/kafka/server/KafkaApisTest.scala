@@ -67,9 +67,7 @@ class KafkaApisTest {
   // This class is written because the NetworkSend can only write to a GatheringByteChannel. This class should be
   // removed after the unit test start to use KafkaTestHarness.
   private class SimpleGatheringBytesChannel(buffer: ByteBuffer) extends GatheringByteChannel {
-    override def write(buffers: Array[ByteBuffer], offset: Int, length: Int) : Long = {
-      0L
-    }
+    override def write(buffers: Array[ByteBuffer], offset: Int, length: Int) : Long = 0L
 
     override def write(buffers: Array[ByteBuffer]): Long = {
       val positionBeforeWrite = buffer.position()
@@ -83,13 +81,8 @@ class KafkaApisTest {
       buffer.position() - positionBeforeWrite
     }
 
-    override def isOpen: Boolean = {
-      true
-    }
+    override def isOpen: Boolean = true
 
-    override def close() {
-
-    }
-
+    override def close() { }
   }
 }

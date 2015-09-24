@@ -19,15 +19,8 @@ public class UnsupportedVersionException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public UnsupportedVersionException() {
-    }
-
     public UnsupportedVersionException(String message) {
         super(message);
-    }
-
-    public UnsupportedVersionException(Throwable throwable) {
-        super(throwable);
     }
 
     public UnsupportedVersionException(String message, Throwable throwable) {

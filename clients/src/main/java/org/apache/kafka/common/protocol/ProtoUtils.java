@@ -18,6 +18,7 @@ package org.apache.kafka.common.protocol;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -66,6 +67,12 @@ public class ProtoUtils {
 
     public static Struct parseResponse(int apiKey, int version, ByteBuffer buffer) {
         return (Struct) responseSchema(apiKey, version).read(buffer);
+    }
+
+    public static void validateApiVersion(int apiKey, int versionId) {
+        if (versionId < 0 || latestVersion(apiKey) < versionId)
+            throw new UnsupportedVersionException("The version " + versionId + " for " + ApiKeys.forId(apiKey).name +
+                " is higher than highest supported version " + ProtoUtils.latestVersion(apiKey));
     }
 
 }
