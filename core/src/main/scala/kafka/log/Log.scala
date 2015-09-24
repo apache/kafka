@@ -486,8 +486,8 @@ class Log(val dir: File,
     // continue to read from successive segments until we get some messages or we reach the end of the log
     while(entry != null) {
       val maxPosition = {
-        if (entry == segments.lastEntry())
-          Option(nextOffsetMetadata.relativePositionInSegment.toLong)
+        if (entry == segments.lastEntry)
+          Some(nextOffsetMetadata.relativePositionInSegment.toLong)
         else
           None
       }
