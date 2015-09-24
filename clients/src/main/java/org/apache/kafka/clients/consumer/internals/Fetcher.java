@@ -263,8 +263,8 @@ public class Fetcher<K, V> {
     }
 
     /**
-     * If any partition from previous fetchResponse contains OffsetOutOfRange error, throw
-     * OffsetOutOfRangeException and clear the partition list.
+     * If any partition from previous fetchResponse contains OffsetOutOfRange error and
+     * the defaultResetPolicy is NONE, throw OffsetOutOfRangeException
      *
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse
      */
@@ -291,7 +291,8 @@ public class Fetcher<K, V> {
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
      * @return The fetched records per partition
-     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         if (this.subscriptions.partitionAssignmentNeeded()) {

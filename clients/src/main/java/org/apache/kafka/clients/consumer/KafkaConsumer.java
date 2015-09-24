@@ -775,6 +775,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @throws NoOffsetForPartitionException If there is no stored offset for a subscribed partition and no automatic
      *             offset reset policy has been configured.
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
@@ -812,6 +814,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * heart-beating, auto-commits, and offset updates.
      * @param timeout The maximum time to block in the underlying poll
      * @return The fetched records (may be empty)
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
