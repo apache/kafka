@@ -46,7 +46,7 @@ public class VerifiableLog4jAppender {
     private long maxMessages = -1;
 
     // Hook to trigger logging thread to stop logging messages
-    private boolean stopLogging = false;
+    private volatile boolean stopLogging = false;
 
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
@@ -97,8 +97,7 @@ public class VerifiableLog4jAppender {
         VerifiableLog4jAppender producer = null;
 
         try {
-            Namespace res;
-            res = parser.parseArgs(args);
+            Namespace res = parser.parseArgs(args);
 
             int maxMessages = res.getInt("maxMessages");
             String topic = res.getString("topic");
@@ -148,7 +147,8 @@ public class VerifiableLog4jAppender {
             }
         });
 
-        for (int i = 0; i < appender.maxMessages || infinite; i++) {
+        long maxMessages = infinite ? Long.MAX_VALUE: appender.maxMessages;
+        for (long i = 0; i < maxMessages; i++) {
             if (appender.stopLogging) {
                 break;
             }
