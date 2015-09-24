@@ -98,7 +98,20 @@ public class OffsetResetStrategyTest {
     }
 
     @Test
-    public void testFetchOffsetOutOfRange() {
+    public void testFetchedRecordsAfterSeek() {
+        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.seek(tp, 0);
+
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
+        consumerClient.poll(0);
+        assertFalse(subscriptions.isOffsetResetNeeded(tp));
+        subscriptions.seek(tp, 2);
+        assertEquals(0, fetcher.fetchedRecords().size());
+    }
+
+    @Test
+    public void testFetchOffsetOutOfRangeException() {
         subscriptions.assign(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
