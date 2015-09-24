@@ -36,12 +36,11 @@ import kafka.utils.CoreUtils.inLock
 import kafka.utils.ZkUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient}
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
 import scala.collection.JavaConversions._
-
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -90,6 +89,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private val rebalanceLock = new Object
   private var fetcher: Option[ConsumerFetcherManager] = None
   private var zkClient: ZkClient = null
+  private var zkConnection : ZkConnection = null
   private var topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
   private val checkpointedZkOffsets = new Pool[TopicAndPartition, Long]
   private val topicThreadIdAndQueues = new Pool[(String, ConsumerThreadId), BlockingQueue[FetchedDataChunk]]
@@ -178,7 +178,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def connectZk() {
     info("Connecting to zookeeper instance at " + config.zkConnect)
-    zkClient = ZkUtils.createZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
+    val (client, connection) = ZkUtils.createZkClientAndConnection(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
+    zkClient = client
+    zkConnection = connection
   }
 
   // Blocks until the offset manager is located and a channel is established to it.
@@ -261,9 +263,12 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val timestamp = SystemTime.milliseconds.toString
     val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
                                                   "timestamp" -> timestamp))
+    val zkWatchedEphemeral = new ZKCheckedEphemeral(dirs.
+                                                    consumerRegistryDir + "/" + consumerIdString, 
+                                                    consumerRegistrationInfo,
+                                                    zkConnection.getZookeeper)
+    zkWatchedEphemeral.create()
 
-    createEphemeralPathExpectConflictHandleZKBug(zkClient, dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo, null,
-                                                 (consumerZKString, consumer) => true, config.zkSessionTimeoutMs)
     info("end registering consumer " + consumerIdString + " in ZK")
   }
 

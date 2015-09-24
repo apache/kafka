@@ -43,7 +43,7 @@ import org.apache.kafka.common.utils.AppInfoParser
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
-import org.I0Itec.zkclient.ZkClient
+import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import kafka.controller.{ControllerStats, KafkaController}
 import kafka.cluster.{EndPoint, Broker}
 import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBrokerIdException}
@@ -129,6 +129,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   val metadataCache: MetadataCache = new MetadataCache(config.brokerId)
 
   var zkClient: ZkClient = null
+  var zkConnection: ZkConnection = null
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
@@ -164,7 +165,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         kafkaScheduler.startup()
 
         /* setup zookeeper */
-        zkClient = initZk()
+        val (client, connection) = initZk()
+        zkClient = client
+        zkConnection = connection
 
         /* start log manager */
         logManager = createLogManager(zkClient, brokerState)
@@ -183,7 +186,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         replicaManager.startup()
 
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, brokerState, kafkaMetricsTime, metrics, threadNamePrefix)
+        kafkaController = new KafkaController(config, zkClient, zkConnection, brokerState, kafkaMetricsTime, metrics, threadNamePrefix)
         kafkaController.startup()
 
         /* start kafka coordinator */
@@ -220,7 +223,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           else
             (protocol, endpoint)
         }
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, config.zkSessionTimeoutMs, zkClient)
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkClient, zkConnection)
         kafkaHealthcheck.startup()
 
         /* register broker metrics */
@@ -242,7 +245,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
   }
 
-  private def initZk(): ZkClient = {
+  private def initZk(): (ZkClient, ZkConnection) = {
     info("Connecting to zookeeper on " + config.zkConnect)
 
     val chroot = {
@@ -260,9 +263,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
       zkClientForChrootCreation.close()
     }
 
-    val zkClient = ZkUtils.createZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
+    val (zkClient, zkConnection) = ZkUtils.createZkClientAndConnection(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
     ZkUtils.setupCommonPaths(zkClient)
-    zkClient
+    (zkClient, zkConnection)
   }
 
 
