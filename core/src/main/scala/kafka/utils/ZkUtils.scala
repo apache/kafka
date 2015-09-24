@@ -902,7 +902,7 @@ class ZKCheckedEphemeral(path: String,
           error("Session has expired while creating %s".format(path))
           setResult(Code.SESSIONEXPIRED)
         case _ =>
-          warn("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
+          warn("ZooKeeper event while creating registration node: %s %s".format(path, Code.get(rc)))
           setResult(Code.get(rc))
       }
     }
@@ -927,6 +927,7 @@ class ZKCheckedEphemeral(path: String,
             error("Session has expired while reading znode %s".format(path))
             setResult(Code.SESSIONEXPIRED)
           case _ =>
+            warn("ZooKeeper event while getting znode data: %s %s".format(path, Code.get(rc)))
             setResult(Code.get(rc))
         }
       }
@@ -969,7 +970,7 @@ class ZKCheckedEphemeral(path: String,
                               error("Session has expired while creating %s".format(path))
                               setResult(Code.get(rc))
                             case _ =>
-                              info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
+                              warn("ZooKeeper event while creating registration node: %s %s".format(path, Code.get(rc)))
                               setResult(Code.get(rc))
                           }
                         }

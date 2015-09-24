@@ -35,7 +35,6 @@ import java.net.InetAddress
  */
 class KafkaHealthcheck(private val brokerId: Int,
                        private val advertisedEndpoints: Map[SecurityProtocol, EndPoint],
-                       private val zkSessionTimeoutMs: Int,
                        private val zkClient: ZkClient,
                        private val zkConnection: ZkConnection) extends Logging {
 
