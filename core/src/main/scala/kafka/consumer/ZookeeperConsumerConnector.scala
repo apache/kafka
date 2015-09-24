@@ -34,7 +34,6 @@ import kafka.network.BlockingChannel
 import kafka.serializer._
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ZkUtils._
-import kafka.utils.ZKCheckedEphemeral
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
@@ -258,6 +257,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   // this API is used by unit tests only
   def getTopicRegistry: Pool[String, Pool[Int, PartitionTopicInfo]] = topicRegistry
+
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) {
     info("begin registering consumer " + consumerIdString + " in ZK")
     val timestamp = SystemTime.milliseconds.toString
@@ -267,7 +267,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                  consumerRegistryDir + "/" + consumerIdString, 
                                                  consumerRegistrationInfo,
                                                  zkConnection.getZookeeper)
-    zkWatchedEphemeral.create
+    zkWatchedEphemeral.create()
 
     info("end registering consumer " + consumerIdString + " in ZK")
   }

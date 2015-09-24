@@ -47,8 +47,6 @@ class KafkaHealthcheck(private val brokerId: Int,
     register()
   }
 
-  def shutdown() {}
-
   /**
    * Register this broker as "alive" in zookeeper
    */
@@ -65,7 +63,7 @@ class KafkaHealthcheck(private val brokerId: Int,
     // only PLAINTEXT is supported as default
     // if the broker doesn't listen on PLAINTEXT protocol, an empty endpoint will be registered and older clients will be unable to connect
     val plaintextEndpoint = updatedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
-    ZkUtils.registerBrokerInZk(zkClient, zkConnection, brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, zkSessionTimeoutMs, jmxPort)
+    ZkUtils.registerBrokerInZk(zkClient, zkConnection, brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort)
   }
 
   /**
@@ -74,10 +72,7 @@ class KafkaHealthcheck(private val brokerId: Int,
    */
   class SessionExpireListener() extends IZkStateListener {
     @throws(classOf[Exception])
-    def handleStateChanged(state: KeeperState) {
-      if (state == KeeperState.Expired)
-        shutdown()
-    }
+    def handleStateChanged(state: KeeperState) {}
 
     /**
      * Called after the zookeeper session has expired and a new session has been created. You would have to re-create

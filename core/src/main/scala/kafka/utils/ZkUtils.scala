@@ -37,12 +37,10 @@ import kafka.controller.KafkaController
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 
-import org.apache.zookeeper.AsyncCallback.{DataCallback,StatCallback,StringCallback}
+import org.apache.zookeeper.AsyncCallback.{DataCallback,StringCallback}
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.WatchedEvent
-import org.apache.zookeeper.Watcher
 import org.apache.zookeeper.ZooDefs.Ids
 import org.apache.zookeeper.ZooKeeper
 
@@ -206,23 +204,22 @@ object ZkUtils extends Logging {
    * @param timeout
    * @param jmxPort
    */
-  def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], timeout: Int, jmxPort: Int) {
+  def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, id: Int, host: String, port: Int, advertisedEndpoints: immutable.Map[SecurityProtocol, EndPoint], jmxPort: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
     val brokerInfo = Json.encode(Map("version" -> 2, "host" -> host, "port" -> port, "endpoints"->advertisedEndpoints.values.map(_.connectionString).toArray, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
-    val expectedBroker = new Broker(id, advertisedEndpoints)
-    registerBrokerInZk(zkClient, zkConnection, brokerIdPath, brokerInfo, expectedBroker, timeout)
+    registerBrokerInZk(zkClient, zkConnection, brokerIdPath, brokerInfo)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
   }
 
-  private def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, brokerIdPath: String, brokerInfo: String, expectedBroker: Broker, timeout: Int) {
+  private def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, brokerIdPath: String, brokerInfo: String) {
     try {
       val zkCheckedEphemeral = new ZKCheckedEphemeral(brokerIdPath, 
                                                       brokerInfo,
                                                       zkConnection.getZookeeper)
-      zkCheckedEphemeral.create
+      zkCheckedEphemeral.create()
     } catch {
       case e: ZkNodeExistsException =>
         throw new RuntimeException("A broker is already registered on the path " + brokerIdPath
@@ -877,19 +874,19 @@ object ZkPath {
  * and otherwise it fails the operation.  
  */
 
-class ZKCheckedEphemeral(path : String,
-                          data : String,
-                          zkHandle : ZooKeeper) extends Logging {
+class ZKCheckedEphemeral(path: String,
+                         data: String,
+                         zkHandle: ZooKeeper) extends Logging {
   private val createCallback = new CreateCallback
   private val getDataCallback = new GetDataCallback
   val latch: CountDownLatch = new CountDownLatch(1)
   var result: Code = Code.OK
   
   private class CreateCallback extends StringCallback {
-    def processResult(rc : Int,
-                      path : String,
-                      ctx : Object,
-                      name : String) {
+    def processResult(rc: Int,
+                      path: String,
+                      ctx: Object,
+                      name: String) {
       Code.get(rc) match {
         case Code.OK =>
            setResult(Code.OK)
@@ -905,79 +902,75 @@ class ZKCheckedEphemeral(path : String,
           error("Session has expired while creating %s".format(path))
           setResult(Code.SESSIONEXPIRED)
         case _ =>
-          info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
+          warn("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
           setResult(Code.get(rc))
       }
     }
   }
 
   private class GetDataCallback extends DataCallback {
-      def processResult(rc : Int,
-                 path : String,
-                 ctx : Object,
-                 readData: Array[Byte],
-                 stat : Stat) {
+      def processResult(rc: Int,
+                        path: String,
+                        ctx: Object,
+                        readData: Array[Byte],
+                        stat: Stat) {
         Code.get(rc) match {
           case Code.OK =>
                 if (stat.getEphemeralOwner != zkHandle.getSessionId)
                   setResult(Code.NODEEXISTS)
                 else
                   setResult(Code.OK)
-          case Code.NONODE => {
-            warn("The ephemeral node [%s] at %s has gone away while reading it, ".format(data, path))
+          case Code.NONODE =>
+            info("The ephemeral node [%s] at %s has gone away while reading it, ".format(data, path))
             createEphemeral
-          }
-          case _ => {
+          case Code.SESSIONEXPIRED =>
+            error("Session has expired while reading znode %s".format(path))
+            setResult(Code.SESSIONEXPIRED)
+          case _ =>
             setResult(Code.get(rc))
-          }
         }
       }
   }
   
   private def createEphemeral() {
     zkHandle.create(path,
-                  ZKStringSerializer.serialize(data),
-                  Ids.OPEN_ACL_UNSAFE,
-                  CreateMode.EPHEMERAL,
-                  createCallback,
-                  null)
+                    ZKStringSerializer.serialize(data),
+                    Ids.OPEN_ACL_UNSAFE,
+                    CreateMode.EPHEMERAL,
+                    createCallback,
+                    null)
   }
   
-  private def createRecursive(prefix : String, suffix : String) {
+  private def createRecursive(prefix: String, suffix: String) {
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     if(suffix.isEmpty()) {
       createEphemeral
     } else {
       zkHandle.create(prefix,
-                  new Array[Byte](0),
-                  Ids.OPEN_ACL_UNSAFE,
-                  CreateMode.PERSISTENT,
-                  new StringCallback() {
+                      new Array[Byte](0),
+                      Ids.OPEN_ACL_UNSAFE,
+                      CreateMode.PERSISTENT,
+                      new StringCallback() {
                         def processResult(rc : Int,
                                           path : String,
                                           ctx : Object,
                                           name : String) {
                           Code.get(rc) match {
-                            case Code.OK | Code.NODEEXISTS => {
+                            case Code.OK | Code.NODEEXISTS =>
                               // Nothing to do
-                            }
-                            case Code.CONNECTIONLOSS => {
+                            case Code.CONNECTIONLOSS =>
                               // try again
                               val suffix = ctx.asInstanceOf[String]
                               createRecursive(path, suffix)
-                            }
-                            case Code.NONODE => {
+                            case Code.NONODE =>
                               error("No node for path %s (could be the parent missing)".format(path))
                               setResult(Code.get(rc))
-                            }
-                            case Code.SESSIONEXPIRED => {
+                            case Code.SESSIONEXPIRED =>
                               error("Session has expired while creating %s".format(path))
                               setResult(Code.get(rc))
-                            }
-                            case _ => {
+                            case _ =>
                               info("ZooKeeper event while creating registration node %s %s".format(path, Code.get(rc)))
                               setResult(Code.get(rc))
-                            }
                           }
                         }
                   },
@@ -1017,12 +1010,10 @@ class ZKCheckedEphemeral(path : String,
     val result = waitUntilResolved()
     info("Result of znode creation is: %s".format(result))
     result match {
-      case Code.OK => {
+      case Code.OK =>
         // Nothing to do
-      }
-      case _ => {
+      case _ =>
         throw ZkException.create(KeeperException.create(result))
-      }
     }
   }
 }

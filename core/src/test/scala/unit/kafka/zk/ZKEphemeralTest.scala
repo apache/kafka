@@ -86,16 +86,10 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
         }
       }
     })
-    zwe.create
+    zwe.create()
     // Waits until the znode is created
-    while(!created && counter > 0) {
-      Thread.sleep(100)
-      counter = counter - 1
-    }
-    // If the znode hasn't been created within the given time,
-    // then fail the test
-    if(counter <= 0)
-      Assert.fail("Failed to create ephemeral znode")
+    TestUtils.waitUntilTrue(() => ZkUtils.pathExists(zkClient, path),
+                            "Znode %s wasn't created".format(path))
   }
 
   /**
@@ -108,27 +102,17 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     val zk1 = zkConnection.getZookeeper
 
     //Creates a second session
-    val (zkClient2, zkConnection2) = ZkUtils.createZkClientAndConnection(zkConnect, zkSessionTimeoutMs, zkConnectionTimeout)
+    val (_, zkConnection2) = ZkUtils.createZkClientAndConnection(zkConnect, zkSessionTimeoutMs, zkConnectionTimeout)
     val zk2 = zkConnection2.getZookeeper
     var zwe = new ZKCheckedEphemeral(path,"", zk2)
-    val numIterations = 10
-    var counter = numIterations
-    var deleted = false
 
     // Creates znode for path in the first session
     zk1.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
-    // Watches the znode
-    zk2.exists(path, new Watcher() {
-      def process(event: WatchedEvent) {
-        if(event.getType == Watcher.Event.EventType.NodeDeleted) {
-          deleted = true
-        }
-      }
-    })
+    
     //Bootstraps the ZKWatchedEphemeral object
     var gotException = false;
     try {
-      zwe.create
+      zwe.create()
     } catch {
       case e: ZkNodeExistsException =>
         gotException = true
@@ -151,7 +135,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     //Bootstraps the ZKWatchedEphemeral object
     var gotException = false;
     try {
-      zwe.create
+      zwe.create()
     } catch {
       case e: ZkNodeExistsException =>
         gotException = true

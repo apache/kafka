@@ -76,7 +76,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
       val zkCheckedEphemeral = new ZKCheckedEphemeral(electionPath,
                                                   electString,
                                                   controllerContext.zkConnection.getZookeeper)
-      zkCheckedEphemeral.create
+      zkCheckedEphemeral.create()
       info(brokerId + " successfully elected as leader")
       leaderId = brokerId
       onBecomingLeader()

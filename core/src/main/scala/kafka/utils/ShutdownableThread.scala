@@ -57,14 +57,15 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   def doWork(): Unit
 
   override def run(): Unit = {
-    info("Starting %s %d".format(name, this.getId))
+    info("Starting ")
     try{
       while(isRunning.get()){
         doWork()
       }
     } catch{
       case e: Throwable =>
-        error("Error due to ", e)
+        if(isRunning.get())
+          error("Error due to ", e)
     }
     shutdownLatch.countDown()
     info("Stopped ")
