@@ -216,7 +216,7 @@ object ZkUtils extends Logging {
 
   private def registerBrokerInZk(zkClient: ZkClient, zkConnection: ZkConnection, brokerIdPath: String, brokerInfo: String) {
     try {
-      val zkCheckedEphemeral = new ZKCheckedEphemeral(brokerIdPath, 
+      val zkCheckedEphemeral = new ZKCheckedEphemeral(brokerIdPath,
                                                       brokerInfo,
                                                       zkConnection.getZookeeper)
       zkCheckedEphemeral.create()

@@ -75,7 +75,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
 
   private def testCreation(path: String) {
     val zk = zkConnection.getZookeeper
-    val zwe = new ZKCheckedEphemeral(path,"", zk)
+    val zwe = new ZKCheckedEphemeral(path, "", zk)
     var created = false
     var counter = 10
 
@@ -131,7 +131,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     // Creates znode for path in the first session
     zk.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
     
-    var zwe = new ZKCheckedEphemeral(path,"", zk)
+    var zwe = new ZKCheckedEphemeral(path, "", zk)
     //Bootstraps the ZKWatchedEphemeral object
     var gotException = false;
     try {

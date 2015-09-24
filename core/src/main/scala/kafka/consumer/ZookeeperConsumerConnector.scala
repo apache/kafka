@@ -264,9 +264,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val consumerRegistrationInfo = Json.encode(Map("version" -> 1, "subscription" -> topicCount.getTopicCountMap, "pattern" -> topicCount.pattern,
                                                   "timestamp" -> timestamp))
     val zkWatchedEphemeral = new ZKCheckedEphemeral(dirs.
-                                                 consumerRegistryDir + "/" + consumerIdString, 
-                                                 consumerRegistrationInfo,
-                                                 zkConnection.getZookeeper)
+                                                    consumerRegistryDir + "/" + consumerIdString, 
+                                                    consumerRegistrationInfo,
+                                                    zkConnection.getZookeeper)
     zkWatchedEphemeral.create()
 
     info("end registering consumer " + consumerIdString + " in ZK")

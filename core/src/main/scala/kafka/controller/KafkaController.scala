@@ -44,7 +44,7 @@ import kafka.server._
 import kafka.common.TopicAndPartition
 
 class ControllerContext(val zkClient: ZkClient,
-                        val zkConnection : ZkConnection,
+                        val zkConnection: ZkConnection,
                         val zkSessionTimeout: Int) {
   var controllerChannelManager: ControllerChannelManager = null
   val controllerLock: ReentrantLock = new ReentrantLock()

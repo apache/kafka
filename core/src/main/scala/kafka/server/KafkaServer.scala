@@ -129,7 +129,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   val metadataCache: MetadataCache = new MetadataCache(config.brokerId)
 
   var zkClient: ZkClient = null
-  var zkConnection : ZkConnection = null
+  var zkConnection: ZkConnection = null
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
