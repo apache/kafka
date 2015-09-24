@@ -21,7 +21,7 @@ import java.net.{SocketTimeoutException}
 import java.util
 
 import kafka.admin._
-import kafka.api.{KAFKA_083, ApiVersion}
+import kafka.api.{KAFKA_090, ApiVersion}
 import kafka.log.LogConfig
 import kafka.log.CleanerConfig
 import kafka.log.LogManager
@@ -478,9 +478,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
       brokerState.newState(PendingControlledShutdown)
 
       val shutdownSucceeded =
-        // Before 0.8.3, `ControlledShutdownRequest` did not contain `client_id` and it's a mandatory field in
+        // Before 0.9.0.0, `ControlledShutdownRequest` did not contain `client_id` and it's a mandatory field in
         // `RequestHeader`, which is used by `NetworkClient`
-        if (config.interBrokerProtocolVersion.onOrAfter(KAFKA_083))
+        if (config.interBrokerProtocolVersion.onOrAfter(KAFKA_090))
           networkClientControlledShutdown(config.controlledShutdownMaxRetries.intValue)
         else blockingChannelControlledShutdown(config.controlledShutdownMaxRetries.intValue)
       
