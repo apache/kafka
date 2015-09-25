@@ -143,6 +143,7 @@ public class ProcessorStateManager {
         if (checkpointedOffsets.containsKey(storePartition)) {
             restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
         } else {
+            // TODO: in this case, we need to ignore the preciously flushed state
             restoreConsumer.seekToBeginning(storePartition);
         }
 
