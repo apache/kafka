@@ -32,7 +32,7 @@ else
 fi
 
 echo "Checking Vagrant installation..."
-vagrant_version=`vagrant --version | egrep -o "[0-9]\.[0-9]\.[0-9]"`
+vagrant_version=`vagrant --version | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"`
 bad_vagrant=false
 if [ "$(version $vagrant_version)" -lt "$(version 1.6.4)" ]; then
     echo "Found Vagrant version $vagrant_version. Please upgrade to 1.6.4 or higher (see http://www.vagrantup.com for details)"
@@ -47,7 +47,7 @@ fi
 
 echo "Checking for necessary Vagrant plugins..."
 install_hostmanager=false
-hostmanager_version=`vagrant plugin list | grep vagrant-hostmanager | egrep -o "\d+\.\d+\.\d+"`
+hostmanager_version=`vagrant plugin list | grep vagrant-hostmanager | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"`
 if [ -z "$hostmanager_version"  ]; then
     install_hostmanager=true
 elif [ "$hostmanager_version" != "1.5.0" ]; then
@@ -73,9 +73,9 @@ fi
 # Sanity check contents of Vagrantfile.local
 echo "Checking Vagrantfile.local..."
 vagrantfile_ok=true
-num_brokers=`egrep -o "num_brokers\s*=\s*\d+" Vagrantfile.local | cut -d '=' -f 2 | xargs`
-num_zookeepers=`egrep -o "num_zookeepers\s*=\s*\d+" Vagrantfile.local | cut -d '=' -f 2 | xargs`
-num_workers=`egrep -o "num_workers\s*=\s*\d+" Vagrantfile.local | cut -d '=' -f 2 | xargs`
+num_brokers=`egrep -o "num_brokers\s*=\s*[0-9]+" Vagrantfile.local | cut -d '=' -f 2 | xargs`
+num_zookeepers=`egrep -o "num_zookeepers\s*=\s*[0-9]+" Vagrantfile.local | cut -d '=' -f 2 | xargs`
+num_workers=`egrep -o "num_workers\s*=\s*[0-9]+" Vagrantfile.local | cut -d '=' -f 2 | xargs`
 if [ "x$num_brokers" == "x" -o "$num_brokers" != 0 ]; then
     echo "Vagrantfile.local: bad num_brokers. Update to: num_brokers = 0"
     vagrantfile_ok=false
