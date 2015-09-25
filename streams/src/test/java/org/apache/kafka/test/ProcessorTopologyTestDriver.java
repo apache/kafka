@@ -284,8 +284,23 @@ public class ProcessorTopologyTestDriver {
      * @return the mock consumer; never null
      */
     protected MockConsumer<byte[], byte[]> createRestoreConsumer(int id, String... storeNames) {
-        MockConsumer<byte[], byte[]> consumer = new MockRestoreConsumer();
+        MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
+            @Override
+            public synchronized void seekToEnd(TopicPartition... partitions) {
+                // do nothing ...
+            }
 
+            @Override
+            public synchronized void seekToBeginning(TopicPartition... partitions) {
+                // do nothing ...
+            }
+
+            @Override
+            public synchronized long position(TopicPartition partition) {
+                // do nothing ...
+                return 0L;
+            }
+        };
         // For each store name ...
         for (String storeName : storeNames) {
             String topicName = storeName;
@@ -295,6 +310,7 @@ public class ProcessorTopologyTestDriver {
             List<PartitionInfo> partitionInfos = new ArrayList<>();
             partitionInfos.add(new PartitionInfo(topicName, id, null, null, null));
             consumer.updatePartitions(topicName, partitionInfos);
+            consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, id), 0L));
         }
         return consumer;
     }
