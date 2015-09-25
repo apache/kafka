@@ -122,9 +122,9 @@ class WorkerSinkTask implements WorkerTask {
      **/
     public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
         log.info("{} Committing offsets", this);
-        HashMap<TopicPartition, Long> offsets = new HashMap<>();
+        HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (TopicPartition tp : consumer.assignment()) {
-            offsets.put(tp, consumer.position(tp));
+            offsets.put(tp, new OffsetAndMetadata(consumer.position(tp)));
         }
         // We only don't flush the task in one case: when shutting down, the task has already been
         // stopped and all data should have already been flushed
@@ -147,7 +147,7 @@ class WorkerSinkTask implements WorkerTask {
         } else {
             OffsetCommitCallback cb = new OffsetCommitCallback() {
                 @Override
-                public void onComplete(Map<TopicPartition, Long> offsets, Exception error) {
+                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
                     workThread.onCommitCompleted(error, seqno);
                 }
             };

@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.regex.Pattern;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
@@ -42,7 +43,7 @@ public class SubscriptionStateTest {
     public void partitionAssignment() {
         state.assign(Arrays.asList(tp0));
         assertEquals(Collections.singleton(tp0), state.assignedPartitions());
-        state.committed(tp0, 1);
+        state.committed(tp0, new OffsetAndMetadata(1));
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
         assertAllPositions(tp0, 1L);
@@ -78,7 +79,7 @@ public class SubscriptionStateTest {
         assertTrue(state.partitionsAutoAssigned());
         state.changePartitionAssignment(asList(tp0));
         state.seek(tp0, 1);
-        state.committed(tp0, 1);
+        state.committed(tp0, new OffsetAndMetadata(1));
         assertAllPositions(tp0, 1L);
         state.changePartitionAssignment(asList(tp1));
         assertTrue(state.isAssigned(tp1));
@@ -99,6 +100,15 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void commitOffsetMetadata() {
+        state.assign(Arrays.asList(tp0));
+        state.committed(tp0, new OffsetAndMetadata(5, "hi"));
+
+        assertEquals(5, state.committed(tp0).offset());
+        assertEquals("hi", state.committed(tp0).metadata());
+    }
+
+    @Test
     public void topicUnsubscription() {
         final String topic = "test";
         state.subscribe(Arrays.asList(topic), rebalanceListener);
@@ -106,7 +116,7 @@ public class SubscriptionStateTest {
         assertTrue(state.assignedPartitions().isEmpty());
         assertTrue(state.partitionsAutoAssigned());
         state.changePartitionAssignment(asList(tp0));
-        state.committed(tp0, 1);
+        state.committed(tp0, new OffsetAndMetadata(1));
         state.seek(tp0, 1);
         assertAllPositions(tp0, 1L);
         state.changePartitionAssignment(asList(tp1));
@@ -143,7 +153,7 @@ public class SubscriptionStateTest {
     }
     
     public void assertAllPositions(TopicPartition tp, Long offset) {
-        assertEquals(offset, state.committed(tp));
+        assertEquals(offset.longValue(), state.committed(tp).offset());
         assertEquals(offset, state.fetched(tp));
         assertEquals(offset, state.consumed(tp));
     }

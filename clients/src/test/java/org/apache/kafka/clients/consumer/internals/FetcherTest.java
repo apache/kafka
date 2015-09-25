@@ -21,12 +21,14 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -55,6 +57,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class FetcherTest {
     private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
@@ -72,27 +75,15 @@ public class FetcherTest {
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
+    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private Metrics metrics = new Metrics(time);
     private Map<String, String> metricTags = new LinkedHashMap<String, String>();
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
 
     private MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
-
-    private Fetcher<byte[], byte[]> fetcher = new Fetcher<byte[], byte[]>(consumerClient,
-                                                                          minBytes,
-                                                                          maxWaitMs,
-                                                                          fetchSize,
-                                                                          true, // check crc
-                                                                          new ByteArrayDeserializer(),
-                                                                          new ByteArrayDeserializer(),
-                                                                          metadata,
-                                                                          subscriptions,
-                                                                          metrics,
-                                                                          "consumer" + groupId,
-                                                                          metricTags,
-                                                                          time,
-                                                                          retryBackoffMs);
+    private Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, metrics);
+    private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, new Metrics(time));
 
     @Before
     public void setup() throws Exception {
@@ -206,6 +197,38 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchedRecordsAfterSeek() {
+        subscriptionsNoAutoReset.assign(Arrays.asList(tp));
+        subscriptionsNoAutoReset.seek(tp, 0);
+
+        fetcherNoAutoReset.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
+        consumerClient.poll(0);
+        assertFalse(subscriptionsNoAutoReset.isOffsetResetNeeded(tp));
+        subscriptionsNoAutoReset.seek(tp, 2);
+        assertEquals(0, fetcherNoAutoReset.fetchedRecords().size());
+    }
+
+    @Test
+    public void testFetchOffsetOutOfRangeException() {
+        subscriptionsNoAutoReset.assign(Arrays.asList(tp));
+        subscriptionsNoAutoReset.seek(tp, 0);
+
+        fetcherNoAutoReset.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
+        consumerClient.poll(0);
+        assertFalse(subscriptionsNoAutoReset.isOffsetResetNeeded(tp));
+        try {
+            fetcherNoAutoReset.fetchedRecords();
+            fail("Should have thrown OffsetOutOfRangeException");
+        } catch (OffsetOutOfRangeException e) {
+            assertTrue(e.offsetOutOfRangePartitions().containsKey(tp));
+            assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+        }
+        assertEquals(0, fetcherNoAutoReset.fetchedRecords().size());
+    }
+
+    @Test
     public void testFetchDisconnected() {
         subscriptions.assign(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
@@ -227,7 +250,7 @@ public class FetcherTest {
         // unless a specific reset is expected, the default behavior is to reset to the committed
         // position if one is present
         subscriptions.assign(Arrays.asList(tp));
-        subscriptions.committed(tp, 5);
+        subscriptions.committed(tp, new OffsetAndMetadata(5));
 
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -356,5 +379,22 @@ public class FetcherTest {
     private Struct fetchResponse(ByteBuffer buffer, short error, long hw, int throttleTime) {
         FetchResponse response = new FetchResponse(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, buffer)), throttleTime);
         return response.toStruct();
+    }
+
+    private  Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions, Metrics metrics) {
+        return new Fetcher<byte[], byte[]>(consumerClient,
+                minBytes,
+                maxWaitMs,
+                fetchSize,
+                true, // check crc
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(),
+                metadata,
+                subscriptions,
+                metrics,
+                "consumer" + groupId,
+                metricTags,
+                time,
+                retryBackoffMs);
     }
 }

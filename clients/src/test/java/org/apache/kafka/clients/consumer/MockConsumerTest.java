@@ -53,7 +53,7 @@ public class MockConsumerTest {
         assertFalse(iter.hasNext());
         assertEquals(2L, consumer.position(new TopicPartition("test", 0)));
         consumer.commitSync();
-        assertEquals(2L, consumer.committed(new TopicPartition("test", 0)));
+        assertEquals(2L, consumer.committed(new TopicPartition("test", 0)).offset());
     }
 
 }

@@ -25,6 +25,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -78,6 +79,8 @@ public class Fetcher<K, V> {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
+    private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
+
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
                    int maxWaitMs,
@@ -106,6 +109,7 @@ public class Fetcher<K, V> {
         this.valueDeserializer = valueDeserializer;
 
         this.records = new LinkedList<PartitionRecords<K, V>>();
+        this.offsetOutOfRangePartitions = new HashMap<>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
         this.retryBackoffMs = retryBackoffMs;
@@ -137,6 +141,7 @@ public class Fetcher<K, V> {
     /**
      * Update the fetch positions for the provided partitions.
      * @param partitions
+     * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no reset policy is available
      */
     public void updateFetchPositions(Set<TopicPartition> partitions) {
         // reset the fetch position to the committed position
@@ -152,9 +157,9 @@ public class Fetcher<K, V> {
                 subscriptions.needOffsetReset(tp);
                 resetOffset(tp);
             } else {
-                log.debug("Resetting offset for partition {} to the committed offset {}",
-                        tp, subscriptions.committed(tp));
-                subscriptions.seek(tp, subscriptions.committed(tp));
+                long committed = subscriptions.committed(tp).offset();
+                log.debug("Resetting offset for partition {} to the committed offset {}", tp, committed);
+                subscriptions.seek(tp, committed);
             }
         }
     }
@@ -258,15 +263,44 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * If any partition from previous fetchResponse contains OffsetOutOfRange error and
+     * the defaultResetPolicy is NONE, throw OffsetOutOfRangeException
+     *
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse
+     */
+    private void throwIfOffsetOutOfRange() throws OffsetOutOfRangeException {
+        Map<TopicPartition, Long> currentOutOfRangePartitions = new HashMap<>();
+
+        // filter offsetOutOfRangePartitions to retain only the fetchable partitions
+        for (Map.Entry<TopicPartition, Long> entry: this.offsetOutOfRangePartitions.entrySet()) {
+            if (!subscriptions.isFetchable(entry.getKey())) {
+                log.debug("Ignoring fetched records for {} since it is no longer fetchable", entry.getKey());
+                continue;
+            }
+            Long consumed = subscriptions.consumed(entry.getKey());
+            // ignore partition if its consumed offset != offset in fetchResponse, e.g. after seek()
+            if (consumed != null && entry.getValue().equals(consumed))
+                currentOutOfRangePartitions.put(entry.getKey(), entry.getValue());
+        }
+        this.offsetOutOfRangePartitions.clear();
+        if (!currentOutOfRangePartitions.isEmpty())
+            throw new OffsetOutOfRangeException(currentOutOfRangePartitions);
+    }
+
+    /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
      * @return The fetched records per partition
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         if (this.subscriptions.partitionAssignmentNeeded()) {
             return Collections.emptyMap();
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
+            throwIfOffsetOutOfRange();
+
             for (PartitionRecords<K, V> part : this.records) {
                 if (!subscriptions.isFetchable(part.partition)) {
                     log.debug("Ignoring fetched records for {} since it is no longer fetchable", part.partition);
@@ -378,8 +412,11 @@ public class Fetcher<K, V> {
                     fetchable.put(node, fetch);
                 }
 
-                long offset = this.subscriptions.fetched(partition);
-                fetch.put(partition, new FetchRequest.PartitionData(offset, this.fetchSize));
+                long fetched = this.subscriptions.fetched(partition);
+                long consumed = this.subscriptions.consumed(partition);
+                // Only fetch data for partitions whose previously fetched data has been consumed
+                if (consumed == fetched)
+                    fetch.put(partition, new FetchRequest.PartitionData(fetched, this.fetchSize));
             }
         }
 
@@ -447,9 +484,12 @@ public class Fetcher<K, V> {
                     || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                     this.metadata.requestUpdate();
                 } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                    // TODO: this could be optimized by grouping all out-of-range partitions
+                    long fetchOffset = request.fetchData().get(tp).offset;
+                    if (subscriptions.hasDefaultOffsetResetPolicy())
+                        subscriptions.needOffsetReset(tp);
+                    else
+                        this.offsetOutOfRangePartitions.put(tp, fetchOffset);
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
-                    subscriptions.needOffsetReset(tp);
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else {

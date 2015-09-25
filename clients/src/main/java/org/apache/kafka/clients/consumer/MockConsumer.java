@@ -178,9 +178,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void commitAsync(Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
+    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
-        for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet())
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet())
             subscriptions.committed(entry.getKey(), entry.getValue());
         if (callback != null) {
             callback.onComplete(offsets, null);
@@ -188,7 +188,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void commitSync(Map<TopicPartition, Long> offsets) {
+    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
         commitAsync(offsets, null);
     }
 
@@ -215,7 +215,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public long committed(TopicPartition partition) {
+    public OffsetAndMetadata committed(TopicPartition partition) {
         ensureNotClosed();
         return subscriptions.committed(partition);
     }
@@ -340,7 +340,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             subscriptions.needOffsetReset(tp);
             resetOffsetPosition(tp);
         } else {
-            subscriptions.seek(tp, subscriptions.committed(tp));
+            subscriptions.seek(tp, subscriptions.committed(tp).offset());
         }
     }
 

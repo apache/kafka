@@ -16,6 +16,7 @@
  **/
 package org.apache.kafka.copycat.sink;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.Task;
@@ -60,5 +61,5 @@ public abstract class SinkTask implements Task {
      *
      * @param offsets mapping of TopicPartition to committed offset
      */
-    public abstract void flush(Map<TopicPartition, Long> offsets);
+    public abstract void flush(Map<TopicPartition, OffsetAndMetadata> offsets);
 }
