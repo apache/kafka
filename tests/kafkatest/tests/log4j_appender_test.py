@@ -19,7 +19,6 @@ from ducktape.utils.util import wait_until
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka_log4j_appender import KafkaLog4jAppender
-from kafkatest.utils.remote_account import line_count
 
 import time
 
@@ -55,13 +54,9 @@ class Log4jAppenderTest(KafkaTest):
             timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
         self.logger.info("consumer started in %s seconds " % str(time.time() - t0))
 
-        time.sleep(10)
-
-        self.logger.info("Consumed messages count: %s" % str(len(self.consumer.messages_consumed[1])))
         # Verify consumed messages count
         expected_lines_count = MAX_MESSAGES * 2  # two times to account for new lines introduced by log4j
         wait_until(lambda: len(self.consumer.messages_consumed[1]) == expected_lines_count, timeout_sec=10,
                    err_msg="Timed out waiting to consume expected number of messages.")
-        assert line_count(node, ConsoleConsumer.STDOUT_CAPTURE) == expected_lines_count
 
         self.consumer.stop_node(node)
