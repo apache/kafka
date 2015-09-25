@@ -59,8 +59,8 @@ public class Worker {
     private KafkaProducer<byte[], byte[]> producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
-    public Worker(WorkerConfig config) {
-        this(new SystemTime(), config, null);
+    public Worker(WorkerConfig config, OffsetBackingStore offsetBackingStore) {
+        this(new SystemTime(), config, offsetBackingStore);
     }
 
     @SuppressWarnings("unchecked")
@@ -76,12 +76,8 @@ public class Worker {
         this.offsetValueConverter = config.getConfiguredInstance(WorkerConfig.OFFSET_VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
         this.offsetValueConverter.configure(config.originalsWithPrefix("offset.value.converter."), false);
 
-        if (offsetBackingStore != null) {
-            this.offsetBackingStore = offsetBackingStore;
-        } else {
-            this.offsetBackingStore = new FileOffsetBackingStore();
-            this.offsetBackingStore.configure(config.originals());
-        }
+        this.offsetBackingStore = offsetBackingStore;
+        this.offsetBackingStore.configure(config.originals());
     }
 
     public void start() {
@@ -132,7 +128,7 @@ public class Worker {
         long timeoutMs = limit - time.milliseconds();
         sourceTaskOffsetCommitter.close(timeoutMs);
 
-        offsetBackingStore.start();
+        offsetBackingStore.stop();
 
         log.info("Worker stopped");
     }

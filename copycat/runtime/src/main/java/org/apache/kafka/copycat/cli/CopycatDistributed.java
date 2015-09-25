@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,7 +23,7 @@ import org.apache.kafka.copycat.runtime.Copycat;
 import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.runtime.standalone.StandaloneHerder;
-import org.apache.kafka.copycat.storage.FileOffsetBackingStore;
+import org.apache.kafka.copycat.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.copycat.util.Callback;
 import org.apache.kafka.copycat.util.FutureCallback;
 import org.slf4j.Logger;
@@ -34,25 +34,23 @@ import java.util.Properties;
 
 /**
  * <p>
- * Command line utility that runs Copycat as a standalone process. In this mode, work is not
- * distributed. Instead, all the normal Copycat machinery works within a single process. This is
- * useful for ad hoc, small, or experimental jobs.
- * </p>
- * <p>
- * By default, no job configs or offset data is persistent. You can make jobs persistent and
- * fault tolerant by overriding the settings to use file storage for both.
+ * Command line utility that runs Copycat in distributed mode. In this mode, the process joints a group of other workers
+ * and work is distributed among them. This is useful for running Copycat as a service, where connectors can be
+ * submitted to the cluster to be automatically executed in a scalable, distributed fashion. This also allows you to
+ * easily scale out horizontally, elastically adding or removing capacity simply by starting or stopping worker
+ * instances.
  * </p>
  */
 @InterfaceStability.Unstable
-public class CopycatStandalone {
-    private static final Logger log = LoggerFactory.getLogger(CopycatStandalone.class);
+public class CopycatDistributed {
+    private static final Logger log = LoggerFactory.getLogger(CopycatDistributed.class);
 
     public static void main(String[] args) throws Exception {
         Properties workerProps;
         Properties connectorProps;
 
         if (args.length < 2) {
-            log.info("Usage: CopycatStandalone worker.properties connector1.properties [connector2.properties ...]");
+            log.info("Usage: CopycatDistributed worker.properties connector1.properties [connector2.properties ...]");
             System.exit(1);
         }
 
@@ -60,7 +58,7 @@ public class CopycatStandalone {
         workerProps = !workerPropsFile.isEmpty() ? Utils.loadProps(workerPropsFile) : new Properties();
 
         WorkerConfig workerConfig = new WorkerConfig(workerProps);
-        Worker worker = new Worker(workerConfig, new FileOffsetBackingStore());
+        Worker worker = new Worker(workerConfig, new KafkaOffsetBackingStore());
         Herder herder = new StandaloneHerder(worker);
         final Copycat copycat = new Copycat(worker, herder);
         copycat.start();

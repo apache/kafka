@@ -31,7 +31,9 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -43,6 +45,7 @@ public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
     // Copycat format - any types should be accepted here
     private static final Map<String, String> OFFSET_KEY = Collections.singletonMap("key", "key");
+    private static final List<Object> OFFSET_KEY_WRAPPED = Arrays.asList(NAMESPACE, OFFSET_KEY);
     private static final Map<String, Integer> OFFSET_VALUE = Collections.singletonMap("key", 12);
 
     // Serialized
@@ -195,12 +198,11 @@ public class OffsetStorageWriterTest {
     private void expectStore(final Callback<Void> callback,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
-        EasyMock.expect(keyConverter.fromCopycatData(NAMESPACE, null, OFFSET_KEY)).andReturn(OFFSET_KEY_SERIALIZED);
+        EasyMock.expect(keyConverter.fromCopycatData(NAMESPACE, null, OFFSET_KEY_WRAPPED)).andReturn(OFFSET_KEY_SERIALIZED);
         EasyMock.expect(valueConverter.fromCopycatData(NAMESPACE, null, OFFSET_VALUE)).andReturn(OFFSET_VALUE_SERIALIZED);
 
         final Capture<Callback<Void>> storeCallback = Capture.newInstance();
-        EasyMock.expect(store.set(EasyMock.eq(NAMESPACE), EasyMock.eq(OFFSETS_SERIALIZED),
-                EasyMock.capture(storeCallback)))
+        EasyMock.expect(store.set(EasyMock.eq(OFFSETS_SERIALIZED), EasyMock.capture(storeCallback)))
                 .andAnswer(new IAnswer<Future<Void>>() {
                     @Override
                     public Future<Void> answer() throws Throwable {

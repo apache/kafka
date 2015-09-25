@@ -1023,10 +1023,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Long offset = this.subscriptions.consumed(partition);
             if (offset == null) {
                 updateFetchPositions(Collections.singleton(partition));
-                return this.subscriptions.consumed(partition);
-            } else {
-                return offset;
+                offset = this.subscriptions.consumed(partition);
             }
+            return offset;
         } finally {
             release();
         }

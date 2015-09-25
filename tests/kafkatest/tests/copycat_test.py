@@ -53,7 +53,7 @@ class CopycatStandaloneFileTest(KafkaTest):
     @parametrize(converter="org.apache.kafka.copycat.json.JsonConverter", schemas=True)
     @parametrize(converter="org.apache.kafka.copycat.json.JsonConverter", schemas=False)
     @parametrize(converter="org.apache.kafka.copycat.storage.StringConverter", schemas=None)
-    def test_file_source_and_sink(self, converter="org.apache.kafka.json.JsonConverter", schemas=True):
+    def test_file_source_and_sink(self, converter="org.apache.kafka.copycat.json.JsonConverter", schemas=True):
         assert converter != None, "converter type must be set"
         # Template parameters
         self.key_converter = converter
