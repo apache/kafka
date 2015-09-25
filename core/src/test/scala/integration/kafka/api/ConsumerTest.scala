@@ -188,9 +188,8 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     val pos2 = this.consumers(0).position(tp2)
     this.consumers(0).commitSync(Map[TopicPartition,OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
     assertEquals(3, this.consumers(0).committed(tp).offset)
-    intercept[NoOffsetForPartitionException] {
-      this.consumers(0).committed(tp2)
-    }
+    assertNull(this.consumers(0).committed(tp2))
+
     // positions should not change
     assertEquals(pos1, this.consumers(0).position(tp))
     assertEquals(pos2, this.consumers(0).position(tp2))
