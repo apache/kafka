@@ -145,7 +145,6 @@ class KafkaService(JmxMixin, Service):
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=False)
         wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=20, err_msg="Kafka node failed to stop")
-        # node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=False)
 
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
@@ -249,10 +248,9 @@ class KafkaService(JmxMixin, Service):
         self.logger.debug("Verify partition reassignment:")
         self.logger.debug(output)
 
-    def restart_node(self, node, wait_sec=0, clean_shutdown=True):
+    def restart_node(self, node, clean_shutdown=True):
         """Restart the given node, waiting wait_sec in between stopping and starting up again."""
         self.stop_node(node, clean_shutdown)
-        time.sleep(wait_sec)
         self.start_node(node)
 
     def leader(self, topic, partition=0):
