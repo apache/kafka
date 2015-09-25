@@ -198,8 +198,7 @@ public final class Coordinator {
             client.poll(future);
 
             if (future.failed()) {
-                if (future.exception() instanceof UnknownConsumerIdException
-                    || future.exception() instanceof IllegalGenerationException)
+                if (future.exception() instanceof UnknownConsumerIdException)
                     continue;
                 else if (!future.isRetriable())
                     throw future.exception();
