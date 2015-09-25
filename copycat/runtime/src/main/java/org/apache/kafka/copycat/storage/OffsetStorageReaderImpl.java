@@ -62,7 +62,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
             try {
                 // Offsets are treated as schemaless, their format is only validated here (and the returned value below)
                 OffsetUtils.validateFormat(key);
-                byte[] keySerialized = keyConverter.fromCopycatData(namespace, null, key);
+                byte[] keySerialized = keyConverter.fromCopycatData(namespace, null, Arrays.asList(namespace, key));
                 ByteBuffer keyBuffer = (keySerialized != null) ? ByteBuffer.wrap(keySerialized) : null;
                 serializedToOriginal.put(keyBuffer, key);
             } catch (Throwable t) {
@@ -75,7 +75,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         // Get serialized key -> serialized value from backing store
         Map<ByteBuffer, ByteBuffer> raw;
         try {
-            raw = backingStore.get(namespace, serializedToOriginal.keySet(), null).get();
+            raw = backingStore.get(serializedToOriginal.keySet(), null).get();
         } catch (Exception e) {
             log.error("Failed to fetch offsets from namespace {}: ", namespace, e);
             throw new CopycatException("Failed to fetch offsets.", e);

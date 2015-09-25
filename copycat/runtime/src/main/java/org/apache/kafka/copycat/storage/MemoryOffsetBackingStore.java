@@ -38,7 +38,7 @@ import java.util.concurrent.Future;
 public class MemoryOffsetBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(MemoryOffsetBackingStore.class);
 
-    protected HashMap<String, Map<ByteBuffer, ByteBuffer>> data = new HashMap<>();
+    protected Map<ByteBuffer, ByteBuffer> data = new HashMap<>();
     protected ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public MemoryOffsetBackingStore() {
@@ -60,18 +60,15 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public Future<Map<ByteBuffer, ByteBuffer>> get(
-            final String namespace, final Collection<ByteBuffer> keys,
+            final Collection<ByteBuffer> keys,
             final Callback<Map<ByteBuffer, ByteBuffer>> callback) {
         return executor.submit(new Callable<Map<ByteBuffer, ByteBuffer>>() {
             @Override
             public Map<ByteBuffer, ByteBuffer> call() throws Exception {
                 Map<ByteBuffer, ByteBuffer> result = new HashMap<>();
                 synchronized (MemoryOffsetBackingStore.this) {
-                    Map<ByteBuffer, ByteBuffer> namespaceData = data.get(namespace);
-                    if (namespaceData == null)
-                        return result;
                     for (ByteBuffer key : keys) {
-                        result.put(key, namespaceData.get(key));
+                        result.put(key, data.get(key));
                     }
                 }
                 if (callback != null)
@@ -83,19 +80,14 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     }
 
     @Override
-    public Future<Void> set(final String namespace, final Map<ByteBuffer, ByteBuffer> values,
+    public Future<Void> set(final Map<ByteBuffer, ByteBuffer> values,
                             final Callback<Void> callback) {
         return executor.submit(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
                 synchronized (MemoryOffsetBackingStore.this) {
-                    Map<ByteBuffer, ByteBuffer> namespaceData = data.get(namespace);
-                    if (namespaceData == null) {
-                        namespaceData = new HashMap<>();
-                        data.put(namespace, namespaceData);
-                    }
                     for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
-                        namespaceData.put(entry.getKey(), entry.getValue());
+                        data.put(entry.getKey(), entry.getValue());
                     }
                     save();
                 }

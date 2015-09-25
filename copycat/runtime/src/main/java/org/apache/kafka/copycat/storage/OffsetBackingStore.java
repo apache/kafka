@@ -34,8 +34,8 @@ import java.util.concurrent.Future;
  * </p>
  * <p>
  * Since OffsetBackingStore is a shared resource that may be used by many OffsetStorage instances
- * that are associated with individual tasks, all operations include a namespace which should be
- * used to isolate different key spaces.
+ * that are associated with individual tasks, the caller must be sure keys include information about the
+ * connector so that the shared namespace does not result in conflicting keys.
  * </p>
  */
 public interface OffsetBackingStore extends Configurable {
@@ -53,22 +53,20 @@ public interface OffsetBackingStore extends Configurable {
 
     /**
      * Get the values for the specified keys
-     * @param namespace prefix for the keys in this request
      * @param keys list of keys to look up
      * @param callback callback to invoke on completion
      * @return future for the resulting map from key to value
      */
     public Future<Map<ByteBuffer, ByteBuffer>> get(
-            String namespace, Collection<ByteBuffer> keys,
+            Collection<ByteBuffer> keys,
             Callback<Map<ByteBuffer, ByteBuffer>> callback);
 
     /**
      * Set the specified keys and values.
-     * @param namespace prefix for the keys in this request
      * @param values map from key to value
      * @param callback callback to invoke on completion
      * @return void future for the operation
      */
-    public Future<Void> set(String namespace, Map<ByteBuffer, ByteBuffer> values,
+    public Future<Void> set(Map<ByteBuffer, ByteBuffer> values,
                             Callback<Void> callback);
 }

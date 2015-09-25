@@ -37,6 +37,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 @RunWith(PowerMockRunner.class)
@@ -45,6 +46,7 @@ import java.util.Properties;
 public class WorkerTest extends ThreadedTest {
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private WorkerConfig config;
     private Worker worker;
     private OffsetBackingStore offsetBackingStore = PowerMock.createMock(OffsetBackingStore.class);
 
@@ -59,13 +61,16 @@ public class WorkerTest extends ThreadedTest {
         workerProps.setProperty("offset.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("offset.key.converter.schemas.enable", "false");
         workerProps.setProperty("offset.value.converter.schemas.enable", "false");
-        WorkerConfig config = new WorkerConfig(workerProps);
-        worker = new Worker(new MockTime(), config, offsetBackingStore);
-        worker.start();
+        config = new WorkerConfig(workerProps);
     }
 
     @Test
     public void testAddRemoveTask() throws Exception {
+        offsetBackingStore.configure(EasyMock.anyObject(Map.class));
+        EasyMock.expectLastCall();
+        offsetBackingStore.start();
+        EasyMock.expectLastCall();
+
         ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
 
         // Create
@@ -96,8 +101,13 @@ public class WorkerTest extends ThreadedTest {
         workerTask.close();
         EasyMock.expectLastCall();
 
+        offsetBackingStore.stop();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
+        worker = new Worker(new MockTime(), config, offsetBackingStore);
+        worker.start();
         worker.addTask(taskId, TestSourceTask.class.getName(), origProps);
         worker.stopTask(taskId);
         // Nothing should be left, so this should effectively be a nop
@@ -108,11 +118,26 @@ public class WorkerTest extends ThreadedTest {
 
     @Test(expected = CopycatException.class)
     public void testStopInvalidTask() {
+        offsetBackingStore.configure(EasyMock.anyObject(Map.class));
+        EasyMock.expectLastCall();
+        offsetBackingStore.start();
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        worker = new Worker(new MockTime(), config, offsetBackingStore);
+        worker.start();
+
         worker.stopTask(taskId);
     }
 
     @Test
     public void testCleanupTasksOnStop() throws Exception {
+        offsetBackingStore.configure(EasyMock.anyObject(Map.class));
+        EasyMock.expectLastCall();
+        offsetBackingStore.start();
+        EasyMock.expectLastCall();
+
         // Create
         TestSourceTask task = PowerMock.createMock(TestSourceTask.class);
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
@@ -142,8 +167,13 @@ public class WorkerTest extends ThreadedTest {
         workerTask.close();
         EasyMock.expectLastCall();
 
+        offsetBackingStore.stop();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
+        worker = new Worker(new MockTime(), config, offsetBackingStore);
+        worker.start();
         worker.addTask(taskId, TestSourceTask.class.getName(), origProps);
         worker.stop();
 

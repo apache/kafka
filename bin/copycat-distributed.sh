@@ -1,3 +1,4 @@
+#!/bin/sh
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -12,17 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# see kafka.server.KafkaConfig for additional details and defaults
 
-from setuptools import find_packages, setup
+base_dir=$(dirname $0)
 
-setup(name="kafkatest",
-      version="0.9.0.dev0",
-      description="Apache Kafka System Tests",
-      author="Apache Kafka",
-      platforms=["any"], 
-      license="apache2.0",
-      packages=find_packages(),
-      include_package_data=True,
-      install_requires=["ducktape==0.3.2"]
-      )
+if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
+    export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/copycat-log4j.properties"
+fi
+
+exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.copycat.cli.CopycatDistributed "$@"
