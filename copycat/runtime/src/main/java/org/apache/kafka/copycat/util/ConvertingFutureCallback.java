@@ -17,7 +17,11 @@
 
 package org.apache.kafka.copycat.util;
 
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Future<T> {
 
