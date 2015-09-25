@@ -775,7 +775,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @throws NoOffsetForPartitionException If there is no stored offset for a subscribed partition and no automatic
      *             offset reset policy has been configured.
-     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
      */
     @Override
@@ -814,7 +814,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * heart-beating, auto-commits, and offset updates.
      * @param timeout The maximum time to block in the underlying poll
      * @return The fetched records (may be empty)
-     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
@@ -1039,9 +1039,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * consumer hasn't yet initialized its cache of committed offsets.
      *
      * @param partition The partition to check
-     * @return The last committed offset
-     * @throws NoOffsetForPartitionException If no offset has ever been committed by any process for the given
-     *             partition.
+     * @return The last committed offset and metadata or null if there was no prior commit
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
@@ -1058,9 +1056,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
                 committed = offsets.get(partition);
             }
-
-            if (committed == null)
-                throw new NoOffsetForPartitionException("No offset has been committed for partition " + partition);
 
             return committed;
         } finally {
