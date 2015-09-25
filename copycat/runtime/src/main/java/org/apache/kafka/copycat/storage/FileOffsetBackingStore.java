@@ -68,17 +68,12 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
             Object obj = is.readObject();
             if (!(obj instanceof HashMap))
                 throw new CopycatException("Expected HashMap but found " + obj.getClass());
-            HashMap<String, Map<byte[], byte[]>> raw = (HashMap<String, Map<byte[], byte[]>>) obj;
+            Map<byte[], byte[]> raw = (Map<byte[], byte[]>) obj;
             data = new HashMap<>();
-            for (Map.Entry<String, Map<byte[], byte[]>> entry : raw.entrySet()) {
-                HashMap<ByteBuffer, ByteBuffer> converted = new HashMap<>();
-                for (Map.Entry<byte[], byte[]> mapEntry : entry.getValue().entrySet()) {
-                    ByteBuffer key = (mapEntry.getKey() != null) ? ByteBuffer.wrap(mapEntry.getKey()) : null;
-                    ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) :
-                            null;
-                    converted.put(key, value);
-                }
-                data.put(entry.getKey(), converted);
+            for (Map.Entry<byte[], byte[]> mapEntry : raw.entrySet()) {
+                ByteBuffer key = (mapEntry.getKey() != null) ? ByteBuffer.wrap(mapEntry.getKey()) : null;
+                ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
+                data.put(key, value);
             }
             is.close();
         } catch (FileNotFoundException | EOFException e) {
@@ -92,15 +87,11 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
     protected void save() {
         try {
             ObjectOutputStream os = new ObjectOutputStream(new FileOutputStream(file));
-            HashMap<String, Map<byte[], byte[]>> raw = new HashMap<>();
-            for (Map.Entry<String, Map<ByteBuffer, ByteBuffer>> entry : data.entrySet()) {
-                HashMap<byte[], byte[]> converted = new HashMap<>();
-                for (Map.Entry<ByteBuffer, ByteBuffer> mapEntry : entry.getValue().entrySet()) {
-                    byte[] key = (mapEntry.getKey() != null) ? mapEntry.getKey().array() : null;
-                    byte[] value = (mapEntry.getValue() != null) ? mapEntry.getValue().array() : null;
-                    converted.put(key, value);
-                }
-                raw.put(entry.getKey(), converted);
+            Map<byte[], byte[]> raw = new HashMap<>();
+            for (Map.Entry<ByteBuffer, ByteBuffer> mapEntry : data.entrySet()) {
+                byte[] key = (mapEntry.getKey() != null) ? mapEntry.getKey().array() : null;
+                byte[] value = (mapEntry.getValue() != null) ? mapEntry.getValue().array() : null;
+                raw.put(key, value);
             }
             os.writeObject(raw);
             os.close();

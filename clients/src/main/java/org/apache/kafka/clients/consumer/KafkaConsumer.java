@@ -48,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -776,6 +777,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @throws NoOffsetForPartitionException If there is no stored offset for a subscribed partition and no automatic
      *             offset reset policy has been configured.
+     * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
@@ -813,6 +816,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * heart-beating, auto-commits, and offset updates.
      * @param timeout The maximum time to block in the underlying poll
      * @return The fetched records (may be empty)
+     * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
@@ -829,6 +834,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         // init any new fetches (won't resend pending fetches)
         Cluster cluster = this.metadata.fetch();
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
+        // Avoid block waiting for response if we already have data available, e.g. from another API call to commit.
+        if (!records.isEmpty()) {
+            client.poll(0);
+            return records;
+        }
         fetcher.initFetches(cluster);
         client.poll(timeout);
         return fetcher.fetchedRecords();
@@ -839,7 +850,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             public void run(long now) {
                 commitAsync(new OffsetCommitCallback() {
                     @Override
-                    public void onComplete(Map<TopicPartition, Long> offsets, Exception exception) {
+                    public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
                         if (exception != null)
                             log.error("Auto offset commit failed.", exception);
                     }
@@ -880,10 +891,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller).
      *
-     * @param offsets The list of offsets per partition that should be committed to Kafka.
+     * @param offsets A map of offsets by partition with associated metadata
      */
     @Override
-    public void commitSync(final Map<TopicPartition, Long> offsets) {
+    public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         acquire();
         try {
             coordinator.commitOffsetsSync(offsets);
@@ -932,15 +943,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
      * (if provided) or discarded.
      *
-     * @param offsets The list of offsets per partition that should be committed to Kafka.
+     * @param offsets A map of offsets by partition with associate metadata. This map will be copied internally, so it
+     *                is safe to mutate the map after returning.
      * @param callback Callback to invoke when the commit completes
      */
     @Override
-    public void commitAsync(final Map<TopicPartition, Long> offsets, OffsetCommitCallback callback) {
+    public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquire();
         try {
             log.debug("Committing offsets: {} ", offsets);
-            coordinator.commitOffsetsAsync(offsets, callback);
+            coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
         } finally {
             release();
         }
@@ -1013,10 +1025,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Long offset = this.subscriptions.consumed(partition);
             if (offset == null) {
                 updateFetchPositions(Collections.singleton(partition));
-                return this.subscriptions.consumed(partition);
-            } else {
-                return offset;
+                offset = this.subscriptions.consumed(partition);
             }
+            return offset;
         } finally {
             release();
         }
@@ -1030,15 +1041,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * consumer hasn't yet initialized its cache of committed offsets.
      *
      * @param partition The partition to check
-     * @return The last committed offset
-     * @throws NoOffsetForPartitionException If no offset has ever been committed by any process for the given
-     *             partition.
+     * @return The last committed offset and metadata or null if there was no prior commit
      */
     @Override
-    public long committed(TopicPartition partition) {
+    public OffsetAndMetadata committed(TopicPartition partition) {
         acquire();
         try {
-            Long committed;
+            OffsetAndMetadata committed;
             if (subscriptions.isAssigned(partition)) {
                 committed = this.subscriptions.committed(partition);
                 if (committed == null) {
@@ -1046,12 +1055,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     committed = this.subscriptions.committed(partition);
                 }
             } else {
-                Map<TopicPartition, Long> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
+                Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
                 committed = offsets.get(partition);
             }
-
-            if (committed == null)
-                throw new NoOffsetForPartitionException("No offset has been committed for partition " + partition);
 
             return committed;
         } finally {

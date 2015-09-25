@@ -92,7 +92,7 @@ public class ProcessorStateManagerTest {
         };
     }
 
-    private static class MockRestoreConsumer extends MockConsumer<byte[], byte[]> {
+    private class MockRestoreConsumer  extends MockConsumer<byte[], byte[]> {
         private final Serializer<Integer> serializer = new IntegerSerializer();
 
         public TopicPartition assignedPartition = null;
@@ -100,32 +100,36 @@ public class ProcessorStateManagerTest {
         public long seekOffset = -1L;
         public boolean seekToBeginingCalled = false;
         public boolean seekToEndCalled = false;
-        private long endOffset = -1L;
-        private long currentOffset = -1L;
+        private long endOffset = 0L;
+        private long currentOffset = 0L;
 
         private ArrayList<ConsumerRecord<byte[], byte[]>> recordBuffer = new ArrayList<>();
 
         MockRestoreConsumer() {
             super(OffsetResetStrategy.EARLIEST);
+
+            reset();
         }
 
-        // prepares this mock restore consumer for a state store registration
-        public void prepare() {
+        // reset this mock restore consumer for a state store registration
+        public void reset() {
             assignedPartition = null;
             seekOffset = -1L;
             seekToBeginingCalled = false;
             seekToEndCalled = false;
-            endOffset = -1L;
+            endOffset = 0L;
             recordBuffer.clear();
         }
 
         // buffer a record (we cannot use addRecord because we need to add records before asigning a partition)
         public void bufferRecord(ConsumerRecord<Integer, Integer> record) {
             recordBuffer.add(
-                    new ConsumerRecord<>(record.topic(), record.partition(), record.offset(),
-                            serializer.serialize(record.topic(), record.key()),
-                            serializer.serialize(record.topic(), record.value())));
+                new ConsumerRecord<>(record.topic(), record.partition(), record.offset(),
+                    serializer.serialize(record.topic(), record.key()),
+                    serializer.serialize(record.topic(), record.value())));
             endOffset = record.offset();
+
+            super.updateEndOffsets(Collections.singletonMap(assignedPartition, endOffset));
         }
 
         @Override
@@ -138,6 +142,10 @@ public class ProcessorStateManagerTest {
                 if (assignedPartition != null)
                     throw new IllegalStateException("RestoreConsumer: partition already assigned");
                 assignedPartition = partitions.get(0);
+
+                // set the beginning offset to 0
+                // NOTE: this is users responsible to set the initial lEO.
+                super.updateBeginningOffsets(Collections.singletonMap(assignedPartition, 0L));
             }
 
             super.assign(partitions);
@@ -186,16 +194,27 @@ public class ProcessorStateManagerTest {
 
         @Override
         public synchronized void seekToBeginning(TopicPartition... partitions) {
-            if (seekToBeginingCalled)
-                throw new IllegalStateException("RestoreConsumer: offset already seeked to beginning");
+            if (partitions.length != 1)
+                throw new IllegalStateException("RestoreConsumer: other than one partition specified");
+
+            for (TopicPartition partition : partitions) {
+                if (!partition.equals(assignedPartition))
+                    throw new IllegalStateException("RestoreConsumer: seek-to-end not on the assigned partition");
+            }
 
             seekToBeginingCalled = true;
+            currentOffset = 0L;
         }
 
         @Override
         public synchronized void seekToEnd(TopicPartition... partitions) {
-            if (seekToEndCalled)
-                throw new IllegalStateException("RestoreConsumer: offset already seeked to beginning");
+            if (partitions.length != 1)
+                throw new IllegalStateException("RestoreConsumer: other than one partition specified");
+
+            for (TopicPartition partition : partitions) {
+                if (!partition.equals(assignedPartition))
+                    throw new IllegalStateException("RestoreConsumer: seek-to-end not on the assigned partition");
+            }
 
             seekToEndCalled = true;
             currentOffset = endOffset;
@@ -262,12 +281,13 @@ public class ProcessorStateManagerTest {
                     new PartitionInfo("persistentStore", 1, Node.noNode(), new Node[0], new Node[0]),
                     new PartitionInfo("persistentStore", 2, Node.noNode(), new Node[0], new Node[0])
             ));
+            restoreConsumer.updateEndOffsets(Collections.singletonMap(new TopicPartition("persistentStore", 2), 13L));
 
             MockStateStore persistentStore = new MockStateStore("persistentStore", false); // non persistent store
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer);
             try {
-                restoreConsumer.prepare();
+                restoreConsumer.reset();
 
                 ArrayList<Integer> expectedKeys = new ArrayList<>();
                 for (int i = 1; i <= 3; i++) {
@@ -295,6 +315,7 @@ public class ProcessorStateManagerTest {
             Utils.delete(baseDir);
         }
     }
+
     @Test
     public void testRegisterNonPersistentStore() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
@@ -308,12 +329,13 @@ public class ProcessorStateManagerTest {
                     new PartitionInfo("nonPersistentStore", 1, Node.noNode(), new Node[0], new Node[0]),
                     new PartitionInfo("nonPersistentStore", 2, Node.noNode(), new Node[0], new Node[0])
             ));
+            restoreConsumer.updateEndOffsets(Collections.singletonMap(new TopicPartition("persistentStore", 2), 13L));
 
             MockStateStore nonPersistentStore = new MockStateStore("nonPersistentStore", true); // persistent store
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer);
             try {
-                restoreConsumer.prepare();
+                restoreConsumer.reset();
 
                 ArrayList<Integer> expectedKeys = new ArrayList<>();
                 for (int i = 1; i <= 3; i++) {
@@ -328,7 +350,7 @@ public class ProcessorStateManagerTest {
                 stateMgr.register(nonPersistentStore, nonPersistentStore.restoreFunc);
 
                 assertEquals(new TopicPartition("nonPersistentStore", 2), restoreConsumer.assignedPartition);
-                assertEquals(-1L, restoreConsumer.seekOffset);
+                assertEquals(0L, restoreConsumer.seekOffset);
                 assertTrue(restoreConsumer.seekToBeginingCalled);
                 assertTrue(restoreConsumer.seekToEndCalled);
                 assertEquals(expectedKeys, nonPersistentStore.keys);
@@ -397,10 +419,10 @@ public class ProcessorStateManagerTest {
                 // make sure the checkpoint file is deleted
                 assertFalse(checkpointFile.exists());
 
-                restoreConsumer.prepare();
+                restoreConsumer.reset();
                 stateMgr.register(persistentStore, persistentStore.restoreFunc);
 
-                restoreConsumer.prepare();
+                restoreConsumer.reset();
                 stateMgr.register(nonPersistentStore, nonPersistentStore.restoreFunc);
             } finally {
                 // close the state manager with the ack'ed offsets

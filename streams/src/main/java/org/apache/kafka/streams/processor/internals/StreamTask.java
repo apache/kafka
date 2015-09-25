@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -250,7 +251,11 @@ public class StreamTask implements Punctuator {
 
         // 3) commit consumed offsets if it is dirty already
         if (commitOffsetNeeded) {
-            consumer.commitSync(consumedOffsets);
+            Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+            for (Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+                consumedOffsetsAndMetadata.put(entry.getKey(), new OffsetAndMetadata(entry.getValue()));
+            }
+            consumer.commitSync(consumedOffsetsAndMetadata);
             commitOffsetNeeded = false;
         }
 

@@ -87,7 +87,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       }
 
       consumer.commitSync()
-      assertEquals(consumer.position(tp), consumer.committed(tp))
+      assertEquals(consumer.position(tp), consumer.committed(tp).offset)
 
       if (consumer.position(tp) == numRecords) {
         consumer.seekToBeginning()
@@ -131,7 +131,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       } else if (coin == 2) {
         info("Committing offset.")
         consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(tp))
+        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
       }
     }
   }

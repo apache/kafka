@@ -310,6 +310,7 @@ public class ProcessorTopologyTestDriver {
             List<PartitionInfo> partitionInfos = new ArrayList<>();
             partitionInfos.add(new PartitionInfo(topicName, id, null, null, null));
             consumer.updatePartitions(topicName, partitionInfos);
+            consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, id), 0L));
         }
         return consumer;
     }

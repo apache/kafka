@@ -18,7 +18,7 @@ package kafka.server
 
 import kafka.utils.ZkUtils._
 import kafka.utils.CoreUtils._
-import kafka.utils.{Json, SystemTime, Logging}
+import kafka.utils.{Json, SystemTime, Logging, ZKCheckedEphemeral}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
@@ -56,7 +56,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
        case None => -1
     }
   }
-    
+
   def elect: Boolean = {
     val timestamp = SystemTime.milliseconds.toString
     val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
@@ -73,9 +73,10 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     }
 
     try {
-      createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, brokerId,
-        (controllerString : String, leaderId : Any) => KafkaController.parseControllerId(controllerString) == leaderId.asInstanceOf[Int],
-        controllerContext.zkSessionTimeout)
+      val zkCheckedEphemeral = new ZKCheckedEphemeral(electionPath,
+                                                      electString,
+                                                      controllerContext.zkConnection.getZookeeper)
+      zkCheckedEphemeral.create()
       info(brokerId + " successfully elected as leader")
       leaderId = brokerId
       onBecomingLeader()
