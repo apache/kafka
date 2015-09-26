@@ -16,7 +16,6 @@
  */
 package unit.kafka.admin
 
-import java.io._
 import java.util.Properties
 
 import kafka.admin.AclCommand
@@ -25,49 +24,47 @@ import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.{After, Test, Assert}
+import org.junit.{After, Assert, Test}
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
-  private val resourceToCommand = Map[Resource, Array[String]](
-    new Resource(Topic, "test") -> Array("--topic", "test"),
-    Resource.ClusterResource -> Array("--cluster"),
-    new Resource(ConsumerGroup, "test") -> Array("--consumer-group", "test")
+  private val resourceToCommand = Map[Set[Resource], Array[String]](
+    Set(new Resource(Topic, "test-1"), new Resource(Topic, "test-2")) -> Array("--topic", "test-1, test-2"),
+    Set(Resource.ClusterResource) -> Array("--cluster"),
+    Set(new Resource(ConsumerGroup, "test-1"), new Resource(ConsumerGroup, "test-2")) -> Array("--consumer-group", "test-1, test-2")
   )
 
   private val operations: Set[Operation] = Set(Read, Write)
-  private val operationsString = operations.mkString(AclCommand.delimeter)
+  private val operationsString = operations.mkString(AclCommand.delimiter)
   private val users = Set(KafkaPrincipal.fromString("User:test1"), KafkaPrincipal.fromString("User:test2"))
-  private val usersString = users.mkString(AclCommand.delimeter)
+  private val usersString = users.mkString(AclCommand.delimiter)
   private val hosts = Set("host1", "host2")
-  private val hostsString = hosts.mkString(AclCommand.delimeter)
+  private val hostsString = hosts.mkString(AclCommand.delimiter)
 
   @Test
   def testAclCli() {
-    val brokerProps: Properties = TestUtils.createBrokerConfig(0, zkConnect)
+    val brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
     brokerProps.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
 
-    //create a temp server.properties file
-    val config: File = TestUtils.tempFile()
-    brokerProps.store(new FileWriter(config), "test-broker-config")
-
-    val AllowAclsAndCommandOptions = getAclToCommand(Allow)
-    val DenyAclsAndCommandOptions = getAclToCommand(Deny)
+    val AllowAclsAndCommandOptions = getAclToCommand(Allow, operations)
+    val DenyAclsAndCommandOptions = getAclToCommand(Deny, operations)
     val AllowAndDenyAclsAndCommandOptions = (AllowAclsAndCommandOptions._1 ++ DenyAclsAndCommandOptions._1,
       AllowAclsAndCommandOptions._2 ++ DenyAclsAndCommandOptions._2)
     val aclsToCmd = Set(AllowAclsAndCommandOptions, DenyAclsAndCommandOptions, AllowAndDenyAclsAndCommandOptions)
 
-    val args: Array[String] = Array("--config", config.getPath,"--operations", operationsString)
+    val args = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect, "--operations", operationsString)
 
     //now test add acls for each type of resource and with only allow, only deny and both allow and deny options.
-    for((resource, resourceCmd) <- resourceToCommand) {
-      for((acls, cmd) <- aclsToCmd) {
+    for ((resources, resourceCmd) <- resourceToCommand) {
+      for ((acls, cmd) <- aclsToCmd) {
         AclCommand.main(args ++ cmd ++ resourceCmd :+ "--add")
-        Assert.assertEquals(acls, getAuthorizer(brokerProps).getAcls(resource))
+        for (resource <- resources) {
+          Assert.assertEquals(acls, getAuthorizer(brokerProps).getAcls(resource))
 
-        //cleanup
-        getAuthorizer(brokerProps).removeAcls(resource)
-        Assert.assertEquals(Set.empty[Acl], getAuthorizer(brokerProps).getAcls(resource))
+          //cleanup
+          getAuthorizer(brokerProps).removeAcls(resource)
+          Assert.assertEquals(Set.empty[Acl], getAuthorizer(brokerProps).getAcls(resource))
+        }
       }
     }
 
@@ -79,26 +76,52 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     //assertTrue(authorizer.getAcls(new Resource(Topic, topic)).isEmpty)
   }
 
-  private def getAclToCommand(permissionType: PermissionType) : (Set[Acl], Array[String]) = {
+  @Test
+  def testProducerConsumerCli() {
+    val brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
+    brokerProps.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
+
+    val args = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)
+    val resourceCommand = resourceToCommand.values.foldLeft(Array[String]())((l, r) => l ++ r)
+
+    AclCommand.main(args ++ resourceCommand ++ getAclToCommand(Allow, operations)._2 :+ "--add" :+ "--producer" :+ "--consumer")
+
+    for (resources <- resourceToCommand.keys) {
+      for (resource <- resources) {
+        if (resource.resourceType == Topic)
+          Assert.assertEquals(AclCommand.getAcls(users, Allow, Set[Operation](Write, Read, Describe), hosts), getAuthorizer(brokerProps).getAcls(resource))
+        else if (resource.resourceType == ConsumerGroup)
+          Assert.assertEquals(AclCommand.getAcls(users, Allow, Set[Operation](Read, Describe), hosts), getAuthorizer(brokerProps).getAcls(resource))
+        else
+          Assert.assertEquals(AclCommand.getAcls(users, Allow, Set[Operation](Create, Describe), hosts), getAuthorizer(brokerProps).getAcls(resource))
+
+        //cleanup
+        getAuthorizer(brokerProps).removeAcls(resource)
+        Assert.assertEquals(Set.empty[Acl], getAuthorizer(brokerProps).getAcls(resource))
+      }
+    }
+  }
+
+  private def getAclToCommand(permissionType: PermissionType, operations: Set[Operation]): (Set[Acl], Array[String]) = {
     (AclCommand.getAcls(users, permissionType, operations, hosts),
-      if(permissionType == Allow)
-        Array("--allowprincipals", usersString,
-        "--allowhosts", hostsString)
+      if (permissionType == Allow)
+        Array("--allow-principals", usersString,
+          "--allow-hosts", hostsString)
       else
-        Array("--denyprincipals", usersString,
-          "--denyhosts", hostsString))
+        Array("--deny-principals", usersString,
+          "--deny-hosts", hostsString))
   }
 
   def getAuthorizer(props: Properties): Authorizer = {
     val kafkaConfig = KafkaConfig.fromProps(props)
-    val authZ: SimpleAclAuthorizer = new SimpleAclAuthorizer
+    val authZ = new SimpleAclAuthorizer
     authZ.configure(kafkaConfig.originals)
 
     authZ
   }
 
   @After
-  def after(): Unit = {
+  def after() {
     //System.setIn(System.in)
   }
 }
