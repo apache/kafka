@@ -90,8 +90,8 @@
 	</subpackage>
 
 	<subpackage name="clients">
-		<allow pkg="org.apache.kafka.common" />
 		<allow pkg="org.slf4j" />
+		<allow pkg="org.apache.kafka.common" />
 		<allow pkg="org.apache.kafka.clients" exact-match="true"/>
 		<allow pkg="org.apache.kafka.test" />
 
@@ -108,6 +108,20 @@
 			<allow pkg="org.apache.kafka.clients.consumer" />
             <allow pkg="com.fasterxml.jackson" />
             <allow pkg="net.sourceforge.argparse4j" />
+		</subpackage>
+	</subpackage>
+
+	<subpackage name="streams">
+		<allow pkg="org.apache.kafka.common"/>
+		<allow pkg="org.apache.kafka.test"/>
+		<allow pkg="org.apache.kafka.clients"/>
+		<allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
+		<allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
+
+		<allow pkg="org.apache.kafka.streams"/>
+
+		<subpackage name="state">
+			<allow pkg="org.rocksdb" />
 		</subpackage>
 	</subpackage>
 
