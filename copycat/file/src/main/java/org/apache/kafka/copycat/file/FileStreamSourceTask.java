@@ -52,6 +52,7 @@ public class FileStreamSourceTask extends SourceTask {
             stream = System.in;
             // Tracking offset for stdin doesn't make sense
             streamOffset = null;
+            reader = new BufferedReader(new InputStreamReader(stream));
         }
         topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
         if (topic == null)
