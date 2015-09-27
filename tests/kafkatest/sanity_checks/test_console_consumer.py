@@ -19,27 +19,9 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
+from kafkatest.utils.remote_account import line_count, file_exists
 
 import time
-
-
-def file_exists(node, file):
-    """Quick and dirty check for existence of remote file."""
-    try:
-        node.account.ssh("cat " + file, allow_fail=False)
-        return True
-    except:
-        return False
-
-
-def line_count(node, file):
-    """Return the line count of file on node"""
-    out = [line for line in node.account.ssh_capture("wc -l %s" % file)]
-    if len(out) != 1:
-        raise Exception("Expected single line of output from wc -l")
-
-    return int(out[0].strip().split(" ")[0])
-
 
 class ConsoleConsumerTest(Test):
     """Sanity checks on console consumer service class."""
