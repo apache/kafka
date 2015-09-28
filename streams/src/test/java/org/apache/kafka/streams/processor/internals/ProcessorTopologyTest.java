@@ -289,7 +289,7 @@ public class ProcessorTopologyTest {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = new InMemoryKeyValueStore<>(storeName, context);
+            store = InMemoryKeyValueStore.create(storeName, context, String.class, String.class);
         }
 
         @Override
