@@ -38,7 +38,13 @@ object ConsoleConsumer extends Logging {
 
   def main(args: Array[String]) {
     val conf = new ConsumerConfig(args)
-    run(conf)
+    try {
+      run(conf)
+    } catch {
+      case e: Throwable =>
+        error("Error running consumer: ", e)
+    }
+    System.exit(0);
   }
 
   def run(conf: ConsumerConfig) {
