@@ -70,7 +70,7 @@ object AclCommand {
   private def addAcl(authZ: Authorizer, opts: AclCommandOptions) {
     val resourceToAcl = getResourceToAcls(opts)
 
-    if (resourceToAcl.values.exists(!_.nonEmpty))
+    if (resourceToAcl.values.exists(_.isEmpty))
       CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of : --allow-principals, --deny-principals when trying to add acls.")
 
     for ((resource, acls) <- resourceToAcl) {
@@ -209,13 +209,13 @@ object AclCommand {
   private def getResource(opts: AclCommandOptions): Set[Resource] = {
     var resources = Set.empty[Resource]
     if (opts.options.has(opts.topicOpt))
-      opts.options.valueOf(opts.topicOpt).toString.split(delimiter).map(topic => resources += (new Resource(Topic, topic.trim)))
+      opts.options.valueOf(opts.topicOpt).toString.split(delimiter).foreach(topic => resources += new Resource(Topic, topic.trim))
 
     if (opts.options.has(opts.clusterOpt))
       resources += Resource.ClusterResource
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valueOf(opts.groupOpt).toString.split(delimiter).map(consumerGroup => resources += new Resource(ConsumerGroup, consumerGroup.trim))
+      opts.options.valueOf(opts.groupOpt).toString.split(delimiter).foreach(consumerGroup => resources += new Resource(ConsumerGroup, consumerGroup.trim))
 
     if (resources.isEmpty)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --consumer-group <group>")
@@ -302,7 +302,7 @@ object AclCommand {
     def checkArgs() {
       CommandLineUtils.checkRequiredArgs(parser, options, authorizerPropertiesOpt)
 
-      val actions = Seq(addOpt, removeOpt, listOpt).count(options.has _)
+      val actions = Seq(addOpt, removeOpt, listOpt).count(options.has)
       if (actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove.")
 
