@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -43,8 +43,8 @@ public final class Sensor {
         this.registry = registry;
         this.name = Utils.notNull(name);
         this.parents = parents == null ? new Sensor[0] : parents;
-        this.metrics = new ArrayList<KafkaMetric>();
-        this.stats = new ArrayList<Stat>();
+        this.metrics = new ArrayList<>();
+        this.stats = new ArrayList<>();
         this.config = config;
         this.time = time;
         checkForest(new HashSet<Sensor>());
@@ -54,8 +54,9 @@ public final class Sensor {
     private void checkForest(Set<Sensor> sensors) {
         if (!sensors.add(this))
             throw new IllegalArgumentException("Circular dependency in sensors: " + name() + " is its own parent.");
-        for (int i = 0; i < parents.length; i++)
-            parents[i].checkForest(sensors);
+        for (Sensor parent : parents) {
+            parent.checkForest(sensors);
+        }
     }
 
     /**
@@ -93,12 +94,14 @@ public final class Sensor {
     public void record(double value, long timeMs) {
         synchronized (this) {
             // increment all the stats
-            for (int i = 0; i < this.stats.size(); i++)
-                this.stats.get(i).record(config, value, timeMs);
+            for (Stat stat : this.stats) {
+                stat.record(config, value, timeMs);
+            }
             checkQuotas(timeMs);
         }
-        for (int i = 0; i < parents.length; i++)
-            parents[i].record(value, timeMs);
+        for (Sensor parent : parents) {
+            parent.record(value, timeMs);
+        }
     }
 
     /**
@@ -106,8 +109,7 @@ public final class Sensor {
      * @param timeMs
      */
     private void checkQuotas(long timeMs) {
-        for (int i = 0; i < this.metrics.size(); i++) {
-            KafkaMetric metric = this.metrics.get(i);
+        for (KafkaMetric metric : this.metrics) {
             MetricConfig config = metric.config();
             if (config != null) {
                 Quota quota = config.quota();
@@ -115,10 +117,10 @@ public final class Sensor {
                     double value = metric.value(timeMs);
                     if (!quota.acceptable(value)) {
                         throw new QuotaViolationException(String.format(
-                            "(%s) violated quota. Actual: (%f), Threshold: (%f)",
-                            metric.metricName(),
-                            quota.bound(),
-                            value));
+                                "(%s) violated quota. Actual: (%f), Threshold: (%f)",
+                                metric.metricName(),
+                                quota.bound(),
+                                value));
                     }
                 }
             }
