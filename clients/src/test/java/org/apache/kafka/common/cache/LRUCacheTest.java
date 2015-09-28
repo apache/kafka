@@ -42,7 +42,7 @@ public class LRUCacheTest {
     }
 
     @Test
-    public void testInvalidate() {
+    public void testRemove() {
         Cache<String, String> cache = new LRUCache<>(4);
 
         cache.put("a", "b");
@@ -50,18 +50,20 @@ public class LRUCacheTest {
         cache.put("e", "f");
         assertEquals(3, cache.size());
 
-        cache.invalidate("a");
+        assertEquals(true, cache.remove("a"));
         assertEquals(2, cache.size());
         assertNull(cache.get("a"));
         assertEquals("d", cache.get("c"));
         assertEquals("f", cache.get("e"));
 
-        cache.invalidate("c");
+        assertEquals(false, cache.remove("key-does-not-exist"));
+
+        assertEquals(true, cache.remove("c"));
         assertEquals(1, cache.size());
         assertNull(cache.get("c"));
         assertEquals("f", cache.get("e"));
 
-        cache.invalidate("e");
+        assertEquals(true, cache.remove("e"));
         assertEquals(0, cache.size());
         assertNull(cache.get("e"));
     }

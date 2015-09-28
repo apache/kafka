@@ -41,7 +41,7 @@ public interface Cache<K, V> {
      * Manually invalidate a key, clearing its entry from the cache.
      * @param key the key to remove
      */
-    void invalidate(K key);
+    boolean remove(K key);
 
     /**
      * Get the number of entries in this cache. If this cache is used by multiple threads concurrently, the returned

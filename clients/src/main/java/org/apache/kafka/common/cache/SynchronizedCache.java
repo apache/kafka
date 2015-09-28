@@ -23,7 +23,7 @@ package org.apache.kafka.common.cache;
  * atomically checking for existence of an entry and computing and inserting the value if it is missing.
  */
 public class SynchronizedCache<K, V> implements Cache<K, V> {
-    private Cache<K, V> underlying;
+    private final Cache<K, V> underlying;
 
     public SynchronizedCache(Cache<K, V> underlying) {
         this.underlying = underlying;
@@ -40,8 +40,8 @@ public class SynchronizedCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public synchronized void invalidate(K key) {
-        underlying.invalidate(key);
+    public synchronized boolean remove(K key) {
+        return underlying.remove(key);
     }
 
     @Override

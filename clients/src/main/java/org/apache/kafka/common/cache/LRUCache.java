@@ -24,7 +24,7 @@ import java.util.Map;
  * A cache implementing a least recently used policy.
  */
 public class LRUCache<K, V> implements Cache<K, V> {
-    private LinkedHashMap<K, V> cache;
+    private final LinkedHashMap<K, V> cache;
 
     public LRUCache(final int maxSize) {
         cache = new LinkedHashMap<K, V>(16, .75f, true) {
@@ -46,8 +46,8 @@ public class LRUCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public void invalidate(K key) {
-        cache.remove(key);
+    public boolean remove(K key) {
+        return cache.remove(key) != null;
     }
 
     @Override
