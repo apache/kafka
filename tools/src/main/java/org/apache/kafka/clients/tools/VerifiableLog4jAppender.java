@@ -147,7 +147,7 @@ public class VerifiableLog4jAppender {
             }
         });
 
-        long maxMessages = infinite ? Long.MAX_VALUE: appender.maxMessages;
+        long maxMessages = infinite ? Long.MAX_VALUE : appender.maxMessages;
         for (long i = 0; i < maxMessages; i++) {
             if (appender.stopLogging) {
                 break;
