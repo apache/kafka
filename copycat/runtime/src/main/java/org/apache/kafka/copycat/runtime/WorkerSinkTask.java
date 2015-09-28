@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
+import org.apache.kafka.copycat.errors.IllegalWorkerStateException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -59,8 +60,8 @@ class WorkerSinkTask implements WorkerTask {
         this.workerConfig = workerConfig;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
-        context = new SinkTaskContextImpl();
         this.time = time;
+        this.context = new WorkerSinkTaskContext();
     }
 
     @Override
@@ -231,6 +232,38 @@ class WorkerSinkTask implements WorkerTask {
                 log.error("Exception from SinkTask {}: ", id, e);
             } catch (Throwable t) {
                 log.error("Unexpected exception from SinkTask {}: ", id, t);
+            }
+        }
+    }
+
+
+    private class WorkerSinkTaskContext extends SinkTaskContext {
+        @Override
+        public Set<TopicPartition> assignment() {
+            if (consumer == null)
+                throw new IllegalWorkerStateException("SinkTaskContext may not be used to look up partition assignment until the task is initialized");
+            return consumer.assignment();
+        }
+
+        @Override
+        public void pause(TopicPartition... partitions) {
+            if (consumer == null)
+                throw new IllegalWorkerStateException("SinkTaskContext may not be used to pause consumption until the task is initialized");
+            try {
+                consumer.pause(partitions);
+            } catch (IllegalStateException e) {
+                throw new IllegalWorkerStateException("SinkTasks may not pause partitions that are not currently assigned to them.", e);
+            }
+        }
+
+        @Override
+        public void resume(TopicPartition... partitions) {
+            if (consumer == null)
+                throw new IllegalWorkerStateException("SinkTaskContext may not be used to resume consumption until the task is initialized");
+            try {
+                consumer.resume(partitions);
+            } catch (IllegalStateException e) {
+                throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);
             }
         }
     }
