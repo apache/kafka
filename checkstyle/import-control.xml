@@ -20,176 +20,176 @@
 
 <import-control pkg="org.apache.kafka">
 
-	<!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
+  <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
 
-	<!-- common library dependencies -->
-	<allow pkg="java" />
-	<allow pkg="javax.management" />
-	<allow pkg="org.slf4j" />
-	<allow pkg="org.junit" />
-	<allow pkg="org.easymock" />
-	<allow pkg="org.powermock" />
+  <!-- common library dependencies -->
+  <allow pkg="java" />
+  <allow pkg="javax.management" />
+  <allow pkg="org.slf4j" />
+  <allow pkg="org.junit" />
+  <allow pkg="org.easymock" />
+  <allow pkg="org.powermock" />
 
-	<allow pkg="javax.net.ssl" />
+  <allow pkg="javax.net.ssl" />
 
-	<!-- no one depends on the server -->
-	<disallow pkg="kafka" />
+  <!-- no one depends on the server -->
+  <disallow pkg="kafka" />
 
-	<!-- anyone can use public classes -->
-	<allow pkg="org.apache.kafka.common" exact-match="true" />
-	<allow pkg="org.apache.kafka.common.utils" />
+  <!-- anyone can use public classes -->
+  <allow pkg="org.apache.kafka.common" exact-match="true" />
+  <allow pkg="org.apache.kafka.common.utils" />
 
-	<subpackage name="common">
-		<disallow pkg="org.apache.kafka.clients" />
-		<allow pkg="org.apache.kafka.common" exact-match="true" />
-		<allow pkg="org.apache.kafka.test" />
+  <subpackage name="common">
+    <disallow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.test" />
 
-		<subpackage name="config">
-			<allow pkg="org.apache.kafka.common.config" />
-			<!-- for testing -->
-			<allow pkg="org.apache.kafka.common.metrics" />
-		</subpackage>
+    <subpackage name="config">
+      <allow pkg="org.apache.kafka.common.config" />
+      <!-- for testing -->
+      <allow pkg="org.apache.kafka.common.metrics" />
+    </subpackage>
 
-		<subpackage name="metrics">
-			<allow pkg="org.apache.kafka.common.metrics" />
-		</subpackage>
+    <subpackage name="metrics">
+      <allow pkg="org.apache.kafka.common.metrics" />
+    </subpackage>
 
-		<subpackage name="network">
-			<allow pkg="org.apache.kafka.common.security.auth" />
-			<allow pkg="org.apache.kafka.common.protocol" />
-			<allow pkg="org.apache.kafka.common.config" />
-			<allow pkg="org.apache.kafka.common.metrics" />
+    <subpackage name="network">
+      <allow pkg="org.apache.kafka.common.security.auth" />
+      <allow pkg="org.apache.kafka.common.protocol" />
+      <allow pkg="org.apache.kafka.common.config" />
+      <allow pkg="org.apache.kafka.common.metrics" />
       <allow pkg="org.apache.kafka.common.security" />
-		</subpackage>
+    </subpackage>
 
-		<subpackage name="security">
+    <subpackage name="security">
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.config" />
     </subpackage>
 
-		<subpackage name="protocol">
-			<allow pkg="org.apache.kafka.common.errors" />
-			<allow pkg="org.apache.kafka.common.protocol.types" />
-		</subpackage>
+    <subpackage name="protocol">
+      <allow pkg="org.apache.kafka.common.errors" />
+      <allow pkg="org.apache.kafka.common.protocol.types" />
+    </subpackage>
 
-		<subpackage name="record">
-			<allow pkg="net.jpountz" />
-			<allow pkg="org.apache.kafka.common.record" />
-		</subpackage>
+    <subpackage name="record">
+      <allow pkg="net.jpountz" />
+      <allow pkg="org.apache.kafka.common.record" />
+    </subpackage>
 
-		<subpackage name="requests">
-			<allow pkg="org.apache.kafka.common.protocol" />
-			<allow pkg="org.apache.kafka.common.network" />
-			<!-- for testing -->
-			<allow pkg="org.apache.kafka.common.errors" />
-		</subpackage>
+    <subpackage name="requests">
+      <allow pkg="org.apache.kafka.common.protocol" />
+      <allow pkg="org.apache.kafka.common.network" />
+      <!-- for testing -->
+      <allow pkg="org.apache.kafka.common.errors" />
+    </subpackage>
 
-		<subpackage name="serialization">
-			<allow class="org.apache.kafka.common.errors.SerializationException" />
-		</subpackage>
-	</subpackage>
+    <subpackage name="serialization">
+      <allow class="org.apache.kafka.common.errors.SerializationException" />
+    </subpackage>
+  </subpackage>
 
-	<subpackage name="clients">
-		<allow pkg="org.slf4j" />
-		<allow pkg="org.apache.kafka.common" />
-		<allow pkg="org.apache.kafka.clients" exact-match="true"/>
-		<allow pkg="org.apache.kafka.test" />
+  <subpackage name="clients">
+    <allow pkg="org.slf4j" />
+    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.clients" exact-match="true"/>
+    <allow pkg="org.apache.kafka.test" />
 
-		<subpackage name="consumer">
-			<allow pkg="org.apache.kafka.clients.consumer" />
-		</subpackage>
+    <subpackage name="consumer">
+      <allow pkg="org.apache.kafka.clients.consumer" />
+    </subpackage>
 
-		<subpackage name="producer">
-			<allow pkg="org.apache.kafka.clients.producer" />
-		</subpackage>
+    <subpackage name="producer">
+      <allow pkg="org.apache.kafka.clients.producer" />
+    </subpackage>
 
-		<subpackage name="tools">
-			<allow pkg="org.apache.kafka.clients.producer" />
-			<allow pkg="org.apache.kafka.clients.consumer" />
-            <allow pkg="com.fasterxml.jackson" />
-            <allow pkg="net.sourceforge.argparse4j" />
-			<allow pkg="org.apache.log4j" />
-		</subpackage>
-	</subpackage>
+    <subpackage name="tools">
+      <allow pkg="org.apache.kafka.clients.producer" />
+      <allow pkg="org.apache.kafka.clients.consumer" />
+      <allow pkg="com.fasterxml.jackson" />
+      <allow pkg="net.sourceforge.argparse4j" />
+      <allow pkg="org.apache.log4j" />
+    </subpackage>
+  </subpackage>
 
-	<subpackage name="streams">
-		<allow pkg="org.apache.kafka.common"/>
-		<allow pkg="org.apache.kafka.test"/>
-		<allow pkg="org.apache.kafka.clients"/>
-		<allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
-		<allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
+  <subpackage name="streams">
+    <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.clients"/>
+    <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
+    <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
 
-		<allow pkg="org.apache.kafka.streams"/>
+    <allow pkg="org.apache.kafka.streams"/>
 
-		<subpackage name="state">
-			<allow pkg="org.rocksdb" />
-		</subpackage>
-	</subpackage>
+    <subpackage name="state">
+      <allow pkg="org.rocksdb" />
+    </subpackage>
+  </subpackage>
 
-	<subpackage name="log4jappender">
-		<allow pkg="org.apache.log4j" />
-		<allow pkg="org.apache.kafka.clients" />
-		<allow pkg="org.apache.kafka.common" />
-		<allow pkg="org.apache.kafka.test" />
-	</subpackage>
+  <subpackage name="log4jappender">
+    <allow pkg="org.apache.log4j" />
+    <allow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.test" />
+  </subpackage>
 
-	<subpackage name="test">
-		<allow pkg="org.apache.kafka" />
-		<allow pkg="org.bouncycastle" />
-	</subpackage>
+  <subpackage name="test">
+    <allow pkg="org.apache.kafka" />
+    <allow pkg="org.bouncycastle" />
+  </subpackage>
 
-	<subpackage name="copycat">
-		<allow pkg="org.apache.kafka.common" />
-		<allow pkg="org.apache.kafka.copycat.data" />
-		<allow pkg="org.apache.kafka.copycat.errors" />
-		<allow pkg="org.apache.kafka.clients" />
+  <subpackage name="copycat">
+    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.copycat.data" />
+    <allow pkg="org.apache.kafka.copycat.errors" />
+    <allow pkg="org.apache.kafka.clients" />
 
-		<subpackage name="source">
-			<allow pkg="org.apache.kafka.copycat.connector" />
-			<allow pkg="org.apache.kafka.copycat.storage" />
-		</subpackage>
+    <subpackage name="source">
+      <allow pkg="org.apache.kafka.copycat.connector" />
+      <allow pkg="org.apache.kafka.copycat.storage" />
+    </subpackage>
 
-		<subpackage name="sink">
-		        <allow pkg="org.apache.kafka.clients.consumer" />
-			<allow pkg="org.apache.kafka.copycat.connector" />
-			<allow pkg="org.apache.kafka.copycat.storage" />
-		</subpackage>
+    <subpackage name="sink">
+      <allow pkg="org.apache.kafka.clients.consumer" />
+      <allow pkg="org.apache.kafka.copycat.connector" />
+      <allow pkg="org.apache.kafka.copycat.storage" />
+    </subpackage>
 
-		<subpackage name="runtime">
-			<allow pkg="org.apache.kafka.copycat" />
-		</subpackage>
+    <subpackage name="runtime">
+      <allow pkg="org.apache.kafka.copycat" />
+    </subpackage>
 
-		<subpackage name="cli">
-			<allow pkg="org.apache.kafka.copycat.runtime" />
-			<allow pkg="org.apache.kafka.copycat.storage" />
-			<allow pkg="org.apache.kafka.copycat.util" />
-			<allow pkg="org.apache.kafka.common" />
-		</subpackage>
+    <subpackage name="cli">
+      <allow pkg="org.apache.kafka.copycat.runtime" />
+      <allow pkg="org.apache.kafka.copycat.storage" />
+      <allow pkg="org.apache.kafka.copycat.util" />
+      <allow pkg="org.apache.kafka.common" />
+    </subpackage>
 
-		<subpackage name="storage">
-			<allow pkg="org.apache.kafka.copycat" />
-			<allow pkg="org.apache.kafka.common.serialization" />
-		</subpackage>
+    <subpackage name="storage">
+      <allow pkg="org.apache.kafka.copycat" />
+      <allow pkg="org.apache.kafka.common.serialization" />
+    </subpackage>
 
-		<subpackage name="util">
-			<allow pkg="org.apache.kafka.copycat" />
-		</subpackage>
+    <subpackage name="util">
+      <allow pkg="org.apache.kafka.copycat" />
+    </subpackage>
 
-		<subpackage name="json">
-			<allow pkg="com.fasterxml.jackson" />
-			<allow pkg="org.apache.kafka.common.serialization" />
-			<allow pkg="org.apache.kafka.common.errors" />
-			<allow pkg="org.apache.kafka.copycat.storage" />
-		</subpackage>
+    <subpackage name="json">
+      <allow pkg="com.fasterxml.jackson" />
+      <allow pkg="org.apache.kafka.common.serialization" />
+      <allow pkg="org.apache.kafka.common.errors" />
+      <allow pkg="org.apache.kafka.copycat.storage" />
+    </subpackage>
 
-		<subpackage name="file">
-			<allow pkg="org.apache.kafka.copycat" />
-		        <allow pkg="org.apache.kafka.clients.consumer" />
-			<!-- for tests -->
-			<allow pkg="org.easymock" />
-			<allow pkg="org.powermock" />
-		</subpackage>
+    <subpackage name="file">
+      <allow pkg="org.apache.kafka.copycat" />
+      <allow pkg="org.apache.kafka.clients.consumer" />
+      <!-- for tests -->
+      <allow pkg="org.easymock" />
+      <allow pkg="org.powermock" />
+    </subpackage>
 
-	</subpackage>
+  </subpackage>
 
 </import-control>
