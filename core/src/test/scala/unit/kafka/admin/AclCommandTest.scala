@@ -34,7 +34,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     Set(new Resource(ConsumerGroup, "test-1"), new Resource(ConsumerGroup, "test-2")) -> Array("--consumer-group", "test-1, test-2")
   )
 
-  private val operations: Set[Operation] = Set(Read, Write)
+  private val operations = Set(Read, Write)
   private val operationsString = operations.mkString(AclCommand.delimiter)
   private val users = Set(KafkaPrincipal.fromString("User:test1"), KafkaPrincipal.fromString("User:test2"))
   private val usersString = users.mkString(AclCommand.delimiter)

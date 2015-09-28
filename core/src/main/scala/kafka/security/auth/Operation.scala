@@ -16,13 +16,13 @@
  */
 package kafka.security.auth
 
-import kafka.common.KafkaException
+import kafka.common.{BaseEnum, KafkaException}
 
 /**
  * Different operations a client may perform on kafka resources.
  */
 
-sealed trait Operation { def name: String}
+sealed trait Operation extends BaseEnum
 case object Read extends Operation { val name = "Read" }
 case object Write extends Operation { val name = "Write" }
 case object Create extends Operation { val name = "Create" }
