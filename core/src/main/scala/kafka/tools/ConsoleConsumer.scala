@@ -42,9 +42,9 @@ object ConsoleConsumer extends Logging {
       run(conf)
     } catch {
       case e: Throwable =>
-        error("Error running consumer: ", e)
+        error("Unknown error when running consumer: ", e)
+        System.exit(1);
     }
-    System.exit(0);
   }
 
   def run(conf: ConsumerConfig) {
