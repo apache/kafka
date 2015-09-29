@@ -188,7 +188,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     //test removing last acl also deletes zookeeper path
     acls = changeAclAndVerify(Set.empty[Acl], Set(acl1), Set.empty[Acl])
-    changeAclAndVerify(Set.empty[Acl], Set.empty[Acl], acls)
+    changeAclAndVerify(acls, Set.empty[Acl], acls)
     assertTrue(!ZkUtils.pathExists(zkClient, simpleAclAuthorizer.toResourcePath(resource)))
   }
 
@@ -226,7 +226,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
       acls --=removedAcls
     }
 
-    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls, "changes not propagated in timeout period.")
+    TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls,
+      s"changes not propagated in timeout period. expected $acls but got ${simpleAclAuthorizer.getAcls(resource)}", waitTime = 10000)
 
     acls
   }
