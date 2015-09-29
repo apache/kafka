@@ -17,20 +17,23 @@
 
 package kafka.admin
 
-import java.util.Properties
-
 import joptsimple._
-import kafka.coordinator.ConsumerCoordinator
 import kafka.security.auth._
-import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
 
+import scala.collection.JavaConverters._
+
 object AclCommand {
 
-  val delimiter = ","
+  val delimiter = ','
   val nl = scala.util.Properties.lineSeparator
+  val resourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
+    Topic -> Set(Read, Write, Describe),
+    ConsumerGroup -> Set(Read),
+    Cluster -> Set(Create, ClusterAction)
+  )
 
   def main(args: Array[String]) {
 
@@ -41,16 +44,15 @@ object AclCommand {
 
     opts.checkArgs()
 
-    val authorizerProperties = new Properties()
+    var authorizerProperties = Map.empty[String, Any]
     if (opts.options.has(opts.authorizerPropertiesOpt)) {
-      val props = opts.options.valueOf(opts.authorizerPropertiesOpt).toString.split(delimiter).map(_.split("="))
-      props.foreach(pair => authorizerProperties.put(pair(0).trim, pair(1).trim))
+      val props = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala.map(_.split("="))
+      props.foreach(pair => authorizerProperties += (pair(0).trim -> pair(1).trim))
     }
 
-    val kafkaConfig = KafkaConfig.fromProps(authorizerProperties)
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
     val authZ: Authorizer = CoreUtils.createObject(authorizerClass)
-    authZ.configure(kafkaConfig.originals())
+    authZ.configure(authorizerProperties.asJava)
 
     try {
       if (opts.options.has(opts.addOpt))
@@ -75,7 +77,7 @@ object AclCommand {
 
     for ((resource, acls) <- resourceToAcl) {
       val acls = resourceToAcl(resource)
-      println(s"Adding following acls for resource: $resource $nl  ${acls.map("\t" + _).mkString(nl)} $nl")
+      println(s"Adding following acls for resource: $resource $nl ${acls.map("\t" + _).mkString(nl)} $nl")
       authZ.addAcls(acls, resource)
     }
 
@@ -110,8 +112,9 @@ object AclCommand {
     var resourceToAcls = Map.empty[Resource, Set[Acl]]
 
     //if none of the --producer or --consumer options are specified , just construct acls from CLI options.
-    if (!opts.options.has(opts.producerOpt) || !opts.options.has(opts.consumerOpt))
+    if (!opts.options.has(opts.producerOpt) && !opts.options.has(opts.consumerOpt)) {
       resourceToAcls ++= getCliResourceToAcls(opts)
+    }
 
     //users are allowed to specify both --producer and --consumer options in a single command.
     if (opts.options.has(opts.producerOpt))
@@ -120,18 +123,19 @@ object AclCommand {
     if (opts.options.has(opts.consumerOpt))
       resourceToAcls ++= getConsumerResourceToAcls(opts).map { case (k, v) => k -> (v ++ resourceToAcls.getOrElse(k, Set.empty[Acl])) }
 
+    validateOperation(opts, resourceToAcls)
+
     resourceToAcls
   }
-
 
   private def getProducerResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
     val topics: Set[Resource] = getResource(opts).filter(_.resourceType == Topic)
 
     val acls = getAcl(opts, Set(Write, Describe))
 
-    //Write, Describe permission on topics, Create,Describe permission on cluster
+    //Write, Describe permission on topics, Create permission on cluster
     topics.map(_ -> acls).toMap[Resource, Set[Acl]] +
-      (Resource.ClusterResource -> getAcl(opts, Set(Create, Describe)))
+      (Resource.ClusterResource -> getAcl(opts, Set(Create)))
   }
 
   private def getConsumerResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -140,14 +144,13 @@ object AclCommand {
     val topics: Set[Resource] = getResource(opts).filter(_.resourceType == Topic)
     val consumerGroups: Set[Resource] = resources.filter(_.resourceType == ConsumerGroup)
 
-    //Read,Describe on topic,consumerGroup and ConsumerCoordinator.OffsetsTopicName + Describe,Create on cluster
+    //Read,Describe on topic, Read on consumerGroup + Create on cluster
 
     val acls = getAcl(opts, Set(Read, Describe))
 
     topics.map(_ -> acls).toMap[Resource, Set[Acl]] ++
-      consumerGroups.map(_ -> acls).toMap[Resource, Set[Acl]] +
-      (Resource.ClusterResource -> getAcl(opts, Set(Create, Describe))) +
-      (new Resource(Topic, ConsumerCoordinator.OffsetsTopicName) -> acls)
+      consumerGroups.map(_ -> getAcl(opts, Set(Read))).toMap[Resource, Set[Acl]] +
+      (Resource.ClusterResource -> getAcl(opts, Set(Create)))
   }
 
   private def getCliResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -176,7 +179,7 @@ object AclCommand {
   }
 
   private def getAcl(opts: AclCommandOptions): Set[Acl] = {
-    val operations = opts.options.valueOf(opts.operationsOpt).toString.split(delimiter).map(operation => Operation.fromString(operation.trim)).toSet
+    val operations = opts.options.valuesOf(opts.operationsOpt).asScala.map(operation => Operation.fromString(operation.trim)).toSet
     getAcl(opts, operations)
   }
 
@@ -192,7 +195,7 @@ object AclCommand {
   private def getHosts(opts: AclCommandOptions, hostOptionSpec: ArgumentAcceptingOptionSpec[String],
                        principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[String] = {
     if (opts.options.has(hostOptionSpec))
-      opts.options.valueOf(hostOptionSpec).toString.split(delimiter).map(_.trim).toSet
+      opts.options.valuesOf(hostOptionSpec).asScala.map(_.trim).toSet
     else if (opts.options.has(principalOptionSpec))
       Set[String](Acl.WildCardHost)
     else
@@ -201,7 +204,7 @@ object AclCommand {
 
   private def getPrincipals(opts: AclCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[KafkaPrincipal] = {
     if (opts.options.has(principalOptionSpec))
-      opts.options.valueOf(principalOptionSpec).toString.split(delimiter).map(s => KafkaPrincipal.fromString(s.trim)).toSet
+      opts.options.valuesOf(principalOptionSpec).asScala.map(s => KafkaPrincipal.fromString(s.trim)).toSet
     else
       Set.empty[KafkaPrincipal]
   }
@@ -209,13 +212,13 @@ object AclCommand {
   private def getResource(opts: AclCommandOptions): Set[Resource] = {
     var resources = Set.empty[Resource]
     if (opts.options.has(opts.topicOpt))
-      opts.options.valueOf(opts.topicOpt).toString.split(delimiter).foreach(topic => resources += new Resource(Topic, topic.trim))
+      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resources += new Resource(Topic, topic.trim))
 
     if (opts.options.has(opts.clusterOpt))
       resources += Resource.ClusterResource
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valueOf(opts.groupOpt).toString.split(delimiter).foreach(consumerGroup => resources += new Resource(ConsumerGroup, consumerGroup.trim))
+      opts.options.valuesOf(opts.groupOpt).asScala.foreach(consumerGroup => resources += new Resource(ConsumerGroup, consumerGroup.trim))
 
     if (resources.isEmpty)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --consumer-group <group>")
@@ -226,6 +229,14 @@ object AclCommand {
   private def confirmAction(msg: String): Boolean = {
     println(msg)
     Console.readLine().equalsIgnoreCase("y")
+  }
+
+  private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[Resource, Set[Acl]]) = {
+    for((resource, acls) <- resourceToAcls) {
+      val validOps = resourceTypeToValidOperations(resource.resourceType)
+      if((acls.map(_.operation) -- validOps).nonEmpty)
+        CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(delimiter.toString)}")
+    }
   }
 
   class AclCommandOptions(args: Array[String]) {
@@ -242,16 +253,20 @@ object AclCommand {
       .withRequiredArg
       .describedAs("authorizer-properties")
       .ofType(classOf[String])
+      .withValuesSeparatedBy(delimiter)
 
-    val topicOpt = parser.accepts("topic", "Comma separeted list of topic to which acls should be added or removed.")
+    val topicOpt = parser.accepts("topic", "Comma separated list of topic to which acls should be added or removed.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
+      .withValuesSeparatedBy(delimiter)
+
     val clusterOpt = parser.accepts("cluster", "Add/Remove cluster acls.")
-    val groupOpt = parser.accepts("consumer-group", "Comma seperated list of consumer groups to which the acls should be added or removed.")
+    val groupOpt = parser.accepts("consumer-group", "Comma separated list of consumer groups to which the acls should be added or removed.")
       .withRequiredArg
       .describedAs("consumer-group")
       .ofType(classOf[String])
+      .withValuesSeparatedBy(delimiter)
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add acls.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove acls.")
@@ -262,36 +277,42 @@ object AclCommand {
       .withRequiredArg
       .ofType(classOf[String])
       .defaultsTo(All.name)
+      .withValuesSeparatedBy(delimiter)
 
     val allowPrincipalsOpt = parser.accepts("allow-principals", "Comma separated list of principals where principal is in principalType:name format." +
       " User:* is the wild card indicating all users.")
       .withRequiredArg
       .describedAs("allow-principals")
       .ofType(classOf[String])
+      .withValuesSeparatedBy(delimiter)
 
     val denyPrincipalsOpt = parser.accepts("deny-principals", "Comma separated list of principals where principal is in " +
       "principalType: name format. By default anyone not in --allow-principals list is denied access. " +
       "You only need to use this option as negation to already allowed set." +
       "For example if you wanted to allow access to all users in the system but not test-user you can define an acl that " +
-      "allows access to user:* and specify --deny-principals=User:test@EXAMPLE.COM. " +
+      "allows access to User:* and specify --deny-principals=User:test@EXAMPLE.COM. " +
       "AND PLEASE REMEMBER DENY RULES TAKES PRECEDENCE OVER ALLOW RULES.")
       .withRequiredArg
       .describedAs("deny-principals")
       .ofType(classOf[String])
+      .withValuesSeparatedBy(delimiter)
 
     val allowHostsOpt = parser.accepts("allow-hosts", "Comma separated list of hosts from which principals listed in --allow-principals will have access." +
       "If you have specified --allow-principals then the default for this option will be set to * which allows access from all hosts.")
       .withRequiredArg
       .describedAs("allow-hosts")
       .ofType(classOf[String])
+      .withValuesSeparatedBy(delimiter)
 
     val denyHostssOpt = parser.accepts("deny-hosts", "Comma separated list of hosts from which principals listed in --deny-principals will be denied access. " +
       "If you have specified --deny-principals then the default for this option will be set to * which denies access from all hosts.")
       .withRequiredArg
       .describedAs("deny-hosts")
       .ofType(classOf[String])
+      .withValuesSeparatedBy(delimiter)
 
-    val producerOpt = parser.accepts("producer", "Convenience option to add/remove acls for producer role.")
+    val producerOpt = parser.accepts("producer", "Convenience option to add/remove acls for producer role. " +
+      "This will generate acls that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")
 
     val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove acls for consumer role.")
 
@@ -304,7 +325,8 @@ object AclCommand {
 
       val actions = Seq(addOpt, removeOpt, listOpt).count(options.has)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove.")
+        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove. " +
+          "This will generate acls that allows READ,DESCRIBE on topic, READ on consumer-group and CREATE on cluster")
 
       CommandLineUtils.checkInvalidArgs(parser, options, listOpt, Set(producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostssOpt, denyPrincipalsOpt))
 
