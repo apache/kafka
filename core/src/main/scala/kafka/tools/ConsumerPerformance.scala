@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.util
 
+import kafka.tools.SimplePropertiesParser._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
@@ -37,6 +38,9 @@ import kafka.consumer.ConsumerTimeoutException
 import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicBoolean
 
+import scala.collection.immutable
+import scala.util.control.NonFatal
+
 /**
  * Performance test for the full zookeeper consumer
  */
@@ -51,15 +55,17 @@ object ConsumerPerformance {
     val totalBytesRead = new AtomicLong(0)
     val consumerTimeout = new AtomicBoolean(false)
 
-    if (!config.hideHeader && (config.showDetailedStats || config.showAllStats))
-        println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+    if (!config.hideHeader && (config.showDetailedStats || config.showAllStats)) {
+      println(s"Consumer Properties: ${config.props}\n")
+      println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+    }
 
     var startMs, endMs = 0L
-    if(config.useNewConsumer) {
+    if (config.useNewConsumer) {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(List(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 5000, config, totalMessagesRead, totalBytesRead)
+      consume(consumer, List(config.topic), config.numMessages, config.testTimeout, config, totalMessagesRead, totalBytesRead)
       endMs = System.currentTimeMillis
       consumer.close()
     } else {
@@ -80,19 +86,18 @@ object ConsumerPerformance {
         thread.start
       for (thread <- threadList)
         thread.join
-      if(consumerTimeout.get())
+      if (consumerTimeout.get())
 	endMs = System.currentTimeMillis - consumerConfig.consumerTimeoutMs
       else
 	endMs = System.currentTimeMillis
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
-    val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-
-    if(!config.showDetailedStats || config.showAllStats){
-      if (!config.hideHeader  )
+    if (!config.showDetailedStats || config.showAllStats){
+      if (!config.hideHeader)
         println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
 
+      val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
       println(("%s, %s, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
         totalMBRead, totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
     }
@@ -130,13 +135,13 @@ object ConsumerPerformance {
     
     while(messagesRead < count && System.currentTimeMillis() - lastConsumedTime <= timeout) {
       val records = consumer.poll(100)
-      if(records.count() > 0)
+      if (records.count() > 0)
         lastConsumedTime = System.currentTimeMillis
       for(record <- records) {
         messagesRead += 1
-        if(record.key != null)
+        if (record.key != null)
           bytesRead += record.key.size
-        if(record.value != null)
+        if (record.value != null)
           bytesRead += record.value.size 
       
         if (messagesRead % config.reportingInterval == 0) {
@@ -208,7 +213,16 @@ object ConsumerPerformance {
       .describedAs("consumer properties")
       .ofType(classOf[java.lang.String])
       .defaultsTo("")
+    val freeformPropsOpt = parser.accepts("consumer-properties", "Freeform consumer properties in the format key=val,key=val,key=val...")
+      .withRequiredArg
+      .describedAs("consumer properties")
+      .ofType(classOf[java.lang.String])
     val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation.")
+    val testTimeoutOpt = parser.accepts("test-timeout", "ms of inactivity after which the test will time out.")
+      .withRequiredArg
+      .describedAs("time in ms")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(5000)
 
     val options = parser.parse(args: _*)
 
@@ -217,7 +231,12 @@ object ConsumerPerformance {
     val useNewConsumer = options.has(useNewConsumerOpt)
     
     val props = if (options.has(propsFileOpt)) Utils.loadProps(options.valueOf(propsFileOpt)) else new Properties
-    if(useNewConsumer) {
+
+    if (options.has(freeformPropsOpt)) {
+      props.putAll(propsFromFreeform(options.valueOf(freeformPropsOpt)))
+    }
+
+    if (useNewConsumer) {
       import org.apache.kafka.clients.consumer.ConsumerConfig
       props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
       props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
@@ -238,15 +257,18 @@ object ConsumerPerformance {
       props.put("num.consumer.fetchers", options.valueOf(numFetchersOpt).toString)
     }
     val numThreads = options.valueOf(numThreadsOpt).intValue
+    val testTimeout = options.valueOf(testTimeoutOpt).intValue
     val topic = options.valueOf(topicOpt)
     val numMessages = options.valueOf(numMessagesOpt).longValue
     val showDetailedStats = options.has(showDetailedStatsOpt)
     val showAllStats = options.has(showAllStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
-    var reportingInterval = options.valueOf(reportingIntervalOpt).longValue
-    if(reportingInterval == -1)
-      reportingInterval = numMessages/10
+    val reportingInterval = {
+      val interval = options.valueOf(reportingIntervalOpt).longValue
+      if (interval == -1) numMessages / 10
+      else interval
+    }
   }
 
   class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Array[Byte], Array[Byte]],
