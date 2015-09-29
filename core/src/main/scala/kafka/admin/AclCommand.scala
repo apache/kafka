@@ -27,9 +27,9 @@ import scala.collection.JavaConverters._
 
 object AclCommand {
 
-  val delimiter = ','
-  val nl = scala.util.Properties.lineSeparator
-  val resourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
+  val Delimiter = ','
+  val Newline = scala.util.Properties.lineSeparator
+  val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
     Topic -> Set(Read, Write, Describe),
     ConsumerGroup -> Set(Read),
     Cluster -> Set(Create, ClusterAction)
@@ -73,11 +73,11 @@ object AclCommand {
     val resourceToAcl = getResourceToAcls(opts)
 
     if (resourceToAcl.values.exists(_.isEmpty))
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of : --allow-principals, --deny-principals when trying to add acls.")
+      CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principals, --deny-principals when trying to add acls.")
 
     for ((resource, acls) <- resourceToAcl) {
       val acls = resourceToAcl(resource)
-      println(s"Adding following acls for resource: $resource $nl ${acls.map("\t" + _).mkString(nl)} $nl")
+      println(s"Adding following acls for resource: $resource $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
       authZ.addAcls(acls, resource)
     }
 
@@ -89,10 +89,10 @@ object AclCommand {
 
     for ((resource, acls) <- resourceToAcl) {
       if (acls.isEmpty) {
-        if (confirmAction(s"Are you sure you want to delete all acls for resource:  $resource y/n?"))
+        if (confirmAction(s"Are you sure you want to delete all acls for resource: $resource y/n?"))
           authZ.removeAcls(resource)
       } else {
-        if (confirmAction(s"Are you sure you want to remove acls: $nl ${acls.map("\t" + _).mkString(nl)} $nl from resource $resource y/n?"))
+        if (confirmAction(s"Are you sure you want to remove acls: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource $resource y/n?"))
           authZ.removeAcls(acls, resource)
       }
     }
@@ -104,7 +104,7 @@ object AclCommand {
     val resources = getResource(opts)
     for (resource <- resources) {
       val acls = authZ.getAcls(resource)
-      println(s"Following is list of acls for resource : $resource $nl ${acls.map("\t" + _).mkString(nl)} $nl")
+      println(s"Following is list of acls for resource: $resource $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
     }
   }
 
@@ -232,10 +232,10 @@ object AclCommand {
   }
 
   private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[Resource, Set[Acl]]) = {
-    for((resource, acls) <- resourceToAcls) {
-      val validOps = resourceTypeToValidOperations(resource.resourceType)
-      if((acls.map(_.operation) -- validOps).nonEmpty)
-        CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(delimiter.toString)}")
+    for ((resource, acls) <- resourceToAcls) {
+      val validOps = ResourceTypeToValidOperations(resource.resourceType)
+      if ((acls.map(_.operation) -- validOps).nonEmpty)
+        CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(Delimiter.toString)}")
     }
   }
 
@@ -247,44 +247,44 @@ object AclCommand {
       .ofType(classOf[String])
       .defaultsTo(classOf[SimpleAclAuthorizer].getName)
 
-    val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "REQUIRED:properties required to configure an instance of Authorizer. " +
+    val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "REQUIRED: properties required to configure an instance of Authorizer. " +
       "These are comma separated key=val pairs. For the default authorizer the example values are: " +
       "zookeeper.connect=localhost:2181")
       .withRequiredArg
       .describedAs("authorizer-properties")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(delimiter)
+      .withValuesSeparatedBy(Delimiter)
 
     val topicOpt = parser.accepts("topic", "Comma separated list of topic to which acls should be added or removed.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(delimiter)
+      .withValuesSeparatedBy(Delimiter)
 
     val clusterOpt = parser.accepts("cluster", "Add/Remove cluster acls.")
     val groupOpt = parser.accepts("consumer-group", "Comma separated list of consumer groups to which the acls should be added or removed.")
       .withRequiredArg
       .describedAs("consumer-group")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(delimiter)
+      .withValuesSeparatedBy(Delimiter)
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add acls.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove acls.")
     val listOpt = parser.accepts("list", "List acls for the specified resource, use --topic <topic> or --consumer-group <group> or --cluster to specify a resource.")
 
-    val operationsOpt = parser.accepts("operations", "Comma separated list of operations, default is All. Valid operation names are: " + nl +
-      Operation.values.map("\t" + _).mkString(nl) + nl)
+    val operationsOpt = parser.accepts("operations", "Comma separated list of operations, default is All. Valid operation names are: " + Newline +
+      Operation.values.map("\t" + _).mkString(Newline) + Newline)
       .withRequiredArg
       .ofType(classOf[String])
       .defaultsTo(All.name)
-      .withValuesSeparatedBy(delimiter)
+      .withValuesSeparatedBy(Delimiter)
 
     val allowPrincipalsOpt = parser.accepts("allow-principals", "Comma separated list of principals where principal is in principalType:name format." +
       " User:* is the wild card indicating all users.")
       .withRequiredArg
       .describedAs("allow-principals")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(delimiter)
+      .withValuesSeparatedBy(Delimiter)
 
     val denyPrincipalsOpt = parser.accepts("deny-principals", "Comma separated list of principals where principal is in " +
       "principalType: name format. By default anyone not in --allow-principals list is denied access. " +
@@ -295,21 +295,21 @@ object AclCommand {
       .withRequiredArg
       .describedAs("deny-principals")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(delimiter)
+      .withValuesSeparatedBy(Delimiter)
 
     val allowHostsOpt = parser.accepts("allow-hosts", "Comma separated list of hosts from which principals listed in --allow-principals will have access." +
       "If you have specified --allow-principals then the default for this option will be set to * which allows access from all hosts.")
       .withRequiredArg
       .describedAs("allow-hosts")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(delimiter)
+      .withValuesSeparatedBy(Delimiter)
 
     val denyHostssOpt = parser.accepts("deny-hosts", "Comma separated list of hosts from which principals listed in --deny-principals will be denied access. " +
       "If you have specified --deny-principals then the default for this option will be set to * which denies access from all hosts.")
       .withRequiredArg
       .describedAs("deny-hosts")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(delimiter)
+      .withValuesSeparatedBy(Delimiter)
 
     val producerOpt = parser.accepts("producer", "Convenience option to add/remove acls for producer role. " +
       "This will generate acls that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")

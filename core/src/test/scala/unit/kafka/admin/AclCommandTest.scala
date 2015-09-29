@@ -30,9 +30,9 @@ import org.junit.{Assert, Test}
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private val Users = Set(KafkaPrincipal.fromString("User:test1"), KafkaPrincipal.fromString("User:test2"))
-  private val UsersString = Users.mkString(AclCommand.delimiter.toString)
+  private val UsersString = Users.mkString(AclCommand.Delimiter.toString)
   private val Hosts = Set("host1", "host2")
-  private val HostsString = Hosts.mkString(AclCommand.delimiter.toString)
+  private val HostsString = Hosts.mkString(AclCommand.Delimiter.toString)
 
   private val TopicResources = Set(new Resource(Topic, "test-1"), new Resource(Topic, "test-2"))
   private val ConsumerGroupResources = Set(new Resource(ConsumerGroup, "test-1"), new Resource(ConsumerGroup, "test-2"))
@@ -93,23 +93,21 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     brokerProps.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
     val args = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)
 
-    for ((cmd, resourcesToAcl) <- CmdToResourcesToAcl) {
-      val resourceCommand: Array[String] = resourcesToAcl.keys.map(ResourceToCommand.get(_))
-        .foldLeft(Array[String]())((l: Array[String], r: Option[Array[String]]) => l ++ r.get)
+    for ((cmd, resourcesToAcls) <- CmdToResourcesToAcl) {
+      val resourceCommand: Array[String] = resourcesToAcls.keys.map(ResourceToCommand.get(_)).foldLeft(Array[String]())((l, r) => l ++ r.get)
       AclCommand.main(args ++ getCmd(Allow) ++ resourceCommand ++ cmd :+ "--add")
-      for ((resources, acls) <- resourcesToAcl) {
+      for ((resources, acls) <- resourcesToAcls) {
         for (resource <- resources) {
           Assert.assertEquals(acls, getAuthorizer(brokerProps).getAcls(resource))
         }
       }
-      testRemove(resourcesToAcl.keys.flatten.toSet, resourceCommand, args, brokerProps)
+      testRemove(resourcesToAcls.keys.flatten.toSet, resourceCommand, args, brokerProps)
     }
   }
 
-  private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps:
-  Properties) {
+  private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties) {
     for (resource <- resources) {
-      Console.withIn(new StringReader(s"y${AclCommand.nl}" * resources.size)) {
+      Console.withIn(new StringReader(s"y${AclCommand.Newline}" * resources.size)) {
         AclCommand.main(args ++ resourceCmd :+ "--remove")
         Assert.assertEquals(Set.empty[Acl], getAuthorizer(brokerProps).getAcls(resource))
       }
@@ -120,7 +118,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     (AclCommand.getAcls(Users, permissionType, operations, Hosts), getCmd(permissionType))
   }
 
-  private def getCmd(permissionType: PermissionType) : Array[String] = {
+  private def getCmd(permissionType: PermissionType): Array[String] = {
     if (permissionType == Allow)
       Array("--allow-principals", UsersString, "--allow-hosts", HostsString)
     else
