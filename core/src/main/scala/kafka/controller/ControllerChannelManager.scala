@@ -106,7 +106,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         1,
         0,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
-        Selectable.USE_DEFAULT_BUFFER_SIZE
+        Selectable.USE_DEFAULT_BUFFER_SIZE,
+        config.requestTimeoutMs
       )
     }
     val threadName = threadNamePrefix match {
