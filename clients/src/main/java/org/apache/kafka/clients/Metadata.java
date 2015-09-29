@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -43,7 +42,7 @@ public final class Metadata {
     private Cluster cluster;
     private boolean needUpdate;
     private final Set<String> topics;
-    private final Set<Listener> listeners;
+    private final List<Listener> listeners;
     private boolean needMetadataForAllTopics;
 
     /**
@@ -67,8 +66,8 @@ public final class Metadata {
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
-        this.topics = new HashSet<>();
-        this.listeners = new HashSet<>();
+        this.topics = new HashSet<String>();
+        this.listeners = new ArrayList<>();
         this.needMetadataForAllTopics = false;
     }
 
