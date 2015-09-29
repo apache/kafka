@@ -94,7 +94,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     val args = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)
 
     for ((cmd, resourcesToAcls) <- CmdToResourcesToAcl) {
-      val resourceCommand: Array[String] = resourcesToAcls.keys.map(ResourceToCommand.get(_)).foldLeft(Array[String]())((l, r) => l ++ r.get)
+      val resourceCommand: Array[String] = resourcesToAcls.keys.map(ResourceToCommand).foldLeft(Array[String]())(_ ++ _)
       AclCommand.main(args ++ getCmd(Allow) ++ resourceCommand ++ cmd :+ "--add")
       for ((resources, acls) <- resourcesToAcls) {
         for (resource <- resources) {
