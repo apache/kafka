@@ -22,54 +22,18 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.junit.After;
 import org.junit.Test;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-
 public abstract class AbstractKeyValueStoreTest {
-
-    protected static final File STATE_DIR = new File("build/data").getAbsoluteFile();
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context,
                                                                       Class<K> keyClass, Class<V> valueClass,
                                                                       boolean useContextSerdes);
-
-    @After
-    public void cleanup() {
-        if (STATE_DIR.exists()) {
-            try {
-                Files.walkFileTree(STATE_DIR.toPath(), new SimpleFileVisitor<Path>() {
-                    @Override
-                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                        Files.delete(file);
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                    @Override
-                    public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                        Files.delete(dir);
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                });
-            } catch (IOException e) {
-                // do nothing
-            }
-        }
-    }
-
+    
     @Test
     public void testIntegerKeysAndStringValues() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create();
-        driver.useStateDir(STATE_DIR);
         KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
         try {
 
@@ -136,7 +100,6 @@ public abstract class AbstractKeyValueStoreTest {
     public void testIntegerKeysAndStringValuesUsingDefaultSerializersAndDeserializers() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        driver.useStateDir(STATE_DIR);
         KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
         try {
 
@@ -177,7 +140,6 @@ public abstract class AbstractKeyValueStoreTest {
     public void testRestoringInetgerKeysAndValues() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        driver.useStateDir(STATE_DIR);
 
         // Add any entries that will be restored to any store
         // that uses the driver's context ...
@@ -204,7 +166,6 @@ public abstract class AbstractKeyValueStoreTest {
     public void testRestoringInetgerKeysAndValuesUsingDefaultSerializersAndDeserializers() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        driver.useStateDir(STATE_DIR);
 
         // Add any entries that will be restored to any store
         // that uses the driver's context ...

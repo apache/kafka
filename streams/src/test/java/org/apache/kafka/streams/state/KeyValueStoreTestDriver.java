@@ -19,12 +19,13 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.RestoreFunc;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.test.MockProcessorContext;
@@ -214,7 +215,15 @@ public class KeyValueStoreTestDriver<K, V> {
     private final List<Entry<K, V>> restorableEntries = new LinkedList<>();
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
-    private final Metrics metrics = new Metrics();
+    private final StreamingMetrics metrics = new StreamingMetrics() {
+        @Override
+        public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
+            return null;
+        }
+        @Override
+        public void recordLatency(Sensor sensor, long startNs, long endNs) {
+        }
+    };
     private final RecordCollector recordCollector;
     private File stateDir = new File("build/data").getAbsoluteFile();
 
@@ -241,7 +250,7 @@ public class KeyValueStoreTestDriver<K, V> {
             }
 
             @Override
-            public void register(StateStore store, RestoreFunc func) {
+            public void register(StateStore store, StateRestoreCallback func) {
                 storeMap.put(store.name(), store);
                 restoreEntries(func);
             }
@@ -252,14 +261,14 @@ public class KeyValueStoreTestDriver<K, V> {
             }
 
             @Override
-            public Metrics metrics() {
+            public StreamingMetrics metrics() {
                 return metrics;
             }
 
             @Override
             public File stateDir() {
                 if (stateDir == null) {
-                    throw new UnsupportedOperationException("No state directory set");
+                    stateDir = StateUtils.tempDir();
                 }
                 stateDir.mkdirs();
                 return stateDir;
@@ -290,12 +299,12 @@ public class KeyValueStoreTestDriver<K, V> {
         }
     }
 
-    private void restoreEntries(RestoreFunc func) {
+    private void restoreEntries(StateRestoreCallback func) {
         for (Entry<K, V> entry : restorableEntries) {
             if (entry != null) {
                 byte[] rawKey = serdes.rawKey(entry.key());
                 byte[] rawValue = serdes.rawValue(entry.value());
-                func.apply(rawKey, rawValue);
+                func.restore(rawKey, rawValue);
             }
         }
     }
