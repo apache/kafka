@@ -26,7 +26,7 @@ import java.util.{Collections, Properties}
 import com.yammer.metrics.core.Gauge
 import joptsimple.OptionParser
 import kafka.client.ClientUtils
-import kafka.consumer._
+import kafka.consumer.{BaseConsumerRebalanceListener, BaseConsumerRecord, ConsumerIterator, BaseConsumer, Blacklist, ConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
 import kafka.javaapi.consumer.ConsumerRebalanceListener
 import kafka.message.MessageAndMetadata
 import kafka.metrics.KafkaMetricsGroup
