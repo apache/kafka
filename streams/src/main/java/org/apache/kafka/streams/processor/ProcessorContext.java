@@ -84,7 +84,7 @@ public interface ProcessorContext {
      *
      * @param store the storage engine
      */
-    void register(StateStore store, RestoreFunc restoreFunc);
+    void register(StateStore store, StateRestoreCallback stateRestoreCallback);
 
     StateStore getStateStore(String name);
 

@@ -29,7 +29,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.processor.RestoreFunc;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.OffsetCheckpoint;
 import org.junit.Test;
@@ -82,11 +82,11 @@ public class ProcessorStateManagerTest {
             return persistent;
         }
 
-        public final RestoreFunc restoreFunc = new RestoreFunc() {
+        public final StateRestoreCallback stateRestoreCallback = new StateRestoreCallback() {
             private final Deserializer<Integer> deserializer = new IntegerDeserializer();
 
             @Override
-            public void apply(byte[] key, byte[] value) {
+            public void restore(byte[] key, byte[] value) {
                 keys.add(deserializer.deserialize("", key));
             }
         };
@@ -259,7 +259,7 @@ public class ProcessorStateManagerTest {
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, new MockRestoreConsumer());
             try {
-                stateMgr.register(mockStateStore, mockStateStore.restoreFunc);
+                stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
             } finally {
                 stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
             }
@@ -299,7 +299,7 @@ public class ProcessorStateManagerTest {
                     );
                 }
 
-                stateMgr.register(persistentStore, persistentStore.restoreFunc);
+                stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
 
                 assertEquals(new TopicPartition("persistentStore", 2), restoreConsumer.assignedPartition);
                 assertEquals(lastCheckpointedOffset, restoreConsumer.seekOffset);
@@ -347,7 +347,7 @@ public class ProcessorStateManagerTest {
                     );
                 }
 
-                stateMgr.register(nonPersistentStore, nonPersistentStore.restoreFunc);
+                stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
 
                 assertEquals(new TopicPartition("nonPersistentStore", 2), restoreConsumer.assignedPartition);
                 assertEquals(0L, restoreConsumer.seekOffset);
@@ -375,7 +375,7 @@ public class ProcessorStateManagerTest {
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer);
             try {
-                stateMgr.register(mockStateStore, mockStateStore.restoreFunc);
+                stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
 
                 assertNull(stateMgr.getStore("noSuchStore"));
                 assertEquals(mockStateStore, stateMgr.getStore("mockStore"));
@@ -420,10 +420,10 @@ public class ProcessorStateManagerTest {
                 assertFalse(checkpointFile.exists());
 
                 restoreConsumer.reset();
-                stateMgr.register(persistentStore, persistentStore.restoreFunc);
+                stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
 
                 restoreConsumer.reset();
-                stateMgr.register(nonPersistentStore, nonPersistentStore.restoreFunc);
+                stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             } finally {
                 // close the state manager with the ack'ed offsets
                 stateMgr.close(ackedOffsets);

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.processor.RestoreFunc;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -96,7 +96,7 @@ public class ProcessorStateManager {
         return this.baseDir;
     }
 
-    public void register(StateStore store, RestoreFunc restoreFunc) {
+    public void register(StateStore store, StateRestoreCallback stateRestoreCallback) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
@@ -138,12 +138,11 @@ public class ProcessorStateManager {
         restoreConsumer.seekToEnd(storePartition);
         long endOffset = restoreConsumer.position(storePartition);
 
-        // load the previously flushed state and restore from the checkpointed offset of the change log
+        // restore from the checkpointed offset of the change log
         // if it exists in the offset file; restore the state from the beginning of the change log otherwise
         if (checkpointedOffsets.containsKey(storePartition)) {
             restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
         } else {
-            // TODO: in this case, we need to ignore the preciously flushed state
             restoreConsumer.seekToBeginning(storePartition);
         }
 
@@ -151,7 +150,7 @@ public class ProcessorStateManager {
         // should not change since it is only written by this thread.
         while (true) {
             for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100).records(storePartition)) {
-                restoreFunc.apply(record.key(), record.value());
+                stateRestoreCallback.restore(record.key(), record.value());
             }
 
             if (restoreConsumer.position(storePartition) == endOffset) {

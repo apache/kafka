@@ -498,8 +498,10 @@ public class StreamThread extends Thread {
             if ((tags.length % 2) != 0)
                 throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
 
-            for (int i = 0; i < tags.length / 2; i++)
+            for (int i = 0; i < tags.length / 2;) {
                 tagMap.put(tags[i], tags[i + 1]);
+                i += 2;
+            }
 
             // first add the global operation metrics if not yet, with the global tags only
             Sensor parent = metrics.sensor(operationName);

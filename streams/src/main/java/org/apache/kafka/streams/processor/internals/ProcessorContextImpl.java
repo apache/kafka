@@ -25,7 +25,7 @@ import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.RestoreFunc;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -148,11 +148,11 @@ public class ProcessorContextImpl implements ProcessorContext {
     }
 
     @Override
-    public void register(StateStore store, RestoreFunc restoreFunc) {
+    public void register(StateStore store, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
             throw new KafkaException("Can only create state stores during initialization.");
 
-        stateMgr.register(store, restoreFunc);
+        stateMgr.register(store, stateRestoreCallback);
     }
 
     @Override

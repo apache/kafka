@@ -40,7 +40,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
     }
 
     public InMemoryKeyValueStore(String name, ProcessorContext context, Time time) {
-        super(name, new MemoryStore<K, V>(name, context), context, "kafka-streams", time);
+        super(name, new MemoryStore<K, V>(name, context), context, "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
@@ -101,11 +101,6 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         @Override
         public void flush() {
             // do-nothing since it is in-memory
-        }
-
-        public void restore() {
-            // this should not happen since it is in-memory, hence no state to load from disk
-            throw new IllegalStateException("This should not happen");
         }
 
         @Override

@@ -44,7 +44,7 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
     }
 
     public RocksDBKeyValueStore(String name, ProcessorContext context, Time time) {
-        super(name, new RocksDBStore(name, context), context, "kafka-streams", time);
+        super(name, new RocksDBStore(name, context), context, "rocksdb-state", time);
     }
 
     private static class RocksDBStore implements KeyValueStore<byte[], byte[]> {
@@ -52,13 +52,13 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         private static final int TTL_NOT_USED = -1;
 
         // TODO: these values should be configurable
+        private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
+        private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
         private static final long WRITE_BUFFER_SIZE = 32 * 1024 * 1024L;
         private static final long BLOCK_CACHE_SIZE = 100 * 1024 * 1024L;
         private static final long BLOCK_SIZE = 4096L;
         private static final int TTL_SECONDS = TTL_NOT_USED;
         private static final int MAX_WRITE_BUFFERS = 3;
-        private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
-        private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
         private static final String DB_FILE_DIR = "rocksdb";
 
         private final String topic;

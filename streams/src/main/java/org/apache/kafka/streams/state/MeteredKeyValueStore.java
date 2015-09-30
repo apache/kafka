@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.RestoreFunc;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -37,7 +37,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     protected final KeyValueStore<K, V> inner;
 
     private final Time time;
-    private final String group;
     private final Sensor putTime;
     private final Sensor getTime;
     private final Sensor deleteTime;
@@ -55,20 +54,19 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final ProcessorContext context;
 
     // always wrap the logged store with the metered store
-    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, ProcessorContext context, String group, Time time) {
+    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, ProcessorContext context, String metricGrp, Time time) {
         this.inner = inner;
 
         this.time = time;
-        this.group = group;
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencySensor("local-state", name, "put", "store-name", name);
-        this.getTime = this.metrics.addLatencySensor("local-state", name, "get", "store-name", name);
-        this.deleteTime = this.metrics.addLatencySensor("local-state", name, "delete", "store-name", name);
-        this.putAllTime = this.metrics.addLatencySensor("local-state", name, "put-all", "store-name", name);
-        this.allTime = this.metrics.addLatencySensor("local-state", name, "all", "store-name", name);
-        this.rangeTime = this.metrics.addLatencySensor("local-state", name, "range", "store-name", name);
-        this.flushTime = this.metrics.addLatencySensor("local-state", name, "flush", "store-name", name);
-        this.restoreTime = this.metrics.addLatencySensor("local-state", name, "restore", "store-name", name);
+        this.putTime = this.metrics.addLatencySensor(metricGrp, name, "put", "store-name", name);
+        this.getTime = this.metrics.addLatencySensor(metricGrp, name, "get", "store-name", name);
+        this.deleteTime = this.metrics.addLatencySensor(metricGrp, name, "delete", "store-name", name);
+        this.putAllTime = this.metrics.addLatencySensor(metricGrp, name, "put-all", "store-name", name);
+        this.allTime = this.metrics.addLatencySensor(metricGrp, name, "all", "store-name", name);
+        this.rangeTime = this.metrics.addLatencySensor(metricGrp, name, "range", "store-name", name);
+        this.flushTime = this.metrics.addLatencySensor(metricGrp, name, "flush", "store-name", name);
+        this.restoreTime = this.metrics.addLatencySensor(metricGrp, name, "restore", "store-name", name);
 
         this.topic = name;
         this.partition = context.id();
@@ -84,9 +82,9 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keyDeserializer();
             final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueDeserializer();
 
-            context.register(this, new RestoreFunc() {
+            context.register(this, new StateRestoreCallback() {
                 @Override
-                public void apply(byte[] key, byte[] value) {
+                public void restore(byte[] key, byte[] value) {
                     inner.put(keyDeserializer.deserialize(topic, key),
                         valDeserializer.deserialize(topic, value));
                 }
