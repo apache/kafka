@@ -17,10 +17,10 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RestoreFunc;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -83,7 +83,7 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public Metrics metrics() {
+    public StreamingMetrics metrics() {
         throw new UnsupportedOperationException("metrics() not supported.");
     }
 

@@ -87,7 +87,7 @@ public final class MetricName {
 
     private static Map<String, String> getTags(String... keyValue) {
         if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in paris");
+            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
         Map<String, String> tags = new HashMap<String, String>();
 
         for (int i = 0; i < keyValue.length / 2; i++)

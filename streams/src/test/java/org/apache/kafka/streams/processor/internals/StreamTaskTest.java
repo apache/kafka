@@ -89,7 +89,7 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testProcessOrder() {
-        StreamTask task = new StreamTask(0, consumer, producer, restoreStateConsumer, partitions, topology, config);
+        StreamTask task = new StreamTask(0, consumer, producer, restoreStateConsumer, partitions, topology, config, null);
 
         task.addRecords(partition1, records(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),
@@ -133,7 +133,7 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() {
-        StreamTask task = new StreamTask(1, consumer, producer, restoreStateConsumer, partitions, topology, config);
+        StreamTask task = new StreamTask(1, consumer, producer, restoreStateConsumer, partitions, topology, config, null);
 
         task.addRecords(partition1, records(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, recordKey, recordValue),

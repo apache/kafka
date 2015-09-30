@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -34,10 +35,10 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +59,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
-    private static AtomicInteger nextThreadNumber = new AtomicInteger(1);
+    private static final AtomicInteger STREAMING_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     private final AtomicBoolean running;
 
@@ -69,13 +70,14 @@ public class StreamThread extends Thread {
     protected final Consumer<byte[], byte[]> restoreConsumer;
 
     private final Map<Integer, StreamTask> tasks;
+    private final String clientId;
     private final Time time;
     private final File stateDir;
     private final long pollTimeMs;
     private final long cleanTimeMs;
     private final long commitTimeMs;
     private final long totalRecordsToProcess;
-    private final StreamingMetrics metrics;
+    private final StreamingMetricsImpl sensors;
 
     private long lastClean;
     private long lastCommit;
@@ -96,19 +98,27 @@ public class StreamThread extends Thread {
         }
     };
 
-    public StreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
-        this(builder, config, null , null, null, new SystemTime());
+    public StreamThread(TopologyBuilder builder,
+                        StreamingConfig config,
+                        String clientId,
+                        Metrics metrics,
+                        Time time) throws Exception {
+        this(builder, config, null , null, null, clientId, metrics, time);
     }
 
-    StreamThread(TopologyBuilder builder, StreamingConfig config,
+    StreamThread(TopologyBuilder builder,
+                 StreamingConfig config,
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
+                 String clientId,
+                 Metrics metrics,
                  Time time) throws Exception {
-        super("StreamThread-" + nextThreadNumber.getAndIncrement());
+        super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.config = config;
         this.builder = builder;
+        this.clientId = clientId;
 
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
@@ -131,7 +141,7 @@ public class StreamThread extends Thread {
         this.recordsProcessed = 0;
         this.time = time;
 
-        this.metrics = new StreamingMetrics();
+        this.sensors = new StreamingMetricsImpl(metrics);
 
         this.running = new AtomicBoolean(true);
     }
@@ -237,7 +247,7 @@ public class StreamThread extends Thread {
                 }
 
                 long endPoll = time.milliseconds();
-                metrics.pollTimeSensor.record(endPoll - startPoll);
+                sensors.pollTimeSensor.record(endPoll - startPoll);
 
                 // try to process one record from each task
                 totalNumBuffered = 0;
@@ -247,7 +257,7 @@ public class StreamThread extends Thread {
 
                     totalNumBuffered += task.process();
 
-                    metrics.processTimeSensor.record(time.milliseconds() - startProcess);
+                    sensors.processTimeSensor.record(time.milliseconds() - startProcess);
                 }
 
                 maybePunctuate();
@@ -279,7 +289,7 @@ public class StreamThread extends Thread {
                 long now = time.milliseconds();
 
                 if (task.maybePunctuate(now))
-                    metrics.punctuateTimeSensor.record(time.milliseconds() - now);
+                    sensors.punctuateTimeSensor.record(time.milliseconds() - now);
 
             } catch (Exception e) {
                 log.error("Failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
@@ -334,7 +344,7 @@ public class StreamThread extends Thread {
             throw e;
         }
 
-        metrics.commitTimeSensor.record(time.milliseconds() - now);
+        sensors.commitTimeSensor.record(time.milliseconds() - now);
     }
 
     /**
@@ -381,9 +391,9 @@ public class StreamThread extends Thread {
     }
 
     protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
-        metrics.taskCreationSensor.record();
+        sensors.taskCreationSensor.record();
 
-        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, builder.build(), config);
+        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, builder.build(), config, sensors);
     }
 
     private void addPartitions(Collection<TopicPartition> assignment) {
@@ -425,13 +435,15 @@ public class StreamThread extends Thread {
                 log.error("Failed to close a task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
                 throw e;
             }
-            metrics.taskDestructionSensor.record();
+            sensors.taskDestructionSensor.record();
         }
         tasks.clear();
     }
 
-    private class StreamingMetrics {
+    private class StreamingMetricsImpl implements StreamingMetrics {
         final Metrics metrics;
+        final String metricGrpName;
+        final Map<String, String> metricTags;
 
         final Sensor commitTimeSensor;
         final Sensor pollTimeSensor;
@@ -440,12 +452,12 @@ public class StreamThread extends Thread {
         final Sensor taskCreationSensor;
         final Sensor taskDestructionSensor;
 
-        public StreamingMetrics() {
-            String metricGrpName = "streaming-metrics";
+        public StreamingMetricsImpl(Metrics metrics) {
 
-            this.metrics = new Metrics();
-            Map<String, String> metricTags = new LinkedHashMap<String, String>();
-            metricTags.put("client-id", config.getString(StreamingConfig.CLIENT_ID_CONFIG) + "-" + getName());
+            this.metrics = metrics;
+            this.metricGrpName = "streaming-metrics";
+            this.metricTags = new LinkedHashMap<>();
+            this.metricTags.put("client-id", clientId + "-" + getName());
 
             this.commitTimeSensor = metrics.sensor("commit-time");
             this.commitTimeSensor.add(new MetricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
@@ -472,6 +484,46 @@ public class StreamThread extends Thread {
 
             this.taskDestructionSensor = metrics.sensor("task-destruction");
             this.taskDestructionSensor.add(new MetricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
+        }
+
+        @Override
+        public void recordLatency(Sensor sensor, long startNs, long endNs) {
+            sensor.record((endNs - startNs) / 1000000, endNs);
+        }
+
+        @Override
+        public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
+            // extract the additional tags if there are any
+            Map<String, String> tagMap = new HashMap<>(this.metricTags);
+            if ((tags.length % 2) != 0)
+                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
+
+            for (int i = 0; i < tags.length / 2; i++)
+                tagMap.put(tags[i], tags[i + 1]);
+
+            // first add the global operation metrics if not yet, with the global tags only
+            Sensor parent = metrics.sensor(operationName);
+            addLatencyMetrics(this.metricGrpName, parent, "all", operationName, this.metricTags);
+
+            // add the store operation metrics with additional tags
+            Sensor sensor = metrics.sensor(entityName + "-" + operationName, parent);
+            addLatencyMetrics("streaming-" + scopeName + "-metrics", sensor, entityName, operationName, tagMap);
+
+            return sensor;
+        }
+
+        private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
+            maybeAddMetric(sensor, new MetricName(opName + "-avg-latency-ms", metricGrpName,
+                "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
+            maybeAddMetric(sensor, new MetricName(opName + "-max-latency-ms", metricGrpName,
+                "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
+            maybeAddMetric(sensor, new MetricName(opName + "-qps", metricGrpName,
+                "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
+        }
+
+        private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
+            if (!metrics.metrics().containsKey(name))
+                sensor.add(name, stat);
         }
     }
 }
