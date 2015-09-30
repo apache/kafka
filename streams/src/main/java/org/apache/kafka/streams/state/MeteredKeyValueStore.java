@@ -25,7 +25,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.util.HashSet;
@@ -191,7 +190,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private void logChange() {
-        RecordCollector collector = ((ProcessorContextImpl) context).recordCollector();
+        RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         if (collector != null) {
             Serializer<K> keySerializer = serialization.keySerializer();
             Serializer<V> valueSerializer = serialization.valueSerializer();
