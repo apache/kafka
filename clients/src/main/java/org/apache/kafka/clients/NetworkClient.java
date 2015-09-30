@@ -238,7 +238,8 @@ public class NetworkClient implements KafkaClient {
     }
 
     private void doSend(ClientRequest request, long now) {
-        this.inFlightRequests.add(request, now);
+        request.setSendTimeMs(now);
+        this.inFlightRequests.add(request);
         selector.send(request.request());
     }
 

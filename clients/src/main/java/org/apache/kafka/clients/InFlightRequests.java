@@ -35,13 +35,12 @@ final class InFlightRequests {
     /**
      * Add the given request to the queue for the connection it was directed to
      */
-    public void add(ClientRequest request, long now) {
+    public void add(ClientRequest request) {
         Deque<ClientRequest> reqs = this.requests.get(request.request().destination());
         if (reqs == null) {
-            reqs = new ArrayDeque<ClientRequest>();
+            reqs = new ArrayDeque<>();
             this.requests.put(request.request().destination(), reqs);
         }
-        request.setSendMs(now);
         reqs.addFirst(request);
     }
 
@@ -138,7 +137,7 @@ final class InFlightRequests {
         for (String nodeId : requests.keySet()) {
             if (inFlightRequestCount(nodeId) > 0) {
                 ClientRequest request = requests.get(nodeId).peekLast();
-                long timeSinceSend = now - request.getSendMs();
+                long timeSinceSend = now - request.sendTimeMs();
                 if (timeSinceSend > requestTimeout) {
                     nodeIds.add(nodeId);
                 }

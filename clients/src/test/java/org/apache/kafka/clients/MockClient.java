@@ -109,7 +109,7 @@ public class MockClient implements KafkaClient {
             ClientResponse resp = new ClientResponse(request, time.milliseconds(), futureResp.disconnected, futureResp.responseBody);
             responses.add(resp);
         } else {
-            request.setSendMs(now);
+            request.setSendTimeMs(now);
             this.requests.add(request);
         }
     }
