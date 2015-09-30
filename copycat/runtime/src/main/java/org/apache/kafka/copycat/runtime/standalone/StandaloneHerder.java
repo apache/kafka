@@ -102,7 +102,7 @@ public class StandaloneHerder implements Herder {
         updateConnectorTasks(state);
     }
 
-    // Creates the and configures the connector. Does not setup any tasks
+    // Creates and configures the connector. Does not setup any tasks
     private ConnectorState createConnector(Map<String, String> connectorProps) {
         ConnectorConfig connConfig = new ConnectorConfig(connectorProps);
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);

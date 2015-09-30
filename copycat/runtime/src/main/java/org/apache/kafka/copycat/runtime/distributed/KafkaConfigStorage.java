@@ -227,7 +227,8 @@ public class KafkaConfigStorage {
     }
 
     /**
-     * Write these task configurations and update the root configuration, unless the
+     * Write these task configurations and update the root configuration, unless an inconsistency is found that indicates
+     * that not all connectors that need reconfiguration have been reconfigured.
      *
      * @param configs map containing task configurations
      * @throws CopycatException if the task configurations do not resolve inconsistencies found in the existing root

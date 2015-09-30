@@ -153,9 +153,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
             if (!subscriptions.isPaused(entry.getKey())) {
                 List<ConsumerRecord<K, V>> recs = entry.getValue();
-                if (!recs.isEmpty()) {
+                if (!recs.isEmpty())
                     this.subscriptions.consumed(entry.getKey(), recs.get(recs.size() - 1).offset() + 1);
-                }
             }
         }
 

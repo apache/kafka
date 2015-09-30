@@ -133,7 +133,7 @@ public class DistributedHerder implements Herder {
         updateConnectorTasks(state);
     }
 
-    // Creates the and configures the connector. Does not setup any tasks
+    // Creates and configures the connector. Does not setup any tasks
     private ConnectorState createConnector(ConnectorConfig connConfig) {
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         String className = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
