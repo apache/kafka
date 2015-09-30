@@ -138,9 +138,9 @@ public class ProcessorStateManager {
         restoreConsumer.seekToEnd(storePartition);
         long endOffset = restoreConsumer.position(storePartition);
 
-        // restore from the checkpointed offset of the change log
-        // if it exists in the offset file; restore the state from the beginning of the change log otherwise
-        if (checkpointedOffsets.containsKey(storePartition)) {
+        // restore from the checkpointed offset of the change log if it is persistent and the offset exists;
+        // restore the state from the beginning of the change log otherwise
+        if (checkpointedOffsets.containsKey(storePartition) && store.persistent()) {
             restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
         } else {
             restoreConsumer.seekToBeginning(storePartition);
