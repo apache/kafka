@@ -14,6 +14,7 @@ package org.apache.kafka.clients;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -238,7 +239,7 @@ public final class Metadata {
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
-        List<Node> nodes = Cluster.empty().nodes();
+        List<Node> nodes = Collections.emptyList();
         if (cluster != null) {
             for (String topic : this.topics) {
                 partitionInfos.addAll(cluster.partitionsForTopic(topic));
