@@ -498,7 +498,7 @@ public class StreamThread extends Thread {
             if ((tags.length % 2) != 0)
                 throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
 
-            for (int i = 0; i < tags.length / 2;) {
+            for (int i = 0; i < tags.length;) {
                 tagMap.put(tags[i], tags[i + 1]);
                 i += 2;
             }
