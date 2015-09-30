@@ -314,7 +314,8 @@ object AclCommand {
     val producerOpt = parser.accepts("producer", "Convenience option to add/remove acls for producer role. " +
       "This will generate acls that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")
 
-    val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove acls for consumer role.")
+    val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove acls for consumer role." +
+      "This will generate acls that allows READ,DESCRIBE on topic, READ on consumer-group and CREATE on cluster")
 
     val helpOpt = parser.accepts("help", "Print usage information.")
 
@@ -325,8 +326,7 @@ object AclCommand {
 
       val actions = Seq(addOpt, removeOpt, listOpt).count(options.has)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove. " +
-          "This will generate acls that allows READ,DESCRIBE on topic, READ on consumer-group and CREATE on cluster")
+        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove. ")
 
       CommandLineUtils.checkInvalidArgs(parser, options, listOpt, Set(producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostssOpt, denyPrincipalsOpt))
 
