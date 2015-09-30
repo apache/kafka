@@ -230,6 +230,7 @@ public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         private RocksDB openDB(File dir, Options options, int ttl) {
             try {
                 if (ttl == TTL_NOT_USED) {
+                    dir.getParentFile().mkdirs();
                     return RocksDB.open(options, dir.toString());
                 } else {
                     throw new KafkaException("Change log is not supported for store " + this.topic + " since it is TTL based.");
