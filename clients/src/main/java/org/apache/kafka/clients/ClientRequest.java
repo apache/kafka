@@ -60,6 +60,8 @@ public final class ClientRequest {
             ", callback=" + callback +
             ", request=" + request +
             (isInitiatedByNetworkClient ? ", isInitiatedByNetworkClient" : "") +
+            ", createdTimeMs=" + createdTimeMs +
+            ", sendTimeMs=" + sendTimeMs +
             ")";
     }
 
