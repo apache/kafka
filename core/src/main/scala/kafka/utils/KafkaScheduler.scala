@@ -106,7 +106,7 @@ class KafkaScheduler(val threads: Int,
       ensureStarted
       val runnable = CoreUtils.runnable {
         try {
-          trace("Begining execution of scheduled task '%s'.".format(name))
+          trace("Beginning execution of scheduled task '%s'.".format(name))
           fun()
         } catch {
           case t: Throwable => error("Uncaught exception in scheduled task '" + name +"'", t)
