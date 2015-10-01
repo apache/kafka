@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -50,7 +50,7 @@ public class KStreamMapValuesTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, String> stream;
-        MockProcessorDef<Integer, Integer> processor = new MockProcessorDef<>();
+        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.mapValues(mapper).process(processor);
 

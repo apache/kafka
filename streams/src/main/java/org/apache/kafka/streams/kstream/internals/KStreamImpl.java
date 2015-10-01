@@ -19,15 +19,15 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorDef;
-import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamWindowed;
+import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.WindowDef;
+import org.apache.kafka.streams.kstream.WindowSupplier;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TopologyBuilder;
 
 import java.lang.reflect.Array;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -127,12 +127,12 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public KStreamWindowed<K, V> with(WindowDef<K, V> window) {
+    public KStreamWindowed<K, V> with(WindowSupplier<K, V> windowSupplier) {
         String name = WINDOWED_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamWindow<>(window), this.name);
+        topology.addProcessor(name, new KStreamWindow<>(windowSupplier), this.name);
 
-        return new KStreamWindowedImpl<>(topology, name, window);
+        return new KStreamWindowedImpl<>(topology, name, windowSupplier);
     }
 
     @Override
@@ -191,10 +191,10 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> process(final ProcessorDef<K, V> processorDef) {
+    public <K1, V1> KStream<K1, V1> process(final ProcessorSupplier<K, V> processorSupplier) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, processorDef, this.name);
+        topology.addProcessor(name, processorSupplier, this.name);
 
         return new KStreamImpl<>(topology, name);
     }

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 /**
  * KStream is an abstraction of a stream of key-value pairs.
@@ -89,7 +89,7 @@ public interface KStream<K, V> {
      * @param windowDef the instance of Window
      * @return the windowed stream
      */
-    KStreamWindowed<K, V> with(WindowDef<K, V> windowDef);
+    KStreamWindowed<K, V> with(WindowSupplier<K, V> windowDef);
 
     /**
      * Creates an array of streams from this stream. Each stream in the array corresponds to a predicate in
@@ -153,8 +153,8 @@ public interface KStream<K, V> {
     /**
      * Processes all elements in this stream by applying a processor.
      *
-     * @param processorDef the class of ProcessorDef
+     * @param processorSupplier the supplier of the Processor to use
      * @return the new stream containing the processed output
      */
-    <K1, V1> KStream<K1, V1> process(ProcessorDef<K, V> processorDef);
+    <K1, V1> KStream<K1, V1> process(ProcessorSupplier<K, V> processorSupplier);
 }

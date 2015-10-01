@@ -20,14 +20,14 @@ package org.apache.kafka.test;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.kstream.KeyValue;
-import org.apache.kafka.streams.kstream.WindowDef;
+import org.apache.kafka.streams.kstream.WindowSupplier;
 import org.apache.kafka.streams.kstream.internals.FilteredIterator;
 import org.apache.kafka.streams.processor.internals.Stamped;
 
 import java.util.Iterator;
 import java.util.LinkedList;
 
-public class UnlimitedWindowDef<K, V> implements WindowDef<K, V> {
+public class UnlimitedWindowDef<K, V> implements WindowSupplier<K, V> {
 
     private final String name;
 
@@ -39,7 +39,7 @@ public class UnlimitedWindowDef<K, V> implements WindowDef<K, V> {
         return name;
     }
 
-    public Window<K, V> instance() {
+    public Window<K, V> get() {
         return new UnlimitedWindow();
     }
 

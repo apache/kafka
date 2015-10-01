@@ -22,11 +22,11 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.util.Iterator;
 
-class KStreamJoin<K, V, V1, V2> implements ProcessorDef<K, V1> {
+class KStreamJoin<K, V, V1, V2> implements ProcessorSupplier<K, V1> {
 
     private static abstract class Finder<K, T> {
         abstract Iterator<T> find(K key, long timestamp);
@@ -41,7 +41,7 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorDef<K, V1> {
     }
 
     @Override
-    public Processor<K, V1> instance() {
+    public Processor<K, V1> get() {
         return new KStreamJoinProcessor(windowName);
     }
 
@@ -66,6 +66,7 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorDef<K, V1> {
             final Window<K, V2> window = (Window<K, V2>) context.getStateStore(windowName);
 
             this.finder = new Finder<K, V2>() {
+                @Override
                 Iterator<V2> find(K key, long timestamp) {
                     return window.find(key, timestamp);
                 }

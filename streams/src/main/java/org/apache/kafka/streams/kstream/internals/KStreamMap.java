@@ -21,9 +21,9 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamMap<K1, V1, K2, V2> implements ProcessorDef<K1, V1> {
+class KStreamMap<K1, V1, K2, V2> implements ProcessorSupplier<K1, V1> {
 
     private final KeyValueMapper<K1, V1, KeyValue<K2, V2>> mapper;
 
@@ -32,7 +32,7 @@ class KStreamMap<K1, V1, K2, V2> implements ProcessorDef<K1, V1> {
     }
 
     @Override
-    public Processor<K1, V1> instance() {
+    public Processor<K1, V1> get() {
         return new KStreamMapProcessor();
     }
 

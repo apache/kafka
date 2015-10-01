@@ -24,7 +24,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.UnlimitedWindowDef;
 import org.junit.Test;
 
@@ -119,7 +119,7 @@ public class KStreamImplTest {
 
         stream4.to("topic-5");
 
-        stream5.through("topic-6").process(new MockProcessorDef<>()).to("topic-7");
+        stream5.through("topic-6").process(new MockProcessorSupplier<>()).to("topic-7");
 
         assertEquals(2 + // sources
             2 + // stream1

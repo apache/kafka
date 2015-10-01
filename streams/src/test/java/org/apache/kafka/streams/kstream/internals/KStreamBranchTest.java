@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import java.lang.reflect.Array;
@@ -65,16 +65,16 @@ public class KStreamBranchTest {
 
         KStream<Integer, String> stream;
         KStream<Integer, String>[] branches;
-        MockProcessorDef<Integer, String>[] processors;
+        MockProcessorSupplier<Integer, String>[] processors;
 
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
 
-        processors = (MockProcessorDef<Integer, String>[]) Array.newInstance(MockProcessorDef.class, branches.length);
+        processors = (MockProcessorSupplier<Integer, String>[]) Array.newInstance(MockProcessorSupplier.class, branches.length);
         for (int i = 0; i < branches.length; i++) {
-            processors[i] = new MockProcessorDef<>();
+            processors[i] = new MockProcessorSupplier<>();
             branches[i].process(processors[i]);
         }
 

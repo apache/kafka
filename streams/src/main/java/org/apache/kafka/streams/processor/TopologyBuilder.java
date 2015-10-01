@@ -57,18 +57,17 @@ public class TopologyBuilder {
     private class ProcessorNodeFactory implements NodeFactory {
         public final String[] parents;
         private final String name;
-        private final ProcessorDef definition;
+        private final ProcessorSupplier supplier;
 
-        public ProcessorNodeFactory(String name, String[] parents, ProcessorDef definition) {
+        public ProcessorNodeFactory(String name, String[] parents, ProcessorSupplier supplier) {
             this.name = name;
             this.parents = parents.clone();
-            this.definition = definition;
+            this.supplier = supplier;
         }
 
         @Override
         public ProcessorNode build() {
-            Processor processor = definition.instance();
-            return new ProcessorNode(name, processor);
+            return new ProcessorNode(name, supplier.get());
         }
     }
 
@@ -123,7 +122,7 @@ public class TopologyBuilder {
      * {@link StreamingConfig streaming configuration}.
      *
      * @param name the unique name of the source used to reference this node when
-     * {@link #addProcessor(String, ProcessorDef, String...) adding processor children}.
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      */
@@ -136,7 +135,7 @@ public class TopologyBuilder {
      * The sink will use the specified key and value deserializers.
      *
      * @param name the unique name of the source used to reference this node when
-     * {@link #addProcessor(String, ProcessorDef, String...) adding processor children}.
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming messages; may be null if the source
      * should use the {@link StreamingConfig#KEY_DESERIALIZER_CLASS_CONFIG default key deserializer} specified in the
      * {@link StreamingConfig streaming configuration}
@@ -216,12 +215,12 @@ public class TopologyBuilder {
      * Add a new processor node that receives and processes messages output by one or more parent source or processor node.
      * Any new messages output by this processor will be forwarded to its child processor or sink nodes.
      * @param name the unique name of the processor node
-     * @param definition the supplier used to obtain this node's {@link Processor} instance
+     * @param supplier the supplier used to obtain this node's {@link Processor} instance
      * @param parentNames the name of one or more source or processor nodes whose output messages this processor should receive
      * and process
      * @return this builder instance so methods can be chained together; never null
      */
-    public final TopologyBuilder addProcessor(String name, ProcessorDef definition, String... parentNames) {
+    public final TopologyBuilder addProcessor(String name, ProcessorSupplier supplier, String... parentNames) {
         if (nodeNames.contains(name))
             throw new TopologyException("Processor " + name + " is already added.");
 
@@ -237,7 +236,7 @@ public class TopologyBuilder {
         }
 
         nodeNames.add(name);
-        nodeFactories.add(new ProcessorNodeFactory(name, parentNames, definition));
+        nodeFactories.add(new ProcessorNodeFactory(name, parentNames, supplier));
         return this;
     }
 

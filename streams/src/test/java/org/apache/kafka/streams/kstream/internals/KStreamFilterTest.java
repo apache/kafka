@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 
 import org.junit.Test;
 
@@ -49,9 +49,9 @@ public class KStreamFilterTest {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
-        MockProcessorDef<Integer, String> processor;
+        MockProcessorSupplier<Integer, String> processor;
 
-        processor = new MockProcessorDef<>();
+        processor = new MockProcessorSupplier<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.filter(isMultipleOfThree).process(processor);
 
@@ -69,9 +69,9 @@ public class KStreamFilterTest {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
-        MockProcessorDef<Integer, String> processor;
+        MockProcessorSupplier<Integer, String> processor;
 
-        processor = new MockProcessorDef<>();
+        processor = new MockProcessorSupplier<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.filterOut(isMultipleOfThree).process(processor);
 
