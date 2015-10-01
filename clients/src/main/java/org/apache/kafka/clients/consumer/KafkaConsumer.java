@@ -725,6 +725,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             this.subscriptions.unsubscribe();
+            this.coordinator.resetGeneration();
             this.metadata.needMetadataForAllTopics(false);
             this.metadata.removeListener(metadataListener);
         } finally {
