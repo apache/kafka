@@ -200,11 +200,21 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     acls = changeAclAndVerify(acls, Set[Acl](acl5), Set.empty[Acl])
 
     //test get by principal name.
-    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl1, acl2)) == simpleAclAuthorizer.getAcls(user1), "changes not propogated in timeout period")
-    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl3, acl4, acl5)) == simpleAclAuthorizer.getAcls(user2), "changes not propogated in timeout period")
+    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl1, acl2)) == simpleAclAuthorizer.getAcls(user1), "changes not propagated in timeout period")
+    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl3, acl4, acl5)) == simpleAclAuthorizer.getAcls(user2), "changes not propagated in timeout period")
+
+    val resourceToAcls = Map[Resource, Set[Acl]](
+      new Resource(Topic, Resource.WildCardResource) -> Set[Acl](new Acl(user2, Allow, WildCardHost, Read)),
+      new Resource(Cluster, Resource.WildCardResource) -> Set[Acl](new Acl(user2, Allow, host1, Read)),
+      new Resource(ConsumerGroup, Resource.WildCardResource) -> acls,
+      new Resource(ConsumerGroup, "test-ConsumerGroup") -> acls
+    )
+
+    resourceToAcls foreach { case (key, value) => changeAclAndVerify(Set.empty[Acl], value, Set.empty[Acl], key) }
+    assertEquals(resourceToAcls + (resource -> acls), simpleAclAuthorizer.getAcls())
 
     //test remove acl from existing acls.
-    changeAclAndVerify(acls, Set.empty[Acl], Set(acl1, acl5))
+    acls = changeAclAndVerify(acls, Set.empty[Acl], Set(acl1, acl5))
 
     //test remove all acls for resource
     simpleAclAuthorizer.removeAcls(resource)

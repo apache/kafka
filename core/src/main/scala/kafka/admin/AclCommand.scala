@@ -149,8 +149,7 @@ object AclCommand {
     val acls = getAcl(opts, Set(Read, Describe))
 
     topics.map(_ -> acls).toMap[Resource, Set[Acl]] ++
-      consumerGroups.map(_ -> getAcl(opts, Set(Read))).toMap[Resource, Set[Acl]] +
-      (Resource.ClusterResource -> getAcl(opts, Set(Create)))
+      consumerGroups.map(_ -> getAcl(opts, Set(Read))).toMap[Resource, Set[Acl]]
   }
 
   private def getCliResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -317,7 +316,7 @@ object AclCommand {
       "This will generate acls that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")
 
     val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove acls for consumer role. " +
-      "This will generate acls that allows READ,DESCRIBE on topic, READ on consumer-group and CREATE on cluster")
+      "This will generate acls that allows READ,DESCRIBE on topic and READ on consumer-group.")
 
     val helpOpt = parser.accepts("help", "Print usage information.")
 
@@ -339,8 +338,8 @@ object AclCommand {
       if (options.has(producerOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "With --producer you must specify a --topic")
 
-      if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt)))
-        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --consumer-group")
+      if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && options.has(clusterOpt))))
+        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --consumer-group and no --cluster option should be specified.")
     }
   }
 
