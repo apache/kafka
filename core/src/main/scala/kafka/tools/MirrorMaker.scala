@@ -65,7 +65,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private var mirrorMakerThreads: Seq[MirrorMakerThread] = null
   private val isShuttingdown: AtomicBoolean = new AtomicBoolean(false)
   // Track the messages not successfully sent by mirror maker.
-  private var numDroppedMessages: AtomicInteger = new AtomicInteger(0)
+  private val numDroppedMessages: AtomicInteger = new AtomicInteger(0)
   private var messageHandler: MirrorMakerMessageHandler = null
   private var offsetCommitIntervalMs = 0
   private var abortOnSendFailure: Boolean = true
@@ -323,10 +323,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       consumerConfigProps.setProperty("client.id", groupIdString + "-" + i.toString)
       new KafkaConsumer[Array[Byte], Array[Byte]](consumerConfigProps)
     }
-    if (!whitelist.isDefined)
-      throw new IllegalArgumentException("White list cannot be empty for new consumer")
+    whitelist.getOrElse(throw new IllegalArgumentException("White list cannot be empty for new consumer"))
     consumers.map(consumer => new MirrorMakerNewConsumer(consumer, customRebalanceListener, whitelist))
-
   }
 
   def commitOffsets(mirrorMakerConsumer: MirrorMakerBaseConsumer) {
@@ -486,12 +484,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                                        customRebalanceListener: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener],
                                        whitelistOpt: Option[String])
     extends MirrorMakerBaseConsumer {
-    val regex = {
-      if (whitelistOpt.isDefined)
-        whitelistOpt.get
-      else
-        throw new IllegalArgumentException("New consumer only supports whitelist.");
-    }
+    val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
     override def init() {
@@ -586,25 +579,21 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]) {
       flushAndCommit()
       // invoke custom consumer rebalance listener
-      if (customRebalanceListenerForOldConsumer.isDefined)
-        customRebalanceListenerForOldConsumer.get.beforeReleasingPartitions(partitionOwnership)
+      customRebalanceListenerForOldConsumer.foreach(_.beforeReleasingPartitions(partitionOwnership))
     }
 
     override def beforeStartingFetchers(consumerId: String,
                                         partitionAssignment: java.util.Map[String, java.util.Map[java.lang.Integer, ConsumerThreadId]]) {
-      if (customRebalanceListenerForOldConsumer.isDefined)
-        customRebalanceListenerForOldConsumer.get.beforeStartingFetchers(consumerId, partitionAssignment)
+      customRebalanceListenerForOldConsumer.foreach(_.beforeStartingFetchers(consumerId, partitionAssignment))
     }
 
     override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
       flushAndCommit()
-      if (customRebalanceListenerForNewConsumer.isDefined)
-        customRebalanceListenerForNewConsumer.get.onPartitionsAssigned(partitions)
+      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsAssigned(partitions))
     }
 
     override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
-      if (customRebalanceListenerForNewConsumer.isDefined)
-        customRebalanceListenerForNewConsumer.get.onPartitionsAssigned(partitions)
+      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsAssigned(partitions))
     }
   }
 
