@@ -101,11 +101,15 @@ object AclCommand {
   }
 
   private def listAcl(authZ: Authorizer, opts: AclCommandOptions) {
-    val resources = getResource(opts)
-    for (resource <- resources) {
-      val acls = authZ.getAcls(resource)
+    val resources = getResource(opts, dieIfNoResourceFound = false)
+
+    val resourceToAcls = if(resources.isEmpty)
+      authZ.getAcls()
+    else
+      resources.map(resource => (resource -> authZ.getAcls(resource)))
+
+    for ((resource, acls) <- resourceToAcls)
       println(s"Following is list of acls for resource: $resource $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-    }
   }
 
   private def getResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -208,7 +212,7 @@ object AclCommand {
       Set.empty[KafkaPrincipal]
   }
 
-  private def getResource(opts: AclCommandOptions): Set[Resource] = {
+  private def getResource(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[Resource] = {
     var resources = Set.empty[Resource]
     if (opts.options.has(opts.topicOpt))
       opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resources += new Resource(Topic, topic.trim))
@@ -219,7 +223,7 @@ object AclCommand {
     if (opts.options.has(opts.groupOpt))
       opts.options.valuesOf(opts.groupOpt).asScala.foreach(consumerGroup => resources += new Resource(ConsumerGroup, consumerGroup.trim))
 
-    if (resources.isEmpty)
+    if (resources.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --consumer-group <group>")
 
     resources
