@@ -141,6 +141,31 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testWildCardAcls(): Unit = {
+    assertFalse("when acls = [],  authorizer should fail close.", simpleAclAuthorizer.authorize(session, Read, resource))
+
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val host1 = "host1"
+    val readAcl = new Acl(user1, Allow, host1, Read)
+    val wildCardResource = new Resource(resource.resourceType, Resource.WildCardResource)
+
+    val acls = changeAclAndVerify(Set.empty[Acl], Set[Acl](readAcl), Set.empty[Acl], wildCardResource)
+
+    val host1Session = new Session(user1, host1)
+    assertTrue("User1 should have Read access from host1", simpleAclAuthorizer.authorize(host1Session, Read, resource))
+
+    //allow Write to specific topic.
+    val writeAcl = new Acl(user1, Allow, host1, Write)
+    changeAclAndVerify(Set.empty[Acl], Set[Acl](writeAcl), Set.empty[Acl])
+
+    //deny Write to wild card topic.
+    val denyWriteOnWildCardResourceAcl = new Acl(user1, Deny, host1, Write)
+    changeAclAndVerify(acls, Set[Acl](denyWriteOnWildCardResourceAcl), Set.empty[Acl], wildCardResource)
+
+    assertFalse("User1 should not have Write access from host1", simpleAclAuthorizer.authorize(host1Session, Write, resource))
+  }
+
+  @Test
   def testNoAclFound() {
     assertFalse("when acls = [],  authorizer should fail close.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
@@ -213,7 +238,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     assertEquals(acls1, authorizer.getAcls(resource1))
   }
 
-  private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl]): Set[Acl] = {
+  private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource): Set[Acl] = {
     var acls = originalAcls
 
     if(addedAcls.nonEmpty) {

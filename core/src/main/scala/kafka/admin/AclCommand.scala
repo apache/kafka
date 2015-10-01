@@ -255,14 +255,16 @@ object AclCommand {
       .ofType(classOf[String])
       .withValuesSeparatedBy(Delimiter)
 
-    val topicOpt = parser.accepts("topic", "Comma separated list of topic to which acls should be added or removed.")
+    val topicOpt = parser.accepts("topic", "Comma separated list of topic to which acls should be added or removed. " +
+      "A value of * indicates acl should apply to all topics.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
       .withValuesSeparatedBy(Delimiter)
 
     val clusterOpt = parser.accepts("cluster", "Add/Remove cluster acls.")
-    val groupOpt = parser.accepts("consumer-group", "Comma separated list of consumer groups to which the acls should be added or removed.")
+    val groupOpt = parser.accepts("consumer-group", "Comma separated list of consumer groups to which the acls should be added or removed. " +
+      "A value of * indicates the acls should apply to all consumer-groups.")
       .withRequiredArg
       .describedAs("consumer-group")
       .ofType(classOf[String])
@@ -288,7 +290,7 @@ object AclCommand {
 
     val denyPrincipalsOpt = parser.accepts("deny-principals", "Comma separated list of principals where principal is in " +
       "principalType: name format. By default anyone not in --allow-principals list is denied access. " +
-      "You only need to use this option as negation to already allowed set." +
+      "You only need to use this option as negation to already allowed set. " +
       "For example if you wanted to allow access to all users in the system but not test-user you can define an acl that " +
       "allows access to User:* and specify --deny-principals=User:test@EXAMPLE.COM. " +
       "AND PLEASE REMEMBER DENY RULES TAKES PRECEDENCE OVER ALLOW RULES.")
@@ -297,7 +299,7 @@ object AclCommand {
       .ofType(classOf[String])
       .withValuesSeparatedBy(Delimiter)
 
-    val allowHostsOpt = parser.accepts("allow-hosts", "Comma separated list of hosts from which principals listed in --allow-principals will have access." +
+    val allowHostsOpt = parser.accepts("allow-hosts", "Comma separated list of hosts from which principals listed in --allow-principals will have access. " +
       "If you have specified --allow-principals then the default for this option will be set to * which allows access from all hosts.")
       .withRequiredArg
       .describedAs("allow-hosts")
@@ -314,7 +316,7 @@ object AclCommand {
     val producerOpt = parser.accepts("producer", "Convenience option to add/remove acls for producer role. " +
       "This will generate acls that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")
 
-    val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove acls for consumer role." +
+    val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove acls for consumer role. " +
       "This will generate acls that allows READ,DESCRIBE on topic, READ on consumer-group and CREATE on cluster")
 
     val helpOpt = parser.accepts("help", "Print usage information.")
