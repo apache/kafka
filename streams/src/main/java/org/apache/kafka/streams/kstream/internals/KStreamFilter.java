@@ -40,7 +40,7 @@ class KStreamFilter<K, V> implements ProcessorDef<K, V> {
     private class KStreamFilterProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
-            if (filterOut ^ predicate.apply(key, value)) {
+            if (filterOut ^ predicate.test(key, value)) {
                 context().forward(key, value);
             }
         }

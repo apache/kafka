@@ -47,12 +47,12 @@ public class KStreamImplTest {
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
                 @Override
-                public boolean apply(String key, String value) {
+                public boolean test(String key, String value) {
                     return true;
                 }
             }).filterOut(new Predicate<String, String>() {
                 @Override
-                public boolean apply(String key, String value) {
+                public boolean test(String key, String value) {
                     return false;
                 }
             });
@@ -74,13 +74,13 @@ public class KStreamImplTest {
         KStream<String, Integer>[] streams2 = stream2.branch(
             new Predicate<String, Integer>() {
                 @Override
-                public boolean apply(String key, Integer value) {
+                public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
             },
             new Predicate<String, Integer>() {
                 @Override
-                public boolean apply(String key, Integer value) {
+                public boolean test(String key, Integer value) {
                     return true;
                 }
             }
@@ -89,13 +89,13 @@ public class KStreamImplTest {
         KStream<String, Integer>[] streams3 = stream3.branch(
             new Predicate<String, Integer>() {
                 @Override
-                public boolean apply(String key, Integer value) {
+                public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
             },
             new Predicate<String, Integer>() {
                 @Override
-                public boolean apply(String key, Integer value) {
+                public boolean test(String key, Integer value) {
                     return true;
                 }
             }

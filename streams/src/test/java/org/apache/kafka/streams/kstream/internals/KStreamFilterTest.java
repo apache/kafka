@@ -38,7 +38,7 @@ public class KStreamFilterTest {
 
     private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
         @Override
-        public boolean apply(Integer key, String value) {
+        public boolean test(Integer key, String value) {
             return (key % 3) == 0;
         }
     };

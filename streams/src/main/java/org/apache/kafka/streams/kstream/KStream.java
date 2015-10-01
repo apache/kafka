@@ -23,6 +23,9 @@ import org.apache.kafka.streams.processor.ProcessorDef;
 
 /**
  * KStream is an abstraction of a stream of key-value pairs.
+ * 
+ * @param <K> the type of keys
+ * @param <V> the type of values
  */
 public interface KStream<K, V> {
 
@@ -30,7 +33,7 @@ public interface KStream<K, V> {
      * Creates a new stream consists of all elements of this stream which satisfy a predicate
      *
      * @param predicate the instance of Predicate
-     * @return KStream
+     * @return the stream with only those elements that satisfy the predicate
      */
     KStream<K, V> filter(Predicate<K, V> predicate);
 
@@ -38,45 +41,45 @@ public interface KStream<K, V> {
      * Creates a new stream consists all elements of this stream which do not satisfy a predicate
      *
      * @param predicate the instance of Predicate
-     * @return KStream
+     * @return the stream with only those elements that do not satisfy the predicate
      */
     KStream<K, V> filterOut(Predicate<K, V> predicate);
 
     /**
-     * Creates a new stream by transforming key-value pairs by a mapper to all elements of this stream
+     * Creates a new stream by applying transforming each element in this stream into a different element in the new stream.
      *
      * @param mapper the instance of KeyValueMapper
      * @param <K1>   the key type of the new stream
      * @param <V1>   the value type of the new stream
-     * @return KStream
+     * @return the mapped stream
      */
     <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper);
 
     /**
-     * Creates a new stream by transforming values by a mapper to all values of this stream
+     * Creates a new stream by applying transforming each value in this stream into a different value in the new stream.
      *
      * @param mapper the instance of ValueMapper
      * @param <V1>   the value type of the new stream
-     * @return KStream
+     * @return the mapped stream
      */
     <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
     /**
-     * Creates a new stream by applying a mapper to all elements of this stream and using the values in the resulting Iterable
+     * Creates a new stream by applying transforming each element in this stream into zero or more elements in the new stream.
      *
      * @param mapper the instance of KeyValueMapper
      * @param <K1>   the key type of the new stream
      * @param <V1>   the value type of the new stream
-     * @return KStream
+     * @return the mapped stream
      */
     <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, Iterable<KeyValue<K1, V1>>> mapper);
 
     /**
-     * Creates a new stream by applying a mapper to all values of this stream and using the values in the resulting Iterable
+     * Creates a new stream by applying transforming each value in this stream into zero or more values in the new stream.
      *
      * @param processor the instance of Processor
      * @param <V1>      the value type of the new stream
-     * @return KStream
+     * @return the mapped stream
      */
     <V1> KStream<K, V1> flatMapValues(ValueMapper<V, Iterable<V1>> processor);
 
@@ -84,18 +87,18 @@ public interface KStream<K, V> {
      * Creates a new windowed stream using a specified window instance.
      *
      * @param windowDef the instance of Window
-     * @return KStream
+     * @return the windowed stream
      */
     KStreamWindowed<K, V> with(WindowDef<K, V> windowDef);
 
     /**
-     * Creates an array of streams from this stream. Each stream in the array coresponds to a predicate in
+     * Creates an array of streams from this stream. Each stream in the array corresponds to a predicate in
      * supplied predicates in the same order. Predicates are evaluated in order. An element is streamed to
      * a corresponding stream for the first predicate is evaluated true.
      * An element will be dropped if none of the predicates evaluate true.
      *
-     * @param predicates Instances of Predicate
-     * @return KStream
+     * @param predicates the ordered list of Predicate instances
+     * @return the new streams that each contain those elements for which their Predicate evaluated to true.
      */
     KStream<K, V>[] branch(Predicate<K, V>... predicates);
 
@@ -106,7 +109,7 @@ public interface KStream<K, V> {
      * @param topic           the topic name
      * @param <K1>            the key type of the new stream
      * @param <V1>            the value type of the new stream
-     * @return KStream
+     * @return the new stream that consumes the given topic
      */
     <K1, V1> KStream<K1, V1> through(String topic);
 
@@ -116,16 +119,16 @@ public interface KStream<K, V> {
      *
      * @param topic           the topic name
      * @param keySerializer   key serializer used to send key-value pairs,
-     *                        if not specified the default serializer defined in the configs will be used
+     *                        if not specified the default key serializer defined in the configuration will be used
      * @param valSerializer   value serializer used to send key-value pairs,
-     *                        if not specified the default serializer defined in the configs will be used
+     *                        if not specified the default value serializer defined in the configuration will be used
      * @param keyDeserializer key deserializer used to create the new KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
+     *                        if not specified the default key deserializer defined in the configuration will be used
      * @param valDeserializer value deserializer used to create the new KStream,
-     *                        if not specified the default deserializer defined in the configs will be used
+     *                        if not specified the default value deserializer defined in the configuration will be used
      * @param <K1>            the key type of the new stream
      * @param <V1>            the value type of the new stream
-     * @return KStream
+     * @return the new stream that consumes the given topic
      */
     <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer);
 
@@ -151,6 +154,7 @@ public interface KStream<K, V> {
      * Processes all elements in this stream by applying a processor.
      *
      * @param processorDef the class of ProcessorDef
+     * @return the new stream containing the processed output
      */
     <K1, V1> KStream<K1, V1> process(ProcessorDef<K, V> processorDef);
 }

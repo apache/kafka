@@ -19,6 +19,6 @@ package org.apache.kafka.streams.kstream;
 
 public interface Predicate<K, V> {
 
-    boolean apply(K key, V value);
+    boolean test(K key, V value);
 
 }

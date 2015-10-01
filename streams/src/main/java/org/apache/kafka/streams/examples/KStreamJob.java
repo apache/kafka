@@ -55,7 +55,7 @@ public class KStreamJob {
                 }
             }).filter(new Predicate<String, Integer>() {
                 @Override
-                public boolean apply(String key, Integer value) {
+                public boolean test(String key, Integer value) {
                     return true;
                 }
             });
@@ -63,13 +63,13 @@ public class KStreamJob {
         KStream<String, Integer>[] streams = stream2.branch(
             new Predicate<String, Integer>() {
                 @Override
-                public boolean apply(String key, Integer value) {
+                public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
             },
             new Predicate<String, Integer>() {
                 @Override
-                public boolean apply(String key, Integer value) {
+                public boolean test(String key, Integer value) {
                     return true;
                 }
             }
