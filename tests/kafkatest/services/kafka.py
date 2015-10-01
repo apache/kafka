@@ -15,6 +15,7 @@
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
+from kafkatest.utils.security_config import SecurityConfig
 
 import json
 import re
@@ -33,7 +34,7 @@ class KafkaService(Service):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, zk, topics=None):
+    def __init__(self, context, num_nodes, zk, interbroker_security_protocol=SecurityConfig.PLAINTEXT, topics=None):
         """
         :type context
         :type zk: ZookeeperService
@@ -41,6 +42,7 @@ class KafkaService(Service):
         """
         super(KafkaService, self).__init__(context, num_nodes)
         self.zk = zk
+        self.interbroker_security_protocol = interbroker_security_protocol
         self.topics = topics
 
     def start(self):
@@ -56,10 +58,12 @@ class KafkaService(Service):
                 self.create_topic(topic_cfg)
 
     def start_node(self, node):
-        props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node))
+        props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node), interbroker_security_protocol=self.interbroker_security_protocol)
         self.logger.info("kafka.properties:")
         self.logger.info(props_file)
         node.account.create_file("/mnt/kafka.properties", props_file)
+        # Create keystore and truststore for SSL endpoint
+        SecurityConfig(node.account, SecurityConfig.SSL)
 
         cmd = "/opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid"
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
@@ -96,7 +100,7 @@ class KafkaService(Service):
 
     def clean_node(self, node):
         node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log /mnt/kafka.pid", allow_fail=False)
+        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log /mnt/kafka.pid /mnt/ssl", allow_fail=False)
 
     def create_topic(self, topic_cfg):
         node = self.nodes[0] # any node is fine here
@@ -226,5 +230,11 @@ class KafkaService(Service):
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
         return self.get_node(leader_idx)
 
-    def bootstrap_servers(self):
-        return ','.join([node.account.hostname + ":9092" for node in self.nodes])
+    def bootstrap_servers(self, security_protocol=SecurityConfig.PLAINTEXT):
+        """Get the broker list to connect to Kafka using the specified security protocol
+        """
+        if security_protocol == SecurityConfig.SSL:
+            port = 9093
+        else:
+            port = 9092
+        return ','.join([node.account.hostname + ":" + `port` for node in self.nodes])

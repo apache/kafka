@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from kafkatest.services.performance import PerformanceService
+from kafkatest.utils.security_config import SecurityConfig
 
 
 class ProducerPerformanceService(PerformanceService):
@@ -24,9 +25,10 @@ class ProducerPerformanceService(PerformanceService):
             "collect_default": True},
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, settings={}, intermediate_stats=False):
+    def __init__(self, context, num_nodes, kafka, security_protocol, topic, num_records, record_size, throughput, settings={}, intermediate_stats=False):
         super(ProducerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
+        self.security_protocol = security_protocol
         self.args = {
             'topic': topic,
             'num_records': num_records,
@@ -38,13 +40,17 @@ class ProducerPerformanceService(PerformanceService):
 
     def _worker(self, idx, node):
         args = self.args.copy()
-        args.update({'bootstrap_servers': self.kafka.bootstrap_servers()})
+        args.update({'bootstrap_servers': self.kafka.bootstrap_servers(self.security_protocol)})
         cmd = "/opt/kafka/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance "\
-              "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s"\
-              " | tee /mnt/producer-performance.log" % args
+              "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s" % args
 
+        if self.security_protocol == SecurityConfig.SSL:
+            security_config = SecurityConfig(node.account, self.security_protocol)
+            self.settings.update(security_config.properties)
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
+        cmd += " | tee /mnt/producer-performance.log"
+
         self.logger.debug("Producer performance %d command: %s", idx, cmd)
 
         def parse_stats(line):

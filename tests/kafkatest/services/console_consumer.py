@@ -15,6 +15,7 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.utils.util import wait_until
+from kafkatest.utils.security_config import SecurityConfig
 
 import os
 import subprocess
@@ -93,13 +94,15 @@ class ConsoleConsumer(BackgroundThreadService):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, message_validator=None, from_beginning=True, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, kafka, topic, security_protocol=None, new_consumer=False, message_validator=None, from_beginning=True, consumer_timeout_ms=None):
         """
         Args:
             context:                    standard context
             num_nodes:                  number of nodes to use (this should be 1)
             kafka:                      kafka service
             topic:                      consume from this topic
+            security_protocol:          security protocol for Kafka connections
+            new_consumer:               use new Kafka consumer if True
             message_validator:          function which returns message or None
             from_beginning:             consume from beginning if True, else from the end
             consumer_timeout_ms:        corresponds to consumer.timeout.ms. consumer process ends if time between
@@ -109,6 +112,8 @@ class ConsoleConsumer(BackgroundThreadService):
         """
         super(ConsoleConsumer, self).__init__(context, num_nodes)
         self.kafka = kafka
+        self.security_protocol = security_protocol
+        self.new_consumer = new_consumer
         self.args = {
             'topic': topic,
         }
@@ -132,6 +137,8 @@ class ConsoleConsumer(BackgroundThreadService):
         cmd += " /opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s --zookeeper %(zk_connect)s" \
             " --consumer.config %(config_file)s" % args
 
+        if self.new_consumer:
+            cmd += " --new-consumer --bootstrap-server %s"  % self.kafka.bootstrap_servers(self.security_protocol)
         if self.from_beginning:
             cmd += " --from-beginning"
 
@@ -158,6 +165,14 @@ class ConsoleConsumer(BackgroundThreadService):
         else:
             prop_file = self.render('console_consumer.properties')
 
+        # Add security properties to the config. If security protocol is not specified,
+        # use the default in the template properties.
+        security_config = SecurityConfig(node.account, self.security_protocol, prop_file)
+        prop_file += str(security_config)
+        if self.security_protocol is None:
+            self.security_protocol = security_config.security_protocol
+            if self.security_protocol == SecurityConfig.SSL:
+                self.new_consumer = True
         self.logger.info("console_consumer.properties:")
         self.logger.info(prop_file)
         node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
@@ -189,5 +204,5 @@ class ConsoleConsumer(BackgroundThreadService):
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
         node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
+        node.account.ssh("rm -rf %s /mnt/ssl" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
 
