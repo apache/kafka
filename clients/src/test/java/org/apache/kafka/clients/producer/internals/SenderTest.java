@@ -123,16 +123,15 @@ public class SenderTest {
         Metrics m = new Metrics();
         try {
             Sender sender = new Sender(client,
-                    metadata,
-                    this.accumulator,
-                    MAX_REQUEST_SIZE,
-                    ACKS_ALL,
-                    maxRetries,
-                    REQUEST_TIMEOUT_MS,
-                    m,
-                    time,
-                    "clientId",
-                    REQUEST_TIMEOUT);
+                                       metadata,
+                                       this.accumulator,
+                                       MAX_REQUEST_SIZE,
+                                       ACKS_ALL,
+                                       maxRetries,
+                                       m,
+                                       time,
+                                       "clientId",
+                                       REQUEST_TIMEOUT);
             // do a successful retry
             Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
             sender.run(time.milliseconds()); // connect
