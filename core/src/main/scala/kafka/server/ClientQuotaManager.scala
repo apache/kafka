@@ -57,8 +57,8 @@ object ClientQuotaManagerConfig {
   val DefaultNumQuotaSamples = 11
   val DefaultQuotaWindowSizeSeconds = 1
   val MaxThrottleTimeSeconds = 30
-  // Purge sensors after 5 minutes of inactivity
-  val expireInactiveSensorTimeSeconds = 300
+  // Purge sensors after 1 hour of inactivity
+  val expireInactiveSensorTimeSeconds = 3600
 }
 
 /**
