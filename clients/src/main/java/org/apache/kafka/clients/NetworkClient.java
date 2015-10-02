@@ -246,7 +246,9 @@ public class NetworkClient implements KafkaClient {
     /**
      * Do actual reads and writes to sockets.
      *
-     * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately
+     * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately,
+     *                must be non-negative. The actual timeout will be the minimum of timeout, request timeout and
+     *                metadata timeout
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
@@ -254,7 +256,7 @@ public class NetworkClient implements KafkaClient {
     public List<ClientResponse> poll(long timeout, long now) {
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
-            this.selector.poll(Math.min(timeout, metadataTimeout));
+            this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O in producer network thread", e);
         }

@@ -75,7 +75,9 @@ public interface KafkaClient extends Closeable {
     /**
      * Do actual reads and writes from sockets.
      * 
-     * @param timeout The maximum amount of time to wait for responses in ms
+     * @param timeout The maximum amount of time to wait for responses in ms, must be non-negative. The implementation
+     *                is free to use a lower value if appropriate (common reasons for this are a lower request or
+     *                metadata update timeout)
      * @param now The current time in ms
      * @throws IllegalStateException If a request is sent to an unready node
      */
