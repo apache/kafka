@@ -20,6 +20,7 @@ object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
   val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName)
+  val WildCardResource = "*"
 
   def fromString(str: String): Resource = {
     str.split(Separator, 2) match {

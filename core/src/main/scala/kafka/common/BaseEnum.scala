@@ -5,45 +5,22 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p/>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.security.auth
+package kafka.common
 
-import kafka.common.{BaseEnum, KafkaException}
-
-/**
- * ResourceTypes.
+/*
+ * We inherit from `Product` and `Serializable` because `case` objects and classes inherit from them and if we don't
+ * do it here, the compiler will infer types that unexpectedly include `Product` and `Serializable`, see
+ * http://underscore.io/blog/posts/2015/06/04/more-on-sealed.html for more information.
  */
-
-
-sealed trait ResourceType extends BaseEnum
-
-case object Cluster extends ResourceType {
-  val name = "Cluster"
-}
-
-case object Topic extends ResourceType {
-  val name = "Topic"
-}
-
-case object ConsumerGroup extends ResourceType {
-  val name = "ConsumerGroup"
-}
-
-
-object ResourceType {
-
-  def fromString(resourceType: String): ResourceType = {
-    val rType = values.find(rType => rType.name.equalsIgnoreCase(resourceType))
-    rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
-  }
-
-  def values: Seq[ResourceType] = List(Cluster, Topic, ConsumerGroup)
+trait BaseEnum extends Product with Serializable {
+  def name: String
 }
