@@ -291,7 +291,8 @@ public class VerifiableProducer {
         });
 
         ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
-        for (int i = 0; i < producer.maxMessages || infinite; i++) {
+        long maxMessages = infinite ? Long.MAX_VALUE : producer.maxMessages;
+        for (long i = 0; i < maxMessages; i++) {
             if (producer.stopProducing) {
                 break;
             }

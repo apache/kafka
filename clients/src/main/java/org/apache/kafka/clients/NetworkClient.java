@@ -73,15 +73,19 @@ public class NetworkClient implements KafkaClient {
     /* the current correlation id to use when sending requests to servers */
     private int correlation;
 
+    /* max time in ms for the producer to wait for acknowledgement from server*/
+    private final int requestTimeoutMs;
+
     public NetworkClient(Selectable selector,
                          Metadata metadata,
                          String clientId,
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
                          int socketSendBuffer,
-                         int socketReceiveBuffer) {
+                         int socketReceiveBuffer,
+                         int requestTimeoutMs) {
         this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer);
+                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs);
     }
 
     public NetworkClient(Selectable selector,
@@ -90,9 +94,10 @@ public class NetworkClient implements KafkaClient {
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
                          int socketSendBuffer,
-                         int socketReceiveBuffer) {
+                         int socketReceiveBuffer,
+                         int requestTimeoutMs) {
         this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer);
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -102,7 +107,7 @@ public class NetworkClient implements KafkaClient {
                           int maxInFlightRequestsPerConnection,
                           long reconnectBackoffMs,
                           int socketSendBuffer,
-                          int socketReceiveBuffer) {
+                          int socketReceiveBuffer, int requestTimeoutMs) {
 
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
@@ -115,7 +120,6 @@ public class NetworkClient implements KafkaClient {
         } else {
             this.metadataUpdater = metadataUpdater;
         }
-
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
@@ -124,6 +128,7 @@ public class NetworkClient implements KafkaClient {
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
         this.nodeIndexOffset = new Random().nextInt(Integer.MAX_VALUE);
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     /**
@@ -222,16 +227,18 @@ public class NetworkClient implements KafkaClient {
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
      *
      * @param request The request
+     * @param now The current timestamp
      */
     @Override
-    public void send(ClientRequest request) {
+    public void send(ClientRequest request, long now) {
         String nodeId = request.request().destination();
         if (!canSendRequest(nodeId))
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
-        doSend(request);
+        doSend(request, now);
     }
 
-    private void doSend(ClientRequest request) {
+    private void doSend(ClientRequest request, long now) {
+        request.setSendTimeMs(now);
         this.inFlightRequests.add(request);
         selector.send(request.request());
     }
@@ -258,6 +265,7 @@ public class NetworkClient implements KafkaClient {
         handleCompletedReceives(responses, now);
         handleDisconnections(responses, now);
         handleConnections();
+        handleTimedOutRequests(responses, now);
 
         // invoke callbacks
         for (ClientResponse response : responses) {
@@ -390,6 +398,43 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Post process disconnection of a node
+     *
+     * @param responses The list of responses to update
+     * @param nodeId Id of the node to be disconnected
+     * @param now The current time
+     */
+    private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
+        connectionStates.disconnected(nodeId);
+        for (ClientRequest request : this.inFlightRequests.clearAll(nodeId)) {
+            log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
+            if (!metadataUpdater.maybeHandleDisconnection(request))
+                responses.add(new ClientResponse(request, now, true, null));
+        }
+    }
+
+    /**
+     * Iterate over all the inflight requests and expire any requests that have exceeded the configured the requestTimeout.
+     * The connection to the node associated with the request will be terminated and will be treated as a disconnection.
+     *
+     * @param responses The list of responses to update
+     * @param now The current time
+     */
+    private void handleTimedOutRequests(List<ClientResponse> responses, long now) {
+        List<String> nodeIds = this.inFlightRequests.getNodesWithTimedOutRequests(now, this.requestTimeoutMs);
+        for (String nodeId : nodeIds) {
+            // close connection to the node
+            this.selector.close(nodeId);
+            log.debug("Disconnecting from node {} due to request timeout.", nodeId);
+            processDisconnection(responses, nodeId, now);
+        }
+
+        // we disconnected, so we should probably refresh our metadata
+        if (nodeIds.size() > 0)
+            metadataUpdater.requestUpdate();
+    }
+
+    /**
      * Handle any completed request send. In particular if no response is expected consider the request complete.
      *
      * @param responses The list of responses to update
@@ -433,13 +478,8 @@ public class NetworkClient implements KafkaClient {
      */
     private void handleDisconnections(List<ClientResponse> responses, long now) {
         for (String node : this.selector.disconnected()) {
-            connectionStates.disconnected(node);
             log.debug("Node {} disconnected.", node);
-            for (ClientRequest request : this.inFlightRequests.clearAll(node)) {
-                log.trace("Cancelled request {} due to node {} being disconnected", request, node);
-                if (!metadataUpdater.maybeHandleDisconnection(request))
-                    responses.add(new ClientResponse(request, now, true, null));
-            }
+            processDisconnection(responses, node, now);
         }
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
         if (this.selector.disconnected().size() > 0)
@@ -604,7 +644,7 @@ public class NetworkClient implements KafkaClient {
                 this.metadataFetchInProgress = true;
                 ClientRequest metadataRequest = request(now, nodeConnectionId, topics);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-                doSend(metadataRequest);
+                doSend(metadataRequest, now);
             } else if (connectionStates.canConnect(nodeConnectionId, now)) {
                 // we don't have a connection to this node right now, make one
                 log.debug("Initialize connection to node {} for sending metadata request", node.id());

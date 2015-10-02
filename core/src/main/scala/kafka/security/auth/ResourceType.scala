@@ -16,16 +16,14 @@
  */
 package kafka.security.auth
 
-import kafka.common.KafkaException
+import kafka.common.{BaseEnum, KafkaException}
 
 /**
  * ResourceTypes.
  */
 
 
-sealed trait ResourceType {
-  def name: String
-}
+sealed trait ResourceType extends BaseEnum
 
 case object Cluster extends ResourceType {
   val name = "Cluster"

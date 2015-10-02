@@ -46,6 +46,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Map<String, List<PartitionInfo>> partitions;
     private final SubscriptionState subscriptions;
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    private Set<TopicPartition> paused;
     private boolean closed;
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
@@ -57,8 +58,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(offsetResetStrategy);
-        this.partitions = new HashMap<String, List<PartitionInfo>>();
-        this.records = new HashMap<TopicPartition, List<ConsumerRecord<K, V>>>();
+        this.partitions = new HashMap<>();
+        this.records = new HashMap<>();
+        this.paused = new HashSet<>();
         this.closed = false;
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
@@ -288,14 +290,18 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void pause(TopicPartition... partitions) {
-        for (TopicPartition partition : partitions)
+        for (TopicPartition partition : partitions) {
             subscriptions.pause(partition);
+            paused.add(partition);
+        }
     }
 
     @Override
     public void resume(TopicPartition... partitions) {
-        for (TopicPartition partition : partitions)
+        for (TopicPartition partition : partitions) {
             subscriptions.resume(partition);
+            paused.remove(partition);
+        }
     }
 
     @Override
@@ -330,6 +336,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (task != null)
                 task.run();
         }
+    }
+
+    public Set<TopicPartition> paused() {
+        return Collections.unmodifiableSet(new HashSet<>(paused));
     }
 
     private void ensureNotClosed() {

@@ -100,7 +100,7 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public void send(ClientRequest request) {
+    public void send(ClientRequest request, long now) {
         if (!futureResponses.isEmpty()) {
             FutureResponse futureResp = futureResponses.poll();
             if (!futureResp.requestMatcher.matches(request))
@@ -109,6 +109,7 @@ public class MockClient implements KafkaClient {
             ClientResponse resp = new ClientResponse(request, time.milliseconds(), futureResp.disconnected, futureResp.responseBody);
             responses.add(resp);
         } else {
+            request.setSendTimeMs(now);
             this.requests.add(request);
         }
     }

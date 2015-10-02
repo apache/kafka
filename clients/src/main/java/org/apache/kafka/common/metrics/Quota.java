@@ -65,6 +65,6 @@ public final class Quota {
         if (!(obj instanceof Quota))
             return false;
         Quota that = (Quota) obj;
-        return (that.bound == this.bound) && (this.upper == this.upper);
+        return (that.bound == this.bound) && (that.upper == this.upper);
     }
 }

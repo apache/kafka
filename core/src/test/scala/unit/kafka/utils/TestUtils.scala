@@ -410,7 +410,6 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
     producerProps.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, metadataFetchTimeout.toString)
-    producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, blockOnBufferFull.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
     producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
@@ -910,19 +909,22 @@ object TestUtils extends Logging {
   }
 
   def addSSLConfigs(mode: SSLFactory.Mode, clientCert: Boolean, trustStoreFile: Option[File],  certAlias: String): Properties = {
-    var sslConfigs: java.util.Map[String, Object] = new java.util.HashMap[String, Object]()
     if (!trustStoreFile.isDefined) {
       throw new Exception("enableSSL set to true but no trustStoreFile provided")
     }
-    if (mode == SSLFactory.Mode.SERVER)
-      sslConfigs = TestSSLUtils.createSSLConfig(true, true, mode, trustStoreFile.get, certAlias)
-    else
-      sslConfigs = TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStoreFile.get, certAlias)
+
+    val sslConfigs = {
+      if (mode == SSLFactory.Mode.SERVER) {
+        val sslConfigs = TestSSLUtils.createSSLConfig(true, true, mode, trustStoreFile.get, certAlias)
+        sslConfigs.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.SSL.name)
+        sslConfigs
+      }
+      else
+        TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStoreFile.get, certAlias)
+    }
 
     val sslProps = new Properties()
-    sslConfigs.foreach(kv =>
-      sslProps.put(kv._1, kv._2)
-    )
+    sslConfigs.foreach { case (k, v) => sslProps.put(k, v) }
     sslProps
   }
 
