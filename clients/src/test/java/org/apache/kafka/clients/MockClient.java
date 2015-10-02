@@ -127,19 +127,6 @@ public class MockClient implements KafkaClient {
         return copy;
     }
 
-    @Override
-    public List<ClientResponse> completeAll(String node, long now) {
-        return completeAll(now);
-    }
-
-    @Override
-    public List<ClientResponse> completeAll(long now) {
-        List<ClientResponse> responses = poll(0, now);
-        if (requests.size() > 0)
-            throw new IllegalStateException("Requests without responses remain.");
-        return responses;
-    }
-
     public Queue<ClientRequest> requests() {
         return this.requests;
     }

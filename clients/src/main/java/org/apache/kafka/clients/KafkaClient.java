@@ -89,23 +89,6 @@ public interface KafkaClient extends Closeable {
     public void close(String nodeId);
 
     /**
-     * Complete all in-flight requests for a given connection
-     * 
-     * @param id The connection to complete requests for
-     * @param now The current time in ms
-     * @return All requests that complete during this time period.
-     */
-    public List<ClientResponse> completeAll(String id, long now);
-
-    /**
-     * Complete all in-flight requests
-     * 
-     * @param now The current time in ms
-     * @return All requests that complete during this time period.
-     */
-    public List<ClientResponse> completeAll(long now);
-
-    /**
      * Choose the node with the fewest outstanding requests. This method will prefer a node with an existing connection,
      * but will potentially choose a node for which we don't yet have a connection if all existing connections are in
      * use.
