@@ -16,8 +16,24 @@
 from ducktape.tests.test import Test
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka import KafkaVersion
+from kafkatest.services.kafka import KafkaService, property
+from kafkatest.services.kafka.version import LATEST_0_8_2
+
+import re
+
+
+def kafka_jar_versions(proc_string):
+    """Return all kafka versions explicitly in the process classpath"""
+    versions = re.findall("kafka_[0-9\.]+-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string)
+    return set(versions)
+
+
+def is_kafka_version(node, version):
+    """Heuristic to check that only the specified version appears in the classpath of the kafka process"""
+    lines = [l for l in node.account.ssh_capture("ps ax | grep kafka.properties | grep -v grep")]
+    assert len(lines) == 1
+
+    return kafka_jar_versions(lines[0]) == {str(version)}
 
 
 class KafkaVersionTest(Test):
@@ -32,15 +48,23 @@ class KafkaVersionTest(Test):
         self.zk.start()
 
     def test_0_8_2(self):
-        """Test that we can start a single-node 0.8.2.1 cluster."""
+        """Test kafka service node-versioning api - verify that we can bring up a single-node 0.8.2.X cluster."""
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
-        self.kafka.nodes[0].version = KafkaVersion.V_0_8_2_1
+        node = self.kafka.nodes[0]
+        node.version = LATEST_0_8_2
         self.kafka.start()
 
+        assert is_kafka_version(node, LATEST_0_8_2)
+
     def test_multi_version(self):
-        """Test that we can bring up a 2-node cluster, one on version 0.8.2.1, the other on trunk."""
+        """Test kafka service node-versioning api - ensure we can bring up a 2-node cluster, one on version 0.8.2.X,
+        the other on trunk."""
         self.kafka = KafkaService(self.test_context, num_nodes=2, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 2}})
-        self.kafka.nodes[1].version = KafkaVersion.V_0_8_2_1
+        self.kafka.nodes[1].version = LATEST_0_8_2
+        self.kafka.nodes[1].config[property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
         self.kafka.start()
+
+        assert not is_kafka_version(self.kafka.nodes[0], LATEST_0_8_2)
+        assert is_kafka_version(self.kafka.nodes[1], LATEST_0_8_2)

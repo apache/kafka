@@ -13,19 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import kafka_prop
+import property
+
+from sortedcontainers import SortedDict
 
 
-class KafkaConfig(dict):
+class KafkaConfig(SortedDict):
     """A dictionary-like container class which allows for definition of overridable default values,
     which is also capable of "rendering" itself as a useable server.properties file.
+
+    For consistency of presentation, subclass SortedDict, which maintains ordering by key.
     """
 
     DEFAULTS = {
-        kafka_prop.PORT: 9092,
-        kafka_prop.SOCKET_RECEIVE_BUFFER_BYTES: 65536,
-        kafka_prop.LOG_DIRS: "/mnt/kafka-logs",
-        kafka_prop.ZOOKEEPER_CONNECTION_TIMEOUT_MS: 2000
+        property.PORT: 9092,
+        property.SOCKET_RECEIVE_BUFFER_BYTES: 65536,
+        property.LOG_DIRS: "/mnt/kafka-logs",
+        property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: 2000
     }
 
     def __init__(self, **kwargs):
@@ -37,9 +41,10 @@ class KafkaConfig(dict):
                 self[key] = val
 
     def render(self):
+        """Render self as a series of lines key=val\n, and do so in a consistent order. """
         s = ""
-        for key, val in self.items():
-            s += "%s=%s\n" % (key, str(val))
+        for key in self:
+            s += "%s=%s\n" % (key, str(self[key]))
         return s
 
 

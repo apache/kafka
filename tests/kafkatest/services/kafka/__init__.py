@@ -13,6 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafka import KafkaService, KafkaVersion
-from kafka_config import KafkaConfig
-
+from kafka import KafkaService

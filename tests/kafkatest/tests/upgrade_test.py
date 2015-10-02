@@ -15,10 +15,11 @@
 
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, KafkaVersion
+from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka.version import LATEST_0_8_2, TRUNK
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
-from kafkatest.services.kafka import kafka_prop
+from kafkatest.services.kafka import property
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 
 
@@ -30,7 +31,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
     def setUp(self):
         self.topic = "test_topic"
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, version=KafkaVersion.V_0_8_2_1, topics={self.topic: {
+        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, version=LATEST_0_8_2, topics={self.topic: {
                                                                     "partitions": 3,
                                                                     "replication-factor": 3,
                                                                     "min.insync.replicas": 2}})
@@ -43,23 +44,23 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.num_consumers = 1
         self.producer = VerifiableProducer(
             self.test_context, self.num_producers, self.kafka, self.topic,
-            throughput=self.producer_throughput, version=KafkaVersion.V_0_8_2_1)
+            throughput=self.producer_throughput, version=LATEST_0_8_2)
         self.consumer = ConsoleConsumer(
             self.test_context, self.num_consumers, self.kafka, self.topic,
-            consumer_timeout_ms=10000, message_validator=is_int, version=KafkaVersion.V_0_8_2_1)
+            consumer_timeout_ms=10000, message_validator=is_int, version=LATEST_0_8_2)
 
     def perform_upgrade(self):
         self.logger.info("First pass bounce - rolling upgrade")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
-            node.version = KafkaVersion.TRUNK
-            node.config[kafka_prop.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
+            node.version = TRUNK
+            node.config[property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
             self.kafka.start_node(node)
 
         self.logger.info("Second pass bounce - remove inter.broker.protocol.version config")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
-            del node.config[kafka_prop.INTER_BROKER_PROTOCOL_VERSION]
+            del node.config[property.INTER_BROKER_PROTOCOL_VERSION]
             self.kafka.start_node(node)
 
     def test_upgrade(self):
@@ -68,7 +69,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         - Start 3 node broker cluster on version 0.8.2
         - Start producer and consumer in the background
         - Perform two-phase rolling upgrade
-            - First phase: upgrade brokers to 0.9.0 with inter.broker.protocol.version set to 0.8.2
+            - First phase: upgrade brokers to 0.9.0 with inter.broker.protocol.version set to 0.8.2.X
             - Second phase: remove inter.broker.protocol.version config with rolling bounce
         - Finally, validate that every message acked by the producer was consumed by the consumer
         """

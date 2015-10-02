@@ -14,7 +14,8 @@
 # limitations under the License.
 
 from ducktape.services.background_thread import BackgroundThreadService
-from kafkatest.services.kafka import TRUNK, KAFKA_0_8_2_1
+from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 from kafkatest.utils.security_config import SecurityConfig
 
 
@@ -91,24 +92,20 @@ class VerifiableProducer(BackgroundThreadService):
                     elif data["name"] == "producer_send_success":
                         self.acked_values.append(int(data["value"]))
 
-    def _kafka_dir(self, node):
-        if node.version == TRUNK:
-            return "/opt/kafka"
-        else:
-            return "/opt/kafka-" + node.version
-
     def start_cmd(self, node):
 
         cmd = ""
-        if node.version == KAFKA_0_8_2_1:
-            cmd += "for file in /opt/kafka/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; "
-            cmd += "for file in /opt/kafka/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; "
+        if node.version <= LATEST_0_8_2:
+            # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
+            # the tools jar from trunk to the classpath
+            cmd += "for file in /opt/kafka-trunk/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; "
+            cmd += "for file in /opt/kafka-trunk/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; "
             cmd += "export CLASSPATH; "
 
         cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
 
-        kafka_dir = self._kafka_dir(node)
+        kafka_dir = "/opt/" + KafkaService.kafka_dir(node)
         cmd += kafka_dir + "/bin/kafka-run-class.sh org.apache.kafka.clients.tools.VerifiableProducer" \
               " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers())
         if self.max_messages > 0:

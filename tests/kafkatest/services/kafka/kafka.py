@@ -16,8 +16,9 @@
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
-from kafka_config import KafkaConfig
-from kafkatest.services.kafka import kafka_prop
+from config import KafkaConfig
+from kafkatest.services.kafka import property
+from kafkatest.services.kafka.version import TRUNK
 
 from kafkatest.services.performance.jmx_mixin import JmxMixin
 from kafkatest.utils.security_config import SecurityConfig
@@ -28,12 +29,7 @@ import subprocess
 import time
 
 
-class KafkaVersion(object):
-    TRUNK = "trunk"
-    V_0_8_2_1 = "0.8.2.1"
-
-
-class KafkaService(JmxMixin, Service):
+class KafkaService(Service):
 
     logs = {
         "kafka_log": {
@@ -47,8 +43,18 @@ class KafkaService(JmxMixin, Service):
             "collect_default": False}
     }
 
+    @staticmethod
+    def kafka_dir(node):
+        """Return name of kafka directory for the given node.
+
+        This provides a convenient way to support different versions of kafka or kafka tools running
+        on different nodes.
+        """
+        return "kafka-" + str(node.version)
+
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 topics=None, version=KafkaVersion.TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+                 topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+
         """
         :type context
         :type zk: ZookeeperService
@@ -70,8 +76,8 @@ class KafkaService(JmxMixin, Service):
         self.topics = topics
 
         for node in self.nodes:
-            node.version = version  # associate config w/version?
-            node.config = KafkaConfig(**{kafka_prop.BROKER_ID: self.idx(node)})
+            node.version = version
+            node.config = KafkaConfig(**{property.BROKER_ID: self.idx(node)})
 
     def start(self):
         Service.start(self)
@@ -87,8 +93,8 @@ class KafkaService(JmxMixin, Service):
 
     def start_node(self, node):
         cfg = KafkaConfig(**node.config)
-        cfg[kafka_prop.ADVERTISED_HOSTNAME] = node.account.hostname
-        cfg[kafka_prop.ZOOKEEPER_CONNECT] = self.zk.connect_setting()
+        cfg[property.ADVERTISED_HOSTNAME] = node.account.hostname
+        cfg[property.ZOOKEEPER_CONNECT] = self.zk.connect_setting()
 
         # TODO - clean up duplicate configuration logic
         props_file = cfg.render()
@@ -101,9 +107,9 @@ class KafkaService(JmxMixin, Service):
         node.account.create_file("/mnt/kafka.properties", props_file)
         self.security_config.setup_node(node)
 
-        cmd = "JMX_PORT=%d " % self.jmx_port
+        cmd = "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export LOG_DIR=/mnt/kafka-operational-logs/; "
-        cmd += self._kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
+        cmd += "/opt/" + KafkaService.kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
 
         with node.account.monitor_log("/mnt/kafka.log") as monitor:
@@ -113,12 +119,6 @@ class KafkaService(JmxMixin, Service):
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
             raise Exception("No process ids recorded on node %s" % str(node))
-
-    def _kafka_dir(self, node):
-        if node.version == KafkaVersion.TRUNK:
-            return "/opt/kafka"
-        else:
-            return "/opt/kafka-" + node.version
 
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""

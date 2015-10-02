@@ -18,7 +18,8 @@ from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, KafkaVersion
+from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka.version import LATEST_0_8_2
 from kafkatest.services.verifiable_producer import VerifiableProducer
 
 
@@ -45,7 +46,7 @@ class TestVerifiableProducer(Test):
         """Test that we can start VerifiableProducer using 0.8.2 jar, and validate that a small number of
         messages can be produced/acknowledged.
         """
-        self.producer.nodes[0].version = KafkaVersion.V_0_8_2_1
+        self.producer.nodes[0].version = LATEST_0_8_2
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
              err_msg="Producer failed to start in a reasonable amount of time.")

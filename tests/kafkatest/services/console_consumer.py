@@ -15,11 +15,11 @@
 
 from ducktape.utils.util import wait_until
 
+from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka.version import TRUNK
 from kafkatest.services.performance.jmx_mixin import JmxMixin
 from kafkatest.services.performance import PerformanceService
 from kafkatest.utils.security_config import SecurityConfig
-
-from kafkatest.services.kafka import TRUNK
 
 import os
 import subprocess
@@ -133,12 +133,6 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         self.client_id = client_id
         self.security_protocol = security_protocol
 
-    def _kafka_dir(self, node):
-        if node.version == TRUNK:
-            return "/opt/kafka"
-        else:
-            return "/opt/kafka-" + node.version
-
     def start_cmd(self, node):
         # Process client configuration
         self.prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms, client_id=self.client_id)
@@ -162,14 +156,14 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
 
         cmd = "export LOG_DIR=%s;" % ConsoleConsumer.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ConsoleConsumer.LOG4J_CONFIG
-        cmd += self._kafka_dir(node) + "/bin/kafka-console-consumer.sh"
+        cmd += "/opt/" + KafkaService.kafka_dir(node) + "/bin/kafka-console-consumer.sh"
         cmd += " --topic %(topic)s --zookeeper %(zk_connect)s --consumer.config %(config_file)s" % args
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsoleConsumer.LOG4J_CONFIG
         cmd += " JMX_PORT=%(jmx_port)d /opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s" \
             " --consumer.config %(config_file)s" % args
 
         if self.new_consumer:
-            cmd += " --new-consumer --bootstrap-server %s"  % self.kafka.bootstrap_servers()
+            cmd += " --new-consumer --bootstrap-server %s" % self.kafka.bootstrap_servers()
         else:
             cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:
@@ -209,6 +203,9 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
 
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
+        # Calling next() here blocks until the first line of output from the consumer,
+        # which provides a rough mechanism for guaranteeing that the consumer process has started.
+        # Note however that if nothing is produced, this blocks forever.
         first_line = consumer_output.next()
         self.start_jmx_tool(idx, node)
         for line in itertools.chain([first_line], consumer_output):
