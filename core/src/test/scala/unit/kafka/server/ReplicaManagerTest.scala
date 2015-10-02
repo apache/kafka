@@ -104,6 +104,6 @@ class ReplicaManagerTest {
       metrics.close()
     }
 
-    TestUtils.verifyNonDaemonThreadsStatus
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 }
