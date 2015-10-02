@@ -87,16 +87,15 @@ public class MockClient implements KafkaClient {
         return false;
     }
 
-    public void disconnect(String node) {
-        Iterator<ClientRequest> iter = requests.iterator();
-        while (iter.hasNext()) {
+    public void disconnect(String nodeId) {
+        for (Iterator<ClientRequest> iter = requests.iterator(); iter.hasNext(); ) {
             ClientRequest request = iter.next();
-            if (request.request().destination() == node) {
+            if (request.request().destination().equals(nodeId)) {
                 responses.add(new ClientResponse(request, time.milliseconds(), true, null));
                 iter.remove();
             }
         }
-        ready.remove(node);
+        ready.remove(Integer.valueOf(nodeId));
     }
 
     @Override
