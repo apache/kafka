@@ -20,6 +20,7 @@ package org.apache.kafka.common.network;
 import java.io.IOException;
 import java.io.EOFException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.CancelledKeyException;
@@ -182,7 +183,7 @@ public class SSLTransportLayer implements TransportLayer {
     * Performs SSL handshake, non blocking.
     * Before application data (kafka protocols) can be sent client & kafka broker must
     * perform ssl handshake.
-    * During the handshake SSLEngine generates encrypted data  that will be transported over socketChannel.
+    * During the handshake SSLEngine generates encrypted data that will be transported over socketChannel.
     * Each SSLEngine operation generates SSLEngineResult , of which SSLEngineResult.handshakeStatus field is used to
     * determine what operation needs to occur to move handshake along.
     * A typical handshake might look like this.
@@ -237,7 +238,7 @@ public class SSLTransportLayer implements TransportLayer {
                               channelId, handshakeResult, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
                     //if handshake status is not NEED_UNWRAP or unable to flush netWriteBuffer contents
                     //we will break here otherwise we can do need_unwrap in the same call.
-                    if (handshakeStatus != HandshakeStatus.NEED_UNWRAP ||  !flush(netWriteBuffer)) {
+                    if (handshakeStatus != HandshakeStatus.NEED_UNWRAP || !flush(netWriteBuffer)) {
                         key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
                         break;
                     }
@@ -311,7 +312,7 @@ public class SSLTransportLayer implements TransportLayer {
      * Sets the interestOps for the selectionKey.
      */
     private void handshakeFinished() throws IOException {
-        // SSLEnginge.getHandshakeStatus is transient and it doesn't record FINISHED status properly.
+        // SSLEngine.getHandshakeStatus is transient and it doesn't record FINISHED status properly.
         // It can move from FINISHED status to NOT_HANDSHAKING after the handshake is completed.
         // Hence we also need to check handshakeResult.getHandshakeStatus() if the handshake finished or not
         if (handshakeResult.getHandshakeStatus() == HandshakeStatus.FINISHED) {
@@ -336,7 +337,7 @@ public class SSLTransportLayer implements TransportLayer {
     * @return SSLEngineResult
     * @throws IOException
     */
-    private SSLEngineResult  handshakeWrap(Boolean doWrite) throws IOException {
+    private SSLEngineResult handshakeWrap(boolean doWrite) throws IOException {
         log.trace("SSLHandshake handshakeWrap", channelId);
         if (netWriteBuffer.hasRemaining())
             throw new IllegalStateException("handshakeWrap called with netWriteBuffer not empty");
@@ -362,7 +363,7 @@ public class SSLTransportLayer implements TransportLayer {
     * @return SSLEngineResult
     * @throws IOException
     */
-    private SSLEngineResult handshakeUnwrap(Boolean doRead) throws IOException {
+    private SSLEngineResult handshakeUnwrap(boolean doRead) throws IOException {
         log.trace("SSLHandshake handshakeUnwrap", channelId);
         SSLEngineResult result;
         boolean cont = false;
@@ -438,7 +439,7 @@ public class SSLTransportLayer implements TransportLayer {
                     }
 
                     // appReadBuffer will extended upto currentApplicationBufferSize
-                    // we need to read the existing content into dst before we can do unwrap again.  If there are no space in dst
+                    // we need to read the existing content into dst before we can do unwrap again. If there are no space in dst
                     // we can break here.
                     if (dst.hasRemaining())
                         read += readFromAppBuffer(dst);
@@ -479,7 +480,7 @@ public class SSLTransportLayer implements TransportLayer {
      * @param dsts - The buffers into which bytes are to be transferred
      * @param offset - The offset within the buffer array of the first buffer into which bytes are to be transferred; must be non-negative and no larger than dsts.length.
      * @param length - The maximum number of buffers to be accessed; must be non-negative and no larger than dsts.length - offset
-     * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream.
+     * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream.
      * @throws IOException if some other I/O error occurs
      */
     @Override
@@ -509,7 +510,7 @@ public class SSLTransportLayer implements TransportLayer {
     * Writes a sequence of bytes to this channel from the given buffer.
     *
     * @param src The buffer from which bytes are to be retrieved
-    * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
+    * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
     * @throws IOException If some other I/O error occurs
     */
     @Override
@@ -557,7 +558,7 @@ public class SSLTransportLayer implements TransportLayer {
     * @throws IOException If some other I/O error occurs
     */
     @Override
-    public long write(ByteBuffer[] srcs, int offset, int length)  throws IOException {
+    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
         if ((offset < 0) || (length < 0) || (offset > srcs.length - length))
             throw new IndexOutOfBoundsException();
         int totalWritten = 0;
@@ -681,12 +682,18 @@ public class SSLTransportLayer implements TransportLayer {
         try {
             sslEngine.closeInbound();
         } catch (SSLException e) {
-            log.debug("SSLEngine.closeInBound() raised an exception.",  e);
+            log.debug("SSLEngine.closeInBound() raised an exception.", e);
         }
     }
 
     @Override
     public boolean isMute() {
-        return  key.isValid() && (key.interestOps() & SelectionKey.OP_READ) == 0;
+        return key.isValid() && (key.interestOps() & SelectionKey.OP_READ) == 0;
     }
+
+    @Override
+    public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
+        return fileChannel.transferTo(position, count, this);
+    }
+
 }
