@@ -287,6 +287,13 @@ project(':core') {
     into "$buildDir/dependant-libs-${scalaVersion}"
   }
 
+  task siteDocsTar(type: Tar) {
+    classifier = 'site-docs'
+    compression = Compression.GZIP
+    from project.file("../docs")
+    into 'site-docs'
+  }
+
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${baseScalaVersion}-${version}"
     compression = Compression.GZIP
@@ -296,6 +303,7 @@ project(':core') {
     from '../NOTICE'
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
+    from(project.siteDocsTar) { into("site-docs/") }
   }
 
   jar {
@@ -313,12 +321,6 @@ project(':core') {
     from sourceSets.test.output
   }
 
-  task publishDocs(type: Jar) {
-    classifier = 'docs'
-    from project.file("../docs")
-    into 'docs'
-  }
-
   test {
     testLogging {
         events "passed", "skipped", "failed"
@@ -328,7 +330,6 @@ project(':core') {
 
   artifacts {
     archives testJar
-    archives publishDocs
   }
 }
 
