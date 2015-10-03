@@ -16,38 +16,23 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.io.IOException;
 import java.io.File;
+import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
 
-import javax.net.ssl.SSLEngine;
-
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.security.ssl.SSLFactory;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSSLUtils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 /**
- * A set of tests for the selector over ssl. These use a test harness that runs a simple socket server that echos back responses.
+ * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
-
-public class SSLSelectorTest {
-
-    private static final int BUFFER_SIZE = 4 * 1024;
-
-    private EchoServer server;
-    private Selector selector;
-    private ChannelBuilder channelBuilder;
-    private Map<String, Object> sslClientConfigs;
+public class SSLSelectorTest extends SelectorTest {
 
     @Before
     public void setup() throws Exception {
@@ -57,12 +42,13 @@ public class SSLSelectorTest {
         sslServerConfigs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         this.server = new EchoServer(sslServerConfigs);
         this.server.start();
-        sslClientConfigs = TestSSLUtils.createSSLConfig(false, false, SSLFactory.Mode.SERVER, trustStoreFile, "client");
+        this.time = new MockTime();
+        Map<String, Object> sslClientConfigs = TestSSLUtils.createSSLConfig(false, false, SSLFactory.Mode.SERVER, trustStoreFile, "client");
         sslClientConfigs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
 
         this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
+        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
     @After
@@ -70,90 +56,6 @@ public class SSLSelectorTest {
         this.selector.close();
         this.server.close();
     }
-
-
-    /**
-     * Validate that we can send and receive a message larger than the receive and send buffer size
-     */
-    @Test
-    public void testSendLargeRequest() throws Exception {
-        String node = "0";
-        blockingConnect(node);
-        String big = TestUtils.randomString(10 * BUFFER_SIZE);
-        assertEquals(big, blockingRequest(node, big));
-    }
-
-
-    /**
-     * Validate that when the server disconnects, a client send ends up with that node in the disconnected list.
-     */
-    @Test
-    public void testServerDisconnect() throws Exception {
-        String node = "0";
-        // connect and do a simple request
-        blockingConnect(node);
-        assertEquals("hello", blockingRequest(node, "hello"));
-
-        // disconnect
-        this.server.closeConnections();
-        while (!selector.disconnected().contains(node))
-            selector.poll(1000L);
-
-        // reconnect and do another request
-        blockingConnect(node);
-        assertEquals("hello", blockingRequest(node, "hello"));
-    }
-
-     /**
-     * Tests wrap BUFFER_OVERFLOW  and unwrap BUFFER_UNDERFLOW
-     * @throws Exception
-     */
-    @Test
-    public void testLargeMessageSequence() throws Exception {
-        int bufferSize = 512 * 1024;
-        String node = "0";
-        int reqs = 50;
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-        String requestPrefix = TestUtils.randomString(bufferSize);
-        sendAndReceive(node, requestPrefix, 0, reqs);
-    }
-
-
-    /**
-     * Test sending an empty string
-     */
-    @Test
-    public void testEmptyRequest() throws Exception {
-        String node = "0";
-        blockingConnect(node);
-        assertEquals("", blockingRequest(node, ""));
-    }
-
-
-    @Test
-    public void testMute() throws Exception {
-        blockingConnect("0");
-        blockingConnect("1");
-        // wait for handshake to finish
-        while (!selector.isChannelReady("0") && !selector.isChannelReady("1"))
-            selector.poll(5);
-        selector.send(createSend("0", "hello"));
-        selector.send(createSend("1", "hi"));
-        selector.mute("1");
-
-        while (selector.completedReceives().isEmpty())
-            selector.poll(5);
-        assertEquals("We should have only one response", 1, selector.completedReceives().size());
-        assertEquals("The response should not be from the muted node", "0", selector.completedReceives().get(0).source());
-        selector.unmute("1");
-        do {
-            selector.poll(5);
-        } while (selector.completedReceives().isEmpty());
-        assertEquals("We should have only one response", 1, selector.completedReceives().size());
-        assertEquals("The response should be from the previously muted node", "1", selector.completedReceives().get(0).source());
-    }
-
 
     /**
      * Tests that SSL renegotiation initiated by the server are handled correctly by the client
@@ -203,182 +105,13 @@ public class SSLSelectorTest {
         }
     }
 
-
     /**
-     * Tests handling of BUFFER_UNDERFLOW during unwrap when network read buffer is smaller than SSL session packet buffer size.
+     * Connects and waits for handshake to complete. This is required since SSLTransportLayer
+     * implementation requires the channel to be ready before send is invoked (unlike plaintext
+     * where send can be invoked straight after connect)
      */
-    @Test
-    public void testNetReadBufferResize() throws Exception {
-        String node = "0";
-        createSelector(10, 0, 0);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        String requestPrefix = TestUtils.randomString(64000);
-        sendAndReceive(node, requestPrefix, 0, 10);
-    }
-    
-    /**
-     * Tests handling of BUFFER_OVERFLOW during wrap when network write buffer is smaller than SSL session packet buffer size.
-     */
-    @Test
-    public void testNetWriteBufferResize() throws Exception {
-        String node = "0";
-        createSelector(0, 10, 0);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        String requestPrefix = TestUtils.randomString(64000);
-        sendAndReceive(node, requestPrefix, 0, 10);
-    }
-
-    /**
-     * Tests handling of BUFFER_OVERFLOW during unwrap when application read buffer is smaller than SSL session application buffer size.
-     */
-    @Test
-    public void testApplicationBufferResize() throws Exception {
-        String node = "0";
-        createSelector(0, 0, 10);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-        String requestPrefix = TestUtils.randomString(64000);
-        sendAndReceive(node, requestPrefix, 0, 10);
-    }
-    
-    private String blockingRequest(String node, String s) throws IOException {
-        selector.send(createSend(node, s));
-        while (true) {
-            selector.poll(1000L);
-            for (NetworkReceive receive : selector.completedReceives())
-                if (receive.source() == node)
-                    return asString(receive);
-        }
-    }
-
-    private String asString(NetworkReceive receive) {
-        return new String(Utils.toArray(receive.payload()));
-    }
-
-    private NetworkSend createSend(String node, String s) {
-        return new NetworkSend(node, ByteBuffer.wrap(s.getBytes()));
-    }
-
-    /* connect and wait for the connection to complete */
-    private void blockingConnect(String node) throws IOException {
-        selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
-        while (!selector.connected().contains(node))
-            selector.poll(10000L);
-        //finish the handshake as well
-        while (!selector.isChannelReady(node))
-            selector.poll(10000L);
-    }
-
-
-    private void sendAndReceive(String node, String requestPrefix, int startIndex, int endIndex) throws Exception {
-        int requests = startIndex;
-        int responses = startIndex;
-        // wait for handshake to finish
-        while (!selector.isChannelReady(node)) {
-            selector.poll(1000L);
-        }
-        selector.send(createSend(node, requestPrefix + "-" + startIndex));
-        requests++;
-        while (responses < endIndex) {
-            // do the i/o
-            selector.poll(0L);
-            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
-
-            // handle requests and responses of the fast node
-            for (NetworkReceive receive : selector.completedReceives()) {
-                assertEquals(requestPrefix + "-" + responses, asString(receive));
-                responses++;
-            }
-
-            for (int i = 0; i < selector.completedSends().size() && requests < endIndex && selector.isChannelReady(node); i++, requests++) {
-                selector.send(createSend(node, requestPrefix + "-" + requests));
-            }
-        }
-    }
-
-    private void createSelector(final int netReadBufSize, final int netWriteBufSize, final int appBufSize) {
-        
-        if (this.selector != null)
-            this.selector.close();
-        this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT) {
-
-            @Override
-            protected SSLTransportLayer buildTransportLayer(SSLFactory sslFactory, String id, SelectionKey key) throws IOException {
-                SocketChannel socketChannel = (SocketChannel) key.channel();
-                SSLEngine sslEngine = sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
-                                socketChannel.socket().getPort());
-                return new TestSSLTransportLayer(id, key, sslEngine, netReadBufSize, netWriteBufSize, appBufSize);
-            }
-
-
-        };
-        this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
-    }
-
-    /**
-     * SSLTransportLayer with overrides for packet and application buffer size to test buffer resize
-     * code path. The overridden buffer size starts with a small value and increases in size when the buffer
-     * size is retrieved to handle overflow/underflow, until the actual session buffer size is reached.
-     */
-    private static class TestSSLTransportLayer extends SSLTransportLayer {
-
-        private int netReadBufSizeOverride;
-        private int netWriteBufSizeOverride;
-        private int appBufSizeOverride;
-        private boolean isInitialized;
-
-        public TestSSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, 
-                int netReadBufSize, int netWriteBufSize, int appBufSize) throws IOException {
-            super(channelId, key, sslEngine);
-            this.netReadBufSizeOverride = netReadBufSize;
-            this.netWriteBufSizeOverride = netWriteBufSize;
-            this.appBufSizeOverride = appBufSize;
-            this.isInitialized = true;
-        }
-        
-        @Override
-        protected int netReadBufferSize() {
-            int size = super.netReadBufferSize();
-            if (!isInitialized) {
-                size = 10;
-            } else if (netReadBufSizeOverride != 0) {
-                if (!netReadBuffer().hasRemaining()) {
-                    netReadBufSizeOverride = Math.min(netReadBufSizeOverride * 2, size);
-                }
-                size = netReadBufSizeOverride;
-            }
-            return size;
-        }
-        
-        @Override
-        protected int netWriteBufferSize() {
-            int size = super.netWriteBufferSize();
-            if (!isInitialized) {
-                size = 10;
-            } else if (netWriteBufSizeOverride != 0) {
-                netWriteBufSizeOverride = Math.min(netWriteBufSizeOverride * 2, size);
-                size = netWriteBufSizeOverride;
-            }
-            return size;
-        }
-
-        @Override
-        protected int applicationBufferSize() {
-            int size = super.applicationBufferSize();
-            if (!isInitialized) {
-                size = 10;
-            } else if (appBufSizeOverride != 0) {
-                appBufSizeOverride = Math.min(appBufSizeOverride * 2, size);
-                size = appBufSizeOverride;
-            }
-            return size;
-        }
+    protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
+        blockingConnect(node, serverAddr);
     }
 
 }

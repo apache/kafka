@@ -63,16 +63,17 @@ public class SSLTransportLayer implements TransportLayer {
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
-        this.netReadBuffer = ByteBuffer.allocate(netReadBufferSize());
-        this.netWriteBuffer = ByteBuffer.allocate(netWriteBufferSize());
-        this.appReadBuffer = ByteBuffer.allocate(applicationBufferSize());
-        startHandshake();
     }
 
     /**
      * starts sslEngine handshake process
      */
-    private void startHandshake() throws IOException {
+    protected void startHandshake() throws IOException {
+
+        this.netReadBuffer = ByteBuffer.allocate(netReadBufferSize());
+        this.netWriteBuffer = ByteBuffer.allocate(netWriteBufferSize());
+        this.appReadBuffer = ByteBuffer.allocate(applicationBufferSize());
+        
         //clear & set netRead & netWrite buffers
         netWriteBuffer.position(0);
         netWriteBuffer.limit(0);
@@ -224,10 +225,10 @@ public class SSLTransportLayer implements TransportLayer {
                     handshakeResult = handshakeWrap(write);
                     if (handshakeResult.getStatus() == Status.BUFFER_OVERFLOW) {
                         int currentNetWriteBufferSize = netWriteBufferSize();
-                        netWriteBuffer.position(netWriteBuffer.limit());
+                        netWriteBuffer.compact();
                         netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
                         netWriteBuffer.flip();
-                        if (netWriteBuffer.position() >= currentNetWriteBufferSize) {
+                        if (netWriteBuffer.limit() >= currentNetWriteBufferSize) {
                             throw new IllegalStateException("Buffer overflow when available data size (" + netWriteBuffer.position() +
                                                             ") >= network buffer size (" + currentNetWriteBufferSize + ")");
                         }
@@ -264,7 +265,6 @@ public class SSLTransportLayer implements TransportLayer {
                         if (netReadBuffer.position() >= currentNetReadBufferSize) {
                             throw new IllegalStateException("Buffer underflow when there is available data");
                         }
-                        if (!read) key.interestOps(SelectionKey.OP_READ);
                     } else if (handshakeResult.getStatus() == Status.CLOSED) {
                         throw new EOFException("SSL handshake status CLOSED during handshake UNWRAP");
                     }
@@ -544,10 +544,10 @@ public class SSLTransportLayer implements TransportLayer {
             flush(netWriteBuffer);
         } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
             int currentNetWriteBufferSize = netWriteBufferSize();
-            netWriteBuffer.position(netWriteBuffer.limit());
+            netWriteBuffer.compact();
             netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
             netWriteBuffer.flip();
-            if (netWriteBuffer.position() >= currentNetWriteBufferSize)
+            if (netWriteBuffer.limit() >= currentNetWriteBufferSize)
                 throw new IllegalStateException("SSL BUFFER_OVERFLOW when available data size (" + netWriteBuffer.position() + ") >= network buffer size (" + currentNetWriteBufferSize + ")");
         } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
             throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
