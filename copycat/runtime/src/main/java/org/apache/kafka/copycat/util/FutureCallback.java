@@ -17,60 +17,14 @@
 
 package org.apache.kafka.copycat.util;
 
-import java.util.concurrent.*;
-
-public class FutureCallback<T> implements Callback<T>, Future<T> {
-
-    private Callback<T> underlying;
-    private CountDownLatch finishedLatch;
-    private T result = null;
-    private Throwable exception = null;
+public class FutureCallback<T> extends ConvertingFutureCallback<T, T> {
 
     public FutureCallback(Callback<T> underlying) {
-        this.underlying = underlying;
-        this.finishedLatch = new CountDownLatch(1);
+        super(underlying);
     }
 
     @Override
-    public void onCompletion(Throwable error, T result) {
-        underlying.onCompletion(error, result);
-        this.exception = error;
-        this.result = result;
-        finishedLatch.countDown();
-    }
-
-    @Override
-    public boolean cancel(boolean b) {
-        return false;
-    }
-
-    @Override
-    public boolean isCancelled() {
-        return false;
-    }
-
-    @Override
-    public boolean isDone() {
-        return finishedLatch.getCount() == 0;
-    }
-
-    @Override
-    public T get() throws InterruptedException, ExecutionException {
-        finishedLatch.await();
-        return result();
-    }
-
-    @Override
-    public T get(long l, TimeUnit timeUnit)
-            throws InterruptedException, ExecutionException, TimeoutException {
-        finishedLatch.await(l, timeUnit);
-        return result();
-    }
-
-    private T result() throws ExecutionException {
-        if (exception != null) {
-            throw new ExecutionException(exception);
-        }
+    public T convert(T result) {
         return result;
     }
 }

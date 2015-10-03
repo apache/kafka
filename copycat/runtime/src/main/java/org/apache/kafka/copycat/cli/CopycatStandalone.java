@@ -19,9 +19,11 @@ package org.apache.kafka.copycat.cli;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.copycat.runtime.Copycat;
 import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.runtime.standalone.StandaloneHerder;
+import org.apache.kafka.copycat.storage.FileOffsetBackingStore;
 import org.apache.kafka.copycat.util.Callback;
 import org.apache.kafka.copycat.util.FutureCallback;
 import org.slf4j.Logger;
@@ -58,9 +60,9 @@ public class CopycatStandalone {
         workerProps = !workerPropsFile.isEmpty() ? Utils.loadProps(workerPropsFile) : new Properties();
 
         WorkerConfig workerConfig = new WorkerConfig(workerProps);
-        Worker worker = new Worker(workerConfig);
+        Worker worker = new Worker(workerConfig, new FileOffsetBackingStore());
         Herder herder = new StandaloneHerder(worker);
-        final org.apache.kafka.copycat.runtime.Copycat copycat = new org.apache.kafka.copycat.runtime.Copycat(worker, herder);
+        final Copycat copycat = new Copycat(worker, herder);
         copycat.start();
 
         try {

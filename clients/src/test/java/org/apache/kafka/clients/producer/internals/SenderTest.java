@@ -44,10 +44,11 @@ public class SenderTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
     private static final short ACKS_ALL = -1;
     private static final int MAX_RETRIES = 0;
-    private static final int REQUEST_TIMEOUT_MS = 10000;
     private static final String CLIENT_ID = "clientId";
     private static final String METRIC_GROUP = "producer-metrics";
     private static final double EPS = 0.0001;
+    private static final int MAX_BLOCK_TIMEOUT = 1000;
+    private static final int REQUEST_TIMEOUT = 1000;
 
     private TopicPartition tp = new TopicPartition("test", 0);
     private MockTime time = new MockTime();
@@ -57,17 +58,17 @@ public class SenderTest {
     private Cluster cluster = TestUtils.singletonCluster("test", 1);
     private Metrics metrics = new Metrics(time);
     Map<String, String> metricTags = new LinkedHashMap<String, String>();
-    private RecordAccumulator accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, false, metrics, time, metricTags);
+    private RecordAccumulator accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, metricTags);
     private Sender sender = new Sender(client,
                                        metadata,
                                        this.accumulator,
                                        MAX_REQUEST_SIZE,
                                        ACKS_ALL,
                                        MAX_RETRIES,
-                                       REQUEST_TIMEOUT_MS,
                                        metrics,
                                        time,
-                                       CLIENT_ID);
+                                       CLIENT_ID,
+                                       REQUEST_TIMEOUT);
 
     @Before
     public void setup() {
@@ -78,7 +79,7 @@ public class SenderTest {
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
-        Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null).future;
+        Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
@@ -97,7 +98,7 @@ public class SenderTest {
     public void testQuotaMetrics() throws Exception {
         final long offset = 0;
         for (int i = 1; i <= 3; i++) {
-            Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null).future;
+            Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
             sender.run(time.milliseconds()); // send produce request
             client.respond(produceResponse(tp, offset, Errors.NONE.code(), 100 * i));
             sender.run(time.milliseconds());
@@ -119,12 +120,12 @@ public class SenderTest {
                                    MAX_REQUEST_SIZE,
                                    ACKS_ALL,
                                    maxRetries,
-                                   REQUEST_TIMEOUT_MS,
                                    new Metrics(),
                                    time,
-                                   "clientId");
+                                   "clientId",
+                                   REQUEST_TIMEOUT);
         // do a successful retry
-        Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null).future;
+        Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals(1, client.inFlightRequestCount());
@@ -141,7 +142,7 @@ public class SenderTest {
         assertEquals(offset, future.get().offset());
 
         // do an unsuccessful retry
-        future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null).future;
+        future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds()); // send produce request
         for (int i = 0; i < maxRetries + 1; i++) {
             client.disconnect(client.requests().peek().request().destination());

@@ -12,8 +12,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition
@@ -42,10 +43,13 @@ import java.util.Set;
  * assignment is changed whether directly by the user or through a group rebalance.
  *
  * This class also maintains a cache of the latest commit position for each of the assigned
- * partitions. This is updated through {@link #committed(TopicPartition, long)} and can be used
+ * partitions. This is updated through {@link #committed(TopicPartition, OffsetAndMetadata)} and can be used
  * to set the initial fetch position (e.g. {@link Fetcher#resetOffset(TopicPartition)}.
  */
 public class SubscriptionState {
+
+    /* the pattern user has requested */
+    private Pattern subscribedPattern;
 
     /* the list of topics the user has requested */
     private final Set<String> subscription;
@@ -66,7 +70,10 @@ public class SubscriptionState {
     private final OffsetResetStrategy defaultResetStrategy;
 
     /* Listener to be invoked when assignment changes */
-    private RebalanceListener listener;
+    private ConsumerRebalanceListener listener;
+
+    private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
+        "Subscription to topics, partitions and pattern are mutually exclusive";
 
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
@@ -75,20 +82,25 @@ public class SubscriptionState {
         this.assignment = new HashMap<>();
         this.needsPartitionAssignment = false;
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
+        this.subscribedPattern = null;
     }
 
-    public void subscribe(List<String> topics, RebalanceListener listener) {
+    public void subscribe(List<String> topics, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        if (!this.userAssignment.isEmpty())
-            throw new IllegalStateException("Subscription to topics and partitions are mutually exclusive");
+        if (!this.userAssignment.isEmpty() || this.subscribedPattern != null)
+            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
 
         this.listener = listener;
 
-        if (!this.subscription.equals(new HashSet<>(topics))) {
+        changeSubscription(topics);
+    }
+
+    public void changeSubscription(List<String> topicsToSubscribe) {
+        if (!this.subscription.equals(new HashSet<>(topicsToSubscribe))) {
             this.subscription.clear();
-            this.subscription.addAll(topics);
+            this.subscription.addAll(topicsToSubscribe);
             this.needsPartitionAssignment = true;
 
             // Remove any assigned partitions which are no longer subscribed to
@@ -98,6 +110,7 @@ public class SubscriptionState {
                     it.remove();
             }
         }
+
     }
 
     public void needReassignment() {
@@ -105,8 +118,8 @@ public class SubscriptionState {
     }
 
     public void assign(List<TopicPartition> partitions) {
-        if (!this.subscription.isEmpty())
-            throw new IllegalStateException("Subscription to topics and partitions are mutually exclusive");
+        if (!this.subscription.isEmpty() || this.subscribedPattern != null)
+            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
 
         this.userAssignment.clear();
         this.userAssignment.addAll(partitions);
@@ -116,6 +129,29 @@ public class SubscriptionState {
                 addAssignedPartition(partition);
 
         this.assignment.keySet().retainAll(this.userAssignment);
+    }
+
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        if (!this.subscription.isEmpty() || !this.userAssignment.isEmpty())
+            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
+
+        this.listener = listener;
+        this.subscribedPattern = pattern;
+    }
+
+    public void unsubscribe() {
+        this.subscription.clear();
+        this.assignment.clear();
+        this.needsPartitionAssignment = true;
+        this.subscribedPattern = null;
+    }
+
+
+    public Pattern getSubscribedPattern() {
+        return this.subscribedPattern;
     }
 
     public void clearAssignment() {
@@ -142,11 +178,11 @@ public class SubscriptionState {
         return state;
     }
 
-    public void committed(TopicPartition tp, long offset) {
+    public void committed(TopicPartition tp, OffsetAndMetadata offset) {
         assignedState(tp).committed(offset);
     }
 
-    public Long committed(TopicPartition tp) {
+    public OffsetAndMetadata committed(TopicPartition tp) {
         return assignedState(tp).committed;
     }
 
@@ -191,12 +227,12 @@ public class SubscriptionState {
         return assignedState(tp).consumed;
     }
 
-    public Map<TopicPartition, Long> allConsumed() {
-        Map<TopicPartition, Long> allConsumed = new HashMap<>();
+    public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
+        Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet()) {
             TopicPartitionState state = entry.getValue();
             if (state.hasValidPosition)
-                allConsumed.put(entry.getKey(), state.consumed);
+                allConsumed.put(entry.getKey(), new OffsetAndMetadata(state.consumed));
         }
         return allConsumed;
     }
@@ -207,6 +243,10 @@ public class SubscriptionState {
 
     public void needOffsetReset(TopicPartition partition) {
         needOffsetReset(partition, defaultResetStrategy);
+    }
+
+    public boolean hasDefaultOffsetResetPolicy() {
+        return defaultResetStrategy != OffsetResetStrategy.NONE;
     }
 
     public boolean isOffsetResetNeeded(TopicPartition partition) {
@@ -225,7 +265,7 @@ public class SubscriptionState {
     }
 
     public Set<TopicPartition> missingFetchPositions() {
-        Set<TopicPartition> missing = new HashSet<>(this.assignment.keySet());
+        Set<TopicPartition> missing = new HashSet<>();
         for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet())
             if (!entry.getValue().hasValidPosition)
                 missing.add(entry.getKey());
@@ -236,7 +276,7 @@ public class SubscriptionState {
         return this.needsPartitionAssignment;
     }
 
-    public void changePartitionAssignment(List<TopicPartition> assignments) {
+    public void changePartitionAssignment(Collection<TopicPartition> assignments) {
         for (TopicPartition tp : assignments)
             if (!this.subscription.contains(tp.topic()))
                 throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
@@ -270,14 +310,14 @@ public class SubscriptionState {
         this.assignment.put(tp, new TopicPartitionState());
     }
 
-    public RebalanceListener listener() {
+    public ConsumerRebalanceListener listener() {
         return listener;
     }
 
     private static class TopicPartitionState {
         private Long consumed;   // offset exposed to the user
         private Long fetched;    // current fetch position
-        private Long committed;  // last committed position
+        private OffsetAndMetadata committed;  // last committed position
 
         private boolean hasValidPosition; // whether we have valid consumed and fetched positions
         private boolean paused;  // whether this partition has been paused by the user
@@ -322,7 +362,7 @@ public class SubscriptionState {
             this.consumed = offset;
         }
 
-        private void committed(Long offset) {
+        private void committed(OffsetAndMetadata offset) {
             this.committed = offset;
         }
 
@@ -339,47 +379,5 @@ public class SubscriptionState {
         }
 
     }
-
-    public static RebalanceListener wrapListener(final Consumer<?, ?> consumer,
-                                                 final ConsumerRebalanceListener listener) {
-        if (listener == null)
-            throw new IllegalArgumentException("ConsumerRebalanceLister must not be null");
-
-        return new RebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                listener.onPartitionsAssigned(consumer, partitions);
-            }
-
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                listener.onPartitionsRevoked(consumer, partitions);
-            }
-
-            @Override
-            public ConsumerRebalanceListener underlying() {
-                return listener;
-            }
-        };
-    }
-
-    /**
-     * Wrapper around {@link ConsumerRebalanceListener} to get around the need to provide a reference
-     * to the consumer in this class.
-     */
-    public static class RebalanceListener {
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-
-        }
-
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-
-        }
-
-        public ConsumerRebalanceListener underlying() {
-            return null;
-        }
-    }
-
 
 }

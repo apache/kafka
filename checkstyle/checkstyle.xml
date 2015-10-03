@@ -17,19 +17,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
---> 
+-->
 <module name="Checker">
   <property name="localeLanguage" value="en"/>
-  
+
   <module name="FileTabCharacter"/>
-  
+
   <!-- header -->
   <module name="RegexpHeader">
     <property name="header" value="/\*\*\nLicensed to the Apache.*"/>
   </module>
-  
+
   <module name="TreeWalker">
-    
+
     <!-- code cleanup -->
     <module name="UnusedImports"/>
     <module name="RedundantImport"/>
@@ -39,7 +39,7 @@
     <module name="OneStatementPerLine"/>
     <module name="UnnecessaryParentheses" />
     <module name="SimplifyBooleanReturn"/>
-    
+
     <!-- style -->
     <module name="DefaultComesLast"/>
     <module name="EmptyStatement"/>
@@ -53,19 +53,23 @@
     </module>
     <module name="LocalVariableName"/>
     <module name="LocalFinalVariableName"/>
-    <module name="ClassTypeParameterName"/>
     <module name="MemberName"/>
-    <module name="MethodTypeParameterName"/>
+    <module name="ClassTypeParameterName">
+      <property name="format" value="^[A-Z0-9]*$"/>
+    </module>
+    <module name="MethodTypeParameterName">
+      <property name="format" value="^[A-Z0-9]*$"/>
+    </module>
     <module name="PackageName"/>
     <module name="ParameterName"/>
     <module name="StaticVariableName"/>
     <module name="TypeName"/>
-    
+
     <!-- dependencies -->
     <module name="ImportControl">
       <property name="file" value="${basedir}/checkstyle/import-control.xml"/>
     </module>
-    
+
     <!-- whitespace -->
     <module name="GenericWhitespace"/>
     <module name="NoWhitespaceBefore"/>

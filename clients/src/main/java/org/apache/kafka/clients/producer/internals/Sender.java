@@ -71,9 +71,6 @@ public class Sender implements Runnable {
     /* the number of acknowledgements to request from the server */
     private final short acks;
 
-    /* the max time in ms for the server to wait for acknowlegements */
-    private final int requestTimeout;
-
     /* the number of times to retry a failed request before giving up */
     private final int retries;
 
@@ -92,27 +89,30 @@ public class Sender implements Runnable {
     /* param clientId of the client */
     private String clientId;
 
+    /* the max time to wait for the server to respond to the request*/
+    private final int requestTimeout;
+
     public Sender(KafkaClient client,
                   Metadata metadata,
                   RecordAccumulator accumulator,
                   int maxRequestSize,
                   short acks,
                   int retries,
-                  int requestTimeout,
                   Metrics metrics,
                   Time time,
-                  String clientId) {
+                  String clientId,
+                  int requestTimeout) {
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
         this.maxRequestSize = maxRequestSize;
         this.running = true;
-        this.requestTimeout = requestTimeout;
         this.acks = acks;
         this.retries = retries;
         this.time = time;
         this.clientId = clientId;
         this.sensors = new SenderMetrics(metrics);
+        this.requestTimeout = requestTimeout;
     }
 
     /**
@@ -187,6 +187,12 @@ public class Sender implements Runnable {
                                                                          result.readyNodes,
                                                                          this.maxRequestSize,
                                                                          now);
+
+        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, cluster, now);
+        // update sensors
+        for (RecordBatch expiredBatch : expiredBatches)
+            this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
+
         sensors.updateProduceRequestMetrics(batches);
         List<ClientRequest> requests = createProduceRequests(batches, now);
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
@@ -200,7 +206,7 @@ public class Sender implements Runnable {
             pollTimeout = 0;
         }
         for (ClientRequest request : requests)
-            client.send(request);
+            client.send(request, now);
 
         // if some partitions are already ready to be sent, the select time would be 0;
         // otherwise if some partition already has some data accumulated but not ready yet,

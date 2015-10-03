@@ -12,7 +12,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class UnknownConsumerIdException extends RetriableException {
+public class UnknownConsumerIdException extends ApiException {
     private static final long serialVersionUID = 1L;
 
     public UnknownConsumerIdException() {

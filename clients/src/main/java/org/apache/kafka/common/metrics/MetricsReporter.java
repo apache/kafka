@@ -34,6 +34,12 @@ public interface MetricsReporter extends Configurable {
     public void metricChange(KafkaMetric metric);
 
     /**
+     * This is called whenever a metric is removed
+     * @param metric
+     */
+    public void metricRemoval(KafkaMetric metric);
+
+    /**
      * Called when the metrics repository is closed.
      */
     public void close();

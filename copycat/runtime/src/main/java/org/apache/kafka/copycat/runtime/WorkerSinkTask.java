@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
@@ -121,9 +122,9 @@ class WorkerSinkTask implements WorkerTask {
      **/
     public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
         log.info("{} Committing offsets", this);
-        HashMap<TopicPartition, Long> offsets = new HashMap<>();
+        HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (TopicPartition tp : consumer.assignment()) {
-            offsets.put(tp, consumer.position(tp));
+            offsets.put(tp, new OffsetAndMetadata(consumer.position(tp)));
         }
         // We only don't flush the task in one case: when shutting down, the task has already been
         // stopped and all data should have already been flushed
@@ -137,13 +138,21 @@ class WorkerSinkTask implements WorkerTask {
             }
         }
 
-        ConsumerCommitCallback cb = new ConsumerCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, Long> offsets, Exception error) {
-                workThread.onCommitCompleted(error, seqno);
+        if (sync) {
+            try {
+                consumer.commitSync(offsets);
+            } catch (KafkaException e) {
+                workThread.onCommitCompleted(e, seqno);
             }
-        };
-        consumer.commit(offsets, sync ? CommitType.SYNC : CommitType.ASYNC, cb);
+        } else {
+            OffsetCommitCallback cb = new OffsetCommitCallback() {
+                @Override
+                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
+                    workThread.onCommitCompleted(error, seqno);
+                }
+            };
+            consumer.commitAsync(offsets, cb);
+        }
     }
 
     public Time time() {

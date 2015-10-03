@@ -30,7 +30,9 @@ import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.{Time => JTime}
 
 import scala.collection._
 
@@ -94,17 +96,20 @@ object ReplicaManager {
 }
 
 class ReplicaManager(val config: KafkaConfig,
-                     private val time: Time,
+                     metrics: Metrics,
+                     time: Time,
+                     jTime: JTime,
                      val zkClient: ZkClient,
                      scheduler: Scheduler,
                      val logManager: LogManager,
-                     val isShuttingDown: AtomicBoolean) extends Logging with KafkaMetricsGroup {
+                     val isShuttingDown: AtomicBoolean,
+                     threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
   private val allPartitions = new Pool[(String, Int), Partition]
   private val replicaStateChangeLock = new Object
-  val replicaFetcherManager = new ReplicaFetcherManager(config, this)
+  val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime, threadNamePrefix)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   val highWatermarkCheckpoints = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
   private var hwThreadInitialized = false

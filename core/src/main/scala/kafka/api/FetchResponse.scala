@@ -24,9 +24,7 @@ import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.network.TransportLayer
-import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.network.MultiSend
+import org.apache.kafka.common.network.{SSLTransportLayer, TransportLayer, Send, MultiSend}
 
 import scala.collection._
 
@@ -55,6 +53,7 @@ case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError, hw: L
 
 class PartitionDataSend(val partitionId: Int,
                         val partitionData: FetchResponsePartitionData) extends Send {
+  private val emptyBuffer = ByteBuffer.allocate(0)
   private val messageSize = partitionData.messages.sizeInBytes
   private var messagesSentSize = 0
   private var pending = false
@@ -71,15 +70,20 @@ class PartitionDataSend(val partitionId: Int,
 
   override def writeTo(channel: GatheringByteChannel): Long = {
     var written = 0L
-    if(buffer.hasRemaining)
+    if (buffer.hasRemaining)
       written += channel.write(buffer)
-    if (!buffer.hasRemaining && messagesSentSize < messageSize) {
-      val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize)
-      messagesSentSize += bytesSent
-      written += bytesSent
+    if (!buffer.hasRemaining) {
+      if (messagesSentSize < messageSize) {
+        val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize)
+        messagesSentSize += bytesSent
+        written += bytesSent
+      }
+      if (messagesSentSize >= messageSize && hasPendingWrites(channel))
+        channel.write(emptyBuffer)
     }
-    if (channel.isInstanceOf[TransportLayer])
-      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
+
+    pending = hasPendingWrites(channel)
+
     written
   }
 
@@ -112,6 +116,8 @@ case class TopicData(topic: String, partitionData: Map[Int, FetchResponsePartiti
 
 class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
 
+  private val emptyBuffer = ByteBuffer.allocate(0)
+
   private var sent = 0L
 
   private var pending = false
@@ -135,14 +141,16 @@ class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
       throw new KafkaException("This operation cannot be completed on a complete request.")
 
     var written = 0L
-    if(buffer.hasRemaining)
+    if (buffer.hasRemaining)
       written += channel.write(buffer)
-    if(!buffer.hasRemaining && !sends.completed) {
-      written += sends.writeTo(channel)
+    if (!buffer.hasRemaining) {
+      if (!sends.completed)
+        written += sends.writeTo(channel)
+      if (sends.completed && hasPendingWrites(channel))
+        written += channel.write(emptyBuffer)
     }
 
-    if (channel.isInstanceOf[TransportLayer])
-      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
+    pending = hasPendingWrites(channel)
 
     sent += written
     written
@@ -245,6 +253,9 @@ case class FetchResponse(correlationId: Int,
 
 
 class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) extends Send {
+
+  private val emptyBuffer = ByteBuffer.allocate(0)
+
   private val payloadSize = fetchResponse.sizeInBytes
 
   private var sent = 0L
@@ -272,15 +283,18 @@ class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) exte
       throw new KafkaException("This operation cannot be completed on a complete request.")
 
     var written = 0L
-    if(buffer.hasRemaining)
-      written += channel.write(buffer)
-    if(!buffer.hasRemaining && !sends.completed) {
-      written += sends.writeTo(channel)
-    }
-    sent += written
 
-    if (channel.isInstanceOf[TransportLayer])
-      pending = channel.asInstanceOf[TransportLayer].hasPendingWrites
+    if (buffer.hasRemaining)
+      written += channel.write(buffer)
+    if (!buffer.hasRemaining) {
+      if (!sends.completed)
+        written += sends.writeTo(channel)
+      if (sends.completed && hasPendingWrites(channel))
+        written += channel.write(emptyBuffer)
+    }
+
+    sent += written
+    pending = hasPendingWrites(channel)
 
     written
   }

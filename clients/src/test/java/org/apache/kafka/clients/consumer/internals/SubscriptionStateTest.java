@@ -22,24 +22,28 @@ import static org.junit.Assert.assertTrue;
 import static java.util.Arrays.asList;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.regex.Pattern;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
 public class SubscriptionStateTest {
 
-    private SubscriptionState.RebalanceListener listener = new SubscriptionState.RebalanceListener();
     private final SubscriptionState state = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private final TopicPartition tp0 = new TopicPartition("test", 0);
     private final TopicPartition tp1 = new TopicPartition("test", 1);
+    private final MockRebalanceListener rebalanceListener = new MockRebalanceListener();
 
     @Test
     public void partitionAssignment() {
         state.assign(Arrays.asList(tp0));
         assertEquals(Collections.singleton(tp0), state.assignedPartitions());
-        state.committed(tp0, 1);
+        state.committed(tp0, new OffsetAndMetadata(1));
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
         assertAllPositions(tp0, 1L);
@@ -69,13 +73,13 @@ public class SubscriptionStateTest {
 
     @Test
     public void topicSubscription() {
-        state.subscribe(Arrays.asList("test"), listener);
+        state.subscribe(Arrays.asList("test"), rebalanceListener);
         assertEquals(1, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
         assertTrue(state.partitionsAutoAssigned());
         state.changePartitionAssignment(asList(tp0));
         state.seek(tp0, 1);
-        state.committed(tp0, 1);
+        state.committed(tp0, new OffsetAndMetadata(1));
         assertAllPositions(tp0, 1L);
         state.changePartitionAssignment(asList(tp1));
         assertTrue(state.isAssigned(tp1));
@@ -96,35 +100,44 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void commitOffsetMetadata() {
+        state.assign(Arrays.asList(tp0));
+        state.committed(tp0, new OffsetAndMetadata(5, "hi"));
+
+        assertEquals(5, state.committed(tp0).offset());
+        assertEquals("hi", state.committed(tp0).metadata());
+    }
+
+    @Test
     public void topicUnsubscription() {
         final String topic = "test";
-        state.subscribe(Arrays.asList(topic), listener);
+        state.subscribe(Arrays.asList(topic), rebalanceListener);
         assertEquals(1, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
         assertTrue(state.partitionsAutoAssigned());
         state.changePartitionAssignment(asList(tp0));
-        state.committed(tp0, 1);
+        state.committed(tp0, new OffsetAndMetadata(1));
         state.seek(tp0, 1);
         assertAllPositions(tp0, 1L);
         state.changePartitionAssignment(asList(tp1));
         assertFalse(state.isAssigned(tp0));
         assertEquals(Collections.singleton(tp1), state.assignedPartitions());
 
-        state.subscribe(Arrays.<String>asList(), listener);
+        state.subscribe(Arrays.<String>asList(), rebalanceListener);
         assertEquals(0, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
     }
 
     @Test(expected = IllegalStateException.class)
     public void invalidConsumedPositionUpdate() {
-        state.subscribe(Arrays.asList("test"), listener);
+        state.subscribe(Arrays.asList("test"), rebalanceListener);
         state.changePartitionAssignment(asList(tp0));
         state.consumed(tp0, 0);
     }
 
     @Test(expected = IllegalStateException.class)
     public void invalidFetchPositionUpdate() {
-        state.subscribe(Arrays.asList("test"), listener);
+        state.subscribe(Arrays.asList("test"), rebalanceListener);
         state.changePartitionAssignment(asList(tp0));
         state.fetched(tp0, 0);
     }
@@ -140,9 +153,74 @@ public class SubscriptionStateTest {
     }
     
     public void assertAllPositions(TopicPartition tp, Long offset) {
-        assertEquals(offset, state.committed(tp));
+        assertEquals(offset.longValue(), state.committed(tp).offset());
         assertEquals(offset, state.fetched(tp));
         assertEquals(offset, state.consumed(tp));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void cantSubscribeTopicAndPattern() {
+        state.subscribe(Arrays.asList("test"), rebalanceListener);
+        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void cantSubscribePartitionAndPattern() {
+        state.assign(Arrays.asList(new TopicPartition("test", 0)));
+        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void cantSubscribePatternAndTopic() {
+        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        state.subscribe(Arrays.asList("test"), rebalanceListener);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void cantSubscribePatternAndPartition() {
+        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        state.assign(Arrays.asList(new TopicPartition("test", 0)));
+    }
+
+    @Test
+    public void patternSubscription() {
+        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        state.changeSubscription(Arrays.asList("test", "test1"));
+
+        assertEquals(
+                "Expected subscribed topics count is incorrect", 2, state.subscription().size());
+    }
+
+    @Test
+    public void patternUnsubscription() {
+        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        state.changeSubscription(Arrays.asList("test", "test1"));
+
+        state.unsubscribe();
+
+        assertEquals(
+                "Expected subscribed topics count is incorrect", 0, state.subscription().size());
+    }
+
+    private static class MockRebalanceListener implements ConsumerRebalanceListener {
+        public Collection<TopicPartition> revoked;
+        public Collection<TopicPartition> assigned;
+        public int revokedCount = 0;
+        public int assignedCount = 0;
+
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            this.assigned = partitions;
+            assignedCount++;
+        }
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            this.revoked = partitions;
+            revokedCount++;
+        }
+
     }
     
 }

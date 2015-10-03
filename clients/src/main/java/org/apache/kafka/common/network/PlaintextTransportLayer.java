@@ -23,6 +23,7 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
 
@@ -189,7 +190,7 @@ public class PlaintextTransportLayer implements TransportLayer {
 
     /**
      * Adds the interestOps to selectionKey.
-     * @param interestOps
+     * @param ops
      */
     @Override
     public void addInterestOps(int ops) {
@@ -199,7 +200,7 @@ public class PlaintextTransportLayer implements TransportLayer {
 
     /**
      * Removes the interestOps from selectionKey.
-     * @param interestOps
+     * @param ops
      */
     @Override
     public void removeInterestOps(int ops) {
@@ -211,4 +212,8 @@ public class PlaintextTransportLayer implements TransportLayer {
         return key.isValid() && (key.interestOps() & SelectionKey.OP_READ) == 0;
     }
 
+    @Override
+    public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
+        return fileChannel.transferTo(position, count, socketChannel);
+    }
 }

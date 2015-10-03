@@ -45,33 +45,21 @@ import org.junit.Test;
 
 public class NetworkClientTest {
 
+    private final int requestTimeoutMs = 1000;
     private MockTime time = new MockTime();
     private MockSelector selector = new MockSelector(time);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
     private int nodeId = 1;
     private Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     private Node node = cluster.nodes().get(0);
-    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024);
+    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs);
+
     private NetworkClient clientWithStaticNodes = new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-            "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024);
+            "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs);
 
     @Before
     public void setup() {
         metadata.update(cluster, time.milliseconds());
-    }
-
-    @Test
-    public void testReadyAndDisconnect() {
-        assertFalse("Client begins unready as it has no connection.", client.ready(node, time.milliseconds()));
-        assertEquals("The connection is established as a side-effect of the readiness check", 1, selector.connected().size());
-        client.poll(1, time.milliseconds());
-        selector.clear();
-        assertTrue("Now the client is ready", client.ready(node, time.milliseconds()));
-        selector.disconnect(node.idString());
-        client.poll(1, time.milliseconds());
-        selector.clear();
-        assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
-        assertTrue("Metadata should get updated.", metadata.timeToNextUpdate(time.milliseconds()) == 0);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -80,7 +68,7 @@ public class NetworkClientTest {
                                            client.nextRequestHeader(ApiKeys.METADATA),
                                            new MetadataRequest(Arrays.asList("test")).toStruct());
         ClientRequest request = new ClientRequest(time.milliseconds(), false, send, null);
-        client.send(request);
+        client.send(request, time.milliseconds());
         client.poll(1, time.milliseconds());
     }
 
@@ -94,6 +82,25 @@ public class NetworkClientTest {
         checkSimpleRequestResponse(clientWithStaticNodes);
     }
 
+    @Test
+    public void testClose() {
+        client.ready(node, time.milliseconds());
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+
+        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
+        RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
+        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
+        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, null);
+        client.send(request, time.milliseconds());
+        assertEquals("There should be 1 in-flight request after send", 1, client.inFlightRequestCount(node.idString()));
+
+        client.close(node.idString());
+        assertEquals("There should be no in-flight request after close", 0, client.inFlightRequestCount(node.idString()));
+        assertFalse("Connection should not be ready after close", client.isReady(node, 0));
+    }
+
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
         RequestHeader reqHeader = networkClient.nextRequestHeader(ApiKeys.PRODUCE);
@@ -101,7 +108,7 @@ public class NetworkClientTest {
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = new ClientRequest(time.milliseconds(), true, send, handler);
         awaitReady(networkClient, node);
-        networkClient.send(request);
+        networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
         ResponseHeader respHeader = new ResponseHeader(reqHeader.correlationId());
@@ -124,15 +131,31 @@ public class NetworkClientTest {
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
     }
-    
+
+    @Test
+    public void testRequestTimeout() {
+        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
+        RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
+        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
+        TestCallbackHandler handler = new TestCallbackHandler();
+        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, handler);
+        awaitReady(client, node);
+        long now = time.milliseconds();
+        client.send(request, now);
+        // sleeping to make sure that the time since last send is greater than requestTimeOut
+        time.sleep(3000);
+        client.poll(3000, time.milliseconds());
+        String disconnectedNode = selector.disconnected().get(0);
+        assertEquals(node.idString(), disconnectedNode);
+    }
+
     private static class TestCallbackHandler implements RequestCompletionHandler {
         public boolean executed = false;
         public ClientResponse response;
-        
+
         public void onComplete(ClientResponse response) {
             this.executed = true;
             this.response = response;
         }
     }
-
 }

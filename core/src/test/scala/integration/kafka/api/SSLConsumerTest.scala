@@ -19,15 +19,10 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.Consumer
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.consumer.CommitType
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.clients.consumer.NoOffsetForPartitionException
 import kafka.integration.KafkaServerTestHarness
 
 import kafka.utils.{TestUtils, Logging}
@@ -169,10 +164,8 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   def testPositionAndCommit() {
     sendRecords(5)
 
-    // committed() on a partition with no committed offset throws an exception
-    intercept[NoOffsetForPartitionException] {
-      this.consumers(0).committed(new TopicPartition(topic, 15))
-    }
+    // committed() on a partition with no committed offset returns null
+    assertNull(this.consumers(0).committed(new TopicPartition(topic, 15)))
 
     // position() on a partition that we aren't subscribed to throws an exception
     intercept[IllegalArgumentException] {
@@ -182,13 +175,13 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
     this.consumers(0).assign(List(tp))
 
     assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers(0).position(tp))
-    this.consumers(0).commit(CommitType.SYNC)
-    assertEquals(0L, this.consumers(0).committed(tp))
+    this.consumers(0).commitSync()
+    assertEquals(0L, this.consumers(0).committed(tp).offset)
 
     consumeRecords(this.consumers(0), 5, 0)
     assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers(0).position(tp))
-    this.consumers(0).commit(CommitType.SYNC)
-    assertEquals("Committed offset should be returned", 5L, this.consumers(0).committed(tp))
+    this.consumers(0).commitSync()
+    assertEquals("Committed offset should be returned", 5L, this.consumers(0).committed(tp).offset)
 
     sendRecords(1)
 

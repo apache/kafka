@@ -16,6 +16,8 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,7 +38,7 @@ final class InFlightRequests {
     public void add(ClientRequest request) {
         Deque<ClientRequest> reqs = this.requests.get(request.request().destination());
         if (reqs == null) {
-            reqs = new ArrayDeque<ClientRequest>();
+            reqs = new ArrayDeque<>();
             this.requests.put(request.request().destination(), reqs);
         }
         reqs.addFirst(request);
@@ -123,4 +125,25 @@ final class InFlightRequests {
         }
     }
 
+    /**
+     * Returns a list of nodes with pending inflight request, that need to be timed out
+     *
+     * @param now current time in milliseconds
+     * @param requestTimeout max time to wait for the request to be completed
+     * @return list of nodes
+     */
+    public List<String> getNodesWithTimedOutRequests(long now, int requestTimeout) {
+        List<String> nodeIds = new LinkedList<String>();
+        for (String nodeId : requests.keySet()) {
+            if (inFlightRequestCount(nodeId) > 0) {
+                ClientRequest request = requests.get(nodeId).peekLast();
+                long timeSinceSend = now - request.sendTimeMs();
+                if (timeSinceSend > requestTimeout) {
+                    nodeIds.add(nodeId);
+                }
+            }
+        }
+
+        return nodeIds;
+    }
 }

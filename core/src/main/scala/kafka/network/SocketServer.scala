@@ -32,8 +32,9 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{Mode, InvalidReceiveException, ChannelBuilders,
+import org.apache.kafka.common.network.{Mode, InvalidReceiveException, ChannelBuilder,
                                         PlaintextChannelBuilder, SSLChannelBuilder, SaslChannelBuilder}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.security.kerberos.LoginManager
 import org.apache.kafka.common.protocol.SecurityProtocol
@@ -419,7 +420,7 @@ private[kafka] class Processor(val id: Int,
           try {
 
             val channel = selector.channelForId(receive.source);
-            val session = RequestChannel.Session(channel.principal, channel.socketDescription)
+            val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal().getName), channel.socketDescription)
             val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
             requestChannel.sendRequest(req)
           } catch {

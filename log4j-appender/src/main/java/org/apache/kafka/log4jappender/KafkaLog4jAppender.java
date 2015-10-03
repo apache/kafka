@@ -117,7 +117,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         if (compressionType != null)
             props.put(COMPRESSION_TYPE_CONFIG, compressionType);
         if (requiredNumAcks != Integer.MAX_VALUE)
-            props.put(ACKS_CONFIG, requiredNumAcks);
+            props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
         if (retries > 0)
             props.put(RETRIES_CONFIG, retries);
 
