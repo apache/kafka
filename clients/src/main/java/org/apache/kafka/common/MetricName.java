@@ -90,10 +90,9 @@ public final class MetricName {
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
         Map<String, String> tags = new HashMap<String, String>();
 
-        for (int i = 0; i < keyValue.length;) {
+        for (int i = 0; i < keyValue.length; i += 2)
             tags.put(keyValue[i], keyValue[i + 1]);
-            i += 2;
-        }
+
         return tags;
     }
 
