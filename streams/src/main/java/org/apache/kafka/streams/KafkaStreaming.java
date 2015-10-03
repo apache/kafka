@@ -17,10 +17,20 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
@@ -61,8 +71,12 @@ import org.slf4j.LoggerFactory;
 public class KafkaStreaming {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
+    private static final AtomicInteger STREAMING_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+    private static final String JMX_PREFIX = "kafka.streaming";
 
-    // Container States
+    private final Time time;
+
+    // container states
     private static final int CREATED = 0;
     private static final int RUNNING = 1;
     private static final int STOPPED = 2;
@@ -70,10 +84,27 @@ public class KafkaStreaming {
 
     private final StreamThread[] threads;
 
+    private String clientId;
+    private final Metrics metrics;
+
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
+        // create the metrics
+        this.time = new SystemTime();
+
+        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamingConfig.METRICS_NUM_SAMPLES_CONFIG))
+            .timeWindow(config.getLong(StreamingConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
+                TimeUnit.MILLISECONDS);
+        clientId = config.getString(StreamingConfig.CLIENT_ID_CONFIG);
+        if (clientId.length() <= 0)
+            clientId = "streaming-" + STREAMING_CLIENT_ID_SEQUENCE.getAndIncrement();
+        List<MetricsReporter> reporters = config.getConfiguredInstances(StreamingConfig.METRIC_REPORTER_CLASSES_CONFIG,
+            MetricsReporter.class);
+        reporters.add(new JmxReporter(JMX_PREFIX));
+        this.metrics = new Metrics(metricConfig, reporters, time);
+
         this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config);
+            this.threads[i] = new StreamThread(builder, config, this.clientId, this.metrics, this.time);
         }
     }
 

@@ -17,17 +17,11 @@
 
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.RestoreFunc;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.MeasurableStat;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
@@ -43,7 +37,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     protected final KeyValueStore<K, V> inner;
 
     private final Time time;
-    private final String group;
     private final Sensor putTime;
     private final Sensor getTime;
     private final Sensor deleteTime;
@@ -52,7 +45,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final Sensor rangeTime;
     private final Sensor flushTime;
     private final Sensor restoreTime;
-    private final Metrics metrics;
+    private final StreamingMetrics metrics;
 
     private final String topic;
     private final int partition;
@@ -61,20 +54,19 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final ProcessorContext context;
 
     // always wrap the logged store with the metered store
-    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, ProcessorContext context, String group, Time time) {
+    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, ProcessorContext context, String metricGrp, Time time) {
         this.inner = inner;
 
         this.time = time;
-        this.group = group;
         this.metrics = context.metrics();
-        this.putTime = createSensor(name, "put");
-        this.getTime = createSensor(name, "get");
-        this.deleteTime = createSensor(name, "delete");
-        this.putAllTime = createSensor(name, "put-all");
-        this.allTime = createSensor(name, "all");
-        this.rangeTime = createSensor(name, "range");
-        this.flushTime = createSensor(name, "flush");
-        this.restoreTime = createSensor(name, "restore");
+        this.putTime = this.metrics.addLatencySensor(metricGrp, name, "put", "store-name", name);
+        this.getTime = this.metrics.addLatencySensor(metricGrp, name, "get", "store-name", name);
+        this.deleteTime = this.metrics.addLatencySensor(metricGrp, name, "delete", "store-name", name);
+        this.putAllTime = this.metrics.addLatencySensor(metricGrp, name, "put-all", "store-name", name);
+        this.allTime = this.metrics.addLatencySensor(metricGrp, name, "all", "store-name", name);
+        this.rangeTime = this.metrics.addLatencySensor(metricGrp, name, "range", "store-name", name);
+        this.flushTime = this.metrics.addLatencySensor(metricGrp, name, "flush", "store-name", name);
+        this.restoreTime = this.metrics.addLatencySensor(metricGrp, name, "restore", "store-name", name);
 
         this.topic = name;
         this.partition = context.id();
@@ -90,35 +82,16 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keyDeserializer();
             final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueDeserializer();
 
-            context.register(this, new RestoreFunc() {
+            context.register(this, new StateRestoreCallback() {
                 @Override
-                public void apply(byte[] key, byte[] value) {
+                public void restore(byte[] key, byte[] value) {
                     inner.put(keyDeserializer.deserialize(topic, key),
                         valDeserializer.deserialize(topic, value));
                 }
             });
         } finally {
-            recordLatency(this.restoreTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
         }
-    }
-
-    private Sensor createSensor(String storeName, String operation) {
-        Sensor parent = metrics.sensor(operation);
-        addLatencyMetrics(parent, operation);
-        Sensor sensor = metrics.sensor(storeName + "- " + operation, parent);
-        addLatencyMetrics(sensor, operation, "store-name", storeName);
-        return sensor;
-    }
-
-    private void addLatencyMetrics(Sensor sensor, String opName, String... kvs) {
-        maybeAddMetric(sensor, new MetricName(opName + "-avg-latency-ms", group, "The average latency in milliseconds of the key-value store operation.", kvs), new Avg());
-        maybeAddMetric(sensor, new MetricName(opName + "-max-latency-ms", group, "The max latency in milliseconds of the key-value store operation.", kvs), new Max());
-        maybeAddMetric(sensor, new MetricName(opName + "-qps", group, "The average number of occurance of the given key-value store operation per second.", kvs), new Rate(new Count()));
-    }
-
-    private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
-        if (!metrics.metrics().containsKey(name))
-            sensor.add(name, stat);
     }
 
     @Override
@@ -137,7 +110,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             return this.inner.get(key);
         } finally {
-            recordLatency(this.getTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.getTime, startNs, time.nanoseconds());
         }
     }
 
@@ -151,7 +124,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             if (this.dirty.size() > this.maxDirty)
                 logChange();
         } finally {
-            recordLatency(this.putTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
     }
 
@@ -168,7 +141,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             if (this.dirty.size() > this.maxDirty)
                 logChange();
         } finally {
-            recordLatency(this.putAllTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
         }
     }
 
@@ -184,7 +157,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
             return value;
         } finally {
-            recordLatency(this.deleteTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
         }
     }
 
@@ -210,7 +183,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             this.inner.flush();
             logChange();
         } finally {
-            recordLatency(this.flushTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
         }
     }
 
@@ -226,10 +199,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             }
             this.dirty.clear();
         }
-    }
-
-    private void recordLatency(Sensor sensor, long startNs, long endNs) {
-        sensor.record((endNs - startNs) / 1000000, endNs);
     }
 
     private class MeteredKeyValueIterator<K1, V1> implements KeyValueIterator<K1, V1> {
@@ -264,7 +233,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             try {
                 iter.close();
             } finally {
-                recordLatency(this.sensor, this.startNs, time.nanoseconds());
+                metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
             }
         }
 

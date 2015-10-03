@@ -17,9 +17,9 @@
 
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamingMetrics;
 
 import java.io.File;
 
@@ -70,9 +70,9 @@ public interface ProcessorContext {
     /**
      * Returns Metrics instance
      *
-     * @return Metrics
+     * @return StreamingMetrics
      */
-    Metrics metrics();
+    StreamingMetrics metrics();
 
     /**
      * Check if this process's incoming streams are joinable
@@ -84,7 +84,7 @@ public interface ProcessorContext {
      *
      * @param store the storage engine
      */
-    void register(StateStore store, RestoreFunc restoreFunc);
+    void register(StateStore store, StateRestoreCallback stateRestoreCallback);
 
     StateStore getStateStore(String name);
 

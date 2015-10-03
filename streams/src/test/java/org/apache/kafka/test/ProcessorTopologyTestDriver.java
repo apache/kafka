@@ -23,10 +23,12 @@ import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -153,7 +155,24 @@ public class ProcessorTopologyTestDriver {
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
 
-        task = new StreamTask(id, consumer, producer, restoreStateConsumer, partitionsByTopic.values(), topology, config);
+        task = new StreamTask(id,
+            consumer,
+            producer,
+            restoreStateConsumer,
+            partitionsByTopic.values(),
+            topology,
+            config,
+            new StreamingMetrics() {
+                @Override
+                public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
+                    return null;
+                }
+
+                @Override
+                public void recordLatency(Sensor sensor, long startNs, long endNs) {
+                    // do nothing
+                }
+            });
     }
 
     /**
