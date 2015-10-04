@@ -920,7 +920,6 @@ object TestUtils extends Logging {
     new String(bytes, encoding)
   }
 
-<<<<<<< HEAD
   def addSSLConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File],  certAlias: String): Properties = {
     var sslConfigs: java.util.Map[String, Object] = new java.util.HashMap[String, Object]()
     if (!trustStoreFile.isDefined) {
@@ -930,22 +929,6 @@ object TestUtils extends Logging {
       sslConfigs = TestSSLUtils.createSSLConfig(true, true, mode, trustStoreFile.get, certAlias)
     else
       sslConfigs = TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStoreFile.get, certAlias)
-=======
-  def addSSLConfigs(mode: SSLFactory.Mode, clientCert: Boolean, trustStoreFile: Option[File],  certAlias: String): Properties = {
-    if (!trustStoreFile.isDefined) {
-      throw new Exception("enableSSL set to true but no trustStoreFile provided")
-    }
-
-    val sslConfigs = {
-      if (mode == SSLFactory.Mode.SERVER) {
-        val sslConfigs = TestSSLUtils.createSSLConfig(true, true, mode, trustStoreFile.get, certAlias)
-        sslConfigs.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.SSL.name)
-        sslConfigs
-      }
-      else
-        TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStoreFile.get, certAlias)
-    }
->>>>>>> refs/remotes/origin/trunk
 
     val sslProps = new Properties()
     sslConfigs.foreach { case (k, v) => sslProps.put(k, v) }

@@ -32,7 +32,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{Mode, InvalidReceiveException, ChannelBuilder,
+import org.apache.kafka.common.network.{Mode, InvalidReceiveException, ChannelBuilders,
                                         PlaintextChannelBuilder, SSLChannelBuilder, SaslChannelBuilder}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.ssl.SSLFactory
