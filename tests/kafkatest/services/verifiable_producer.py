@@ -98,8 +98,8 @@ class VerifiableProducer(BackgroundThreadService):
         if node.version <= LATEST_0_8_2:
             # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
             # the tools jar from trunk to the classpath
-            cmd += "for file in /opt/kafka-trunk/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; "
-            cmd += "for file in /opt/kafka-trunk/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; "
+            cmd += "for file in /opt/%s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KafkaService.KAFKA_TRUNK
+            cmd += "for file in /opt/%s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KafkaService.KAFKA_TRUNK
             cmd += "export CLASSPATH; "
 
         cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR

@@ -29,6 +29,8 @@ import subprocess
 import time
 
 
+
+
 class KafkaService(Service):
 
     logs = {
@@ -43,13 +45,22 @@ class KafkaService(Service):
             "collect_default": False}
     }
 
+    # "trunk" installation of kafka
+    KAFKA_TRUNK = "kafka-trunk"
+
     @staticmethod
-    def kafka_dir(node):
+    def kafka_dir(node=None):
         """Return name of kafka directory for the given node.
 
         This provides a convenient way to support different versions of kafka or kafka tools running
         on different nodes.
         """
+        if node is None:
+            return KafkaService.KAFKA_TRUNK
+
+        if not hasattr(node, "version"):
+            return KafkaService.KAFKA_TRUNK
+
         return "kafka-" + str(node.version)
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
@@ -153,12 +164,20 @@ class KafkaService(Service):
         self.security_config.clean_node(node)
         node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log", allow_fail=False)
 
-    def create_topic(self, topic_cfg):
-        node = self.nodes[0] # any node is fine here
+    def create_topic(self, topic_cfg, node=None):
+        """Run the admin tool create topic command.
+        Specifying node is optional, and may be done if for different kafka nodes have different versions,
+        and we care where command gets run.
+
+        If the node is not specified, run the command from self.nodes[0]
+        """
+        if node is None:
+            node = self.nodes[0]
+        kafka_dir = KafkaService.kafka_dir(node)
         self.logger.info("Creating topic %s with settings %s", topic_cfg["topic"], topic_cfg)
 
-        cmd = "/opt/kafka/bin/kafka-topics.sh --zookeeper %(zk_connect)s --create "\
-            "--topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
+        cmd = "/opt/%s/bin/kafka-topics.sh " % kafka_dir
+        cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
                 'zk_connect': self.zk.connect_setting(),
                 'topic': topic_cfg.get("topic"),
                 'partitions': topic_cfg.get('partitions', 1),
@@ -177,19 +196,23 @@ class KafkaService(Service):
         for line in self.describe_topic(topic_cfg["topic"]).split("\n"):
             self.logger.info(line)
 
-    def describe_topic(self, topic):
-        node = self.nodes[0]
-        cmd = "/opt/kafka/bin/kafka-topics.sh --zookeeper %s --topic %s --describe" % \
-              (self.zk.connect_setting(), topic)
+    def describe_topic(self, topic, node=None):
+        if node is None:
+            node = self.nodes[0]
+        kafka_dir = KafkaService.kafka_dir(node)
+        cmd = "/opt/%s/bin/kafka-topics.sh --zookeeper %s --topic %s --describe" % \
+              (kafka_dir, self.zk.connect_setting(), topic)
         output = ""
         for line in node.account.ssh_capture(cmd):
             output += line
         return output
 
-    def verify_reassign_partitions(self, reassignment):
+    def verify_reassign_partitions(self, reassignment, node=None):
         """Run the reassign partitions admin tool in "verify" mode
         """
-        node = self.nodes[0]
+        if node is None:
+            node = self.nodes[0]
+        kafka_dir = KafkaService.kafka_dir(node)
         json_file = "/tmp/" + str(time.time()) + "_reassign.json"
 
         # reassignment to json
@@ -198,10 +221,10 @@ class KafkaService(Service):
 
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
-        cmd += "/opt/kafka/bin/kafka-reassign-partitions.sh "\
-                "--zookeeper %(zk_connect)s "\
-                "--reassignment-json-file %(reassignment_file)s "\
-                "--verify" % {'zk_connect': self.zk.connect_setting(),
+        cmd += "/opt/%s/bin/kafka-reassign-partitions.sh " % kafka_dir
+        cmd += "--zookeeper %(zk_connect)s "
+        cmd += "--reassignment-json-file %(reassignment_file)s "
+        cmd += "--verify" % {'zk_connect': self.zk.connect_setting(),
                                 'reassignment_file': json_file}
         cmd += " && sleep 1 && rm -f %s" % json_file
 
@@ -219,10 +242,12 @@ class KafkaService(Service):
 
         return True
 
-    def execute_reassign_partitions(self, reassignment):
+    def execute_reassign_partitions(self, reassignment, node=None):
         """Run the reassign partitions admin tool in "verify" mode
         """
-        node = self.nodes[0]
+        if node is None:
+            node = self.nodes[0]
+        kafka_dir = KafkaService.kafka_dir(node)
         json_file = "/tmp/" + str(time.time()) + "_reassign.json"
 
         # reassignment to json
@@ -231,10 +256,10 @@ class KafkaService(Service):
 
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
-        cmd += "/opt/kafka/bin/kafka-reassign-partitions.sh "\
-                "--zookeeper %(zk_connect)s "\
-                "--reassignment-json-file %(reassignment_file)s "\
-                "--execute" % {'zk_connect': self.zk.connect_setting(),
+        cmd += "/opt/%s/bin/kafka-reassign-partitions.sh " % kafka_dir
+        cmd += "--zookeeper %(zk_connect)s "
+        cmd += "--reassignment-json-file %(reassignment_file)s "
+        cmd += "--execute" % {'zk_connect': self.zk.connect_setting(),
                                 'reassignment_file': json_file}
         cmd += " && sleep 1 && rm -f %s" % json_file
 
@@ -256,8 +281,9 @@ class KafkaService(Service):
     def leader(self, topic, partition=0):
         """ Get the leader replica for the given topic and partition.
         """
-        cmd = "/opt/kafka/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " \
-              % self.zk.connect_setting()
+        kafka_dir = KafkaService.KAFKA_TRUNK
+        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " %\
+              (kafka_dir, self.zk.connect_setting())
         cmd += "get /brokers/topics/%s/partitions/%d/state" % (topic, partition)
         self.logger.debug(cmd)
 

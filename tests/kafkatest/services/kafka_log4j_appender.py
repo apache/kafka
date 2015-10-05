@@ -15,6 +15,8 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
+from kafkatest.services.kafka import KafkaService
+
 
 class KafkaLog4jAppender(BackgroundThreadService):
 
@@ -32,14 +34,15 @@ class KafkaLog4jAppender(BackgroundThreadService):
         self.max_messages = max_messages
 
     def _worker(self, idx, node):
-        cmd = self.start_cmd
+        cmd = self.start_cmd(node)
         self.logger.debug("VerifiableKafkaLog4jAppender %d command: %s" % (idx, cmd))
         node.account.ssh(cmd)
 
-    @property
-    def start_cmd(self):
-        cmd = "/opt/kafka/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableLog4jAppender" \
-              " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers())
+    def start_cmd(self, node):
+        cmd = "/opt/%s/bin/" % KafkaService.kafka_dir(node)
+        cmd += "kafka-run-class.sh org.apache.kafka.clients.tools.VerifiableLog4jAppender"
+        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers())
+
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 

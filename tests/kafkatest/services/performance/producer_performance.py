@@ -17,6 +17,8 @@ from kafkatest.services.performance.jmx_mixin import JmxMixin
 from kafkatest.services.performance import PerformanceService
 import itertools
 from kafkatest.utils.security_config import SecurityConfig
+from kafkatest.services.kafka import KafkaService
+
 
 class ProducerPerformanceService(JmxMixin, PerformanceService):
 
@@ -30,6 +32,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
                  intermediate_stats=False, client_id="producer-performance", jmx_object_names=None, jmx_attributes=[]):
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         PerformanceService.__init__(self, context, num_nodes)
+
         self.kafka = kafka
         self.security_config = SecurityConfig(security_protocol)
         self.security_protocol = security_protocol
@@ -45,9 +48,12 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
 
     def _worker(self, idx, node):
         args = self.args.copy()
-        args.update({'bootstrap_servers': self.kafka.bootstrap_servers(), 'jmx_port': self.jmx_port, 'client_id': self.client_id})
-        cmd = "JMX_PORT=%(jmx_port)d /opt/kafka/bin/kafka-run-class.sh org.apache.kafka.tools.ProducerPerformance " \
-              "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
+        args.update({'bootstrap_servers': self.kafka.bootstrap_servers(), 'client_id': self.client_id})
+
+        cmd = "export JMX_PORT=%(jmx_port)d; " % self.jmx_port
+        cmd += "/opt/%s/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance " % KafkaService.kafka_dir(node)
+        cmd += "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
+        cmd += " | tee /mnt/producer-performance.log"
 
         self.security_config.setup_node(node)
         if self.security_protocol == SecurityConfig.SSL:
@@ -71,6 +77,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
                 'latency_99th_ms': float(parts[6].split()[0]),
                 'latency_999th_ms': float(parts[7].split()[0]),
             }
+
         last = None
         producer_output = node.account.ssh_capture(cmd)
         first_line = producer_output.next()

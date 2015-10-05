@@ -108,7 +108,6 @@ class CopycatStandaloneService(CopycatServiceBase):
             raise RuntimeError("No process ids recorded")
 
 
-
 class CopycatDistributedService(CopycatServiceBase):
     """Runs Copycat in distributed mode."""
 
@@ -140,4 +139,3 @@ class CopycatDistributedService(CopycatServiceBase):
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
 
-        self.first_start = False

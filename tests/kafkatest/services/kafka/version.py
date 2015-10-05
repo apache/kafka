@@ -57,4 +57,4 @@ V_0_8_2_1 = KafkaVersion("0.8.2.1")
 V_0_8_2_2 = KafkaVersion("0.8.2.2")
 
 # Latest supported 0.8.2 version
-LATEST_0_8_2 = V_0_8_2_1
+LATEST_0_8_2 = V_0_8_2_2
