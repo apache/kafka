@@ -17,10 +17,10 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.RestoreFunc;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -83,13 +83,13 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public Metrics metrics() {
+    public StreamingMetrics metrics() {
         throw new UnsupportedOperationException("metrics() not supported.");
     }
 
     @Override
-    public void register(StateStore store, RestoreFunc func) {
-        if (func != null) throw new UnsupportedOperationException("RestoreFunc not supported.");
+    public void register(StateStore store, StateRestoreCallback func) {
+        if (func != null) throw new UnsupportedOperationException("StateRestoreCallback not supported.");
         storeMap.put(store.name(), store);
     }
 

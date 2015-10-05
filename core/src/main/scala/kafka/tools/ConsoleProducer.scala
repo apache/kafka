@@ -33,11 +33,11 @@ object ConsoleProducer {
 
   def main(args: Array[String]) {
 
-    val config = new ProducerConfig(args)
-    val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
-    reader.init(System.in, getReaderProps(config))
-
     try {
+        val config = new ProducerConfig(args)
+        val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
+        reader.init(System.in, getReaderProps(config))
+
         val producer =
           if(config.useNewProducer) {
             new NewShinyProducer(getNewProducerProps(config))
@@ -58,6 +58,9 @@ object ConsoleProducer {
             producer.send(message.topic, message.key, message.message)
         } while(message != null)
     } catch {
+      case e: joptsimple.OptionException =>
+        System.err.println(e.getMessage)
+        System.exit(1)
       case e: Exception =>
         e.printStackTrace
         System.exit(1)

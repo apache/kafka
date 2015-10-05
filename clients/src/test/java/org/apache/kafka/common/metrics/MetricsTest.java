@@ -47,9 +47,10 @@ public class MetricsTest {
 
     @Test
     public void testMetricName() {
-        MetricName n1 = new MetricName("name", "group", "description", "key1", "value1");
+        MetricName n1 = new MetricName("name", "group", "description", "key1", "value1", "key2", "value2");
         Map<String, String> tags = new HashMap<String, String>();
         tags.put("key1", "value1");
+        tags.put("key2", "value2");
         MetricName n2 = new MetricName("name", "group", "description", tags);
         assertEquals("metric names created in two different ways should be equal", n1, n2);
 

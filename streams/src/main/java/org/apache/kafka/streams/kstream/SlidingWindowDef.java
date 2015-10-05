@@ -25,10 +25,10 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.FilteredIterator;
 import org.apache.kafka.streams.kstream.internals.WindowSupport;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.RestoreFunc;
 import org.apache.kafka.streams.processor.internals.Stamped;
 
 import java.util.Collections;
@@ -83,7 +83,7 @@ public class SlidingWindowDef<K, V> implements WindowDef<K, V> {
         @Override
         public void init(ProcessorContext context) {
             this.context = context;
-            RestoreFuncImpl restoreFunc = new RestoreFuncImpl();
+            SlidingWindowRegistryCallback restoreFunc = new SlidingWindowRegistryCallback();
             context.register(this, restoreFunc);
 
             for (ValueList<V> valueList : map.values()) {
@@ -229,17 +229,17 @@ public class SlidingWindowDef<K, V> implements WindowDef<K, V> {
             return false;
         }
 
-        private class RestoreFuncImpl implements RestoreFunc {
+        private class SlidingWindowRegistryCallback implements StateRestoreCallback {
 
             final IntegerDeserializer intDeserializer;
             int slotNum = 0;
 
-            RestoreFuncImpl() {
+            SlidingWindowRegistryCallback() {
                 intDeserializer = new IntegerDeserializer();
             }
 
             @Override
-            public void apply(byte[] slot, byte[] bytes) {
+            public void restore(byte[] slot, byte[] bytes) {
 
                 slotNum = intDeserializer.deserialize("", slot);
 

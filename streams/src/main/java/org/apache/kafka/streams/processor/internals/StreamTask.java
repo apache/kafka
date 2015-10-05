@@ -23,8 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
@@ -74,6 +74,7 @@ public class StreamTask implements Punctuator {
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param config                the {@link StreamingConfig} specified by the user
+     * @param metrics               the {@link StreamingMetrics} created by the thread
      */
     public StreamTask(int id,
                       Consumer<byte[], byte[]> consumer,
@@ -81,7 +82,8 @@ public class StreamTask implements Punctuator {
                       Consumer<byte[], byte[]> restoreConsumer,
                       Collection<TopicPartition> partitions,
                       ProcessorTopology topology,
-                      StreamingConfig config) {
+                      StreamingConfig config,
+                      StreamingMetrics metrics) {
 
         this.id = id;
         this.consumer = consumer;
@@ -119,7 +121,7 @@ public class StreamTask implements Punctuator {
         }
 
         // initialize the topology with its own context
-        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, new Metrics());
+        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics);
 
         // initialize the task by initializing all its processor nodes in the topology
         for (ProcessorNode node : this.topology.processors()) {
