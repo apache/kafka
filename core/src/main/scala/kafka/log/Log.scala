@@ -486,10 +486,17 @@ class Log(val dir: File,
     // continue to read from successive segments until we get some messages or we reach the end of the log
     while(entry != null) {
       val maxPosition = {
-        if (entry == segments.lastEntry)
-          Some(nextOffsetMetadata.relativePositionInSegment.toLong)
-        else
-          None
+        if (entry == segments.lastEntry) {
+          val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
+          // Check the segment again in case a new segment has just rolled rolled out
+          if (entry != segments.lastEntry)
+            // New log segment has rolled out, we can read up to the file end.
+            entry.getValue.size
+          else
+            exposedPos
+        } else {
+          entry.getValue.size
+        }
       }
       val fetchInfo = entry.getValue.read(startOffset, maxOffset, maxLength, maxPosition)
       if(fetchInfo == null) {
