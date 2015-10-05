@@ -33,7 +33,7 @@ class KafkaService(Service):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, zk, topics=None):
+    def __init__(self, context, num_nodes, zk, topics=None, quota_config=None):
         """
         :type context
         :type zk: ZookeeperService
@@ -42,6 +42,7 @@ class KafkaService(Service):
         super(KafkaService, self).__init__(context, num_nodes)
         self.zk = zk
         self.topics = topics
+        self.quota_config = quota_config
 
     def start(self):
         super(KafkaService, self).start()
@@ -56,7 +57,8 @@ class KafkaService(Service):
                 self.create_topic(topic_cfg)
 
     def start_node(self, node):
-        props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node))
+        props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node), quota_config=self.quota_config)
+
         self.logger.info("kafka.properties:")
         self.logger.info(props_file)
         node.account.create_file("/mnt/kafka.properties", props_file)

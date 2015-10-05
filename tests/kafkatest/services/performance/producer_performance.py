@@ -13,10 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.services.performance import PerformanceService
+from kafkatest.services.performance.jmx_mixin import JmxMixin
 
-
-class ProducerPerformanceService(PerformanceService):
+class ProducerPerformanceService(JmxMixin):
 
     logs = {
         "producer_performance_log": {
@@ -24,8 +23,9 @@ class ProducerPerformanceService(PerformanceService):
             "collect_default": True},
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, settings={}, intermediate_stats=False):
-        super(ProducerPerformanceService, self).__init__(context, num_nodes)
+    def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, settings={},
+                 intermediate_stats=False, client_id="producer-performance", jmx_object_name=None, jmx_attributes=None):
+        super(ProducerPerformanceService, self).__init__(context, num_nodes, jmx_object_name, jmx_attributes)
         self.kafka = kafka
         self.args = {
             'topic': topic,
@@ -35,12 +35,13 @@ class ProducerPerformanceService(PerformanceService):
         }
         self.settings = settings
         self.intermediate_stats = intermediate_stats
+        self.client_id = client_id
 
     def _worker(self, idx, node):
         args = self.args.copy()
-        args.update({'bootstrap_servers': self.kafka.bootstrap_servers()})
-        cmd = "/opt/kafka/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance "\
-              "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s"\
+        args.update({'bootstrap_servers': self.kafka.bootstrap_servers(), 'jmx_port': self.jmx_port, 'client_id': self.client_id})
+        cmd = "JMX_PORT=%(jmx_port)d /opt/kafka/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance "\
+              "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s"\
               " | tee /mnt/producer-performance.log" % args
 
         for key, value in self.settings.items():
@@ -62,6 +63,7 @@ class ProducerPerformanceService(PerformanceService):
             }
         last = None
         for line in node.account.ssh_capture(cmd):
+            self.maybe_start_jmx_tool(idx, node)
             if self.intermediate_stats:
                 try:
                     self.stats[idx-1].append(parse_stats(line))
@@ -74,3 +76,4 @@ class ProducerPerformanceService(PerformanceService):
             self.results[idx-1] = parse_stats(last)
         except:
             raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
+        self.read_jmx_output(idx, node)
