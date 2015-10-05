@@ -101,7 +101,7 @@ object ConsoleConsumer extends Logging {
         consumer.receive()
       } catch {
         case e: Throwable => {
-          error("Error processing message, stopping consumer: ", e)
+          error("Error processing message, terminating consumer process: ", e)
           // Consumer will be stopped in shutdown hook
           return
         }
