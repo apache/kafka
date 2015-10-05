@@ -211,7 +211,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     )
 
     resourceToAcls foreach { case (key, value) => changeAclAndVerify(Set.empty[Acl], value, Set.empty[Acl], key) }
-    assertEquals(resourceToAcls + (resource -> acls), simpleAclAuthorizer.getAcls())
+    TestUtils.waitUntilTrue(() => resourceToAcls + (resource -> acls) == simpleAclAuthorizer.getAcls(), "changes not propagated in timeout period.")
 
     //test remove acl from existing acls.
     acls = changeAclAndVerify(acls, Set.empty[Acl], Set(acl1, acl5))
@@ -262,7 +262,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     }
 
     TestUtils.waitUntilTrue(() => simpleAclAuthorizer.getAcls(resource) == acls,
-      s"changes not propagated in timeout period. expected $acls but got ${simpleAclAuthorizer.getAcls(resource)}", waitTime = 10000)
+      s"expected $acls but got ${simpleAclAuthorizer.getAcls(resource)}", waitTime = 10000)
 
     acls
   }

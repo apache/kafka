@@ -168,7 +168,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         ZkUtils.createPersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
 
       updateAclChangedFlag(resource)
-      updateCache(resource, updatedAcls)
     }
   }
 
@@ -186,7 +185,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
           ZkUtils.deletePath(zkClient, toResourcePath(resource))
 
         updateAclChangedFlag(resource)
-        updateCache(resource, filteredAcls)
       }
 
       aclNeedsRemoval
@@ -197,7 +195,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     if (ZkUtils.pathExists(zkClient, toResourcePath(resource))) {
       ZkUtils.deletePath(zkClient, toResourcePath(resource))
       updateAclChangedFlag(resource)
-      updateCache(resource, Set.empty[Acl])
       true
     } else false
   }
