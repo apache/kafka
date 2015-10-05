@@ -20,27 +20,27 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public class ClientResponse {
 
-    private final long received;
+    private final long receivedTimeMs;
     private final boolean disconnected;
     private final ClientRequest request;
     private final Struct responseBody;
 
     /**
      * @param request The original request
-     * @param received The unix timestamp when this response was received
+     * @param receivedTimeMs The unix timestamp when this response was received
      * @param disconnected Whether the client disconnected before fully reading a response
      * @param responseBody The response contents (or null) if we disconnected or no response was expected
      */
-    public ClientResponse(ClientRequest request, long received, boolean disconnected, Struct responseBody) {
+    public ClientResponse(ClientRequest request, long receivedTimeMs, boolean disconnected, Struct responseBody) {
         super();
-        this.received = received;
+        this.receivedTimeMs = receivedTimeMs;
         this.disconnected = disconnected;
         this.request = request;
         this.responseBody = responseBody;
     }
 
-    public long receivedTime() {
-        return received;
+    public long receivedTimeMs() {
+        return receivedTimeMs;
     }
 
     public boolean wasDisconnected() {
@@ -60,12 +60,12 @@ public class ClientResponse {
     }
 
     public long requestLatencyMs() {
-        return receivedTime() - this.request.createdTime();
+        return receivedTimeMs() - this.request.createdTimeMs();
     }
 
     @Override
     public String toString() {
-        return "ClientResponse(received=" + received +
+        return "ClientResponse(receivedTimeMs=" + receivedTimeMs +
                ", disconnected=" +
                disconnected +
                ", request=" +

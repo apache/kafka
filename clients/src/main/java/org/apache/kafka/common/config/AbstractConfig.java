@@ -62,6 +62,10 @@ public class AbstractConfig {
         return values.get(key);
     }
 
+    public void ignore(String key) {
+        used.add(key);
+    }
+
     public Short getShort(String key) {
         return (Short) get(key);
     }

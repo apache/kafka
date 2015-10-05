@@ -100,6 +100,8 @@ public class RequestFuture<T> {
      * @param value corresponding value (or null if there is none)
      */
     public void complete(T value) {
+        if (isDone)
+            throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
         this.value = value;
         this.isDone = true;
         fireSuccess();
@@ -111,6 +113,8 @@ public class RequestFuture<T> {
      * @param e corresponding exception to be passed to caller
      */
     public void raise(RuntimeException e) {
+        if (isDone)
+            throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
         this.exception = e;
         this.isDone = true;
         fireFailure();

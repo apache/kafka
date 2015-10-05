@@ -67,9 +67,9 @@ public class FileOffsetBackingStoreTest {
         Callback<Map<ByteBuffer, ByteBuffer>> getCallback = expectSuccessfulGetCallback();
         PowerMock.replayAll();
 
-        store.set("namespace", firstSet, setCallback).get();
+        store.set(firstSet, setCallback).get();
 
-        Map<ByteBuffer, ByteBuffer> values = store.get("namespace", Arrays.asList(buffer("key"), buffer("bad")), getCallback).get();
+        Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad")), getCallback).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
         assertEquals(null, values.get(buffer("bad")));
 
@@ -82,14 +82,14 @@ public class FileOffsetBackingStoreTest {
         Callback<Map<ByteBuffer, ByteBuffer>> getCallback = expectSuccessfulGetCallback();
         PowerMock.replayAll();
 
-        store.set("namespace", firstSet, setCallback).get();
+        store.set(firstSet, setCallback).get();
         store.stop();
 
         // Restore into a new store to ensure correct reload from scratch
         FileOffsetBackingStore restore = new FileOffsetBackingStore();
         restore.configure(props);
         restore.start();
-        Map<ByteBuffer, ByteBuffer> values = restore.get("namespace", Arrays.asList(buffer("key")), getCallback).get();
+        Map<ByteBuffer, ByteBuffer> values = restore.get(Arrays.asList(buffer("key")), getCallback).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
 
         PowerMock.verifyAll();

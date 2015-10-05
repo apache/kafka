@@ -139,7 +139,8 @@ public class OffsetStorageWriter {
                 // for that data. The only enforcement of the format is here.
                 OffsetUtils.validateFormat(entry.getKey());
                 OffsetUtils.validateFormat(entry.getValue());
-                byte[] key = keyConverter.fromCopycatData(namespace, null, entry.getKey());
+                // When serializing the key, we add in the namespace information so the key is [namespace, real key]
+                byte[] key = keyConverter.fromCopycatData(namespace, null, Arrays.asList(namespace, entry.getKey()));
                 ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
                 byte[] value = valueConverter.fromCopycatData(namespace, null, entry.getValue());
                 ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
@@ -158,7 +159,7 @@ public class OffsetStorageWriter {
 
         // And submit the data
         log.debug("Submitting {} entries to backing store", offsetsSerialized.size());
-        return backingStore.set(namespace, offsetsSerialized, new Callback<Void>() {
+        return backingStore.set(offsetsSerialized, new Callback<Void>() {
             @Override
             public void onCompletion(Throwable error, Void result) {
                 boolean isCurrent = handleFinishWrite(flushId, error, result);

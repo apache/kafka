@@ -71,7 +71,7 @@ rat {
     'gradlew.bat',
     '**/README.md',
     '.reviewboardrc',
-    'system_test/**',
+    'system_test/**'
   ])
 }
 
@@ -215,25 +215,22 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
 }
 
 def copycatPkgs = ['copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
-def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools'] + copycatPkgs
+def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools', 'streams'] + copycatPkgs
 
 tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) {
-}
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) { }
 
 tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10_5', 'srcJar_2_11_7'] + pkgs.collect { it + ":srcJar" }) { }
 
 tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10_5', 'docsJar_2_11_7'] + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testCopycat", dependsOn: copycatPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: ['test_core_2_10_5', 'test_core_2_11_7'] + pkgs.collect { it + ":test" }) {
-}
+tasks.create(name: "testAll", dependsOn: ['test_core_2_10_5', 'test_core_2_11_7'] + pkgs.collect { it + ":test" }) { }
 
 tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10_5', 'releaseTarGz_2_11_7']) {
 }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10_5', 'uploadCoreArchives_2_11_7'] + pkgs.collect { it + ":uploadArchives" }) {
-}
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10_5', 'uploadCoreArchives_2_11_7'] + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
   println "Building project 'core' with Scala version $scalaVersion"
@@ -287,6 +284,13 @@ project(':core') {
     into "$buildDir/dependant-libs-${scalaVersion}"
   }
 
+  task siteDocsTar(type: Tar) {
+    classifier = 'site-docs'
+    compression = Compression.GZIP
+    from project.file("../docs")
+    into 'site-docs'
+  }
+
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${baseScalaVersion}-${version}"
     compression = Compression.GZIP
@@ -296,6 +300,7 @@ project(':core') {
     from '../NOTICE'
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
+    from(project.siteDocsTar) { into("site-docs/") }
   }
 
   jar {
@@ -516,6 +521,71 @@ project(':tools') {
 
     jar {
         dependsOn 'copyDependantLibs'
+    }
+
+    artifacts {
+        archives testJar
+    }
+
+    configurations {
+        archives.extendsFrom (testCompile)
+    }
+
+    checkstyle {
+        configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    }
+    test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':streams') {
+    apply plugin: 'checkstyle'
+    archivesBaseName = "kafka-streams"
+
+    dependencies {
+        compile project(':clients')
+        compile "$slf4jlog4j"
+        compile 'org.rocksdb:rocksdbjni:3.10.1'
+
+        testCompile "$junit"
+        testCompile project(path: ':clients', configuration: 'archives')
+    }
+
+    task testJar(type: Jar) {
+        classifier = 'test'
+        from sourceSets.test.output
+    }
+
+    test {
+        testLogging {
+            events "passed", "skipped", "failed"
+            exceptionFormat = 'full'
+        }
+    }
+
+    javadoc {
+        include "**/org/apache/kafka/streams/*"
+    }
+
+    tasks.create(name: "copyDependantLibs", type: Copy) {
+        from (configurations.testRuntime) {
+            include('slf4j-log4j12*')
+        }
+        from (configurations.runtime) {
+            exclude('kafka-clients*')
+        }
+        into "$buildDir/dependant-libs-${scalaVersion}"
+    }
+
+    jar {
+        dependsOn 'copyDependantLibs'
+    }
+
+    artifacts {
+      archives testJar
+    }
+
+    configurations {
+      archives.extendsFrom (testCompile)
     }
 
     checkstyle {

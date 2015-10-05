@@ -18,6 +18,7 @@ import java.util.List;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.slf4j.Logger;
@@ -41,7 +42,9 @@ public final class RecordBatch {
     public final MemoryRecords records;
     public final TopicPartition topicPartition;
     public final ProduceRequestResult produceFuture;
+    public long lastAppendTime;
     private final List<Thunk> thunks;
+    private boolean retry;
 
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
         this.createdMs = now;
@@ -50,6 +53,8 @@ public final class RecordBatch {
         this.topicPartition = tp;
         this.produceFuture = new ProduceRequestResult();
         this.thunks = new ArrayList<Thunk>();
+        this.lastAppendTime = createdMs;
+        this.retry = false;
     }
 
     /**
@@ -57,12 +62,13 @@ public final class RecordBatch {
      * 
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
-    public FutureRecordMetadata tryAppend(byte[] key, byte[] value, Callback callback) {
+    public FutureRecordMetadata tryAppend(byte[] key, byte[] value, Callback callback, long now) {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
             this.records.append(0L, key, value);
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
+            this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount);
             if (callback != null)
                 thunks.add(new Thunk(callback, future));
@@ -115,5 +121,35 @@ public final class RecordBatch {
     @Override
     public String toString() {
         return "RecordBatch(topicPartition=" + topicPartition + ", recordCount=" + recordCount + ")";
+    }
+
+    /**
+     * Expire the batch that is ready but is sitting in accumulator for more than requestTimeout due to metadata being unavailable.
+     * We need to explicitly check if the record is full or linger time is met because the accumulator's partition may not be ready
+     * if the leader is unavailable.
+     */
+    public boolean maybeExpire(int requestTimeout, long now, long lingerMs) {
+        boolean expire = false;
+        if ((this.records.isFull() && requestTimeout < (now - this.lastAppendTime)) || requestTimeout < (now - (this.lastAttemptMs + lingerMs))) {
+            expire = true;
+            this.records.close();
+            this.done(-1L, new TimeoutException("Batch Expired"));
+        }
+
+        return expire;
+    }
+
+    /**
+     * Returns if the batch is been retried for sending to kafka
+     */
+    public boolean inRetry() {
+        return this.retry;
+    }
+
+    /**
+     * Set retry to true if the batch is being retried (for send)
+     */
+    public void setRetry() {
+        this.retry = true;
     }
 }

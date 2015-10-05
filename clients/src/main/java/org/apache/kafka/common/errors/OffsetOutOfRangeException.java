@@ -12,6 +12,9 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.TopicPartition;
+import java.util.Map;
+
 /**
  * This offset is either larger or smaller than the range of offsets the server has for the given partition.
  * 
@@ -19,8 +22,13 @@ package org.apache.kafka.common.errors;
 public class OffsetOutOfRangeException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
+    private Map<TopicPartition, Long> offsetOutOfRangePartitions = null;
 
     public OffsetOutOfRangeException() {
+    }
+
+    public OffsetOutOfRangeException(Map<TopicPartition, Long> offsetOutOfRangePartitions) {
+        this.offsetOutOfRangePartitions = offsetOutOfRangePartitions;
     }
 
     public OffsetOutOfRangeException(String message) {
@@ -33,6 +41,10 @@ public class OffsetOutOfRangeException extends RetriableException {
 
     public OffsetOutOfRangeException(String message, Throwable cause) {
         super(message, cause);
+    }
+
+    public Map<TopicPartition, Long> offsetOutOfRangePartitions() {
+        return offsetOutOfRangePartitions;
     }
 
 }

@@ -13,10 +13,13 @@
 
 package kafka.api
 
+import java.util
+
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.errors.{IllegalGenerationException, UnknownConsumerIdException}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{Test, Before}
@@ -73,25 +76,39 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     sendRecords(numRecords)
     this.producers.foreach(_.close)
 
-    var consumed = 0
+    var consumed = 0L
     val consumer = this.consumers(0)
-    consumer.subscribe(List(topic))
+
+    consumer.subscribe(List(topic), new ConsumerRebalanceListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
+        // TODO: until KAFKA-2017 is merged, we have to handle the case in which the
+        // the commit fails on prior to rebalancing on coordinator fail-over.
+        consumer.seek(tp, consumed)
+      }
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {}
+    })
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
     while (scheduler.isRunning.get()) {
       for (record <- consumer.poll(100)) {
-        assertEquals(consumed.toLong, record.offset())
+        assertEquals(consumed, record.offset())
         consumed += 1
       }
 
-      consumer.commitSync()
-      assertEquals(consumer.position(tp), consumer.committed(tp))
+      try {
+        consumer.commitSync()
+        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
 
-      if (consumer.position(tp) == numRecords) {
-        consumer.seekToBeginning()
-        consumed = 0
+        if (consumer.position(tp) == numRecords) {
+          consumer.seekToBeginning()
+          consumed = 0
+        }
+      } catch {
+        // TODO: should be no need to catch these exceptions once KAFKA-2017 is
+        // merged since coordinator fail-over will not cause a rebalance
+        case _: UnknownConsumerIdException | _: IllegalGenerationException =>
       }
     }
     scheduler.shutdown()
@@ -131,7 +148,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       } else if (coin == 2) {
         info("Committing offset.")
         consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(tp))
+        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
       }
     }
   }

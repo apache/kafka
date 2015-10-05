@@ -16,7 +16,7 @@
 */
 package kafka.controller
 
-import kafka.api.{LeaderAndIsr, KAFKA_083, PartitionStateInfo}
+import kafka.api.{LeaderAndIsr, KAFKA_090, PartitionStateInfo}
 import kafka.utils._
 import org.apache.kafka.clients.{ClientResponse, ClientRequest, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.{TopicPartition, Node}
@@ -106,7 +106,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         1,
         0,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
-        Selectable.USE_DEFAULT_BUFFER_SIZE
+        Selectable.USE_DEFAULT_BUFFER_SIZE,
+        config.requestTimeoutMs
       )
     }
     val threadName = threadNamePrefix match {
@@ -379,7 +380,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           topicPartition -> partitionState
         }
 
-        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_083)) (1: Short) else (0: Short)
+        val version = if (controller.config.interBrokerProtocolVersion.onOrAfter(KAFKA_090)) (1: Short) else (0: Short)
 
         val updateMetadataRequest =
           if (version == 0) {

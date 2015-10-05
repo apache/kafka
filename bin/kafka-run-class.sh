@@ -56,6 +56,11 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+for file in $base_dir/stream/build/libs/kafka-streams*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
 for file in $base_dir/tools/build/libs/kafka-tools*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
@@ -132,7 +137,7 @@ fi
 
 # JVM performance options
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
 fi
 
 

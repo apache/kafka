@@ -66,7 +66,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testManualReplicaAssignment() {
     val brokers = List(0, 1, 2, 3, 4)
-    TestUtils.createBrokersInZk(zkClient, brokers)
+    TestUtils.createBrokersInZk(zkClient, zkConnection, brokers)
 
     // duplicate brokers
     intercept[IllegalArgumentException] {
@@ -117,7 +117,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
       11 -> 1
     )
     val topic = "test"
-    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
+    TestUtils.createBrokersInZk(zkClient, zkConnection, List(0, 1, 2, 3, 4))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     // create leaders for all partitions
@@ -137,7 +137,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
   def testTopicCreationWithCollision() {
     val topic = "test.topic"
     val collidingTopic = "test_topic"
-    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
+    TestUtils.createBrokersInZk(zkClient, zkConnection, List(0, 1, 2, 3, 4))
     // create the topic
     AdminUtils.createTopic(zkClient, topic, 3, 1)
 

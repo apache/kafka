@@ -90,6 +90,68 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  def testAutoCommitOnClose() {
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    val numRecords = 10000
+    sendRecords(numRecords)
+
+    consumer0.subscribe(List(topic))
+
+    val assignment = Set(tp, tp2)
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == assignment.asJava
+    }, s"Expected partitions ${assignment.asJava} but actually got ${consumer0.assignment()}")
+
+    // should auto-commit seeked positions before closing
+    consumer0.seek(tp, 300)
+    consumer0.seek(tp2, 500)
+    consumer0.close()
+
+    // now we should see the committed positions from another consumer
+    assertEquals(300, this.consumers(0).committed(tp).offset)
+    assertEquals(500, this.consumers(0).committed(tp2).offset)
+  }
+
+  @Test
+  def testAutoCommitOnRebalance() {
+    val topic2 = "topic2"
+    TestUtils.createTopic(this.zkClient, topic2, 2, serverCount, this.servers)
+
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    val numRecords = 10000
+    sendRecords(numRecords)
+
+    consumer0.subscribe(List(topic))
+
+    val assignment = Set(tp, tp2)
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == assignment.asJava
+    }, s"Expected partitions ${assignment.asJava} but actually got ${consumer0.assignment()}")
+
+    consumer0.seek(tp, 300)
+    consumer0.seek(tp2, 500)
+
+    // change subscription to trigger rebalance
+    consumer0.subscribe(List(topic, topic2))
+
+    val newAssignment = Set(tp, tp2, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == newAssignment.asJava
+    }, s"Expected partitions ${newAssignment.asJava} but actually got ${consumer0.assignment()}")
+
+    // after rebalancing, we should have reset to the committed positions
+    assertEquals(300, consumer0.committed(tp).offset)
+    assertEquals(500, consumer0.committed(tp2).offset)
+  }
+
+  @Test
   def testPatternSubscription() {
     val numRecords = 10000
     sendRecords(numRecords)
@@ -186,23 +248,22 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     this.consumers(0).poll(50)
     val pos1 = this.consumers(0).position(tp)
     val pos2 = this.consumers(0).position(tp2)
-    this.consumers(0).commitSync(Map[TopicPartition,java.lang.Long]((tp, 3L)).asJava)
-    assertEquals(3, this.consumers(0).committed(tp))
-    intercept[NoOffsetForPartitionException] {
-      this.consumers(0).committed(tp2)
-    }
+    this.consumers(0).commitSync(Map[TopicPartition,OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
+    assertEquals(3, this.consumers(0).committed(tp).offset)
+    assertNull(this.consumers(0).committed(tp2))
+
     // positions should not change
     assertEquals(pos1, this.consumers(0).position(tp))
     assertEquals(pos2, this.consumers(0).position(tp2))
-    this.consumers(0).commitSync(Map[TopicPartition,java.lang.Long]((tp2, 5L)).asJava)
-    assertEquals(3, this.consumers(0).committed(tp))
-    assertEquals(5, this.consumers(0).committed(tp2))
+    this.consumers(0).commitSync(Map[TopicPartition,OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
+    assertEquals(3, this.consumers(0).committed(tp).offset)
+    assertEquals(5, this.consumers(0).committed(tp2).offset)
 
     // Using async should pick up the committed changes after commit completes
     val commitCallback = new CountConsumerCommitCallback()
-    this.consumers(0).commitAsync(Map[TopicPartition,java.lang.Long]((tp2, 7L)).asJava, commitCallback)
+    this.consumers(0).commitAsync(Map[TopicPartition,OffsetAndMetadata]((tp2, new OffsetAndMetadata(7L))).asJava, commitCallback)
     awaitCommitCallback(this.consumers(0), commitCallback)
-    assertEquals(7, this.consumers(0).committed(tp2))
+    assertEquals(7, this.consumers(0).committed(tp2).offset)
   }
 
   @Test
@@ -240,7 +301,25 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
+
   @Test
+  def testCommitMetadata() {
+    this.consumers(0).assign(List(tp))
+
+    // sync commit
+    val syncMetadata = new OffsetAndMetadata(5, "foo")
+    this.consumers(0).commitSync(Map((tp, syncMetadata)))
+    assertEquals(syncMetadata, this.consumers(0).committed(tp))
+
+    // async commit
+    val asyncMetadata = new OffsetAndMetadata(10, "bar")
+    val callback = new CountConsumerCommitCallback
+    this.consumers(0).commitAsync(Map((tp, asyncMetadata)), callback)
+    awaitCommitCallback(this.consumers(0), callback)
+
+    assertEquals(asyncMetadata, this.consumers(0).committed(tp))
+  }
+
   def testPositionAndCommit() {
     sendRecords(5)
 
@@ -258,12 +337,12 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
     assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers(0).position(tp))
     this.consumers(0).commitSync()
-    assertEquals(0L, this.consumers(0).committed(tp))
+    assertEquals(0L, this.consumers(0).committed(tp).offset)
 
     consumeRecords(this.consumers(0), 5, 0)
     assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers(0).position(tp))
     this.consumers(0).commitSync()
-    assertEquals("Committed offset should be returned", 5L, this.consumers(0).committed(tp))
+    assertEquals("Committed offset should be returned", 5L, this.consumers(0).committed(tp).offset)
 
     sendRecords(1)
 
@@ -473,14 +552,14 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     val startCount = commitCallback.count
     val started = System.currentTimeMillis()
     while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
-      this.consumers(0).poll(10000)
+      this.consumers(0).poll(50)
     assertEquals(startCount + 1, commitCallback.count)
   }
 
   private class CountConsumerCommitCallback extends OffsetCommitCallback {
     var count = 0
 
-    override def onComplete(offsets: util.Map[TopicPartition, lang.Long], exception: Exception): Unit = count += 1
+    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = count += 1
   }
 
 }

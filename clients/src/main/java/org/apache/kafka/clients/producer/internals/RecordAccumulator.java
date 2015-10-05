@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Iterator;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -82,8 +83,6 @@ public final class RecordAccumulator {
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
      *        exhausting all retries in a short period of time.
-     * @param blockOnBufferFull If true block when we are out of memory; if false throw an exception when we are out of
-     *        memory
      * @param metrics The metrics
      * @param time The time instance to use
      * @param metricTags additional key/value attributes of the metric
@@ -93,7 +92,6 @@ public final class RecordAccumulator {
                              CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
-                             boolean blockOnBufferFull,
                              Metrics metrics,
                              Time time,
                              Map<String, String> metricTags) {
@@ -107,7 +105,7 @@ public final class RecordAccumulator {
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<TopicPartition, Deque<RecordBatch>>();
         String metricGrpName = "producer-metrics";
-        this.free = new BufferPool(totalSize, batchSize, blockOnBufferFull, metrics, time , metricGrpName , metricTags);
+        this.free = new BufferPool(totalSize, batchSize, metrics, time , metricGrpName , metricTags);
         this.incomplete = new IncompleteRecordBatches();
         this.time = time;
         registerMetrics(metrics, metricGrpName, metricTags);
@@ -153,8 +151,9 @@ public final class RecordAccumulator {
      * @param key The key for the record
      * @param value The value for the record
      * @param callback The user-supplied callback to execute when the request is complete
+     * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
      */
-    public RecordAppendResult append(TopicPartition tp, byte[] key, byte[] value, Callback callback) throws InterruptedException {
+    public RecordAppendResult append(TopicPartition tp, byte[] key, byte[] value, Callback callback, long maxTimeToBlock) throws InterruptedException {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
@@ -166,7 +165,7 @@ public final class RecordAccumulator {
             synchronized (dq) {
                 RecordBatch last = dq.peekLast();
                 if (last != null) {
-                    FutureRecordMetadata future = last.tryAppend(key, value, callback);
+                    FutureRecordMetadata future = last.tryAppend(key, value, callback, time.milliseconds());
                     if (future != null)
                         return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
                 }
@@ -175,14 +174,14 @@ public final class RecordAccumulator {
             // we don't have an in-progress record batch try to allocate a new batch
             int size = Math.max(this.batchSize, Records.LOG_OVERHEAD + Record.recordSize(key, value));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
-            ByteBuffer buffer = free.allocate(size);
+            ByteBuffer buffer = free.allocate(size, maxTimeToBlock);
             synchronized (dq) {
                 // Need to check if producer is closed again after grabbing the dequeue lock.
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
                 RecordBatch last = dq.peekLast();
                 if (last != null) {
-                    FutureRecordMetadata future = last.tryAppend(key, value, callback);
+                    FutureRecordMetadata future = last.tryAppend(key, value, callback, time.milliseconds());
                     if (future != null) {
                         // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                         free.deallocate(buffer);
@@ -191,7 +190,7 @@ public final class RecordAccumulator {
                 }
                 MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
                 RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
-                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, callback));
+                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, callback, time.milliseconds()));
 
                 dq.addLast(batch);
                 incomplete.add(batch);
@@ -203,11 +202,51 @@ public final class RecordAccumulator {
     }
 
     /**
+     * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
+     * due to metadata being unavailable
+     */
+    public List<RecordBatch> abortExpiredBatches(int requestTimeout, Cluster cluster, long now) {
+        List<RecordBatch> expiredBatches = new ArrayList<RecordBatch>();
+        int count = 0;
+        for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
+            TopicPartition topicAndPartition = entry.getKey();
+            Deque<RecordBatch> dq = entry.getValue();
+            synchronized (dq) {
+                // iterate over the batches and expire them if they have stayed in accumulator for more than requestTimeOut
+                Iterator<RecordBatch> batchIterator = dq.iterator();
+                while (batchIterator.hasNext()) {
+                    RecordBatch batch = batchIterator.next();
+                    Node leader = cluster.leaderFor(topicAndPartition);
+                    if (leader == null) {
+                        // check if the batch is expired
+                        if (batch.maybeExpire(requestTimeout, now, this.lingerMs)) {
+                            expiredBatches.add(batch);
+                            count++;
+                            batchIterator.remove();
+                            deallocate(batch);
+                        } else {
+                            if (!batch.inRetry()) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (expiredBatches.size() > 0)
+            log.trace("Expired {} batches in accumulator", count);
+
+        return expiredBatches;
+    }
+
+    /**
      * Re-enqueue the given record batch in the accumulator to retry
      */
     public void reenqueue(RecordBatch batch, long now) {
         batch.attempts++;
         batch.lastAttemptMs = now;
+        batch.lastAppendTime = now;
+        batch.setRetry();
         Deque<RecordBatch> deque = dequeFor(batch.topicPartition);
         synchronized (deque) {
             deque.addFirst(batch);

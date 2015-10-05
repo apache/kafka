@@ -346,7 +346,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
                 }
         );
 
-        sinkTask.flush(Collections.singletonMap(TOPIC_PARTITION, finalOffset));
+        sinkTask.flush(Collections.singletonMap(TOPIC_PARTITION, new OffsetAndMetadata(finalOffset)));
         IExpectationSetters<Object> flushExpectation = PowerMock.expectLastCall();
         if (flushError != null) {
             flushExpectation.andThrow(flushError).once();
@@ -354,7 +354,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         }
 
         final Capture<OffsetCommitCallback> capturedCallback = EasyMock.newCapture();
-        final Map<TopicPartition, Long> offsets = Collections.singletonMap(TOPIC_PARTITION, finalOffset);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(TOPIC_PARTITION, new OffsetAndMetadata(finalOffset));
         consumer.commitAsync(EasyMock.eq(offsets),
                 EasyMock.capture(capturedCallback));
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {

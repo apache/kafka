@@ -13,7 +13,6 @@
 package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -99,24 +98,6 @@ public class SSLSelectorTest {
         // reconnect and do another request
         blockingConnect(node);
         assertEquals("hello", blockingRequest(node, "hello"));
-    }
-
-
-    /**
-     * Validate that the client can intentionally disconnect and reconnect
-     */
-    @Test
-    public void testClientDisconnect() throws Exception {
-        String node = "0";
-        blockingConnect(node);
-        selector.disconnect(node);
-        selector.send(createSend(node, "hello1"));
-        selector.poll(10L);
-        assertEquals("Request should not have succeeded", 0, selector.completedSends().size());
-        assertEquals("There should be a disconnect", 1, selector.disconnected().size());
-        assertTrue("The disconnect should be from our node", selector.disconnected().contains(node));
-        blockingConnect(node);
-        assertEquals("hello2", blockingRequest(node, "hello2"));
     }
 
      /**

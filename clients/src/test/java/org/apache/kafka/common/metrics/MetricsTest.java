@@ -13,8 +13,10 @@
 package org.apache.kafka.common.metrics;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.Arrays;
@@ -45,9 +47,10 @@ public class MetricsTest {
 
     @Test
     public void testMetricName() {
-        MetricName n1 = new MetricName("name", "group", "description", "key1", "value1");
+        MetricName n1 = new MetricName("name", "group", "description", "key1", "value1", "key2", "value2");
         Map<String, String> tags = new HashMap<String, String>();
         tags.put("key1", "value1");
+        tags.put("key2", "value2");
         MetricName n2 = new MetricName("name", "group", "description", tags);
         assertEquals("metric names created in two different ways should be equal", n1, n2);
 
@@ -272,6 +275,18 @@ public class MetricsTest {
         } catch (QuotaViolationException e) {
             // this is good
         }
+    }
+
+    @Test
+    public void testQuotasEquality() {
+        final Quota quota1 = Quota.lessThan(10.5);
+        final Quota quota2 = Quota.moreThan(10.5);
+
+        assertFalse("Quota with different upper values shouldn't be equal", quota1.equals(quota2));
+
+        final Quota quota3 = Quota.moreThan(10.5);
+
+        assertTrue("Quota with same upper and bound values should be equal", quota2.equals(quota3));
     }
 
     @Test

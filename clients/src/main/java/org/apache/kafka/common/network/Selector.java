@@ -177,17 +177,6 @@ public class Selector implements Selectable {
     }
 
     /**
-     * Disconnect any connections for the given id (if there are any). The disconnection is asynchronous and will not be
-     * processed until the next {@link #poll(long) poll()} call.
-     */
-    @Override
-    public void disconnect(String id) {
-        KafkaChannel channel = this.channels.get(id);
-        if (channel != null)
-            channel.disconnect();
-    }
-
-    /**
      * Interrupt the nioSelector if it is blocked waiting to do I/O.
      */
     @Override
