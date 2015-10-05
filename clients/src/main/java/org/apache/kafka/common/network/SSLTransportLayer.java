@@ -344,7 +344,7 @@ public class SSLTransportLayer implements TransportLayer {
     * @return SSLEngineResult
     * @throws IOException
     */
-    private SSLEngineResult  handshakeWrap(boolean doWrite) throws IOException {
+    private SSLEngineResult handshakeWrap(boolean doWrite) throws IOException {
         log.trace("SSLHandshake handshakeWrap {}", channelId);
         if (netWriteBuffer.hasRemaining())
             throw new IllegalStateException("handshakeWrap called with netWriteBuffer not empty");
