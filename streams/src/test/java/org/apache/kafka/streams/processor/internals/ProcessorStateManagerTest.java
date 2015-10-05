@@ -331,7 +331,7 @@ public class ProcessorStateManagerTest {
             ));
             restoreConsumer.updateEndOffsets(Collections.singletonMap(new TopicPartition("persistentStore", 2), 13L));
 
-            MockStateStore nonPersistentStore = new MockStateStore("nonPersistentStore", true); // non persistent store
+            MockStateStore nonPersistentStore = new MockStateStore("nonPersistentStore", false); // non persistent store
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer);
             try {
