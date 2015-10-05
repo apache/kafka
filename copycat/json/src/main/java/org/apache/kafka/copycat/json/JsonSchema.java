@@ -30,6 +30,7 @@ public class JsonSchema {
     static final String SCHEMA_NAME_FIELD_NAME = "name";
     static final String SCHEMA_VERSION_FIELD_NAME = "version";
     static final String SCHEMA_DOC_FIELD_NAME = "doc";
+    static final String SCHEMA_PARAMETERS_FIELD_NAME = "parameters";
     static final String SCHEMA_DEFAULT_FIELD_NAME = "default";
     static final String ARRAY_ITEMS_FIELD_NAME = "items";
     static final String MAP_KEY_FIELD_NAME = "keys";

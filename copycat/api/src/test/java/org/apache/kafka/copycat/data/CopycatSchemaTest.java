@@ -208,14 +208,15 @@ public class CopycatSchemaTest {
     @Test
     public void testPrimitiveEquality() {
         // Test that primitive types, which only need to consider all the type & metadata fields, handle equality correctly
-        CopycatSchema s1 = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "doc", null, null, null);
-        CopycatSchema s2 = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "doc", null, null, null);
-        CopycatSchema differentType = new CopycatSchema(Schema.Type.INT16, false, null, "name", 2, "doc", null, null, null);
-        CopycatSchema differentOptional = new CopycatSchema(Schema.Type.INT8, true, null, "name", 2, "doc", null, null, null);
-        CopycatSchema differentDefault = new CopycatSchema(Schema.Type.INT8, false, true, "name", 2, "doc", null, null, null);
-        CopycatSchema differentName = new CopycatSchema(Schema.Type.INT8, false, null, "otherName", 2, "doc", null, null, null);
-        CopycatSchema differentVersion = new CopycatSchema(Schema.Type.INT8, false, null, "name", 4, "doc", null, null, null);
-        CopycatSchema differentDoc = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "other doc", null, null, null);
+        CopycatSchema s1 = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "doc", null, null, null, null);
+        CopycatSchema s2 = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "doc", null, null, null, null);
+        CopycatSchema differentType = new CopycatSchema(Schema.Type.INT16, false, null, "name", 2, "doc", null, null, null, null);
+        CopycatSchema differentOptional = new CopycatSchema(Schema.Type.INT8, true, null, "name", 2, "doc", null, null, null, null);
+        CopycatSchema differentDefault = new CopycatSchema(Schema.Type.INT8, false, true, "name", 2, "doc", null, null, null, null);
+        CopycatSchema differentName = new CopycatSchema(Schema.Type.INT8, false, null, "otherName", 2, "doc", null, null, null, null);
+        CopycatSchema differentVersion = new CopycatSchema(Schema.Type.INT8, false, null, "name", 4, "doc", null, null, null, null);
+        CopycatSchema differentDoc = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "other doc", null, null, null, null);
+        CopycatSchema differentParameters = new CopycatSchema(Schema.Type.INT8, false, null, "name", 2, "doc", Collections.singletonMap("param", "value"), null, null, null);
 
         assertEquals(s1, s2);
         assertNotEquals(s1, differentType);
@@ -224,15 +225,16 @@ public class CopycatSchemaTest {
         assertNotEquals(s1, differentName);
         assertNotEquals(s1, differentVersion);
         assertNotEquals(s1, differentDoc);
+        assertNotEquals(s1, differentParameters);
     }
 
     @Test
     public void testArrayEquality() {
         // Validate that the value type for the array is tested for equality. This test makes sure the same schema object is
         // never reused to ensure we're actually checking equality
-        CopycatSchema s1 = new CopycatSchema(Schema.Type.ARRAY, false, null, null, null, null, null, null, SchemaBuilder.int8().build());
-        CopycatSchema s2 = new CopycatSchema(Schema.Type.ARRAY, false, null, null, null, null, null, null, SchemaBuilder.int8().build());
-        CopycatSchema differentValueSchema = new CopycatSchema(Schema.Type.ARRAY, false, null, null, null, null, null, null, SchemaBuilder.int16().build());
+        CopycatSchema s1 = new CopycatSchema(Schema.Type.ARRAY, false, null, null, null, null, null, null, null, SchemaBuilder.int8().build());
+        CopycatSchema s2 = new CopycatSchema(Schema.Type.ARRAY, false, null, null, null, null, null, null, null, SchemaBuilder.int8().build());
+        CopycatSchema differentValueSchema = new CopycatSchema(Schema.Type.ARRAY, false, null, null, null, null, null, null, null, SchemaBuilder.int16().build());
 
         assertEquals(s1, s2);
         assertNotEquals(s1, differentValueSchema);
@@ -241,10 +243,10 @@ public class CopycatSchemaTest {
     @Test
     public void testMapEquality() {
         // Same as testArrayEquality, but for both key and value schemas
-        CopycatSchema s1 = new CopycatSchema(Schema.Type.MAP, false, null, null, null, null, null, SchemaBuilder.int8().build(), SchemaBuilder.int16().build());
-        CopycatSchema s2 = new CopycatSchema(Schema.Type.MAP, false, null, null, null, null, null, SchemaBuilder.int8().build(), SchemaBuilder.int16().build());
-        CopycatSchema differentKeySchema = new CopycatSchema(Schema.Type.MAP, false, null, null, null, null, null, SchemaBuilder.string().build(), SchemaBuilder.int16().build());
-        CopycatSchema differentValueSchema = new CopycatSchema(Schema.Type.MAP, false, null, null, null, null, null, SchemaBuilder.int8().build(), SchemaBuilder.string().build());
+        CopycatSchema s1 = new CopycatSchema(Schema.Type.MAP, false, null, null, null, null, null, null, SchemaBuilder.int8().build(), SchemaBuilder.int16().build());
+        CopycatSchema s2 = new CopycatSchema(Schema.Type.MAP, false, null, null, null, null, null, null, SchemaBuilder.int8().build(), SchemaBuilder.int16().build());
+        CopycatSchema differentKeySchema = new CopycatSchema(Schema.Type.MAP, false, null, null, null, null, null, null, SchemaBuilder.string().build(), SchemaBuilder.int16().build());
+        CopycatSchema differentValueSchema = new CopycatSchema(Schema.Type.MAP, false, null, null, null, null, null, null, SchemaBuilder.int8().build(), SchemaBuilder.string().build());
 
         assertEquals(s1, s2);
         assertNotEquals(s1, differentKeySchema);
@@ -255,13 +257,13 @@ public class CopycatSchemaTest {
     public void testStructEquality() {
         // Same as testArrayEquality, but checks differences in fields. Only does a simple check, relying on tests of
         // Field's equals() method to validate all variations in the list of fields will be checked
-        CopycatSchema s1 = new CopycatSchema(Schema.Type.STRUCT, false, null, null, null, null,
+        CopycatSchema s1 = new CopycatSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
                 Arrays.asList(new Field("field", 0, SchemaBuilder.int8().build()),
                         new Field("field2", 1, SchemaBuilder.int16().build())), null, null);
-        CopycatSchema s2 = new CopycatSchema(Schema.Type.STRUCT, false, null, null, null, null,
+        CopycatSchema s2 = new CopycatSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
                 Arrays.asList(new Field("field", 0, SchemaBuilder.int8().build()),
                         new Field("field2", 1, SchemaBuilder.int16().build())), null, null);
-        CopycatSchema differentField = new CopycatSchema(Schema.Type.STRUCT, false, null, null, null, null,
+        CopycatSchema differentField = new CopycatSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
                 Arrays.asList(new Field("field", 0, SchemaBuilder.int8().build()),
                         new Field("different field name", 1, SchemaBuilder.int16().build())), null, null);
 
