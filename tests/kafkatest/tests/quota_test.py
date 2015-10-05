@@ -41,19 +41,17 @@ class QuotaTest(Test):
         self.logger.info("use topic " + self.topic)
 
         # quota related parameters
-        self.quota_config = {"quota_producer_default": 250000,
-                             "quota_consumer_default": 100000,
-                             "quota_producer_bytes_per_second_overrides": "overridden_id=375000",
-                             "quota_consumer_bytes_per_second_overrides": "overridden_id=150000"}
-        self.maximum_deviation_percentage = 100.0
-        self.overridden_client_id = "overridden_id"
-        self.default_client_id = "default_id"
-        self.num_records = 5000
+        self.quota_config = {"quota_producer_default": 2500000,
+                             "quota_consumer_default": 2000000,
+                             "quota_producer_bytes_per_second_overrides": "overridden_id=3750000",
+                             "quota_consumer_bytes_per_second_overrides": "overridden_id=3000000"}
+        self.maximum_deviation_percentage = 50.0
+        self.num_records = 100000
         self.record_size = 3000
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
-                                  topics={self.topic: {"partitions": 3, "replication-factor": 1, "min.insync.replicas": 1}},
+                                  topics={self.topic: {"partitions": 6, "replication-factor": 1, "min.insync.replicas": 1}},
                                   quota_config=self.quota_config)
         self.num_producers = 1
         self.num_consumers = 2
@@ -90,6 +88,10 @@ class QuotaTest(Test):
             jmx_object_name="kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=%s" % consumer_id,
             jmx_attributes="OneMinuteRate")
         consumer.run()
+
+        for idx, messages in consumer.messages_consumed.iteritems():
+            assert len(messages)>0, "consumer %d didn't consume any message before timeout" % idx
+
         self.consumed_num[consumer.client_id] = sum([len(value) for value in consumer.messages_consumed.values()])
         self.consumer_average_bps[consumer.client_id] = consumer.average_jmx_value
         self.consumer_maximum_bps[consumer.client_id] = consumer.maximum_jmx_value
@@ -151,10 +153,10 @@ class QuotaTest(Test):
         return self.quota_config["quota_consumer_default"]
 
     def test_default_quota(self):
-        self.run_clients(producer_id=self.default_client_id, producer_num=1, consumer_id=self.default_client_id, consumer_num=1)
+        self.run_clients(producer_id="default_id", producer_num=1, consumer_id="default_id", consumer_num=1)
 
     def test_overridden_quota(self):
-        self.run_clients(producer_id=self.overridden_client_id, producer_num=1, consumer_id=self.overridden_client_id, consumer_num=1)
+        self.run_clients(producer_id="overridden_id", producer_num=1, consumer_id="overridden_id", consumer_num=1)
 
     def test_shared_quota(self):
-        self.run_clients(producer_id=self.overridden_client_id, producer_num=1, consumer_id=self.overridden_client_id, consumer_num=2)
+        self.run_clients(producer_id="overridden_id", producer_num=1, consumer_id="overridden_id", consumer_num=2)
