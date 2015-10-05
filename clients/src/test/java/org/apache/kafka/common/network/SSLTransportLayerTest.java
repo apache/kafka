@@ -128,10 +128,12 @@ public class SSLTransportLayerTest {
     @Test
     public void testEndpointIdentificationDisabled() throws Exception {
         String node = "0";
-        createEchoServer(sslServerConfigs);
+        String serverHost = InetAddress.getLocalHost().getHostAddress();
+        server = new SSLEchoServer(sslServerConfigs, serverHost);
+        server.start();
         sslClientConfigs.remove(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port);
+        InetSocketAddress addr = new InetSocketAddress(serverHost, server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         testClientConnection(node, 100, 10);
