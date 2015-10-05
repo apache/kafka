@@ -413,6 +413,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
     private final long retryBackoffMs;
+    private long requestTimeoutMs;
     private boolean closed = false;
     private Metadata.Listener metadataListener;
 
@@ -421,10 +422,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     // refcount is used to allow reentrant access by the thread who has acquired currentThread
     private final AtomicInteger refcount = new AtomicInteger(0);
-
-    // TODO: This timeout controls how long we should wait before retrying a request. We should be able
-    //       to leverage the work of KAFKA-2120 to get this value from configuration.
-    private long requestTimeoutMs;
 
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
