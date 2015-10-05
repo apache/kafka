@@ -66,7 +66,7 @@ public class Rate implements MeasurableStat {
         // the elapsed time is always N-1 complete windows plus whatever fraction of the final window is complete
         long elapsedCurrentWindowMs = (now - stat.oldest(now).lastWindowMs) % config.timeWindowMs();
         long elapsedPriorWindowsMs = config.timeWindowMs() * (config.samples() - 1);
-        return  elapsedCurrentWindowMs + elapsedPriorWindowsMs;
+        return elapsedCurrentWindowMs + elapsedPriorWindowsMs;
     }
 
     private double convert(long timeMs) {
