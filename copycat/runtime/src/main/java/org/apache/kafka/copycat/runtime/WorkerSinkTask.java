@@ -17,15 +17,22 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.ConsumerWakeupException;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.errors.IllegalWorkerStateException;
+import org.apache.kafka.copycat.errors.TransientException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -34,7 +41,13 @@ import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -217,21 +230,58 @@ class WorkerSinkTask implements WorkerTask {
             for (ConsumerRecord<byte[], byte[]> msg : msgs) {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
                 SchemaAndValue keyAndSchema = keyConverter.toCopycatData(msg.topic(), msg.key());
-                SchemaAndValue valueAndSchema = valueConverter.toCopycatData(msg.topic(), msg.value());
+                SchemaAndValue
+                    valueAndSchema =
+                    valueConverter.toCopycatData(msg.topic(), msg.value());
                 records.add(
-                        new SinkRecord(msg.topic(), msg.partition(),
-                                keyAndSchema.schema(), keyAndSchema.value(),
-                                valueAndSchema.schema(), valueAndSchema.value(),
-                                msg.offset())
+                    new SinkRecord(msg.topic(), msg.partition(),
+                                   keyAndSchema.schema(), keyAndSchema.value(),
+                                   valueAndSchema.schema(), valueAndSchema.value(),
+                                   msg.offset())
                 );
             }
+            Set<TopicPartition> assignment;
+            boolean pause = false;
+            while (true) {
+                try {
+                    // Pause the assigned partitions in case of TransientException.
+                    // After pause, consumer poll servers as a mechanism to heartbeat and
+                    // remain group membership.
+                    if (pause) {
+                        assignment = context.assignment();
+                        for (TopicPartition tp: assignment) {
+                            context.pause(tp);
+                        }
+                        consumer.poll(0);
+                    }
+                    // This assumes that in case of transient exception, no records will
+                    // be processed by the sink connector tasks.
+                    task.put(records);
 
-            try {
-                task.put(records);
-            } catch (CopycatException e) {
-                log.error("Exception from SinkTask {}: ", id, e);
-            } catch (Throwable t) {
-                log.error("Unexpected exception from SinkTask {}: ", id, t);
+                    // We resume consumption in case that we can handle TransientException.
+                    // If the TransientException does not recover after several retries, we will
+                    // log the exception and abort the task.
+                    if (pause) {
+                        consumer.poll(0);
+                        assignment = context.assignment();
+                        for (TopicPartition tp: assignment) {
+                            context.resume(tp);
+                        }
+                    }
+                    break;
+                } catch (TransientException e) {
+                    log.error("Transient Exception from SinkTask {}: ", id, e);
+                    pause = true;
+                } catch (IllegalWorkerStateException e) {
+                    log.error("Exception from SinkTask {}: ", id, e);
+                    break;
+                } catch (CopycatException e) {
+                    log.error("Exception from SinkTask {}: ", id, e);
+                    break;
+                } catch (Throwable t) {
+                    log.error("Unexpected exception from SinkTask {}: ", id, t);
+                    break;
+                }
             }
         }
     }

@@ -30,6 +30,7 @@ import java.util.Set;
 @InterfaceStability.Unstable
 public abstract class SinkTaskContext {
     private Map<TopicPartition, Long> offsets;
+    private long rotateIntervalMs;
 
     public SinkTaskContext() {
         offsets = new HashMap<>();
