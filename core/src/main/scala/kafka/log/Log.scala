@@ -470,39 +470,37 @@ class Log(val dir: File,
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
+    // Because we don't use lock for reading, the synchronization is a little bit tricky.
     // We first create a few local variables to avoid race conditions with updates to the log. The order matters here.
     // We can allow currentLastEntry to have a newer value than currentNextOffsetMetadata but not vice versa.
     val currentNextOffsetMetadata = nextOffsetMetadata
-    val currentNext = currentNextOffsetMetadata.messageOffset
-    val currentLastEntry = segments.lastEntry
-
-    if(startOffset == currentNext)
+    val next = currentNextOffsetMetadata.messageOffset
+    if(startOffset == next)
       return FetchDataInfo(currentNextOffsetMetadata, MessageSet.Empty)
 
     var entry = segments.floorEntry(startOffset)
 
     // attempt to read beyond the log end offset is an error
-    if(startOffset > currentNext || entry == null)
-      throw new OffsetOutOfRangeException(("Request for offset %d but we only have log segments in the range %d " +
-        "to %d.").format(startOffset, segments.firstKey, currentNext))
+    if(startOffset > next || entry == null)
+      throw new OffsetOutOfRangeException("Request for offset %d but we only have log segments in the range %d to %d.".format(startOffset, segments.firstKey, next))
     
     // Do the read on the segment with a base offset less than the target offset
     // but if that segment doesn't contain any messages with an offset greater than that
     // continue to read from successive segments until we get some messages or we reach the end of the log
-    // Note that at this point startOffset < currentNext. There are three cases:
-    // 1. No new log segment is created after we created local variable currentNextOffsetMetadata and currentLastEntry
-    // 2. A new log segment is created after we created local variable currentNextOffsetMetadata but before we created
-    //    currentLastEntry. i.e currentLastEntry is actually newer than currentNextOffsetMetadata
-    // 3. A new log segment is created after we created currentNextOffsetMetadata and currentLastEntry.
-    // In all three cases, reading will start from currentLastEntry or older segments, but not the newly rolled segment.
-    // In case (2) and (3), if the reading starts from the currentLastEntry, it might be reading a little conservatively
-    // because we capped the reading up to currentNextOffsetMetadata.relativePositionInSegment even though the log
-    // segment being read is no longer the active log segment. But it is fine because later reading will see updated
-    // messages.
     while(entry != null) {
+      // If the fetch occurs on the active segment, there might be a race condition where two fetch requests occur after
+      // the message is appended but before the nextOffsetMetadata is updated. In that case the second fetch may
+      // cause OffsetOutOfRangeException. To solve that, we cap the reading up to exposed position instead of the log
+      // end of the active segment.
       val maxPosition = {
-        if (entry == currentLastEntry) {
-          currentNextOffsetMetadata.relativePositionInSegment.toLong
+        if (entry == segments.lastEntry) {
+          val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
+          // Check the segment again in case a new segment has just rolled rolled out
+          if (entry != segments.lastEntry)
+            // New log segment has rolled out, we can read up to the file end.
+            entry.getValue.size
+          else
+            exposedPos
         } else {
           entry.getValue.size
         }
