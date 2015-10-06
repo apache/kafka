@@ -152,15 +152,15 @@ public class Metrics implements Closeable {
      * receive every value recorded with this sensor.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
-     * @param expireInactiveSensorTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long expireInactiveSensorTimeSeconds, Sensor... parents) {
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time, expireInactiveSensorTimeSeconds);
+            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds);
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
@@ -172,8 +172,8 @@ public class Metrics implements Closeable {
                     children.add(s);
                 }
             }
+            log.debug("Added sensor with name {}", name);
         }
-        log.debug("Added sensor with name {}", name);
         return s;
     }
 
@@ -191,11 +191,11 @@ public class Metrics implements Closeable {
                     if (sensors.remove(name, sensor)) {
                         for (KafkaMetric metric : sensor.metrics())
                             removeMetric(metric.metricName());
+                        log.debug("Removed sensor with name {}", name);
                         childSensors = childrenSensors.remove(sensor);
                     }
                 }
             }
-            log.debug("Removed sensor with name {}", name);
             if (childSensors != null) {
                 for (Sensor childSensor : childSensors)
                     removeSensor(childSensor.name());

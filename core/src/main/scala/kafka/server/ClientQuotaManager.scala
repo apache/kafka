@@ -58,7 +58,7 @@ object ClientQuotaManagerConfig {
   val DefaultQuotaWindowSizeSeconds = 1
   val MaxThrottleTimeSeconds = 30
   // Purge sensors after 1 hour of inactivity
-  val expireInactiveSensorTimeSeconds = 3600
+  val inactiveSensorExpirationTimeSeconds  = 3600
 }
 
 /**
@@ -200,7 +200,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
           // create the throttle time sensor also. Use default metric config
           throttleTimeSensor = metrics.sensor(throttleTimeSensorName,
                                               null,
-                                              ClientQuotaManagerConfig.expireInactiveSensorTimeSeconds)
+                                              ClientQuotaManagerConfig.inactiveSensorExpirationTimeSeconds)
           throttleTimeSensor.add(new MetricName("throttle-time",
                                                 apiKey,
                                                 "Tracking average throttle-time per client",
@@ -209,7 +209,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
           quotaSensor = metrics.sensor(quotaSensorName,
                                        getQuotaMetricConfig(quota(clientId)),
-                                       ClientQuotaManagerConfig.expireInactiveSensorTimeSeconds)
+                                       ClientQuotaManagerConfig.inactiveSensorExpirationTimeSeconds)
           quotaSensor.add(clientRateMetricName(clientId), new Rate())
         }
       } finally {

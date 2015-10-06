@@ -39,9 +39,9 @@ public final class Sensor {
     private final MetricConfig config;
     private final Time time;
     private volatile long lastRecordTime;
-    private final long expireInactiveSensorTimeMillis;
+    private final long inactiveSensorExpirationTimeMs;
 
-    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time, long expireInactiveSensorTimeSeconds) {
+    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time, long inactiveSensorExpirationTimeSeconds) {
         super();
         this.registry = registry;
         this.name = Utils.notNull(name);
@@ -50,7 +50,7 @@ public final class Sensor {
         this.stats = new ArrayList<>();
         this.config = config;
         this.time = time;
-        this.expireInactiveSensorTimeMillis = TimeUnit.MILLISECONDS.convert(expireInactiveSensorTimeSeconds, TimeUnit.SECONDS);
+        this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
         this.lastRecordTime = time.milliseconds();
         checkForest(new HashSet<Sensor>());
     }
@@ -184,7 +184,7 @@ public final class Sensor {
      *        false otherwise
      */
     public boolean isExpired() {
-        return (time.milliseconds() - this.lastRecordTime) > this.expireInactiveSensorTimeMillis;
+        return (time.milliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
     }
 
     synchronized List<KafkaMetric> metrics() {
