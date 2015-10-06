@@ -45,8 +45,8 @@ class QuotaTest(Test):
                              "quota_consumer_default": 2000000,
                              "quota_producer_bytes_per_second_overrides": "overridden_id=3750000",
                              "quota_consumer_bytes_per_second_overrides": "overridden_id=3000000"}
-        self.maximum_deviation_percentage = 50.0
-        self.num_records = 200000
+        self.maximum_deviation_percentage = 100.0
+        self.num_records = 100000
         self.record_size = 3000
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
@@ -85,7 +85,7 @@ class QuotaTest(Test):
         self.producer_maximum_bps[producer.client_id] = producer.maximum_jmx_value[producer_attribute_name]
 
         # Consume all messages
-        consumer = ConsoleConsumer(self.test_context, consumer_num, self.kafka, self.topic, consumer_timeout_ms=30000, client_id=consumer_id,
+        consumer = ConsoleConsumer(self.test_context, consumer_num, self.kafka, self.topic, consumer_timeout_ms=60000, client_id=consumer_id,
             jmx_object_name="kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=%s" % consumer_id,
             jmx_attributes="OneMinuteRate")
         consumer.run()
