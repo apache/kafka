@@ -232,7 +232,7 @@ class RequestSendThread(val controllerId: Int,
       }
     } catch {
       case e: Throwable =>
-        error("Controller %d's connection to broker %s was unsuccessful".format(controllerId, toBroker.toString()), e)
+        warn("Controller %d's connection to broker %s was unsuccessful".format(controllerId, toBroker.toString()), e)
         networkClient.close(brokerNode.idString)
         false
     }
