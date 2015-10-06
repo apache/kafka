@@ -46,7 +46,7 @@ class QuotaTest(Test):
                              "quota_producer_bytes_per_second_overrides": "overridden_id=3750000",
                              "quota_consumer_bytes_per_second_overrides": "overridden_id=3000000"}
         self.maximum_deviation_percentage = 50.0
-        self.num_records = 100000
+        self.num_records = 200000
         self.record_size = 3000
 
         self.zk = ZookeeperService(test_context, num_nodes=1)

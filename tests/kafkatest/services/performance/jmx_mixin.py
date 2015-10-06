@@ -30,7 +30,7 @@ class JmxMixin(object):
         node.account.ssh("rm -rf /mnt/jmx_tool.log", allow_fail=False)
 
     def maybe_start_jmx_tool(self, idx, node):
-        if self.started[idx-1] == True:
+        if self.started[idx-1] == True or self.jmx_object_name == None:
             return
         self.started[idx-1] = True
 
