@@ -14,10 +14,12 @@ package org.apache.kafka.clients;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
@@ -237,11 +239,13 @@ public final class Metadata {
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
+        List<Node> nodes = Collections.emptyList();
         if (cluster != null) {
             for (String topic : this.topics) {
                 partitionInfos.addAll(cluster.partitionsForTopic(topic));
             }
+            nodes = cluster.nodes();
         }
-        return new Cluster(cluster.nodes(), partitionInfos);
+        return new Cluster(nodes, partitionInfos);
     }
 }
