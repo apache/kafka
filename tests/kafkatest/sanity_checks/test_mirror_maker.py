@@ -77,9 +77,9 @@ class TestMirrorMakerService(Test):
             "grep \"consumer\.timeout\.ms\" %s" % MirrorMaker.CONSUMER_CONFIG, allow_fail=False)
 
         self.producer.start()
-        self.producer.wait()
+        self.producer.wait(10)
         self.consumer.start()
-        self.consumer.wait()
+        self.consumer.wait(10)
 
         num_consumed = len(self.consumer.messages_consumed[1])
         num_produced = self.producer.num_acked
