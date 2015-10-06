@@ -124,10 +124,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         throttleTimeMs = throttleTime(clientMetric, getQuotaMetricConfig(quota(clientId)))
         delayQueue.add(new ThrottledResponse(time, throttleTimeMs, callback))
         delayQueueSensor.record()
-        clientSensors.throttleTimeSensor.record(throttleTimeMs)
         // If delayed, add the element to the delayQueue
         logger.debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
+    // If the request is not throttled, a throttleTime of 0 ms is recorded
+    clientSensors.throttleTimeSensor.record(throttleTimeMs)
     throttleTimeMs
   }
 
@@ -141,12 +142,19 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    */
   private def throttleTime(clientMetric: KafkaMetric, config: MetricConfig): Int = {
     // Casting to Rate because we only use Rate in Quota computation
-    val rateMetric = clientMetric.measurable().asInstanceOf[Rate]
+    val rateMetric: Rate = measurableAsRate(clientMetric.metricName(), clientMetric.measurable())
     val quota = config.quota()
     val difference = clientMetric.value() - quota.bound
     // Use the precise window used by the rate calculation
     val throttleTimeMs = difference / quota.bound * rateMetric.windowSize(config, time.milliseconds())
     throttleTimeMs.round.toInt
+  }
+
+  private def measurableAsRate(name: MetricName, measurable: Measurable): Rate = {
+    if (! measurable.isInstanceOf[Rate])
+      throw new IllegalArgumentException("Metric " + name + " is not a Rate metric")
+
+    measurable.asInstanceOf[Rate]
   }
 
   /**
