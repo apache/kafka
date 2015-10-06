@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Context passed to SinkTasks, allowing them to access utilities in the copycat runtime.
@@ -56,4 +57,22 @@ public abstract class SinkTaskContext {
     public Map<TopicPartition, Long> offsets() {
         return offsets;
     }
+
+    /**
+     * Get the current set of assigned TopicPartitions for this task.
+     * @return the set of currently assigned TopicPartitions
+     */
+    public abstract Set<TopicPartition> assignment();
+
+    /**
+     * Pause consumption of messages from the specified TopicPartitions.
+     * @param partitions the partitions which should be paused
+     */
+    public abstract void pause(TopicPartition... partitions);
+
+    /**
+     * Resume consumption of messages from previously paused TopicPartitions.
+     * @param partitions the partitions to resume
+     */
+    public abstract void resume(TopicPartition... partitions);
 }
