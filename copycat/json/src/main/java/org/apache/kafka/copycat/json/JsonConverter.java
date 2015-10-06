@@ -21,6 +21,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.kafka.common.cache.Cache;
+import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.copycat.data.*;
 import org.apache.kafka.copycat.errors.DataException;
@@ -28,7 +31,11 @@ import org.apache.kafka.copycat.storage.Converter;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Implementation of Converter that uses JSON to store schemas and objects.
@@ -36,6 +43,8 @@ import java.util.*;
 public class JsonConverter implements Converter {
     private static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
     private static final boolean SCHEMAS_ENABLE_DEFAULT = true;
+    private static final String SCHEMAS_CACHE_CONFIG = "schemas.cache.size";
+    private static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
 
     private static final HashMap<Schema.Type, JsonToCopycatTypeConverter> TO_COPYCAT_CONVERTERS = new HashMap<>();
 
@@ -188,6 +197,9 @@ public class JsonConverter implements Converter {
     }
 
     private boolean enableSchemas = SCHEMAS_ENABLE_DEFAULT;
+    private int cacheSize = SCHEMAS_CACHE_SIZE_DEFAULT;
+    private Cache<Schema, ObjectNode> fromCopycatSchemaCache;
+    private Cache<JsonNode, Schema> toCopycatSchemaCache;
 
     private final JsonSerializer serializer = new JsonSerializer();
     private final JsonDeserializer deserializer = new JsonDeserializer();
@@ -200,6 +212,12 @@ public class JsonConverter implements Converter {
 
         serializer.configure(configs, isKey);
         deserializer.configure(configs, isKey);
+
+        Object cacheSizeVal = configs.get(SCHEMAS_CACHE_SIZE_DEFAULT);
+        if (cacheSizeVal != null)
+            cacheSize = (int) cacheSizeVal;
+        fromCopycatSchemaCache = new SynchronizedCache<>(new LRUCache<Schema, ObjectNode>(cacheSize));
+        toCopycatSchemaCache = new SynchronizedCache<>(new LRUCache<JsonNode, Schema>(cacheSize));
     }
 
     @Override
@@ -247,9 +265,13 @@ public class JsonConverter implements Converter {
         return new SchemaAndValue(schema, convertToCopycat(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)));
     }
 
-    private static ObjectNode asJsonSchema(Schema schema) {
+    private ObjectNode asJsonSchema(Schema schema) {
         if (schema == null)
             return null;
+
+        ObjectNode cached = fromCopycatSchemaCache.get(schema);
+        if (cached != null)
+            return cached;
 
         final ObjectNode jsonSchema;
         switch (schema.type()) {
@@ -313,13 +335,18 @@ public class JsonConverter implements Converter {
         if (schema.defaultValue() != null)
             jsonSchema.set(JsonSchema.SCHEMA_DEFAULT_FIELD_NAME, convertToJson(schema, schema.defaultValue()));
 
+        fromCopycatSchemaCache.put(schema, jsonSchema);
         return jsonSchema;
     }
 
 
-    private static Schema asCopycatSchema(JsonNode jsonSchema) {
+    private Schema asCopycatSchema(JsonNode jsonSchema) {
         if (jsonSchema.isNull())
             return null;
+
+        Schema cached = toCopycatSchemaCache.get(jsonSchema);
+        if (cached != null)
+            return cached;
 
         JsonNode schemaTypeNode = jsonSchema.get(JsonSchema.SCHEMA_TYPE_FIELD_NAME);
         if (schemaTypeNode == null || !schemaTypeNode.isTextual())
@@ -409,7 +436,9 @@ public class JsonConverter implements Converter {
         if (schemaDefaultNode != null)
             builder.defaultValue(convertToCopycat(builder, schemaDefaultNode));
 
-        return builder.build();
+        Schema result = builder.build();
+        toCopycatSchemaCache.put(jsonSchema, result);
+        return result;
     }
 
 
@@ -420,11 +449,11 @@ public class JsonConverter implements Converter {
      * @param value the value
      * @return JsonNode-encoded version
      */
-    private static JsonNode convertToJsonWithEnvelope(Schema schema, Object value) {
+    private JsonNode convertToJsonWithEnvelope(Schema schema, Object value) {
         return new JsonSchema.Envelope(asJsonSchema(schema), convertToJson(schema, value)).toJsonNode();
     }
 
-    private static JsonNode convertToJsonWithoutEnvelope(Schema schema, Object value) {
+    private JsonNode convertToJsonWithoutEnvelope(Schema schema, Object value) {
         return convertToJson(schema, value);
     }
 
