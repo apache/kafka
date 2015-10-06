@@ -121,7 +121,7 @@ class QuotaTest(Test):
                    (sum(self.produced_num.values()), sum(self.consumed_num.values()))
 
         for client_id, maximum_bps in self.producer_maximum_bps.iteritems():
-            quota_bps = self.getProducerQuota(client_id)
+            quota_bps = self.get_producer_quota(client_id)
             self.logger.info("producer %s has maximum throughput %.2f bps, average throughput %.2f bps with quota %.2f bps" %
                              (client_id, maximum_bps, self.producer_average_bps[client_id], quota_bps))
             if maximum_bps > quota_bps*(self.maximum_deviation_percentage/100+1):
@@ -130,7 +130,7 @@ class QuotaTest(Test):
                        (maximum_bps, quota_bps, self.maximum_deviation_percentage)
 
         for client_id, maximum_bps in self.consumer_maximum_bps.iteritems():
-            quota_bps = self.getConsumerQuota(client_id)
+            quota_bps = self.get_consumer_quota(client_id)
             self.logger.info("consumer %s has maximum throughput %.2f bps, average throughput %.2f bps with quota %.2f bps" %
                              (client_id, maximum_bps, self.consumer_average_bps[client_id], quota_bps))
             if maximum_bps > quota_bps*(self.maximum_deviation_percentage/100+1):
@@ -140,13 +140,13 @@ class QuotaTest(Test):
 
         return success, msg
 
-    def getProducerQuota(self, client_id):
+    def get_producer_quota(self, client_id):
         overridden_quotas = {value.split('=')[0]:value.split('=')[1] for value in self.quota_config["quota_producer_bytes_per_second_overrides"].split(',')}
         if client_id in overridden_quotas:
             return float(overridden_quotas[client_id])
         return self.quota_config["quota_producer_default"]
 
-    def getConsumerQuota(self, client_id):
+    def get_consumer_quota(self, client_id):
         overridden_quotas = {value.split('=')[0]:value.split('=')[1] for value in self.quota_config["quota_consumer_bytes_per_second_overrides"].split(',')}
         if client_id in overridden_quotas:
             return float(overridden_quotas[client_id])

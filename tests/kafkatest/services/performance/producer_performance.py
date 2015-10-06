@@ -14,8 +14,9 @@
 # limitations under the License.
 
 from kafkatest.services.performance.jmx_mixin import JmxMixin
+from kafkatest.services.performance import PerformanceService
 
-class ProducerPerformanceService(JmxMixin):
+class ProducerPerformanceService(JmxMixin, PerformanceService):
 
     logs = {
         "producer_performance_log": {
@@ -25,7 +26,9 @@ class ProducerPerformanceService(JmxMixin):
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, settings={},
                  intermediate_stats=False, client_id="producer-performance", jmx_object_name=None, jmx_attributes=None):
-        super(ProducerPerformanceService, self).__init__(context, num_nodes, jmx_object_name, jmx_attributes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_name, jmx_attributes)
+        PerformanceService.__init__(self, context, num_nodes)
+
         self.kafka = kafka
         self.args = {
             'topic': topic,

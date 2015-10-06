@@ -13,24 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.services.performance import PerformanceService
+class JmxMixin(object):
 
-
-class JmxMixin(PerformanceService):
-
-    def __init__(self, context, num_nodes, jmx_object_name=None, jmx_attributes=None):
-        super(JmxMixin, self).__init__(context, num_nodes)
+    def __init__(self, num_nodes, jmx_object_name=None, jmx_attributes=None):
         self.jmx_object_name = jmx_object_name
         self.jmx_attributes = jmx_attributes
         self.jmx_port = 9192
 
-        self.started = [False] * self.num_nodes
-        self.jmx_stats = [{} for x in range(self.num_nodes)]
+        self.started = [False] * num_nodes
+        self.jmx_stats = [{} for x in range(num_nodes)]
         self.maximum_jmx_value = None
         self.average_jmx_value = None
 
     def clean_node(self, node):
-        super(JmxMixin, self).clean_node(node)
         node.account.kill_process("jmx", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf /mnt/jmx_tool.log", allow_fail=False)
 
@@ -47,8 +42,7 @@ class JmxMixin(PerformanceService):
         cmd += "> /mnt/jmx_tool.log &"
 
         self.logger.debug("Start JmxTool %d command: %s", idx, cmd)
-        for l in node.account.ssh_capture(cmd, allow_fail=False):
-            break
+        node.account.ssh(cmd, allow_fail=False)
 
     def read_jmx_output(self, idx, node):
         if self.started[idx-1] == False:

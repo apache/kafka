@@ -16,6 +16,7 @@
 from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.utils.util import wait_until
 from kafkatest.services.performance.jmx_mixin import JmxMixin
+from kafkatest.services.performance import PerformanceService
 
 import os
 import subprocess
@@ -72,7 +73,7 @@ Option                                  Description
 """
 
 
-class ConsoleConsumer(JmxMixin):
+class ConsoleConsumer(JmxMixin, PerformanceService):
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/console_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stdout")
@@ -109,7 +110,8 @@ class ConsoleConsumer(JmxMixin):
                                         waiting for the consumer to stop is a pretty good way to consume all messages
                                         in a topic.
         """
-        super(ConsoleConsumer, self).__init__(context, num_nodes, jmx_object_name, jmx_attributes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_name, jmx_attributes)
+        PerformanceService.__init__(self, context, num_nodes)
         self.kafka = kafka
         self.args = {
             'topic': topic,
@@ -181,7 +183,7 @@ class ConsoleConsumer(JmxMixin):
         self.read_jmx_output(idx, node)
 
     def start_node(self, node):
-        super(ConsoleConsumer, self).start_node(node)
+        PerformanceService.start_node(self, node)
 
     def stop_node(self, node):
         node.account.kill_process("console-consumer", allow_fail=True)
@@ -192,5 +194,6 @@ class ConsoleConsumer(JmxMixin):
         if self.alive(node):
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
-        super(JmxMixin, self).clean_node(node)
+        JmxMixin.clean_node(self, node)
+        PerformanceService.clean_node(self, node)
         node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
