@@ -151,7 +151,7 @@ class LogSegment(val log: FileMessageSet,
               logSize // the max offset is off the end of the log, use the end of the file
             else
               mapping.position
-          min(endPosition - startPosition.position, maxSize) 
+          min(min(maxPosition, endPosition) - startPosition.position, maxSize).toInt
         }
       }
     FetchDataInfo(offsetMetadata, log.read(startPosition.position, length))
