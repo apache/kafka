@@ -29,8 +29,6 @@ import subprocess
 import time
 
 
-
-
 class KafkaService(Service):
 
     logs = {
@@ -159,10 +157,9 @@ class KafkaService(Service):
 
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
-        node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log /mnt/kafka.pid", allow_fail=False)
         self.security_config.clean_node(node)
-        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log", allow_fail=False)
+        node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
+        node.account.ssh("rm -rf /mnt/*", allow_fail=False)
 
     def create_topic(self, topic_cfg, node=None):
         """Run the admin tool create topic command.
