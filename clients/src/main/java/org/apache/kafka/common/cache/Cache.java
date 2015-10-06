@@ -40,6 +40,7 @@ public interface Cache<K, V> {
     /**
      * Manually invalidate a key, clearing its entry from the cache.
      * @param key the key to remove
+     * @return true if the key existed in the cache and the entry was removed or false if it was not present
      */
     boolean remove(K key);
 
