@@ -80,8 +80,9 @@ class QuotaTest(Test):
             jmx_object_name="kafka.producer:type=producer-metrics,client-id=%s" % producer_id, jmx_attributes="outgoing-byte-rate")
         producer.run()
         self.produced_num[producer.client_id] = sum([value["records"] for value in producer.results])
-        self.producer_average_bps[producer.client_id] = producer.average_jmx_value
-        self.producer_maximum_bps[producer.client_id] = producer.maximum_jmx_value
+        producer_attribute_name = "kafka.producer:type=producer-metrics,client-id=%s:outgoing-byte-rate" % producer_id
+        self.producer_average_bps[producer.client_id] = producer.average_jmx_value[producer_attribute_name]
+        self.producer_maximum_bps[producer.client_id] = producer.maximum_jmx_value[producer_attribute_name]
 
         # Consume all messages
         consumer = ConsoleConsumer(self.test_context, consumer_num, self.kafka, self.topic, consumer_timeout_ms=30000, client_id=consumer_id,
@@ -93,8 +94,9 @@ class QuotaTest(Test):
             assert len(messages)>0, "consumer %d didn't consume any message before timeout" % idx
 
         self.consumed_num[consumer.client_id] = sum([len(value) for value in consumer.messages_consumed.values()])
-        self.consumer_average_bps[consumer.client_id] = consumer.average_jmx_value
-        self.consumer_maximum_bps[consumer.client_id] = consumer.maximum_jmx_value
+        consumer_attribute_name = "kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=%s:OneMinuteRate" % consumer_id
+        self.consumer_average_bps[consumer.client_id] = consumer.average_jmx_value[consumer_attribute_name]
+        self.consumer_maximum_bps[consumer.client_id] = consumer.maximum_jmx_value[consumer_attribute_name]
 
         success, msg = self.validate()
         assert success, msg
