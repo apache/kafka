@@ -19,6 +19,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerWakeupException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -124,6 +125,24 @@ public class ConsumerNetworkClient implements Closeable {
         do {
             poll(Long.MAX_VALUE);
         } while (this.metadata.version() == version);
+    }
+
+    /**
+     * Block until the metadata has been refreshed or the timeout has expired.
+     * @param timeout The maximum duration (in ms) to wait for the request
+     * @throws TimeoutException if the timeout has expired
+     */
+    public void awaitMetadataUpdate(long timeout) {
+        long now = time.milliseconds();
+        long deadline = now + timeout;
+        int version = this.metadata.requestUpdate();
+        while (this.metadata.version() == version && now < deadline) {
+            poll(deadline - now, now);
+            now = time.milliseconds();
+        }
+
+        if (this.metadata.version() == version)
+            throw new TimeoutException("Failed to get metadata after " + timeout + " ms.");
     }
 
     /**

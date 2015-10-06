@@ -1067,7 +1067,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
             if (parts == null) {
                 metadata.add(topic);
-                client.awaitMetadataUpdate();
+                client.awaitMetadataUpdate(requestTimeoutMs);
                 parts = metadata.fetch().partitionsForTopic(topic);
             }
             return parts;
