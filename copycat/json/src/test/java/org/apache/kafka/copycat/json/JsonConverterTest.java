@@ -23,13 +23,17 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.apache.kafka.copycat.data.Date;
 import org.apache.kafka.copycat.data.Decimal;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.data.Struct;
 import org.apache.kafka.copycat.data.Timestamp;
 import org.apache.kafka.copycat.errors.DataException;
+import org.junit.Before;
 import org.junit.Test;
+import org.powermock.reflect.Whitebox;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -57,6 +61,11 @@ public class JsonConverterTest {
 
     ObjectMapper objectMapper = new ObjectMapper();
     JsonConverter converter = new JsonConverter();
+
+    @Before
+    public void setUp() {
+        converter.configure(Collections.EMPTY_MAP, false);
+    }
 
     // Schema metadata
 
@@ -259,6 +268,27 @@ public class JsonConverterTest {
         assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 3, \"doc\": \"the documentation\", \"parameters\": { \"foo\": \"bar\" }}"),
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+    }
+
+
+    @Test
+    public void testCacheSchemaToCopycatConversion() {
+        Cache<JsonNode, Schema> cache = Whitebox.getInternalState(converter, "toCopycatSchemaCache");
+        assertEquals(0, cache.size());
+
+        converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes());
+        assertEquals(1, cache.size());
+
+        converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes());
+        assertEquals(1, cache.size());
+
+        // Different schema should also get cached
+        converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": true }, \"payload\": true }".getBytes());
+        assertEquals(2, cache.size());
+
+        // Even equivalent, but different JSON encoding of schema, should get different cache entry
+        converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": false }, \"payload\": true }".getBytes());
+        assertEquals(3, cache.size());
     }
 
     // Schema types
@@ -526,6 +556,23 @@ public class JsonConverterTest {
         assertEquals(true, converted.booleanValue());
     }
 
+    @Test
+    public void testCacheSchemaToJsonConversion() {
+        Cache<Schema, ObjectNode> cache = Whitebox.getInternalState(converter, "fromCopycatSchemaCache");
+        assertEquals(0, cache.size());
+
+        // Repeated conversion of the same schema, even if the schema object is different should return the same Java
+        // object
+        converter.fromCopycatData(TOPIC, SchemaBuilder.bool().build(), true);
+        assertEquals(1, cache.size());
+
+        converter.fromCopycatData(TOPIC, SchemaBuilder.bool().build(), true);
+        assertEquals(1, cache.size());
+
+        // Validate that a similar, but different schema correctly returns a different schema.
+        converter.fromCopycatData(TOPIC, SchemaBuilder.bool().optional().build(), true);
+        assertEquals(2, cache.size());
+    }
 
 
     private JsonNode parse(byte[] json) {

@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,10 +15,21 @@
  * limitations under the License.
  **/
 
-package org.apache.kafka.copycat.runtime;
+package org.apache.kafka.copycat.errors;
 
-import org.apache.kafka.copycat.sink.SinkTaskContext;
+/**
+ * Indicates that a method has been invoked illegally or at an invalid time by a connector or task.
+ */
+public class IllegalWorkerStateException extends CopycatException {
+    public IllegalWorkerStateException(String s) {
+        super(s);
+    }
 
-class SinkTaskContextImpl extends SinkTaskContext {
+    public IllegalWorkerStateException(String s, Throwable throwable) {
+        super(s, throwable);
+    }
 
+    public IllegalWorkerStateException(Throwable throwable) {
+        super(throwable);
+    }
 }
