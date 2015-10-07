@@ -17,10 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
@@ -61,7 +58,7 @@ public class Metrics implements Closeable {
     private final ConcurrentMap<Sensor, List<Sensor>> childrenSensors;
     private final List<MetricsReporter> reporters;
     private final Time time;
-    private final ScheduledExecutorService scheduler;
+    private final ScheduledThreadPoolExecutor metricsScheduler;
     private static final Logger log = LoggerFactory.getLogger(Metrics.class);
 
     /**
@@ -102,8 +99,13 @@ public class Metrics implements Closeable {
         this.time = time;
         for (MetricsReporter reporter : reporters)
             reporter.init(new ArrayList<KafkaMetric>());
-        this.scheduler = Executors.newScheduledThreadPool(1);
-        this.scheduler.scheduleAtFixedRate(new ExpireSensorTask(), 30, 30, TimeUnit.SECONDS);
+        this.metricsScheduler = new ScheduledThreadPoolExecutor(1);
+        // Creating a daemon thread to not block shutdown
+        this.metricsScheduler.setThreadFactory(new ThreadFactory() {
+            public Thread newThread(Runnable runnable) {
+                return Utils.newThread("SensorExpiryThread", runnable, true);
+            }
+        });
     }
 
     /**
@@ -275,12 +277,12 @@ public class Metrics implements Closeable {
      */
     class ExpireSensorTask implements Runnable {
         public void run() {
-            for (Map.Entry<String, Sensor> sensor : sensors.entrySet()) {
+            for (Map.Entry<String, Sensor> sensorEntry : sensors.entrySet()) {
                 // removeSensor also locks the sensor object. This is fine because synchronized is reentrant
-                synchronized (sensor.getValue()) {
-                    if (sensor.getValue().isExpired()) {
-                        log.debug("Removing expired sensor {}", sensor.getKey());
-                        removeSensor(sensor.getKey());
+                synchronized (sensorEntry.getValue()) {
+                    if (sensorEntry.getValue().hasExpired()) {
+                        log.debug("Removing expired sensor {}", sensorEntry.getKey());
+                        removeSensor(sensorEntry.getKey());
                     }
                 }
             }
@@ -297,9 +299,9 @@ public class Metrics implements Closeable {
      */
     @Override
     public void close() {
-        this.scheduler.shutdown();
+        this.metricsScheduler.shutdown();
         try {
-            this.scheduler.awaitTermination(30, TimeUnit.SECONDS);
+            this.metricsScheduler.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException ex) {
             // ignore and continue shutdown
         }

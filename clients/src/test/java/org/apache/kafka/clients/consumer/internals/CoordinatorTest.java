@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -109,6 +110,11 @@ public class CoordinatorTest {
                 defaultOffsetCommitCallback,
                 autoCommitEnabled,
                 autoCommitIntervalMs);
+    }
+
+    @After
+    public void teardown() {
+        this.metrics.close();
     }
 
     @Test

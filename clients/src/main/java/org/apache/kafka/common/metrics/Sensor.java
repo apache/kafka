@@ -183,7 +183,7 @@ public final class Sensor {
      * Return true if the Sensor is eligible for removal due to inactivity.
      *        false otherwise
      */
-    public boolean isExpired() {
+    public boolean hasExpired() {
         return (time.milliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
     }
 
