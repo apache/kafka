@@ -541,8 +541,8 @@ public class JsonConverter implements Converter {
      * Convert this object, in the org.apache.kafka.copycat.data format, into a JSON object, returning both the schema
      * and the converted object.
      */
-    private static JsonNode convertToJson(Schema schema, Object value) {
-        if (value == null) {
+    private static JsonNode convertToJson(Schema schema, Object logicalValue) {
+        if (logicalValue == null) {
             if (schema == null) // Any schema is valid and we don't have a default, so treat this as an optional schema
                 return null;
             if (schema.defaultValue() != null)
@@ -552,10 +552,11 @@ public class JsonConverter implements Converter {
             throw new DataException("Conversion error: null value for field that is required and has no default value");
         }
 
+        Object value = logicalValue;
         if (schema != null && schema.name() != null) {
             LogicalTypeConverter logicalConverter = TO_JSON_LOGICAL_CONVERTERS.get(schema.name());
             if (logicalConverter != null)
-                value = logicalConverter.convert(schema, value);
+                value = logicalConverter.convert(schema, logicalValue);
         }
 
         try {

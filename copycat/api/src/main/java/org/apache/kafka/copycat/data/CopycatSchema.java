@@ -102,6 +102,21 @@ public class CopycatSchema implements Schema {
         this.valueSchema = valueSchema;
     }
 
+    /**
+     * Construct a Schema for a primitive type, setting schema parameters, struct fields, and key and value schemas to null.
+     */
+    public CopycatSchema(Type type, boolean optional, Object defaultValue, String name, Integer version, String doc) {
+        this(type, optional, defaultValue, name, version, doc, null, null, null, null);
+    }
+
+    /**
+     * Construct a default schema for a primitive type. The schema is required, has no default value, name, version,
+     * or documentation.
+     */
+    public CopycatSchema(Type type) {
+        this(type, false, null, null, null, null);
+    }
+
     @Override
     public Type type() {
         return type;
