@@ -178,6 +178,8 @@ class Partition(val topic: String,
 
       // If the ISR size received from a LeaderAndIsrRequest is smaller than the existing ISR size,
       // mark the isrShrinkRate meter. For example: This can happen if one of the followers is shutdown.
+      // Note that this metric is not triggered on follower -> leader transition
+      // because the inSyncReplicas.size is always zero on a follower
       if (newInSyncReplicas.size < inSyncReplicas.size) replicaManager.isrShrinkRate.mark()
 
       // remove assigned replicas that have been removed by the controller
