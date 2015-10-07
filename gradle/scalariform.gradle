@@ -1,0 +1,32 @@
+buildscript {
+    repositories {
+        repositories {
+            jcenter()
+        }
+    }
+
+    dependencies {
+        classpath "org.scalariform:scalariform_$baseScalaVersion:0.1.7"
+    }
+}
+
+task formatScala() {
+    def scalaVersion = "$scalaVersion"
+    def prefsFile = "$rootDir/gradle/resources/scalariform.properties"
+
+    doLast {
+        // Format Scala
+        def prefs = scalariform.formatter.preferences.PreferencesImporterExporter$.newInstance().loadPreferences(prefsFile)
+        project.fileTree(project.projectDir).include("**/*.scala").each { File f ->
+            String contents = f.text
+            logger.debug("Formatting $f")
+            def formattedContents = scalariform.formatter.ScalaFormatter$.newInstance().format(contents, prefs, scala.Option.apply("\n"), 0, scalaVersion)
+            if (!formattedContents.equals(contents)) {
+                logger.println("Formatted $f")
+            }
+            f.write(formattedContents, "UTF-8")
+        }
+    }
+}
+//compileScala.dependsOn('formatScala')
+//compileTestScala.dependsOn('formatScala')
