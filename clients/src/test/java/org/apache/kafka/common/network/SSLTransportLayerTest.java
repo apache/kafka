@@ -504,6 +504,10 @@ public class SSLTransportLayerTest {
         @Override
         protected int netReadBufferSize() {
             ByteBuffer netReadBuffer = netReadBuffer();
+            // netReadBufferSize() is invoked in SSLTransportLayer.read() prior to the read
+            // operation. To avoid the read buffer being expanded too early, increase buffer size
+            // only when read buffer is full. This ensures that BUFFER_UNDERFLOW is always
+            // triggered in testNetReadBufferResize().
             boolean updateBufSize = netReadBuffer != null && !netReadBuffer().hasRemaining();
             return netReadBufSize.updateAndGet(super.netReadBufferSize(), updateBufSize);
         }
