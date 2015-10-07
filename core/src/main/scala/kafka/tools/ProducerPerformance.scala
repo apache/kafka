@@ -199,7 +199,6 @@ object ProducerPerformance extends Logging {
         props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec.name)
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-        //props.put(ProducerConfig.METADATA_MAX_AGE_CONFIG, (10 * 1000).toString);
         new NewShinyProducer(props)
       } else {
         props.putAll(config.producerProps)

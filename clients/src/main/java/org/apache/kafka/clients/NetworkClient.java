@@ -365,24 +365,15 @@ public class NetworkClient implements KafkaClient {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         int inflight = Integer.MAX_VALUE;
         Node found = null;
-        //XXXEno: 
-        log.debug("Attempting leastLoadedNode, nodes.size is {}", nodes.size()); 
         for (int i = 0; i < nodes.size(); i++) {
             int idx = Utils.abs((this.nodeIndexOffset + i) % nodes.size());
             Node node = nodes.get(idx);
-            //XXXEno:
-            log.debug("Attempting leastLoadedNode, nodes.id is {}", node.toString()); 
             int currInflight = this.inFlightRequests.inFlightRequestCount(node.idString());
             if (currInflight == 0 && this.connectionStates.isConnected(node.idString())) {
-                //XXXEno:
-                log.debug("Option 1 return currInFlight={} stats={}", currInflight, this.connectionStates.isConnected(node.idString()));
                 // if we find an established connection with no in-flight requests we can stop right away
                 return node;
             } else if (!this.connectionStates.isBlackedOut(node.idString(), now) && currInflight < inflight) {
                 // otherwise if this is the best we have found so far, record that
-                //XXXEno:
-                log.debug("Option 2 return isBlackedOut={} curr={} inflight={}", this.connectionStates.isBlackedOut(node.idString(), now), 
-                        currInflight, inflight);
                 inflight = currInflight;
                 found = node;
             }
@@ -390,10 +381,9 @@ public class NetworkClient implements KafkaClient {
 
         // if we found no node in the current list, try one from the nodes seen before
         if (found == null && nodesEverSeen.size() > 0) {
-            //XXXEno:
             Random rand = new Random();
             int tryNode = rand.nextInt(nodesEverSeen.size());
-            log.debug("Option 3 Trying other nodes. Index {}", tryNode);
+            log.debug("No node found. Trying previously-seen nodes. Index {}", tryNode);
             found = nodesEverSeen.get(tryNode);
         }
 
@@ -572,10 +562,6 @@ public class NetworkClient implements KafkaClient {
                 // Beware that the behavior of this method and the computation of timeouts for poll() are
                 // highly dependent on the behavior of leastLoadedNode.
                 Node node = leastLoadedNode(now);
-                //XXXEno: 
-                if (node == null)
-                    log.debug("MaybeUpdate: timeToNextMetadataUpdate={}, timeToNextReconnectAttempt={}, waitForMetadataFetch={}, metadataTimeout={},",
-                            timeToNextMetadataUpdate, timeToNextReconnectAttempt, waitForMetadataFetch, metadataTimeout);
                 maybeUpdate(now, node);
             }
 
