@@ -20,15 +20,15 @@ import subprocess
 class Keytool(object):
 
     @staticmethod
-    def generate_keystore_truststore(dir='.'):
+    def generate_keystore_truststore(ssl_dir='.'):
         """
         Generate JKS keystore and truststore and return
         Kafka SSL properties with these stores.
         """
-        ks_path = os.path.join(dir, 'test.keystore.jks')
+        ks_path = os.path.join(ssl_dir, 'test.keystore.jks')
         ks_password = 'test-ks-passwd'
         key_password = 'test-key-passwd'
-        ts_path = os.path.join(dir, 'test.truststore.jks')
+        ts_path = os.path.join(ssl_dir, 'test.truststore.jks')
         ts_password = 'test-ts-passwd'
         if os.path.exists(ks_path):
             os.remove(ks_path)

@@ -124,10 +124,7 @@ class ConsoleConsumer(BackgroundThreadService):
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
 
         # Process client configuration
-        if self.consumer_timeout_ms is not None:
-            self.prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms)
-        else:
-            self.prop_file = self.render('console_consumer.properties')
+        self.prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.

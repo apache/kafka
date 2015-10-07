@@ -30,7 +30,6 @@ class ConsoleConsumerTest(Test):
     def __init__(self, test_context):
         super(ConsoleConsumerTest, self).__init__(test_context)
 
-        self.test_context = test_context
         self.topic = "topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
 

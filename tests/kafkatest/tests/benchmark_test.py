@@ -35,7 +35,6 @@ class Benchmark(Test):
     """
     def __init__(self, test_context):
         super(Benchmark, self).__init__(test_context)
-        self.test_context = test_context
         self.num_zk = 1
         self.num_brokers = 3
         self.topics = {
