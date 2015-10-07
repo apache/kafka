@@ -94,7 +94,7 @@ class ConsoleConsumer(BackgroundThreadService):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, security_protocol=None, new_consumer=False, message_validator=None, from_beginning=True, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, kafka, topic, security_protocol=None, new_consumer=None, message_validator=None, from_beginning=True, consumer_timeout_ms=None):
         """
         Args:
             context:                    standard context
@@ -112,7 +112,6 @@ class ConsoleConsumer(BackgroundThreadService):
         """
         super(ConsoleConsumer, self).__init__(context, num_nodes)
         self.kafka = kafka
-        self.security_protocol = security_protocol
         self.new_consumer = new_consumer
         self.args = {
             'topic': topic,
@@ -124,6 +123,22 @@ class ConsoleConsumer(BackgroundThreadService):
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
 
+        # Process client configuration
+        if self.consumer_timeout_ms is not None:
+            self.prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms)
+        else:
+            self.prop_file = self.render('console_consumer.properties')
+
+        # Add security properties to the config. If security protocol is not specified,
+        # use the default in the template properties.
+        self.security_config = SecurityConfig(security_protocol, self.prop_file)
+        self.security_protocol = self.security_config.security_protocol
+        if self.new_consumer is None:
+            self.new_consumer = self.security_protocol == SecurityConfig.SSL
+        if self.security_protocol == SecurityConfig.SSL and not self.new_consumer:
+            raise Exception("SSL protocol is supported only with the new consumer")
+        self.prop_file += str(self.security_config)
+
     @property
     def start_cmd(self):
         args = self.args.copy()
@@ -134,11 +149,13 @@ class ConsoleConsumer(BackgroundThreadService):
 
         cmd = "export LOG_DIR=%s;" % ConsoleConsumer.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsoleConsumer.LOG4J_CONFIG
-        cmd += " /opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s --zookeeper %(zk_connect)s" \
+        cmd += " /opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s" \
             " --consumer.config %(config_file)s" % args
 
         if self.new_consumer:
-            cmd += " --new-consumer --bootstrap-server %s"  % self.kafka.bootstrap_servers(self.security_protocol)
+            cmd += " --new-consumer --bootstrap-server %s"  % self.kafka.bootstrap_servers()
+        else:
+            cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:
             cmd += " --from-beginning"
 
@@ -159,23 +176,10 @@ class ConsoleConsumer(BackgroundThreadService):
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
 
-        # Create and upload config file
-        if self.consumer_timeout_ms is not None:
-            prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms)
-        else:
-            prop_file = self.render('console_consumer.properties')
-
-        # Add security properties to the config. If security protocol is not specified,
-        # use the default in the template properties.
-        security_config = SecurityConfig(node.account, self.security_protocol, prop_file)
-        prop_file += str(security_config)
-        if self.security_protocol is None:
-            self.security_protocol = security_config.security_protocol
-            if self.security_protocol == SecurityConfig.SSL:
-                self.new_consumer = True
         self.logger.info("console_consumer.properties:")
-        self.logger.info(prop_file)
-        node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
+        self.logger.info(self.prop_file)
+        node.account.create_file(ConsoleConsumer.CONFIG_FILE, self.prop_file)
+        self.security_config.setup_node(node)
 
         # Create and upload log properties
         log_config = self.render('tools_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
@@ -204,5 +208,6 @@ class ConsoleConsumer(BackgroundThreadService):
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
         node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf %s /mnt/ssl" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
+        node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
+        self.security_config.clean_node(node)
 

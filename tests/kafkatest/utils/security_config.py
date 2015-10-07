@@ -14,12 +14,10 @@
 # limitations under the License.
 
 import os
-import sys
 import subprocess
-import tempfile
 
 
-class Keytool:
+class Keytool(object):
 
     @staticmethod
     def generate_keystore_truststore(dir='.'):
@@ -27,27 +25,27 @@ class Keytool:
         Generate JKS keystore and truststore and return
         Kafka SSL properties with these stores.
         """
-        ksPath = os.path.join(dir, 'test.keystore.jks')
-        ksPassword = 'test-ks-passwd'
-        keyPassword = 'test-key-passwd'
-        tsPath = os.path.join(dir, 'test.truststore.jks')
-        tsPassword = 'test-ts-passwd'
-        if os.path.exists(ksPath):
-            os.remove(ksPath)
-        if os.path.exists(tsPath):
-            os.remove(tsPath)
+        ks_path = os.path.join(dir, 'test.keystore.jks')
+        ks_password = 'test-ks-passwd'
+        key_password = 'test-key-passwd'
+        ts_path = os.path.join(dir, 'test.truststore.jks')
+        ts_password = 'test-ts-passwd'
+        if os.path.exists(ks_path):
+            os.remove(ks_path)
+        if os.path.exists(ts_path):
+            os.remove(ts_path)
         
-        Keytool.runcmd("keytool -genkeypair -alias test -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -keypass %s -storepass %s -dname CN=systemtest" % (ksPath, keyPassword, ksPassword))
-        Keytool.runcmd("keytool -export -alias test -keystore %s -storepass %s -storetype JKS -rfc -file test.crt" % (ksPath, ksPassword))
-        Keytool.runcmd("keytool -import -alias test -file test.crt -keystore %s -storepass %s -storetype JKS -noprompt" % (tsPath, tsPassword))
+        Keytool.runcmd("keytool -genkeypair -alias test -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -keypass %s -storepass %s -dname CN=systemtest" % (ks_path, key_password, ks_password))
+        Keytool.runcmd("keytool -export -alias test -keystore %s -storepass %s -storetype JKS -rfc -file test.crt" % (ks_path, ks_password))
+        Keytool.runcmd("keytool -import -alias test -file test.crt -keystore %s -storepass %s -storetype JKS -noprompt" % (ts_path, ts_password))
         os.remove('test.crt')
 
         return {
-            'ssl.keystore.location' : ksPath,
-            'ssl.keystore.password' : ksPassword,
-            'ssl.key.password' : keyPassword,
-            'ssl.truststore.location' : tsPath,
-            'ssl.truststore.password' : tsPassword
+            'ssl.keystore.location' : ks_path,
+            'ssl.keystore.password' : ks_password,
+            'ssl.key.password' : key_password,
+            'ssl.truststore.location' : ts_path,
+            'ssl.truststore.password' : ts_password
         }
 
     @staticmethod
@@ -58,7 +56,7 @@ class Keytool:
             raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
-class SecurityConfig:
+class SecurityConfig(object):
 
     PLAINTEXT = 'PLAINTEXT'
     SSL = 'SSL'
@@ -68,7 +66,7 @@ class SecurityConfig:
 
     ssl_stores = Keytool.generate_keystore_truststore('.')
 
-    def __init__(self, node_account, security_protocol, template_props=""):
+    def __init__(self, security_protocol, template_props=""):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -77,20 +75,12 @@ class SecurityConfig:
         template properties either, PLAINTEXT is used as default.
         """
 
-        self.node_account = node_account
         if security_protocol is None:
-            for line in template_props.split("\n"):
-                items = line.split("=")
-                if len(items) == 2 and items[0].strip() == 'security.protocol':
-                    security_protocol = str(items[1].strip())
-                    if security_protocol not in [SecurityConfig.PLAINTEXT, SecurityConfig.SSL]:
-                        raise Exception("Invalid security.protocol in template properties: " + security_protocol)
+            security_protocol = self.get_property('security.protocol', template_props)
         if security_protocol is None:
             security_protocol = SecurityConfig.PLAINTEXT
-        if security_protocol == SecurityConfig.SSL:
-            node_account.ssh("mkdir -p %s" % SecurityConfig.SSL_DIR, allow_fail=False)
-            node_account.scp_to(SecurityConfig.ssl_stores['ssl.keystore.location'], SecurityConfig.KEYSTORE_PATH)
-            node_account.scp_to(SecurityConfig.ssl_stores['ssl.truststore.location'], SecurityConfig.TRUSTSTORE_PATH)
+        elif security_protocol not in [SecurityConfig.PLAINTEXT, SecurityConfig.SSL]:
+            raise Exception("Invalid security.protocol in template properties: " + security_protocol)
 
         self.properties = {
             'security.protocol' : security_protocol,
@@ -101,16 +91,27 @@ class SecurityConfig:
             'ssl.truststore.password' : SecurityConfig.ssl_stores['ssl.truststore.password']
         }
     
-    def write_to_file(self, prop_file='/mnt/ssl/security.properties'):
-        """Write security properties to a remote file"""
-        tmpfile =  tempfile.NamedTemporaryFile(delete=False)
-        localfile = tmpfile.name
-        with open(localfile, 'w') as fd:
-            for key, value in self.properties.items():
-                fd.write(key + "=" + value + "\n")
-        self.node_account.scp_to(localfile, prop_file)
-        os.remove(localfile)
-        return prop_file
+    def setup_node(self, node):
+        if self.security_protocol == SecurityConfig.SSL:
+            node.account.ssh("mkdir -p %s" % SecurityConfig.SSL_DIR, allow_fail=False)
+            node.account.scp_to(SecurityConfig.ssl_stores['ssl.keystore.location'], SecurityConfig.KEYSTORE_PATH)
+            node.account.scp_to(SecurityConfig.ssl_stores['ssl.truststore.location'], SecurityConfig.TRUSTSTORE_PATH)
+
+    def clean_node(self, node):
+        if self.security_protocol == SecurityConfig.SSL:
+            node.account.ssh("rm -rf %s" % SecurityConfig.SSL_DIR, allow_fail=False)
+
+    def get_property(self, prop_name, template_props=""):
+        """
+        Get property value from the string representation of
+        a properties file.
+        """
+        value = None
+        for line in template_props.split("\n"):
+            items = line.split("=")
+            if len(items) == 2 and items[0].strip() == prop_name:
+                value = str(items[1].strip())
+        return value
 
     @property
     def security_protocol(self):

@@ -55,18 +55,19 @@ class Benchmark(Test):
     def setUp(self):
         self.zk.start()
 
-    def start_kafka(self, interbroker_security_protocol):
+    def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
-            self.test_context, self.num_brokers, 
-            self.zk, interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
+            self.test_context, self.num_brokers,
+            self.zk, security_protocol=security_protocol,
+            interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
         self.kafka.start()
 
-    @parametrize(acks=1, topic=TOPIC_REP_ONE, num_producers=1, message_size=DEFAULT_RECORD_SIZE, security_protocol='PLAINTEXT')
-    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=1, message_size=DEFAULT_RECORD_SIZE, security_protocol='PLAINTEXT')
-    @parametrize(acks=-1, topic=TOPIC_REP_THREE, num_producers=1, message_size=DEFAULT_RECORD_SIZE, security_protocol='PLAINTEXT')
-    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3, message_size=DEFAULT_RECORD_SIZE, security_protocol='PLAINTEXT')
-    @matrix(acks=[1], topic=[TOPIC_REP_THREE], num_producers=[1], message_size=[10, 100, 1000, 10000, 100000], security_protocol=['PLAINTEXT', 'SSL'])
-    def test_producer_throughput(self, acks, topic, num_producers, message_size, security_protocol):
+    @parametrize(acks=1, topic=TOPIC_REP_ONE)
+    @parametrize(acks=1, topic=TOPIC_REP_THREE)
+    @parametrize(acks=-1, topic=TOPIC_REP_THREE)
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
+    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], security_protocol=['PLAINTEXT', 'SSL'])
+    def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE, security_protocol='PLAINTEXT'):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce ~128MB worth of messages to a topic with 6 partitions. Required acks, topic replication factor,
@@ -75,7 +76,7 @@ class Benchmark(Test):
         Collect and return aggregate throughput statistics after all messages have been acknowledged.
         (This runs ProducerPerformance.java under the hood)
         """
-        self.start_kafka(security_protocol)
+        self.start_kafka(security_protocol, security_protocol)
         # Always generate the same total amount of data
         nrecords = int(self.target_data_size / message_size)
 
@@ -89,8 +90,9 @@ class Benchmark(Test):
         self.producer.run()
         return compute_aggregate_throughput(self.producer)
 
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
-    def test_long_term_producer_throughput(self, security_protocol):
+    @parametrize(security_protocol='PLAINTEXT', interbroker_security_protocol='PLAINTEXT')
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT', 'SSL'])
+    def test_long_term_producer_throughput(self, security_protocol, interbroker_security_protocol):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce 10e6 100 byte messages to a topic with 6 partitions, replication-factor 3, and acks=1.
@@ -99,7 +101,7 @@ class Benchmark(Test):
 
         (This runs ProducerPerformance.java under the hood)
         """
-        self.start_kafka(security_protocol)
+        self.start_kafka(security_protocol, security_protocol)
         self.producer = ProducerPerformanceService(
             self.test_context, 1, self.kafka, security_protocol=security_protocol,
             topic=TOPIC_REP_THREE, num_records=self.msgs_large, record_size=DEFAULT_RECORD_SIZE,
@@ -133,8 +135,7 @@ class Benchmark(Test):
 
     
     @parametrize(security_protocol='PLAINTEXT', interbroker_security_protocol='PLAINTEXT')
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='SSL')
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT', 'SSL'])
     def test_end_to_end_latency(self, security_protocol, interbroker_security_protocol):
         """
         Setup: 1 node zk + 3 node kafka cluster
@@ -145,7 +146,7 @@ class Benchmark(Test):
 
         (Under the hood, this simply runs EndToEndLatency.scala)
         """
-        self.start_kafka(interbroker_security_protocol)
+        self.start_kafka(security_protocol, interbroker_security_protocol)
         self.logger.info("BENCHMARK: End to end latency")
         self.perf = EndToEndLatencyService(
             self.test_context, 1, self.kafka,
@@ -154,9 +155,10 @@ class Benchmark(Test):
         self.perf.run()
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])
 
-    @parametrize(new_consumer=True, security_protocol='SSL')
+    @parametrize(new_consumer=True, security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
+    @parametrize(new_consumer=True, security_protocol='SSL', interbroker_security_protocol='SSL')
     @matrix(new_consumer=[True, False], security_protocol=['PLAINTEXT'])
-    def test_producer_and_consumer(self, new_consumer, security_protocol):
+    def test_producer_and_consumer(self, new_consumer, security_protocol, interbroker_security_protocol='PLAINTEXT'):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Concurrently produce and consume 10e6 messages with a single producer and a single consumer,
@@ -166,7 +168,7 @@ class Benchmark(Test):
 
         (Under the hood, this runs ProducerPerformance.java, and ConsumerPerformance.scala)
         """
-        self.start_kafka(security_protocol)
+        self.start_kafka(security_protocol, interbroker_security_protocol)
         num_records = 10 * 1000 * 1000  # 10e6
 
         self.producer = ProducerPerformanceService(
@@ -189,14 +191,15 @@ class Benchmark(Test):
         self.logger.info("\n".join(summary))
         return data
 
-    @parametrize(new_consumer=True, security_protocol='SSL', num_consumers=1)
-    @matrix(new_consumer=[True, False], security_protocol=['PLAINTEXT'], num_consumers=[1])
-    def test_consumer_throughput(self, new_consumer, security_protocol, num_consumers):
+    @parametrize(new_consumer=True, security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
+    @parametrize(new_consumer=True, security_protocol='SSL', interbroker_security_protocol='SSL')
+    @matrix(new_consumer=[True, False], security_protocol=['PLAINTEXT'])
+    def test_consumer_throughput(self, new_consumer, security_protocol, interbroker_security_protocol='PLAINTEXT', num_consumers=1):
         """
         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
         (using new consumer iff new_consumer == True), and report throughput.
         """
-        self.start_kafka(security_protocol)
+        self.start_kafka(security_protocol, interbroker_security_protocol)
         num_records = 10 * 1000 * 1000  # 10e6
 
         # seed kafka w/messages

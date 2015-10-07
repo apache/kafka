@@ -28,6 +28,7 @@ class EndToEndLatencyService(PerformanceService):
     def __init__(self, context, num_nodes, kafka, security_protocol, topic, num_records, consumer_fetch_max_wait=100, acks=1):
         super(EndToEndLatencyService, self).__init__(context, num_nodes)
         self.kafka = kafka
+        self.security_config = SecurityConfig(security_protocol)
         self.security_protocol = security_protocol
         self.args = {
             'topic': topic,
@@ -38,14 +39,15 @@ class EndToEndLatencyService(PerformanceService):
 
     def _worker(self, idx, node):
         args = self.args.copy()
+        self.security_config.setup_node(node)
         if self.security_protocol == SecurityConfig.SSL:
-            ssl_config = SecurityConfig(node.account, self.security_protocol)
-            ssl_config_file = ssl_config.write_to_file()
+            ssl_config_file = SecurityConfig.SSL_DIR + "/security.properties"
+            node.account.create_file(ssl_config_file, str(self.security_config))
         else:
             ssl_config_file = ""
         args.update({
             'zk_connect': self.kafka.zk.connect_setting(),
-            'bootstrap_servers': self.kafka.bootstrap_servers(self.security_protocol),
+            'bootstrap_servers': self.kafka.bootstrap_servers(),
             'ssl_config_file': ssl_config_file
         })
 

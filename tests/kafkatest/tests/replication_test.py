@@ -71,7 +71,9 @@ class ReplicationTest(Test):
         indicator that nothing is left to consume.
 
         """
+        security_protocol='PLAINTEXT'
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, 
+                                  security_protocol=security_protocol,
                                   interbroker_security_protocol=interbroker_security_protocol,
                                   topics={self.topic: {
                                                "partitions": 3,
@@ -79,8 +81,8 @@ class ReplicationTest(Test):
                                                "min.insync.replicas": 2}
                                          })
         self.kafka.start()
-        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, security_protocol='PLAINTEXT', throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, security_protocol='PLAINTEXT', new_consumer=False, consumer_timeout_ms=3000, message_validator=is_int)
+        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, security_protocol=security_protocol, throughput=self.producer_throughput)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, security_protocol=security_protocol, new_consumer=False, consumer_timeout_ms=3000, message_validator=is_int)
 
         # Produce in a background thread while driving broker failures
         self.producer.start()

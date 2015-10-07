@@ -32,7 +32,6 @@ class VerifiableProducer(BackgroundThreadService):
         super(VerifiableProducer, self).__init__(context, num_nodes)
 
         self.kafka = kafka
-        self.security_protocol = security_protocol
         self.topic = topic
         self.max_messages = max_messages
         self.throughput = throughput
@@ -40,17 +39,18 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
 
+        # If security protocol is not specified, use the default in the template properties.
+        self.prop_file = self.render('verifiable_producer.properties')
+        self.security_config = SecurityConfig(security_protocol, self.prop_file)
+        self.security_protocol = self.security_config.security_protocol
+        self.prop_file += str(self.security_config)
+
     def _worker(self, idx, node):
         # Create and upload config file
-        # If security protocol is not specified, use the default in the template properties.
-        prop_file = self.render('verifiable_producer.properties')
-        security_config = SecurityConfig(node.account, self.security_protocol, prop_file)
-        prop_file += str(security_config)
-        if self.security_protocol is None:
-            self.security_protocol = security_config.security_protocol
         self.logger.info("verifiable_producer.properties:")
-        self.logger.info(prop_file)
-        node.account.create_file(VerifiableProducer.CONFIG_FILE, prop_file)
+        self.logger.info(self.prop_file)
+        node.account.create_file(VerifiableProducer.CONFIG_FILE, self.prop_file)
+        self.security_config.setup_node(node)
 
         cmd = self.start_cmd
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
@@ -72,7 +72,7 @@ class VerifiableProducer(BackgroundThreadService):
     @property
     def start_cmd(self):
         cmd = "/opt/kafka/bin/kafka-verifiable-producer.sh" \
-              " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
+              " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers())
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:
@@ -114,7 +114,8 @@ class VerifiableProducer(BackgroundThreadService):
 
     def clean_node(self, node):
         node.account.kill_process("VerifiableProducer", clean_shutdown=False, allow_fail=False)
-        node.account.ssh("rm -rf /mnt/producer.log /mnt/verifiable_producer.properties /mnt/ssl", allow_fail=False)
+        node.account.ssh("rm -rf /mnt/producer.log /mnt/verifiable_producer.properties", allow_fail=False)
+        self.security_config.clean_node(node)
 
     def try_parse_json(self, string):
         """Try to parse a string as json. Return None if not parseable."""

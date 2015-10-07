@@ -68,6 +68,7 @@ class ConsumerPerformanceService(PerformanceService):
     def __init__(self, context, num_nodes, kafka, security_protocol, topic, messages, new_consumer=False, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
+        self.security_config = SecurityConfig(security_protocol)
         self.security_protocol = security_protocol
         self.topic = topic
         self.messages = messages
@@ -92,7 +93,7 @@ class ConsumerPerformanceService(PerformanceService):
 
         if self.new_consumer:
             args['new-consumer'] = ""
-            args['broker-list'] = self.kafka.bootstrap_servers(self.security_protocol)
+            args['broker-list'] = self.kafka.bootstrap_servers()
         else:
             args['zookeeper'] = self.kafka.zk.connect_setting()
 
@@ -136,7 +137,8 @@ class ConsumerPerformanceService(PerformanceService):
 
         log_config = self.render('tools_log4j.properties', log_file=ConsumerPerformanceService.LOG_FILE)
         node.account.create_file(ConsumerPerformanceService.LOG4J_CONFIG, log_config)
-        SecurityConfig(node.account, self.security_protocol).write_to_file(ConsumerPerformanceService.CONFIG_FILE)
+        node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, str(self.security_config))
+        self.security_config.setup_node(node)
 
         cmd = self.start_cmd
         self.logger.debug("Consumer performance %d command: %s", idx, cmd)
