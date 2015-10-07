@@ -279,6 +279,11 @@ public class Metrics implements Closeable {
         public void run() {
             for (Map.Entry<String, Sensor> sensorEntry : sensors.entrySet()) {
                 // removeSensor also locks the sensor object. This is fine because synchronized is reentrant
+                // There is however a minor race condition here. Assume we have a parent sensor P and child sensor C.
+                // Calling record on C would cause a record on P as well.
+                // So expiration time for P == C1. If the record on P happens via C just after P is removed,
+                // that remove will cause C to also get removed
+                // Since the expiration time is typically high it is not expected to be a significant concern and thus not worth optimizing
                 synchronized (sensorEntry.getValue()) {
                     if (sensorEntry.getValue().hasExpired()) {
                         log.debug("Removing expired sensor {}", sensorEntry.getKey());
