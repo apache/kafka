@@ -17,7 +17,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
@@ -282,8 +285,9 @@ public class Metrics implements Closeable {
                 // There is however a minor race condition here. Assume we have a parent sensor P and child sensor C.
                 // Calling record on C would cause a record on P as well.
                 // So expiration time for P == C1. If the record on P happens via C just after P is removed,
-                // that remove will cause C to also get removed
-                // Since the expiration time is typically high it is not expected to be a significant concern and thus not worth optimizing
+                // that will cause C to also get removed.
+                // Since the expiration time is typically high it is not expected to be a significant concern
+                // and thus not necessary to optimize
                 synchronized (sensorEntry.getValue()) {
                     if (sensorEntry.getValue().hasExpired()) {
                         log.debug("Removing expired sensor {}", sensorEntry.getKey());
