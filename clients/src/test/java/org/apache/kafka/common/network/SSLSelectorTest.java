@@ -34,11 +34,6 @@ import org.junit.Test;
  */
 public class SSLSelectorTest extends SelectorTest {
 
-    private static final int BUFFER_SIZE = 4 * 1024;
-
-    private EchoServer server;
-    private Selector selector;
-    private ChannelBuilder channelBuilder;
     private Metrics metrics;
 
     @Before
@@ -56,7 +51,7 @@ public class SSLSelectorTest extends SelectorTest {
         this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
     @After

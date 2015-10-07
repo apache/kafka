@@ -42,7 +42,7 @@ public class BufferPoolTest {
 
     @After
     public void teardown() {
-      this.metrics.close();
+        this.metrics.close();
     }
 
     /**
