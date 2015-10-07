@@ -75,17 +75,19 @@ public class CopycatSchema implements Schema {
     private final Integer version;
     // Optional human readable documentation describing this schema.
     private final String doc;
+    private final Map<String, String> parameters;
 
     /**
      * Construct a Schema. Most users should not construct schemas manually, preferring {@link SchemaBuilder} instead.
      */
-    public CopycatSchema(Type type, boolean optional, Object defaultValue, String name, Integer version, String doc, List<Field> fields, Schema keySchema, Schema valueSchema) {
+    public CopycatSchema(Type type, boolean optional, Object defaultValue, String name, Integer version, String doc, Map<String, String> parameters, List<Field> fields, Schema keySchema, Schema valueSchema) {
         this.type = type;
         this.optional = optional;
         this.defaultValue = defaultValue;
         this.name = name;
         this.version = version;
         this.doc = doc;
+        this.parameters = parameters;
 
         this.fields = fields;
         if (this.fields != null && this.type == Type.STRUCT) {
@@ -98,6 +100,21 @@ public class CopycatSchema implements Schema {
 
         this.keySchema = keySchema;
         this.valueSchema = valueSchema;
+    }
+
+    /**
+     * Construct a Schema for a primitive type, setting schema parameters, struct fields, and key and value schemas to null.
+     */
+    public CopycatSchema(Type type, boolean optional, Object defaultValue, String name, Integer version, String doc) {
+        this(type, optional, defaultValue, name, version, doc, null, null, null, null);
+    }
+
+    /**
+     * Construct a default schema for a primitive type. The schema is required, has no default value, name, version,
+     * or documentation.
+     */
+    public CopycatSchema(Type type) {
+        this(type, false, null, null, null, null);
     }
 
     @Override
@@ -130,7 +147,10 @@ public class CopycatSchema implements Schema {
         return doc;
     }
 
-
+    @Override
+    public Map<String, String> parameters() {
+        return parameters;
+    }
 
     @Override
     public List<Field> fields() {
@@ -163,7 +183,7 @@ public class CopycatSchema implements Schema {
 
     /**
      * Validate that the value can be used with the schema, i.e. that its type matches the schema type and nullability
-     * requirements. Throws a DataException if the value is invalid. Returns
+     * requirements. Throws a DataException if the value is invalid.
      * @param schema Schema to test
      * @param value value to test
      */
@@ -239,12 +259,13 @@ public class CopycatSchema implements Schema {
                 Objects.equals(valueSchema, schema.valueSchema) &&
                 Objects.equals(name, schema.name) &&
                 Objects.equals(version, schema.version) &&
-                Objects.equals(doc, schema.doc);
+                Objects.equals(doc, schema.doc) &&
+                Objects.equals(parameters, schema.parameters);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc);
+        return Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc, parameters);
     }
 
     @Override
