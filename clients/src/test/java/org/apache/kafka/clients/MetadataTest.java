@@ -111,6 +111,9 @@ public class MetadataTest {
         assertEquals(100, metadata.timeToNextUpdate(1100));
         assertEquals(100, metadata.lastSuccessfulUpdate());
 
+        metadata.needMetadataForAllTopics(true);
+        metadata.update(null, time);
+        assertEquals(100, metadata.timeToNextUpdate(1000));
     }
 
     @Test

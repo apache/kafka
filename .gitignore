@@ -11,6 +11,8 @@ patch-process/*
 .idea
 .svn
 .classpath
+/.metadata
+/.recommenders
 *~
 *#
 .#*

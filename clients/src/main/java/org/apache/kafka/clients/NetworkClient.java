@@ -258,7 +258,9 @@ public class NetworkClient implements KafkaClient {
     /**
      * Do actual reads and writes to sockets.
      *
-     * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately
+     * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately,
+     *                must be non-negative. The actual timeout will be the minimum of timeout, request timeout and
+     *                metadata timeout
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
@@ -267,7 +269,7 @@ public class NetworkClient implements KafkaClient {
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         long updatedNow = now;
         try {
-            this.selector.poll(Math.min(timeout, metadataTimeout));
+            this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O in producer network thread", e);
         }
@@ -292,38 +294,6 @@ public class NetworkClient implements KafkaClient {
             }
         }
 
-        return responses;
-    }
-
-    /**
-     * Await all the outstanding responses for requests on the given connection
-     *
-     * @param node The node to block on
-     * @param now The current time in ms
-     * @return All the collected responses
-     */
-    @Override
-    public List<ClientResponse> completeAll(String node, long now) {
-        try {
-            this.selector.muteAll();
-            this.selector.unmute(node);
-            List<ClientResponse> responses = new ArrayList<ClientResponse>();
-            while (inFlightRequestCount(node) > 0)
-                responses.addAll(poll(Integer.MAX_VALUE, now));
-            return responses;
-        } finally {
-            this.selector.unmuteAll();
-        }
-    }
-
-    /**
-     * Wait for all outstanding requests to complete.
-     */
-    @Override
-    public List<ClientResponse> completeAll(long now) {
-        List<ClientResponse> responses = new ArrayList<ClientResponse>();
-        while (inFlightRequestCount() > 0)
-            responses.addAll(poll(Integer.MAX_VALUE, now));
         return responses;
     }
 

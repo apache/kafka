@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.util.{Arrays, Properties}
 
-import org.apache.kafka.clients.consumer.{CommitType, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.utils.Utils
 

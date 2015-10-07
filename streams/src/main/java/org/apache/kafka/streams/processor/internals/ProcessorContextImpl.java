@@ -19,13 +19,13 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.RestoreFunc;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +43,7 @@ public class ProcessorContextImpl implements ProcessorContext {
 
     private final int id;
     private final StreamTask task;
-    private final Metrics metrics;
+    private final StreamingMetrics metrics;
     private final RecordCollector collector;
     private final ProcessorStateManager stateMgr;
 
@@ -60,7 +60,7 @@ public class ProcessorContextImpl implements ProcessorContext {
                                 StreamingConfig config,
                                 RecordCollector collector,
                                 ProcessorStateManager stateMgr,
-                                Metrics metrics) {
+                                StreamingMetrics metrics) {
         this.id = id;
         this.task = task;
         this.metrics = metrics;
@@ -143,16 +143,16 @@ public class ProcessorContextImpl implements ProcessorContext {
     }
 
     @Override
-    public Metrics metrics() {
+    public StreamingMetrics metrics() {
         return metrics;
     }
 
     @Override
-    public void register(StateStore store, RestoreFunc restoreFunc) {
+    public void register(StateStore store, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
             throw new KafkaException("Can only create state stores during initialization.");
 
-        stateMgr.register(store, restoreFunc);
+        stateMgr.register(store, stateRestoreCallback);
     }
 
     @Override
