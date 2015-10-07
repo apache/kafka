@@ -19,6 +19,7 @@ package org.apache.kafka.copycat.data;
 
 import org.apache.kafka.copycat.errors.DataException;
 
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.*;
 
@@ -27,6 +28,10 @@ public class CopycatSchema implements Schema {
      * Maps Schema.Types to a list of Java classes that can be used to represent them.
      */
     private static final Map<Type, List<Class>> SCHEMA_TYPE_CLASSES = new HashMap<>();
+    /**
+     * Maps known logical types to a list of Java classes that can be used to represent them.
+     */
+    private static final Map<String, List<Class>> LOGICAL_TYPE_CLASSES = new HashMap<>();
 
     /**
      * Maps the Java classes to the corresponding Schema.Type.
@@ -54,6 +59,14 @@ public class CopycatSchema implements Schema {
             for (Class<?> schemaClass : schemaClasses.getValue())
                 JAVA_CLASS_SCHEMA_TYPES.put(schemaClass, schemaClasses.getKey());
         }
+
+        LOGICAL_TYPE_CLASSES.put(Decimal.LOGICAL_NAME, Arrays.asList((Class) BigDecimal.class));
+        LOGICAL_TYPE_CLASSES.put(Date.LOGICAL_NAME, Arrays.asList((Class) java.util.Date.class));
+        LOGICAL_TYPE_CLASSES.put(Time.LOGICAL_NAME, Arrays.asList((Class) java.util.Date.class));
+        LOGICAL_TYPE_CLASSES.put(Timestamp.LOGICAL_NAME, Arrays.asList((Class) java.util.Date.class));
+        // We don't need to put these into JAVA_CLASS_SCHEMA_TYPES since that's only used to determine schemas for
+        // schemaless data and logical types will have ambiguous schemas (e.g. many of them use the same Java class) so
+        // they should not be used without schemas.
     }
 
     // The type of the field
@@ -195,7 +208,11 @@ public class CopycatSchema implements Schema {
                 return;
         }
 
-        final List<Class> expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
+        List<Class> expectedClasses = LOGICAL_TYPE_CLASSES.get(schema.name());
+
+        if (expectedClasses == null)
+                expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
+
         if (expectedClasses == null)
             throw new DataException("Invalid Java object for schema type " + schema.type() + ": " + value.getClass());
 
