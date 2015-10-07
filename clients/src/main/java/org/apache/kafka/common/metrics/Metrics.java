@@ -18,12 +18,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A registry of sensors and metrics.
@@ -56,6 +61,8 @@ public class Metrics implements Closeable {
     private final ConcurrentMap<Sensor, List<Sensor>> childrenSensors;
     private final List<MetricsReporter> reporters;
     private final Time time;
+    private final ScheduledThreadPoolExecutor metricsScheduler;
+    private static final Logger log = LoggerFactory.getLogger(Metrics.class);
 
     /**
      * Create a metrics repository with no metric reporters and default configuration.
@@ -95,6 +102,13 @@ public class Metrics implements Closeable {
         this.time = time;
         for (MetricsReporter reporter : reporters)
             reporter.init(new ArrayList<KafkaMetric>());
+        this.metricsScheduler = new ScheduledThreadPoolExecutor(1);
+        // Creating a daemon thread to not block shutdown
+        this.metricsScheduler.setThreadFactory(new ThreadFactory() {
+            public Thread newThread(Runnable runnable) {
+                return Utils.newThread("SensorExpiryThread", runnable, true);
+            }
+        });
     }
 
     /**
@@ -135,9 +149,23 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+        return sensor(name, config, Long.MAX_VALUE, parents);
+    }
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor.
+     * @param name The name of the sensor
+     * @param config A default configuration to use for this sensor for metrics that don't have their own config
+     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     *                                        it is eligible for removal
+     * @param parents The parent sensors
+     * @return The sensor that is created
+     */
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time);
+            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds);
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
@@ -149,6 +177,7 @@ public class Metrics implements Closeable {
                     children.add(s);
                 }
             }
+            log.debug("Added sensor with name {}", name);
         }
         return s;
     }
@@ -167,6 +196,7 @@ public class Metrics implements Closeable {
                     if (sensors.remove(name, sensor)) {
                         for (KafkaMetric metric : sensor.metrics())
                             removeMetric(metric.metricName());
+                        log.debug("Removed sensor with name {}", name);
                         childSensors = childrenSensors.remove(sensor);
                     }
                 }
@@ -244,6 +274,30 @@ public class Metrics implements Closeable {
         return this.metrics;
     }
 
+    /**
+     * This iterates over every Sensor and triggers a removeSensor if it has expired
+     * Package private for testing
+     */
+    class ExpireSensorTask implements Runnable {
+        public void run() {
+            for (Map.Entry<String, Sensor> sensorEntry : sensors.entrySet()) {
+                // removeSensor also locks the sensor object. This is fine because synchronized is reentrant
+                // There is however a minor race condition here. Assume we have a parent sensor P and child sensor C.
+                // Calling record on C would cause a record on P as well.
+                // So expiration time for P == expiration time for C. If the record on P happens via C just after P is removed,
+                // that will cause C to also get removed.
+                // Since the expiration time is typically high it is not expected to be a significant concern
+                // and thus not necessary to optimize
+                synchronized (sensorEntry.getValue()) {
+                    if (sensorEntry.getValue().hasExpired()) {
+                        log.debug("Removing expired sensor {}", sensorEntry.getKey());
+                        removeSensor(sensorEntry.getKey());
+                    }
+                }
+            }
+        }
+    }
+
     /* For testing use only. */
     Map<Sensor, List<Sensor>> childrenSensors() {
         return Collections.unmodifiableMap(childrenSensors);
@@ -254,6 +308,13 @@ public class Metrics implements Closeable {
      */
     @Override
     public void close() {
+        this.metricsScheduler.shutdown();
+        try {
+            this.metricsScheduler.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException ex) {
+            // ignore and continue shutdown
+        }
+
         for (MetricsReporter reporter : this.reporters)
             reporter.close();
     }

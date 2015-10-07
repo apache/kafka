@@ -36,6 +36,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -76,6 +77,11 @@ public class SenderTest {
         metricTags.put("client-id", CLIENT_ID);
     }
 
+    @After
+    public void tearDown() {
+        this.metrics.close();
+    }
+
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
@@ -114,44 +120,49 @@ public class SenderTest {
     public void testRetries() throws Exception {
         // create a sender with retries = 1
         int maxRetries = 1;
-        Sender sender = new Sender(client,
-                                   metadata,
-                                   this.accumulator,
-                                   MAX_REQUEST_SIZE,
-                                   ACKS_ALL,
-                                   maxRetries,
-                                   new Metrics(),
-                                   time,
-                                   "clientId",
-                                   REQUEST_TIMEOUT);
-        // do a successful retry
-        Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
-        sender.run(time.milliseconds()); // connect
-        sender.run(time.milliseconds()); // send produce request
-        assertEquals(1, client.inFlightRequestCount());
-        client.disconnect(client.requests().peek().request().destination());
-        assertEquals(0, client.inFlightRequestCount());
-        sender.run(time.milliseconds()); // receive error
-        sender.run(time.milliseconds()); // reconnect
-        sender.run(time.milliseconds()); // resend
-        assertEquals(1, client.inFlightRequestCount());
-        long offset = 0;
-        client.respond(produceResponse(tp, offset, Errors.NONE.code(), 0));
-        sender.run(time.milliseconds());
-        assertTrue("Request should have retried and completed", future.isDone());
-        assertEquals(offset, future.get().offset());
-
-        // do an unsuccessful retry
-        future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
-        sender.run(time.milliseconds()); // send produce request
-        for (int i = 0; i < maxRetries + 1; i++) {
+        Metrics m = new Metrics();
+        try {
+            Sender sender = new Sender(client,
+                                       metadata,
+                                       this.accumulator,
+                                       MAX_REQUEST_SIZE,
+                                       ACKS_ALL,
+                                       maxRetries,
+                                       m,
+                                       time,
+                                       "clientId",
+                                       REQUEST_TIMEOUT);
+            // do a successful retry
+            Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+            sender.run(time.milliseconds()); // connect
+            sender.run(time.milliseconds()); // send produce request
+            assertEquals(1, client.inFlightRequestCount());
             client.disconnect(client.requests().peek().request().destination());
+            assertEquals(0, client.inFlightRequestCount());
             sender.run(time.milliseconds()); // receive error
             sender.run(time.milliseconds()); // reconnect
             sender.run(time.milliseconds()); // resend
+            assertEquals(1, client.inFlightRequestCount());
+            long offset = 0;
+            client.respond(produceResponse(tp, offset, Errors.NONE.code(), 0));
+            sender.run(time.milliseconds());
+            assertTrue("Request should have retried and completed", future.isDone());
+            assertEquals(offset, future.get().offset());
+
+            // do an unsuccessful retry
+            future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+            sender.run(time.milliseconds()); // send produce request
+            for (int i = 0; i < maxRetries + 1; i++) {
+                client.disconnect(client.requests().peek().request().destination());
+                sender.run(time.milliseconds()); // receive error
+                sender.run(time.milliseconds()); // reconnect
+                sender.run(time.milliseconds()); // resend
+            }
+            sender.run(time.milliseconds());
+            completedWithError(future, Errors.NETWORK_EXCEPTION);
+        } finally {
+            m.close();
         }
-        sender.run(time.milliseconds());
-        completedWithError(future, Errors.NETWORK_EXCEPTION);
     }
 
     private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {
