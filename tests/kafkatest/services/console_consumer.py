@@ -20,7 +20,7 @@ from kafkatest.services.performance import PerformanceService
 
 import os
 import subprocess
-
+import itertools
 
 def is_int(msg):
     """Default method used to check whether text pulled from console consumer is a message.
@@ -96,7 +96,7 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         }
 
     def __init__(self, context, num_nodes, kafka, topic, message_validator=None, from_beginning=True,
-                 client_id="console-consumer", consumer_timeout_ms=None, jmx_object_name=None, jmx_attributes=None):
+                 client_id="console-consumer", consumer_timeout_ms=None, jmx_object_names=None, jmx_attributes=[]):
         """
         Args:
             context:                    standard context
@@ -110,7 +110,7 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
                                         waiting for the consumer to stop is a pretty good way to consume all messages
                                         in a topic.
         """
-        JmxMixin.__init__(self, num_nodes, jmx_object_name, jmx_attributes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         PerformanceService.__init__(self, context, num_nodes)
         self.kafka = kafka
         self.args = {
@@ -172,8 +172,11 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         # Run and capture output
         cmd = self.start_cmd
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
-        for line in node.account.ssh_capture(cmd, allow_fail=False):
-            self.maybe_start_jmx_tool(idx, node)
+
+        consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
+        first_line = consumer_output.next()
+        self.start_jmx_tool(idx, node)
+        for line in itertools.chain([first_line], consumer_output):
             msg = line.strip()
             if self.message_validator is not None:
                 msg = self.message_validator(msg)

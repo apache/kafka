@@ -15,6 +15,7 @@
 
 from kafkatest.services.performance.jmx_mixin import JmxMixin
 from kafkatest.services.performance import PerformanceService
+import itertools
 
 class ProducerPerformanceService(JmxMixin, PerformanceService):
 
@@ -25,8 +26,8 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
     }
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, settings={},
-                 intermediate_stats=False, client_id="producer-performance", jmx_object_name=None, jmx_attributes=None):
-        JmxMixin.__init__(self, num_nodes, jmx_object_name, jmx_attributes)
+                 intermediate_stats=False, client_id="producer-performance", jmx_object_names=None, jmx_attributes=[]):
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         PerformanceService.__init__(self, context, num_nodes)
 
         self.kafka = kafka
@@ -65,8 +66,10 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
                 'latency_999th_ms': float(parts[7].split()[0]),
             }
         last = None
-        for line in node.account.ssh_capture(cmd):
-            self.maybe_start_jmx_tool(idx, node)
+        producer_output = node.account.ssh_capture(cmd)
+        first_line = producer_output.next()
+        self.start_jmx_tool(idx, node)
+        for line in itertools.chain([first_line], producer_output):
             if self.intermediate_stats:
                 try:
                     self.stats[idx-1].append(parse_stats(line))

@@ -15,6 +15,7 @@
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
+from ducktape.mark import parametrize
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -45,14 +46,18 @@ class QuotaTest(Test):
                              "quota_consumer_default": 2000000,
                              "quota_producer_bytes_per_second_overrides": "overridden_id=3750000",
                              "quota_consumer_bytes_per_second_overrides": "overridden_id=3000000"}
-        self.maximum_deviation_percentage = 100.0
+        self.maximum_client_deviation_percentage = 100.0
+        self.maximum_broker_deviation_percentage = 5.0
         self.num_records = 100000
         self.record_size = 3000
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
                                   topics={self.topic: {"partitions": 6, "replication-factor": 1, "min.insync.replicas": 1}},
-                                  quota_config=self.quota_config)
+                                  quota_config=self.quota_config,
+                                  jmx_object_names=["kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec",
+                                                    "kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec"],
+                                  jmx_attributes=["OneMinuteRate"])
         self.num_producers = 1
         self.num_consumers = 2
 
@@ -65,80 +70,87 @@ class QuotaTest(Test):
         return super(QuotaTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
     def run_clients(self, producer_id, producer_num, consumer_id, consumer_num):
-        self.produced_num = {}
-        self.producer_average_bps = {}
-        self.producer_maximum_bps = {}
-
-        self.consumed_num = {}
-        self.consumer_average_bps = {}
-        self.consumer_maximum_bps = {}
-
         # Produce all messages
         producer = ProducerPerformanceService(
             self.test_context, producer_num, self.kafka,
             topic=self.topic, num_records=self.num_records, record_size=self.record_size, throughput=-1, client_id=producer_id,
-            jmx_object_name="kafka.producer:type=producer-metrics,client-id=%s" % producer_id, jmx_attributes="outgoing-byte-rate")
+            jmx_object_names=["kafka.producer:type=producer-metrics,client-id=%s" % producer_id], jmx_attributes=["outgoing-byte-rate"])
         producer.run()
-        self.produced_num[producer.client_id] = sum([value["records"] for value in producer.results])
-        producer_attribute_name = "kafka.producer:type=producer-metrics,client-id=%s:outgoing-byte-rate" % producer_id
-        self.producer_average_bps[producer.client_id] = producer.average_jmx_value[producer_attribute_name]
-        self.producer_maximum_bps[producer.client_id] = producer.maximum_jmx_value[producer_attribute_name]
 
         # Consume all messages
         consumer = ConsoleConsumer(self.test_context, consumer_num, self.kafka, self.topic, consumer_timeout_ms=60000, client_id=consumer_id,
-            jmx_object_name="kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=%s" % consumer_id,
-            jmx_attributes="OneMinuteRate")
+            jmx_object_names=["kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=%s" % consumer_id],
+            jmx_attributes=["OneMinuteRate"])
         consumer.run()
 
         for idx, messages in consumer.messages_consumed.iteritems():
             assert len(messages)>0, "consumer %d didn't consume any message before timeout" % idx
 
-        self.consumed_num[consumer.client_id] = sum([len(value) for value in consumer.messages_consumed.values()])
-        consumer_attribute_name = "kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=%s:OneMinuteRate" % consumer_id
-        self.consumer_average_bps[consumer.client_id] = consumer.average_jmx_value[consumer_attribute_name]
-        self.consumer_maximum_bps[consumer.client_id] = consumer.maximum_jmx_value[consumer_attribute_name]
-
-        success, msg = self.validate()
+        success, msg = self.validate(self.kafka, producer, consumer)
         assert success, msg
 
-    def validate(self):
+    def validate(self, broker, producer, consumer):
         """
         For each client_id we validate that:
         1) number of consumed messages equals number of produced messages
-        2) maximum_producer_throughput <= producer_quota * (1 + maximum_deviation_percentage/100)
-        3) maximum_consumer_throughput <= consumer_quota * (1 + maximum_deviation_percentage/100)
+        2) maximum_producer_throughput <= producer_quota * (1 + maximum_client_deviation_percentage/100)
+        3) maximum_broker_byte_in_rate <= producer_quota * (1 + maximum_broker_deviation_percentage/100)
+        4) maximum_consumer_throughput <= consumer_quota * (1 + maximum_client_deviation_percentage/100)
+        5) maximum_broker_byte_out_rate <= consumer_quota * (1 + maximum_broker_deviation_percentage/100)
         """
         success = True
         msg = ""
 
-        for client_id, num in self.produced_num.iteritems():
-            self.logger.info("producer %s produced %d messages" % (client_id, num))
+        self.kafka.read_jmx_output_all_nodes()
 
-        for client_id, num in self.consumed_num.iteritems():
-            self.logger.info("consumer %s consumed %d messages" % (client_id, num))
-
-        if sum(self.produced_num.values()) != sum(self.consumed_num.values()):
+        # validate that number of consumed messages equals number of produced messages
+        produced_num = sum([value["records"] for value in producer.results])
+        consumed_num = sum([len(value) for value in consumer.messages_consumed.values()])
+        self.logger.info("producer produced %d messages" % produced_num)
+        self.logger.info("consumer consumed %d messages" % consumed_num)
+        if produced_num != consumed_num:
             success = False
-            msg += "number of produced messages %d doesn't equal number of consumed messages %d" % \
-                   (sum(self.produced_num.values()), sum(self.consumed_num.values()))
+            msg += "number of produced messages %d doesn't equal number of consumed messages %d" % (produced_num, consumed_num)
 
-        for client_id, maximum_bps in self.producer_maximum_bps.iteritems():
-            quota_bps = self.get_producer_quota(client_id)
-            self.logger.info("producer %s has maximum throughput %.2f bps, average throughput %.2f bps with quota %.2f bps" %
-                             (client_id, maximum_bps, self.producer_average_bps[client_id], quota_bps))
-            if maximum_bps > quota_bps*(self.maximum_deviation_percentage/100+1):
-                success = False
-                msg += "maximum producer throughput %.2f bps exceeded quota %.2f bps by more than %.1f%%" % \
-                       (maximum_bps, quota_bps, self.maximum_deviation_percentage)
+        # validate that maximum_producer_throughput <= producer_quota * (1 + maximum_client_deviation_percentage/100)
+        producer_attribute_name = "kafka.producer:type=producer-metrics,client-id=%s:outgoing-byte-rate" % producer.client_id
+        producer_maximum_bps = producer.maximum_jmx_value[producer_attribute_name]
+        producer_quota_bps = self.get_producer_quota(producer.client_id)
+        self.logger.info("producer has maximum throughput %.2f bps with producer quota %.2f bps" % (producer_maximum_bps, producer_quota_bps))
+        if producer_maximum_bps > producer_quota_bps*(self.maximum_client_deviation_percentage/100+1):
+            success = False
+            msg += "maximum producer throughput %.2f bps exceeded producer quota %.2f bps by more than %.1f%%" % \
+                   (producer_maximum_bps, producer_quota_bps, self.maximum_client_deviation_percentage)
 
-        for client_id, maximum_bps in self.consumer_maximum_bps.iteritems():
-            quota_bps = self.get_consumer_quota(client_id)
-            self.logger.info("consumer %s has maximum throughput %.2f bps, average throughput %.2f bps with quota %.2f bps" %
-                             (client_id, maximum_bps, self.consumer_average_bps[client_id], quota_bps))
-            if maximum_bps > quota_bps*(self.maximum_deviation_percentage/100+1):
-                success = False
-                msg += "maximum consumer throughput %.2f bps exceeded quota %.2f bps by more than %.1f%%" % \
-                       (maximum_bps, quota_bps, self.maximum_deviation_percentage)
+        # validate that maximum_broker_byte_in_rate <= producer_quota * (1 + maximum_broker_deviation_percentage/100)
+        broker_byte_in_attribute_name = "kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec:OneMinuteRate"
+        broker_maximum_byte_in_bps = broker.maximum_jmx_value[broker_byte_in_attribute_name]
+        self.logger.info("broker has maximum byte-in rate %.2f bps with producer quota %.2f bps" %
+                         (broker_maximum_byte_in_bps, producer_quota_bps))
+        if broker_maximum_byte_in_bps > producer_quota_bps*(self.maximum_broker_deviation_percentage/100+1):
+            success = False
+            msg += "maximum broker byte-in rate %.2f bps exceeded producer quota %.2f bps by more than %.1f%%" % \
+                   (broker_maximum_byte_in_bps, producer_quota_bps, self.maximum_broker_deviation_percentage)
+
+        # validate that maximum_consumer_throughput <= consumer_quota * (1 + maximum_client_deviation_percentage/100)
+        consumer_attribute_name = "kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=%s:OneMinuteRate" % consumer.client_id
+        consumer_maximum_bps = consumer.maximum_jmx_value[consumer_attribute_name]
+        consumer_quota_bps = self.get_consumer_quota(consumer.client_id)
+        self.logger.info("consumer has maximum throughput %.2f bps with consumer quota %.2f bps" % (consumer_maximum_bps, consumer_quota_bps))
+        if consumer_maximum_bps > consumer_quota_bps*(self.maximum_client_deviation_percentage/100+1):
+            success = False
+            msg += "maximum consumer throughput %.2f bps exceeded consumer quota %.2f bps by more than %.1f%%" % \
+                   (consumer_maximum_bps, consumer_quota_bps, self.maximum_client_deviation_percentage)
+
+        # validate that maximum_broker_byte_out_rate <= consumer_quota * (1 + maximum_broker_deviation_percentage/100)
+        broker_byte_out_attribute_name = "kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec:OneMinuteRate"
+        broker_maximum_byte_out_bps = broker.maximum_jmx_value[broker_byte_out_attribute_name]
+        self.logger.info("broker has maximum byte-out rate %.2f bps with consumer quota %.2f bps" %
+                         (broker_maximum_byte_out_bps, consumer_quota_bps))
+        if broker_maximum_byte_out_bps > consumer_quota_bps*(self.maximum_broker_deviation_percentage/100+1):
+            success = False
+            msg += "maximum broker byte-out rate %.2f bps exceeded consumer quota %.2f bps by more than %.1f%%" % \
+                   (broker_maximum_byte_out_bps, consumer_quota_bps, self.maximum_broker_deviation_percentage)
 
         return success, msg
 
@@ -154,11 +166,9 @@ class QuotaTest(Test):
             return float(overridden_quotas[client_id])
         return self.quota_config["quota_consumer_default"]
 
-    def test_default_quota(self):
-        self.run_clients(producer_id="default_id", producer_num=1, consumer_id="default_id", consumer_num=1)
-
-    def test_overridden_quota(self):
-        self.run_clients(producer_id="overridden_id", producer_num=1, consumer_id="overridden_id", consumer_num=1)
-
-    def test_shared_quota(self):
-        self.run_clients(producer_id="overridden_id", producer_num=1, consumer_id="overridden_id", consumer_num=2)
+    @parametrize(producer_id="default_id", producer_num=1, consumer_id="default_id", consumer_num=1)
+    @parametrize(producer_id="overridden_id", producer_num=1, consumer_id="overridden_id", consumer_num=1)
+    @parametrize(producer_id="overridden_id", producer_num=1, consumer_id="overridden_id", consumer_num=2)
+    def test_quota(self, producer_id="default_id", producer_num=1, consumer_id="default_id", consumer_num=1):
+        self.run_clients(producer_id, producer_num, consumer_id, consumer_num)
+    

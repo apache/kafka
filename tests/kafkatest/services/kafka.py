@@ -15,14 +15,14 @@
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-
+from kafkatest.services.performance.jmx_mixin import JmxMixin
 import json
 import re
 import signal
 import time
 
 
-class KafkaService(Service):
+class KafkaService(JmxMixin, Service):
 
     logs = {
         "kafka_log": {
@@ -33,19 +33,20 @@ class KafkaService(Service):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, zk, topics=None, quota_config=None):
+    def __init__(self, context, num_nodes, zk, topics=None, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
         """
         :type context
         :type zk: ZookeeperService
         :type topics: dict
         """
-        super(KafkaService, self).__init__(context, num_nodes)
+        Service.__init__(self, context, num_nodes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         self.zk = zk
         self.topics = topics
         self.quota_config = quota_config
 
     def start(self):
-        super(KafkaService, self).start()
+        Service.start(self)
 
         # Create topics if necessary
         if self.topics is not None:
@@ -63,11 +64,12 @@ class KafkaService(Service):
         self.logger.info(props_file)
         node.account.create_file("/mnt/kafka.properties", props_file)
 
-        cmd = "/opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid"
+        cmd = "JMX_PORT=%d /opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid" % self.jmx_port
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log("/mnt/kafka.log") as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
+        self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
             raise Exception("No process ids recorded on node %s" % str(node))
 
@@ -97,6 +99,7 @@ class KafkaService(Service):
         node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=False)
 
     def clean_node(self, node):
+        JmxMixin.clean_node(self, node)
         node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log /mnt/kafka.pid", allow_fail=False)
 
@@ -230,3 +233,7 @@ class KafkaService(Service):
 
     def bootstrap_servers(self):
         return ','.join([node.account.hostname + ":9092" for node in self.nodes])
+
+    def read_jmx_output_all_nodes(self):
+        for node in self.nodes:
+            self.read_jmx_output(self.idx(node), node)
