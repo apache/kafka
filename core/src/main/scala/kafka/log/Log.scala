@@ -471,8 +471,7 @@ class Log(val dir: File,
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
     // Because we don't use lock for reading, the synchronization is a little bit tricky.
-    // We first create a few local variables to avoid race conditions with updates to the log. The order matters here.
-    // We can allow currentLastEntry to have a newer value than currentNextOffsetMetadata but not vice versa.
+    // We create the local variables to avoid race conditions with updates to the log.
     val currentNextOffsetMetadata = nextOffsetMetadata
     val next = currentNextOffsetMetadata.messageOffset
     if(startOffset == next)
@@ -495,7 +494,7 @@ class Log(val dir: File,
       val maxPosition = {
         if (entry == segments.lastEntry) {
           val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
-          // Check the segment again in case a new segment has just rolled rolled out
+          // Check the segment again in case a new segment has just rolled out.
           if (entry != segments.lastEntry)
             // New log segment has rolled out, we can read up to the file end.
             entry.getValue.size
