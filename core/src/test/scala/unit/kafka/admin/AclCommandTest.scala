@@ -78,8 +78,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
         val (acls, cmd) = getAclToCommand(permissionType, operationToCmd._1)
           AclCommand.main(args ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
           for (resource <- resources) {
-            TestUtils.waitUntilTrue(() => acls == getAuthorizer(brokerProps).getAcls(resource),
-              s"expected $acls , found ${getAuthorizer(brokerProps).getAcls(resource)}")
+            TestUtils.waitAndVerifyAcls(acls, getAuthorizer(brokerProps), resource)
           }
 
           testRemove(resources, resourceCmd, args, brokerProps)
@@ -98,8 +97,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       AclCommand.main(args ++ getCmd(Allow) ++ resourceCommand ++ cmd :+ "--add")
       for ((resources, acls) <- resourcesToAcls) {
         for (resource <- resources) {
-          TestUtils.waitUntilTrue(() => acls == getAuthorizer(brokerProps).getAcls(resource),
-            s"expected $acls , found ${getAuthorizer(brokerProps).getAcls(resource)}")
+          TestUtils.waitAndVerifyAcls(acls, getAuthorizer(brokerProps), resource)
         }
       }
       testRemove(resourcesToAcls.keys.flatten.toSet, resourceCommand, args, brokerProps)
@@ -110,8 +108,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     for (resource <- resources) {
       Console.withIn(new StringReader(s"y${AclCommand.Newline}" * resources.size)) {
         AclCommand.main(args ++ resourceCmd :+ "--remove")
-        TestUtils.waitUntilTrue(() => Set.empty[Acl] == getAuthorizer(brokerProps).getAcls(resource),
-          s"expected empty acls , found ${getAuthorizer(brokerProps).getAcls(resource)}")
+        TestUtils.waitAndVerifyAcls(Set.empty[Acl], getAuthorizer(brokerProps), resource)
       }
     }
   }
