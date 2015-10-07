@@ -21,12 +21,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.apache.kafka.copycat.data.Date;
+import org.apache.kafka.copycat.data.Decimal;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.data.Struct;
+import org.apache.kafka.copycat.data.Timestamp;
 import org.apache.kafka.copycat.errors.DataException;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,9 +37,20 @@ import org.powermock.reflect.Whitebox;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.GregorianCalendar;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -62,8 +76,8 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA, null), converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": true }, \"payload\": null }".getBytes()));
         assertEquals(new SchemaAndValue(SchemaBuilder.bool().defaultValue(true).build(), true),
                 converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"default\": true }, \"payload\": null }".getBytes()));
-        assertEquals(new SchemaAndValue(SchemaBuilder.bool().required().name("bool").version(2).doc("the documentation").build(), true),
-                converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 2, \"doc\": \"the documentation\"}, \"payload\": true }".getBytes()));
+        assertEquals(new SchemaAndValue(SchemaBuilder.bool().required().name("bool").version(2).doc("the documentation").parameter("foo", "bar").build(), true),
+                converter.toCopycatData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 2, \"doc\": \"the documentation\", \"parameters\": { \"foo\": \"bar\" }}, \"payload\": true }".getBytes()));
     }
 
     // Schema types
@@ -189,6 +203,47 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(null, obj), converted);
     }
 
+    @Test
+    public void decimalToCopycat() {
+        Schema schema = Decimal.schema(2);
+        BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
+        // Payload is base64 encoded byte[]{0, -100}, which is the two's complement encoding of 156.
+        String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.copycat.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }, \"payload\": \"AJw=\" }";
+        SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, msg.getBytes());
+        BigDecimal converted = (BigDecimal) schemaAndValue.value();
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, converted);
+    }
+
+    @Test
+    public void dateToCopycat() {
+        Schema schema = Date.SCHEMA;
+        GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+        calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
+        calendar.add(Calendar.DATE, 10000);
+        java.util.Date reference = calendar.getTime();
+        String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.copycat.data.Date\", \"version\": 1 }, \"payload\": 10000 }";
+        SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, msg.getBytes());
+        java.util.Date converted = (java.util.Date) schemaAndValue.value();
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, converted);
+    }
+
+    @Test
+    public void timestampToCopycat() {
+        Schema schema = Timestamp.SCHEMA;
+        GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+        calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
+        calendar.add(Calendar.MILLISECOND, 2000000000);
+        calendar.add(Calendar.MILLISECOND, 2000000000);
+        java.util.Date reference = calendar.getTime();
+        String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.copycat.data.Timestamp\", \"version\": 1 }, \"payload\": 4000000000 }";
+        SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, msg.getBytes());
+        java.util.Date converted = (java.util.Date) schemaAndValue.value();
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, converted);
+    }
+
     // Schema metadata
 
     @Test
@@ -208,9 +263,9 @@ public class JsonConverterTest {
         assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"default\": true }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
 
-        converted = parse(converter.fromCopycatData(TOPIC, SchemaBuilder.bool().required().name("bool").version(3).doc("the documentation").build(), true));
+        converted = parse(converter.fromCopycatData(TOPIC, SchemaBuilder.bool().required().name("bool").version(3).doc("the documentation").parameter("foo", "bar").build(), true));
         validateEnvelope(converted);
-        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 3, \"doc\": \"the documentation\"}"),
+        assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 3, \"doc\": \"the documentation\", \"parameters\": { \"foo\": \"bar\" }}"),
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
     }
@@ -371,6 +426,49 @@ public class JsonConverterTest {
                         .put("field1", true)
                         .put("field2", "string"),
                 converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+
+    @Test
+    public void decimalToJson() throws IOException {
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Decimal.schema(2), new BigDecimal(new BigInteger("156"), 2)));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false, \"name\": \"org.apache.kafka.copycat.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertArrayEquals(new byte[]{0, -100}, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue());
+    }
+
+    @Test
+    public void dateToJson() throws IOException {
+        GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+        calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
+        calendar.add(Calendar.DATE, 10000);
+        java.util.Date date = calendar.getTime();
+
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Date.SCHEMA, date));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"int32\", \"optional\": false, \"name\": \"org.apache.kafka.copycat.data.Date\", \"version\": 1 }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
+        assertTrue(payload.isInt());
+        assertEquals(10000, payload.intValue());
+    }
+
+    @Test
+    public void timestampToJson() throws IOException {
+        GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+        calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
+        calendar.add(Calendar.MILLISECOND, 2000000000);
+        calendar.add(Calendar.MILLISECOND, 2000000000);
+        java.util.Date date = calendar.getTime();
+
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Timestamp.SCHEMA, date));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"int64\", \"optional\": false, \"name\": \"org.apache.kafka.copycat.data.Timestamp\", \"version\": 1 }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
+        assertTrue(payload.isLong());
+        assertEquals(4000000000L, payload.longValue());
     }
 
 
