@@ -385,9 +385,10 @@ public class NetworkClient implements KafkaClient {
             int tryNode = rand.nextInt(nodesEverSeen.size());
             log.debug("No node found. Trying previously-seen nodes. Index {}", tryNode);
             found = nodesEverSeen.get(tryNode);
+            // node could still be blacked out
+            if (this.connectionStates.isBlackedOut(found.idString(), now))
+                found = null;
         }
-
-
         return found;
     }
 
