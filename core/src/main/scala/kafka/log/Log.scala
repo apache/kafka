@@ -641,12 +641,14 @@ class Log(val dir: File,
       val prev = addSegment(segment)
       if(prev != null)
         throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
-      
+      // We need to update the segment base offset and append position data of the metadata when log rolls.
+      // The next offset should not change.
+      updateLogEndOffset(nextOffsetMetadata.messageOffset)
       // schedule an asynchronous flush of the old segment
       scheduler.schedule("flush-log", () => flush(newOffset), delay = 0L)
       
       info("Rolled new log segment for '" + name + "' in %.0f ms.".format((System.nanoTime - start) / (1000.0*1000.0)))
-      
+
       segment
     }
   }
