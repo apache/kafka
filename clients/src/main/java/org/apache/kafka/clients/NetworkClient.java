@@ -514,8 +514,7 @@ public class NetworkClient implements KafkaClient {
                              this.socketReceiveBuffer);
         } catch (IOException e) {
             /* attempt failed, we'll try again after the backoff */
-            long afterFailureNow = this.time.milliseconds();
-            connectionStates.disconnected(nodeConnectionId, afterFailureNow);
+            connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
             metadataUpdater.requestUpdate();
             log.debug("Error connecting to node {} at {}:{}:", node.id(), node.host(), node.port(), e);

@@ -272,6 +272,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void clientPoll(long timeout, long now) {
         client.poll(timeout, now);
+        now = time.milliseconds();
         if (wakeup.get()) {
             clearUnsentRequests(now);
             wakeup.set(false);
