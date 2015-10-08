@@ -15,8 +15,10 @@ package org.apache.kafka.clients;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -55,6 +57,7 @@ public class NetworkClient implements KafkaClient {
     
     /* a list of nodes we've connected to in the past */
     private List<Node> nodesEverSeen;
+    private Map<Integer, Node> nodesEverSeenById;
 
     /* the state of each node's connection */
     private final ClusterConnectionStates connectionStates;
@@ -140,6 +143,7 @@ public class NetworkClient implements KafkaClient {
         this.nodeIndexOffset = new Random().nextInt(Integer.MAX_VALUE);
         this.requestTimeoutMs = requestTimeoutMs;
         this.nodesEverSeen = new ArrayList<Node>();
+        this.nodesEverSeenById = new HashMap<Integer, Node>();
         this.time = time;
     }
 
@@ -381,14 +385,19 @@ public class NetworkClient implements KafkaClient {
 
         // if we found no node in the current list, try one from the nodes seen before
         if (found == null && nodesEverSeen.size() > 0) {
+            // random offset into list
             Random rand = new Random();
-            int tryNode = rand.nextInt(nodesEverSeen.size());
-            log.debug("No node found. Trying previously-seen nodes. Index {}", tryNode);
-            found = nodesEverSeen.get(tryNode);
-            // node could still be blacked out
-            if (this.connectionStates.isBlackedOut(found.idString(), now))
-                found = null;
+            int offset = rand.nextInt(nodesEverSeen.size());
+            for (int i = 0; i < nodesEverSeen.size(); i++) {
+                int idx = Utils.abs((offset + i) % nodesEverSeen.size());
+                Node node = nodesEverSeen.get(idx);
+                log.debug("No node found. Trying previously-seen node with ID {}", node.id());
+                if (!this.connectionStates.isBlackedOut(node.idString(), now)) {
+                    found = node;
+                }
+            }
         }
+        
         return found;
     }
 
@@ -601,21 +610,14 @@ public class NetworkClient implements KafkaClient {
          * @param nodes Current alive nodes
          */
         private void updateNodesEverSeen(List<Node> nodes) {
-            boolean found = false;
             for (Node n : nodes) {
-                for (Node e: nodesEverSeen) {
-                    if (n.id() == e.id()) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
+                if (!nodesEverSeenById.containsKey(n.id())) {
+                    nodesEverSeenById.put(n.id(), n);
                     log.debug("Adding node {} to nodes ever seen", n.id());
                     nodesEverSeen.add(n);
                 }
             }
         }
-
 
         private void handleResponse(RequestHeader header, Struct body, long now) {
             this.metadataFetchInProgress = false;
