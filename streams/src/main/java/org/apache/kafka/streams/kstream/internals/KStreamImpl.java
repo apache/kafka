@@ -191,7 +191,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> process(final ProcessorDef processorDef) {
+    public <K1, V1> KStream<K1, V1> process(final ProcessorDef<K, V> processorDef) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, processorDef, this.name);

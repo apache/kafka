@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.ProcessorDef;
 
 import java.util.Iterator;
 
-class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
+class KStreamJoin<K, V, V1, V2> implements ProcessorDef<K, V1> {
 
     private static abstract class Finder<K, T> {
         abstract Iterator<T> find(K key, long timestamp);
@@ -41,7 +41,7 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorDef {
     }
 
     @Override
-    public Processor instance() {
+    public Processor<K, V1> instance() {
         return new KStreamJoinProcessor(windowName);
     }
 

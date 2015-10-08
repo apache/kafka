@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.ProcessorDef;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.kstream.WindowDef;
 
-public class KStreamWindow<K, V> implements ProcessorDef {
+public class KStreamWindow<K, V> implements ProcessorDef<K, V> {
 
     private final WindowDef<K, V> windowDef;
 
@@ -37,7 +37,7 @@ public class KStreamWindow<K, V> implements ProcessorDef {
     }
 
     @Override
-    public Processor instance() {
+    public Processor<K, V> instance() {
         return new KStreamWindowProcessor();
     }
 

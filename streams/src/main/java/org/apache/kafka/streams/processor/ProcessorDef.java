@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.processor;
 
-public interface ProcessorDef {
+public interface ProcessorDef<K, V> {
 
-    Processor instance();
+    Processor<K, V> instance();
 }

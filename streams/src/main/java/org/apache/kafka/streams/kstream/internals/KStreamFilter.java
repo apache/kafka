@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.ProcessorDef;
 
-class KStreamFilter<K, V> implements ProcessorDef {
+class KStreamFilter<K, V> implements ProcessorDef<K, V> {
 
     private final Predicate<K, V> predicate;
     private final boolean filterOut;
@@ -33,7 +33,7 @@ class KStreamFilter<K, V> implements ProcessorDef {
     }
 
     @Override
-    public Processor instance() {
+    public Processor<K, V> instance() {
         return new KStreamFilterProcessor();
     }
 

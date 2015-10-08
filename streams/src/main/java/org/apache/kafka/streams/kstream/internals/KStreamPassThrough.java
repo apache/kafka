@@ -21,10 +21,10 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorDef;
 
-class KStreamPassThrough<K, V> implements ProcessorDef {
+class KStreamPassThrough<K, V> implements ProcessorDef<K, V> {
 
     @Override
-    public Processor instance() {
+    public Processor<K, V> instance() {
         return new KStreamPassThroughProcessor();
     }
 
