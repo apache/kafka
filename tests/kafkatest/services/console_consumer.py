@@ -189,7 +189,7 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
         PerformanceService.start_node(self, node)
 
     def stop_node(self, node):
-        node.account.kill_process("console-consumer", allow_fail=True)
+        node.account.kill_process("console_consumer", allow_fail=True)
         wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.2,
                    err_msg="Timed out waiting for consumer to stop.")
 
