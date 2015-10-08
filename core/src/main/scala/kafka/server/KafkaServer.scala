@@ -513,6 +513,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           CoreUtils.swallow(socketServer.shutdown())
         if(requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown())
+        CoreUtils.swallow(kafkaScheduler.shutdown())
         if(apis != null)
           CoreUtils.swallow(apis.close())
         if(replicaManager != null)
@@ -527,7 +528,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           CoreUtils.swallow(zkClient.close())
         if (metrics != null)
           CoreUtils.swallow(metrics.close())
-        CoreUtils.swallow(kafkaScheduler.shutdown())
 
         brokerState.newState(NotRunning)
 
