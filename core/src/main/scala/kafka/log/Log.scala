@@ -527,8 +527,10 @@ class Log(val dir: File,
     if(numToDelete > 0) {
       lock synchronized {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
-        if(segments.size == numToDelete)
+        if(segments.size == numToDelete) {
           roll()
+          updateLogEndOffset(nextOffsetMetadata.messageOffset)
+        }
         // remove the segments for lookups
         deletable.foreach(deleteSegment(_))
       }
