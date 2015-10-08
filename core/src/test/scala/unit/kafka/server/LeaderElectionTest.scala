@@ -138,24 +138,28 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
 
     val controllerContext = new ControllerContext(zkClient, zkConnection, 6000)
     controllerContext.liveBrokers = brokers.toSet
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, new SystemTime, new Metrics)
+    val metrics = new Metrics
+    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, new SystemTime, metrics)
     controllerChannelManager.startup()
-    val staleControllerEpoch = 0
-    val partitionStates = Map(
-      new TopicPartition(topic, partitionId) -> new PartitionState(2, brokerId2, LeaderAndIsr.initialLeaderEpoch,
-        Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
-        Set(0, 1).map(Integer.valueOf).asJava)
-    )
-    val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, staleControllerEpoch, partitionStates.asJava,
-      brokerEndPoints.toSet.asJava)
+    try {
+      val staleControllerEpoch = 0
+      val partitionStates = Map(
+        new TopicPartition(topic, partitionId) -> new PartitionState(2, brokerId2, LeaderAndIsr.initialLeaderEpoch,
+          Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
+          Set(0, 1).map(Integer.valueOf).asJava)
+      )
+      val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, staleControllerEpoch, partitionStates.asJava,
+        brokerEndPoints.toSet.asJava)
 
-    controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest,
-      staleControllerEpochCallback)
-    TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true,
-                            "Controller epoch should be stale")
-    assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
-
-    controllerChannelManager.shutdown()
+      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest,
+        staleControllerEpochCallback)
+      TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true,
+        "Controller epoch should be stale")
+      assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
+    } finally {
+      controllerChannelManager.shutdown()
+      metrics.close()
+    }
   }
 
   private def staleControllerEpochCallback(response: AbstractRequestResponse): Unit = {
