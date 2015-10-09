@@ -13,6 +13,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownConsumerIdException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -125,7 +127,7 @@ public final class Coordinator implements Closeable {
      */
     public void refreshCommittedOffsetsIfNeeded() {
         if (subscriptions.refreshCommitsNeeded()) {
-            Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(subscriptions.assignedPartitions());
+            Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(subscriptions.assignedPartitions(), requestTimeoutMs);
             for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 // verify assignment is still active
@@ -141,22 +143,27 @@ public final class Coordinator implements Closeable {
      * @param partitions The partitions to fetch offsets for
      * @return A map from partition to the committed offset
      */
-    public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions) {
-        while (true) {
-            ensureCoordinatorKnown();
+    public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions, long timeout) {
+        long start = time.milliseconds();
+        long deadline = start + timeout;
+        while (time.milliseconds() < deadline) {
+            long remainingTime = ClientUtils.maybeGetRemainingTime(start, time.milliseconds(), timeout, "");
+            ensureCoordinatorKnown(remainingTime);
 
             // contact coordinator to fetch committed offsets
             RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
-            client.poll(future);
+            remainingTime = ClientUtils.maybeGetRemainingTime(start, time.milliseconds(), timeout, "");
+            client.poll(future, remainingTime);
 
             if (future.succeeded())
                 return future.value();
 
-            if (!future.isRetriable())
+            else if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
             Utils.sleep(retryBackoffMs);
         }
+        throw new TimeoutException("foo");
     }
 
     /**
@@ -231,6 +238,15 @@ public final class Coordinator implements Closeable {
         }
     }
 
+    public void ensureCoordinatorKnown(long timeout) {
+        long now = time.milliseconds();
+        long deadline = now + timeout;
+        while (coordinatorUnknown() && now < deadline) {
+            RequestFuture<Void> future = sendConsumerMetadataRequest();
+            client.poll(future, requestTimeoutMs);
+        }
+        throw new TimeoutException("foo");
+    }
 
     @Override
     public void close() {

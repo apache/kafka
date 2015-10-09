@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
@@ -79,4 +80,10 @@ public class ClientUtils {
         return ChannelBuilders.create(securityProtocol, SSLFactory.Mode.CLIENT, configs);
     }
 
+    public static long maybeGetRemainingTime(long start, long now, long timeout, String message) {
+        long elapsed = now - start;
+        if (elapsed > timeout)
+            throw new TimeoutException(message);
+        else return timeout - elapsed;
+    }
 }
