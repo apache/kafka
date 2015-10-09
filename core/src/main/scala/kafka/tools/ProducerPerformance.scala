@@ -19,6 +19,7 @@ package kafka.tools
 
 import kafka.metrics.KafkaMetricsReporter
 import kafka.producer.{OldProducer, NewShinyProducer}
+import kafka.tools.SimplePropertiesParser._
 import kafka.utils.{ToolsUtils, VerifiableProperties, Logging, CommandLineUtils}
 import kafka.message.CompressionCodec
 import kafka.serializer._
@@ -38,6 +39,12 @@ import org.apache.log4j.Logger
 object ProducerPerformance extends Logging {
 
   def main(args: Array[String]) {
+    run(args)
+    System.exit(0)
+  }
+
+  def run(args: Array[String]) {
+    println("Running ProducerPerformance with args: " + args.map(s => " " + s).deep.mkString)
     val logger = Logger.getLogger(getClass)
     val config = new ProducerPerfConfig(args)
     if (!config.isFixedSize)
@@ -50,12 +57,16 @@ object ProducerPerformance extends Logging {
     val startMs = System.currentTimeMillis
     val rand = new java.util.Random
 
-    if (!config.hideHeader)
+    val props: Properties = properties(config)
+
+    if (!config.hideHeader) {
+      println(s"Producer Properties: ${props}\n")
       println("start.time, end.time, compression, message.size, batch.size, total.data.sent.in.MB, MB.sec, " +
         "total.data.sent.in.nMsg, nMsg.sec")
+    }
 
     for (i <- 0 until config.numThreads) {
-      executor.execute(new ProducerThread(i, config, totalBytesSent, totalMessagesSent, allDone, rand))
+      executor.execute(new ProducerThread(i, config, totalBytesSent, totalMessagesSent, allDone, rand, props))
     }
 
     allDone.await()
@@ -66,7 +77,42 @@ object ProducerPerformance extends Logging {
       config.dateFormat.format(startMs), config.dateFormat.format(endMs),
       config.compressionCodec.codec, config.messageSize, config.batchSize, totalMBSent,
       totalMBSent / elapsedSecs, totalMessagesSent.get, totalMessagesSent.get / elapsedSecs))
-    System.exit(0)
+  }
+
+  def properties(config: ProducerPerfConfig): Properties = {
+    val props = new Properties()
+    if (config.useNewProducer) {
+      import org.apache.kafka.clients.producer.ProducerConfig
+      props.putAll(config.producerProps)
+      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
+      props.put(ProducerConfig.SEND_BUFFER_CONFIG, (64 * 1024).toString)
+      props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-performance")
+      props.put(ProducerConfig.ACKS_CONFIG, config.producerRequestRequiredAcks.toString)
+      props.put(ProducerConfig.RETRIES_CONFIG, config.producerNumRetries.toString)
+      props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.producerRetryBackoffMs.toString)
+      props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec.name)
+      if (config.lingerTime != null) props.put(ProducerConfig.LINGER_MS_CONFIG, config.lingerTime)
+      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    } else {
+      props.putAll(config.producerProps)
+      props.put("metadata.broker.list", config.brokerList)
+      props.put("compression.codec", config.compressionCodec.codec.toString)
+      props.put("send.buffer.bytes", (64 * 1024).toString)
+      if (!config.isSync) {
+        props.put("producer.type", "async")
+        props.put("batch.num.messages", config.batchSize.toString)
+        props.put("queue.enqueue.timeout.ms", "-1")
+      }
+      props.put("client.id", "producer-performance")
+      props.put("request.required.acks", config.producerRequestRequiredAcks.toString)
+      props.put("request.timeout.ms", config.producerRequestTimeoutMs.toString)
+      props.put("message.send.max.retries", config.producerNumRetries.toString)
+      props.put("retry.backoff.ms", config.producerRetryBackoffMs.toString)
+      props.put("serializer.class", classOf[DefaultEncoder].getName)
+      props.put("key.serializer.class", classOf[NullEncoder[Long]].getName)
+    }
+    props
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
@@ -106,6 +152,10 @@ object ProducerPerformance extends Logging {
       .describedAs("number of threads")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
+    val lingerTimeOpt = parser.accepts("linger-ms", "This setting adds a small amount of artificial delay to writes to allow them to batch. See documentation for linger.ms")
+      .withRequiredArg
+      .describedAs("ms of linger")
+      .ofType(classOf[java.lang.Integer])
     val initialMessageIdOpt = parser.accepts("initial-message-id", "The is used for generating test data, If set, messages will be tagged with an " +
       "ID and sent by producer starting from this ID sequentially. Message content will be String type and " +
       "in the form of 'Message:000...1:xxx...'")
@@ -124,6 +174,10 @@ object ProducerPerformance extends Logging {
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
     val useNewProducerOpt = parser.accepts("new-producer", "Use the new producer implementation.")
+    val freeformPropsOpt = parser.accepts("producer-properties", "Freeform set of producer properties in the format name=value,name=value...")
+      .withRequiredArg()
+      .describedAs("freeform properties")
+      .ofType(classOf[String])
 
     val options = parser.parse(args: _*)
     CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
@@ -141,6 +195,7 @@ object ProducerPerformance extends Logging {
     var isSync = options.has(syncOpt)
     var batchSize = options.valueOf(batchSizeOpt).intValue
     var numThreads = options.valueOf(numThreadsOpt).intValue
+    val lingerTime = options.valueOf(lingerTimeOpt)
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt).intValue)
     val seqIdMode = options.has(initialMessageIdOpt)
     var initialMessageId: Int = 0
@@ -158,6 +213,10 @@ object ProducerPerformance extends Logging {
       Utils.loadProps(options.valueOf(producerConfigOpt))
     else
       new Properties()
+
+    if (options.has(freeformPropsOpt)) {
+      producerProps.putAll(propsFromFreeform(options.valueOf(freeformPropsOpt)))
+    }
 
     if (csvMetricsReporterEnabled) {
       val props = new Properties()
@@ -180,45 +239,14 @@ object ProducerPerformance extends Logging {
     val totalBytesSent: AtomicLong,
     val totalMessagesSent: AtomicLong,
     val allDone: CountDownLatch,
-    val rand: Random) extends Runnable {
+    val rand: Random,
+    val props: Properties) extends Runnable {
     val seqIdNumDigit = 10 // no. of digits for max int value
 
     val messagesPerThread = config.numMessages / config.numThreads
     debug("Messages per thread = " + messagesPerThread)
-    val props = new Properties()
-    val producer =
-      if (config.useNewProducer) {
-        import org.apache.kafka.clients.producer.ProducerConfig
-        props.putAll(config.producerProps)
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
-        props.put(ProducerConfig.SEND_BUFFER_CONFIG, (64 * 1024).toString)
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-performance")
-        props.put(ProducerConfig.ACKS_CONFIG, config.producerRequestRequiredAcks.toString)
-        props.put(ProducerConfig.RETRIES_CONFIG, config.producerNumRetries.toString)
-        props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.producerRetryBackoffMs.toString)
-        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec.name)
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-        new NewShinyProducer(props)
-      } else {
-        props.putAll(config.producerProps)
-        props.put("metadata.broker.list", config.brokerList)
-        props.put("compression.codec", config.compressionCodec.codec.toString)
-        props.put("send.buffer.bytes", (64 * 1024).toString)
-        if (!config.isSync) {
-          props.put("producer.type", "async")
-          props.put("batch.num.messages", config.batchSize.toString)
-          props.put("queue.enqueue.timeout.ms", "-1")
-        }
-        props.put("client.id", "producer-performance")
-        props.put("request.required.acks", config.producerRequestRequiredAcks.toString)
-        props.put("request.timeout.ms", config.producerRequestTimeoutMs.toString)
-        props.put("message.send.max.retries", config.producerNumRetries.toString)
-        props.put("retry.backoff.ms", config.producerRetryBackoffMs.toString)
-        props.put("serializer.class", classOf[DefaultEncoder].getName)
-        props.put("key.serializer.class", classOf[NullEncoder[Long]].getName)
-        new OldProducer(props)
-      }
+
+    val producer = if (config.useNewProducer) new NewShinyProducer(props) else new OldProducer(props)
 
     // generate the sequential message ID
     private val SEP = ":" // message field separator

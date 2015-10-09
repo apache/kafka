@@ -26,11 +26,11 @@ class PerfConfig(args: Array[String]) {
     .withRequiredArg
     .describedAs("count")
     .ofType(classOf[java.lang.Long])
-  val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval at which to print progress info.")
+  val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval at which to print progress info. If not supplied this is set dynamically")
     .withRequiredArg
-    .describedAs("size")
+    .describedAs("number of messages after which we print progress")
     .ofType(classOf[java.lang.Integer])
-    .defaultsTo(5000)
+    .defaultsTo(-1)//this default is overridden dynamically based on the supplied batch size
   val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
     "See java.text.SimpleDateFormat for options.")
     .withRequiredArg
@@ -39,6 +39,8 @@ class PerfConfig(args: Array[String]) {
     .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS")
   val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
     "interval as configured by reporting-interval")
+  val showAllStatsOpt = parser.accepts("show-all-stats", "Show intermediary stats based on the " +
+    "reporting interval and include the summary stats at the end of the run")
   val hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats ")
   val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
     .withRequiredArg
