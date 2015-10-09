@@ -20,6 +20,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.kstream.TransformerDef;
+import org.apache.kafka.streams.kstream.ValueTransformerDef;
 import org.apache.kafka.streams.processor.ProcessorDef;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.kstream.KStreamWindowed;
@@ -43,6 +45,10 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     private static final String FLATMAP_NAME = "KAFKA-FLATMAP-";
 
     private static final String FLATMAPVALUES_NAME = "KAFKA-FLATMAPVALUES-";
+
+    private static final String TRANSFORM_NAME = "KAFKA-TRANSFORM-";
+
+    private static final String TRANSFORMVALUES_NAME = "KAFKA-TRANSFORMVALUES-";
 
     private static final String PROCESSOR_NAME = "KAFKA-PROCESSOR-";
 
@@ -191,11 +197,27 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> process(final ProcessorDef<K, V> processorDef) {
+    public <K1, V1> KStream<K1, V1> transform(TransformerDef<K, V, KeyValue<K1, V1>> transformerDef) {
+        String name = TRANSFORM_NAME + INDEX.getAndIncrement();
+
+        topology.addProcessor(name, new KStreamTransform<>(transformerDef), this.name);
+
+        return new KStreamImpl<>(topology, name);
+    }
+
+    @Override
+    public <K, V1> KStream<K, V1> transformValues(ValueTransformerDef<V, V1> valueTransformerDef) {
+        String name = TRANSFORMVALUES_NAME + INDEX.getAndIncrement();
+
+        topology.addProcessor(name, new KStreamTransformValues<>(valueTransformerDef), this.name);
+
+        return new KStreamImpl<>(topology, name);
+    }
+
+    @Override
+    public void process(final ProcessorDef<K, V> processorDef) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, processorDef, this.name);
-
-        return new KStreamImpl<>(topology, name);
     }
 }

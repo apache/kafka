@@ -148,9 +148,25 @@ public interface KStream<K, V> {
     void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
 
     /**
+     * Applies a stateful transformation to all elements in this stream.
+     *
+     * @param transformerDef the class of TransformerDef
+     * @return KStream
+     */
+    <K1, V1> KStream<K1, V1> transform(TransformerDef<K, V, KeyValue<K1, V1>> transformerDef);
+
+    /**
+     * Applies a stateful transformation to all values in this stream.
+     *
+     * @param valueTransformerDef the class of TransformerDef
+     * @return KStream
+     */
+    <K, R> KStream<K, R> transformValues(ValueTransformerDef<V, R> valueTransformerDef);
+
+    /**
      * Processes all elements in this stream by applying a processor.
      *
      * @param processorDef the class of ProcessorDef
      */
-    <K1, V1> KStream<K1, V1> process(ProcessorDef<K, V> processorDef);
+    void process(ProcessorDef<K, V> processorDef);
 }
