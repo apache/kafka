@@ -21,12 +21,12 @@ package kafka.coordinator
 import java.util.concurrent.TimeUnit
 
 import org.junit.Assert._
-import kafka.common.TopicAndPartition
+import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.server.{OffsetManager, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.JoinGroupRequest
-import org.easymock.EasyMock
+import org.apache.kafka.common.requests.{OffsetCommitRequest, JoinGroupRequest}
+import org.easymock.{IAnswer, EasyMock}
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
 
@@ -41,6 +41,8 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   type JoinGroupCallback = (Set[TopicAndPartition], String, Int, Short) => Unit
   type HeartbeatCallbackParams = Short
   type HeartbeatCallback = Short => Unit
+  type CommitOffsetCallbackParams = Map[TopicAndPartition, Short]
+  type CommitOffsetCallback = Map[TopicAndPartition, Short] => Unit
 
   val ConsumerMinSessionTimeout = 10
   val ConsumerMaxSessionTimeout = 200
@@ -232,6 +234,29 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   }
 
   @Test
+  def testCommitOffsetFromUnknownGroup() {
+    val groupId = "groupId"
+    val consumerId = "consumer"
+    val generationId = 1
+    val tp = new TopicAndPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+
+    val commitOffsetResult = commitOffsets(groupId, consumerId, generationId, Map(tp -> offset), true)
+    assertEquals(Errors.ILLEGAL_GENERATION.code, commitOffsetResult(tp))
+  }
+
+  @Test
+  def testCommitOffsetWithDefaultGeneration() {
+    val groupId = "groupId"
+    val tp = new TopicAndPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+
+    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_CONSUMER_ID,
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp -> offset), true)
+    assertEquals(Errors.NONE.code, commitOffsetResult(tp))
+  }
+
+  @Test
   def testHeartbeatDuringRebalanceCausesRebalanceInProgress() {
     val groupId = "groupId"
     val partitionAssignmentStrategy = "range"
@@ -291,6 +316,13 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     (responseFuture, responseCallback)
   }
 
+  private def setupCommitOffsetsCallback: (Future[CommitOffsetCallbackParams], CommitOffsetCallback) = {
+    val responsePromise = Promise[CommitOffsetCallbackParams]
+    val responseFuture = responsePromise.future
+    val responseCallback: CommitOffsetCallback = offsets => responsePromise.success(offsets)
+    (responseFuture, responseCallback)
+  }
+
   private def sendJoinGroup(groupId: String,
                             consumerId: String,
                             partitionAssignmentStrategy: String,
@@ -323,6 +355,24 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     EasyMock.expect(offsetManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.replay(offsetManager)
     consumerCoordinator.handleHeartbeat(groupId, consumerId, generationId, responseCallback)
+    Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
+  }
+
+  private def commitOffsets(groupId: String,
+                            consumerId: String,
+                            generationId: Int,
+                            offsets: Map[TopicAndPartition, OffsetAndMetadata],
+                            isCoordinatorForGroup: Boolean): CommitOffsetCallbackParams = {
+    val (responseFuture, responseCallback) = setupCommitOffsetsCallback
+    EasyMock.expect(offsetManager.partitionFor(groupId)).andReturn(1)
+    EasyMock.expect(offsetManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
+    val storeOffsetAnswer = new IAnswer[Unit] {
+      override def answer = responseCallback.apply(offsets.mapValues(_ => Errors.NONE.code))
+    }
+    EasyMock.expect(offsetManager.storeOffsets(groupId, consumerId, generationId, offsets, responseCallback))
+      .andAnswer(storeOffsetAnswer)
+    EasyMock.replay(offsetManager)
+    consumerCoordinator.handleCommitOffsets(groupId, consumerId, generationId, offsets, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
   }
 }

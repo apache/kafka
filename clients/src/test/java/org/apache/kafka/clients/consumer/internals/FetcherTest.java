@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -83,7 +84,8 @@ public class FetcherTest {
 
     private MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
     private Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, metrics);
-    private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, new Metrics(time));
+    private Metrics fetcherMetrics = new Metrics(time);
+    private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, fetcherMetrics);
 
     @Before
     public void setup() throws Exception {
@@ -95,6 +97,12 @@ public class FetcherTest {
         records.append(3L, "key".getBytes(), "value-3".getBytes());
         records.close();
         records.flip();
+    }
+
+    @After
+    public void teardown() {
+        this.metrics.close();
+        this.fetcherMetrics.close();
     }
 
     @Test

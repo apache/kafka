@@ -13,25 +13,45 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ **/
+
+package org.apache.kafka.common.cache;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * A cache implementing a least recently used policy.
  */
+public class LRUCache<K, V> implements Cache<K, V> {
+    private final LinkedHashMap<K, V> cache;
 
-package org.apache.kafka.streams.kstream.internals;
-
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorDef;
-
-class KStreamPassThrough<K, V> implements ProcessorDef<K, V> {
-
-    @Override
-    public Processor<K, V> instance() {
-        return new KStreamPassThroughProcessor();
+    public LRUCache(final int maxSize) {
+        cache = new LinkedHashMap<K, V>(16, .75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry eldest) {
+                return size() > maxSize;
+            }
+        };
     }
 
-    public class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
-        @Override
-        public void process(K key, V value) {
-            context().forward(key, value);
-        }
+    @Override
+    public V get(K key) {
+        return cache.get(key);
+    }
+
+    @Override
+    public void put(K key, V value) {
+        cache.put(key, value);
+    }
+
+    @Override
+    public boolean remove(K key) {
+        return cache.remove(key) != null;
+    }
+
+    @Override
+    public long size() {
+        return cache.size();
     }
 }

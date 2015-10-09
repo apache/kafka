@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
+import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -40,9 +41,15 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(WorkerSinkTask.class)
@@ -53,6 +60,8 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     // with mix of integer/string in Copycat
     private static final String TOPIC = "test";
     private static final int PARTITION = 12;
+    private static final int PARTITION2 = 13;
+    private static final int PARTITION3 = 14;
     private static final long FIRST_OFFSET = 45;
     private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
     private static final int KEY = 12;
@@ -62,10 +71,14 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     private static final byte[] RAW_VALUE = "value".getBytes();
 
     private static final TopicPartition TOPIC_PARTITION = new TopicPartition(TOPIC, PARTITION);
+    private static final TopicPartition TOPIC_PARTITION2 = new TopicPartition(TOPIC, PARTITION2);
+    private static final TopicPartition TOPIC_PARTITION3 = new TopicPartition(TOPIC, PARTITION3);
+    private static final TopicPartition UNASSIGNED_TOPIC_PARTITION = new TopicPartition(TOPIC, 200);
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private Time time;
     @Mock private SinkTask sinkTask;
+    private Capture<SinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
     @Mock private Converter keyConverter;
     @Mock
@@ -266,9 +279,79 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    private KafkaConsumer<byte[], byte[]> expectInitializeTask(Properties taskProps)
-            throws Exception {
-        sinkTask.initialize(EasyMock.anyObject(SinkTaskContext.class));
+    @Test
+    public void testAssignmentPauseResume() throws Exception {
+        // Just validate that the calls are passed through to the consumer, and that where appropriate errors are
+        // converted
+
+        Properties taskProps = new Properties();
+
+        expectInitializeTask(taskProps);
+
+        expectOnePoll().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                assertEquals(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3)),
+                        sinkTaskContext.getValue().assignment());
+                return null;
+            }
+        });
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3)));
+
+        expectOnePoll().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                try {
+                    sinkTaskContext.getValue().pause(UNASSIGNED_TOPIC_PARTITION);
+                    fail("Trying to pause unassigned partition should have thrown an Copycat exception");
+                } catch (CopycatException e) {
+                    // expected
+                }
+                sinkTaskContext.getValue().pause(TOPIC_PARTITION, TOPIC_PARTITION2);
+                return null;
+            }
+        });
+        consumer.pause(UNASSIGNED_TOPIC_PARTITION);
+        PowerMock.expectLastCall().andThrow(new IllegalStateException("unassigned topic partition"));
+        consumer.pause(TOPIC_PARTITION, TOPIC_PARTITION2);
+        PowerMock.expectLastCall();
+
+        expectOnePoll().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                try {
+                    sinkTaskContext.getValue().resume(UNASSIGNED_TOPIC_PARTITION);
+                    fail("Trying to resume unassigned partition should have thrown an Copycat exception");
+                } catch (CopycatException e) {
+                    // expected
+                }
+
+                sinkTaskContext.getValue().resume(TOPIC_PARTITION, TOPIC_PARTITION2);
+                return null;
+            }
+        });
+        consumer.resume(UNASSIGNED_TOPIC_PARTITION);
+        PowerMock.expectLastCall().andThrow(new IllegalStateException("unassigned topic partition"));
+        consumer.resume(TOPIC_PARTITION, TOPIC_PARTITION2);
+        PowerMock.expectLastCall();
+
+        expectStopTask(0);
+
+        PowerMock.replayAll();
+
+        workerTask.start(taskProps);
+        workerThread.iteration();
+        workerThread.iteration();
+        workerThread.iteration();
+        workerTask.stop();
+        workerTask.close();
+
+        PowerMock.verifyAll();
+    }
+
+
+    private void expectInitializeTask(Properties taskProps) throws Exception {
+        sinkTask.initialize(EasyMock.capture(sinkTaskContext));
         PowerMock.expectLastCall();
         sinkTask.start(taskProps);
         PowerMock.expectLastCall();
@@ -282,7 +365,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
                 .andReturn(workerThread);
         workerThread.start();
         PowerMock.expectLastCall();
-        return consumer;
     }
 
     private void expectStopTask(final long expectedMessages) throws Exception {
@@ -326,6 +408,32 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         sinkTask.put(EasyMock.capture(capturedRecords));
         EasyMock.expectLastCall().anyTimes();
         return capturedRecords;
+    }
+
+    private IExpectationSetters<Object> expectOnePoll() {
+        // Currently the SinkTask's put() method will not be invoked unless we provide some data, so instead of
+        // returning empty data, we return one record. The expectation is that the data will be ignored by the
+        // response behavior specified using the return value of this method.
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                    @Override
+                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                        // "Sleep" so time will progress
+                        time.sleep(1L);
+                        ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
+                                Collections.singletonMap(
+                                        new TopicPartition(TOPIC, PARTITION),
+                                        Arrays.asList(
+                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
+                                        )));
+                        recordsReturned++;
+                        return records;
+                    }
+                });
+        EasyMock.expect(keyConverter.toCopycatData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
+        EasyMock.expect(valueConverter.toCopycatData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
+        sinkTask.put(EasyMock.anyObject(Collection.class));
+        return EasyMock.expectLastCall();
     }
 
     private Capture<OffsetCommitCallback> expectOffsetFlush(final long expectedMessages,
