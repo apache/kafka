@@ -16,11 +16,13 @@
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
+from ducktape.mark import parametrize
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import LATEST_0_8_2
+from kafkatest.services.kafka.version import LATEST_0_8_2, TRUNK, KafkaVersion
 from kafkatest.services.verifiable_producer import VerifiableProducer
+from kafkatest.utils import is_version
 
 
 class TestVerifiableProducer(Test):
@@ -33,7 +35,7 @@ class TestVerifiableProducer(Test):
         self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
 
-        self.num_messages = 1000
+        self.num_messages = 100
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
                                            max_messages=self.num_messages, throughput=1000)
@@ -42,28 +44,24 @@ class TestVerifiableProducer(Test):
         self.zk.start()
         self.kafka.start()
 
-    def test_version(self):
-        """Test that we can start VerifiableProducer using 0.8.2 jar, and validate that a small number of
-        messages can be produced/acknowledged.
+    @parametrize(version=str(LATEST_0_8_2))
+    @parametrize(version=str(TRUNK))
+    def test_simple_run(self, version=TRUNK):
         """
-        self.producer.nodes[0].version = LATEST_0_8_2
+        Test that we can start VerifiableProducer on trunk or against the 0.8.2 jar, and
+        verify that we can produce a small number of messages.
+        """
+        node = self.producer.nodes[0]
+        node.version = KafkaVersion(version)
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
              err_msg="Producer failed to start in a reasonable amount of time.")
+
+        # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring
+        # that this check works with TRUNK
+        assert is_version(node, node.version.vstring, "VerifiableProducer")
+
         self.producer.wait()
-
-        num_produced = self.producer.num_acked
-        assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
-
-    def test_normal_operation(self):
-        """Test startup of single-node VerifiableProducer, and validate that a small number of messages can
-        be produced/acknowledged.
-        """
-        self.producer.start()
-        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
-             err_msg="Producer failed to start in a reasonable amount of time.")
-        self.producer.wait()
-
         num_produced = self.producer.num_acked
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 

@@ -32,7 +32,7 @@ def is_int(msg):
     """
     try:
         return int(msg)
-    except:
+    except ValueError:
         return None
 
 """

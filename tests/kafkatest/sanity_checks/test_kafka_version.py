@@ -17,23 +17,8 @@ from ducktape.tests.test import Test
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, property
-from kafkatest.services.kafka.version import LATEST_0_8_2
-
-import re
-
-
-def kafka_jar_versions(proc_string):
-    """Return all kafka versions explicitly in the process classpath"""
-    versions = re.findall("kafka_[0-9\.]+-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string)
-    return set(versions)
-
-
-def is_kafka_version(node, version):
-    """Heuristic to check that only the specified version appears in the classpath of the kafka process"""
-    lines = [l for l in node.account.ssh_capture("ps ax | grep kafka.properties | grep -v grep")]
-    assert len(lines) == 1
-
-    return kafka_jar_versions(lines[0]) == {str(version)}
+from kafkatest.services.kafka.version import LATEST_0_8_2, TRUNK
+from kafkatest.utils import is_version
 
 
 class KafkaVersionTest(Test):
@@ -55,7 +40,7 @@ class KafkaVersionTest(Test):
         node.version = LATEST_0_8_2
         self.kafka.start()
 
-        assert is_kafka_version(node, LATEST_0_8_2)
+        assert is_version(node, LATEST_0_8_2)
 
     def test_multi_version(self):
         """Test kafka service node-versioning api - ensure we can bring up a 2-node cluster, one on version 0.8.2.X,
@@ -66,5 +51,5 @@ class KafkaVersionTest(Test):
         self.kafka.nodes[1].config[property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
         self.kafka.start()
 
-        assert not is_kafka_version(self.kafka.nodes[0], LATEST_0_8_2)
-        assert is_kafka_version(self.kafka.nodes[1], LATEST_0_8_2)
+        assert is_version(self.kafka.nodes[0], TRUNK.vstring)
+        assert is_version(self.kafka.nodes[1], LATEST_0_8_2)
