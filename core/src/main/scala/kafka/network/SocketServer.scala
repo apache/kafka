@@ -32,14 +32,11 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{Mode, InvalidReceiveException, ChannelBuilders,
-                                        PlaintextChannelBuilder, SSLChannelBuilder, SaslChannelBuilder}
+import org.apache.kafka.common.network.{Mode, InvalidReceiveException, ChannelBuilders}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.security.ssl.SSLFactory
-import org.apache.kafka.common.security.kerberos.LoginManager
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
-import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection._
 import scala.util.control.{NonFatal, ControlThrowable}

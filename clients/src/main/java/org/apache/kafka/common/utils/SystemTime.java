@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.util.Date;
-
 /**
  * A time implementation that uses the system clock and sleep call
  */
@@ -50,12 +48,6 @@ public class SystemTime implements Time {
     @Override
     public long currentWallTime() {
         return System.currentTimeMillis();
-    }
-
-    @Override
-    public Date elapsedTimeToDate(long elapsedTime) {
-        long wallTime = currentWallTime() + elapsedTime - currentElapsedTime();
-        return new Date(wallTime);
     }
 
 }

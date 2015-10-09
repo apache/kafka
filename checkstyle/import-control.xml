@@ -22,47 +22,46 @@
 
   <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
 
-	<!-- common library dependencies -->
-	<allow pkg="java" />
-	<allow pkg="javax.management" />
-	<allow pkg="org.slf4j" />
-	<allow pkg="org.junit" />
+  <!-- common library dependencies -->
+  <allow pkg="java" />
+  <allow pkg="javax.management" />
+  <allow pkg="org.slf4j" />
+  <allow pkg="org.junit" />
   <allow pkg="org.easymock" />
   <allow pkg="org.powermock" />
-
   <allow pkg="java.security" />
-	<allow pkg="javax.net.ssl" />
+  <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
   <allow pkg="org.ietf.jgss" />
 
-	<!-- no one depends on the server -->
-	<disallow pkg="kafka" />
+  <!-- no one depends on the server -->
+  <disallow pkg="kafka" />
 
-	<!-- anyone can use public classes -->
-	<allow pkg="org.apache.kafka.common" exact-match="true" />
-	<allow pkg="org.apache.kafka.common.utils" />
+  <!-- anyone can use public classes -->
+  <allow pkg="org.apache.kafka.common" exact-match="true" />
+  <allow pkg="org.apache.kafka.common.security" />
+  <allow pkg="org.apache.kafka.common.utils" />
 
-	<subpackage name="common">
-		<disallow pkg="org.apache.kafka.clients" />
-		<allow pkg="org.apache.kafka.common" exact-match="true" />
-    <allow pkg="org.apache.kafka.common.security" />
-		<allow pkg="org.apache.kafka.test" />
+  <subpackage name="common">
+    <disallow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.test" />
 
-		<subpackage name="config">
-			<allow pkg="org.apache.kafka.common.config" />
-			<!-- for testing -->
-			<allow pkg="org.apache.kafka.common.metrics" />
-		</subpackage>
+    <subpackage name="config">
+      <allow pkg="org.apache.kafka.common.config" />
+      <!-- for testing -->
+      <allow pkg="org.apache.kafka.common.metrics" />
+    </subpackage>
 
-		<subpackage name="metrics">
-			<allow pkg="org.apache.kafka.common.metrics" />
-		</subpackage>
+    <subpackage name="metrics">
+      <allow pkg="org.apache.kafka.common.metrics" />
+    </subpackage>
 
-		<subpackage name="network">
-			<allow pkg="org.apache.kafka.common.security.auth" />
-			<allow pkg="org.apache.kafka.common.protocol" />
-			<allow pkg="org.apache.kafka.common.config" />
-			<allow pkg="org.apache.kafka.common.metrics" />
+    <subpackage name="network">
+      <allow pkg="org.apache.kafka.common.security.auth" />
+      <allow pkg="org.apache.kafka.common.protocol" />
+      <allow pkg="org.apache.kafka.common.config" />
+      <allow pkg="org.apache.kafka.common.metrics" />
       <allow pkg="org.apache.kafka.common.security" />
     </subpackage>
 

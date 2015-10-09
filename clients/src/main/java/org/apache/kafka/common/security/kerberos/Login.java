@@ -76,7 +76,6 @@ public class Login {
 
     private LoginContext login = null;
     private String loginContextName = null;
-    private String jaasConfigFilePath = null;
     private String principal = null;
     private Configuration jaasConfig = null;
     private Time time = new SystemTime();
@@ -93,10 +92,8 @@ public class Login {
      * @throws javax.security.auth.login.LoginException
      *               Thrown if authentication fails.
      */
-    public Login(final String loginContextName)
-            throws LoginException {
+    public Login(final String loginContextName) throws LoginException {
         this.loginContextName = loginContextName;
-        this.jaasConfigFilePath = jaasConfigFilePath;
         login = login(loginContextName);
         subject = login.getSubject();
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
