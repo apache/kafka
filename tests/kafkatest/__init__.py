@@ -18,9 +18,9 @@
 #
 # Note that in development, this version name can't follow Kafka's convention of having a trailing "-SNAPSHOT"
 # due to python version naming restrictions, which are enforced by python packaging tools
-#  (see  https://www.python.org/dev/peps/pep-0440/)
+# (see  https://www.python.org/dev/peps/pep-0440/)
 #
 # Instead, in trunk, the version should have a suffix of the form ".devN"
 #
-# For example, when Kafka is at version 0.9.0-SNAPSHOT, this should be something like "0.9.0.dev0"
-__version__ = '0.9.0.dev0'
+# For example, when Kafka is at version 0.9.0.0-SNAPSHOT, this should be something like "0.9.0.0.dev0"
+__version__ = '0.9.0.0.dev0'
