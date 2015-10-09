@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.api.{ApiVersion, KAFKA_082}
 import kafka.message._
 import kafka.utils.{TestUtils, CoreUtils}

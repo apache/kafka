@@ -16,7 +16,6 @@ package kafka.api
 
 import java.util.Properties
 
-import junit.framework.Assert
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.{KafkaServer, KafkaConfig}
@@ -133,7 +132,7 @@ class QuotasTest extends KafkaServerTestHarness {
                                     RequestKeys.nameForKey(RequestKeys.ProduceKey),
                                     "Tracking throttle-time per client",
                                     "client-id", producerId1)
-    Assert.assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
+    assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
 
     // Consumer should read in a bursty manner and get throttled immediately
     consume(consumers.head, numRecords)
@@ -144,7 +143,7 @@ class QuotasTest extends KafkaServerTestHarness {
                                             RequestKeys.nameForKey(RequestKeys.FetchKey),
                                             "Tracking throttle-time per client",
                                             "client-id", consumerId1)
-    Assert.assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
+    assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
   }
 
   @Test
@@ -156,7 +155,7 @@ class QuotasTest extends KafkaServerTestHarness {
                                             RequestKeys.nameForKey(RequestKeys.ProduceKey),
                                             "Tracking throttle-time per client",
                                             "client-id", producerId2)
-    Assert.assertEquals("Should not have been throttled", Double.NaN, allMetrics(producerMetricName).value())
+    assertEquals(Double.NaN, allMetrics(producerMetricName).value(), 0.0)
 
     // The "client" consumer does not get throttled.
     consume(consumers(1), numRecords)
@@ -167,7 +166,7 @@ class QuotasTest extends KafkaServerTestHarness {
                                             RequestKeys.nameForKey(RequestKeys.FetchKey),
                                             "Tracking throttle-time per client",
                                             "client-id", consumerId2)
-    Assert.assertEquals("Should not have been throttled", Double.NaN, allMetrics(consumerMetricName).value())
+    assertEquals(Double.NaN, allMetrics(consumerMetricName).value(), 0.0)
   }
 
   def produce(p: KafkaProducer[Array[Byte], Array[Byte]], count: Int): Int = {

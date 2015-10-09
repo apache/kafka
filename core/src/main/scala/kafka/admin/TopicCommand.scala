@@ -28,7 +28,7 @@ import scala.collection._
 import scala.collection.JavaConversions._
 import kafka.log.LogConfig
 import kafka.consumer.Whitelist
-import kafka.server.{ConfigType, OffsetManager}
+import kafka.server.ConfigType
 import org.apache.kafka.common.utils.Utils
 import kafka.coordinator.ConsumerCoordinator
 
@@ -39,7 +39,7 @@ object TopicCommand extends Logging {
     
     val opts = new TopicCommandOptions(args)
     
-    if(args.length == 0)
+    if(args.isEmpty)
       CommandLineUtils.printUsageAndDie(opts.parser, "Create, delete, describe, or change a topic.")
     
     // should have exactly one action
@@ -103,7 +103,7 @@ object TopicCommand extends Logging {
 
   def alterTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
-    if (topics.length == 0) {
+    if (topics.isEmpty) {
       throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
           opts.options.valueOf(opts.zkConnectOpt)))
     }
@@ -118,6 +118,14 @@ object TopicCommand extends Logging {
         val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
         AdminUtils.addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr)
         println("Adding partitions succeeded!")
+      }
+      if(opts.options.has(opts.replicationFactorOpt)) {
+        val replicationFactor = opts.options.valueOf(opts.replicationFactorOpt)
+        val brokerList = ZkUtils.getSortedBrokerList(zkClient)
+        val partitions = ZkUtils.getPartitionsForTopics(zkClient, Seq(topic))(topic)
+        val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions.length, replicationFactor)
+        AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, replicaAssignment, update = true)
+        println("Replication factor has been changed for " + topic)
       }
     }
   }
@@ -135,7 +143,7 @@ object TopicCommand extends Logging {
 
   def deleteTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
-    if (topics.length == 0) {
+    if (topics.isEmpty) {
       throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
           opts.options.valueOf(opts.zkConnectOpt)))
     }
@@ -285,8 +293,8 @@ object TopicCommand extends Logging {
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, configOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, allTopicLevelOpts -- Set(createOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, allTopicLevelOpts -- Set(createOpt,alterOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, allTopicLevelOpts -- Set(createOpt, alterOpt))
       // Topic configs cannot be changed with alterTopic
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(configOpt))
       if(options.has(createOpt))

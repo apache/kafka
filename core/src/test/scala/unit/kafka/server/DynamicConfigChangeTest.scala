@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util.Properties
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.easymock.{Capture, EasyMock}
 import org.junit.Test
 import kafka.integration.KafkaServerTestHarness

@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.Logging
 import kafka.utils.TestUtils
@@ -96,5 +96,33 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
         TopicCommand.deleteTopic(zkClient, deleteOffsetTopicOpts)
     }
     assertFalse("Delete path for topic shouldn't exist after deletion.", zkClient.exists(deleteOffsetTopicPath))
+  }
+
+  @Test
+  def testTopicAlterReplicationFactor() {
+    val normalTopic = "test"
+    val numPartitionsOriginal = 2
+    val replicationFactorOriginal = 1
+    val replicationFactorChange = 2
+
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    // create the NormalTopic
+    val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", replicationFactorOriginal.toString,
+      "--topic", normalTopic))
+    TopicCommand.createTopic(zkClient, createOpts)
+
+    // alter the NormalTopic
+    val alterOpts = new TopicCommandOptions(Array("--replication-factor", replicationFactorChange.toString
+      , "--topic", normalTopic))
+    TopicCommand.alterTopic(zkClient, alterOpts)
+
+    val replicaAssigment = ZkUtils.getReplicaAssignmentForTopics(zkClient, Seq(normalTopic))
+    replicaAssigment.foreach {
+      case (_, replicas) => assertEquals(replicationFactorChange, replicas.size)
+    }
   }
 }
