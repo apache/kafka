@@ -74,6 +74,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
         - Finally, validate that every message acked by the producer was consumed by the consumer
         """
 
-        self.run_default_test_template(core_test_action=self.perform_upgrade)
+        self.run_produce_consume_validate(core_test_action=self.perform_upgrade)
 
 

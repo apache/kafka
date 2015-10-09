@@ -18,6 +18,14 @@ from ducktape.utils.util import wait_until
 
 
 class ProduceConsumeValidateTest(Test):
+    """This class provides a shared template for tests which follow the common pattern of:
+
+        - produce to a topic in the background
+        - consume from that topic in the background
+        - run some logic, e.g. fail topic leader etc.
+        - perform validation
+    """
+
     def __init__(self, test_context):
         super(ProduceConsumeValidateTest, self).__init__(test_context=test_context)
 
@@ -27,17 +35,24 @@ class ProduceConsumeValidateTest(Test):
     def start_producer_and_consumer(self):
         # Start background producer and consumer
         self.producer.start()
-        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=10,
              err_msg="Producer failed to start in a reasonable amount of time.")
         self.consumer.start()
+        wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=10,
+             err_msg="Consumer failed to start in a reasonable amount of time.")
 
     def stop_producer_and_consumer(self):
         for node in self.consumer.nodes:
-            assert self.consumer.alive(node)
+            if not self.consumer.alive(node):
+                self.logger.warn("Consumer on %s is not alive and probably should be." % str(node.account))
+        for node in self.producer.nodes:
+            if not self.producer.alive(node):
+                self.logger.warn("Producer on %s is not alive and probably should be." % str(node.account))
+
         self.producer.stop()
         self.consumer.wait()
 
-    def run_default_test_template(self, core_test_action):
+    def run_produce_consume_validate(self, core_test_action):
         """Top-level template for simple produce/consume/validate tests."""
 
         self.start_producer_and_consumer()
@@ -66,7 +81,14 @@ class ProduceConsumeValidateTest(Test):
             # Every acked message must appear in the logs. I.e. consumed messages must be superset of acked messages.
             acked_minus_consumed = set(self.producer.acked) - set(self.consumed)
             success = False
-            msg += "At least one acked message did not appear in the consumed messages. acked_minus_consumed: " + str(acked_minus_consumed)
+
+            msg += "At least one acked message did not appear in the consumed messages. acked_minus_consumed: "
+            if len(acked_minus_consumed) < 20:
+                msg += str(acked_minus_consumed)
+            else:
+                for i in range(20):
+                    msg += str(acked_minus_consumed.pop()) + ", "
+                msg += "...plus " + str(len(acked_minus_consumed) - 20) + " more"
 
         if not success:
             # Collect all the data logs if there was a failure

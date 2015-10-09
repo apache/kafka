@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.utils.util import wait_until
 
 from ducktape.mark import matrix
 
@@ -46,8 +47,19 @@ def hard_bounce(obj):
     """Chase the leader and restart it cleanly."""
     for i in range(5):
         prev_leader_node = obj.kafka.leader(topic=obj.topic, partition=0)
-        obj.kafka.restart_node(prev_leader_node, clean_shutdown=False)
+        obj.kafka.signal_node(prev_leader_node, sig=signal.SIGKILL)
 
+        # Since this is a hard kill, we need to make sure the process is down and that
+        # zookeeper and the broker cluster have registered the loss of the leader.
+        # Waiting for a new leader to be elected on the topic-partition is a reasonable heuristic for this.
+
+        def leader_changed():
+            current_leader = obj.kafka.leader(topic=obj.topic, partition=0)
+            return current_leader is not None and current_leader != prev_leader_node
+
+        wait_until(lambda: len(obj.kafka.pids(prev_leader_node)) == 0, timeout_sec=5)
+        wait_until(leader_changed, timeout_sec=10, backoff_sec=.5)
+        obj.kafka.start_node(prev_leader_node)
 
 failures = {
     "clean_shutdown": clean_shutdown,
@@ -117,4 +129,4 @@ class ReplicationTest(ProduceConsumeValidateTest):
         self.kafka.interbroker_security_protocol = interbroker_security_protocol
         self.kafka.start()
         
-        self.run_default_test_template(core_test_action=lambda: failures[failure_mode](self))
+        self.run_produce_consume_validate(core_test_action=lambda: failures[failure_mode](self))
