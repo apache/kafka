@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorDef;
 import org.apache.kafka.streams.kstream.Predicate;
 
-class KStreamBranch<K, V> implements ProcessorDef {
+class KStreamBranch<K, V> implements ProcessorDef<K, V> {
 
     private final Predicate<K, V>[] predicates;
 
@@ -32,7 +32,7 @@ class KStreamBranch<K, V> implements ProcessorDef {
     }
 
     @Override
-    public Processor instance() {
+    public Processor<K, V> instance() {
         return new KStreamBranchProcessor();
     }
 
