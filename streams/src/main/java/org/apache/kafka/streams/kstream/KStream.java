@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 /**
  * KStream is an abstraction of a stream of key-value pairs.
- * 
+ *
  * @param <K> the type of keys
  * @param <V> the type of values
  */
@@ -151,10 +151,27 @@ public interface KStream<K, V> {
     void to(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
 
     /**
+     * Applies a stateful transformation to all elements in this stream.
+     *
+     * @param transformerSupplier the class of TransformerDef
+     * @return KStream
+     */
+    <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier);
+
+    /**
+     * Applies a stateful transformation to all values in this stream.
+     *
+     * @param valueTransformerSupplier the class of TransformerDef
+     * @return KStream
+     */
+    <R> KStream<K, R> transformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier);
+
+    /**
      * Processes all elements in this stream by applying a processor.
      *
      * @param processorSupplier the supplier of the Processor to use
      * @return the new stream containing the processed output
      */
-    <K1, V1> KStream<K1, V1> process(ProcessorSupplier<K, V> processorSupplier);
+    void process(ProcessorSupplier<K, V> processorSupplier);
+
 }

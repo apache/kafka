@@ -119,7 +119,7 @@ public class KStreamImplTest {
 
         stream4.to("topic-5");
 
-        stream5.through("topic-6").process(new MockProcessorSupplier<>()).to("topic-7");
+        stream5.through("topic-6").process(new MockProcessorSupplier<>());
 
         assertEquals(2 + // sources
             2 + // stream1
@@ -131,8 +131,7 @@ public class KStreamImplTest {
             2 + 3 + // stream5
             1 + // to
             2 + // through
-            1 + // process
-            1, // to
+            1, // process
             builder.build().processors().size());
     }
 }
