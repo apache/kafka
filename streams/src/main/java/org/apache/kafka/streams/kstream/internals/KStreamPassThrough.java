@@ -19,13 +19,13 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamPassThrough<K, V> implements ProcessorDef<K, V> {
+class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
 
     @Override
-    public Processor<K, V> instance() {
-        return new KStreamPassThroughProcessor();
+    public Processor<K, V> get() {
+        return new KStreamPassThroughProcessor<K, V>();
     }
 
     public class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {

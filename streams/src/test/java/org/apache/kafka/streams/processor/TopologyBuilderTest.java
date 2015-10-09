@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor;
 
 import static org.junit.Assert.assertEquals;
 
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 public class TopologyBuilderTest {
@@ -45,22 +45,22 @@ public class TopologyBuilderTest {
         final TopologyBuilder builder = new TopologyBuilder();
 
         builder.addSource("source", "topic-1");
-        builder.addProcessor("processor", new MockProcessorDef(), "source");
-        builder.addProcessor("processor", new MockProcessorDef(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
     }
 
     @Test(expected = TopologyException.class)
     public void testAddProcessorWithWrongParent() {
         final TopologyBuilder builder = new TopologyBuilder();
 
-        builder.addProcessor("processor", new MockProcessorDef(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
     }
 
     @Test(expected = TopologyException.class)
     public void testAddProcessorWithSelfParent() {
         final TopologyBuilder builder = new TopologyBuilder();
 
-        builder.addProcessor("processor", new MockProcessorDef(), "processor");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "processor");
     }
 
     @Test(expected = TopologyException.class)
