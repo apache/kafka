@@ -18,7 +18,7 @@ import property
 from sortedcontainers import SortedDict
 
 
-class KafkaConfig(SortedDict):
+class KafkaConfig(dict):
     """A dictionary-like container class which allows for definition of overridable default values,
     which is also capable of "rendering" itself as a useable server.properties file.
 
@@ -42,9 +42,12 @@ class KafkaConfig(SortedDict):
 
     def render(self):
         """Render self as a series of lines key=val\n, and do so in a consistent order. """
+        keys = [k for k in self.keys()]
+        keys.sort()
+
         s = ""
-        for key in self:
-            s += "%s=%s\n" % (key, str(self[key]))
+        for k in keys:
+            s += "%s=%s\n" % (k, str(self[k]))
         return s
 
 
