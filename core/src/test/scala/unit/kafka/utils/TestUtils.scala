@@ -30,7 +30,7 @@ import kafka.security.auth.{Resource, Authorizer, Acl}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils._
 
-import collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 
@@ -158,16 +158,22 @@ object TestUtils extends Logging {
   def createBrokerConfig(nodeId: Int, zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false,
-    port: Int = RandomPort, enableSasl:Boolean = false, saslPort:Int = RandomPort, enableSSL: Boolean = false,
+    port: Int = RandomPort, enableSasl: Boolean = false, saslPort: Int = RandomPort, enableSSL: Boolean = false,
     sslPort: Int = RandomPort, trustStoreFile: Option[File] = None): Properties = {
 
+    val listeners = {
+      val protocolAndPorts = ArrayBuffer("PLAINTEXT" -> port)
+      if (enableSSL)
+        protocolAndPorts += "SSL" -> sslPort
+      if (enableSasl)
+        protocolAndPorts += "PLAINTEXTSASL" -> saslPort
+      protocolAndPorts.map { case (protocol, port) =>
+        s"$protocol://localhost:$port"
+      }.mkString(",")
+    }
+
     val props = new Properties
-    var listeners: String = "PLAINTEXT://localhost:"+port.toString
     if (nodeId >= 0) props.put("broker.id", nodeId.toString)
-    if (enableSSL)
-      listeners = listeners + "," + "SSL://localhost:"+sslPort.toString
-    if (enableSasl)
-      listeners = listeners + "," + "PLAINTEXTSASL://localhost:" + saslPort.toString
     props.put("listeners", listeners)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("zookeeper.connect", zkConnect)
@@ -176,9 +182,8 @@ object TestUtils extends Logging {
     props.put("controlled.shutdown.enable", enableControlledShutdown.toString)
     props.put("delete.topic.enable", enableDeleteTopic.toString)
     props.put("controlled.shutdown.retry.backoff.ms", "100")
-    if (enableSSL) {
-      props.putAll(addSSLConfigs(Mode.SERVER, true, trustStoreFile, "server"+nodeId))
-    }
+    if (enableSSL)
+      props.putAll(addSSLConfigs(Mode.SERVER, true, trustStoreFile, s"server$nodeId"))
     props.put("port", port.toString)
     props
   }

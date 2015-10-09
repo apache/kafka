@@ -33,13 +33,12 @@ public class ChannelBuilders {
 
         switch (securityProtocol) {
             case SSL:
-                if (mode == null)
-                    throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `SSL`");
+                requireNonNullMode(mode, securityProtocol);
                 channelBuilder = new SSLChannelBuilder(mode);
                 break;
+            case SSLSASL:
             case PLAINTEXTSASL:
-                if (mode == null)
-                    throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `PLAINTEXTSASL`");
+                requireNonNullMode(mode, securityProtocol);
                 channelBuilder = new SaslChannelBuilder(mode, securityProtocol);
                 break;
             case PLAINTEXT:
@@ -53,4 +52,10 @@ public class ChannelBuilders {
         channelBuilder.configure(configs);
         return channelBuilder;
     }
+
+    private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {
+        if (mode == null)
+            throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+    }
+
 }
