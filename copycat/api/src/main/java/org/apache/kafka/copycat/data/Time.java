@@ -62,7 +62,7 @@ public class Time {
         calendar.setTime(value);
         long unixMillis = calendar.getTimeInMillis();
         if (unixMillis < 0 || unixMillis > MILLIS_PER_DAY) {
-            throw new DataException("Copycat Time type should not have any time fields set to non-zero values.");
+            throw new DataException("Copycat Time type should not have any date fields set to non-zero values.");
         }
         return (int) unixMillis;
     }
