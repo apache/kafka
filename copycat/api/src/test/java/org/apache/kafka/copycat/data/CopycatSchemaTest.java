@@ -20,6 +20,8 @@ package org.apache.kafka.copycat.data;
 import org.apache.kafka.copycat.errors.DataException;
 import org.junit.Test;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.util.Arrays;
@@ -95,6 +97,14 @@ public class CopycatSchemaTest {
                 .put("map", Collections.singletonMap(1, "value"))
                 .put("nested", new Struct(FLAT_STRUCT_SCHEMA).put("field", 12));
         CopycatSchema.validateValue(STRUCT_SCHEMA, structValue);
+    }
+
+    @Test
+    public void testValidateValueMatchingLogicalType() {
+        CopycatSchema.validateValue(Decimal.schema(2), new BigDecimal(new BigInteger("156"), 2));
+        CopycatSchema.validateValue(Date.SCHEMA, new java.util.Date(0));
+        CopycatSchema.validateValue(Time.SCHEMA, new java.util.Date(0));
+        CopycatSchema.validateValue(Timestamp.SCHEMA, new java.util.Date(0));
     }
 
     // To avoid requiring excessive numbers of tests, these checks for invalid types use a similar type where possible
@@ -204,6 +214,25 @@ public class CopycatSchemaTest {
         );
     }
 
+    @Test(expected = DataException.class)
+    public void testValidateValueMismatchDecimal() {
+        CopycatSchema.validateValue(Decimal.schema(2), new BigInteger("156"));
+    }
+
+    @Test(expected = DataException.class)
+    public void testValidateValueMismatchDate() {
+        CopycatSchema.validateValue(Date.SCHEMA, 1000L);
+    }
+
+    @Test(expected = DataException.class)
+    public void testValidateValueMismatchTime() {
+        CopycatSchema.validateValue(Time.SCHEMA, 1000L);
+    }
+
+    @Test(expected = DataException.class)
+    public void testValidateValueMismatchTimestamp() {
+        CopycatSchema.validateValue(Timestamp.SCHEMA, 1000L);
+    }
 
     @Test
     public void testPrimitiveEquality() {
