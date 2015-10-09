@@ -23,7 +23,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.KafkaStreaming;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.StreamingConfig;
@@ -36,10 +36,10 @@ import java.util.Properties;
 
 public class ProcessorJob {
 
-    private static class MyProcessorDef implements ProcessorDef {
+    private static class MyProcessorSupplier implements ProcessorSupplier<String, String> {
 
         @Override
-        public Processor<String, String> instance() {
+        public Processor<String, String> get() {
             return new Processor<String, String>() {
                 private ProcessorContext context;
                 private KeyValueStore<String, Integer> kvStore;
@@ -102,7 +102,7 @@ public class ProcessorJob {
 
         builder.addSource("SOURCE", new StringDeserializer(), new StringDeserializer(), "topic-source");
 
-        builder.addProcessor("PROCESS", new MyProcessorDef(), "SOURCE");
+        builder.addProcessor("PROCESS", new MyProcessorSupplier(), "SOURCE");
 
         builder.addSink("SINK", "topic-sink", new StringSerializer(), new IntegerSerializer(), "PROCESS");
 

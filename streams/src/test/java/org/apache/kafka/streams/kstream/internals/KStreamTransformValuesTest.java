@@ -21,10 +21,10 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerDef;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -40,9 +40,9 @@ public class KStreamTransformValuesTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        ValueTransformerDef<Integer, Integer> valueTransformerDef =
-            new ValueTransformerDef<Integer, Integer>() {
-                public ValueTransformer<Integer, Integer> instance() {
+        ValueTransformerSupplier<Integer, Integer> valueTransformerSupplier =
+            new ValueTransformerSupplier<Integer, Integer>() {
+                public ValueTransformer<Integer, Integer> get() {
                     return new ValueTransformer<Integer, Integer>() {
 
                         private int total = 0;
@@ -71,9 +71,9 @@ public class KStreamTransformValuesTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, Integer> stream;
-        MockProcessorDef<Integer, Integer> processor = new MockProcessorDef<>();
+        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
-        stream.transformValues(valueTransformerDef).process(processor);
+        stream.transformValues(valueTransformerSupplier).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {

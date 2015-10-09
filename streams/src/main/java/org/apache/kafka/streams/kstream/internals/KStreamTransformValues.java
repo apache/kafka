@@ -18,22 +18,22 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerDef;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamTransformValues<K, V, R> implements ProcessorDef<K, V> {
+public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
 
-    private final ValueTransformerDef<V, R> valueTransformerDef;
+    private final ValueTransformerSupplier<V, R> valueTransformerSupplier;
 
-    public KStreamTransformValues(ValueTransformerDef valueTransformerDef) {
-        this.valueTransformerDef = valueTransformerDef;
+    public KStreamTransformValues(ValueTransformerSupplier valueTransformerSupplier) {
+        this.valueTransformerSupplier = valueTransformerSupplier;
     }
 
     @Override
-    public Processor<K, V> instance() {
-        return new KStreamTransformValuesProcessor(valueTransformerDef.instance());
+    public Processor<K, V> get() {
+        return new KStreamTransformValuesProcessor(valueTransformerSupplier.get());
     }
 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {

@@ -17,9 +17,8 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface WindowDef<K, V> {
+public interface ValueTransformerSupplier<V, R> {
 
-    String name();
+    ValueTransformer<V, R> get();
 
-    Window<K, V> instance();
 }

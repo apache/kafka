@@ -22,10 +22,10 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerDef;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -41,9 +41,9 @@ public class KStreamTransformTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        TransformerDef<Integer, Integer, KeyValue<Integer, Integer>> transformerDef =
-            new TransformerDef<Integer, Integer, KeyValue<Integer, Integer>>() {
-                public Transformer<Integer, Integer, KeyValue<Integer, Integer>> instance() {
+        TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>> transformerSupplier =
+            new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
+                public Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
                     return new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
 
                         private int total = 0;
@@ -72,9 +72,9 @@ public class KStreamTransformTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, Integer> stream;
-        MockProcessorDef<Integer, Integer> processor = new MockProcessorDef<>();
+        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
-        stream.transform(transformerDef).process(processor);
+        stream.transform(transformerSupplier).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {

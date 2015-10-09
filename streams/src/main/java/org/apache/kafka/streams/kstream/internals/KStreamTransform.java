@@ -19,22 +19,22 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerDef;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamTransform<K1, V1, K2, V2> implements ProcessorDef<K1, V1> {
+public class KStreamTransform<K1, V1, K2, V2> implements ProcessorSupplier<K1, V1> {
 
-    private final TransformerDef<K1, V1, KeyValue<K2, V2>> transformerDef;
+    private final TransformerSupplier<K1, V1, KeyValue<K2, V2>> transformerSupplier;
 
-    public KStreamTransform(TransformerDef<K1, V1, KeyValue<K2, V2>> transformerDef) {
-        this.transformerDef = transformerDef;
+    public KStreamTransform(TransformerSupplier<K1, V1, KeyValue<K2, V2>> transformerSupplier) {
+        this.transformerSupplier = transformerSupplier;
     }
 
     @Override
-    public Processor<K1, V1> instance() {
-        return new KStreamTransformProcessor(transformerDef.instance());
+    public Processor<K1, V1> get() {
+        return new KStreamTransformProcessor(transformerSupplier.get());
     }
 
     public static class KStreamTransformProcessor<K1, V1, K2, V2> implements Processor<K1, V1> {

@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.kstream;
 
-public interface ProcessorDef<K, V> {
+public interface WindowSupplier<K, V> {
 
-    Processor<K, V> instance();
+    String name();
+
+    Window<K, V> get();
 }

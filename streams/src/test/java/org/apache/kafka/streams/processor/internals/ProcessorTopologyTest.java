@@ -31,13 +31,13 @@ import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.junit.After;
 import org.junit.Before;
@@ -115,8 +115,8 @@ public class ProcessorTopologyTest {
 
         builder.addSource("source-1", "topic-1");
         builder.addSource("source-2", "topic-2", "topic-3");
-        builder.addProcessor("processor-1", new MockProcessorDef(), "source-1");
-        builder.addProcessor("processor-2", new MockProcessorDef(), "source-1", "source-2");
+        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-1", "source-2");
         builder.addSink("sink-1", "topic-3", "processor-1");
         builder.addSink("sink-2", "topic-4", "processor-1", "processor-2");
 
@@ -308,10 +308,10 @@ public class ProcessorTopologyTest {
         }
     }
 
-    protected ProcessorDef define(final Processor processor) {
-        return new ProcessorDef() {
+    protected ProcessorSupplier define(final Processor processor) {
+        return new ProcessorSupplier() {
             @Override
-            public Processor instance() {
+            public Processor get() {
                 return processor;
             }
         };

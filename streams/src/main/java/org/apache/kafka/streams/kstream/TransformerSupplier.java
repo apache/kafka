@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface TransformerDef<K, V, R> {
+public interface TransformerSupplier<K, V, R> {
 
-    Transformer<K, V, R> instance();
+    Transformer<K, V, R> get();
 
 }
