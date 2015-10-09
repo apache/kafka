@@ -144,8 +144,10 @@ object TestUtils extends Logging {
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false,
     enableSSL: Boolean = false,
+    enableSasl: Boolean = false,
     trustStoreFile: Option[File] = None): Seq[Properties] = {
-    (0 until numConfigs).map(node => createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, enableSSL = enableSSL, trustStoreFile = trustStoreFile))
+    (0 until numConfigs).map(node => createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic,
+      enableSSL = enableSSL, enableSasl = enableSasl, trustStoreFile = trustStoreFile))
   }
 
   def getBrokerListStrFromServers(servers: Seq[KafkaServer], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
@@ -443,6 +445,7 @@ object TestUtils extends Logging {
                         partitionFetchSize: Long = 4096L,
                         partitionAssignmentStrategy: String = "blah",
                         sessionTimeout: Int = 30000,
+                        enableSasl: Boolean = false,
                         enableSSL: Boolean = false,
                         trustStoreFile: Option[File] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -461,6 +464,8 @@ object TestUtils extends Logging {
     if (enableSSL) {
       consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
       consumerProps.putAll(addSSLConfigs(Mode.CLIENT, false, trustStoreFile, "consumer"))
+    } else if (enableSasl) {
+      consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXTSASL")
     }
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }

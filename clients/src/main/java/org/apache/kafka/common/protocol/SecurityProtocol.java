@@ -29,7 +29,7 @@ public enum SecurityProtocol {
     /** SASL authenticated, non-encrypted channel */
     PLAINTEXTSASL(2, "PLAINTEXTSASL"),
     /** SASL authenticated, SSL channel */
-    SSLSASL(2, "SASL"),
+    SSLSASL(3, "SSLSASL"),
     /** Currently identical to PLAINTEXT and used for testing only. We may implement extra instrumentation when testing channel code. */
     TRACE(Short.MAX_VALUE, "TRACE");
 
