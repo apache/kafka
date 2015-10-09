@@ -43,9 +43,7 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
 
     kdc.start()
     kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
-    println("setting java property ", jaasFile.getAbsolutePath);
     System.setProperty("java.security.auth.login.config", jaasFile.getAbsolutePath)
-    println("setting java property ", System.getProperty("java.security.auth.login.config"));
     super.setUp
   }
 
