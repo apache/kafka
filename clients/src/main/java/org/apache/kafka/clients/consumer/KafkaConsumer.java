@@ -1085,7 +1085,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (parts != null)
                 return parts;
 
-            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Arrays.asList(topic), requestTimeoutMs);
+            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topic), requestTimeoutMs);
             return topicMetadata.get(topic);
         } finally {
             release();
@@ -1103,7 +1103,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<String, List<PartitionInfo>> listTopics() {
         acquire();
         try {
-            return fetcher.getTopicMetadata(Collections.<String>emptyList(), requestTimeoutMs);
+            return fetcher.getAllTopicMetadata(requestTimeoutMs);
         } finally {
             release();
         }
