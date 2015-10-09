@@ -26,7 +26,7 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 
 import com.yammer.metrics.core.Gauge
-import kafka.cluster.EndPoint
+import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
@@ -362,22 +362,14 @@ private[kafka] class Processor(val id: Int,
                                metrics: Metrics) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
-
-    private def parseHostPort(s: String): Option[(String, Int)] = s.split(":") match {
-      case Array(host, port) =>
-        try Some(host, port.toInt) catch { case e: NumberFormatException => None }
-      case _ => None
-    }
-
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
-      case Array(local, remote) => parseHostPort(local).flatMap { case (localHost, localPort) =>
-        parseHostPort(remote).map { case (remoteHost, remotePort) =>
+      case Array(local, remote) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
+        BrokerEndPoint.parseHostPort(remote).map { case (remoteHost, remotePort) =>
           ConnectionId(localHost, localPort, remoteHost, remotePort)
         }
       }
       case _ => None
     }
-
   }
 
   private case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int) {
