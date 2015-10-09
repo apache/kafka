@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
@@ -50,10 +51,7 @@ public class SSLChannelBuilder implements ChannelBuilder {
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException {
         KafkaChannel channel = null;
         try {
-            SocketChannel socketChannel = (SocketChannel) key.channel();
-            SSLTransportLayer transportLayer = new SSLTransportLayer(id, key,
-                                                                     sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
-                                                                                                socketChannel.socket().getPort()));
+            SSLTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key);
             Authenticator authenticator = new DefaultAuthenticator();
             authenticator.configure(transportLayer, this.principalBuilder, this.configs);
             channel = new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
@@ -66,5 +64,14 @@ public class SSLChannelBuilder implements ChannelBuilder {
 
     public void close()  {
         this.principalBuilder.close();
+    }
+
+    protected SSLTransportLayer buildTransportLayer(SSLFactory sslFactory, String id, SelectionKey key) throws IOException {
+        SocketChannel socketChannel = (SocketChannel) key.channel();
+        SSLTransportLayer transportLayer = new SSLTransportLayer(id, key,
+                sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
+                                           socketChannel.socket().getPort()));
+        transportLayer.startHandshake();
+        return transportLayer;
     }
 }

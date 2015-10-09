@@ -33,7 +33,7 @@ public interface ChannelBuilder {
      * @param  id  channel id
      * @param  key SelectionKey
      * @param  maxReceiveSize
-     * @returns KafkaChannel
+     * @return KafkaChannel
      */
     KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
 

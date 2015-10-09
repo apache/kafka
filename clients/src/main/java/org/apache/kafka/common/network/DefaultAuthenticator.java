@@ -28,13 +28,11 @@ public class DefaultAuthenticator implements Authenticator {
 
     private TransportLayer transportLayer;
     private PrincipalBuilder principalBuilder;
-    private Map<String, ?> configs;
     private Principal principal;
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
         this.transportLayer = transportLayer;
         this.principalBuilder = principalBuilder;
-        this.configs = configs;
     }
 
     /**

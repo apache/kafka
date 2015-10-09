@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorDef;
 
-class KStreamFlatMapValues<K1, V1, V2> implements ProcessorDef {
+class KStreamFlatMapValues<K1, V1, V2> implements ProcessorDef<K1, V1> {
 
     private final ValueMapper<V1, ? extends Iterable<V2>> mapper;
 
@@ -31,7 +31,7 @@ class KStreamFlatMapValues<K1, V1, V2> implements ProcessorDef {
     }
 
     @Override
-    public Processor instance() {
+    public Processor<K1, V1> instance() {
         return new KStreamFlatMapValuesProcessor();
     }
 

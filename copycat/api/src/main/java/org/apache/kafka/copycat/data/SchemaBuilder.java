@@ -22,7 +22,9 @@ import org.apache.kafka.copycat.errors.SchemaBuilderException;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * <p>
@@ -71,7 +73,8 @@ public class SchemaBuilder implements Schema {
     private Integer version;
     // Optional human readable documentation describing this schema.
     private String doc;
-
+    // Additional parameters for logical types.
+    private Map<String, String> parameters;
 
     private SchemaBuilder(Type type) {
         this.type = type;
@@ -176,6 +179,41 @@ public class SchemaBuilder implements Schema {
         return this;
     }
 
+    @Override
+    public Map<String, String> parameters() {
+        return Collections.unmodifiableMap(parameters);
+    }
+
+    /**
+     * Set a schema parameter.
+     * @param propertyName name of the schema property to define
+     * @param propertyValue value of the schema property to define, as a String
+     * @return the SchemaBuilder
+     */
+    public SchemaBuilder parameter(String propertyName, String propertyValue) {
+        // Preserve order of insertion with a LinkedHashMap. This isn't strictly necessary, but is nice if logical types
+        // can print their properties in a consistent order.
+        if (parameters == null)
+            parameters = new LinkedHashMap<>();
+        parameters.put(propertyName, propertyValue);
+        return this;
+    }
+
+    /**
+     * Set schema parameters. This operation is additive; it does not remove existing parameters that do not appear in
+     * the set of properties pass to this method.
+     * @param props Map of properties to set
+     * @return the SchemaBuilder
+     */
+    public SchemaBuilder parameters(Map<String, String> props) {
+        // Avoid creating an empty set of properties so we never have an empty map
+        if (props.isEmpty())
+            return this;
+        if (parameters == null)
+            parameters = new LinkedHashMap<>();
+        parameters.putAll(props);
+        return this;
+    }
 
     @Override
     public Type type() {
@@ -347,7 +385,9 @@ public class SchemaBuilder implements Schema {
      * @return the {@link Schema}
      */
     public Schema build() {
-        return new CopycatSchema(type, isOptional(), defaultValue, name, version, doc, fields == null ? null : Collections.unmodifiableList(fields), keySchema, valueSchema);
+        return new CopycatSchema(type, isOptional(), defaultValue, name, version, doc,
+                parameters == null ? null : Collections.unmodifiableMap(parameters),
+                fields == null ? null : Collections.unmodifiableList(fields), keySchema, valueSchema);
     }
 
     /**

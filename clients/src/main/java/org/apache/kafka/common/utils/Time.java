@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.util.Date;
 /**
  * An interface abstracting the clock to use in unit testing classes that make use of clock time
  */
@@ -51,11 +50,5 @@ public interface Time {
      * Sleep for the given number of milliseconds
      */
     public void sleep(long ms);
-
-    /**
-     * This is to convert the elapsedTime to a Date.
-     * @return A date object indicated by the elapsedTime.
-     */
-    public Date elapsedTimeToDate(long elapsedTime);
 
 }

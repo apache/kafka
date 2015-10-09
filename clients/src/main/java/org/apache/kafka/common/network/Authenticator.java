@@ -31,9 +31,9 @@ import org.apache.kafka.common.KafkaException;
 public interface Authenticator {
 
     /**
-     * configures Authenticator using principalbuilder and transportLayer.
-     * @param TransportLayer transportLayer
-     * @param PrincipalBuilder principalBuilder
+     * Configures Authenticator using principalBuilder and transportLayer.
+     * @param transportLayer
+     * @param principalBuilder
      */
     void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs);
 

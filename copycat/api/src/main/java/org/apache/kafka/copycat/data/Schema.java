@@ -18,6 +18,7 @@
 package org.apache.kafka.copycat.data;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * <p>
@@ -122,6 +123,12 @@ public interface Schema {
      * @return the documentation for this schema
      */
     String doc();
+
+    /**
+     * Get a map of schema parameters.
+     * @return Map containing parameters for this schema, or null if there are no parameters
+     */
+    Map<String, String> parameters();
 
     /**
      * Get the key schema for this map schema. Throws a DataException if this schema is not a map.

@@ -23,6 +23,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +34,7 @@ public class SchemaBuilderTest {
     private static final String NAME = "name";
     private static final Integer VERSION = 2;
     private static final String DOC = "doc";
+    private static final Map<String, String> NO_PARAMS = null;
 
     @Test
     public void testInt8Builder() {
@@ -43,7 +45,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.int8().name(NAME).optional().defaultValue((byte) 12)
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.INT8, true, (byte) 12);
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -60,7 +62,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.int16().name(NAME).optional().defaultValue((short) 12)
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.INT16, true, (short) 12);
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -77,7 +79,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.int32().name(NAME).optional().defaultValue(12)
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.INT32, true, 12);
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -94,7 +96,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.int64().name(NAME).optional().defaultValue((long) 12)
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.INT64, true, (long) 12);
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -111,7 +113,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.float32().name(NAME).optional().defaultValue(12.f)
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.FLOAT32, true, 12.f);
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -128,7 +130,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.float64().name(NAME).optional().defaultValue(12.0)
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.FLOAT64, true, 12.0);
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -145,7 +147,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.bool().name(NAME).optional().defaultValue(true)
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.BOOLEAN, true, true);
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -162,7 +164,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.string().name(NAME).optional().defaultValue("a default string")
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.STRING, true, "a default string");
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -179,7 +181,7 @@ public class SchemaBuilderTest {
         schema = SchemaBuilder.bytes().name(NAME).optional().defaultValue("a default byte array".getBytes())
                 .version(VERSION).doc(DOC).build();
         assertTypeAndDefault(schema, Schema.Type.BYTES, true, "a default byte array".getBytes());
-        assertMetadata(schema, NAME, VERSION, DOC);
+        assertMetadata(schema, NAME, VERSION, DOC, NO_PARAMS);
     }
 
     @Test(expected = SchemaBuilderException.class)
@@ -187,6 +189,21 @@ public class SchemaBuilderTest {
         SchemaBuilder.bytes().defaultValue("a string, not bytes");
     }
 
+
+    @Test
+    public void testParameters() {
+        Map<String, String> expectedParameters = new HashMap<>();
+        expectedParameters.put("foo", "val");
+        expectedParameters.put("bar", "baz");
+
+        Schema schema = SchemaBuilder.string().parameter("foo", "val").parameter("bar", "baz").build();
+        assertTypeAndDefault(schema, Schema.Type.STRING, false, null);
+        assertMetadata(schema, null, null, null, expectedParameters);
+
+        schema = SchemaBuilder.string().parameters(expectedParameters).build();
+        assertTypeAndDefault(schema, Schema.Type.STRING, false, null);
+        assertMetadata(schema, null, null, null, expectedParameters);
+    }
 
 
     @Test
@@ -275,13 +292,14 @@ public class SchemaBuilderTest {
         }
     }
 
-    private void assertMetadata(Schema schema, String name, Integer version, String doc) {
+    private void assertMetadata(Schema schema, String name, Integer version, String doc, Map<String, String> parameters) {
         assertEquals(name, schema.name());
         assertEquals(version, schema.version());
         assertEquals(doc, schema.doc());
+        assertEquals(parameters, schema.parameters());
     }
 
     private void assertNoMetadata(Schema schema) {
-        assertMetadata(schema, null, null, null);
+        assertMetadata(schema, null, null, null, null);
     }
 }

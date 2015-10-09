@@ -236,10 +236,13 @@ class ConsumerCoordinator(val brokerId: Int,
     } else {
       val group = coordinatorMetadata.getGroup(groupId)
       if (group == null) {
-        // if the group does not exist, it means this group is not relying
-        // on Kafka for partition management, and hence never send join-group
-        // request to the coordinator before; in this case blindly commit the offsets
-        offsetManager.storeOffsets(groupId, consumerId, generationId, offsetMetadata, responseCallback)
+        if (generationId < 0)
+          // the group is not relying on Kafka for partition management, so allow the commit
+          offsetManager.storeOffsets(groupId, consumerId, generationId, offsetMetadata, responseCallback)
+        else
+          // the group has failed over to this coordinator (which will be handled in KAFKA-2017),
+          // or this is a request coming from an older generation. either way, reject the commit
+          responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION.code))
       } else {
         group synchronized {
           if (group.is(Dead)) {

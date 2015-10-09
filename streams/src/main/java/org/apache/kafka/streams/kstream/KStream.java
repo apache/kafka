@@ -152,5 +152,5 @@ public interface KStream<K, V> {
      *
      * @param processorDef the class of ProcessorDef
      */
-    <K1, V1> KStream<K1, V1> process(ProcessorDef processorDef);
+    <K1, V1> KStream<K1, V1> process(ProcessorDef<K, V> processorDef);
 }

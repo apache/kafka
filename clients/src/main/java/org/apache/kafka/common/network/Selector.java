@@ -239,12 +239,15 @@ public class Selector implements Selectable {
      * the poll to add the completedReceives. If there are any active channels in the "stagedReceives" we set "timeout" to 0
      * and pop response and add to the completedReceives.
      *
-     * @param timeout The amount of time to wait, in milliseconds. If negative, wait indefinitely.
+     * @param timeout The amount of time to wait, in milliseconds, which must be non-negative
+     * @throws IllegalArgumentException If `timeout` is negative
      * @throws IllegalStateException If a send is given for which we have no existing connection or for which there is
      *         already an in-progress send
      */
     @Override
     public void poll(long timeout) throws IOException {
+        if (timeout < 0)
+            throw new IllegalArgumentException("timeout should be >= 0");
         clear();
         if (hasStagedReceives())
             timeout = 0;
@@ -276,12 +279,8 @@ public class Selector implements Selectable {
                     }
 
                     /* if channel is not ready finish prepare */
-                    if (channel.isConnected() && !channel.ready()) {
+                    if (channel.isConnected() && !channel.ready())
                         channel.prepare();
-                        if (channel.id().equals("-1")) {
-
-                        }
-                    }
 
                     /* if channel is ready read from any connections that have readable data */
                     if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
@@ -418,15 +417,17 @@ public class Selector implements Selectable {
     /**
      * Check for data, waiting up to the given timeout.
      *
-     * @param ms Length of time to wait, in milliseconds. If negative, wait indefinitely.
+     * @param ms Length of time to wait, in milliseconds, which must be non-negative
      * @return The number of keys ready
+     * @throws IllegalArgumentException
      * @throws IOException
      */
     private int select(long ms) throws IOException {
+        if (ms < 0L)
+            throw new IllegalArgumentException("timeout should be >= 0");
+
         if (ms == 0L)
             return this.nioSelector.selectNow();
-        else if (ms < 0L)
-            return this.nioSelector.select();
         else
             return this.nioSelector.select(ms);
     }

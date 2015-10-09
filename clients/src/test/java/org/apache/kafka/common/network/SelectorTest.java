@@ -38,12 +38,13 @@ import org.junit.Test;
  */
 public class SelectorTest {
 
-    private static final int BUFFER_SIZE = 4 * 1024;
+    protected static final int BUFFER_SIZE = 4 * 1024;
 
-    private EchoServer server;
-    private Time time;
-    private Selectable selector;
-    private ChannelBuilder channelBuilder;
+    protected EchoServer server;
+    protected Time time;
+    protected Selectable selector;
+    protected ChannelBuilder channelBuilder;
+    private Metrics metrics;
 
     @Before
     public void setup() throws Exception {
@@ -54,13 +55,15 @@ public class SelectorTest {
         this.time = new MockTime();
         this.channelBuilder = new PlaintextChannelBuilder();
         this.channelBuilder.configure(configs);
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
+        this.metrics = new Metrics();
+        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
     @After
     public void teardown() throws Exception {
         this.selector.close();
         this.server.close();
+        this.metrics.close();
     }
 
     /**
@@ -139,7 +142,7 @@ public class SelectorTest {
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         for (int i = 0; i < conns; i++)
-            selector.connect(Integer.toString(i), addr, BUFFER_SIZE, BUFFER_SIZE);
+            connect(Integer.toString(i), addr);
         // send echo requests and receive responses
         Map<String, Integer> requests = new HashMap<String, Integer>();
         Map<String, Integer> responses = new HashMap<String, Integer>();
@@ -202,7 +205,7 @@ public class SelectorTest {
         String node = "0";
         int reqs = 50;
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        connect(node, addr);
         String requestPrefix = TestUtils.randomString(bufferSize);
         sendAndReceive(node, requestPrefix, 0, reqs);
     }
@@ -260,6 +263,7 @@ public class SelectorTest {
         assertTrue("The idle connection should have been closed", selector.disconnected().contains(id));
     }
 
+    
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         selector.poll(1000L);
@@ -270,19 +274,28 @@ public class SelectorTest {
                     return asString(receive);
         }
     }
+    
+    protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
+    }
 
     /* connect and wait for the connection to complete */
     private void blockingConnect(String node) throws IOException {
-        selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        blockingConnect(node, new InetSocketAddress("localhost", server.port));
+    }
+    protected void blockingConnect(String node, InetSocketAddress serverAddr) throws IOException {
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
+            selector.poll(10000L);
+        while (!selector.isChannelReady(node))
             selector.poll(10000L);
     }
 
-    private NetworkSend createSend(String node, String s) {
+    protected NetworkSend createSend(String node, String s) {
         return new NetworkSend(node, ByteBuffer.wrap(s.getBytes()));
     }
 
-    private String asString(NetworkReceive receive) {
+    protected String asString(NetworkReceive receive) {
         return new String(Utils.toArray(receive.payload()));
     }
 

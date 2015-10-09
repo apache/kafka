@@ -12,40 +12,37 @@
   */
 package kafka.api
 
-import java.io.{FileWriter, BufferedWriter, File}
-import java.net.URL
+import java.io.{BufferedReader, FileWriter, BufferedWriter, File}
 import javax.security.auth.login.Configuration
 
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.hadoop.minikdc.MiniKdc
 import org.junit.{After, Before}
-import org.scalatest.junit.JUnitSuite
-
 
 trait SaslTestHarness extends ZooKeeperTestHarness {
-  val WorkDir = new File(System.getProperty("test.dir", "target"));
-  val KdcConf = MiniKdc.createConf();
-  val Kdc: MiniKdc = new MiniKdc(KdcConf, WorkDir);
+  val workDir = new File(System.getProperty("test.dir", "target"))
+  val kdcConf = MiniKdc.createConf()
+  val kdc = new MiniKdc(kdcConf, workDir)
 
   @Before
   override def setUp() {
-    val keytabFile: File = TestUtils.tempFile()
-    val jaasFile: File = TestUtils.tempFile()
+    val keytabFile = TestUtils.tempFile()
+    val jaasFile = TestUtils.tempFile()
 
-    val writer: BufferedWriter = new BufferedWriter(new FileWriter(jaasFile))
-
-    val path: String = Thread.currentThread().getContextClassLoader.getResource("kafka_jaas.conf").getPath
-    for(line <- io.Source.fromFile(path).getLines()) {
-      val s: String = "\\$keytab-location"
-      val replaced = line.replaceAll("\\$keytab-location",keytabFile.getAbsolutePath)
+    val writer = new BufferedWriter(new FileWriter(jaasFile))
+    val source = io.Source.fromInputStream(
+      Thread.currentThread().getContextClassLoader.getResourceAsStream("kafka_jaas.conf"), "UTF-8")
+    for (line <- source.getLines) {
+      val replaced = line.replaceAll("\\$keytab-location", keytabFile.getAbsolutePath)
       writer.write(replaced)
       writer.newLine()
     }
     writer.close()
+    source.close()
 
-    Kdc.start()
-    Kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
+    kdc.start()
+    kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
     System.setProperty("java.security.auth.login.config", jaasFile.getAbsolutePath)
     super.setUp
   }
@@ -53,7 +50,7 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     super.tearDown
-    Kdc.stop()
+    kdc.stop()
     System.clearProperty("java.security.auth.login.config")
     Configuration.setConfiguration(null)
   }

@@ -58,6 +58,7 @@ class IsrExpirationTest {
   @After
   def tearDown() {
     replicaManager.shutdown(false)
+    metrics.close()
   }
 
   /*
