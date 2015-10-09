@@ -18,9 +18,10 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 from kafkatest.utils.security_config import SecurityConfig
 
-
 import json
 import os
+import subprocess
+import time
 
 
 class VerifiableProducer(BackgroundThreadService):
@@ -46,6 +47,7 @@ class VerifiableProducer(BackgroundThreadService):
 
     def __init__(self, context, num_nodes, kafka, topic, security_protocol=None, max_messages=-1, throughput=100000, version=TRUNK):
         super(VerifiableProducer, self).__init__(context, num_nodes)
+        self.log_level = "TRACE"
 
         self.kafka = kafka
         self.topic = topic
@@ -78,6 +80,9 @@ class VerifiableProducer(BackgroundThreadService):
         cmd = self.start_cmd(node)
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
 
+
+        last_produced_time = time.time()
+        prev_msg = None
         for line in node.account.ssh_capture(cmd):
             line = line.strip()
 
@@ -91,6 +96,17 @@ class VerifiableProducer(BackgroundThreadService):
 
                     elif data["name"] == "producer_send_success":
                         self.acked_values.append(int(data["value"]))
+
+                        # Log information if there is a large gap between successively acknowledged messages
+                        t = time.time()
+                        time_delta_sec = t - last_produced_time
+                        if time_delta_sec > 2 and prev_msg is not None:
+                            self.logger.debug(
+                                "Time delta between successively acked messages is large: " +
+                                "delta_t_sec: %s, prev_message: %s, current_message: %s" % (str(time_delta_sec), str(prev_msg), str(data)))
+
+                        last_produced_time = t
+                        prev_msg = data
 
     def start_cmd(self, node):
 
@@ -116,6 +132,17 @@ class VerifiableProducer(BackgroundThreadService):
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
         return cmd
+
+    def pids(self, node):
+        try:
+            cmd = "ps ax | grep -i VerifiableProducer | grep java | grep -v grep | awk '{print $1}'"
+            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
+            return pid_arr
+        except (subprocess.CalledProcessError, ValueError) as e:
+            return []
+
+    def alive(self, node):
+        return len(self.pids(node)) > 0
 
     @property
     def acked(self):
@@ -149,7 +176,7 @@ class VerifiableProducer(BackgroundThreadService):
 
     def clean_node(self, node):
         node.account.kill_process("VerifiableProducer", clean_shutdown=False, allow_fail=False)
-        node.account.ssh("rm -rf /mnt/producer.log /mnt/verifiable_producer.properties", allow_fail=False)
+        node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
 
     def try_parse_json(self, string):
