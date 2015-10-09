@@ -101,7 +101,7 @@ public final class Coordinator implements Closeable {
                        long autoCommitIntervalMs) {
         this.client = client;
         this.time = time;
-        this.generation = -1;
+        this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
         this.consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
         this.groupId = groupId;
         this.consumerCoordinator = null;
@@ -435,6 +435,14 @@ public final class Coordinator implements Closeable {
                 log.error("Auto offset commit failed.", e);
             }
         }
+    }
+
+    /**
+     * Reset the generation/consumerId tracked by this consumer.
+     */
+    public void resetGeneration() {
+        this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
+        this.consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
     }
 
     /**
