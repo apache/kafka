@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.integration.KafkaServerTestHarness
 
 import kafka.utils.{TestUtils, Logging}
@@ -75,21 +76,21 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   @Before
   override def setUp() {
     super.setUp()
-    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getSSLBrokerListStrFromServers(servers))
+    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL))
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getSSLBrokerListStrFromServers(servers))
+    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL))
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range")
 
     for (i <- 0 until producerCount)
-      producers += TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers),
+      producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL),
                                                acks = 1,
                                                enableSSL=true,
                                                trustStoreFile=Some(trustStoreFile))
     for (i <- 0 until consumerCount)
-      consumers += TestUtils.createNewConsumer(TestUtils.getSSLBrokerListStrFromServers(servers),
+      consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL),
                                                groupId = "my-test",
                                                partitionAssignmentStrategy= "range",
                                                enableSSL=true,

@@ -20,6 +20,8 @@ import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
+import org.apache.kafka.common.security.ssl.SSLFactory;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
@@ -31,18 +33,27 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
     private LoginManager loginManager;
     private PrincipalBuilder principalBuilder;
+    private SecurityProtocol securityProtocol;
+    private SSLFactory sslFactory;
     private Mode mode;
+    private Map<String, ?> configs;
 
-    public SaslChannelBuilder(Mode mode) {
+    public SaslChannelBuilder(Mode mode, SecurityProtocol securityProtocol) {
         this.mode = mode;
+        this.securityProtocol = securityProtocol;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
+            this.configs = configs;
             this.loginManager = LoginManager.getLoginManager(mode);
-            this.loginManager.configure(configs);
+            this.loginManager.configure(this.configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
+            if (this.securityProtocol == SecurityProtocol.SSLSASL) {
+                this.sslFactory = new SSLFactory(mode);
+                this.sslFactory.configure(this.configs);
+            }
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -52,13 +63,20 @@ public class SaslChannelBuilder implements ChannelBuilder {
         KafkaChannel channel = null;
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
-            TransportLayer transportLayer = new PlaintextTransportLayer(key);
+            TransportLayer transportLayer;
+            if (this.securityProtocol == SecurityProtocol.SSLSASL) {
+                transportLayer = new SSLTransportLayer(id, key,
+                                                       sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
+                                                                                  socketChannel.socket().getPort()));
+            } else {
+                transportLayer = new PlaintextTransportLayer(key);
+            }
             Authenticator authenticator;
             if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, loginManager.subject());
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(), socketChannel.socket().getInetAddress().getHostName());
-            authenticator.configure(transportLayer, this.principalBuilder);
+            authenticator.configure(transportLayer, this.principalBuilder, this.configs);
             channel = new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);

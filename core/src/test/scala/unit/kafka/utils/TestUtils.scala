@@ -147,16 +147,8 @@ object TestUtils extends Logging {
     (0 until numConfigs).map(node => createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, enableSSL = enableSSL, trustStoreFile = trustStoreFile))
   }
 
-  def getBrokerListStrFromServers(servers: Seq[KafkaServer]): String = {
-    servers.map(s => formatAddress(s.config.hostName, s.boundPort())).mkString(",")
-  }
-
-  def getSSLBrokerListStrFromServers(servers: Seq[KafkaServer]): String = {
-    servers.map(s => formatAddress(s.config.hostName, s.boundPort(SecurityProtocol.SSL))).mkString(",")
-  }
-
-  def getSaslBrokerListStrFromServers(servers: Seq[KafkaServer]): String = {
-    servers.map(s => formatAddress(s.config.hostName, s.boundPort(SecurityProtocol.PLAINTEXTSASL))).mkString(",")
+  def getBrokerListStrFromServers(servers: Seq[KafkaServer], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
+    servers.map(s => formatAddress(s.config.hostName, s.boundPort(protocol))).mkString(",")
   }
 
   /**

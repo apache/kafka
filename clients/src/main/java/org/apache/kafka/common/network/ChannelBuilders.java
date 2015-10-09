@@ -40,7 +40,7 @@ public class ChannelBuilders {
             case PLAINTEXTSASL:
                 if (mode == null)
                     throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `PLAINTEXTSASL`");
-                channelBuilder = new SaslChannelBuilder(mode);
+                channelBuilder = new SaslChannelBuilder(mode, securityProtocol);
                 break;
             case PLAINTEXT:
             case TRACE:

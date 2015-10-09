@@ -22,6 +22,7 @@ package org.apache.kafka.common.network;
  */
 
 import java.io.IOException;
+import java.util.Map;
 import java.security.Principal;
 
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
@@ -34,7 +35,7 @@ public interface Authenticator {
      * @param TransportLayer transportLayer
      * @param PrincipalBuilder principalBuilder
      */
-    void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder);
+    void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs);
 
     /**
      * Implements any authentication mechanism. Use transportLayer to read or write tokens.

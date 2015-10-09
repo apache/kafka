@@ -18,6 +18,7 @@
 package org.apache.kafka.common.security.authenticator;
 
 import java.io.IOException;
+import java.util.Map;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -68,7 +69,7 @@ public class SaslServerAuthenticator implements Authenticator {
         saslServer = createSaslServer();
     }
 
-    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder) {
+    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
         this.transportLayer = transportLayer;
         this.principalBuilder = principalBuilder;
     }

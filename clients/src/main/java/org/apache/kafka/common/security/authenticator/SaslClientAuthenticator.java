@@ -21,6 +21,7 @@ package org.apache.kafka.common.security.authenticator;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
+import java.util.Map;
 
 import java.security.Principal;
 import java.security.PrivilegedActionException;
@@ -39,12 +40,13 @@ import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.kerberos.KerberosName;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.KafkaException;
 
 import org.slf4j.Logger;
@@ -60,6 +62,12 @@ public class SaslClientAuthenticator implements Authenticator {
     private PrincipalBuilder principalBuilder;
     private String host;
     private String node;
+    private String serverRealm;
+    private Object[] principals;
+    private Principal clientPrincipal;
+    private KerberosName clientKerberosName;
+    private KerberosName serviceKerberosName;
+    private String clientPrincipalName;
     private TransportLayer transportLayer;
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
@@ -76,25 +84,32 @@ public class SaslClientAuthenticator implements Authenticator {
         this.subject = subject;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
-        this.saslClient = createSaslClient();
     }
 
-    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder) throws KafkaException {
-        this.transportLayer = transportLayer;
-        this.principalBuilder = principalBuilder;
-        this.saslClient = createSaslClient();
+    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) throws KafkaException {
+        try {
+            this.transportLayer = transportLayer;
+            this.principalBuilder = principalBuilder;
+
+            this.principals = subject.getPrincipals().toArray();
+            // determine client principal from subject.
+            this.clientPrincipal = (Principal) principals[0];
+            this.clientKerberosName = new KerberosName(clientPrincipal.getName());
+            // assume that server and client are in the same realm (by default; unless the config
+            // "kafka.server.realm" is set).
+            if (configs.containsKey(SaslConfigs.SASL_KAFKA_SERVER_REALM))
+                this.serverRealm = (String) configs.get(SaslConfigs.SASL_KAFKA_SERVER_REALM);
+            else
+                this.serverRealm = clientKerberosName.realm();
+            this.serviceKerberosName = new KerberosName(servicePrincipal + "@" + serverRealm);
+            this.clientPrincipalName = clientKerberosName.toString();
+            this.saslClient = createSaslClient();
+        } catch (Exception e) {
+            throw new KafkaException("Failed to configure SaslClientAuthenticator", e);
+        }
     }
 
     private SaslClient createSaslClient() {
-        final Object[] principals = subject.getPrincipals().toArray();
-        // determine client principal from subject.
-        final Principal clientPrincipal = (Principal) principals[0];
-        final KerberosName clientKerberosName = new KerberosName(clientPrincipal.getName());
-        // assume that server and client are in the same realm (by default; unless the config
-        // "kafka.server.realm" is set).
-        String serverRealm = System.getProperty("kafka.server.realm", clientKerberosName.realm());
-        KerberosName serviceKerberosName = new KerberosName(servicePrincipal + "@" + serverRealm);
-        final String clientPrincipalName = clientKerberosName.toString();
         try {
             saslClient = Subject.doAs(subject, new PrivilegedExceptionAction<SaslClient>() {
                     public SaslClient run() throws SaslException {
@@ -218,51 +233,43 @@ public class SaslClientAuthenticator implements Authenticator {
             this.password = password;
         }
 
-        public void handle(Callback[] callbacks) throws
-          UnsupportedCallbackException {
+        public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
             for (Callback callback : callbacks) {
                 if (callback instanceof NameCallback) {
                     NameCallback nc = (NameCallback) callback;
                     nc.setName(nc.getDefaultName());
-                } else {
-                    if (callback instanceof PasswordCallback) {
-                        PasswordCallback pc = (PasswordCallback) callback;
-                        if (password != null) {
-                            pc.setPassword(this.password.toCharArray());
-                        } else {
-                            LOG.warn("Could not login: the client is being asked for a password, but the Kafka" +
-                                     " client code does not currently support obtaining a password from the user." +
-                                     " Make sure -Djava.security.auth.login.config property passed to JVM and " +
-                                     " the client is configured to use a ticket cache (using" +
-                                     " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
-                                     " FQDN of the Kafka broker you are trying to connect to. ");
-                        }
+                } else if (callback instanceof PasswordCallback) {
+                    PasswordCallback pc = (PasswordCallback) callback;
+                    if (password != null) {
+                        pc.setPassword(this.password.toCharArray());
                     } else {
-                        if (callback instanceof RealmCallback) {
-                            RealmCallback rc = (RealmCallback) callback;
-                            rc.setText(rc.getDefaultText());
-                        } else {
-                            if (callback instanceof AuthorizeCallback) {
-                                AuthorizeCallback ac = (AuthorizeCallback) callback;
-                                String authid = ac.getAuthenticationID();
-                                String authzid = ac.getAuthorizationID();
-
-                                if (authid.equals(authzid))
-                                    ac.setAuthorized(true);
-                                else
-                                    ac.setAuthorized(false);
-
-
-                                if (ac.isAuthorized())
-                                    ac.setAuthorizedID(authzid);
-                            } else {
-                                throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
-                            }
-                        }
+                        LOG.warn("Could not login: the client is being asked for a password, but the Kafka" +
+                                 " client code does not currently support obtaining a password from the user." +
+                                 " Make sure -Djava.security.auth.login.config property passed to JVM and " +
+                                 " the client is configured to use a ticket cache (using" +
+                                 " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
+                                 " FQDN of the Kafka broker you are trying to connect to. ");
                     }
+                } else if (callback instanceof RealmCallback) {
+                    RealmCallback rc = (RealmCallback) callback;
+                    rc.setText(rc.getDefaultText());
+                } else if (callback instanceof AuthorizeCallback) {
+                    AuthorizeCallback ac = (AuthorizeCallback) callback;
+                    String authid = ac.getAuthenticationID();
+                    String authzid = ac.getAuthorizationID();
+
+                    if (authid.equals(authzid))
+                        ac.setAuthorized(true);
+                    else
+                        ac.setAuthorized(false);
+
+
+                    if (ac.isAuthorized())
+                        ac.setAuthorizedID(authzid);
+                } else {
+                    throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
                 }
             }
         }
     }
-
 }

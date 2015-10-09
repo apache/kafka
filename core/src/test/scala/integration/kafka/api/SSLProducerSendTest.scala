@@ -30,6 +30,7 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.SerializationException
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -75,7 +76,7 @@ class SSLProducerSendTest extends KafkaServerTestHarness {
     */
   @Test
   def testSendOffset() {
-    var sslProducer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile))
+    var sslProducer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL), enableSSL=true, trustStoreFile=Some(trustStoreFile))
     var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers))
     val partition = new Integer(0)
 
@@ -156,7 +157,7 @@ class SSLProducerSendTest extends KafkaServerTestHarness {
     */
   @Test
   def testClose() {
-    var producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile))
+    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL), enableSSL=true, trustStoreFile=Some(trustStoreFile))
     try {
       // create topic
       TestUtils.createTopic(zkClient, topic, 1, 2, servers)
@@ -191,7 +192,7 @@ class SSLProducerSendTest extends KafkaServerTestHarness {
     */
   @Test
   def testSendToPartition() {
-    var producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile))
+    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL), enableSSL=true, trustStoreFile=Some(trustStoreFile))
     try {
       // create topic
       val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)

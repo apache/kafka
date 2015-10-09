@@ -24,5 +24,11 @@ public class SaslConfigs {
         + "Default will be from kafka jaas config";
     public static final String DEFAULT_KAFKA_SERVER_REALM = "";
 
+    public static final String SASL_KERBEROS_KINIT_CMD = "sasl.kerberos.kinit.cmd";
+    public static final String SASL_KERBEROS_KINIT_CMD_DOC = "Kerberos kinit command path."
+        + "Default will be /usr/bin/kinit";
+    public static final String DEFAULT_KERBEROS_KINIT_CMD = "/usr/bin/kinit";
+
+
 
 }
