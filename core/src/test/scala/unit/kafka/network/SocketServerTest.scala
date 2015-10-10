@@ -51,9 +51,9 @@ class SocketServerTest extends JUnitSuite {
   props.put("socket.request.max.bytes", "50")
   props.put("max.connections.per.ip", "5")
   props.put("connections.max.idle.ms", "60000")
-  val config: KafkaConfig = KafkaConfig.fromProps(props)
-  val metrics = new Metrics()
-  val server: SocketServer = new SocketServer(config, metrics, new SystemTime())
+  val config = KafkaConfig.fromProps(props)
+  val metrics = new Metrics
+  val server = new SocketServer(config, metrics, new SystemTime)
   server.startup()
 
   def sendRequest(socket: Socket, id: Short, request: Array[Byte]) {
@@ -82,9 +82,8 @@ class SocketServerTest extends JUnitSuite {
     channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
   }
 
-  def connect(s:SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
+  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) =
     new Socket("localhost", server.boundPort(protocol))
-  }
 
   @After
   def cleanup() {
@@ -92,10 +91,7 @@ class SocketServerTest extends JUnitSuite {
     server.shutdown()
   }
 
-  @Test
-  def simpleRequest() {
-    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    val traceSocket = connect(protocol = SecurityProtocol.TRACE)
+  private def producerRequestBytes: Array[Byte] = {
     val correlationId = -1
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
@@ -108,6 +104,14 @@ class SocketServerTest extends JUnitSuite {
     byteBuffer.rewind()
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
     byteBuffer.get(serializedBytes)
+    serializedBytes
+  }
+
+  @Test
+  def simpleRequest() {
+    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val traceSocket = connect(protocol = SecurityProtocol.TRACE)
+    val serializedBytes = producerRequestBytes
 
     // Test PLAINTEXT socket
     sendRequest(plainSocket, 0, serializedBytes)
@@ -122,7 +126,7 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def tooBigRequestIsRejected() {
-    val tooManyBytes = new Array[Byte](server.maxRequestSize + 1)
+    val tooManyBytes = new Array[Byte](server.config.socketRequestMaxBytes + 1)
     new Random().nextBytes(tooManyBytes)
     val socket = connect()
     sendRequest(socket, 0, tooManyBytes)
@@ -170,20 +174,34 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testMaxConnectionsPerIp() {
     // make the maximum allowable number of connections and then leak them
-    val conns = (0 until server.maxConnectionsPerIp).map(i => connect())
+    val conns = (0 until server.config.maxConnectionsPerIp).map(_ => connect())
     // now try one more (should fail)
     val conn = connect()
     conn.setSoTimeout(3000)
     assertEquals(-1, conn.getInputStream().read())
+    conn.close()
+
+    // it should succeed after closing one connection
+    val address = conns.head.getInetAddress
+    conns.head.close()
+    TestUtils.waitUntilTrue(() => server.connectionCount(address) < conns.length,
+      "Failed to decrement connection count after close")
+    val conn2 = connect()
+    val serializedBytes = producerRequestBytes
+    sendRequest(conn2, 0, serializedBytes)
+    val request = server.requestChannel.receiveRequest(2000)
+    assertNotNull(request)
+    conn2.close()
+    conns.tail.foreach(_.close())
   }
 
   @Test
   def testMaxConnectionsPerIPOverrides() {
     val overrideNum = 6
-    val overrides: Map[String, Int] = Map("localhost" -> overrideNum)
-    val overrideprops = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val overrides = Map("localhost" -> overrideNum)
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics()
-    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideprops), serverMetrics, new SystemTime())
+    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime())
     try {
       overrideServer.startup()
       // make the maximum allowable number of connections and then leak them
@@ -192,6 +210,8 @@ class SocketServerTest extends JUnitSuite {
       val conn = connect(overrideServer)
       conn.setSoTimeout(3000)
       assertEquals(-1, conn.getInputStream.read())
+      conn.close()
+      conns.foreach(_.close())
     } finally {
       overrideServer.shutdown()
       serverMetrics.close()
@@ -201,11 +221,11 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testSSLSocketServer(): Unit = {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
-    val overrideprops = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0, enableSSL = true, trustStoreFile = Some(trustStoreFile))
-    overrideprops.put("listeners", "SSL://localhost:0")
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0, enableSSL = true, trustStoreFile = Some(trustStoreFile))
+    overrideProps.put("listeners", "SSL://localhost:0")
 
-    val serverMetrics = new Metrics()
-    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideprops), serverMetrics, new SystemTime())
+    val serverMetrics = new Metrics
+    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)
     overrideServer.startup()
     try {
       val sslContext = SSLContext.getInstance("TLSv1.2")
@@ -230,6 +250,7 @@ class SocketServerTest extends JUnitSuite {
       sendRequest(sslSocket, 0, serializedBytes)
       processRequest(overrideServer.requestChannel)
       assertEquals(serializedBytes.toSeq, receiveResponse(sslSocket).toSeq)
+      sslSocket.close()
     } finally {
       overrideServer.shutdown()
       serverMetrics.close()
@@ -242,5 +263,7 @@ class SocketServerTest extends JUnitSuite {
     val bytes = new Array[Byte](40)
     sendRequest(socket, 0, bytes)
     assertEquals(KafkaPrincipal.ANONYMOUS, server.requestChannel.receiveRequest().session.principal)
+    socket.close()
   }
+
 }
