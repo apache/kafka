@@ -17,8 +17,14 @@
 
 package org.apache.kafka.streams.kstream;
 
+/**
+ * Represents a predicate (boolean-valued function) of two arguments.
+ *
+ * @param <K> the type of key
+ * @param <V> the type of value
+ */
 public interface Predicate<K, V> {
 
-    boolean apply(K key, V value);
+    boolean test(K key, V value);
 
 }

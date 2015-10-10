@@ -19,16 +19,17 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.util.ArrayList;
 
-public class MockProcessorDef<K, V> implements ProcessorDef {
+public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
     public final ArrayList<String> processed = new ArrayList<>();
     public final ArrayList<Long> punctuated = new ArrayList<>();
 
-    public Processor instance() {
+    @Override
+    public Processor<K, V> get() {
         return new MockProcessor();
     }
 

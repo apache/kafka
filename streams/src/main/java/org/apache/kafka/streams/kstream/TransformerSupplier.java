@@ -15,9 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.kstream;
 
-public interface ProcessorDef {
+public interface TransformerSupplier<K, V, R> {
 
-    Processor instance();
+    Transformer<K, V, R> get();
+
 }

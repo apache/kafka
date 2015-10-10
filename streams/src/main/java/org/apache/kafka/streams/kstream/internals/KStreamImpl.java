@@ -20,14 +20,16 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorDef;
-import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamWindowed;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.WindowDef;
+import org.apache.kafka.streams.kstream.WindowSupplier;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TopologyBuilder;
 
 import java.lang.reflect.Array;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,6 +45,10 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     private static final String FLATMAP_NAME = "KAFKA-FLATMAP-";
 
     private static final String FLATMAPVALUES_NAME = "KAFKA-FLATMAPVALUES-";
+
+    private static final String TRANSFORM_NAME = "KAFKA-TRANSFORM-";
+
+    private static final String TRANSFORMVALUES_NAME = "KAFKA-TRANSFORMVALUES-";
 
     private static final String PROCESSOR_NAME = "KAFKA-PROCESSOR-";
 
@@ -127,12 +133,12 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public KStreamWindowed<K, V> with(WindowDef<K, V> window) {
+    public KStreamWindowed<K, V> with(WindowSupplier<K, V> windowSupplier) {
         String name = WINDOWED_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, new KStreamWindow<>(window), this.name);
+        topology.addProcessor(name, new KStreamWindow<>(windowSupplier), this.name);
 
-        return new KStreamWindowedImpl<>(topology, name, window);
+        return new KStreamWindowedImpl<>(topology, name, windowSupplier);
     }
 
     @Override
@@ -191,11 +197,27 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> process(final ProcessorDef processorDef) {
-        String name = PROCESSOR_NAME + INDEX.getAndIncrement();
+    public <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier) {
+        String name = TRANSFORM_NAME + INDEX.getAndIncrement();
 
-        topology.addProcessor(name, processorDef, this.name);
+        topology.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
 
         return new KStreamImpl<>(topology, name);
+    }
+
+    @Override
+    public <V1> KStream<K, V1> transformValues(ValueTransformerSupplier<V, V1> valueTransformerSupplier) {
+        String name = TRANSFORMVALUES_NAME + INDEX.getAndIncrement();
+
+        topology.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
+
+        return new KStreamImpl<>(topology, name);
+    }
+
+    @Override
+    public void process(final ProcessorSupplier<K, V> processorSupplier) {
+        String name = PROCESSOR_NAME + INDEX.getAndIncrement();
+
+        topology.addProcessor(name, processorSupplier, this.name);
     }
 }

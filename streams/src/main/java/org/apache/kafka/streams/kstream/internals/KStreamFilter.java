@@ -20,9 +20,9 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamFilter<K, V> implements ProcessorDef {
+class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
 
     private final Predicate<K, V> predicate;
     private final boolean filterOut;
@@ -33,14 +33,14 @@ class KStreamFilter<K, V> implements ProcessorDef {
     }
 
     @Override
-    public Processor instance() {
+    public Processor<K, V> get() {
         return new KStreamFilterProcessor();
     }
 
     private class KStreamFilterProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
-            if (filterOut ^ predicate.apply(key, value)) {
+            if (filterOut ^ predicate.test(key, value)) {
                 context().forward(key, value);
             }
         }

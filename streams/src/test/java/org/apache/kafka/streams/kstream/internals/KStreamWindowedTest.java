@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.WindowDef;
+import org.apache.kafka.streams.kstream.WindowSupplier;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.UnlimitedWindowDef;
 import org.junit.Test;
@@ -46,11 +46,11 @@ public class KStreamWindowedTest {
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         KStream<Integer, String> stream;
-        WindowDef<Integer, String> windowDef;
+        WindowSupplier<Integer, String> windowSupplier;
 
-        windowDef = new UnlimitedWindowDef<>(windowName);
+        windowSupplier = new UnlimitedWindowDef<>(windowName);
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
-        stream.with(windowDef);
+        stream.with(windowSupplier);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
         Window<Integer, String> window = (Window<Integer, String>) driver.getStateStore(windowName);
