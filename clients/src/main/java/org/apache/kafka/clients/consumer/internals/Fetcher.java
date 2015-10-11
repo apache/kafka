@@ -302,11 +302,6 @@ public class Fetcher<K, V> {
             throwIfOffsetOutOfRange();
 
             for (PartitionRecords<K, V> part : this.records) {
-                if (!subscriptions.isFetchable(part.partition)) {
-                    log.debug("Ignoring fetched records for {} since it is no longer fetchable", part.partition);
-                    continue;
-                }
-
                 Long consumed = subscriptions.consumed(part.partition);
                 if (consumed != null && part.fetchOffset == consumed) {
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
@@ -446,7 +441,11 @@ public class Fetcher<K, V> {
                 TopicPartition tp = entry.getKey();
                 FetchResponse.PartitionData partition = entry.getValue();
                 if (!subscriptions.assignedPartitions().contains(tp)) {
+                    // this can happen when a rebalance happened while fetch is still in-flight
                     log.debug("Ignoring fetched data for partition {} which is no longer assigned.", tp);
+                } else if (!subscriptions.isFetchable(tp)) {
+                    // this can happen when user called pause while fetch is still in-flight
+                    log.debug("Ignoring fetched records for partition {} since it is no longer fetchable", tp);
                 } else if (partition.errorCode == Errors.NONE.code()) {
                     long fetchOffset = request.fetchData().get(tp).offset;
 
