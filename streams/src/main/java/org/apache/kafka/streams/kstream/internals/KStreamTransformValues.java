@@ -17,52 +17,53 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.WindowSupplier;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamWindow<K, V> implements ProcessorSupplier<K, V> {
+public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
 
-    private final WindowSupplier<K, V> windowSupplier;
+    private final ValueTransformerSupplier<V, R> valueTransformerSupplier;
 
-    KStreamWindow(WindowSupplier<K, V> windowSupplier) {
-        this.windowSupplier = windowSupplier;
-    }
-
-    public WindowSupplier<K, V> window() {
-        return windowSupplier;
+    public KStreamTransformValues(ValueTransformerSupplier valueTransformerSupplier) {
+        this.valueTransformerSupplier = valueTransformerSupplier;
     }
 
     @Override
     public Processor<K, V> get() {
-        return new KStreamWindowProcessor();
+        return new KStreamTransformValuesProcessor(valueTransformerSupplier.get());
     }
 
-    private class KStreamWindowProcessor extends AbstractProcessor<K, V> {
+    public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
-        private Window<K, V> window;
+        private final ValueTransformer valueTransformer;
+        private ProcessorContext context;
+
+        public KStreamTransformValuesProcessor(ValueTransformer<V, R> valueTransformer) {
+            this.valueTransformer = valueTransformer;
+        }
 
         @Override
         public void init(ProcessorContext context) {
-            super.init(context);
-            this.window = windowSupplier.get();
-            this.window.init(context);
+            valueTransformer.init(context);
+            this.context = context;
         }
 
         @Override
         public void process(K key, V value) {
-            synchronized (this) {
-                window.put(key, value, context().timestamp());
-                context().forward(key, value);
-            }
+            context.forward(key, valueTransformer.transform(value));
+        }
+
+        @Override
+        public void punctuate(long timestamp) {
+            valueTransformer.punctuate(timestamp);
         }
 
         @Override
         public void close() {
-            window.close();
+            valueTransformer.close();
         }
     }
 }

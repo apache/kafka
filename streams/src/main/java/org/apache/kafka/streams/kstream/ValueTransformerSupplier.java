@@ -15,23 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+public interface ValueTransformerSupplier<V, R> {
 
-class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
+    ValueTransformer<V, R> get();
 
-    @Override
-    public Processor<K, V> get() {
-        return new KStreamPassThroughProcessor<K, V>();
-    }
-
-    public class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
-        @Override
-        public void process(K key, V value) {
-            context().forward(key, value);
-        }
-    }
 }

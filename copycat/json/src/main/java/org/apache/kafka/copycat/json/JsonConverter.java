@@ -217,6 +217,15 @@ public class JsonConverter implements Converter {
             }
         });
 
+        TO_COPYCAT_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof Integer))
+                    throw new DataException("Invalid type for Time, underlying representation should be int32 but was " + value.getClass());
+                return Time.toLogical(schema, (int) value);
+            }
+        });
+
         TO_COPYCAT_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
@@ -244,6 +253,15 @@ public class JsonConverter implements Converter {
                 if (!(value instanceof java.util.Date))
                     throw new DataException("Invalid type for Date, expected Date but was " + value.getClass());
                 return Date.fromLogical(schema, (java.util.Date) value);
+            }
+        });
+
+        TO_JSON_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof java.util.Date))
+                    throw new DataException("Invalid type for Time, expected Date but was " + value.getClass());
+                return Time.fromLogical(schema, (java.util.Date) value);
             }
         });
 

@@ -18,56 +18,76 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValue;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamMapTest {
+public class KStreamTransformTest {
 
     private String topicName = "topic";
 
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
+    private IntegerDeserializer valDeserializer = new IntegerDeserializer();
 
     @Test
-    public void testMap() {
+    public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        KeyValueMapper<Integer, String, KeyValue<String, Integer>> mapper =
-            new KeyValueMapper<Integer, String, KeyValue<String, Integer>>() {
-                @Override
-                public KeyValue<String, Integer> apply(Integer key, String value) {
-                    return KeyValue.pair(value, key);
+        TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>> transformerSupplier =
+            new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
+                public Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
+                    return new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+
+                        private int total = 0;
+
+                        @Override
+                        public void init(ProcessorContext context) {
+                        }
+
+                        @Override
+                        public KeyValue<Integer, Integer> transform(Integer key, Integer value) {
+                            total += value;
+                            return KeyValue.pair(key * 2, total);
+                        }
+
+                        @Override
+                        public void punctuate(long timestamp) {
+                        }
+
+                        @Override
+                        public void close() {
+                        }
+                    };
                 }
             };
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = {1, 10, 100, 1000};
 
-        KStream<Integer, String> stream;
-        MockProcessorSupplier<String, Integer> processor;
-
-        processor = new MockProcessorSupplier<>();
+        KStream<Integer, Integer> stream;
+        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
-        stream.map(mapper).process(processor);
+        stream.transform(transformerSupplier).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+            driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
         }
 
         assertEquals(4, processor.processed.size());
 
-        String[] expected = new String[]{"V0:0", "V1:1", "V2:2", "V3:3"};
+        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
         }
     }
+
 }

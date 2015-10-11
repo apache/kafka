@@ -418,9 +418,7 @@ public class SSLTransportLayerTest {
         boolean closed = false;
         for (int i = 0; i < 30; i++) {
             selector.poll(1000L);
-            try {
-                selector.channelForId(node);
-            } catch (IllegalStateException e) {
+            if (selector.channel(node) == null) {
                 closed = true;
                 break;
             }
@@ -581,7 +579,7 @@ public class SSLTransportLayerTest {
                     newChannels.clear();
                     while (true) {
                         NetworkSend send = inflightSends.peek();
-                        if (send != null && !selector.channelForId(send.destination()).hasSend()) {
+                        if (send != null && !selector.channel(send.destination()).hasSend()) {
                             send = inflightSends.poll();
                             selector.send(send);
                         } else
@@ -590,7 +588,7 @@ public class SSLTransportLayerTest {
                     List<NetworkReceive> completedReceives = selector.completedReceives();
                     for (NetworkReceive rcv : completedReceives) {
                         NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
-                        if (!selector.channelForId(send.destination()).hasSend())
+                        if (!selector.channel(send.destination()).hasSend())
                             selector.send(send);
                         else
                             inflightSends.add(send);

@@ -37,7 +37,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
 
-public class SlidingWindowDef<K, V> implements WindowDef<K, V> {
+public class SlidingWindowSupplier<K, V> implements WindowSupplier<K, V> {
     private final String name;
     private final long duration;
     private final int maxCount;
@@ -46,7 +46,7 @@ public class SlidingWindowDef<K, V> implements WindowDef<K, V> {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
-    public SlidingWindowDef(
+    public SlidingWindowSupplier(
             String name,
             long duration,
             int maxCount,
@@ -69,7 +69,7 @@ public class SlidingWindowDef<K, V> implements WindowDef<K, V> {
     }
 
     @Override
-    public Window<K, V> instance() {
+    public Window<K, V> get() {
         return new SlidingWindow();
     }
 

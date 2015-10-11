@@ -159,7 +159,7 @@ public class StreamThread extends Thread {
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
-    
+
     private Consumer<byte[], byte[]> createRestoreConsumer() {
         log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
         return new KafkaConsumer<>(config.getConsumerConfigs(),
@@ -240,9 +240,11 @@ public class StreamThread extends Thread {
                 // try to fetch some records if necessary
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
 
-                for (StreamTask task : tasks.values()) {
-                    for (TopicPartition partition : task.partitions()) {
-                        task.addRecords(partition, records.records(partition));
+                if (!records.isEmpty()) {
+                    for (StreamTask task : tasks.values()) {
+                        for (TopicPartition partition : task.partitions()) {
+                            task.addRecords(partition, records.records(partition));
+                        }
                     }
                 }
 

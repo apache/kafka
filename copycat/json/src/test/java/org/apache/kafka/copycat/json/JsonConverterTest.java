@@ -29,6 +29,7 @@ import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.data.Struct;
+import org.apache.kafka.copycat.data.Time;
 import org.apache.kafka.copycat.data.Timestamp;
 import org.apache.kafka.copycat.errors.DataException;
 import org.junit.Before;
@@ -223,6 +224,20 @@ public class JsonConverterTest {
         calendar.add(Calendar.DATE, 10000);
         java.util.Date reference = calendar.getTime();
         String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.copycat.data.Date\", \"version\": 1 }, \"payload\": 10000 }";
+        SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, msg.getBytes());
+        java.util.Date converted = (java.util.Date) schemaAndValue.value();
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, converted);
+    }
+
+    @Test
+    public void timeToCopycat() {
+        Schema schema = Time.SCHEMA;
+        GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+        calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
+        calendar.add(Calendar.MILLISECOND, 14400000);
+        java.util.Date reference = calendar.getTime();
+        String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.copycat.data.Time\", \"version\": 1 }, \"payload\": 14400000 }";
         SchemaAndValue schemaAndValue = converter.toCopycatData(TOPIC, msg.getBytes());
         java.util.Date converted = (java.util.Date) schemaAndValue.value();
         assertEquals(schema, schemaAndValue.schema());
@@ -452,6 +467,22 @@ public class JsonConverterTest {
         JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
         assertTrue(payload.isInt());
         assertEquals(10000, payload.intValue());
+    }
+
+    @Test
+    public void timeToJson() throws IOException {
+        GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
+        calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
+        calendar.add(Calendar.MILLISECOND, 14400000);
+        java.util.Date date = calendar.getTime();
+
+        JsonNode converted = parse(converter.fromCopycatData(TOPIC, Time.SCHEMA, date));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"int32\", \"optional\": false, \"name\": \"org.apache.kafka.copycat.data.Time\", \"version\": 1 }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
+        assertTrue(payload.isInt());
+        assertEquals(14400000, payload.longValue());
     }
 
     @Test

@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.UnlimitedWindowDef;
 import org.junit.Test;
 
@@ -90,10 +90,10 @@ public class KStreamJoinTest {
         KStream<Integer, String> stream2;
         KStreamWindowed<Integer, String> windowed1;
         KStreamWindowed<Integer, String> windowed2;
-        MockProcessorDef<Integer, String> processor;
+        MockProcessorSupplier<Integer, String> processor;
         String[] expected;
 
-        processor = new MockProcessorDef<>();
+        processor = new MockProcessorSupplier<>();
         stream1 = builder.from(keyDeserializer, valDeserializer, topic1);
         stream2 = builder.from(keyDeserializer, valDeserializer, topic2);
         windowed1 = stream1.with(new UnlimitedWindowDef<Integer, String>("window1"));

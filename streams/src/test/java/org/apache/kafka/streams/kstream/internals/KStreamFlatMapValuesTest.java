@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockProcessorDef;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -55,9 +55,9 @@ public class KStreamFlatMapValuesTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         KStream<Integer, String> stream;
-        MockProcessorDef<Integer, String> processor;
+        MockProcessorSupplier<Integer, String> processor;
 
-        processor = new MockProcessorDef<>();
+        processor = new MockProcessorSupplier<>();
         stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.flatMapValues(mapper).process(processor);
 
