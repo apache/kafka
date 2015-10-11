@@ -239,8 +239,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   val serverChannel = openServerSocket(endPoint.host, endPoint.port)
 
   this.synchronized {
-    processors.zipWithIndex.foreach { case (processor, i) =>
-      Utils.newThread("kafka-network-thread-%d-%s-%d".format(brokerId, endPoint.protocolType.toString, i), processor, false).start()
+    processors.foreach { processor =>
+      Utils.newThread("kafka-network-thread-%d-%s-%d".format(brokerId, endPoint.protocolType.toString, processor.id), processor, false).start()
     }
   }
 
