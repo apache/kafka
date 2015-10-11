@@ -41,7 +41,7 @@ class NewShinyConsumer(topic: String, consumerProps: Properties, val timeoutMs: 
   var recordIter = consumer.poll(0).iterator
 
   override def receive(): BaseConsumerRecord = {
-    while (!recordIter.hasNext) {
+    if (!recordIter.hasNext) {
       recordIter = consumer.poll(timeoutMs).iterator
       if (!recordIter.hasNext)
         throw new ConsumerTimeoutException

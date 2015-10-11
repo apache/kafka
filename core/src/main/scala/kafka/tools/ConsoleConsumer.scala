@@ -102,7 +102,7 @@ object ConsoleConsumer extends Logging {
       } catch {
         case e: Throwable => {
           error("Error processing message, terminating consumer process: ", e)
-          // Consumer will be stopped in shutdown hook
+          // Consumer will be closed
           return
         }
       }
@@ -113,7 +113,7 @@ object ConsoleConsumer extends Logging {
           if (skipMessageOnError) {
             error("Error processing message, skipping this message: ", e)
           } else {
-            // Consumer will be stopped in shutdown hook
+            // Consumer will be closed
             throw e
           }
       }
