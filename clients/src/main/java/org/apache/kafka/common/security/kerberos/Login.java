@@ -18,11 +18,6 @@
 
 package org.apache.kafka.common.security.kerberos;
 
-/**
- * This class is responsible for refreshing Kerberos credentials for
- * logins for both Kafka client and server.
- */
-
 import javax.security.auth.kerberos.KerberosPrincipal;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
@@ -38,6 +33,7 @@ import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.SystemTime;
 
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,40 +44,44 @@ import java.util.Date;
 import java.util.Random;
 import java.util.Set;
 
+/**
+ * This class is responsible for refreshing Kerberos credentials for
+ * logins for both Kafka client and server.
+ */
 public class Login {
     private static final Logger log = LoggerFactory.getLogger(Login.class);
 
     // LoginThread will sleep until 80% of time from last refresh to
     // ticket's expiry has been reached, at which time it will wake
     // and try to renew the ticket.
-    private static final float TICKET_RENEW_WINDOW = 0.80f;
+    private static final float TICKET_RENEW_WINDOW_FACTOR = 0.80f;
 
     /**
      * Percentage of random jitter added to the renewal time
      */
     private static final float TICKET_RENEW_JITTER = 0.05f;
 
-    // Regardless of TICKET_RENEW_WINDOW setting above and the ticket expiry time,
+    // Regardless of TICKET_RENEW_WINDOW_FACTOR setting above and the ticket expiry time,
     // thread will not sleep between refresh attempts any less than 1 minute (60*1000 milliseconds = 1 minute).
     // Change the '1' to e.g. 5, to change this to 5 minutes.
     private static final long MIN_TIME_BEFORE_RELOGIN = 1 * 60 * 1000L;
 
+    private static final Random RNG = new Random();
+
     private volatile Subject subject = null;
-    private Thread t = null;
-    private boolean isKrbTicket = false;
-    private boolean isUsingTicketCache = false;
 
-    /** Random number generator */
-    private static Random rng = new Random();
+    private final Thread t;
+    private final boolean isKrbTicket;
+    private final boolean isUsingTicketCache;
 
-    private LoginContext login = null;
-    private String loginContextName = null;
-    private String principal = null;
-    private Configuration jaasConfig = null;
-    private Time time = new SystemTime();
+    private final String loginContextName;
+    private final String principal;
+    private final Time time = new SystemTime();
+    private final CallbackHandler callbackHandler = new ClientCallbackHandler();
+
+    private LoginContext login;
     // Initialize 'lastLogin' to do a login at first time
     private long lastLogin = time.currentElapsedTime() - MIN_TIME_BEFORE_RELOGIN;
-    public CallbackHandler callbackHandler = new ClientCallbackHandler(null);
 
     /**
      * Login constructor. The constructor starts the thread used
@@ -97,21 +97,28 @@ public class Login {
         login = login(loginContextName);
         subject = login.getSubject();
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
+
         AppConfigurationEntry[] entries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
-        for (AppConfigurationEntry entry: entries) {
+        if (entries.length == 0) {
+            isUsingTicketCache = false;
+            principal = null;
+        } else {
+            AppConfigurationEntry entry = entries[0];
             // there will only be a single entry, so this for() loop will only be iterated through once.
             if (entry.getOptions().get("useTicketCache") != null) {
                 String val = (String) entry.getOptions().get("useTicketCache");
-                if (val.equals("true"))
-                    isUsingTicketCache = true;
-            }
+                isUsingTicketCache = val.equals("true");
+            } else
+                isUsingTicketCache = false;
             if (entry.getOptions().get("principal") != null)
                 principal = (String) entry.getOptions().get("principal");
-            break;
+            else
+                principal = null;
         }
 
         log.debug("checking if its isKrbTicket");
         if (!isKrbTicket) {
+            t = null;
             // if no TGT, do not bother with ticket management.
             return;
         }
@@ -120,7 +127,7 @@ public class Login {
         // TGT's existing expiry date and the configured MIN_TIME_BEFORE_RELOGIN. For testing and development,
         // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running :
         //  "modprinc -maxlife 3mins <principal>" in kadmin.
-        t = new Thread(new Runnable() {
+        t = Utils.newThread("kafka-kerberos-refresh-thread", new Runnable() {
             public void run() {
                 log.info("TGT refresh thread started.");
                 while (true) {  // renewal thread's main loop. if it exits from here, thread will exit.
@@ -136,10 +143,10 @@ public class Login {
                         nextRefresh = getRefreshTime(tgt);
                         long expiry = tgt.getEndTime().getTime();
                         Date expiryDate = new Date(expiry);
-                        if (isUsingTicketCache && (tgt.getEndTime().equals(tgt.getRenewTill()))) {
+                        if (isUsingTicketCache && tgt.getRenewTill() != null && tgt.getRenewTill().getTime() >= expiry) {
                             log.error("The TGT cannot be renewed beyond the next expiry date: " + expiryDate + "." +
                                     "This process will not be able to authenticate new SASL connections after that " +
-                                    "time (for example, it will not be authenticate a new connection with a Kafka " +
+                                    "time (for example, it will not be able to authenticate a new connection with a Kafka " +
                                     "Broker).  Ask your system administrator to either increase the " +
                                     "'renew until' time by doing : 'modprinc -maxrenewlife " + principal + "' within " +
                                     "kadmin, or instead, to generate a keytab for " + principal + ". Because the TGT's " +
@@ -159,8 +166,8 @@ public class Login {
                             if (nextRefresh < (now + MIN_TIME_BEFORE_RELOGIN)) {
                                 // next scheduled refresh is sooner than (now + MIN_TIME_BEFORE_LOGIN).
                                 Date until = new Date(nextRefresh);
-                                Date newuntil = new Date(now + MIN_TIME_BEFORE_RELOGIN);
-                                log.warn("TGT refresh thread time adjusted from : " + until + " to : " + newuntil + " since "
+                                Date newUntil = new Date(now + MIN_TIME_BEFORE_RELOGIN);
+                                log.warn("TGT refresh thread time adjusted from : " + until + " to : " + newUntil + " since "
                                         + "the former is sooner than the minimum refresh interval ("
                                         + MIN_TIME_BEFORE_RELOGIN / 1000 + " seconds) from now.");
                             }
@@ -181,7 +188,7 @@ public class Login {
                             Thread.sleep(nextRefresh - now);
                         } catch (InterruptedException ie) {
                             log.warn("TGT renewal thread has been interrupted and will exit.");
-                            break;
+                            return;
                         }
                     } else {
                         log.error("nextRefresh:" + nextRefreshDate + " is in the past: exiting refresh thread. Check"
@@ -243,12 +250,11 @@ public class Login {
                         }
                     } catch (LoginException le) {
                         log.error("Failed to refresh TGT: refresh thread exiting now.", le);
-                        break;
+                        return;
                     }
                 }
             }
-        });
-        t.setDaemon(true);
+        }, false);
     }
 
     public void startThreadIfNeeded() {
@@ -291,9 +297,8 @@ public class Login {
         }
 
         File configFile = new File(System.getProperty("java.security.auth.login.config"));
-        Configuration loginConf = null;
         try {
-            loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configFile.toURI()));
+            Configuration loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configFile.toURI()));
             Configuration.setConfiguration(loginConf);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
@@ -311,7 +316,7 @@ public class Login {
         log.info("TGT valid starting at:        " + tgt.getStartTime().toString());
         log.info("TGT expires:                  " + tgt.getEndTime().toString());
         long proposedRefresh = start + (long) ((expires - start) *
-                (TICKET_RENEW_WINDOW + (TICKET_RENEW_JITTER * rng.nextDouble())));
+                (TICKET_RENEW_WINDOW_FACTOR + (TICKET_RENEW_JITTER * RNG.nextDouble())));
 
         if (proposedRefresh > expires)
             // proposedRefresh is too far in the future: it's after ticket expires: simply return now.
@@ -322,7 +327,7 @@ public class Login {
 
     private synchronized KerberosTicket getTGT() {
         Set<KerberosTicket> tickets = subject.getPrivateCredentials(KerberosTicket.class);
-        for (KerberosTicket ticket: tickets) {
+        for (KerberosTicket ticket : tickets) {
             KerberosPrincipal server = ticket.getServer();
             if (server.getName().equals("krbtgt/" + server.getRealm() + "@" + server.getRealm())) {
                 log.debug("Found tgt " + ticket + ".");
@@ -334,47 +339,15 @@ public class Login {
 
     private boolean hasSufficientTimeElapsed() {
         long now = time.currentElapsedTime();
-        if (now - getLastLogin() < MIN_TIME_BEFORE_RELOGIN) {
+        if (now - lastLogin < MIN_TIME_BEFORE_RELOGIN) {
             log.warn("Not attempting to re-login since the last re-login was " +
                     "attempted less than " + (MIN_TIME_BEFORE_RELOGIN / 1000) + " seconds" +
                     " before.");
             return false;
         }
         // register most recent relogin attempt
-        setLastLogin(now);
+        lastLogin = now;
         return true;
-    }
-
-    /**
-     * Returns login object
-     * @return login
-     */
-    private LoginContext getLogin() {
-        return login;
-    }
-
-    /**
-     * Set the login object
-     * @param login
-     */
-    private void setLogin(LoginContext login) {
-        this.login = login;
-    }
-
-    /**
-     * Set the last login time.
-     * @param time the number of milliseconds since the beginning of time
-     */
-    private void setLastLogin(long time) {
-        lastLogin = time;
-    }
-
-    /**
-     * Get the time of the last login.
-     * @return the number of milliseconds since the beginning of time.
-     */
-    private long getLastLogin() {
-        return lastLogin;
     }
 
     /**
@@ -386,8 +359,7 @@ public class Login {
         if (!isKrbTicket) {
             return;
         }
-        LoginContext login = getLogin();
-        if (login  == null) {
+        if (login == null) {
             throw new LoginException("login must be done first");
         }
         if (!hasSufficientTimeElapsed()) {
@@ -404,7 +376,6 @@ public class Login {
             login = new LoginContext(loginContextName, subject());
             log.info("Initiating re-login for " + principal);
             login.login();
-            setLogin(login);
         }
     }
 }

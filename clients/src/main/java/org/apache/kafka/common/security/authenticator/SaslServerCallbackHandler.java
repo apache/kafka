@@ -33,7 +33,6 @@ import javax.security.sasl.RealmCallback;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.JaasUtils;
 
-
 public class SaslServerCallbackHandler implements CallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerCallbackHandler.class);
 
@@ -72,9 +71,9 @@ public class SaslServerCallbackHandler implements CallbackHandler {
 
         KerberosName kerberosName = new KerberosName(authenticationID);
         try {
-            StringBuilder userNameBuilder = new StringBuilder(kerberosName.shortName());
-            LOG.info("Setting authorizedID: " + userNameBuilder);
-            ac.setAuthorizedID(userNameBuilder.toString());
+            String userName = kerberosName.shortName();
+            LOG.info("Setting authorizedID: " + userName);
+            ac.setAuthorizedID(userName);
         } catch (IOException e) {
             LOG.error("Failed to set name based on Kerberos authentication rules.");
         }

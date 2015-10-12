@@ -31,9 +31,11 @@ import org.apache.kafka.common.KafkaException;
 public interface Authenticator {
 
     /**
-     * Configures Authenticator using principalBuilder and transportLayer.
-     * @param transportLayer
-     * @param principalBuilder
+     * Configures Authenticator using the provided parameters.
+     *
+     * @param transportLayer The transport layer used to read or write tokens
+     * @param principalBuilder The builder used to construct `Principal`
+     * @param configs Additional configuration parameters as key/value pairs
      */
     void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs);
 
