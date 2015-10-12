@@ -146,6 +146,10 @@ public class KafkaConfigStorage {
     // Connector and task configs: name or id -> config map
     private Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
     private Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+    // Offsets for most recently applied root and connector offsets, which are included in snapshots and can be used
+    // to efficiently ensure different worker nodes are working with the same set of configs
+    private long rootOffset;
+    private long connectorOffset;
 
     private Map<ConnectorTaskId, Map<String, String>> deferredTaskUpdates = new HashMap<>();
 
@@ -156,6 +160,9 @@ public class KafkaConfigStorage {
         this.converter = converter;
         this.connectorConfigCallback = connectorConfigCallback;
         this.tasksConfigCallback = tasksConfigCallback;
+
+        rootOffset = -1;
+        connectorOffset = -1;
     }
 
     public void configure(Map<String, ?> configs) {
@@ -201,6 +208,8 @@ public class KafkaConfigStorage {
             // Doing a shallow copy of the data is safe here because the complex nested data that is copied should all be
             // immutable configs
             return new ClusterConfigState(
+                    rootOffset,
+                    connectorOffset,
                     new HashMap<>(rootConfig),
                     new HashMap<>(connectorConfigs),
                     new HashMap<>(taskConfigs)
@@ -365,6 +374,7 @@ public class KafkaConfigStorage {
                         return;
                     }
                     rootConfig = (Map<String, Integer>) newRootConfig;
+                    rootOffset = record.offset();
                     updatedTasks = new ArrayList<>(deferredTaskUpdates.keySet());
                     deferredTaskUpdates.clear();
                 }
@@ -385,6 +395,7 @@ public class KafkaConfigStorage {
                         return;
                     }
                     connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
+                    connectorOffset = record.offset();
                 }
                 if (!starting)
                     connectorConfigCallback.onCompletion(null, connectorName);

@@ -120,6 +120,8 @@ public class KafkaConfigStorageTest {
     private Capture<Map<String, Object>> capturedConsumerProps = EasyMock.newCapture();
     private Capture<Callback<ConsumerRecord<String, byte[]>>> capturedConsumedCallback = EasyMock.newCapture();
 
+    private long logOffset = 0;
+
     @Before
     public void setUp() {
         configStorage = PowerMock.createPartialMock(KafkaConfigStorage.class, new String[]{"createKafkaBasedLog"},
@@ -173,18 +175,24 @@ public class KafkaConfigStorageTest {
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(-1, configState.rootOffset());
+        assertEquals(-1, configState.connectorOffset());
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
         // Writing should block until it is written and read back from Kafka
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
         configState = configStorage.snapshot();
+        assertEquals(-1, configState.rootOffset());
+        assertEquals(0, configState.connectorOffset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
         // Second should also block and all configs should still be available
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1));
         configState = configStorage.snapshot();
+        assertEquals(-1, configState.rootOffset());
+        assertEquals(1, configState.connectorOffset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(1), configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
@@ -234,6 +242,8 @@ public class KafkaConfigStorageTest {
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(-1, configState.rootOffset());
+        assertEquals(-1, configState.connectorOffset());
         assertNull(configState.taskConfig(TASK_IDS.get(0)));
         assertNull(configState.taskConfig(TASK_IDS.get(1)));
 
@@ -246,6 +256,8 @@ public class KafkaConfigStorageTest {
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
+        assertEquals(2, configState.rootOffset());
+        assertEquals(-1, configState.connectorOffset());
         String connectorName = CONNECTOR_IDS.get(0);
         assertEquals(Arrays.asList(connectorName), new ArrayList<>(configState.connectors()));
         assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(connectorName));
@@ -281,6 +293,7 @@ public class KafkaConfigStorageTest {
         deserialized.put(CONFIGS_SERIALIZED.get(4), ROOT_CONFIG_STRUCT_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(5), CONNECTOR_CONFIG_STRUCTS.get(2));
         deserialized.put(CONFIGS_SERIALIZED.get(6), TASK_CONFIG_STRUCTS.get(1));
+        logOffset = 7;
         expectStart(existingRecords, deserialized);
 
         // Shouldn't see any callbacks since this is during startup
@@ -294,6 +307,8 @@ public class KafkaConfigStorageTest {
 
         // Should see a single connector and its config should be the last one seen anywhere in the log
         ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(4, configState.rootOffset());
+        assertEquals(5, configState.connectorOffset());
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // CONNECTOR_CONFIG_STRUCTS[2] -> SAMPLE_CONFIGS[2]
         assertEquals(SAMPLE_CONFIGS.get(2), configState.connectorConfig(CONNECTOR_IDS.get(0)));
@@ -327,6 +342,7 @@ public class KafkaConfigStorageTest {
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(4), ROOT_CONFIG_STRUCT_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(5), TASK_CONFIG_STRUCTS.get(1));
+        logOffset = 6;
         expectStart(existingRecords, deserialized);
 
         // Two failed attempts to write new task configs
@@ -360,6 +376,8 @@ public class KafkaConfigStorageTest {
         configStorage.start();
         // After reading the log, it should have been in an inconsistent state: we always apply the root updates to
         ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(4, configState.rootOffset());
+        assertEquals(0, configState.connectorOffset());
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // Despite missing data, should still see 2 tasks
         assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(CONNECTOR_IDS.get(0)));
@@ -389,6 +407,10 @@ public class KafkaConfigStorageTest {
         configStorage.putTaskConfigs(Collections.singletonMap(TASK_IDS.get(0), SAMPLE_CONFIGS.get(0)));
         // Validate updated config
         configState = configStorage.snapshot();
+        // This is only two more ahead of the last one because multiple calls fail, and so their configs are not written
+        // to the topic. Only the last call with 1 task config + 1 root config actually gets written.
+        assertEquals(7, configState.rootOffset());
+        assertEquals(0, configState.connectorOffset());
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         assertEquals(Arrays.asList(TASK_IDS.get(0)), configState.tasks(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
@@ -458,7 +480,7 @@ public class KafkaConfigStorageTest {
                     public Future<Void> answer() throws Throwable {
                         TestFuture<Void> future = new TestFuture<Void>();
                         for (Map.Entry<String, byte[]> entry : serializedConfigs.entrySet())
-                            capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 0, entry.getKey(), entry.getValue()));
+                            capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, logOffset++, entry.getKey(), entry.getValue()));
                         future.resolveOnGet((Void) null);
                         return future;
                     }

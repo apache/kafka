@@ -221,7 +221,7 @@ public class DistributedHerderTest {
             connectorConfigs.put(connName, connectorProps.get(connName));
         }
         EasyMock.expect(configStorage.snapshot())
-                .andReturn(new ClusterConfigState(rootConfig, connectorConfigs, Collections.EMPTY_MAP));
+                .andReturn(new ClusterConfigState(1, 2, rootConfig, connectorConfigs, Collections.EMPTY_MAP));
 
         // Restore never uses a callback
         for (String connectorName : connectorNames)

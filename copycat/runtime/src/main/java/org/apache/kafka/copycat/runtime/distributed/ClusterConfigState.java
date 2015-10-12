@@ -28,16 +28,37 @@ import java.util.Map;
  * An immutable snapshot of the configuration state of connectors and tasks in a Copycat cluster.
  */
 public class ClusterConfigState {
-    private Map<String, Integer> rootConfig;
-    private Map<String, Map<String, String>> connectorConfigs;
-    private Map<ConnectorTaskId, Map<String, String>> taskConfigs;
+    private final long rootOffset;
+    private final long connectorOffset;
+    private final Map<String, Integer> rootConfig;
+    private final Map<String, Map<String, String>> connectorConfigs;
+    private final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
 
-    public ClusterConfigState(Map<String, Integer> rootConfig,
+    public ClusterConfigState(long rootOffset, long connectorOffset,
+                              Map<String, Integer> rootConfig,
                               Map<String, Map<String, String>> connectorConfigs,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs) {
+        this.rootOffset = rootOffset;
+        this.connectorOffset = connectorOffset;
         this.rootConfig = rootConfig;
         this.connectorConfigs = connectorConfigs;
         this.taskConfigs = taskConfigs;
+    }
+
+    /**
+     * Get the offset of the root configuration included in this cluster config state.
+     * @return the root offset
+     */
+    public long rootOffset() {
+        return rootOffset;
+    }
+
+    /**
+     * Get the offset of the most recent connector configuration included in this cluster config state.
+     * @return the most recent connector config offset
+     */
+    public long connectorOffset() {
+        return connectorOffset;
     }
 
     /**
