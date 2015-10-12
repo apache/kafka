@@ -649,11 +649,12 @@ public class CoordinatorTest {
 
     private Struct joinGroupLeaderResponse(int generationId, String memberId,
                                            Map<String, List<String>> subscription, short error) {
+        GroupProtocol.GenericType<ConsumerProtocol.Subscription> schema = new ConsumerProtocol().metadataSchema();
         Map<String, ByteBuffer> metadata = new HashMap<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : subscription.entrySet()) {
-            Struct struct = new ConsumerProtocol.Subscription(subscriptionEntry.getValue()).toStruct();
-            ByteBuffer buf = ByteBuffer.allocate(struct.sizeOf());
-            struct.writeTo(buf);
+            ConsumerProtocol.Subscription memberSubscription = new ConsumerProtocol.Subscription(subscriptionEntry.getValue());
+            ByteBuffer buf = ByteBuffer.allocate(schema.sizeOf(memberSubscription));
+            schema.write(buf, memberSubscription);
             buf.flip();
             metadata.put(subscriptionEntry.getKey(), buf);
         }
@@ -666,9 +667,10 @@ public class CoordinatorTest {
     }
 
     private Struct syncGroupResponse(List<TopicPartition> partitions, short error) {
-        Struct assignment = new ConsumerProtocol.Assignment(partitions).toStruct();
-        ByteBuffer buf = ByteBuffer.allocate(assignment.sizeOf());
-        assignment.writeTo(buf);
+        GroupProtocol.GenericType<ConsumerProtocol.Assignment> schema = new ConsumerProtocol().assignmentSchema();
+        ConsumerProtocol.Assignment assignment = new ConsumerProtocol.Assignment(partitions);
+        ByteBuffer buf = ByteBuffer.allocate(schema.sizeOf(assignment));
+        schema.write(buf, assignment);
         buf.flip();
         return new SyncGroupResponse(error, buf).toStruct();
     }

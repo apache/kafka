@@ -28,8 +28,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * This class implements the consumer's group protocol including the format of consumer subscription
- * and assignment data.
+ * This class implements the protocol format of the consumer's subscriptions and assignments. It
+ * assumes that future versions will be compatible with existing formats. In particular, newer formats
+ * will remain parseable by older versions of the protocol.
  */
 public class ConsumerProtocol implements GroupProtocol<ConsumerProtocol.Subscription, ConsumerProtocol.Assignment> {
 
@@ -40,14 +41,17 @@ public class ConsumerProtocol implements GroupProtocol<ConsumerProtocol.Subscrip
     public static final String ASSIGNMENT_KEY_NAME = "assignment";
 
     public static final short CONSUMER_PROTOCOL_V0 = 0;
+    public static final Schema CONSUMER_PROTOCOL_HEADER_SCHEMA = new Schema(
+            new Field(VERSION_KEY_NAME, Type.INT16));
+    private static final Struct CONSUMER_PROTOCOL_HEADER = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA)
+            .set(VERSION_KEY_NAME, CONSUMER_PROTOCOL_V0);
+
     public static final Schema SUBSCRIPTION_V0 = new Schema(
-            new Field(VERSION_KEY_NAME, Type.INT16),
             new Field(SUBSCRIPTION_KEY_NAME, new ArrayOf(Type.STRING)));
     public static final Schema TOPIC_ASSIGNMENT_V0 = new Schema(
             new Field(TOPIC_KEY_NAME, Type.STRING),
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
     public static final Schema ASSIGNMENT_V0 = new Schema(
-            new Field(VERSION_KEY_NAME, Type.INT16),
             new Field(ASSIGNMENT_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)));
 
     @Override
@@ -55,9 +59,17 @@ public class ConsumerProtocol implements GroupProtocol<ConsumerProtocol.Subscrip
         return "consumer";
     }
 
+    private void checkVersionCompatibility(short version) {
+        // check for invalid versions
+        if (version < CONSUMER_PROTOCOL_V0)
+            throw new SchemaException("Unsupported subscription version: " + version);
+
+        // otherwise, assume versions can be parsed as V0
+    }
+
     @Override
-    public GenType<Subscription> metadataSchema() {
-        return new GenType<Subscription>() {
+    public GenericType<Subscription> metadataSchema() {
+        return new GenericType<Subscription>() {
             @Override
             public Subscription validate(Object obj) {
                 if (obj instanceof Subscription)
@@ -67,27 +79,31 @@ public class ConsumerProtocol implements GroupProtocol<ConsumerProtocol.Subscrip
 
             @Override
             public void write(ByteBuffer buffer, Object o) {
+                CONSUMER_PROTOCOL_HEADER.writeTo(buffer);
                 Subscription subscription = (Subscription) o;
                 subscription.struct.writeTo(buffer);
             }
 
             @Override
             public Object read(ByteBuffer buffer) {
+                Struct header = (Struct) CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
+                Short version = header.getShort(VERSION_KEY_NAME);
+                checkVersionCompatibility(version);
                 Struct struct = (Struct) SUBSCRIPTION_V0.read(buffer);
-                return new Subscription(struct);
+                return new Subscription(version, struct);
             }
 
             @Override
             public int sizeOf(Object o) {
                 Subscription subscription = (Subscription) o;
-                return subscription.struct.sizeOf();
+                return CONSUMER_PROTOCOL_HEADER.sizeOf() + subscription.struct.sizeOf();
             }
         };
     }
 
     @Override
-    public GenType<Assignment> stateSchema() {
-        return new GenType<Assignment>() {
+    public GenericType<Assignment> assignmentSchema() {
+        return new GenericType<Assignment>() {
             @Override
             public Assignment validate(Object obj) {
                 if (obj instanceof Assignment)
@@ -97,20 +113,24 @@ public class ConsumerProtocol implements GroupProtocol<ConsumerProtocol.Subscrip
 
             @Override
             public void write(ByteBuffer buffer, Object o) {
+                CONSUMER_PROTOCOL_HEADER.writeTo(buffer);
                 Assignment assignment = (Assignment) o;
                 assignment.struct.writeTo(buffer);
             }
 
             @Override
             public Object read(ByteBuffer buffer) {
+                Struct header = (Struct) CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
+                Short version = header.getShort(VERSION_KEY_NAME);
+                checkVersionCompatibility(version);
                 Struct struct = (Struct) ASSIGNMENT_V0.read(buffer);
-                return new Assignment(struct);
+                return new Assignment(version, struct);
             }
 
             @Override
             public int sizeOf(Object o) {
                 Assignment assignment = (Assignment) o;
-                return assignment.struct.sizeOf();
+                return CONSUMER_PROTOCOL_HEADER.sizeOf() + assignment.struct.sizeOf();
             }
         };
     }
@@ -146,12 +166,11 @@ public class ConsumerProtocol implements GroupProtocol<ConsumerProtocol.Subscrip
             }
             this.struct.set(ASSIGNMENT_KEY_NAME, topicAssignments.toArray());
             this.partitions = partitions;
-
             this.version = CONSUMER_PROTOCOL_V0;
-            this.struct.set(VERSION_KEY_NAME, CONSUMER_PROTOCOL_V0);
         }
 
-        public Assignment(Struct struct) {
+        public Assignment(short version, Struct struct) {
+            this.version = version;
             this.struct = struct;
             this.partitions = new ArrayList<>();
             for (Object structObj : struct.getArray(ASSIGNMENT_KEY_NAME)) {
@@ -162,7 +181,7 @@ public class ConsumerProtocol implements GroupProtocol<ConsumerProtocol.Subscrip
                     this.partitions.add(new TopicPartition(topic, partition));
                 }
             }
-            this.version = struct.getShort(VERSION_KEY_NAME);
+
         }
 
         public short version() {
@@ -193,14 +212,13 @@ public class ConsumerProtocol implements GroupProtocol<ConsumerProtocol.Subscrip
         public Subscription(List<String> topics) {
             this.struct = new Struct(SUBSCRIPTION_V0);
             this.struct.set(SUBSCRIPTION_KEY_NAME, topics.toArray());
-            this.struct.set(VERSION_KEY_NAME, CONSUMER_PROTOCOL_V0);
             this.version = CONSUMER_PROTOCOL_V0;
             this.topics = topics;
         }
 
-        public Subscription(Struct struct) {
+        public Subscription(short version, Struct struct) {
+            this.version = version;
             this.struct = struct;
-            this.version = struct.getShort(VERSION_KEY_NAME);
             this.topics = new ArrayList<>();
             for (Object topicObj : struct.getArray(SUBSCRIPTION_KEY_NAME))
                 topics.add((String) topicObj);

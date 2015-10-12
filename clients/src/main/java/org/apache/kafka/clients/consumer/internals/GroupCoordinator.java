@@ -376,8 +376,8 @@ public abstract class GroupCoordinator<M, S> {
             short errorCode = syncResponse.errorCode();
             if (errorCode == Errors.NONE.code()) {
                 try {
-                    Object assignment = groupProtocol.stateSchema().read(syncResponse.memberAssignment());
-                    future.complete(groupProtocol.stateSchema().validate(assignment));
+                    Object assignment = groupProtocol.assignmentSchema().read(syncResponse.memberAssignment());
+                    future.complete(groupProtocol.assignmentSchema().validate(assignment));
                     sensors.syncLatency.record(response.requestLatencyMs());
                 } catch (SchemaException e) {
                     future.raise(e);
@@ -557,7 +557,7 @@ public abstract class GroupCoordinator<M, S> {
     }
 
     private Map<String, M> deserializeMetadata(Map<String, ByteBuffer> metadata) {
-        GroupProtocol.GenType<M> schema = groupProtocol.metadataSchema();
+        GroupProtocol.GenericType<M> schema = groupProtocol.metadataSchema();
         Map<String, M> res = new HashMap<>();
         for (Map.Entry<String, ByteBuffer> metadataEntry : metadata.entrySet()) {
             Object obj = schema.read(metadataEntry.getValue());
@@ -567,7 +567,7 @@ public abstract class GroupCoordinator<M, S> {
     }
 
     private Map<String, ByteBuffer> serializeAssignment(Map<String, S> state) {
-        GroupProtocol.GenType<S> schema = groupProtocol.stateSchema();
+        GroupProtocol.GenericType<S> schema = groupProtocol.assignmentSchema();
         Map<String, ByteBuffer> res = new HashMap<>();
         for (Map.Entry<String, S> stateEntry : state.entrySet()) {
             ByteBuffer buf = ByteBuffer.allocate(schema.sizeOf(stateEntry.getValue()));

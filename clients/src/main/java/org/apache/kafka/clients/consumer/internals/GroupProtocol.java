@@ -15,21 +15,54 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.protocol.types.Type;
 
 /**
- * Interface for protocols supported by an implementation of {@link GroupCoordinator}. In Kafka's group
- * management, a protocol consists of a name, version, and some opaque metadata. The coordinator accepts
- * the protocols from each group member and chooses one which all members can support (based on the name
- * and version). The associated metadata for each protocol is then forwarded to all members of the group.
+ * Interface for protocols supported by an implementation of {@link GroupCoordinator}. This class provides
+ * the metadata and assignment schemas used by instances of the group protocol. From a
+ * high level, Kafka's group management protocol consists of the following sequence of actions:
  *
+ * <ol>
+ *     <li>Group Registration: Group members register with the coordinator providing their own metadata
+ *         (such as the set of topics they are interested in).</li>
+ *     <li>Group/Leader Selection: The coordinator select the members of the group and chooses one member
+ *         as the leader.</li>
+ *     <li>State Assignment: The leader collects the metadata from all the members of the group and
+ *         assigns state.</li>
+ *     <li>Group Stabilization: Each member receives the state assigned by the leader and begins
+ *         processing.</li>
+ * </ol>
+ *
+ * This class defines the format of the metadata used in group registration and the format of the
+ * state assigned by the leader. It is up to implementations to define their own way to version
+ * these schemas. Typically, this will involve embedding version information in the metadata/assignment
+ * schemas. Note that since metadata/assignment data is opaque to the coordinator, the leader will
+ * be chosen randomly from among the members of the group. This means that to support rolling upgrade
+ * scenarios, protocols must be both backwards and forwards compatible.
+ *
+ * @param <M> Type of Metadata which each member provides on group registration
+ * @param <A> Type of Assignment which leader provides to each member
  */
-public interface GroupProtocol<M, S> {
+public interface GroupProtocol<M, A> {
 
+    /**
+     * User-friendly name for the group protocol (e.g. "consumer" or "copycat").
+     * @return Non-null name
+     */
     String name();
 
-    GenType<M> metadataSchema();
+    /**
+     * Schema for member metadata.
+     * @return the schema
+     */
+    GenericType<M> metadataSchema();
 
-    GenType<S> stateSchema();
+    /**
+     * Schema for member assignment.
+     * @return the schema
+     */
+    GenericType<A> assignmentSchema();
 
-    abstract class GenType<T> extends Type {
+
+    // TODO: Make Type generic and remove this extension
+    abstract class GenericType<T> extends Type {
         public abstract T validate(Object obj);
     }
 
