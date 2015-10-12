@@ -14,10 +14,9 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -47,7 +46,7 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
         for (String memberId : subscriptions.keySet())
             assignment.put(memberId, new ArrayList<TopicPartition>());
 
-        CircularIterator<String> assigner = new CircularIterator<>(sorted(subscriptions.keySet()));
+        CircularIterator<String> assigner = new CircularIterator<>(Utils.sorted(subscriptions.keySet()));
         for (TopicPartition partition : allPartitionsSorted(partitionsPerTopic, subscriptions)) {
             final String topic = partition.topic();
             while (!subscriptions.get(assigner.peek()).contains(topic))
@@ -57,11 +56,6 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
         return assignment;
     }
 
-    public <T extends Comparable<T>> List<T> sorted(Collection<T> consumers) {
-        List<T> res = new ArrayList<>(consumers);
-        Collections.sort(res);
-        return res;
-    }
 
     public List<TopicPartition> allPartitionsSorted(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, List<String>> subscriptions) {

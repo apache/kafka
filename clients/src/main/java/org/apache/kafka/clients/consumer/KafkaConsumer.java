@@ -43,7 +43,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -416,7 +415,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long retryBackoffMs;
     private long requestTimeoutMs;
     private boolean closed = false;
-    private Metadata.Listener metadataListener;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
@@ -702,22 +700,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             log.debug("Subscribed to pattern: {}", pattern);
-            metadataListener = new Metadata.Listener() {
-                @Override
-                public void onMetadataUpdate(Cluster cluster) {
-                    final List<String> topicsToSubscribe = new ArrayList<>();
-
-                    for (String topic : cluster.topics())
-                        if (subscriptions.getSubscribedPattern().matcher(topic).matches())
-                            topicsToSubscribe.add(topic);
-
-                    subscriptions.changeSubscription(topicsToSubscribe);
-                    metadata.setTopics(topicsToSubscribe);
-                }
-            };
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
-            this.metadata.addListener(metadataListener);
         } finally {
             release();
         }
@@ -732,7 +716,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.subscriptions.unsubscribe();
             this.coordinator.resetGeneration();
             this.metadata.needMetadataForAllTopics(false);
-            this.metadata.removeListener(metadataListener);
         } finally {
             release();
         }

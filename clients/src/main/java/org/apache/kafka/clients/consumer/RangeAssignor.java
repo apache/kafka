@@ -71,12 +71,12 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         for (String memberId : subscriptions.keySet())
             assignment.put(memberId, new ArrayList<TopicPartition>());
 
-        for (Map.Entry<String, Integer> topicEntry : partitionsPerTopic.entrySet()) {
+        for (Map.Entry<String, List<String>> topicEntry : consumersPerTopic.entrySet()) {
             String topic = topicEntry.getKey();
-            int numPartitionsForTopic = topicEntry.getValue();
+            List<String> consumersForTopic = topicEntry.getValue();
 
-            List<String> consumersForTopic = consumersPerTopic.get(topic);
-            if (consumersForTopic == null || consumersForTopic.isEmpty())
+            Integer numPartitionsForTopic = partitionsPerTopic.get(topic);
+            if (numPartitionsForTopic == null)
                 continue;
 
             Collections.sort(consumersForTopic);
@@ -84,7 +84,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
             int numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size();
             int consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();
 
-            List<TopicPartition> partitions = partitions(topic, topicEntry.getValue());
+            List<TopicPartition> partitions = partitions(topic, numPartitionsForTopic);
             for (int i = 0, n = consumersForTopic.size(); i < n; i++) {
                 int start = numPartitionsPerConsumer * i + Math.min(i, consumersWithExtraPartition);
                 int length = numPartitionsPerConsumer + (i + 1 > consumersWithExtraPartition ? 0 : 1);

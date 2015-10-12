@@ -14,8 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 

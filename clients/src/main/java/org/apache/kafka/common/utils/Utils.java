@@ -23,6 +23,7 @@ import java.io.StringWriter;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -50,6 +51,18 @@ public class Utils {
     public static final String NL = System.getProperty("line.separator");
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
+    /**
+     * Get a sorted list representation of a collection.
+     * @param collection The collection to sort
+     * @param <T> The class of objects in the collection
+     * @return An unmodifiable sorted list with the contents of the collection
+     */
+    public static <T extends Comparable<? super T>> List<T> sorted(Collection<T> collection) {
+        List<T> res = new ArrayList<>(collection);
+        Collections.sort(res);
+        return Collections.unmodifiableList(res);
+    }
 
     /**
      * Turn the given UTF8 byte array into a string

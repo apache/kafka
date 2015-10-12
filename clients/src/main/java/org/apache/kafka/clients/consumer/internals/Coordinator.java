@@ -56,11 +56,11 @@ import java.util.Set;
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class Coordinator extends GroupCoordinator<ConsumerProtocol.Subscription, ConsumerProtocol.Assignment>
-        implements Closeable, Metadata.Listener {
+        implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
 
-    private final Map<String, PartitionAssignor> assignors;
+    private final Map<String, PartitionAssignor> assignorsMap;
     private final org.apache.kafka.clients.Metadata metadata;
     private final MetadataSnapshot metadataSnapshot;
     private final ConsumerCoordinatorMetrics sensors;
@@ -99,16 +99,18 @@ public final class Coordinator extends GroupCoordinator<ConsumerProtocol.Subscri
                 requestTimeoutMs,
                 retryBackoffMs);
         this.metadata = metadata;
-        this.metadata.addListener(this);
+
         this.metadata.requestUpdate();
         this.metadataSnapshot = new MetadataSnapshot();
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
         this.autoCommitEnabled = autoCommitEnabled;
 
-        this.assignors = new HashMap<>();
+        this.assignorsMap = new HashMap<>();
         for (PartitionAssignor assignor : assignors)
-            this.assignors.put(assignor.name(), assignor);
+            this.assignorsMap.put(assignor.name(), assignor);
+
+        addMetadataListener();
 
         if (autoCommitEnabled)
             scheduleAutoCommitTask(autoCommitIntervalMs);
@@ -123,14 +125,29 @@ public final class Coordinator extends GroupCoordinator<ConsumerProtocol.Subscri
 
     @Override
     public Collection<String> subProtocols() {
-        return assignors.keySet();
+        return assignorsMap.keySet();
     }
 
-    @Override
-    public void onMetadataUpdate(Cluster cluster) {
-        // check if there are any changes to the metadata which should trigger a rebalance
-        if (metadataSnapshot.update(subscriptions, cluster) && subscriptions.partitionsAutoAssigned())
-            subscriptions.needReassignment();
+    private void addMetadataListener() {
+        this.metadata.addListener(new Metadata.Listener() {
+            @Override
+            public void onMetadataUpdate(Cluster cluster) {
+                if (subscriptions.hasPatternSubscription()) {
+                    final List<String> topicsToSubscribe = new ArrayList<>();
+
+                    for (String topic : cluster.topics())
+                        if (subscriptions.getSubscribedPattern().matcher(topic).matches())
+                            topicsToSubscribe.add(topic);
+
+                    subscriptions.changeSubscription(topicsToSubscribe);
+                    metadata.setTopics(subscriptions.groupSubscription());
+                }
+
+                // check if there are any changes to the metadata which should trigger a rebalance
+                if (metadataSnapshot.update(subscriptions, cluster) && subscriptions.partitionsAutoAssigned())
+                    subscriptions.needReassignment();
+            }
+        });
     }
 
     @Override
@@ -157,7 +174,7 @@ public final class Coordinator extends GroupCoordinator<ConsumerProtocol.Subscri
     protected Map<String, ConsumerProtocol.Assignment> doSync(String leaderId,
                                                               String assignmentStrategy,
                                                               Map<String, ConsumerProtocol.Subscription> allSubscriptions) {
-        PartitionAssignor assignor = assignors.get(assignmentStrategy);
+        PartitionAssignor assignor = assignorsMap.get(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator returned an incompatible assignment strategy");
 
@@ -171,7 +188,7 @@ public final class Coordinator extends GroupCoordinator<ConsumerProtocol.Subscri
 
         // the leader will begin watching for changes to any of the topics the group is interested in
         this.subscriptions.groupSubscribe(allSubscribedTopics);
-        metadata.setTopics(allSubscribedTopics);
+        metadata.setTopics(this.subscriptions.groupSubscription());
         client.ensureFreshMetadata();
 
         log.debug("Performing {} assignment for subscriptions {}", assignmentStrategy, subscriptions);

@@ -27,7 +27,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.MockPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
@@ -322,6 +321,31 @@ public class CoordinatorTest {
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(Collections.singleton(tp), rebalanceListener.assigned);
+    }
+
+
+    @Test
+    public void testMetadataChangeTriggersRebalance() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+
+        coordinator.ensurePartitionAssignment();
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+
+        // a new partition is added to the topic
+        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
+
+        // we should detect the change and ask for reassignment
+        assertTrue(subscriptions.partitionAssignmentNeeded());
     }
 
     @Test
