@@ -71,8 +71,9 @@ import java.util.concurrent.TimeoutException;
  * </p>
  * <p>
  *     The root configuration is used to trigger *task* updates since we require a combination of a compacted topic and atomic
- *     updates. To accomplish this, we do *not* apply updates to each configuration as we read them off the log. Instead,
- *     they are accumulated and an update to the root config indicates that they should be applied. This prevents
+ *     updates. To accomplish this, we do *not* apply updates to each configuration immediately as they are read from the
+ *     Kafka log by this class. Instead, the are accumulated in a buffer in this class until we can be sure it is safe
+ *     to atomically apply all outstanding updates, which is indicated by an update of the root config. This prevents
  *     problematic partial updates (e.g. some task configurations are updated, the leader dies, and others are left in
  *     their old state; if the new leader used the current state, some partitions could be assigned to multiple workers).
  * </p>
@@ -166,6 +167,7 @@ public class KafkaConfigStorage {
         producerProps.putAll(configs);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
 
         Map<String, Object> consumerProps = new HashMap<>();
         consumerProps.putAll(configs);
@@ -281,8 +283,8 @@ public class KafkaConfigStorage {
                 for (int taskIndex = 0; taskIndex < newRootEntry.getValue(); taskIndex++) {
                     ConnectorTaskId taskId = new ConnectorTaskId(connName, taskIndex);
                     // Note that we *do not* include deferred updates here. This is important because a half completed
-                    // write of updated task configs could leave some left over data in the deferred tasks, which would
-                    // then make this appear to have a complete set of task configs. In order to ensure correctness,
+                    // write of updated task configs could leave some left over data in the list of deferred task updates
+                    // which would then make this appear to have a complete set of task configs. In order to ensure correctness,
                     // this method call or the existing task configs need to ensure everything that is inconsistent is
                     // addressed in one batch.
                     Map<String, String> taskConfig = configs.containsKey(taskId) ? configs.get(taskId) : taskConfigs.get(taskId);
@@ -407,7 +409,7 @@ public class KafkaConfigStorage {
                     deferredTaskUpdates.put(taskId, (Map<String, String>) newTaskConfig);
                 }
             } else {
-                log.error("Discarding unexpected config update record for key: " + record.key());
+                log.error("Discarding config update record with invalid key: " + record.key());
             }
         }
     };

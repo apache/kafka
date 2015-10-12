@@ -22,8 +22,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * <p>
@@ -65,10 +65,10 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig() {
-        this(new Properties());
+        this(new HashMap<String, String>());
     }
 
-    public ConnectorConfig(Map<?, ?> props) {
+    public ConnectorConfig(Map<String, String> props) {
         super(config, props);
     }
 }
