@@ -39,8 +39,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
 
-        # If security protocol is not specified, use the default in the template properties.
-        self.prop_file = self.render('verifiable_producer.properties')
+        self.prop_file = ""
         self.security_config = SecurityConfig(security_protocol, self.prop_file)
         self.security_protocol = self.security_config.security_protocol
         self.prop_file += str(self.security_config)
