@@ -23,6 +23,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -56,7 +57,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
+import java.util.HashSet;
 
 /**
  * This class manage the fetching process with the brokers.
@@ -80,6 +81,7 @@ public class Fetcher<K, V> {
     private final Deserializer<V> valueDeserializer;
 
     private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
+    private final Set<TopicPartition> unauthorizedTopicPartition;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -110,6 +112,7 @@ public class Fetcher<K, V> {
 
         this.records = new LinkedList<PartitionRecords<K, V>>();
         this.offsetOutOfRangePartitions = new HashMap<>();
+        this.unauthorizedTopicPartition = new HashSet<>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
         this.retryBackoffMs = retryBackoffMs;
@@ -288,6 +291,20 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * If any topic from previous fetchResponse contatains Authorization error, throw ApiException.
+     * @throws ApiException
+     */
+    private void throwIfUnauthorized() throws ApiException {
+        if (!unauthorizedTopicPartition.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (TopicPartition topicPartition: unauthorizedTopicPartition)
+                sb.append(topicPartition + ",");
+            unauthorizedTopicPartition.clear();
+            throw new ApiException(String.format("Not authorized to read from %s", sb.substring(0, sb.length() - 1).toString()));
+        }
+    }
+
+    /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
      * @return The fetched records per partition
@@ -300,7 +317,8 @@ public class Fetcher<K, V> {
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
             throwIfOffsetOutOfRange();
-
+            throwIfUnauthorized();
+            
             for (PartitionRecords<K, V> part : this.records) {
                 if (!subscriptions.isFetchable(part.partition)) {
                     log.debug("Ignoring fetched records for {} since it is no longer fetchable", part.partition);
@@ -490,6 +508,9 @@ public class Fetcher<K, V> {
                     else
                         this.offsetOutOfRangePartitions.put(tp, fetchOffset);
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
+                } else if (partition.errorCode == Errors.AUTHORIZATION_FAILED.code()) {
+                    log.info("not authorized to read from topic {}.", tp.topic());
+                    unauthorizedTopicPartition.add(tp);
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else {
