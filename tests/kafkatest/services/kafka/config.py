@@ -15,8 +15,6 @@
 
 import property
 
-from sortedcontainers import SortedDict
-
 
 class KafkaConfig(dict):
     """A dictionary-like container class which allows for definition of overridable default values,
