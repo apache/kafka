@@ -36,17 +36,17 @@ object UpdateOffsetsInZK {
     if(args.length < 3)
       usage
     val config = new ConsumerConfig(Utils.loadProps(args(1)))
-    val zkClient = ZkUtils.createZkClient(config.zkConnect, config.zkSessionTimeoutMs,
-        config.zkConnectionTimeoutMs)
+    val zkUtils = ZkUtils.create(config.zkConnect, config.zkSessionTimeoutMs,
+        config.zkConnectionTimeoutMs, System.getProperty("java.security.auth.login.config"))
     args(0) match {
-      case Earliest => getAndSetOffsets(zkClient, OffsetRequest.EarliestTime, config, args(2))
-      case Latest => getAndSetOffsets(zkClient, OffsetRequest.LatestTime, config, args(2))
+      case Earliest => getAndSetOffsets(zkUtils, OffsetRequest.EarliestTime, config, args(2))
+      case Latest => getAndSetOffsets(zkUtils, OffsetRequest.LatestTime, config, args(2))
       case _ => usage
     }
   }
 
-  private def getAndSetOffsets(zkClient: ZkClient, offsetOption: Long, config: ConsumerConfig, topic: String): Unit = {
-    val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, List(topic))
+  private def getAndSetOffsets(zkUtils: ZkUtils, offsetOption: Long, config: ConsumerConfig, topic: String): Unit = {
+    val partitionsPerTopicMap = zkUtils.getPartitionsForTopics(List(topic))
     var partitions: Seq[Int] = Nil
 
     partitionsPerTopicMap.get(topic) match {
@@ -56,7 +56,7 @@ object UpdateOffsetsInZK {
 
     var numParts = 0
     for (partition <- partitions) {
-      val brokerHostingPartition = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
+      val brokerHostingPartition = zkUtils.getLeaderForPartition(topic, partition)
 
       val broker = brokerHostingPartition match {
         case Some(b) => b
@@ -64,7 +64,7 @@ object UpdateOffsetsInZK {
           "getOffsetsBefore request")
       }
 
-      ZkUtils.getBrokerInfo(zkClient, broker) match {
+      zkUtils.getBrokerInfo(broker) match {
         case Some(brokerInfo) =>
           val consumer = new SimpleConsumer(brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).host,
                                             brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).port,
@@ -75,7 +75,7 @@ object UpdateOffsetsInZK {
           val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
           println("updating partition " + partition + " with new offset: " + offset)
-          ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition, offset.toString)
+          zkUtils.updatePersistentPath(topicDirs.consumerOffsetDir + "/" + partition, offset.toString)
           numParts += 1
         case None => throw new KafkaException("Broker information for broker id %d does not exist in ZK".format(broker))
       }
