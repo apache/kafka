@@ -39,7 +39,7 @@ final class Serdes<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> Serializer<T> serializer(Class<T> type) {
+    static <T> Serializer<T> serializer(Class<T> type) {
         if (String.class.isAssignableFrom(type)) return (Serializer<T>) new StringSerializer();
         if (Integer.class.isAssignableFrom(type)) return (Serializer<T>) new IntegerSerializer();
         if (Long.class.isAssignableFrom(type)) return (Serializer<T>) new LongSerializer();
@@ -48,7 +48,7 @@ final class Serdes<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> Deserializer<T> deserializer(Class<T> type) {
+    static <T> Deserializer<T> deserializer(Class<T> type) {
         if (String.class.isAssignableFrom(type)) return (Deserializer<T>) new StringDeserializer();
         if (Integer.class.isAssignableFrom(type)) return (Deserializer<T>) new IntegerDeserializer();
         if (Long.class.isAssignableFrom(type)) return (Deserializer<T>) new LongDeserializer();

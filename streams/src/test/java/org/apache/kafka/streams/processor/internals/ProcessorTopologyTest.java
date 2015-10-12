@@ -34,10 +34,10 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
-import org.apache.kafka.streams.state.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateUtils;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.junit.After;
@@ -264,7 +264,7 @@ public class ProcessorTopologyTest {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = InMemoryKeyValueStore.create(storeName, context, String.class, String.class);
+            store = Stores.create(storeName, context).withStringKeys().withStringValues().inMemory().build();
         }
 
         @Override

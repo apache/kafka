@@ -31,7 +31,7 @@ public abstract class AbstractKeyValueStoreTest {
                                                                       boolean useContextSerdes);
     
     @Test
-    public void testIntegerKeysAndStringValues() {
+    public void testPutGetRange() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create();
         KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
@@ -97,7 +97,7 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void testIntegerKeysAndStringValuesUsingDefaultSerializersAndDeserializers() {
+    public void testPutGetRangeWithDefaultSerdes() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
         KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
@@ -137,16 +137,16 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void testRestoringInetgerKeysAndValues() {
+    public void testRestore() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
 
         // Add any entries that will be restored to any store
         // that uses the driver's context ...
-        driver.addRestoreEntry(0, "zero");
-        driver.addRestoreEntry(1, "one");
-        driver.addRestoreEntry(2, "two");
-        driver.addRestoreEntry(4, "four");
+        driver.addEntryToRestoreLog(0, "zero");
+        driver.addEntryToRestoreLog(1, "one");
+        driver.addEntryToRestoreLog(2, "two");
+        driver.addEntryToRestoreLog(4, "four");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
@@ -163,16 +163,16 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void testRestoringInetgerKeysAndValuesUsingDefaultSerializersAndDeserializers() {
+    public void testRestoreWithDefaultSerdes() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
 
         // Add any entries that will be restored to any store
         // that uses the driver's context ...
-        driver.addRestoreEntry(0, "zero");
-        driver.addRestoreEntry(1, "one");
-        driver.addRestoreEntry(2, "two");
-        driver.addRestoreEntry(4, "four");
+        driver.addEntryToRestoreLog(0, "zero");
+        driver.addEntryToRestoreLog(1, "one");
+        driver.addEntryToRestoreLog(2, "two");
+        driver.addEntryToRestoreLog(4, "four");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...

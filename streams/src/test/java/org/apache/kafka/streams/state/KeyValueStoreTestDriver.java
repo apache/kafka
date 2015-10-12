@@ -49,12 +49,13 @@ import java.util.Set;
  * This component can be used to help test a {@link KeyValueStore}'s ability to read and write entries.
  * 
  * <pre>
- * &#47;&#47; Create the test driver ...
+ * // Create the test driver ...
  * KeyValueStoreTestDriver&lt;Integer, String> driver = KeyValueStoreTestDriver.create();
- * InMemoryKeyValueStore&lt;Integer, String> store = InMemoryKeyValueStore.create("my-store", driver.context(),
- *                                                                             Integer.class, String.class);
+ * KeyValueStore&lt;Integer, String> store = Stores.create("my-store", driver.context())
+ *                                              .withIntegerKeys().withStringKeys()
+ *                                              .inMemory().build();
  * 
- * &#47;&#47; Verify that the store reads and writes correctly ...
+ * // Verify that the store reads and writes correctly ...
  * store.put(0, "zero");
  * store.put(1, "one");
  * store.put(2, "two");
@@ -69,7 +70,7 @@ import java.util.Set;
  * assertNull(store.get(3));
  * store.delete(5);
  * 
- * &#47;&#47; Flush the store and verify all current entries were properly flushed ...
+ * // Flush the store and verify all current entries were properly flushed ...
  * store.flush();
  * assertEquals("zero", driver.flushedEntryStored(0));
  * assertEquals("one", driver.flushedEntryStored(1));
@@ -87,30 +88,33 @@ import java.util.Set;
  * <p>
  * <h2>Restoring a store</h2>
  * This component can be used to test whether a {@link KeyValueStore} implementation properly
- * {@link ProcessorContext#register(StateStore, RestoreFunc) registers itself} with the {@link ProcessorContext}. To do this,
- * create an instance of this driver component, {@link #addRestoreEntry(Object, Object) add entries} that will be passed to the
- * store upon creation, and then create the store using this driver's {@link #context() ProcessorContext}:
+ * {@link ProcessorContext#register(StateStore, StateRestoreCallback) registers itself} with the {@link ProcessorContext}, so that
+ * the persisted contents of a store are properly restored from the flushed entries when the store instance is started.
+ * <p>
+ * To do this, create an instance of this driver component, {@link #addEntryToRestoreLog(Object, Object) add entries} that will be
+ * passed to the store upon creation (simulating the entries that were previously flushed to the topic), and then create the store
+ * using this driver's {@link #context() ProcessorContext}:
  * 
  * <pre>
- * &#47;&#47; Create the test driver ...
+ * // Create the test driver ...
  * KeyValueStoreTestDriver&lt;Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
  * 
- * &#47;&#47; Add any entries that will be restored to any store
- * &#47;&#47; that uses the driver's context ...
+ * // Add any entries that will be restored to any store that uses the driver's context ...
  * driver.addRestoreEntry(0, "zero");
  * driver.addRestoreEntry(1, "one");
  * driver.addRestoreEntry(2, "two");
  * driver.addRestoreEntry(4, "four");
  * 
- * &#47;&#47; Create the store, which should register with the context and automatically
- * &#47;&#47; receive the restore entries ...
- * InMemoryKeyValueStore&lt;Integer, String> store = InMemoryKeyValueStore.create("my-store", driver.context(),
- *                                                                             Integer.class, String.class);
+ * // Create the store, which should register with the context and automatically
+ * // receive the restore entries ...
+ * KeyValueStore&lt;Integer, String> store = Stores.create("my-store", driver.context())
+ *                                              .withIntegerKeys().withStringKeys()
+ *                                              .inMemory().build();
  * 
- * &#47;&#47; Verify that the store's contents were properly restored ...
+ * // Verify that the store's contents were properly restored ...
  * assertEquals(0, driver.checkForRestoredEntries(store));
  * 
- * &#47;&#47; and there are no other entries ...
+ * // and there are no other entries ...
  * assertEquals(4, driver.sizeOf(store));
  * </pre>
  * 
@@ -144,7 +148,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
             @Override
             public T deserialize(String topic, byte[] data) {
-                throw new UnsupportedOperationException("This serializer should not be used");
+                throw new UnsupportedOperationException("This deserializer should not be used");
             }
 
             @Override
@@ -220,6 +224,7 @@ public class KeyValueStoreTestDriver<K, V> {
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
             return null;
         }
+
         @Override
         public void recordLatency(Sensor sensor, long startNs, long endNs) {
         }
@@ -310,16 +315,35 @@ public class KeyValueStoreTestDriver<K, V> {
     }
 
     /**
-     * This method adds an entry to the "restore log" for the {@link KeyValueStore}. This should be called <em>before</em>
-     * creating
-     * the {@link KeyValueStore} with the {@link #context() ProcessorContext}; when the {@link KeyValueStore} is created, it will
-     * {@link ProcessorContext#register(StateStore, RestoreFunc) register} itself with the {@link #context() ProcessorContext},
-     * and this object will then pre-populate the store with all restore entries added via this method.
+     * This method adds an entry to the "restore log" for the {@link KeyValueStore}, and is used <em>only</em> when testing the
+     * restore functionality of a {@link KeyValueStore} implementation.
+     * <p>
+     * To create such a test, create the test driver, call this method one or more times, and then create the
+     * {@link KeyValueStore}. Your tests can then check whether the store contains the entries from the log.
+     * 
+     * <pre>
+     * // Set up the driver and pre-populate the log ...
+     * KeyValueStoreTestDriver&lt;Integer, String> driver = KeyValueStoreTestDriver.create();
+     * driver.addRestoreEntry(1,"value1");
+     * driver.addRestoreEntry(2,"value2");
+     * driver.addRestoreEntry(3,"value3");
+     * 
+     * // Create the store using the driver's context ...
+     * ProcessorContext context = driver.context();
+     * KeyValueStore&lt;Integer, String> store = ...
+     * 
+     * // Verify that the store's contents were properly restored from the log ...
+     * assertEquals(0, driver.checkForRestoredEntries(store));
+     * 
+     * // and there are no other entries ...
+     * assertEquals(3, driver.sizeOf(store));
+     * </pre>
      * 
      * @param key the key for the entry
      * @param value the value for the entry
+     * @see #checkForRestoredEntries(KeyValueStore)
      */
-    public void addRestoreEntry(K key, V value) {
+    public void addEntryToRestoreLog(K key, V value) {
         restorableEntries.add(new Entry<K, V>(key, value));
     }
 
@@ -328,11 +352,11 @@ public class KeyValueStoreTestDriver<K, V> {
      * written by the store to the Kafka topic, making them available via the {@link #flushedEntryStored(Object)} and
      * {@link #flushedEntryRemoved(Object)} methods.
      * <p>
-     * If the {@link KeyValueStore}'s are to be restored upon its startup, be sure to {@link #addRestoreEntry(Object, Object)
+     * If the {@link KeyValueStore}'s are to be restored upon its startup, be sure to {@link #addEntryToRestoreLog(Object, Object)
      * add the restore entries} before creating the store with the {@link ProcessorContext} returned by this method.
      * 
      * @return the processing context; never null
-     * @see #addRestoreEntry(Object, Object)
+     * @see #addEntryToRestoreLog(Object, Object)
      */
     public ProcessorContext context() {
         return context;
@@ -349,11 +373,12 @@ public class KeyValueStoreTestDriver<K, V> {
     }
 
     /**
-     * Utility method that will count the number of {@link #addRestoreEntry(Object, Object) restore entries} missing from the
+     * Utility method that will count the number of {@link #addEntryToRestoreLog(Object, Object) restore entries} missing from the
      * supplied store.
      * 
      * @param store the store that is to have all of the {@link #restoredEntries() restore entries}
      * @return the number of restore entries missing from the store, or 0 if all restore entries were found
+     * @see #addEntryToRestoreLog(Object, Object)
      */
     public int checkForRestoredEntries(KeyValueStore<K, V> store) {
         int missing = 0;

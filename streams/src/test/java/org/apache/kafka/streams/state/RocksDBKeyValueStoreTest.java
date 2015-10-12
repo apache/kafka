@@ -16,16 +16,23 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
+    @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context, Class<K> keyClass, Class<V> valueClass,
                                                              boolean useContextSerdes) {
         if (useContextSerdes) {
-            return RocksDBKeyValueStore.create("my-store", context);
+            Serializer<K> keySer = (Serializer<K>) context.keySerializer();
+            Deserializer<K> keyDeser = (Deserializer<K>) context.keyDeserializer();
+            Serializer<V> valSer = (Serializer<V>) context.valueSerializer();
+            Deserializer<V> valDeser = (Deserializer<V>) context.valueDeserializer();
+            return Stores.create("my-store", context).withKeys(keySer, keyDeser).withValues(valSer, valDeser).localDatabase().build();
         }
-        return RocksDBKeyValueStore.create("my-store", context, keyClass, valueClass);
+        return Stores.create("my-store", context).withKeys(keyClass).withValues(valueClass).localDatabase().build();
     }
 }

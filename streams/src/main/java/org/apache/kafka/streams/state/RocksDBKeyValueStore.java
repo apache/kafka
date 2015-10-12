@@ -18,8 +18,6 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -43,124 +41,10 @@ import java.util.NoSuchElementException;
  *
  * @param <K> the type of keys
  * @param <V> the type of values
+ * 
+ * @see Stores#create(String, ProcessorContext)
  */
 public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
-
-    /**
-     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage and the system time
-     * provider.
-     * 
-     * @param name the name of the store, used in the name of the topic to which entries are recorded
-     * @param context the processing context
-     * @param keyClass the class for the keys, which must be one of the types for which Kafka has built-in serializers and
-     *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
-     *            {@code byte[].class})
-     * @param valueClass the class for the values, which must be one of the types for which Kafka has built-in serializers and
-     *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
-     *            {@code byte[].class})
-     * @return the key-value store
-     * @throws IllegalArgumentException if the {@code keyClass} or {@code valueClass} are not one of {@code String.class},
-     *             {@code Integer.class}, {@code Long.class}, or
-     *             {@code byte[].class}
-     */
-    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context, Class<K> keyClass, Class<V> valueClass) {
-        return create(name, context, keyClass, valueClass, new SystemTime());
-    }
-
-    /**
-     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage and the given time
-     * provider.
-     * 
-     * @param name the name of the store, used in the name of the topic to which entries are recorded
-     * @param context the processing context
-     * @param keyClass the class for the keys, which must be one of the types for which Kafka has built-in serializers and
-     *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
-     *            {@code byte[].class})
-     * @param valueClass the class for the values, which must be one of the types for which Kafka has built-in serializers and
-     *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
-     *            {@code byte[].class})
-     * @param time the time provider; may be null if the system time should be used
-     * @return the key-value store
-     * @throws IllegalArgumentException if the {@code keyClass} or {@code valueClass} are not one of {@code String.class},
-     *             {@code Integer.class}, {@code Long.class}, or
-     *             {@code byte[].class}
-     */
-    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context, Class<K> keyClass, Class<V> valueClass,
-                                                           Time time) {
-        return new RocksDBKeyValueStore<>(name, context, Serdes.withBuiltinTypes(name, keyClass, valueClass), time);
-    }
-
-    /**
-     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage, the
-     * {@link ProcessorContext}'s default serializers and deserializers, and the system time provider.
-     * <p>
-     * <strong>NOTE:</strong> the default serializers and deserializers in the context <em>must</em> match the key and value types
-     * used as parameters for this key value store. This is not checked in this method, and any mismatch will result in
-     * class cast exceptions during usage.
-     * 
-     * @param name the name of the store, used in the name of the topic to which entries are recorded
-     * @param context the processing context
-     * @return the key-value store
-     */
-    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context) {
-        return create(name, context, new SystemTime());
-    }
-
-    /**
-     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage, the
-     * {@link ProcessorContext}'s default serializers and deserializers, and the given time provider.
-     * <p>
-     * <strong>NOTE:</strong> the default serializers and deserializers in the context <em>must</em> match the key and value types
-     * used as parameters for this key value store.
-     * 
-     * @param name the name of the store, used in the name of the topic to which entries are recorded
-     * @param context the processing context
-     * @param time the time provider; may be null if the system time should be used
-     * @return the key-value store
-     */
-    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context, Time time) {
-        Serdes<K, V> serdes = new Serdes<>(name, context);
-        return new RocksDBKeyValueStore<>(name, context, serdes, time);
-    }
-
-    /**
-     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage, the
-     * supplied serializers and deserializers, and the system time provider.
-     * 
-     * @param name the name of the store, used in the name of the topic to which entries are recorded
-     * @param context the processing context
-     * @param keySerializer the serializer for keys; may not be null
-     * @param keyDeserializer the deserializer for keys; may not be null
-     * @param valueSerializer the serializer for values; may not be null
-     * @param valueDeserializer the deserializer for values; may not be null
-     * @return the key-value store
-     */
-    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context,
-                                                           Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
-                                                           Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
-        return create(name, context, keySerializer, keyDeserializer, valueSerializer, valueDeserializer, new SystemTime());
-    }
-
-    /**
-     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage, the
-     * supplied serializers and deserializers, and the given time provider.
-     * 
-     * @param name the name of the store, used in the name of the topic to which entries are recorded
-     * @param context the processing context
-     * @param keySerializer the serializer for keys; may not be null
-     * @param keyDeserializer the deserializer for keys; may not be null
-     * @param valueSerializer the serializer for values; may not be null
-     * @param valueDeserializer the deserializer for values; may not be null
-     * @param time the time provider; may be null if the system time should be used
-     * @return the key-value store
-     */
-    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context,
-                                                           Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
-                                                           Serializer<V> valueSerializer, Deserializer<V> valueDeserializer,
-                                                           Time time) {
-        Serdes<K, V> serdes = new Serdes<>(name, keySerializer, keyDeserializer, valueSerializer, valueDeserializer);
-        return new RocksDBKeyValueStore<>(name, context, serdes, time);
-    }
 
     protected RocksDBKeyValueStore(String name, ProcessorContext context, Serdes<K, V> serdes, Time time) {
         super(name, new RocksDBStore<K, V>(name, context, serdes), context, serdes, "rocksdb-state", time != null ? time : new SystemTime());
@@ -381,18 +265,18 @@ public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
             // comparator to be pluggable, and the default is lexicographic, so it's
             // safe to just force lexicographic comparator here for now.
             private final Comparator<byte[]> comparator = new LexicographicComparator();
-            byte[] to;
+            byte[] rawToKey;
 
             public RocksDBRangeIterator(RocksIterator iter, Serdes<K, V> serdes,
                     K from, K to) {
                 super(iter, serdes);
                 iter.seek(serdes.rawKey(from));
-                this.to = serdes.rawKey(to);
+                this.rawToKey = serdes.rawKey(to);
             }
 
             @Override
             public boolean hasNext() {
-                return super.hasNext() && comparator.compare(super.peekRawKey(), this.to) < 0;
+                return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) < 0;
             }
         }
 
