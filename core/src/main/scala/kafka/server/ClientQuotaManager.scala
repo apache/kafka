@@ -123,13 +123,14 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       case qve: QuotaViolationException =>
         // Compute the delay
         val clientMetric = metrics.metrics().get(clientRateMetricName(clientId))
-        throttleTimeMs = throttleTime(clientMetric.value(), getQuotaMetricConfig(quota(clientId)))
+        throttleTimeMs = throttleTime(clientMetric, getQuotaMetricConfig(quota(clientId)))
         delayQueue.add(new ThrottledResponse(time, throttleTimeMs, callback))
         delayQueueSensor.record()
-        clientSensors.throttleTimeSensor.record(throttleTimeMs)
         // If delayed, add the element to the delayQueue
         logger.debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
+    // If the request is not throttled, a throttleTime of 0 ms is recorded
+    clientSensors.throttleTimeSensor.record(throttleTimeMs)
     throttleTimeMs
   }
 
@@ -141,11 +142,21 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * we need to add a delay of X to W such that O * W / (W + X) = T.
    * Solving for X, we get X = (O - T)/T * W.
    */
-  private def throttleTime(metricValue: Double, config: MetricConfig): Int = {
+  private def throttleTime(clientMetric: KafkaMetric, config: MetricConfig): Int = {
+    val rateMetric: Rate = measurableAsRate(clientMetric.metricName(), clientMetric.measurable())
     val quota = config.quota()
-    val difference = metricValue - quota.bound
-    val time = difference / quota.bound * config.timeWindowMs() * config.samples()
-    time.round.toInt
+    val difference = clientMetric.value() - quota.bound
+    // Use the precise window used by the rate calculation
+    val throttleTimeMs = difference / quota.bound * rateMetric.windowSize(config, time.milliseconds())
+    throttleTimeMs.round.toInt
+  }
+
+  // Casting to Rate because we only use Rate in Quota computation
+  private def measurableAsRate(name: MetricName, measurable: Measurable): Rate = {
+    measurable match {
+      case r: Rate => r
+      case _ => throw new IllegalArgumentException(s"Metric $name is not a Rate metric, value $measurable")
+    }
   }
 
   /**
