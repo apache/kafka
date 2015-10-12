@@ -302,6 +302,18 @@ public class Fetcher<K, V> {
             throwIfOffsetOutOfRange();
 
             for (PartitionRecords<K, V> part : this.records) {
+                if (!subscriptions.isFetchable(part.partition)) {
+                    // this can happen when a rebalance happened or a partition consumption paused
+                    // before fetched records are returned to the consumer's poll call
+                    log.debug("Not returning fetched records for partition {} since it is no longer fetchable", part.partition);
+
+                    // we also need to reset the fetch positions to pretend we did not fetch
+                    // this partition in the previous request at all
+                    subscriptions.fetched(part.partition, part.records.get(0).offset());
+
+                    continue;
+                }
+
                 Long consumed = subscriptions.consumed(part.partition);
                 if (consumed != null && part.fetchOffset == consumed) {
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
@@ -440,11 +452,9 @@ public class Fetcher<K, V> {
             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 FetchResponse.PartitionData partition = entry.getValue();
-                if (!subscriptions.assignedPartitions().contains(tp)) {
-                    // this can happen when a rebalance happened while fetch is still in-flight
-                    log.debug("Ignoring fetched data for partition {} which is no longer assigned.", tp);
-                } else if (!subscriptions.isFetchable(tp)) {
-                    // this can happen when user called pause while fetch is still in-flight
+                if (!subscriptions.isFetchable(tp)) {
+                    // this can happen when a rebalance happened or a partition consumption paused
+                    // while fetch is still in-flight
                     log.debug("Ignoring fetched records for partition {} since it is no longer fetchable", tp);
                 } else if (partition.errorCode == Errors.NONE.code()) {
                     long fetchOffset = request.fetchData().get(tp).offset;
