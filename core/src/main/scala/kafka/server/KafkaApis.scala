@@ -786,14 +786,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def instantiateQuotaManagers(cfg: KafkaConfig): immutable.Map[Short, ClientQuotaManager] = {
     val producerQuotaManagerCfg = ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
-    //  quotaBytesPerSecondOverrides = cfg.producerQuotaBytesPerSecondOverrides,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
 
     val consumerQuotaManagerCfg = ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
-    //  quotaBytesPerSecondOverrides = cfg.consumerQuotaBytesPerSecondOverrides,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )

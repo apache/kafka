@@ -41,6 +41,8 @@ class ClientQuotaManagerTest {
   @Test
   def testQuotaParsing() {
     val clientMetrics = new ClientQuotaManager(config, newMetrics, "producer", time)
+
+    // Case 1: Update the quota. Assert that the new quota value is returned
     clientMetrics.updateQuota("p1", new Quota(2000, true));
     clientMetrics.updateQuota("p2", new Quota(4000, true));
 
@@ -52,15 +54,26 @@ class ClientQuotaManagerTest {
       Assert.assertEquals("Should return the overridden value (4000)",
                           new Quota(4000, true), clientMetrics.quota("p2"))
 
-      // change quota again
+      // p1 should be throttled using the default quota
+      var throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 2500 * config.numQuotaSamples, this.callback)
+      Assert.assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
+
+      // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
+      // p1 should not longer be throttled after the quota change
       clientMetrics.updateQuota("p1", new Quota(3000, true));
       Assert.assertEquals("Should return the newly overridden value (3000)",
         new Quota(3000, true), clientMetrics.quota("p1"))
 
-      // Change back to default
+      throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 0, this.callback)
+      Assert.assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
+
+      // Case 3: Change quota back to default. Should be throttled again
       clientMetrics.updateQuota("p1", new Quota(500, true));
       Assert.assertEquals("Should return the default value (500)",
         new Quota(500, true), clientMetrics.quota("p1"))
+
+      throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 0, this.callback)
+      Assert.assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
     } finally {
       clientMetrics.shutdown()
     }

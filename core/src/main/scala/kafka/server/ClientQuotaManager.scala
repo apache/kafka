@@ -159,7 +159,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * Returns the consumer quota for the specified clientId
    * @return
    */
-  private[server] def quota(clientId: String): Quota = overriddenQuota.getOrDefault(clientId, defaultQuota)
+  def quota(clientId: String): Quota = overriddenQuota.getOrDefault(clientId, defaultQuota)
 
   /*
    * This function either returns the sensors for a given client id or creates them if they don't exist
@@ -250,7 +250,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def updateQuota(clientId: String, quota: Quota) = {
     /*
      * Acquire the write lock to apply changes in the quota objects.
-     * This method changes the quota in the overriddenQuota map and applies the update on the actual KafkaMetric object.
+     * This method changes the quota in the overriddenQuota map and applies the update on the actual KafkaMetric object (if it exists).
+     * If the KafkaMetric hasn't been created, the most recent value will be used from the overriddenQuota map.
      * The write lock prevents quota update and creation at the same time. It also guards against concurrent quota change
      * notifications
      */
