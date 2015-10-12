@@ -138,7 +138,9 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
             case Some(value: String) => value
             case _ => throw new IllegalArgumentException("Config change notification does not specify 'entity_name'. Received: " + json)
           }
-          configHandler(entityType).processConfigChanges(entity, AdminUtils.fetchEntityConfig(zkUtils, entityType, entity))
+          val entityConfig = AdminUtils.fetchEntityConfig(zkUtils, entityType, entity)
+          logger.info(s"Processing override for entityType: $entityType, entity: $entity with config: $entityConfig")
+          configHandler(entityType).processConfigChanges(entity, entityConfig)
 
         case o => throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
                                                              "{\"version\" : 1," +

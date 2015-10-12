@@ -26,8 +26,7 @@ import org.junit.{Assert, Before, Test}
 class ClientQuotaManagerTest {
   private val time = new MockTime
 
-  private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
-                                                quotaBytesPerSecondOverrides = "p1=2000,p2=4000")
+  private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500)
 
   var numCallbacks: Int = 0
   def callback(delayTimeMs: Int) {
@@ -42,6 +41,9 @@ class ClientQuotaManagerTest {
   @Test
   def testQuotaParsing() {
     val clientMetrics = new ClientQuotaManager(config, newMetrics, "producer", time)
+    clientMetrics.updateQuota("p1", new Quota(2000, true));
+    clientMetrics.updateQuota("p2", new Quota(4000, true));
+
     try {
       Assert.assertEquals("Default producer quota should be 500",
                           new Quota(500, true), clientMetrics.quota("random-client-id"))
@@ -49,6 +51,16 @@ class ClientQuotaManagerTest {
                           new Quota(2000, true), clientMetrics.quota("p1"))
       Assert.assertEquals("Should return the overridden value (4000)",
                           new Quota(4000, true), clientMetrics.quota("p2"))
+
+      // change quota again
+      clientMetrics.updateQuota("p1", new Quota(3000, true));
+      Assert.assertEquals("Should return the newly overridden value (3000)",
+        new Quota(3000, true), clientMetrics.quota("p1"))
+
+      // Change back to default
+      clientMetrics.updateQuota("p1", new Quota(500, true));
+      Assert.assertEquals("Should return the default value (500)",
+        new Quota(500, true), clientMetrics.quota("p1"))
     } finally {
       clientMetrics.shutdown()
     }
@@ -100,58 +112,6 @@ class ClientQuotaManagerTest {
     } finally {
       clientMetrics.shutdown()
     }
-  }
-
-  @Test
-  def testOverrideParse() {
-    var testConfig = ClientQuotaManagerConfig()
-    var clientMetrics = new ClientQuotaManager(testConfig, newMetrics, "consumer", time)
-
-    try {
-      // Case 1 - Default config
-      Assert.assertEquals(new Quota(ClientQuotaManagerConfig.QuotaBytesPerSecondDefault, true),
-                          clientMetrics.quota("p1"))
-    } finally {
-      clientMetrics.shutdown()
-    }
-
-
-    // Case 2 - Empty override
-    testConfig = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
-                                          quotaBytesPerSecondOverrides = "p1=2000,p2=4000,,")
-
-    clientMetrics = new ClientQuotaManager(testConfig, newMetrics, "consumer", time)
-    try {
-      Assert.assertEquals(new Quota(2000, true), clientMetrics.quota("p1"))
-      Assert.assertEquals(new Quota(4000, true), clientMetrics.quota("p2"))
-    } finally {
-      clientMetrics.shutdown()
-    }
-
-    // Case 3 - NumberFormatException for override
-    testConfig = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
-                                          quotaBytesPerSecondOverrides = "p1=2000,p2=4000,p3=p4")
-    try {
-      clientMetrics = new ClientQuotaManager(testConfig, newMetrics, "consumer", time)
-      Assert.fail("Should fail to parse invalid config " + testConfig.quotaBytesPerSecondOverrides)
-    }
-    catch {
-      // Swallow.
-      case nfe: NumberFormatException =>
-    }
-
-    // Case 4 - IllegalArgumentException for override
-    testConfig = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500,
-                                          quotaBytesPerSecondOverrides = "p1=2000=3000")
-    try {
-      clientMetrics = new ClientQuotaManager(testConfig, newMetrics, "producer", time)
-      Assert.fail("Should fail to parse invalid config " + testConfig.quotaBytesPerSecondOverrides)
-    }
-    catch {
-      // Swallow.
-      case nfe: IllegalArgumentException =>
-    }
-
   }
 
   def newMetrics: Metrics = {

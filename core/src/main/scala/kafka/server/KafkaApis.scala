@@ -19,6 +19,8 @@ package kafka.server
 
 import java.nio.ByteBuffer
 
+import org.apache.kafka.common.TopicPartition
+import kafka.api._
 import kafka.admin.AdminUtils
 import kafka.api._
 import kafka.common._
@@ -55,7 +57,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   // Store all the quota managers for each type of request
-  private val quotaManagers = instantiateQuotaManagers(config)
+  val quotaManagers: immutable.Map[Short, ClientQuotaManager] = instantiateQuotaManagers(config)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -781,22 +783,22 @@ class KafkaApis(val requestChannel: RequestChannel,
   /*
    * Returns a Map of all quota managers configured. The request Api key is the key for the Map
    */
-  private def instantiateQuotaManagers(cfg: KafkaConfig): Map[Short, ClientQuotaManager] = {
+  private def instantiateQuotaManagers(cfg: KafkaConfig): immutable.Map[Short, ClientQuotaManager] = {
     val producerQuotaManagerCfg = ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
-      quotaBytesPerSecondOverrides = cfg.producerQuotaBytesPerSecondOverrides,
+    //  quotaBytesPerSecondOverrides = cfg.producerQuotaBytesPerSecondOverrides,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
 
     val consumerQuotaManagerCfg = ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
-      quotaBytesPerSecondOverrides = cfg.consumerQuotaBytesPerSecondOverrides,
+    //  quotaBytesPerSecondOverrides = cfg.consumerQuotaBytesPerSecondOverrides,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
 
-    val quotaManagers = Map[Short, ClientQuotaManager](
+    val quotaManagers = immutable.Map[Short, ClientQuotaManager](
       RequestKeys.ProduceKey ->
               new ClientQuotaManager(producerQuotaManagerCfg, metrics, RequestKeys.nameForKey(RequestKeys.ProduceKey), new org.apache.kafka.common.utils.SystemTime),
       RequestKeys.FetchKey ->
