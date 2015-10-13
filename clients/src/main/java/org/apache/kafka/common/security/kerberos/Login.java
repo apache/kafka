@@ -84,7 +84,6 @@ public class Login {
     private volatile Subject subject;
 
     private LoginContext login;
-    // Initialize 'lastLogin' to do a login at first time
     private long lastLogin;
 
     /**
@@ -103,8 +102,8 @@ public class Login {
         this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
         this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
         this.kinitCmd = (String) configs.get(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
-        this.lastLogin = time.currentElapsedTime() - this.minTimeBeforeRelogin;
 
+        this.lastLogin = time.currentElapsedTime();
         login = login(loginContextName);
         subject = login.getSubject();
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
@@ -169,8 +168,7 @@ public class Login {
                         // We should not allow the ticket to expire, but we should take into consideration
                         // minTimeBeforeRelogin. Will not sleep less than minTimeBeforeRelogin, unless doing so
                         // would cause ticket expiration.
-                        if ((nextRefresh > expiry) ||
-                                ((now + minTimeBeforeRelogin) > expiry)) {
+                        if ((nextRefresh > expiry) || (now + minTimeBeforeRelogin > expiry)) {
                             // expiry is before next scheduled refresh).
                             log.info("Refreshing now because expiry is before next scheduled refresh time.");
                             nextRefresh = now;
@@ -345,8 +343,6 @@ public class Login {
                     " before.");
             return false;
         }
-        // register most recent relogin attempt
-        lastLogin = now;
         return true;
     }
 
@@ -367,6 +363,8 @@ public class Login {
         }
         log.info("Initiating logout for " + principal);
         synchronized (Login.class) {
+            // register most recent relogin attempt
+            lastLogin = time.currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per
             //the Java kerberos login module code, only the kerberos credentials
             //are cleared
