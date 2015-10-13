@@ -36,6 +36,8 @@ import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.MockTime;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 public class MetricsTest {
@@ -43,7 +45,17 @@ public class MetricsTest {
     private static final double EPS = 0.000001;
     private MockTime time = new MockTime();
     private MetricConfig config = new MetricConfig();
-    private Metrics metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time);
+    private Metrics metrics;
+
+    @Before
+    public void setup() {
+        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time);
+    }
+
+    @After
+    public void tearDown() {
+        this.metrics.close();
+    }
 
     @Test
     public void testMetricName() {
@@ -200,6 +212,56 @@ public class MetricsTest {
     }
 
     @Test
+    public void testRemoveInactiveMetrics() {
+        Sensor s1 = metrics.sensor("test.s1", null, 1);
+        s1.add(new MetricName("test.s1.count", "grp1"), new Count());
+
+        Sensor s2 = metrics.sensor("test.s2", null, 3);
+        s2.add(new MetricName("test.s2.count", "grp1"), new Count());
+
+        Metrics.ExpireSensorTask purger = metrics.new ExpireSensorTask();
+        purger.run();
+        assertNotNull("Sensor test.s1 must be present", metrics.getSensor("test.s1"));
+        assertNotNull("MetricName test.s1.count must be present",
+                metrics.metrics().get(new MetricName("test.s1.count", "grp1")));
+        assertNotNull("Sensor test.s2 must be present", metrics.getSensor("test.s2"));
+        assertNotNull("MetricName test.s2.count must be present",
+                metrics.metrics().get(new MetricName("test.s2.count", "grp1")));
+
+        time.sleep(1001);
+        purger.run();
+        assertNull("Sensor test.s1 should have been purged", metrics.getSensor("test.s1"));
+        assertNull("MetricName test.s1.count should have been purged",
+                metrics.metrics().get(new MetricName("test.s1.count", "grp1")));
+        assertNotNull("Sensor test.s2 must be present", metrics.getSensor("test.s2"));
+        assertNotNull("MetricName test.s2.count must be present",
+                metrics.metrics().get(new MetricName("test.s2.count", "grp1")));
+
+        // record a value in sensor s2. This should reset the clock for that sensor.
+        // It should not get purged at the 3 second mark after creation
+        s2.record();
+        time.sleep(2000);
+        purger.run();
+        assertNotNull("Sensor test.s2 must be present", metrics.getSensor("test.s2"));
+        assertNotNull("MetricName test.s2.count must be present",
+                metrics.metrics().get(new MetricName("test.s2.count", "grp1")));
+
+        // After another 1 second sleep, the metric should be purged
+        time.sleep(1000);
+        purger.run();
+        assertNull("Sensor test.s2 should have been purged", metrics.getSensor("test.s1"));
+        assertNull("MetricName test.s2.count should have been purged",
+                metrics.metrics().get(new MetricName("test.s1.count", "grp1")));
+
+        // After purging, it should be possible to recreate a metric
+        s1 = metrics.sensor("test.s1", null, 1);
+        s1.add(new MetricName("test.s1.count", "grp1"), new Count());
+        assertNotNull("Sensor test.s1 must be present", metrics.getSensor("test.s1"));
+        assertNotNull("MetricName test.s1.count must be present",
+                metrics.metrics().get(new MetricName("test.s1.count", "grp1")));
+    }
+
+    @Test
     public void testRemoveMetric() {
         metrics.addMetric(new MetricName("test1", "grp1"), new Count());
         metrics.addMetric(new MetricName("test2", "grp1"), new Count());
@@ -320,6 +382,34 @@ public class MetricsTest {
         assertEquals(0.0, p25.value(), 1.0);
         assertEquals(0.0, p50.value(), 1.0);
         assertEquals(0.0, p75.value(), 1.0);
+    }
+
+    @Test
+    public void testRateWindowing() throws Exception {
+        // Use the default time window. Set 3 samples
+        MetricConfig cfg = new MetricConfig().samples(3);
+        Sensor s = metrics.sensor("test.sensor", cfg);
+        s.add(new MetricName("test.rate", "grp1"), new Rate(TimeUnit.SECONDS));
+
+        int sum = 0;
+        int count = cfg.samples() - 1;
+        // Advance 1 window after every record
+        for (int i = 0; i < count; i++) {
+            s.record(100);
+            sum += 100;
+            time.sleep(cfg.timeWindowMs());
+        }
+
+        // Sleep for half the window.
+        time.sleep(cfg.timeWindowMs() / 2);
+
+        // prior to any time passing
+        double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + cfg.timeWindowMs() / 2) / 1000.0;
+
+        KafkaMetric km = metrics.metrics().get(new MetricName("test.rate", "grp1"));
+        assertEquals("Rate(0...2) = 2.666", sum / elapsedSecs, km.value(), EPS);
+        assertEquals("Elapsed Time = 75 seconds", elapsedSecs,
+                ((Rate) km.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS);
     }
 
     public static class ConstantMeasurable implements Measurable {

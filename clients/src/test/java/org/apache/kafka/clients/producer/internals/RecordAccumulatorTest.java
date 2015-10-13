@@ -42,6 +42,7 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.junit.After;
 import org.junit.Test;
 
 public class RecordAccumulatorTest {
@@ -66,6 +67,11 @@ public class RecordAccumulatorTest {
     private Metrics metrics = new Metrics(time);
     Map<String, String> metricTags = new LinkedHashMap<String, String>();
     private final long maxBlockTimeMs = 1000;
+
+    @After
+    public void teardown() {
+        this.metrics.close();
+    }
 
     @Test
     public void testFull() throws Exception {

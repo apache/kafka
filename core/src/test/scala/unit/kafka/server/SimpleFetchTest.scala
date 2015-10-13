@@ -123,6 +123,7 @@ class SimpleFetchTest {
   @After
   def tearDown() {
     replicaManager.shutdown(false)
+    metrics.close()
   }
 
   /**

@@ -18,26 +18,26 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.WindowSupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorDef;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.kstream.WindowDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamWindow<K, V> implements ProcessorDef {
+public class KStreamWindow<K, V> implements ProcessorSupplier<K, V> {
 
-    private final WindowDef<K, V> windowDef;
+    private final WindowSupplier<K, V> windowSupplier;
 
-    KStreamWindow(WindowDef<K, V> windowDef) {
-        this.windowDef = windowDef;
+    KStreamWindow(WindowSupplier<K, V> windowSupplier) {
+        this.windowSupplier = windowSupplier;
     }
 
-    public WindowDef<K, V> window() {
-        return windowDef;
+    public WindowSupplier<K, V> window() {
+        return windowSupplier;
     }
 
     @Override
-    public Processor instance() {
+    public Processor<K, V> get() {
         return new KStreamWindowProcessor();
     }
 
@@ -48,7 +48,7 @@ public class KStreamWindow<K, V> implements ProcessorDef {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            this.window = windowDef.instance();
+            this.window = windowSupplier.get();
             this.window.init(context);
         }
 

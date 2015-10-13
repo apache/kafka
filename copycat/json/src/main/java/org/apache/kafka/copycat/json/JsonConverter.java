@@ -21,14 +21,22 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.kafka.common.cache.Cache;
+import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.copycat.data.*;
 import org.apache.kafka.copycat.errors.DataException;
 import org.apache.kafka.copycat.storage.Converter;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Implementation of Converter that uses JSON to store schemas and objects.
@@ -36,6 +44,8 @@ import java.util.*;
 public class JsonConverter implements Converter {
     private static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
     private static final boolean SCHEMAS_ENABLE_DEFAULT = true;
+    private static final String SCHEMAS_CACHE_CONFIG = "schemas.cache.size";
+    private static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
 
     private static final HashMap<Schema.Type, JsonToCopycatTypeConverter> TO_COPYCAT_CONVERTERS = new HashMap<>();
 
@@ -183,11 +193,93 @@ public class JsonConverter implements Converter {
                 return result;
             }
         });
-
-
     }
 
+    // Convert values in Copycat form into their logical types. These logical converters are discovered by logical type
+    // names specified in the field
+    private static final HashMap<String, LogicalTypeConverter> TO_COPYCAT_LOGICAL_CONVERTERS = new HashMap<>();
+    static {
+        TO_COPYCAT_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof byte[]))
+                    throw new DataException("Invalid type for Decimal, underlying representation should be bytes but was " + value.getClass());
+                return Decimal.toLogical(schema, (byte[]) value);
+            }
+        });
+
+        TO_COPYCAT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof Integer))
+                    throw new DataException("Invalid type for Date, underlying representation should be int32 but was " + value.getClass());
+                return Date.toLogical(schema, (int) value);
+            }
+        });
+
+        TO_COPYCAT_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof Integer))
+                    throw new DataException("Invalid type for Time, underlying representation should be int32 but was " + value.getClass());
+                return Time.toLogical(schema, (int) value);
+            }
+        });
+
+        TO_COPYCAT_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof Long))
+                    throw new DataException("Invalid type for Timestamp, underlying representation should be int64 but was " + value.getClass());
+                return Timestamp.toLogical(schema, (long) value);
+            }
+        });
+    }
+
+    private static final HashMap<String, LogicalTypeConverter> TO_JSON_LOGICAL_CONVERTERS = new HashMap<>();
+    static {
+        TO_JSON_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof BigDecimal))
+                    throw new DataException("Invalid type for Decimal, expected BigDecimal but was " + value.getClass());
+                return Decimal.fromLogical(schema, (BigDecimal) value);
+            }
+        });
+
+        TO_JSON_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof java.util.Date))
+                    throw new DataException("Invalid type for Date, expected Date but was " + value.getClass());
+                return Date.fromLogical(schema, (java.util.Date) value);
+            }
+        });
+
+        TO_JSON_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof java.util.Date))
+                    throw new DataException("Invalid type for Time, expected Date but was " + value.getClass());
+                return Time.fromLogical(schema, (java.util.Date) value);
+            }
+        });
+
+        TO_JSON_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public Object convert(Schema schema, Object value) {
+                if (!(value instanceof java.util.Date))
+                    throw new DataException("Invalid type for Timestamp, expected Date but was " + value.getClass());
+                return Timestamp.fromLogical(schema, (java.util.Date) value);
+            }
+        });
+    }
+
+
     private boolean enableSchemas = SCHEMAS_ENABLE_DEFAULT;
+    private int cacheSize = SCHEMAS_CACHE_SIZE_DEFAULT;
+    private Cache<Schema, ObjectNode> fromCopycatSchemaCache;
+    private Cache<JsonNode, Schema> toCopycatSchemaCache;
 
     private final JsonSerializer serializer = new JsonSerializer();
     private final JsonDeserializer deserializer = new JsonDeserializer();
@@ -200,6 +292,12 @@ public class JsonConverter implements Converter {
 
         serializer.configure(configs, isKey);
         deserializer.configure(configs, isKey);
+
+        Object cacheSizeVal = configs.get(SCHEMAS_CACHE_SIZE_DEFAULT);
+        if (cacheSizeVal != null)
+            cacheSize = (int) cacheSizeVal;
+        fromCopycatSchemaCache = new SynchronizedCache<>(new LRUCache<Schema, ObjectNode>(cacheSize));
+        toCopycatSchemaCache = new SynchronizedCache<>(new LRUCache<JsonNode, Schema>(cacheSize));
     }
 
     @Override
@@ -247,9 +345,13 @@ public class JsonConverter implements Converter {
         return new SchemaAndValue(schema, convertToCopycat(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)));
     }
 
-    private static ObjectNode asJsonSchema(Schema schema) {
+    private ObjectNode asJsonSchema(Schema schema) {
         if (schema == null)
             return null;
+
+        ObjectNode cached = fromCopycatSchemaCache.get(schema);
+        if (cached != null)
+            return cached;
 
         final ObjectNode jsonSchema;
         switch (schema.type()) {
@@ -310,16 +412,27 @@ public class JsonConverter implements Converter {
             jsonSchema.put(JsonSchema.SCHEMA_VERSION_FIELD_NAME, schema.version());
         if (schema.doc() != null)
             jsonSchema.put(JsonSchema.SCHEMA_DOC_FIELD_NAME, schema.doc());
+        if (schema.parameters() != null) {
+            ObjectNode jsonSchemaParams = JsonNodeFactory.instance.objectNode();
+            for (Map.Entry<String, String> prop : schema.parameters().entrySet())
+                jsonSchemaParams.put(prop.getKey(), prop.getValue());
+            jsonSchema.put(JsonSchema.SCHEMA_PARAMETERS_FIELD_NAME, jsonSchemaParams);
+        }
         if (schema.defaultValue() != null)
             jsonSchema.set(JsonSchema.SCHEMA_DEFAULT_FIELD_NAME, convertToJson(schema, schema.defaultValue()));
 
+        fromCopycatSchemaCache.put(schema, jsonSchema);
         return jsonSchema;
     }
 
 
-    private static Schema asCopycatSchema(JsonNode jsonSchema) {
+    private Schema asCopycatSchema(JsonNode jsonSchema) {
         if (jsonSchema.isNull())
             return null;
+
+        Schema cached = toCopycatSchemaCache.get(jsonSchema);
+        if (cached != null)
+            return cached;
 
         JsonNode schemaTypeNode = jsonSchema.get(JsonSchema.SCHEMA_TYPE_FIELD_NAME);
         if (schemaTypeNode == null || !schemaTypeNode.isTextual())
@@ -405,11 +518,25 @@ public class JsonConverter implements Converter {
         if (schemaDocNode != null && schemaDocNode.isTextual())
             builder.doc(schemaDocNode.textValue());
 
+        JsonNode schemaParamsNode = jsonSchema.get(JsonSchema.SCHEMA_PARAMETERS_FIELD_NAME);
+        if (schemaParamsNode != null && schemaParamsNode.isObject()) {
+            Iterator<Map.Entry<String, JsonNode>> paramsIt = schemaParamsNode.fields();
+            while (paramsIt.hasNext()) {
+                Map.Entry<String, JsonNode> entry = paramsIt.next();
+                JsonNode paramValue = entry.getValue();
+                if (!paramValue.isTextual())
+                    throw new DataException("Schema parameters must have string values.");
+                builder.parameter(entry.getKey(), paramValue.textValue());
+            }
+        }
+
         JsonNode schemaDefaultNode = jsonSchema.get(JsonSchema.SCHEMA_DEFAULT_FIELD_NAME);
         if (schemaDefaultNode != null)
             builder.defaultValue(convertToCopycat(builder, schemaDefaultNode));
 
-        return builder.build();
+        Schema result = builder.build();
+        toCopycatSchemaCache.put(jsonSchema, result);
+        return result;
     }
 
 
@@ -420,11 +547,11 @@ public class JsonConverter implements Converter {
      * @param value the value
      * @return JsonNode-encoded version
      */
-    private static JsonNode convertToJsonWithEnvelope(Schema schema, Object value) {
+    private JsonNode convertToJsonWithEnvelope(Schema schema, Object value) {
         return new JsonSchema.Envelope(asJsonSchema(schema), convertToJson(schema, value)).toJsonNode();
     }
 
-    private static JsonNode convertToJsonWithoutEnvelope(Schema schema, Object value) {
+    private JsonNode convertToJsonWithoutEnvelope(Schema schema, Object value) {
         return convertToJson(schema, value);
     }
 
@@ -432,8 +559,8 @@ public class JsonConverter implements Converter {
      * Convert this object, in the org.apache.kafka.copycat.data format, into a JSON object, returning both the schema
      * and the converted object.
      */
-    private static JsonNode convertToJson(Schema schema, Object value) {
-        if (value == null) {
+    private static JsonNode convertToJson(Schema schema, Object logicalValue) {
+        if (logicalValue == null) {
             if (schema == null) // Any schema is valid and we don't have a default, so treat this as an optional schema
                 return null;
             if (schema.defaultValue() != null)
@@ -441,6 +568,13 @@ public class JsonConverter implements Converter {
             if (schema.isOptional())
                 return JsonNodeFactory.instance.nullNode();
             throw new DataException("Conversion error: null value for field that is required and has no default value");
+        }
+
+        Object value = logicalValue;
+        if (schema != null && schema.name() != null) {
+            LogicalTypeConverter logicalConverter = TO_JSON_LOGICAL_CONVERTERS.get(schema.name());
+            if (logicalConverter != null)
+                value = logicalConverter.convert(schema, logicalValue);
         }
 
         try {
@@ -581,11 +715,21 @@ public class JsonConverter implements Converter {
         if (typeConverter == null)
             throw new DataException("Unknown schema type: " + schema.type());
 
-        return typeConverter.convert(schema, jsonValue);
+        Object converted = typeConverter.convert(schema, jsonValue);
+        if (schema != null && schema.name() != null) {
+            LogicalTypeConverter logicalConverter = TO_COPYCAT_LOGICAL_CONVERTERS.get(schema.name());
+            if (logicalConverter != null)
+                converted = logicalConverter.convert(schema, converted);
+        }
+        return converted;
     }
 
 
     private interface JsonToCopycatTypeConverter {
         Object convert(Schema schema, JsonNode value);
+    }
+
+    private interface LogicalTypeConverter {
+        Object convert(Schema schema, Object value);
     }
 }
