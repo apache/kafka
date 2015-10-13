@@ -46,8 +46,8 @@ private[coordinator] class MemberMetadata(val memberId: String,
                                           val sessionTimeoutMs: Int,
                                           var metadata: Array[Byte],
                                           var subProtocols: Set[String]) {
-  def hasMetadata(metadata: Array[Byte]): Boolean = {
-    util.Arrays.equals(metadata, this.metadata)
+  def matches(metadata: Array[Byte], subProtocols: Set[String]): Boolean = {
+    util.Arrays.equals(metadata, this.metadata) && subProtocols == this.subProtocols
   }
 
   def hasAssignment(assignment: Array[Byte]): Boolean = {

@@ -155,7 +155,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createConsumerMetadataResponse() {
-        return new GroupMetadataResponse((short) 1, new Node(10, "host1", 2014));
+        return new GroupMetadataResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
     }
 
     private AbstractRequest createFetchRequest() {

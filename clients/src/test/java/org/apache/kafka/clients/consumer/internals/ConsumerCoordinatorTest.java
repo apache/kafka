@@ -288,6 +288,7 @@ public class ConsumerCoordinatorTest {
         assertFalse(subscriptions.partitionAssignmentNeeded());
         assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
         assertEquals(1, rebalanceListener.revokedCount);
+        assertEquals(Collections.emptySet(), rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(Collections.singleton(tp), rebalanceListener.assigned);
     }
@@ -366,7 +367,7 @@ public class ConsumerCoordinatorTest {
 
         // and join the group again
         subscriptions.needReassignment();
-        client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE.code()));
+        client.prepareResponse(joinGroupFollowerResponse(2, "consumer", "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
         coordinator.ensurePartitionAssignment();
 

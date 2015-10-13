@@ -53,7 +53,6 @@ private[coordinator] case object AwaitingSync extends GroupState { val state: By
  * action: respond to member heartbeats normally
  * transition: member failure detected via heartbeat => PreparingRebalance
  *             member join-group received => PreparingRebalance
- *             zookeeper topic watcher fired => PreparingRebalance
  */
 private[coordinator] case object Stable extends GroupState { val state: Byte = 3 }
 
@@ -93,7 +92,6 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocol: Stri
   private var state: GroupState = Stable
   var generationId = 0
   var leaderId: String = null
-  var syncErrorCode = Errors.NONE.code
   var subProtocol: String = null
 
   def is(groupState: GroupState) = state == groupState
@@ -117,6 +115,8 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocol: Stri
       }
     }
   }
+
+  def currentState = state
 
   def isEmpty = members.isEmpty
 
@@ -169,12 +169,9 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocol: Stri
   def initNextGeneration = {
     assert(notYetRejoinedMembers == List.empty[MemberMetadata])
     generationId += 1
-    syncErrorCode = Errors.NONE.code
     subProtocol = selectProtocol
     transitionTo(AwaitingSync)
   }
-
-  def hasError = syncErrorCode != Errors.NONE.code
 
   def currentMemberMetadata: Map[String, Array[Byte]] = {
     if (is(Dead) || is(PreparingRebalance))
