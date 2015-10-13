@@ -105,6 +105,12 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
 ### Running checkstyle on the java code ###
     ./gradlew checkstyleMain checkstyleTest
 
+### Limit the number of processes for each task ###
+    ./gradlew -Dorg.gradle.project.maxParallelForks=1 test
+
+This will most commonly be useful for automated builds where the full resources of the host running the build and tests
+may not be dedicated to Kafka's build.
+
 ### Running in Vagrant ###
 
 See [vagrant/README.md](vagrant/README.md).

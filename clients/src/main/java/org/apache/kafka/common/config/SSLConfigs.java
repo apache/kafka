@@ -13,8 +13,8 @@
 
 package org.apache.kafka.common.config;
 
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.TrustManagerFactory;
 
 public class SSLConfigs {
     /*
@@ -34,7 +34,7 @@ public class SSLConfigs {
     public static final String SSL_PROVIDER_DOC = "The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.";
 
     public static final String SSL_CIPHER_SUITES_CONFIG = "ssl.cipher.suites";
-    public static final String SSL_CIPHER_SUITES_DOC = "A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol."
+    public static final String SSL_CIPHER_SUITES_DOC = "A list of cipher suites. This is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol."
             + "By default all the available cipher suites are supported.";
 
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
