@@ -25,25 +25,21 @@ import org.scalatest.junit.JUnitSuite
 trait ZooKeeperTestHarness extends JUnitSuite {
   var zkPort: Int = -1
   var zookeeper: EmbeddedZookeeper = null
-  var zkClient: ZkClient = null
-  var zkConnection : ZkConnection = null
+  var zkUtils: ZkUtils = null
   val zkConnectionTimeout = 6000
   val zkSessionTimeout = 6000
-
   def zkConnect: String = "127.0.0.1:" + zkPort
 
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
     zkPort = zookeeper.port
-    val (client, connection) = ZkUtils.createZkClientAndConnection(zkConnect, zkSessionTimeout, zkConnectionTimeout)
-    zkClient = client
-    zkConnection = connection
+    zkUtils = ZkUtils.create(zkConnect, zkSessionTimeout, zkConnectionTimeout, "")
   }
 
   @After
   def tearDown() {
-    CoreUtils.swallow(zkClient.close())
+    CoreUtils.swallow(zkUtils.zkClient.close())
     CoreUtils.swallow(zookeeper.shutdown())
   }
 

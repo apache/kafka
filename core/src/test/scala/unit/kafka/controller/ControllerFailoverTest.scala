@@ -75,7 +75,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
       }
     }
     // Create topic with one partition
-    kafka.admin.AdminUtils.createTopic(controller.zkClient, topic, 1, 1)
+    kafka.admin.AdminUtils.createTopic(controller.zkUtils, topic, 1, 1)
     val topicPartition = TopicAndPartition("topic1", 0)
     var partitions = controller.kafkaController.partitionStateMachine.partitionsInState(OnlinePartition)
     while (!partitions.contains(topicPartition)) {

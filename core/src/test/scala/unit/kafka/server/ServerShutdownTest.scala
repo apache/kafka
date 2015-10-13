@@ -53,7 +53,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       keyEncoder = classOf[IntEncoder].getName)
 
     // create topic
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     // send some messages
     producer.send(sent1.map(m => new KeyedMessage[Int, String](topic, 0, m)):_*)

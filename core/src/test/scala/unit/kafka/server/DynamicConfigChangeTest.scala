@@ -39,14 +39,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val tp = TopicAndPartition("test", 0)
     val logProps = new Properties()
     logProps.put(LogConfig.FlushMessagesProp, oldVal.toString)
-    AdminUtils.createTopic(zkClient, tp.topic, 1, 1, logProps)
+    AdminUtils.createTopic(zkUtils, tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.servers(0).logManager.getLog(tp)
       assertTrue(logOpt.isDefined)
       assertEquals(oldVal, logOpt.get.config.flushInterval)
     }
     logProps.put(LogConfig.FlushMessagesProp, newVal.toString)
-    AdminUtils.changeTopicConfig(zkClient, tp.topic, logProps)
+    AdminUtils.changeTopicConfig(zkUtils, tp.topic, logProps)
     TestUtils.retry(10000) {
       assertEquals(newVal, this.servers(0).logManager.getLog(tp).get.config.flushInterval)
     }
@@ -61,7 +61,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props = new Properties()
     props.put("a.b", "c")
     props.put("x.y", "z")
-    AdminUtils.changeClientIdConfig(zkClient, clientId, props)
+    AdminUtils.changeClientIdConfig(zkUtils, clientId, props)
     TestUtils.retry(10000) {
       val configHandler = this.servers(0).dynamicConfigHandlers(ConfigType.Client).asInstanceOf[ClientIdConfigHandler]
       assertTrue("ClientId testClient must exist", configHandler.configPool.contains(clientId))
@@ -77,7 +77,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     try {
       val logProps = new Properties()
       logProps.put(LogConfig.FlushMessagesProp, 10000: java.lang.Integer)
-      AdminUtils.changeTopicConfig(zkClient, topic, logProps)
+      AdminUtils.changeTopicConfig(zkUtils, topic, logProps)
       fail("Should fail with AdminOperationException for topic doesn't exist")
     } catch {
       case e: AdminOperationException => // expected
@@ -99,7 +99,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     EasyMock.expectLastCall().once()
     EasyMock.replay(handler)
 
-    val configManager = new DynamicConfigManager(zkClient, Map(ConfigType.Topic -> handler))
+    val configManager = new DynamicConfigManager(zkUtils, Map(ConfigType.Topic -> handler))
     // Notifications created using the old TopicConfigManager are ignored.
     configManager.processNotification(Some("not json"))
 

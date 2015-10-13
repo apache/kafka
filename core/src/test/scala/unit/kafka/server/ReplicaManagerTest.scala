@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.api.{ProducerResponseStatus, SerializationTestUtils, ProducerRequest}
 import kafka.common.TopicAndPartition
-import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import kafka.utils.{ZkUtils, MockScheduler, MockTime, TestUtils}
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
@@ -42,11 +42,12 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = ZkUtils.createWithZkClient(zkClient, null)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
     val metrics = new Metrics
-    val rm = new ReplicaManager(config, metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
     try {
       val partition = rm.getOrCreatePartition(topic, 1)
@@ -64,12 +65,12 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = EasyMock.createMock(classOf[ZkUtils])
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
     val metrics = new Metrics
-    val rm = new ReplicaManager(config, metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false))
     try {
       val partition = rm.getOrCreatePartition(topic, 1)
@@ -86,12 +87,12 @@ class ReplicaManagerTest {
   def testIllegalRequiredAcks() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = EasyMock.createMock(classOf[ZkUtils])
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
     val metrics = new Metrics
-    val rm = new ReplicaManager(config, metrics, time, jTime, zkClient, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), Option(this.getClass.getName))
     try {
       val produceRequest = new ProducerRequest(1, "client 1", 3, 1000, SerializationTestUtils.topicDataProducerRequest)

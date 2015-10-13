@@ -83,6 +83,13 @@ object ZkUtils {
     (zkClient, zkConnection)
   }
   
+  /*
+   * For tests
+   */
+  def createWithZkClient(zkClient: ZkClient, loginConfigFile: String): ZkUtils = {
+    new ZkUtils(zkClient, null, loginConfigFile)
+  } 
+  
   def maybeDeletePath(zkUrl: String, dir: String) {
     try {
       val zk = ZkUtils.createZkClient(zkUrl, 30*1000, 30*1000)
@@ -109,15 +116,13 @@ class ZkUtils(val zkClient: ZkClient,
                               ZkUtils.IsrChangeNotificationPath)
 
   /** true if java.security.auth.login.config is set to some jaas file which has "Client" entry. **/
-                              //System.getProperty("java.security.auth.login.config")
 
   val isSecure: Boolean = {
-    val loginConfigurationFile: String = loginConfigFile
     var isSecurityEnabled = false
-    if (loginConfigurationFile != null && loginConfigurationFile.length > 0) {
-      val configFile: File = new File(loginConfigurationFile)
+    if (loginConfigFile != null && loginConfigFile.length > 0) {
+      val configFile: File = new File(loginConfigFile)
       if (!configFile.canRead) {
-        throw new KafkaException(s"File $loginConfigurationFile cannot be read.")
+        throw new KafkaException(s"File $loginConfigFile cannot be read.")
       }
       try {
         val configUri: URI = configFile.toURI

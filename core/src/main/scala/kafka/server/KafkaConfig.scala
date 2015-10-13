@@ -122,7 +122,7 @@ object Defaults {
   
   /** ********* Security configuration ***********/
   val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
-  val AuthLoginConfig = null
+  val AuthLoginConfig = ""
   
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetries = 3

@@ -43,10 +43,10 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
     val notificationMessage2 = "message2"
     val changeExpirationMs = 100
 
-    val notificationListener = new ZkNodeChangeNotificationListener(zkClient, seqNodeRoot, seqNodePrefix, notificationHandler, changeExpirationMs)
+    val notificationListener = new ZkNodeChangeNotificationListener(zkUtils, seqNodeRoot, seqNodePrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
-    ZkUtils.createSequentialPersistentPath(zkClient, seqNodePath, notificationMessage1)
+    zkUtils.createSequentialPersistentPath(seqNodePath, notificationMessage1)
 
     TestUtils.waitUntilTrue(() => notificationHandler.invocationCount == 1 && notificationHandler.notification == notificationMessage1, "failed to send/process notification message in the timeout period.")
 
@@ -55,7 +55,7 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
     Assert.assertEquals(1, ZkUtils.getChildren(zkClient, seqNodeRoot).size) however even after that the assertion can fail as the second node it self can be deleted
     depending on how threads get scheduled.*/
 
-    ZkUtils.createSequentialPersistentPath(zkClient, seqNodePath, notificationMessage2)
+    zkUtils.createSequentialPersistentPath(seqNodePath, notificationMessage2)
     TestUtils.waitUntilTrue(() => notificationHandler.invocationCount == 2 && notificationHandler.notification == notificationMessage2, "failed to send/process notification message in the timeout period.")
   }
 }
