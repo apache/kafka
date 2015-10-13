@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
 
 public class PlaintextTransportLayer implements TransportLayer {
     private static final Logger log = LoggerFactory.getLogger(PlaintextTransportLayer.class);
-    public final SelectionKey key;
+    private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Principal principal = KafkaPrincipal.ANONYMOUS;
 

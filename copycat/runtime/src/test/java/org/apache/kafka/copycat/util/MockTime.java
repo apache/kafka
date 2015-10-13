@@ -57,9 +57,4 @@ public class MockTime implements Time {
         return 0;
     }
 
-    @Override
-    public Date elapsedTimeToDate(long elapsedTime) {
-        return null;
-    }
-
 }

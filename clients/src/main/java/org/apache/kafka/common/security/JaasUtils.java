@@ -26,14 +26,11 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 public class JaasUtils {
     private static final Logger LOG = LoggerFactory.getLogger(JaasUtils.class);
     public static final String LOGIN_CONTEXT_SERVER = "KafkaServer";
     public static final String LOGIN_CONTEXT_CLIENT = "KafkaClient";
     public static final String SERVICE_NAME = "serviceName";
-    // Oid mechanism = use Kerberos V5 as the security mechanism.
-    //public static final Oid KRB5_MECH_OID = new Oid("1.2.840.113554.1.2.2");
 
     /**
      * Construct a JAAS configuration object per kafka jaas configuration file

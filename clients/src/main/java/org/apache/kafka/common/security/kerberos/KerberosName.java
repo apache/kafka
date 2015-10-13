@@ -26,13 +26,11 @@ import java.util.regex.Pattern;
 
 import org.apache.kafka.common.security.JaasUtils;
 
-
 /**
  * This class implements parsing and handling of Kerberos principal names. In
  * particular, it splits them apart and translates them down into local
  * operating system names.
  */
-
 public class KerberosName {
     /** The first component of the name */
     private final String serviceName;
@@ -42,43 +40,46 @@ public class KerberosName {
     private final String realm;
 
     /**
-     * A pattern that matches a Kerberos name with at most 2 components.
+     * A pattern that matches a Kerberos name with at most 3 components.
      */
-    private static final Pattern NAMEPARSER = Pattern.compile("([^/@]*)(/([^/@]*))?@([^/@]*)");
+    private static final Pattern NAME_PARSER = Pattern.compile("([^/@]*)(/([^/@]*))?@([^/@]*)");
 
     /**
-     * A pattern that matches a string with out '$' and then a single
+     * A pattern that matches a string without '$' and then a single
      * parameter with $n.
      */
-    private static final Pattern PARAMETERPATTERN = Pattern.compile("([^$]*)(\\$(\\d*))?");
+    private static final Pattern PARAMETER_PATTERN = Pattern.compile("([^$]*)(\\$(\\d*))?");
 
     /**
      * A pattern for parsing a auth_to_local rule.
      */
-    private static final Pattern RULEPARSER = Pattern.compile("\\s*((DEFAULT)|(RULE:\\[(\\d*):([^\\]]*)](\\(([^)]*)\\))?" +
+    private static final Pattern RULE_PARSER = Pattern.compile("\\s*((DEFAULT)|(RULE:\\[(\\d*):([^\\]]*)](\\(([^)]*)\\))?" +
                                                               "(s/([^/]*)/([^/]*)/(g)?)?))");
 
     /**
      * A pattern that recognizes simple/non-simple names.
      */
-    private static final Pattern NONSIMPLEPATTERN = Pattern.compile("[/@]");
+    private static final Pattern NON_SIMPLE_PATTERN = Pattern.compile("[/@]");
 
     /**
      * The list of translation rules.
      */
-    private static List<Rule> rules;
+    private static final List<Rule> RULES;
 
-    private static String defaultRealm;
+    private static final String DEFAULT_REALM;
 
     static {
+        String defaultRealm;
         try {
             defaultRealm = JaasUtils.defaultRealm();
         } catch (Exception ke) {
             defaultRealm = "";
         }
+        DEFAULT_REALM = defaultRealm;
         try {
-            setConfiguration();
-        } catch (IOException e) {
+            String ruleString = System.getProperty("kafka.security.auth_to_local", "DEFAULT");
+            RULES = parseRules(ruleString);
+        } catch (Exception e) {
             throw new IllegalArgumentException("Could not configure Kerberos principal name mapping.");
         }
     }
@@ -88,7 +89,7 @@ public class KerberosName {
      * @param name
      */
     public KerberosName(String name) {
-        Matcher match = NAMEPARSER.matcher(name);
+        Matcher match = NAME_PARSER.matcher(name);
         if (!match.matches()) {
             if (name.contains("@")) {
                 throw new IllegalArgumentException("Malformed Kerberos name: " + name);
@@ -109,7 +110,7 @@ public class KerberosName {
      * @return the default realm from the krb5.conf
      */
     public String getDefaultRealm() {
-        return defaultRealm;
+        return DEFAULT_REALM;
     }
 
     /**
@@ -229,7 +230,7 @@ public class KerberosName {
          */
         static String replaceParameters(String format,
                                         String[] params) throws BadFormatString {
-            Matcher match = PARAMETERPATTERN.matcher(format);
+            Matcher match = PARAMETER_PATTERN.matcher(format);
             int start = 0;
             StringBuilder result = new StringBuilder();
             while (start < format.length() && match.find(start)) {
@@ -285,7 +286,7 @@ public class KerberosName {
         String apply(String[] params) throws IOException {
             String result = null;
             if (isDefault) {
-                if (defaultRealm.equals(params[0])) {
+                if (DEFAULT_REALM.equals(params[0])) {
                     result = params[1];
                 }
             } else if (params.length - 1 == numOfComponents) {
@@ -298,7 +299,7 @@ public class KerberosName {
                     }
                 }
             }
-            if (result != null && NONSIMPLEPATTERN.matcher(result).find()) {
+            if (result != null && NON_SIMPLE_PATTERN.matcher(result).find()) {
                 throw new NoMatchingRule("Non-simple name " + result +
                                          " after auth_to_local rule " + this);
             }
@@ -310,7 +311,7 @@ public class KerberosName {
         List<Rule> result = new ArrayList<Rule>();
         String remaining = rules.trim();
         while (remaining.length() > 0) {
-            Matcher matcher = RULEPARSER.matcher(remaining);
+            Matcher matcher = RULE_PARSER.matcher(remaining);
             if (!matcher.lookingAt()) {
                 throw new IllegalArgumentException("Invalid rule: " + remaining);
             }
@@ -327,16 +328,6 @@ public class KerberosName {
             remaining = remaining.substring(matcher.end());
         }
         return result;
-    }
-
-    /**
-     * Set the static configuration to get the rules.
-     * @param conf the new configuration
-     * @throws IOException
-     */
-    public static void setConfiguration() throws IOException {
-        String ruleString = System.getProperty("kafka.security.auth_to_local", "DEFAULT");
-        rules = parseRules(ruleString);
     }
 
     @SuppressWarnings("serial")
@@ -372,7 +363,7 @@ public class KerberosName {
         } else {
             params = new String[]{realm, serviceName, hostName};
         }
-        for (Rule r: rules) {
+        for (Rule r : RULES) {
             String result = r.apply(params);
             if (result != null)
                 return result;

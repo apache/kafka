@@ -17,9 +17,9 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface WindowDef<K, V> {
+public interface WindowSupplier<K, V> {
 
     String name();
 
-    Window<K, V> instance();
+    Window<K, V> get();
 }

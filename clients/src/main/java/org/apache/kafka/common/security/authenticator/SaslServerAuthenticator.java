@@ -49,29 +49,29 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 
-
 public class SaslServerAuthenticator implements Authenticator {
 
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
-    private SaslServer saslServer;
-    private Subject subject;
+
+    private final SaslServer saslServer;
+    private final Subject subject;
+    private final String node;
+
+    // assigned in `configure`
     private TransportLayer transportLayer;
-    private String node = "0";
+
+    // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
-    private SaslServerCallbackHandler saslServerCallbackHandler;
-    private PrincipalBuilder principalBuilder;
 
     public SaslServerAuthenticator(String node, final Subject subject) throws IOException {
         this.node = node;
-        this.transportLayer = transportLayer;
         this.subject = subject;
         saslServer = createSaslServer();
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
         this.transportLayer = transportLayer;
-        this.principalBuilder = principalBuilder;
     }
 
     private SaslServer createSaslServer() throws IOException {
@@ -79,9 +79,8 @@ public class SaslServerAuthenticator implements Authenticator {
             // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
             if (subject.getPrincipals().size() > 0) {
                 try {
-                    saslServerCallbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration());
-                    final Object[] principals = subject.getPrincipals().toArray();
-                    final Principal servicePrincipal = (Principal) principals[0];
+                    final SaslServerCallbackHandler saslServerCallbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration());
+                    final Principal servicePrincipal = subject.getPrincipals().iterator().next();
 
                     final String servicePrincipalNameAndHostname = servicePrincipal.getName();
                     int indexOf = servicePrincipalNameAndHostname.indexOf("/");
@@ -93,7 +92,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
                     LOG.debug("serviceHostname is '" + serviceHostname + "'");
                     LOG.debug("servicePrincipalName is '" + servicePrincipalName + "'");
-                    LOG.debug("SASL mechanism(mech) is '" + mech + "'");
+                    LOG.debug("SASL mechanism is '" + mech + "'");
                     boolean usingNativeJgss = Boolean.getBoolean("sun.security.jgss.native");
                     if (usingNativeJgss) {
                         try {
@@ -109,17 +108,15 @@ public class SaslServerAuthenticator implements Authenticator {
 
                     try {
                         return Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
-                                public SaslServer run() {
-                                    try {
-                                        SaslServer saslServer;
-                                        saslServer = Sasl.createSaslServer(mech, servicePrincipalName, serviceHostname, null, saslServerCallbackHandler);
-                                        return saslServer;
-                                    } catch (SaslException e) {
-                                        LOG.error("Kafka Server failed to create a SaslServer to interact with a client during session authentication: " + e);
-                                        return null;
-                                    }
+                            public SaslServer run() {
+                                try {
+                                    return Sasl.createSaslServer(mech, servicePrincipalName, serviceHostname, null, saslServerCallbackHandler);
+                                } catch (SaslException e) {
+                                    LOG.error("Kafka Server failed to create a SaslServer to interact with a client during session authentication: " + e);
+                                    return null;
                                 }
-                            });
+                            }
+                        });
                     } catch (PrivilegedActionException e) {
                         LOG.error("KafkaBroker experienced a PrivilegedActionException exception while creating a SaslServer using a JAAS principal context:" + e);
                     }
@@ -142,20 +139,17 @@ public class SaslServerAuthenticator implements Authenticator {
             return;
         }
 
-        byte[] clientToken = new byte[0];
-
         if (netInBuffer == null) netInBuffer = new NetworkReceive(node);
 
-        long readLen = netInBuffer.readFrom(transportLayer);
+        netInBuffer.readFrom(transportLayer);
 
         if (netInBuffer.complete()) {
             netInBuffer.payload().rewind();
-            clientToken = new byte[netInBuffer.payload().remaining()];
+            byte[] clientToken = new byte[netInBuffer.payload().remaining()];
             netInBuffer.payload().get(clientToken, 0, clientToken.length);
             netInBuffer = null; // reset the networkReceive as we read all the data.
             try {
-                byte[] response;
-                response = saslServer.evaluateResponse(clientToken);
+                byte[] response = saslServer.evaluateResponse(clientToken);
                 if (response != null) {
                     netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
                     if (!flushNetOutBuffer()) {
@@ -168,8 +162,6 @@ public class SaslServerAuthenticator implements Authenticator {
             }
         }
     }
-
-
 
     public Principal principal() {
         return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslServer.getAuthorizationID());

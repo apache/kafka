@@ -50,7 +50,7 @@ public interface Selectable {
     /**
      * Close the connection identified by the given id
      */
-    public void close(String nodeId);
+    public void close(String id);
 
     /**
      * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls

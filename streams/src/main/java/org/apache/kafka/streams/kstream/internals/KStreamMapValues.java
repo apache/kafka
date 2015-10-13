@@ -17,12 +17,12 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.processor.ProcessorDef;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamMapValues<K1, V1, V2> implements ProcessorDef<K1, V1> {
+class KStreamMapValues<K1, V1, V2> implements ProcessorSupplier<K1, V1> {
 
     private final ValueMapper<V1, V2> mapper;
 
@@ -31,7 +31,7 @@ class KStreamMapValues<K1, V1, V2> implements ProcessorDef<K1, V1> {
     }
 
     @Override
-    public Processor<K1, V1> instance() {
+    public Processor<K1, V1> get() {
         return new KStreamMapProcessor();
     }
 
