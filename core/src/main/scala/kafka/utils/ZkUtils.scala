@@ -88,8 +88,8 @@ object ZkUtils {
    */
   def createWithZkClient(zkClient: ZkClient, loginConfigFile: String): ZkUtils = {
     new ZkUtils(zkClient, null, loginConfigFile)
-  } 
-  
+  }
+
   def maybeDeletePath(zkUrl: String, dir: String) {
     try {
       val zk = ZkUtils.createZkClient(zkUrl, 30*1000, 30*1000)
