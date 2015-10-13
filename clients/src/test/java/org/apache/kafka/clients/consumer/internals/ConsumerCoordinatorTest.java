@@ -62,7 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class CoordinatorTest {
+public class ConsumerCoordinatorTest {
 
     private String topicName = "test";
     private String groupId = "test-group";
@@ -86,7 +86,7 @@ public class CoordinatorTest {
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
     private MockCommitCallback defaultOffsetCommitCallback;
-    private Coordinator coordinator;
+    private ConsumerCoordinator coordinator;
 
     @Before
     public void setup() {
@@ -103,7 +103,7 @@ public class CoordinatorTest {
 
         client.setNode(node);
 
-        this.coordinator = new Coordinator(consumerClient,
+        this.coordinator = new ConsumerCoordinator(consumerClient,
                 groupId,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,

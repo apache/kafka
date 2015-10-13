@@ -34,7 +34,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise}
 
 /**
- * Test ConsumerCoordinator responses
+ * Test GroupCoordinator responses
  */
 class GroupCoordinatorResponseTest extends JUnitSuite {
   type JoinGroupCallback = JoinGroupResult => Unit

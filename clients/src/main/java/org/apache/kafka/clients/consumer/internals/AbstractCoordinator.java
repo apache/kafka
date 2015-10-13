@@ -51,10 +51,13 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * GroupCoordinator implements group management for a single group member by interacting with
+ * AbstractCoordinator implements group management for a single group member by interacting with
  * a designated Kafka broker (the coordinator). Group semantics are provided by extending this class.
+ *
+ * @param <M> Type of member metadata, see {@link GroupProtocol}
+ * @param <A> Type of member assignment, see {@link GroupProtocol}
  */
-public abstract class GroupCoordinator<M, S> {
+public abstract class AbstractCoordinator<M, A> {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -67,7 +70,7 @@ public abstract class GroupCoordinator<M, S> {
     protected final Time time;
     protected final long retryBackoffMs;
     protected final long requestTimeoutMs;
-    private final GroupProtocol<M, S> groupProtocol;
+    private final GroupProtocol<M, A> groupProtocol;
 
     private boolean rejoinNeeded = true;
     protected Node coordinator;
@@ -77,17 +80,17 @@ public abstract class GroupCoordinator<M, S> {
     /**
      * Initialize the coordination manager.
      */
-    public GroupCoordinator(GroupProtocol<M, S> groupProtocol,
-                            ConsumerNetworkClient client,
-                            String groupId,
-                            int sessionTimeoutMs,
-                            int heartbeatIntervalMs,
-                            Metrics metrics,
-                            String metricGrpPrefix,
-                            Map<String, String> metricTags,
-                            Time time,
-                            long requestTimeoutMs,
-                            long retryBackoffMs) {
+    public AbstractCoordinator(GroupProtocol<M, A> groupProtocol,
+                               ConsumerNetworkClient client,
+                               String groupId,
+                               int sessionTimeoutMs,
+                               int heartbeatIntervalMs,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Map<String, String> metricTags,
+                               Time time,
+                               long requestTimeoutMs,
+                               long retryBackoffMs) {
         this.groupProtocol = groupProtocol;
         this.client = client;
         this.time = time;
@@ -123,7 +126,7 @@ public abstract class GroupCoordinator<M, S> {
      * @param memberId The identifier for the local member in the group.
      * @param memberState
      */
-    protected abstract void onJoin(int generation, String memberId, S memberState);
+    protected abstract void onJoin(int generation, String memberId, A memberState);
 
     /**
      * Perform synchronization for the group. This is used by the leader to push state to all the members
@@ -132,7 +135,7 @@ public abstract class GroupCoordinator<M, S> {
      * @param allMemberMetadata Metadata from all members of the group
      * @return A map from each member to their assignment
      */
-    protected abstract Map<String, S> doSync(String leaderId, String subProtocol, Map<String, M> allMemberMetadata);
+    protected abstract Map<String, A> doSync(String leaderId, String subProtocol, Map<String, M> allMemberMetadata);
 
 
     /**
@@ -193,7 +196,7 @@ public abstract class GroupCoordinator<M, S> {
                 continue;
             }
 
-            RequestFuture<S> future = sendJoinGroupRequest();
+            RequestFuture<A> future = sendJoinGroupRequest();
             client.poll(future);
 
             if (future.succeeded()) {
@@ -264,7 +267,7 @@ public abstract class GroupCoordinator<M, S> {
      * be polled to see if the request completed successfully.
      * @return A request future whose completion indicates the result of the JoinGroup request.
      */
-    private RequestFuture<S> sendJoinGroupRequest() {
+    private RequestFuture<A> sendJoinGroupRequest() {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
@@ -287,7 +290,7 @@ public abstract class GroupCoordinator<M, S> {
     }
 
 
-    private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, S> {
+    private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, A> {
 
         @Override
         public JoinGroupResponse parse(ClientResponse response) {
@@ -295,19 +298,19 @@ public abstract class GroupCoordinator<M, S> {
         }
 
         @Override
-        public void handle(JoinGroupResponse joinResponse, RequestFuture<S> future) {
+        public void handle(JoinGroupResponse joinResponse, RequestFuture<A> future) {
             // process the response
             short errorCode = joinResponse.errorCode();
             if (errorCode == Errors.NONE.code()) {
                 log.debug("Joined group: {}", joinResponse.toStruct());
-                GroupCoordinator.this.memberId = joinResponse.memberId();
-                GroupCoordinator.this.generation = joinResponse.generationId();
-                GroupCoordinator.this.rejoinNeeded = false;
+                AbstractCoordinator.this.memberId = joinResponse.memberId();
+                AbstractCoordinator.this.generation = joinResponse.generationId();
+                AbstractCoordinator.this.rejoinNeeded = false;
                 sensors.joinLatency.record(response.requestLatencyMs());
                 performSync(joinResponse).chain(future);
             } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
                 // reset the member id and retry immediately
-                GroupCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+                AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
                 log.info("Attempt to join group {} failed due to unknown member id, resetting and retrying.",
                         groupId);
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
@@ -333,12 +336,12 @@ public abstract class GroupCoordinator<M, S> {
         }
     }
 
-    private RequestFuture<S> performSync(JoinGroupResponse joinResponse) {
+    private RequestFuture<A> performSync(JoinGroupResponse joinResponse) {
         if (joinResponse.isLeader()) {
             try {
                 // perform the leader synchronization and send back the assignment for the group
                 Map<String, M> metadata = deserializeMetadata(joinResponse.members());
-                Map<String, S> groupAssignment = doSync(joinResponse.leaderId(), joinResponse.subProtocol(), metadata);
+                Map<String, A> groupAssignment = doSync(joinResponse.leaderId(), joinResponse.subProtocol(), metadata);
 
                 SyncGroupRequest request = new SyncGroupRequest(groupId, generation,
                         memberId, serializeAssignment(groupAssignment));
@@ -356,14 +359,14 @@ public abstract class GroupCoordinator<M, S> {
         }
     }
 
-    private RequestFuture<S> sendSyncGroupRequest(SyncGroupRequest request) {
+    private RequestFuture<A> sendSyncGroupRequest(SyncGroupRequest request) {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
         return client.send(coordinator, ApiKeys.SYNC_GROUP, request)
                 .compose(new SyncGroupRequestHandler());
     }
 
-    private class SyncGroupRequestHandler extends CoordinatorResponseHandler<SyncGroupResponse, S> {
+    private class SyncGroupRequestHandler extends CoordinatorResponseHandler<SyncGroupResponse, A> {
 
         @Override
         public SyncGroupResponse parse(ClientResponse response) {
@@ -372,7 +375,7 @@ public abstract class GroupCoordinator<M, S> {
 
         @Override
         public void handle(SyncGroupResponse syncResponse,
-                           RequestFuture<S> future) {
+                           RequestFuture<A> future) {
             short errorCode = syncResponse.errorCode();
             if (errorCode == Errors.NONE.code()) {
                 try {
@@ -383,7 +386,7 @@ public abstract class GroupCoordinator<M, S> {
                     future.raise(e);
                 }
             } else {
-                GroupCoordinator.this.rejoinNeeded = true;
+                AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.forCode(errorCode));
             }
         }
@@ -491,16 +494,16 @@ public abstract class GroupCoordinator<M, S> {
                 future.raise(Errors.forCode(error));
             } else if (error == Errors.REBALANCE_IN_PROGRESS.code()) {
                 log.info("Attempt to heart beat failed since the group is rebalancing, try to re-join group.");
-                GroupCoordinator.this.rejoinNeeded = true;
+                AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.REBALANCE_IN_PROGRESS);
             } else if (error == Errors.ILLEGAL_GENERATION.code()) {
                 log.info("Attempt to heart beat failed since generation id is not legal, try to re-join group.");
-                GroupCoordinator.this.rejoinNeeded = true;
+                AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.ILLEGAL_GENERATION);
             } else if (error == Errors.UNKNOWN_MEMBER_ID.code()) {
                 log.info("Attempt to heart beat failed since member id is not valid, reset it and try to re-join group.");
                 memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
-                GroupCoordinator.this.rejoinNeeded = true;
+                AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
             } else {
                 future.raise(new KafkaException("Unexpected error in heartbeat response: "
@@ -566,10 +569,10 @@ public abstract class GroupCoordinator<M, S> {
         return res;
     }
 
-    private Map<String, ByteBuffer> serializeAssignment(Map<String, S> state) {
-        GroupProtocol.GenericType<S> schema = groupProtocol.assignmentSchema();
+    private Map<String, ByteBuffer> serializeAssignment(Map<String, A> state) {
+        GroupProtocol.GenericType<A> schema = groupProtocol.assignmentSchema();
         Map<String, ByteBuffer> res = new HashMap<>();
-        for (Map.Entry<String, S> stateEntry : state.entrySet()) {
+        for (Map.Entry<String, A> stateEntry : state.entrySet()) {
             ByteBuffer buf = ByteBuffer.allocate(schema.sizeOf(stateEntry.getValue()));
             schema.write(buf, stateEntry.getValue());
             buf.flip();

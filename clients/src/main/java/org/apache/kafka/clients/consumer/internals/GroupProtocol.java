@@ -15,7 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.protocol.types.Type;
 
 /**
- * Interface for protocols supported by an implementation of {@link GroupCoordinator}. This class provides
+ * Interface for protocols supported by an implementation of {@link AbstractCoordinator}. This class provides
  * the metadata and assignment schemas used by instances of the group protocol. From a
  * high level, Kafka's group management protocol consists of the following sequence of actions:
  *

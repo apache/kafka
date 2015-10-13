@@ -55,10 +55,10 @@ import java.util.Set;
 /**
  * This class manages the coordination process with the consumer coordinator.
  */
-public final class Coordinator extends GroupCoordinator<ConsumerProtocol.Subscription, ConsumerProtocol.Assignment>
+public final class ConsumerCoordinator extends AbstractCoordinator<ConsumerProtocol.Subscription, ConsumerProtocol.Assignment>
         implements Closeable {
 
-    private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
+    private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
     private final Map<String, PartitionAssignor> assignorsMap;
     private final org.apache.kafka.clients.Metadata metadata;
@@ -71,22 +71,22 @@ public final class Coordinator extends GroupCoordinator<ConsumerProtocol.Subscri
     /**
      * Initialize the coordination manager.
      */
-    public Coordinator(ConsumerNetworkClient client,
-                       String groupId,
-                       int sessionTimeoutMs,
-                       int heartbeatIntervalMs,
-                       List<PartitionAssignor> assignors,
-                       org.apache.kafka.clients.Metadata metadata,
-                       SubscriptionState subscriptions,
-                       Metrics metrics,
-                       String metricGrpPrefix,
-                       Map<String, String> metricTags,
-                       Time time,
-                       long requestTimeoutMs,
-                       long retryBackoffMs,
-                       OffsetCommitCallback defaultOffsetCommitCallback,
-                       boolean autoCommitEnabled,
-                       long autoCommitIntervalMs) {
+    public ConsumerCoordinator(ConsumerNetworkClient client,
+                               String groupId,
+                               int sessionTimeoutMs,
+                               int heartbeatIntervalMs,
+                               List<PartitionAssignor> assignors,
+                               org.apache.kafka.clients.Metadata metadata,
+                               SubscriptionState subscriptions,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Map<String, String> metricTags,
+                               Time time,
+                               long requestTimeoutMs,
+                               long retryBackoffMs,
+                               OffsetCommitCallback defaultOffsetCommitCallback,
+                               boolean autoCommitEnabled,
+                               long autoCommitIntervalMs) {
         super(new ConsumerProtocol(),
                 client,
                 groupId,
