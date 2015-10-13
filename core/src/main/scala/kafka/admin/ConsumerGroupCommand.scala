@@ -65,7 +65,7 @@ object ConsumerGroupCommand {
         println("Error while executing consumer group command " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
-      zkUtils.zkClient.close()
+      zkUtils.close()
     }
   }
 

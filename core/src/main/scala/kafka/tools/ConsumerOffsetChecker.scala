@@ -217,7 +217,7 @@ object ConsumerOffsetChecker extends Logging {
         }
       }
       if (zkUtils != null)
-        zkUtils.zkClient.close()
+        zkUtils.close()
 
       if (channel != null)
         channel.disconnect()

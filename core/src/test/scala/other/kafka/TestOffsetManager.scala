@@ -300,7 +300,7 @@ object TestOffsetManager {
         statsThread.shutdown()
         statsThread.join()
       }
-      zkUtils.zkClient.close()
+      zkUtils.close()
     }
 
   }

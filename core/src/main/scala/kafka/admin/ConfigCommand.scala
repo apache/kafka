@@ -57,7 +57,7 @@ object ConfigCommand {
         println("Error while executing topic command " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
-      zkUtils.zkClient.close()
+      zkUtils.close()
     }
   }
 

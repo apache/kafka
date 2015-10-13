@@ -39,7 +39,7 @@ trait ZooKeeperTestHarness extends JUnitSuite {
 
   @After
   def tearDown() {
-    CoreUtils.swallow(zkUtils.zkClient.close())
+    CoreUtils.swallow(zkUtils.close())
     CoreUtils.swallow(zookeeper.shutdown())
   }
 

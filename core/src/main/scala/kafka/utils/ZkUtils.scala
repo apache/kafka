@@ -842,6 +842,12 @@ class ZkUtils(val zkClient: ZkClient,
       }
     }
   }
+  
+  def close() {
+    if(zkClient != null) {
+      zkClient.close()
+    }
+  }
 }
 
 private object ZKStringSerializer extends ZkSerializer {

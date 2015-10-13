@@ -211,7 +211,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           if (config.autoCommitEnable)
             commitOffsets(true)
           if (zkUtils != null) {
-            zkUtils.zkClient.close()
+            zkUtils.close()
             zkUtils = null
           }
 

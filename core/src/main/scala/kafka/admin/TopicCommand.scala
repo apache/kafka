@@ -71,7 +71,7 @@ object TopicCommand extends Logging {
         error(Utils.stackTrace(e))
         exitCode = 1
     } finally {
-      zkUtils.zkClient.close()
+      zkUtils.close()
       System.exit(exitCode)
     }
 

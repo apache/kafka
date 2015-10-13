@@ -45,7 +45,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     var testData: String = null
     testData = zkUtils.readData("/tmp/zktest")._1
     Assert.assertNotNull(testData)
-    zkUtils.zkClient.close
+    zkUtils.close
     zkUtils = ZkUtils.create(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, "")
     val nodeExists = zkUtils.pathExists("/tmp/zktest")
     Assert.assertFalse(nodeExists)

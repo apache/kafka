@@ -64,7 +64,7 @@ object VerifyConsumerRebalance extends Logging {
     }
     finally {
       if (zkUtils != null)
-        zkUtils.zkClient.close()
+        zkUtils.close()
     }
   }
 
