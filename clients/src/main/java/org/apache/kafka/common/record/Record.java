@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Crc32;
 import org.apache.kafka.common.utils.Utils;
 
@@ -222,11 +223,15 @@ public final class Record {
      * Throw an InvalidRecordException if isValid is false for this record
      */
     public void ensureValid() {
+        // Check CRC before checking the magic byte.
         if (!isValid())
             throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
                                              + ", computed crc = "
                                              + computeChecksum()
                                              + ")");
+        if (magic() > Record.CURRENT_MAGIC_VALUE)
+            throw new UnsupportedVersionException("Magic byte of record is " + magic() +
+                    ", which is higher than supported magic byte " + Record.CURRENT_MAGIC_VALUE);
     }
 
     /**

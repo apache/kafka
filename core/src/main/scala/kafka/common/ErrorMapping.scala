@@ -20,6 +20,7 @@ package kafka.common
 import java.nio.ByteBuffer
 
 import kafka.message.InvalidMessageException
+import org.apache.kafka.common.errors.UnsupportedVersionException
 
 import scala.Predef._
 
@@ -59,7 +60,8 @@ object ErrorMapping {
   // 26: INVALID_SESSION_TIMEOUT
   // 27: COMMITTING_PARTITIONS_NOT_ASSIGNED
   // 28: INVALID_COMMIT_OFFSET_SIZE
-  val AuthorizationCode: Short = 29;
+  val AuthorizationCode: Short = 29
+  val UnsupportedVersionCode: Short = 30
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](
@@ -82,7 +84,8 @@ object ErrorMapping {
       classOf[MessageSetSizeTooLargeException].asInstanceOf[Class[Throwable]] -> MessageSetSizeTooLargeCode,
       classOf[NotEnoughReplicasException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasCode,
       classOf[NotEnoughReplicasAfterAppendException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasAfterAppendCode,
-      classOf[AuthorizationException].asInstanceOf[Class[Throwable]] -> AuthorizationCode
+      classOf[AuthorizationException].asInstanceOf[Class[Throwable]] -> AuthorizationCode,
+      classOf[UnsupportedVersionException].asInstanceOf[Class[Throwable]] -> UnsupportedVersionCode
     ).withDefaultValue(UnknownCode)
 
   /* invert the mapping */

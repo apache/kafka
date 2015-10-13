@@ -18,6 +18,8 @@
 package kafka.message
 
 import java.nio._
+import org.apache.kafka.common.errors.UnsupportedVersionException
+
 import scala.math._
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
@@ -83,7 +85,7 @@ object Message {
 class Message(val buffer: ByteBuffer) {
   
   import kafka.message.Message._
-  
+
   /**
    * A constructor to create a Message
    * @param bytes The payload of the message
@@ -165,6 +167,9 @@ class Message(val buffer: ByteBuffer) {
   def ensureValid() {
     if(!isValid)
       throw new InvalidMessageException("Message is corrupt (stored crc = " + checksum + ", computed crc = " + computeChecksum() + ")")
+    if (magic > Message.CurrentMagicValue)
+      throw new UnsupportedVersionException("Magic byte of message is " + magic +
+        ", which is higher than supported magic byte " + Message.CurrentMagicValue)
   }
   
   /**

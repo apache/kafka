@@ -75,6 +75,7 @@
     <subpackage name="record">
       <allow pkg="net.jpountz" />
       <allow pkg="org.apache.kafka.common.record" />
+      <allow pkg="org.apache.kafka.common.errors" />
     </subpackage>
 
     <subpackage name="requests">

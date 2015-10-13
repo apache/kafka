@@ -27,6 +27,7 @@ import kafka.common.TopicAndPartition
 import kafka.message.ByteBufferMessageSet
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, SystemTime}
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader}
@@ -69,8 +70,16 @@ object RequestChannel extends Logging {
       } else
         null
     val body: AbstractRequest =
-      if (requestObj == null)
-        AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+      if (requestObj == null) {
+        try {
+          // If the request version is higher than supported version, UnsupportedVersionException might be thrown,
+          // we ignore it here and let KafkaApis to handle it.
+          AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+        } catch {
+          case e : UnsupportedVersionException =>
+            null
+        }
+      }
       else
         null
 

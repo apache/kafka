@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -36,6 +37,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
      * Factory method for getting a request object based on ApiKey ID and a buffer
      */
     public static AbstractRequest getRequest(int requestId, int versionId, ByteBuffer buffer) {
+        ProtoUtils.validateApiVersion(requestId, versionId);
         switch (ApiKeys.forId(requestId)) {
             case PRODUCE:
                 return ProduceRequest.parse(buffer, versionId);
