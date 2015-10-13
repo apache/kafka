@@ -67,7 +67,7 @@ class SaslProducerTest extends SaslTestHarness {
   @Test
   def testProduceAndConsume() {
     val topic = "new-topic"
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAIN), enableSasl=true)
+    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT), enableSasl=true)
     val partition = new Integer(0)
     val numRecords = 100
 
