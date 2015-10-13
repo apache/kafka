@@ -506,6 +506,12 @@ class KafkaConfigTest {
         case KafkaConfig.SSLTrustManagerAlgorithmProp =>
         case KafkaConfig.SSLClientAuthProp => // ignore string
 
+        //Sasl Configs
+        case KafkaConfig.SaslKerberosKinitCmdProp =>
+        case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
+        case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
+        case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
+
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })

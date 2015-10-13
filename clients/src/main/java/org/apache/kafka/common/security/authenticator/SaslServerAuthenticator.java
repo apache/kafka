@@ -135,7 +135,7 @@ public class SaslServerAuthenticator implements Authenticator {
         }
 
         if (saslServer.isComplete()) {
-            transportLayer.addInterestOps(SelectionKey.OP_READ);
+            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
             return;
         }
 

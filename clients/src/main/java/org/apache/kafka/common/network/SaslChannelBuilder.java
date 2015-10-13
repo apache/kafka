@@ -46,8 +46,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            this.loginManager = LoginManager.getLoginManager(mode);
-            this.loginManager.configure(this.configs);
+            this.loginManager = LoginManager.getLoginManager(mode, configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
             if (this.securityProtocol == SecurityProtocol.SSLSASL) {

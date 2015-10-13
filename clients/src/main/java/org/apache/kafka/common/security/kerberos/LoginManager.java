@@ -25,39 +25,34 @@ import java.util.Map;
 
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.JaasUtils;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Configurable;
 
-public class LoginManager implements Configurable {
+public class LoginManager {
     private final Login login;
     private final String serviceName;
     private volatile static LoginManager instance;
 
-    private LoginManager(Mode mode) throws IOException, LoginException {
+    private LoginManager(Mode mode, Map<String, ?> configs) throws IOException, LoginException {
         String loginContext;
         if (mode == Mode.SERVER)
             loginContext = JaasUtils.LOGIN_CONTEXT_SERVER;
         else
             loginContext = JaasUtils.LOGIN_CONTEXT_CLIENT;
         this.serviceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
-        login = new Login(loginContext);
+        login = new Login(loginContext, configs);
         login.startThreadIfNeeded();
     }
 
-    public static final LoginManager getLoginManager(Mode mode) throws IOException, LoginException {
+    public static final LoginManager getLoginManager(Mode mode, Map<String, ?> configs) throws IOException, LoginException {
         if (instance != null) {
             return instance;
         } else {
             synchronized (LoginManager.class)  {
                 if (instance == null)
-                    instance = new LoginManager(mode);
+                    instance = new LoginManager(mode, configs);
             }
         }
         return instance;
     }
-
-    @Override
-    public void configure(Map<String, ?> configs) throws KafkaException {}
 
     public Subject subject() {
         return login.subject();

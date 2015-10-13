@@ -31,6 +31,7 @@ public class JaasUtils {
     public static final String LOGIN_CONTEXT_SERVER = "KafkaServer";
     public static final String LOGIN_CONTEXT_CLIENT = "KafkaClient";
     public static final String SERVICE_NAME = "serviceName";
+    public static final String JAVA_LOGIN_CONFIG_PARAM = "java.security.auth.login.config";
 
     /**
      * Construct a JAAS configuration object per kafka jaas configuration file

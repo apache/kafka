@@ -137,6 +137,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     saslState = SaslState.COMPLETE;
                 break;
             case COMPLETE:
+                transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
                 break;
             case FAILED:
                 throw new IOException("SASL handshake failed");

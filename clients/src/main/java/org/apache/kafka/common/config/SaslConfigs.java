@@ -28,4 +28,19 @@ public class SaslConfigs {
         + "Default will be /usr/bin/kinit";
     public static final String DEFAULT_KERBEROS_KINIT_CMD = "/usr/bin/kinit";
 
+    public static final String SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR = "sasl.kerberos.ticket.renew.window.factor";
+    public static final String SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC = "LoginThread will sleep until specified window factor of time from last refresh"
+        + " to ticket's expiry has been reached, at which time it will wake and try to renew the ticket.";
+    public static final Double DEFAULT_KERBEROS_TICKET_RENEW_WINDOW_FACTOR = 0.80;
+
+    public static final String SASL_KERBEROS_TICKET_RENEW_JITTER = "sasl.kerberos.ticket.renew.jitter";
+    public static final String SASL_KERBEROS_TICKET_RENEW_JITTER_DOC = "Percentage of random jitter added to the renewal time";
+    public static final Double DEFAULT_KERBEROS_TICKET_RENEW_JITTER = 0.05;
+
+    public static final String SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN = "sasl.kerberos.min.time.before.relogin";
+    public static final String SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC = "LoginThread sleep time between refresh attempts";
+    public static final Long DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN = 1 * 60 * 1000L;
+
+
+
 }
