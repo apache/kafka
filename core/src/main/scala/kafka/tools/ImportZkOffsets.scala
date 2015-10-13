@@ -20,7 +20,7 @@ package kafka.tools
 import java.io.BufferedReader
 import java.io.FileReader
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils, CommandLineUtils}
+import kafka.utils.{ToolsUtils, Logging, ZkUtils, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
 
 
@@ -68,7 +68,7 @@ object ImportZkOffsets extends Logging {
     val zkConnect           = options.valueOf(zkConnectOpt)
     val partitionOffsetFile = options.valueOf(inFileOpt)
 
-    val zkUtils = ZkUtils.create(zkConnect, 30000, 30000, System.getProperty("java.security.auth.login.config"))
+    val zkUtils = ZkUtils.create(zkConnect, 30000, 30000, ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
     val partitionOffsets: Map[String,String] = getPartitionOffsetsFromFile(partitionOffsetFile)
 
     updateZkOffsets(zkUtils, partitionOffsets)

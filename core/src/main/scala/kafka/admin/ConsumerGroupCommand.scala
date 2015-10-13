@@ -51,7 +51,7 @@ object ConsumerGroupCommand {
     val zkUtils = ZkUtils.create(opts.options.valueOf(opts.zkConnectOpt), 
                                  30000,
                                  30000,
-                                 System.getProperty("java.security.auth.login.config"))
+                                 ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
 
     try {
       if (opts.options.has(opts.listOpt))

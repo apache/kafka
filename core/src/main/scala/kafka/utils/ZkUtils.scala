@@ -67,9 +67,9 @@ object ZkUtils {
   val EntityConfigChangesPath = "/config/changes"
   
   
-  def create(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, loginConfigFile: String): ZkUtils = {
+  def create(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isSecure: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
-    new ZkUtils(zkClient, zkConnection, loginConfigFile)
+    new ZkUtils(zkClient, zkConnection, isSecure)
   }
   
   def createZkClient(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int): ZkClient = {
@@ -86,8 +86,8 @@ object ZkUtils {
   /*
    * For tests
    */
-  def createWithZkClient(zkClient: ZkClient, loginConfigFile: String): ZkUtils = {
-    new ZkUtils(zkClient, null, loginConfigFile)
+  def createWithZkClient(zkClient: ZkClient, isSecure: Boolean): ZkUtils = {
+    new ZkUtils(zkClient, null, isSecure)
   }
 
   def maybeDeletePath(zkUrl: String, dir: String) {
@@ -103,7 +103,7 @@ object ZkUtils {
 
 class ZkUtils(val zkClient: ZkClient, 
               val zkConnection: ZkConnection,
-              val loginConfigFile: String) extends Logging {
+              val isSecure: Boolean) extends Logging {
   // These are persistent ZK paths that should exist on kafka broker startup.
   val persistentZkPaths = Seq(ZkUtils.ConsumersPath,
                               ZkUtils.BrokerIdsPath,
@@ -116,26 +116,6 @@ class ZkUtils(val zkClient: ZkClient,
                               ZkUtils.IsrChangeNotificationPath)
 
   /** true if java.security.auth.login.config is set to some jaas file which has "Client" entry. **/
-
-  val isSecure: Boolean = {
-    var isSecurityEnabled = false
-    if (loginConfigFile != null && loginConfigFile.length > 0) {
-      val configFile: File = new File(loginConfigFile)
-      if (!configFile.canRead) {
-        throw new KafkaException(s"File $loginConfigFile cannot be read.")
-      }
-      try {
-        val configUri: URI = configFile.toURI
-        val loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configUri))
-        isSecurityEnabled = loginConf.getAppConfigurationEntry("Client") != null
-      } catch {
-        case ex: Exception => {
-          throw new KafkaException(ex)
-        }
-      }
-    }
-    isSecurityEnabled
-  }
 
   val DefaultAcls: List[ACL] = if (isSecure) {
     (ZooDefs.Ids.CREATOR_ALL_ACL.asScala ++ ZooDefs.Ids.READ_ACL_UNSAFE.asScala).toList

@@ -16,10 +16,36 @@
 */
 package kafka.utils
 
+import java.io.File
 import joptsimple.OptionParser
+import java.net.URI
+import java.security.URIParameter
+import javax.security.auth.login.Configuration
+
+import kafka.common.KafkaException
 
 object ToolsUtils {
 
+  def isSecure(loginConfigFile: String): Boolean = {
+    var isSecurityEnabled = false
+    if (loginConfigFile != null && loginConfigFile.length > 0) {
+      val configFile: File = new File(loginConfigFile)
+      if (!configFile.canRead) {
+        throw new KafkaException(s"File $loginConfigFile cannot be read.")
+      }
+      try {
+        val configUri: URI = configFile.toURI
+        val loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configUri))
+        isSecurityEnabled = loginConf.getAppConfigurationEntry("Client") != null
+      } catch {
+        case ex: Exception => {
+          throw new KafkaException(ex)
+        }
+      }
+    }
+    isSecurityEnabled
+  }
+  
   def validatePortOrDie(parser: OptionParser, hostPort: String) = {
     val hostPorts: Array[String] = if(hostPort.contains(','))
       hostPort.split(",")

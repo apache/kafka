@@ -177,7 +177,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def connectZk() {
     info("Connecting to zookeeper instance at " + config.zkConnect)
-    zkUtils = ZkUtils.create(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, "")
+    zkUtils = ZkUtils.create(config.zkConnect,
+                             config.zkSessionTimeoutMs,
+                             config.zkConnectionTimeoutMs,
+                             ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
   }
 
   // Blocks until the offset manager is located and a channel is established to it.

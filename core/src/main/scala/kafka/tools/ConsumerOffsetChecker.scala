@@ -151,7 +151,10 @@ object ConsumerOffsetChecker extends Logging {
     var zkUtils: ZkUtils = null
     var channel: BlockingChannel = null
     try {
-      zkUtils = ZkUtils.create(zkConnect, 30000, 30000, "")
+      zkUtils = ZkUtils.create(zkConnect,
+                               30000,
+                               30000,
+                               ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
 
       val topicList = topics match {
         case Some(x) => x.split(",").view.toList

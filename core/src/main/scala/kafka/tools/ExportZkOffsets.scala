@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.io.FileWriter
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
+import kafka.utils.{ToolsUtils, Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
 
 
@@ -76,7 +76,10 @@ object ExportZkOffsets extends Logging {
     val fileWriter : FileWriter  = new FileWriter(outfile)
     
     try {
-      zkUtils = ZkUtils.create(zkConnect, 30000, 30000, System.getProperty("java.security.auth.login.config"))
+      zkUtils = ZkUtils.create(zkConnect,
+                               30000,
+                               30000,
+                               ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
       
       var consumerGroups: Seq[String] = null
 

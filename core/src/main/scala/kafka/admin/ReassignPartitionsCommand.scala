@@ -41,7 +41,7 @@ object ReassignPartitionsCommand extends Logging {
     val zkUtils = ZkUtils.create(zkConnect, 
                                  30000,
                                  30000,
-                                 System.getProperty("java.security.auth.login.config"))
+                                 ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
     try {
       if(opts.options.has(opts.verifyOpt))
         verifyAssignment(zkUtils, opts)

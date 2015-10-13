@@ -55,9 +55,9 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     try {
       zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
       zkUtils = ZkUtils.create(zkConnect, 
-                                             30000,
-                                             30000,
-                                             System.getProperty("java.security.auth.login.config"))
+                               30000,
+                               30000,
+                               ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
       val partitionsForPreferredReplicaElection =
         if (!options.has(jsonFileOpt))
           zkUtils.getAllPartitions()
