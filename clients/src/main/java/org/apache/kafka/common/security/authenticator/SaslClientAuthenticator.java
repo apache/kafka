@@ -165,7 +165,7 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     public boolean complete() {
-        return saslClient.isComplete() && saslState == SaslState.COMPLETE;
+        return saslState == SaslState.COMPLETE;
     }
 
     public void close() throws IOException {
