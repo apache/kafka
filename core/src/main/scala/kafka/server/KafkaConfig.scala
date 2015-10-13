@@ -514,8 +514,6 @@ object KafkaConfig {
   val SaslKerberosTicketRenewJitterDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_DOC
   val SaslKerberosMinTimeBeforeReloginDoc = SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC
 
-
-
   private val configDef = {
     import ConfigDef.Range._
     import ConfigDef.ValidString._
