@@ -26,16 +26,12 @@ import kafka.consumer.ConsumerConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.config.SSLConfigs
-import org.apache.kafka.common.config.ConfigDef.Importance._
-import org.apache.kafka.common.config.ConfigDef.Range._
-import org.apache.kafka.common.config.ConfigDef.Type._
-
-import org.apache.kafka.common.config.{ConfigException, AbstractConfig, ConfigDef}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SSLConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.PrincipalBuilder
-import scala.collection.{mutable, immutable, JavaConversions, Map}
+
+import scala.collection.{Map, immutable}
 
 
 object Defaults {
@@ -176,7 +172,7 @@ object Defaults {
   val SSLClientAuthRequested = "requested"
   val SSLClientAuthNone = "none"
   val SSLClientAuth = SSLClientAuthNone
-
+  val SSLCipherSuites = ""
 }
 
 object KafkaConfig {
@@ -497,10 +493,10 @@ object KafkaConfig {
   val SSLClientAuthDoc = SSLConfigs.SSL_CLIENT_AUTH_DOC
 
   private val configDef = {
-    import ConfigDef.Range._
-    import ConfigDef.ValidString._
-    import ConfigDef.Type._
     import ConfigDef.Importance._
+    import ConfigDef.Range._
+    import ConfigDef.Type._
+    import ConfigDef.ValidString._
 
     new ConfigDef()
 
@@ -650,7 +646,7 @@ object KafkaConfig {
       .define(SSLKeyManagerAlgorithmProp, STRING, Defaults.SSLKeyManagerAlgorithm, MEDIUM, SSLKeyManagerAlgorithmDoc)
       .define(SSLTrustManagerAlgorithmProp, STRING, Defaults.SSLTrustManagerAlgorithm, MEDIUM, SSLTrustManagerAlgorithmDoc)
       .define(SSLClientAuthProp, STRING, Defaults.SSLClientAuth, in(Defaults.SSLClientAuthRequired, Defaults.SSLClientAuthRequested, Defaults.SSLClientAuthNone), MEDIUM, SSLClientAuthDoc)
-
+      .define(SSLCipherSuitesProp, LIST, Defaults.SSLCipherSuites, MEDIUM, SSLCipherSuitesDoc)
   }
 
   def configNames() = {
@@ -809,6 +805,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val sslKeyManagerAlgorithm = getString(KafkaConfig.SSLKeyManagerAlgorithmProp)
   val sslTrustManagerAlgorithm = getString(KafkaConfig.SSLTrustManagerAlgorithmProp)
   val sslClientAuth = getString(KafkaConfig.SSLClientAuthProp)
+  val sslCipher = getList(KafkaConfig.SSLCipherSuitesProp)
 
   /** ********* Quota Configuration **************/
   val producerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp)
@@ -948,6 +945,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     channelConfigs.put(SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm)
     channelConfigs.put(SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm)
     channelConfigs.put(SSLClientAuthProp, sslClientAuth)
+    channelConfigs.put(SSLCipherSuitesProp, sslCipher)
     channelConfigs
   }
 
