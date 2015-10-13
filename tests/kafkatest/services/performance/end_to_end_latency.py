@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from kafkatest.services.performance import PerformanceService
+from kafkatest.utils.security_config import SecurityConfig
 
 
 class EndToEndLatencyService(PerformanceService):
@@ -24,9 +25,11 @@ class EndToEndLatencyService(PerformanceService):
             "collect_default": True},
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, consumer_fetch_max_wait=100, acks=1):
+    def __init__(self, context, num_nodes, kafka, security_protocol, topic, num_records, consumer_fetch_max_wait=100, acks=1):
         super(EndToEndLatencyService, self).__init__(context, num_nodes)
         self.kafka = kafka
+        self.security_config = SecurityConfig(security_protocol)
+        self.security_protocol = security_protocol
         self.args = {
             'topic': topic,
             'num_records': num_records,
@@ -36,14 +39,21 @@ class EndToEndLatencyService(PerformanceService):
 
     def _worker(self, idx, node):
         args = self.args.copy()
+        self.security_config.setup_node(node)
+        if self.security_protocol == SecurityConfig.SSL:
+            ssl_config_file = SecurityConfig.SSL_DIR + "/security.properties"
+            node.account.create_file(ssl_config_file, str(self.security_config))
+        else:
+            ssl_config_file = ""
         args.update({
             'zk_connect': self.kafka.zk.connect_setting(),
             'bootstrap_servers': self.kafka.bootstrap_servers(),
+            'ssl_config_file': ssl_config_file
         })
 
         cmd = "/opt/kafka/bin/kafka-run-class.sh kafka.tools.EndToEndLatency "\
               "%(bootstrap_servers)s %(topic)s %(num_records)d "\
-              "%(acks)d 20" % args
+              "%(acks)d 20 %(ssl_config_file)s" % args
 
         cmd += " | tee /mnt/end-to-end-latency.log"
 

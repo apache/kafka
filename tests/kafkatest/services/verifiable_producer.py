@@ -14,19 +14,21 @@
 # limitations under the License.
 
 from ducktape.services.background_thread import BackgroundThreadService
+from kafkatest.utils.security_config import SecurityConfig
 
 import json
 
 
 class VerifiableProducer(BackgroundThreadService):
 
+    CONFIG_FILE = "/mnt/verifiable_producer.properties"
     logs = {
         "producer_log": {
             "path": "/mnt/producer.log",
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000):
+    def __init__(self, context, num_nodes, kafka, topic, security_protocol=None, max_messages=-1, throughput=100000):
         super(VerifiableProducer, self).__init__(context, num_nodes)
 
         self.kafka = kafka
@@ -37,7 +39,18 @@ class VerifiableProducer(BackgroundThreadService):
         self.acked_values = []
         self.not_acked_values = []
 
+        self.prop_file = ""
+        self.security_config = SecurityConfig(security_protocol, self.prop_file)
+        self.security_protocol = self.security_config.security_protocol
+        self.prop_file += str(self.security_config)
+
     def _worker(self, idx, node):
+        # Create and upload config file
+        self.logger.info("verifiable_producer.properties:")
+        self.logger.info(self.prop_file)
+        node.account.create_file(VerifiableProducer.CONFIG_FILE, self.prop_file)
+        self.security_config.setup_node(node)
+
         cmd = self.start_cmd
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
 
@@ -64,6 +77,7 @@ class VerifiableProducer(BackgroundThreadService):
         if self.throughput > 0:
             cmd += " --throughput %s" % str(self.throughput)
 
+        cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
         cmd += " 2>> /mnt/producer.log | tee -a /mnt/producer.log &"
         return cmd
 
@@ -99,7 +113,8 @@ class VerifiableProducer(BackgroundThreadService):
 
     def clean_node(self, node):
         node.account.kill_process("VerifiableProducer", clean_shutdown=False, allow_fail=False)
-        node.account.ssh("rm -rf /mnt/producer.log", allow_fail=False)
+        node.account.ssh("rm -rf /mnt/producer.log /mnt/verifiable_producer.properties", allow_fail=False)
+        self.security_config.clean_node(node)
 
     def try_parse_json(self, string):
         """Try to parse a string as json. Return None if not parseable."""
