@@ -65,7 +65,8 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
-    val zkUtils = EasyMock.createMock(classOf[ZkUtils])
+    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = ZkUtils.createWithZkClient(zkClient, null)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
@@ -87,7 +88,8 @@ class ReplicaManagerTest {
   def testIllegalRequiredAcks() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
-    val zkUtils = EasyMock.createMock(classOf[ZkUtils])
+    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkUtils = ZkUtils.createWithZkClient(zkClient, null)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val jTime = new JMockTime
