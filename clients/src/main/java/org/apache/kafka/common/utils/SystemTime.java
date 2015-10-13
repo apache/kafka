@@ -40,14 +40,4 @@ public class SystemTime implements Time {
         }
     }
 
-    @Override
-    public long currentElapsedTime() {
-        return System.nanoTime() / 1000000;
-    }
-
-    @Override
-    public long currentWallTime() {
-        return System.currentTimeMillis();
-    }
-
 }

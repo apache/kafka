@@ -103,7 +103,7 @@ public class Login {
         this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
         this.kinitCmd = (String) configs.get(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
 
-        this.lastLogin = time.currentElapsedTime();
+        this.lastLogin = currentElapsedTime();
         login = login(loginContextName);
         subject = login.getSubject();
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
@@ -143,7 +143,7 @@ public class Login {
                 log.info("TGT refresh thread started.");
                 while (true) {  // renewal thread's main loop. if it exits from here, thread will exit.
                     KerberosTicket tgt = getTGT();
-                    long now = time.currentWallTime();
+                    long now = currentWallTime();
                     long nextRefresh;
                     Date nextRefreshDate;
                     if (tgt == null) {
@@ -318,7 +318,7 @@ public class Login {
 
         if (proposedRefresh > expires)
             // proposedRefresh is too far in the future: it's after ticket expires: simply return now.
-            return time.currentWallTime();
+            return currentWallTime();
         else
             return proposedRefresh;
     }
@@ -336,7 +336,7 @@ public class Login {
     }
 
     private boolean hasSufficientTimeElapsed() {
-        long now = time.currentElapsedTime();
+        long now = currentElapsedTime();
         if (now - lastLogin < minTimeBeforeRelogin) {
             log.warn("Not attempting to re-login since the last re-login was " +
                     "attempted less than " + (minTimeBeforeRelogin / 1000) + " seconds" +
@@ -364,7 +364,7 @@ public class Login {
         log.info("Initiating logout for " + principal);
         synchronized (Login.class) {
             // register most recent relogin attempt
-            lastLogin = time.currentElapsedTime();
+            lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per
             //the Java kerberos login module code, only the kerberos credentials
             //are cleared
@@ -376,4 +376,13 @@ public class Login {
             login.login();
         }
     }
+
+    private long currentElapsedTime() {
+        return time.nanoseconds() / 1000000;
+    }
+
+    private long currentWallTime() {
+        return time.milliseconds();
+    }
+
 }
