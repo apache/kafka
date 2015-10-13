@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -226,6 +227,7 @@ public class KafkaConfigStorage {
         consumerProps.putAll(configs);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
         configLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback);
     }
@@ -271,9 +273,14 @@ public class KafkaConfigStorage {
      * @param properties the configuration to write
      */
     public void putConnectorConfig(String connector, Map<String, String> properties) {
-        Struct copycatConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
-        copycatConfig.put("properties", properties);
-        byte[] serializedConfig = converter.fromCopycatData(topic, CONNECTOR_CONFIGURATION_V0, copycatConfig);
+        byte[] serializedConfig;
+        if (properties == null) {
+            serializedConfig = null;
+        } else {
+            Struct copycatConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
+            copycatConfig.put("properties", properties);
+            serializedConfig = converter.fromCopycatData(topic, CONNECTOR_CONFIGURATION_V0, copycatConfig);
+        }
 
         try {
             configLog.send(CONNECTOR_KEY(connector), serializedConfig);
@@ -349,6 +356,14 @@ public class KafkaConfigStorage {
         }
     }
 
+    public Future<Void> readToEnd() {
+        return configLog.readToEnd();
+    }
+
+    public void readToEnd(Callback<Void> cb) {
+        configLog.readToEnd(cb);
+    }
+
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps, Callback<ConsumerRecord<String, byte[]>> consumedCallback) {
         return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, new SystemTime());
@@ -369,22 +384,29 @@ public class KafkaConfigStorage {
                 log.error("Failed to convert config data to Copycat format: ", e);
                 return;
             }
-            offset = record.offset();
+            // Make the recorded offset match the API used for positions in the consumer -- return the offset of the
+            // *next record*, not the last one consumed.
+            offset = record.offset() + 1;
 
             if (record.key().startsWith(CONNECTOR_PREFIX)) {
                 String connectorName = record.key().substring(CONNECTOR_PREFIX.length());
                 synchronized (lock) {
-                    // Connector configs can be applied and callbacks invoked immediately
-                    if (!(value.value() instanceof Map)) {
-                        log.error("Found connector configuration (" + record.key() + ") in wrong format: " + value.value().getClass());
-                        return;
+                    if (value.value() == null) {
+                        // Connector deletion will be written as a null value
+                        connectorConfigs.remove(connectorName);
+                    } else {
+                        // Connector configs can be applied and callbacks invoked immediately
+                        if (!(value.value() instanceof Map)) {
+                            log.error("Found connector configuration (" + record.key() + ") in wrong format: " + value.value().getClass());
+                            return;
+                        }
+                        Object newConnectorConfig = ((Map<String, Object>) value.value()).get("properties");
+                        if (!(newConnectorConfig instanceof Map)) {
+                            log.error("Invalid data for connector config: properties filed should be a Map but is " + newConnectorConfig.getClass());
+                            return;
+                        }
+                        connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
                     }
-                    Object newConnectorConfig = ((Map<String, Object>) value.value()).get("properties");
-                    if (!(newConnectorConfig instanceof Map)) {
-                        log.error("Invalid data for connector config: properties filed should be a Map but is " + newConnectorConfig.getClass());
-                        return;
-                    }
-                    connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
                 }
                 if (!starting)
                     connectorConfigCallback.onCompletion(null, connectorName);
@@ -445,8 +467,7 @@ public class KafkaConfigStorage {
 
                     Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(connectorName);
 
-                    Object newTaskCountObj = ((Map<String, Object>) value.value()).get("tasks");
-                    Integer newTaskCount = (Integer) newTaskCountObj;
+                    int newTaskCount = intValue(((Map<String, Object>) value.value()).get("tasks"));
 
                     // Validate the configs we're supposed to update to ensure we're getting a complete configuration
                     // update of all tasks that are expected based on the number of tasks in the commit message.
@@ -541,6 +562,17 @@ public class KafkaConfigStorage {
             if (!idSet.contains(i))
                 return false;
         return true;
+    }
+
+    // Convert an integer value extracted from a schemaless struct to an int. This handles potentially different
+    // encodings by different Converters.
+    private static int intValue(Object value) {
+        if (value instanceof Integer)
+            return (int) value;
+        else if (value instanceof Long)
+            return (int) (long) value;
+        else
+            throw new CopycatException("Expected integer value to be either Integer or Long");
     }
 }
 
