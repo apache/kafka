@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,7 +15,7 @@
  * limitations under the License.
  **/
 
-package org.apache.kafka.copycat.runtime.standalone;
+package org.apache.kafka.copycat.runtime.distributed;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.connector.Connector;
@@ -26,27 +26,49 @@ import org.apache.kafka.copycat.runtime.HerderConnectorContext;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.sink.SinkConnector;
 import org.apache.kafka.copycat.sink.SinkTask;
-import org.apache.kafka.copycat.util.*;
+import org.apache.kafka.copycat.storage.KafkaConfigStorage;
+import org.apache.kafka.copycat.util.Callback;
+import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
 /**
- * Single process, in-memory "herder". Useful for a standalone copycat process.
+ * Distributed "herder" that coordinates with other workers to spread work across multiple processes.
  */
-public class StandaloneHerder implements Herder {
-    private static final Logger log = LoggerFactory.getLogger(StandaloneHerder.class);
+public class DistributedHerder implements Herder {
+    private static final Logger log = LoggerFactory.getLogger(DistributedHerder.class);
 
     private Worker worker;
+    private KafkaConfigStorage configStorage;
+    private ClusterConfigState configState;
     private HashMap<String, ConnectorState> connectors = new HashMap<>();
 
-    public StandaloneHerder(Worker worker) {
+    public DistributedHerder(Worker worker) {
         this.worker = worker;
+        this.configStorage = new KafkaConfigStorage(worker.getInternalValueConverter(),
+                new ConnectorConfigCallback(), new TaskConfigCallback());
+    }
+
+    // Public for testing (mock KafkaConfigStorage)
+    public DistributedHerder(Worker worker, KafkaConfigStorage configStorage) {
+        this.worker = worker;
+        this.configStorage = configStorage;
+    }
+
+    public synchronized void configure(Map<String, ?> configs) {
+        configStorage.configure(configs);
     }
 
     public synchronized void start() {
         log.info("Herder starting");
+
+        configStorage.start();
+
+        log.info("Restoring connectors from stored configs");
+        restoreConnectors();
+
         log.info("Herder started");
     }
 
@@ -62,6 +84,11 @@ public class StandaloneHerder implements Herder {
         }
         connectors.clear();
 
+        if (configStorage != null) {
+            configStorage.stop();
+            configStorage = null;
+        }
+
         log.info("Herder stopped");
     }
 
@@ -69,7 +96,12 @@ public class StandaloneHerder implements Herder {
     public synchronized void addConnector(Map<String, String> connectorProps,
                                           Callback<String> callback) {
         try {
-            ConnectorState connState = createConnector(connectorProps);
+            // Ensure the config is written to storage first
+            ConnectorConfig connConfig = new ConnectorConfig(connectorProps);
+            String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
+            configStorage.putConnectorConfig(connName, connectorProps);
+
+            ConnectorState connState = createConnector(connConfig);
             if (callback != null)
                 callback.onCompletion(null, connState.name);
             // This should always be a new job, create jobs from scratch
@@ -103,8 +135,7 @@ public class StandaloneHerder implements Herder {
     }
 
     // Creates and configures the connector. Does not setup any tasks
-    private ConnectorState createConnector(Map<String, String> connectorProps) {
-        ConnectorConfig connConfig = new ConnectorConfig(connectorProps);
+    private ConnectorState createConnector(ConnectorConfig connConfig) {
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         String className = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         log.info("Creating connector {} of type {}", connName, className);
@@ -156,6 +187,7 @@ public class StandaloneHerder implements Herder {
         }
 
         stopConnector(state);
+        configStorage.putConnectorConfig(state.name, null);
         connectors.remove(state.name);
 
         log.info("Finished destroying connector {}", connName);
@@ -233,6 +265,23 @@ public class StandaloneHerder implements Herder {
         createConnectorTasks(state);
     }
 
+    private void restoreConnectors() {
+        configState = configStorage.snapshot();
+        Collection<String> connNames = configState.connectors();
+        for (String connName : connNames) {
+            log.info("Restoring connector {}", connName);
+            Map<String, String> connProps = configState.connectorConfig(connName);
+            ConnectorConfig connConfig = new ConnectorConfig(connProps);
+            ConnectorState connState = createConnector(connConfig);
+            // Because this coordinator is standalone, connectors are only restored when this process
+            // starts and we know there can't be any existing tasks. So in this special case we're able
+            // to just create the tasks rather than having to check for existing tasks and sort out
+            // whether they need to be reconfigured.
+            createConnectorTasks(connState);
+        }
+    }
+
+
 
     private static class ConnectorState {
         public String name;
@@ -250,4 +299,22 @@ public class StandaloneHerder implements Herder {
             this.tasks = new HashSet<>();
         }
     }
+
+    private class ConnectorConfigCallback implements Callback<String> {
+        @Override
+        public void onCompletion(Throwable error, String result) {
+            configState = configStorage.snapshot();
+            // FIXME
+        }
+    }
+
+    private class TaskConfigCallback implements Callback<List<ConnectorTaskId>> {
+        @Override
+        public void onCompletion(Throwable error, List<ConnectorTaskId> result) {
+            configState = configStorage.snapshot();
+            // FIXME
+        }
+    }
+
+
 }

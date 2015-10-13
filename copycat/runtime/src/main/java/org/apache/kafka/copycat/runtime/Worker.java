@@ -52,8 +52,8 @@ public class Worker {
     private WorkerConfig config;
     private Converter keyConverter;
     private Converter valueConverter;
-    private Converter offsetKeyConverter;
-    private Converter offsetValueConverter;
+    private Converter internalKeyConverter;
+    private Converter internalValueConverter;
     private OffsetBackingStore offsetBackingStore;
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
     private KafkaProducer<byte[], byte[]> producer;
@@ -71,10 +71,10 @@ public class Worker {
         this.keyConverter.configure(config.originalsWithPrefix("key.converter."), true);
         this.valueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
         this.valueConverter.configure(config.originalsWithPrefix("value.converter."), false);
-        this.offsetKeyConverter = config.getConfiguredInstance(WorkerConfig.OFFSET_KEY_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.offsetKeyConverter.configure(config.originalsWithPrefix("offset.key.converter."), true);
-        this.offsetValueConverter = config.getConfiguredInstance(WorkerConfig.OFFSET_VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.offsetValueConverter.configure(config.originalsWithPrefix("offset.value.converter."), false);
+        this.internalKeyConverter = config.getConfiguredInstance(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.internalKeyConverter.configure(config.originalsWithPrefix("internal.key.converter."), true);
+        this.internalValueConverter = config.getConfiguredInstance(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.internalValueConverter.configure(config.originalsWithPrefix("internal.value.converter."), false);
 
         this.offsetBackingStore = offsetBackingStore;
         this.offsetBackingStore.configure(config.originals());
@@ -157,9 +157,9 @@ public class Worker {
         if (task instanceof SourceTask) {
             SourceTask sourceTask = (SourceTask) task;
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
-                    offsetKeyConverter, offsetValueConverter);
+                    internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
-                    offsetKeyConverter, offsetValueConverter);
+                    internalKeyConverter, internalValueConverter);
             workerTask = new WorkerSourceTask(id, sourceTask, keyConverter, valueConverter, producer,
                     offsetReader, offsetWriter, config, time);
         } else if (task instanceof SinkTask) {
@@ -201,4 +201,11 @@ public class Worker {
         return task;
     }
 
+    public Converter getInternalKeyConverter() {
+        return internalKeyConverter;
+    }
+
+    public Converter getInternalValueConverter() {
+        return internalValueConverter;
+    }
 }

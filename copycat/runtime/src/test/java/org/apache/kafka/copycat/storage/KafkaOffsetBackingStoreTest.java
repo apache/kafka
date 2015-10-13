@@ -18,23 +18,16 @@
 package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.util.Callback;
-import org.apache.kafka.copycat.util.TestFuture;
+import org.apache.kafka.copycat.util.KafkaBasedLog;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -49,70 +42,56 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.apache.kafka.copycat.util.ByteArrayProducerRecordEquals.eqProducerRecord;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(KafkaOffsetBackingStore.class)
 @PowerMockIgnore("javax.management.*")
 public class KafkaOffsetBackingStoreTest {
     private static final String TOPIC = "copycat-offsets";
-    private static final TopicPartition TP0 = new TopicPartition(TOPIC, 0);
-    private static final TopicPartition TP1 = new TopicPartition(TOPIC, 1);
     private static final Map<String, String> DEFAULT_PROPS = new HashMap<>();
     static {
         DEFAULT_PROPS.put(KafkaOffsetBackingStore.OFFSET_STORAGE_TOPIC_CONFIG, TOPIC);
         DEFAULT_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
     }
-    private static final Set<TopicPartition> CONSUMER_ASSIGNMENT = new HashSet<>(Arrays.asList(TP0, TP1));
     private static final Map<ByteBuffer, ByteBuffer> FIRST_SET = new HashMap<>();
     static {
         FIRST_SET.put(buffer("key"), buffer("value"));
         FIRST_SET.put(null, null);
     }
 
-
-    private static final Node LEADER = new Node(1, "broker1", 9092);
-    private static final Node REPLICA = new Node(1, "broker2", 9093);
-
-    private static final PartitionInfo TPINFO0 = new PartitionInfo(TOPIC, 0, LEADER, new Node[]{REPLICA}, new Node[]{REPLICA});
-    private static final PartitionInfo TPINFO1 = new PartitionInfo(TOPIC, 1, LEADER, new Node[]{REPLICA}, new Node[]{REPLICA});
-
     private static final ByteBuffer TP0_KEY = buffer("TP0KEY");
     private static final ByteBuffer TP1_KEY = buffer("TP1KEY");
+    private static final ByteBuffer TP2_KEY = buffer("TP2KEY");
     private static final ByteBuffer TP0_VALUE = buffer("VAL0");
     private static final ByteBuffer TP1_VALUE = buffer("VAL1");
+    private static final ByteBuffer TP2_VALUE = buffer("VAL2");
     private static final ByteBuffer TP0_VALUE_NEW = buffer("VAL0_NEW");
     private static final ByteBuffer TP1_VALUE_NEW = buffer("VAL1_NEW");
 
+    @Mock
+    KafkaBasedLog<byte[], byte[]> storeLog;
     private KafkaOffsetBackingStore store;
 
-    @Mock private KafkaProducer<byte[], byte[]> producer;
-    private MockConsumer<byte[], byte[]> consumer;
+    private Capture<String> capturedTopic = EasyMock.newCapture();
+    private Capture<Map<String, Object>> capturedProducerProps = EasyMock.newCapture();
+    private Capture<Map<String, Object>> capturedConsumerProps = EasyMock.newCapture();
+    private Capture<Callback<ConsumerRecord<byte[], byte[]>>> capturedConsumedCallback = EasyMock.newCapture();
 
     @Before
     public void setUp() throws Exception {
-        store = PowerMock.createPartialMockAndInvokeDefaultConstructor(KafkaOffsetBackingStore.class, new String[]{"createConsumer", "createProducer"});
-        consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
-        Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
-        beginningOffsets.put(TP0, 0L);
-        beginningOffsets.put(TP1, 0L);
-        consumer.updateBeginningOffsets(beginningOffsets);
+        store = PowerMock.createPartialMockAndInvokeDefaultConstructor(KafkaOffsetBackingStore.class, new String[]{"createKafkaBasedLog"});
     }
 
     @Test(expected = CopycatException.class)
@@ -123,142 +102,108 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testStartStop() throws Exception {
-        expectStart();
+        expectConfigure();
+        expectStart(Collections.EMPTY_LIST);
         expectStop();
 
         PowerMock.replayAll();
 
         store.configure(DEFAULT_PROPS);
+        assertEquals(TOPIC, capturedTopic.getValue());
+        assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
+        assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
+        assertEquals("org.apache.kafka.common.serialization.ByteArrayDeserializer", capturedConsumerProps.getValue().get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
+        assertEquals("org.apache.kafka.common.serialization.ByteArrayDeserializer", capturedConsumerProps.getValue().get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
 
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 0L);
-        endOffsets.put(TP1, 0L);
-        consumer.updateEndOffsets(endOffsets);
         store.start();
-        assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
-
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         PowerMock.verifyAll();
     }
 
     @Test
     public void testReloadOnStart() throws Exception {
-        expectStart();
+        expectConfigure();
+        expectStart(Arrays.asList(
+                new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY.array(), TP0_VALUE.array()),
+                new ConsumerRecord<>(TOPIC, 1, 0, TP1_KEY.array(), TP1_VALUE.array()),
+                new ConsumerRecord<>(TOPIC, 0, 1, TP0_KEY.array(), TP0_VALUE_NEW.array()),
+                new ConsumerRecord<>(TOPIC, 1, 1, TP1_KEY.array(), TP1_VALUE_NEW.array())
+        ));
         expectStop();
 
         PowerMock.replayAll();
 
         store.configure(DEFAULT_PROPS);
-
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 1L);
-        endOffsets.put(TP1, 1L);
-        consumer.updateEndOffsets(endOffsets);
-        Thread startConsumerOpsThread = new Thread("start-consumer-ops-thread") {
-            @Override
-            public void run() {
-                // Needs to seek to end to find end offsets
-                consumer.waitForPoll(10000);
-
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY.array(), TP0_VALUE.array()));
-                    }
-                }, 10000);
-
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, TP1_KEY.array(), TP1_VALUE.array()));
-                    }
-                }, 10000);
-            }
-        };
-        startConsumerOpsThread.start();
         store.start();
-        startConsumerOpsThread.join(10000);
-        assertFalse(startConsumerOpsThread.isAlive());
-        assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         HashMap<ByteBuffer, ByteBuffer> data = Whitebox.getInternalState(store, "data");
-        assertEquals(TP0_VALUE, data.get(TP0_KEY));
-        assertEquals(TP1_VALUE, data.get(TP1_KEY));
+        assertEquals(TP0_VALUE_NEW, data.get(TP0_KEY));
+        assertEquals(TP1_VALUE_NEW, data.get(TP1_KEY));
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         PowerMock.verifyAll();
     }
 
     @Test
     public void testGetSet() throws Exception {
-        expectStart();
-        TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
-        ProducerRecord<byte[], byte[]> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY.array(), TP0_VALUE.array());
-        Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(eqProducerRecord(tp0Record), EasyMock.capture(callback1))).andReturn(tp0Future);
-        TestFuture<RecordMetadata> tp1Future = new TestFuture<>();
-        ProducerRecord<byte[], byte[]> tp1Record = new ProducerRecord<>(TOPIC, TP1_KEY.array(), TP1_VALUE.array());
-        Capture<org.apache.kafka.clients.producer.Callback> callback2 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(eqProducerRecord(tp1Record), EasyMock.capture(callback2))).andReturn(tp1Future);
-
+        expectConfigure();
+        expectStart(Collections.EMPTY_LIST);
         expectStop();
+
+        // First get() against an empty store
+        final Capture<Callback<Void>> firstGetReadToEndCallback = EasyMock.newCapture();
+        storeLog.readToEnd(EasyMock.capture(firstGetReadToEndCallback));
+        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                firstGetReadToEndCallback.getValue().onCompletion(null, null);
+                return null;
+            }
+        });
+
+        // Set offsets
+        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
+        storeLog.send(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0));
+        PowerMock.expectLastCall();
+        Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
+        storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()), EasyMock.capture(callback1));
+        PowerMock.expectLastCall();
+
+        // Second get() should get the produced data and return the new values
+        final Capture<Callback<Void>> secondGetReadToEndCallback = EasyMock.newCapture();
+        storeLog.readToEnd(EasyMock.capture(secondGetReadToEndCallback));
+        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY.array(), TP0_VALUE.array()));
+                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 1, 0, TP1_KEY.array(), TP1_VALUE.array()));
+                secondGetReadToEndCallback.getValue().onCompletion(null, null);
+                return null;
+            }
+        });
+
+        // Third get() should pick up data produced by someone else and return those values
+        final Capture<Callback<Void>> thirdGetReadToEndCallback = EasyMock.newCapture();
+        storeLog.readToEnd(EasyMock.capture(thirdGetReadToEndCallback));
+        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 1, TP0_KEY.array(), TP0_VALUE_NEW.array()));
+                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 1, 1, TP1_KEY.array(), TP1_VALUE_NEW.array()));
+                thirdGetReadToEndCallback.getValue().onCompletion(null, null);
+                return null;
+            }
+        });
 
         PowerMock.replayAll();
 
+
+
         store.configure(DEFAULT_PROPS);
-
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 0L);
-        endOffsets.put(TP1, 0L);
-        consumer.updateEndOffsets(endOffsets);
-        Thread startConsumerOpsThread = new Thread("start-consumer-ops-thread") {
-            @Override
-            public void run() {
-                // Should keep polling until it has partition info
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.seek(TP0, 0);
-                        consumer.seek(TP1, 0);
-                    }
-                }, 10000);
-            }
-        };
-        startConsumerOpsThread.start();
         store.start();
-        startConsumerOpsThread.join(10000);
-        assertFalse(startConsumerOpsThread.isAlive());
-        assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
 
-        Map<ByteBuffer, ByteBuffer> toSet = new HashMap<>();
-        toSet.put(TP0_KEY, TP0_VALUE);
-        toSet.put(TP1_KEY, TP1_VALUE);
-        final AtomicBoolean invoked = new AtomicBoolean(false);
-        Future<Void> setFuture = store.set(toSet, new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                invoked.set(true);
-            }
-        });
-        assertFalse(setFuture.isDone());
-        tp1Future.resolve((RecordMetadata) null); // Output not used, so safe to not return a real value for testing
-        assertFalse(setFuture.isDone());
-        tp0Future.resolve((RecordMetadata) null);
-        // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
-        // for the store's set callback
-        callback2.getValue().onCompletion(null, null);
-        assertFalse(invoked.get());
-        callback1.getValue().onCompletion(null, null);
-        setFuture.get(10000, TimeUnit.MILLISECONDS);
-        assertTrue(invoked.get());
-
-        // Getting data should continue to return old data...
+        // Getting from empty store should return nulls
         final AtomicBoolean getInvokedAndPassed = new AtomicBoolean(false);
         store.get(Arrays.asList(TP0_KEY, TP1_KEY), new Callback<Map<ByteBuffer, ByteBuffer>>() {
             @Override
@@ -271,184 +216,138 @@ public class KafkaOffsetBackingStoreTest {
         }).get(10000, TimeUnit.MILLISECONDS);
         assertTrue(getInvokedAndPassed.get());
 
-        // Until the consumer gets the new data
-        Thread readNewDataThread = new Thread("read-new-data-thread") {
+        // Set some offsets
+        Map<ByteBuffer, ByteBuffer> toSet = new HashMap<>();
+        toSet.put(TP0_KEY, TP0_VALUE);
+        toSet.put(TP1_KEY, TP1_VALUE);
+        final AtomicBoolean invoked = new AtomicBoolean(false);
+        Future<Void> setFuture = store.set(toSet, new Callback<Void>() {
             @Override
-            public void run() {
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY.array(), TP0_VALUE_NEW.array()));
-                    }
-                }, 10000);
-
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, TP1_KEY.array(), TP1_VALUE_NEW.array()));
-                    }
-                }, 10000);
+            public void onCompletion(Throwable error, Void result) {
+                invoked.set(true);
             }
-        };
-        readNewDataThread.start();
-        readNewDataThread.join(10000);
-        assertFalse(readNewDataThread.isAlive());
+        });
+        assertFalse(setFuture.isDone());
+        // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
+        // for the store's set callback
+        callback1.getValue().onCompletion(null, null);
+        assertFalse(invoked.get());
+        callback0.getValue().onCompletion(null, null);
+        setFuture.get(10000, TimeUnit.MILLISECONDS);
+        assertTrue(invoked.get());
 
-        // And now the new data should be returned
-        final AtomicBoolean finalGetInvokedAndPassed = new AtomicBoolean(false);
+        // Getting data should read to end of our published data and return it
+        final AtomicBoolean secondGetInvokedAndPassed = new AtomicBoolean(false);
+        store.get(Arrays.asList(TP0_KEY, TP1_KEY), new Callback<Map<ByteBuffer, ByteBuffer>>() {
+            @Override
+            public void onCompletion(Throwable error, Map<ByteBuffer, ByteBuffer> result) {
+                assertEquals(TP0_VALUE, result.get(TP0_KEY));
+                assertEquals(TP1_VALUE, result.get(TP1_KEY));
+                secondGetInvokedAndPassed.set(true);
+            }
+        }).get(10000, TimeUnit.MILLISECONDS);
+        assertTrue(secondGetInvokedAndPassed.get());
+
+        // Getting data should read to end of our published data and return it
+        final AtomicBoolean thirdGetInvokedAndPassed = new AtomicBoolean(false);
         store.get(Arrays.asList(TP0_KEY, TP1_KEY), new Callback<Map<ByteBuffer, ByteBuffer>>() {
             @Override
             public void onCompletion(Throwable error, Map<ByteBuffer, ByteBuffer> result) {
                 assertEquals(TP0_VALUE_NEW, result.get(TP0_KEY));
                 assertEquals(TP1_VALUE_NEW, result.get(TP1_KEY));
-                finalGetInvokedAndPassed.set(true);
+                thirdGetInvokedAndPassed.set(true);
             }
         }).get(10000, TimeUnit.MILLISECONDS);
-        assertTrue(finalGetInvokedAndPassed.get());
+        assertTrue(thirdGetInvokedAndPassed.get());
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         PowerMock.verifyAll();
     }
 
     @Test
-    public void testConsumerError() throws Exception {
-        expectStart();
+    public void testSetFailure() throws Exception {
+        expectConfigure();
+        expectStart(Collections.EMPTY_LIST);
         expectStop();
 
-        PowerMock.replayAll();
-
-        store.configure(DEFAULT_PROPS);
-
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 1L);
-        endOffsets.put(TP1, 1L);
-        consumer.updateEndOffsets(endOffsets);
-        Thread startConsumerOpsThread = new Thread("start-consumer-ops-thread") {
-            @Override
-            public void run() {
-                // Trigger exception
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.setException(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.exception());
-                    }
-                }, 10000);
-
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY.array(), TP0_VALUE_NEW.array()));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, TP0_KEY.array(), TP0_VALUE_NEW.array()));
-                    }
-                }, 10000);
-            }
-        };
-        startConsumerOpsThread.start();
-        store.start();
-        startConsumerOpsThread.join(10000);
-        assertFalse(startConsumerOpsThread.isAlive());
-        assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
-
-        store.stop();
-
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testProducerError() throws Exception {
-        expectStart();
-        TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
-        ProducerRecord<byte[], byte[]> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY.array(), TP0_VALUE.array());
+        // Set offsets
+        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
+        storeLog.send(EasyMock.aryEq(TP0_KEY.array()), EasyMock.aryEq(TP0_VALUE.array()), EasyMock.capture(callback0));
+        PowerMock.expectLastCall();
         Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(eqProducerRecord(tp0Record), EasyMock.capture(callback1))).andReturn(tp0Future);
-        TestFuture<RecordMetadata> tp1Future = new TestFuture<>();
-        ProducerRecord<byte[], byte[]> tp1Record = new ProducerRecord<>(TOPIC, TP1_KEY.array(), TP1_VALUE.array());
+        storeLog.send(EasyMock.aryEq(TP1_KEY.array()), EasyMock.aryEq(TP1_VALUE.array()), EasyMock.capture(callback1));
+        PowerMock.expectLastCall();
         Capture<org.apache.kafka.clients.producer.Callback> callback2 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(eqProducerRecord(tp1Record), EasyMock.capture(callback2))).andReturn(tp1Future);
-
-        expectStop();
+        storeLog.send(EasyMock.aryEq(TP2_KEY.array()), EasyMock.aryEq(TP2_VALUE.array()), EasyMock.capture(callback2));
+        PowerMock.expectLastCall();
 
         PowerMock.replayAll();
 
+
+
         store.configure(DEFAULT_PROPS);
-
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 0L);
-        endOffsets.put(TP1, 0L);
-        consumer.updateEndOffsets(endOffsets);
-        Thread startConsumerOpsThread = new Thread("start-consumer-ops-thread") {
-            @Override
-            public void run() {
-                // Should keep polling until it has partition info
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.seek(TP0, 0);
-                        consumer.seek(TP1, 0);
-                    }
-                }, 10000);
-            }
-        };
-        startConsumerOpsThread.start();
         store.start();
-        startConsumerOpsThread.join(10000);
-        assertFalse(startConsumerOpsThread.isAlive());
-        assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
 
+        // Set some offsets
         Map<ByteBuffer, ByteBuffer> toSet = new HashMap<>();
         toSet.put(TP0_KEY, TP0_VALUE);
         toSet.put(TP1_KEY, TP1_VALUE);
-        final AtomicReference<Throwable> setException = new AtomicReference<>();
+        toSet.put(TP2_KEY, TP2_VALUE);
+        final AtomicBoolean invoked = new AtomicBoolean(false);
+        final AtomicBoolean invokedFailure = new AtomicBoolean(false);
         Future<Void> setFuture = store.set(toSet, new Callback<Void>() {
             @Override
             public void onCompletion(Throwable error, Void result) {
-                assertNull(setException.get()); // Should only be invoked once
-                setException.set(error);
+                invoked.set(true);
+                if (error != null)
+                    invokedFailure.set(true);
             }
         });
         assertFalse(setFuture.isDone());
-        KafkaException exc = new LeaderNotAvailableException("Error");
-        tp1Future.resolve(exc);
-        callback2.getValue().onCompletion(null, exc);
-        // One failure should resolve the future immediately
+        // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
+        // for the store's set callback
+        callback1.getValue().onCompletion(null, null);
+        assertFalse(invoked.get());
+        callback2.getValue().onCompletion(null, new KafkaException("bogus error"));
+        assertTrue(invoked.get());
+        assertTrue(invokedFailure.get());
+        callback0.getValue().onCompletion(null, null);
         try {
             setFuture.get(10000, TimeUnit.MILLISECONDS);
-            fail("Should have see ExecutionException");
+            fail("Should have seen KafkaException thrown when waiting on KafkaOffsetBackingStore.set() future");
         } catch (ExecutionException e) {
             // expected
+            assertNotNull(e.getCause());
+            assertTrue(e.getCause() instanceof KafkaException);
         }
-        assertNotNull(setException.get());
-
-        // Callbacks can continue to arrive
-        tp0Future.resolve((RecordMetadata) null);
-        callback1.getValue().onCompletion(null, null);
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
         PowerMock.verifyAll();
     }
 
+    private void expectConfigure() throws Exception {
+        PowerMock.expectPrivate(store, "createKafkaBasedLog", EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
+                EasyMock.capture(capturedConsumerProps), EasyMock.capture(capturedConsumedCallback))
+                .andReturn(storeLog);
+    }
 
-    private void expectStart() throws Exception {
-        PowerMock.expectPrivate(store, "createProducer")
-                .andReturn(producer);
-        PowerMock.expectPrivate(store, "createConsumer")
-                .andReturn(consumer);
+    private void expectStart(final List<ConsumerRecord<byte[], byte[]>> preexistingRecords) throws Exception {
+        storeLog.start();
+        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                for (ConsumerRecord<byte[], byte[]> rec : preexistingRecords)
+                    capturedConsumedCallback.getValue().onCompletion(null, rec);
+                return null;
+            }
+        });
     }
 
     private void expectStop() {
-        producer.close();
+        storeLog.stop();
         PowerMock.expectLastCall();
-        // MockConsumer close is checked after test.
     }
 
     private static ByteBuffer buffer(String v) {
