@@ -15,7 +15,7 @@
  * limitations under the License.
  **/
 
-package org.apache.kafka.copycat.runtime.distributed;
+package org.apache.kafka.copycat.storage;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -28,7 +28,7 @@ import org.apache.kafka.copycat.data.SchemaBuilder;
 import org.apache.kafka.copycat.data.Struct;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.errors.DataException;
-import org.apache.kafka.copycat.storage.Converter;
+import org.apache.kafka.copycat.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.copycat.util.Callback;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.apache.kafka.copycat.util.KafkaBasedLog;
