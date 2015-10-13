@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,59 +49,94 @@ import java.util.concurrent.TimeoutException;
 
 /**
  * <p>
- *     Provides persistent storage of Copycat connector configurations in a Kafka topic.
+ * Provides persistent storage of Copycat connector configurations in a Kafka topic.
  * </p>
  * <p>
- *     This class manages both connector and task configurations. It tracks three types of configuration entries:
- *
- *     1. Root config: list of connector IDs, each with the current number of tasks (Kafka key: root).
- *                          This config is used only to track which task configs are in a consistent state and is
- *                          therefore effectively ephemeral -- if it were deleted, we would treat everything as
- *                          inconsistent until all connector's tasks were updated and a new record specifying
- *                          the number of tasks per connector was written.
- *     2. Connector config: map of string -> string configurations passed to the Connector class, with support for
- *                          expanding this format if necessary. (Kafka key: connector-[connector-id]).
- *                          These configs are *not* ephemeral. They represent the source of truth. If the entire Copycat
- *                          cluster goes down, this is all that is really needed to recover.
- *     3. Task configs: map of string -> string configurations passed to the Task class, with support for expanding
- *                          this format if necessary. (Kafka key: task-[connector-id]-[task-id]).
- *                          These configs are ephemeral; they are stored here to a) disseminate them to all workers while
- *                          ensuring agreement and b) to allow faster cluster/worker recovery since the common case
- *                          of recovery (restoring a connector) will simply result in the same configuration as before
- *                          the failure.
+ * This class manages both connector and task configurations. It tracks three types of configuration entries:
+ * <p/>
+ * 1. Connector config: map of string -> string configurations passed to the Connector class, with support for
+ * expanding this format if necessary. (Kafka key: connector-[connector-id]).
+ * These configs are *not* ephemeral. They represent the source of truth. If the entire Copycat
+ * cluster goes down, this is all that is really needed to recover.
+ * 2. Task configs: map of string -> string configurations passed to the Task class, with support for expanding
+ * this format if necessary. (Kafka key: task-[connector-id]-[task-id]).
+ * These configs are ephemeral; they are stored here to a) disseminate them to all workers while
+ * ensuring agreement and b) to allow faster cluster/worker recovery since the common case
+ * of recovery (restoring a connector) will simply result in the same configuration as before
+ * the failure.
+ * 3. Task commit "configs": records indicating that previous task config entries should be committed and all task
+ * configs for a connector can be applied. (Kafka key: commit-[connector-id].
+ * This config has two effects. First, it records the number of tasks the connector is currently
+ * running (and can therefore increase/decrease parallelism). Second, because each task config
+ * is stored separately but they need to be applied together to ensure each partition is assigned
+ * to a single task, this record also indicates that task configs for the specified connector
+ * can be "applied" or "committed".
  * </p>
  * <p>
- *     The root configuration is used to trigger *task* updates since we require a combination of a compacted topic and atomic
- *     updates. To accomplish this, we do *not* apply updates to each configuration immediately as they are read from the
- *     Kafka log by this class. Instead, the are accumulated in a buffer in this class until we can be sure it is safe
- *     to atomically apply all outstanding updates, which is indicated by an update of the root config. This prevents
- *     problematic partial updates (e.g. some task configurations are updated, the leader dies, and others are left in
- *     their old state; if the new leader used the current state, some partitions could be assigned to multiple workers).
+ * This configuration is expected to be stored in a *single partition* and *compacted* topic. Using a single partition
+ * ensures we can enforce ordering on messages, allowing Kafka to be used as a write ahead log. Compaction allows
+ * us to clean up outdated configurations over time. However, this combination has some important implications for
+ * the implementation of this class and the configuration state that it may expose.
  * </p>
  * <p>
- *     Note that this has two implications. First, every instance tailing the log must check for inconsistencies --
- *     under normal circumstances they could not encounter them, but when they first load the log they could find it in
- *     an inconsistent state. Second, the leader instance (as determined by the calling Herder) must ensure that any
- *     inconsistencies are resolved, which it may do by requesting any necessary reconfiguration, writing the new values,
- *     and then updating the root config. Note that due to the way the root configuration is used, the leader *must*
- *     ensure that *all* inconsistent configs have been correctly updated before proceeding.
+ * Connector configurations are independent of all other configs, so they are handled easily. Writing a single record
+ * is already atomic, so these can be applied as soon as they are read. One connectors config does not affect any
+ * others, and they do not need to coordinate with the connector's task configuration at all.
  * </p>
  * <p>
- *     Connector config changes are handled differently since they are single entries -- any writes are atomic, so they
- *     can safely be applied immediately and do not require the root config to be rewritten.
+ * The most obvious implication for task configs is the need for the commit messages. Because Kafka does not
+ * currently have multi-record transactions or support atomic batch record writes, task commit messages are required
+ * to ensure that readers do not end up using inconsistent configs. For example, consider if a connector wrote configs
+ * for its tasks, then was reconfigured and only managed to write updated configs for half its tasks. If task configs
+ * were applied immediately you could be using half the old configs and half the new configs. In that condition, some
+ * partitions may be double-assigned because the old config and new config may use completely different assignments.
+ * Therefore, when reading the log, we must buffer config updates for a connector's tasks and only apply atomically them
+ * once a commit message has been read.
  * </p>
  * <p>
- *     Note that the expectation is that this config storage system has only a single writer at a time.
- *     The caller (Herder) must ensure this is the case. In distributed mode this will require forwarding config change
- *     requests to a leader.
+ * However, there are also further challenges. This simple buffering approach would work fine as long as the entire log was
+ * always available, but we would like to be able to enable compaction so our configuration topic does not grow
+ * indefinitely. Compaction may break a normal log because old entries will suddenly go missing. A new worker reading
+ * from the beginning of the log in order to build up the full current configuration will see task commits, but some
+ * records required for those commits will have been removed because the same keys have subsequently been rewritten.
+ * For example, if you have a sequence of record keys [connector-foo-config, task-foo-1-config, task-foo-2-config,
+ * commit-foo (2 tasks), task-foo-1-config, commit-foo (1 task)], we can end up with a compacted log containing
+ * [connector-foo-config, task-foo-2-config, commit-foo (2 tasks), task-foo-1-config, commit-foo (1 task)]. When read
+ * back, the first commit will see an invalid state because the first task-foo-1-config has been cleaned up.
  * </p>
  * <p>
- *     Since processing of the config log occurs in a background thread, callers must take care when using accessors.
- *     To simplify handling this correctly, this class only exposes a mechanism to snapshot the current state of the cluster.
- *     Updates may continue to be applied (and callbacks invoked) in the background. Callers must take care that they are
- *     using a consistent snapshot and only update when it is safe. In particular, if task configs are updated which require
- *     synchronization across workers to commit offsets and update the configuration, callbacks and updates during the
- *     rebalance must be deferred.
+ * Compaction can further complicate things if writing new task configs fails mid-write. Consider a similar scenario
+ * as the previous one, but in this case both the first and second update will write 2 task configs. However, the
+ * second write fails half of the way through:
+ * [connector-foo-config, task-foo-1-config, task-foo-2-config, commit-foo (2 tasks), task-foo-1-config]. Now compaction
+ * occurs and we're left with
+ * [connector-foo-config, task-foo-2-config, commit-foo (2 tasks), task-foo-1-config]. At the first commit, we don't
+ * have a complete set of configs. And because of the failure, there is no second commit. We are left in an inconsistent
+ * state with no obvious way to resolve the issue -- we can try to keep on reading, but the failed node may never
+ * recover and write the updated config. Meanwhile, other workers may have seen the entire log; they will see the second
+ * task-foo-1-config waiting to be applied, but will otherwise think everything is ok -- they have a valid set of task
+ * configs for connector "foo".
+ * </p>
+ * <p>
+ * Because we can encounter these inconsistencies and addressing them requires support from the rest of the system
+ * (resolving the task configuration inconsistencies requires support from the connector instance to regenerate updated
+ * configs), this class exposes not only the current set of configs, but also which connectors have inconsistent data.
+ * This allows users of this class (i.e., Herder implementations) to take action to resolve any inconsistencies. These
+ * inconsistencies should be rare (as described above, due to compaction combined with leader failures in the middle
+ * of updating task configurations).
+ * </p>
+ * <p>
+ * Note that the expectation is that this config storage system has only a single writer at a time.
+ * The caller (Herder) must ensure this is the case. In distributed mode this will require forwarding config change
+ * requests to the leader in the cluster (i.e. the worker group coordinated by the Kafka broker).
+ * </p>
+ * <p>
+ * Since processing of the config log occurs in a background thread, callers must take care when using accessors.
+ * To simplify handling this correctly, this class only exposes a mechanism to snapshot the current state of the cluster.
+ * Updates may continue to be applied (and callbacks invoked) in the background. Callers must take care that they are
+ * using a consistent snapshot and only update when it is safe. In particular, if task configs are updated which require
+ * synchronization across workers to commit offsets and update the configuration, callbacks and updates during the
+ * rebalance must be deferred.
  * </p>
  */
 public class KafkaConfigStorage {
@@ -108,27 +144,35 @@ public class KafkaConfigStorage {
 
     public static final String CONFIG_TOPIC_CONFIG = "config.storage.topic";
 
-    public static final String ROOT_KEY = "root";
     public static final String CONNECTOR_PREFIX = "connector-";
+
     public static String CONNECTOR_KEY(String connectorName) {
         return CONNECTOR_PREFIX + connectorName;
     }
+
     public static final String TASK_PREFIX = "task-";
+
     public static String TASK_KEY(ConnectorTaskId taskId) {
         return TASK_PREFIX + taskId.connector() + "-" + taskId.task();
+    }
+
+    public static final String COMMIT_TASKS_PREFIX = "commit-";
+
+    public static String COMMIT_TASKS_KEY(String connectorName) {
+        return COMMIT_TASKS_PREFIX + connectorName;
     }
 
     // Note that while using real serialization for values as we have here, but ad hoc string serialization for keys,
     // isn't ideal, we use this approach because it avoids any potential problems with schema evolution or
     // converter/serializer changes causing keys to change. We need to absolutely ensure that the keys remain precisely
     // the same.
-    public static final Schema ROOT_V0 = SchemaBuilder.struct()
-            .field("connectors", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build())
-            .build();
     public static final Schema CONNECTOR_CONFIGURATION_V0 = SchemaBuilder.struct()
             .field("properties", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA))
             .build();
     public static final Schema TASK_CONFIGURATION_V0 = CONNECTOR_CONFIGURATION_V0;
+    public static final Schema CONNECTOR_TASKS_COMMIT_V0 = SchemaBuilder.struct()
+            .field("tasks", Schema.INT32_SCHEMA)
+            .build();
 
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
 
@@ -141,17 +185,20 @@ public class KafkaConfigStorage {
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Copycat
     // format to serialized form
     private KafkaBasedLog<String, byte[]> configLog;
-    // Root config: connector -> # of tasks
-    private Map<String, Integer> rootConfig = new HashMap<>();
+    // Connector -> # of tasks
+    private Map<String, Integer> connectorTaskCounts = new HashMap<>();
     // Connector and task configs: name or id -> config map
     private Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
     private Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
-    // Offsets for most recently applied root and connector offsets, which are included in snapshots and can be used
-    // to efficiently ensure different worker nodes are working with the same set of configs
-    private long rootOffset;
-    private long connectorOffset;
+    // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
+    // is in an inconsistent state and we cannot safely use them until they have been refreshed.
+    private Set<String> inconsistent = new HashSet<>();
+    // The most recently read offset. This does not take into account deferred task updates/commits, so we may have
+    // outstanding data to be applied.
+    private long offset;
 
-    private Map<ConnectorTaskId, Map<String, String>> deferredTaskUpdates = new HashMap<>();
+    // Connector -> Map[ConnectorTaskId -> Configs]
+    private Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
 
 
     public KafkaConfigStorage(Converter converter, Callback<String> connectorConfigCallback, Callback<List<ConnectorTaskId>> tasksConfigCallback) {
@@ -161,8 +208,7 @@ public class KafkaConfigStorage {
         this.connectorConfigCallback = connectorConfigCallback;
         this.tasksConfigCallback = tasksConfigCallback;
 
-        rootOffset = -1;
-        connectorOffset = -1;
+        offset = -1;
     }
 
     public void configure(Map<String, ?> configs) {
@@ -208,11 +254,11 @@ public class KafkaConfigStorage {
             // Doing a shallow copy of the data is safe here because the complex nested data that is copied should all be
             // immutable configs
             return new ClusterConfigState(
-                    rootOffset,
-                    connectorOffset,
-                    new HashMap<>(rootConfig),
+                    offset,
+                    new HashMap<>(connectorTaskCounts),
                     new HashMap<>(connectorConfigs),
-                    new HashMap<>(taskConfigs)
+                    new HashMap<>(taskConfigs),
+                    new HashSet<>(inconsistent)
             );
         }
     }
@@ -220,7 +266,8 @@ public class KafkaConfigStorage {
     /**
      * Write this connector configuration to persistent storage and wait until it has been acknowledge and read back by
      * tailing the Kafka log with a consumer.
-     * @param connector name of the connector to write data for
+     *
+     * @param connector  name of the connector to write data for
      * @param properties the configuration to write
      */
     public void putConnectorConfig(String connector, Map<String, String> properties) {
@@ -238,12 +285,12 @@ public class KafkaConfigStorage {
     }
 
     /**
-     * Write these task configurations and update the root configuration, unless an inconsistency is found that indicates
-     * that not all connectors that need reconfiguration have been reconfigured.
+     * Write these task configurations and associated commit messages, unless an inconsistency is found that indicates
+     * that we would be leaving one of the referenced connectors with an inconsistent state.
      *
      * @param configs map containing task configurations
      * @throws CopycatException if the task configurations do not resolve inconsistencies found in the existing root
-     *         and task configurations.
+     *                          and task configurations.
      */
     public void putTaskConfigs(Map<ConnectorTaskId, Map<String, String>> configs) {
         // Make sure we're at the end of the log. We should be the only writer, but we want to make sure we don't have
@@ -258,53 +305,18 @@ public class KafkaConfigStorage {
         // In theory, there is only a single writer and we shouldn't need this lock since the background thread should
         // not invoke any callbacks that would conflict, but in practice this guards against inconsistencies due to
         // the root config being updated.
-        Map<String, Integer> newRootConfig = new HashMap<>();
+        Map<String, Integer> newTaskCounts = new HashMap<>();
         synchronized (lock) {
             // Validate tasks in this assignment. Any task configuration updates should include updates for *all* tasks
             // in the connector -- we should have all task IDs 0 - N-1 within a connector if any task is included here
-            Map<String, Set<Integer>> updatedConfigIdsByConnector = new HashMap<>();
-            for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : configs.entrySet()) {
-                ConnectorTaskId taskId = taskConfigEntry.getKey();
-                if (!updatedConfigIdsByConnector.containsKey(taskId.connector()))
-                    updatedConfigIdsByConnector.put(taskId.connector(), new TreeSet<Integer>());
-                updatedConfigIdsByConnector.get(taskId.connector()).add(taskId.task());
-            }
-            Map<String, Integer> updatedRootConfigEntries = new HashMap<>();
+            Map<String, Set<Integer>> updatedConfigIdsByConnector = taskIdsByConnector(configs);
             for (Map.Entry<String, Set<Integer>> taskConfigSetEntry : updatedConfigIdsByConnector.entrySet()) {
-                for (Integer elem : taskConfigSetEntry.getValue()) {
-                    if (elem < 0 || elem >= taskConfigSetEntry.getValue().size()) {
-                        log.error("Submitted task configuration contain invalid range of task IDs, ignoring this submission");
-                        throw new CopycatException("Error writing task configurations: found some connectors with invalid connectors");
-                    }
+                if (!completeTaskIdSet(taskConfigSetEntry.getValue(), taskConfigSetEntry.getValue().size())) {
+                    log.error("Submitted task configuration contain invalid range of task IDs, ignoring this submission");
+                    throw new CopycatException("Error writing task configurations: found some connectors with invalid connectors");
                 }
-                updatedRootConfigEntries.put(taskConfigSetEntry.getKey(), taskConfigSetEntry.getValue().size());
+                newTaskCounts.put(taskConfigSetEntry.getKey(), taskConfigSetEntry.getValue().size());
             }
-
-            // Generate new root config
-            newRootConfig.putAll(rootConfig);
-            newRootConfig.putAll(updatedRootConfigEntries);
-
-            // Second half of validation: if we find some missing task configurations even with a) outstanding deferred
-            // updates and b) these updates, then we shouldn't generate an updated root config
-            boolean inconsistent = false;
-            for (Map.Entry<String, Integer> newRootEntry : newRootConfig.entrySet()) {
-                String connName = newRootEntry.getKey();
-                for (int taskIndex = 0; taskIndex < newRootEntry.getValue(); taskIndex++) {
-                    ConnectorTaskId taskId = new ConnectorTaskId(connName, taskIndex);
-                    // Note that we *do not* include deferred updates here. This is important because a half completed
-                    // write of updated task configs could leave some left over data in the list of deferred task updates
-                    // which would then make this appear to have a complete set of task configs. In order to ensure correctness,
-                    // this method call or the existing task configs need to ensure everything that is inconsistent is
-                    // addressed in one batch.
-                    Map<String, String> taskConfig = configs.containsKey(taskId) ? configs.get(taskId) : taskConfigs.get(taskId);
-                    if (taskConfig == null) {
-                        log.error("Found inconsistent/incomplete assignment, missing config for task " + taskId);
-                        inconsistent = true;
-                    }
-                }
-            }
-            if (inconsistent)
-                throw new CopycatException("Error writing task configurations: found some connectors with incomplete task assignments");
         }
 
         // Start sending all the individual updates
@@ -315,16 +327,21 @@ public class KafkaConfigStorage {
             configLog.send(TASK_KEY(taskConfigEntry.getKey()), serializedConfig);
         }
 
-        // Finally, send the root update, then wait until we read to the end of the log
+        // Finally, send the commit to update the number of tasks and apply the new configs, then wait until we read to
+        // the end of the log
         try {
             // Read to end to ensure all the task configs have been written
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
-            Struct copycatConfig = new Struct(ROOT_V0);
-            copycatConfig.put("connectors", newRootConfig);
-            byte[] serializedConfig = converter.fromCopycatData(topic, ROOT_V0, copycatConfig);
-            configLog.send(ROOT_KEY, serializedConfig);
+            // Write all the commit messages
+            for (Map.Entry<String, Integer> taskCountEntry : newTaskCounts.entrySet()) {
+                Struct copycatConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
+                copycatConfig.put("tasks", taskCountEntry.getValue());
+                byte[] serializedConfig = converter.fromCopycatData(topic, CONNECTOR_TASKS_COMMIT_V0, copycatConfig);
+                configLog.send(COMMIT_TASKS_KEY(taskCountEntry.getKey()), serializedConfig);
+            }
 
+            // Read to end to ensure all the commit messages have been written
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write root configuration to Kafka: ", e);
@@ -352,36 +369,9 @@ public class KafkaConfigStorage {
                 log.error("Failed to convert config data to Copycat format: ", e);
                 return;
             }
+            offset = record.offset();
 
-            if (record.key().equals(ROOT_KEY)) {
-                List<ConnectorTaskId> updatedTasks;
-                synchronized (lock) {
-                    // Apply any outstanding deferred task updates and then update the root config. This *can* result in
-                    // an inconsistent output, which will have to be resolved by some external mechanism ensuring reconfiguration
-                    // of the right connectors takes place.
-                    //
-                    // Note that we *MUST* always apply root updates. They should only occur when they are valid and if we
-                    // didn't, we could lose track of some connectors.
-                    if (!(value.value() instanceof Map)) { // Schema-less, so we get maps instead of structs
-                        log.error("Ignoring root configuration because it is in the wrong format: " + value.value());
-                        return;
-                    }
-
-                    taskConfigs.putAll(deferredTaskUpdates);
-                    Object newRootConfig = ((Map<String, Object>) value.value()).get("connectors");
-                    if (!(newRootConfig instanceof Map)) {
-                        log.error("Invalid data for root config: connectors field should be a Map but is " + newRootConfig.getClass());
-                        return;
-                    }
-                    rootConfig = (Map<String, Integer>) newRootConfig;
-                    rootOffset = record.offset();
-                    updatedTasks = new ArrayList<>(deferredTaskUpdates.keySet());
-                    deferredTaskUpdates.clear();
-                }
-
-                if (!starting)
-                    tasksConfigCallback.onCompletion(null, updatedTasks);
-            } else if (record.key().startsWith(CONNECTOR_PREFIX)) {
+            if (record.key().startsWith(CONNECTOR_PREFIX)) {
                 String connectorName = record.key().substring(CONNECTOR_PREFIX.length());
                 synchronized (lock) {
                     // Connector configs can be applied and callbacks invoked immediately
@@ -395,7 +385,6 @@ public class KafkaConfigStorage {
                         return;
                     }
                     connectorConfigs.put(connectorName, (Map<String, String>) newConnectorConfig);
-                    connectorOffset = record.offset();
                 }
                 if (!starting)
                     connectorConfigCallback.onCompletion(null, connectorName);
@@ -417,8 +406,76 @@ public class KafkaConfigStorage {
                         return;
                     }
 
-                    deferredTaskUpdates.put(taskId, (Map<String, String>) newTaskConfig);
+                    Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(taskId.connector());
+                    if (deferred == null) {
+                        deferred = new HashMap<>();
+                        deferredTaskUpdates.put(taskId.connector(), deferred);
+                    }
+                    deferred.put(taskId, (Map<String, String>) newTaskConfig);
                 }
+            } else if (record.key().startsWith(COMMIT_TASKS_PREFIX)) {
+                String connectorName = record.key().substring(COMMIT_TASKS_PREFIX.length());
+                List<ConnectorTaskId> updatedTasks = new ArrayList<>();
+                synchronized (lock) {
+                    // Apply any outstanding deferred task updates for the given connector. Note that just because we
+                    // encounter a commit message does not mean it will result in consistent output. In particular due to
+                    // compaction, there may be cases where . For example if we have the following sequence of writes:
+                    //
+                    // 1. Write connector "foo"'s config
+                    // 2. Write connector "foo", task 1's config <-- compacted
+                    // 3. Write connector "foo", task 2's config
+                    // 4. Write connector "foo" task commit message
+                    // 5. Write connector "foo", task 1's config
+                    // 6. Write connector "foo", task 2's config
+                    // 7. Write connector "foo" task commit message
+                    //
+                    // then when a new worker starts up, if message 2 had been compacted, then when message 4 is applied
+                    // "foo" will not have a complete set of configs. Only when message 7 is applied will the complete
+                    // configuration be available. Worse, if the leader died while writing messages 5, 6, and 7 such that
+                    // only 5 was written, then there may be nothing that will finish writing the configs and get the
+                    // log back into a consistent state.
+                    //
+                    // It is expected that the user of this class (i.e., the Herder) will take the necessary action to
+                    // resolve this (i.e., get the connector to recommit its configuration). This inconsistent state is
+                    // exposed in the snapshots provided via ClusterConfigState so they are easy to handle.
+                    if (!(value.value() instanceof Map)) { // Schema-less, so we get maps instead of structs
+                        log.error("Ignoring connector tasks configuration commit because it is in the wrong format: " + value.value());
+                        return;
+                    }
+
+                    Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(connectorName);
+
+                    Object newTaskCountObj = ((Map<String, Object>) value.value()).get("tasks");
+                    Integer newTaskCount = (Integer) newTaskCountObj;
+
+                    // Validate the configs we're supposed to update to ensure we're getting a complete configuration
+                    // update of all tasks that are expected based on the number of tasks in the commit message.
+                    Map<String, Set<Integer>> updatedConfigIdsByConnector = taskIdsByConnector(deferred);
+                    Set<Integer> taskIdSet = updatedConfigIdsByConnector.get(connectorName);
+                    if (!completeTaskIdSet(taskIdSet, newTaskCount)) {
+                        // Given the logic for writing commit messages, we should only hit this condition due to compacted
+                        // historical data, in which case we would not have applied any updates yet and there will be no
+                        // task config data already committed for the connector, so we shouldn't have to clear any data
+                        // out. All we need to do is add the flag marking it inconsistent.
+                        inconsistent.add(connectorName);
+                    } else {
+                        if (deferred != null) {
+                            taskConfigs.putAll(deferred);
+                            updatedTasks.addAll(taskConfigs.keySet());
+                        }
+                        inconsistent.remove(connectorName);
+                    }
+                    // Always clear the deferred entries, even if we didn't apply them. If they represented an inconsistent
+                    // update, then we need to see a completely fresh set of configs after this commit message, so we don't
+                    // want any of these outdated configs
+                    if (deferred != null)
+                        deferred.clear();
+
+                    connectorTaskCounts.put(connectorName, newTaskCount);
+                }
+
+                if (!starting)
+                    tasksConfigCallback.onCompletion(null, updatedTasks);
             } else {
                 log.error("Discarding config update record with invalid key: " + record.key());
             }
@@ -438,14 +495,52 @@ public class KafkaConfigStorage {
         }
     }
 
-    private static class ConfigUpdate {
-        final String target;
-        final SchemaAndValue value;
-
-        ConfigUpdate(String target, SchemaAndValue value) {
-            this.target = target;
-            this.value = value;
+    /**
+     * Given task configurations, get a set of integer task IDs organized by connector name.
+     */
+    private Map<String, Set<Integer>> taskIdsByConnector(Map<ConnectorTaskId, Map<String, String>> configs) {
+        Map<String, Set<Integer>> connectorTaskIds = new HashMap<>();
+        if (configs == null)
+            return connectorTaskIds;
+        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : configs.entrySet()) {
+            ConnectorTaskId taskId = taskConfigEntry.getKey();
+            if (!connectorTaskIds.containsKey(taskId.connector()))
+                connectorTaskIds.put(taskId.connector(), new TreeSet<Integer>());
+            connectorTaskIds.get(taskId.connector()).add(taskId.task());
         }
+        return connectorTaskIds;
+    }
+
+    private boolean completeTaskIdSet(Set<Integer> idSet, int expectedSize) {
+        // Note that we do *not* check for the exact set. This is an important implication of compaction. If we start out
+        // with 2 tasks, then reduce to 1, we'll end up with log entries like:
+        //
+        // 1. Connector "foo" config
+        // 2. Connector "foo", task 1 config
+        // 3. Connector "foo", task 2 config
+        // 4. Connector "foo", commit 2 tasks
+        // 5. Connector "foo", task 1 config
+        // 6. Connector "foo", commit 1 tasks
+        //
+        // However, due to compaction we could end up with a log that looks like this:
+        //
+        // 1. Connector "foo" config
+        // 3. Connector "foo", task 2 config
+        // 5. Connector "foo", task 1 config
+        // 6. Connector "foo", commit 1 tasks
+        //
+        // which isn't incorrect, but would appear in this code to have an extra task configuration. Instead, we just
+        // validate that all the configs specified by the commit message are present. This should be fine because the
+        // logic for writing configs ensures all the task configs are written (and reads them back) before writing the
+        // commit message.
+
+        if (idSet.size() < expectedSize)
+            return false;
+
+        for (int i = 0; i < expectedSize; i++)
+            if (!idSet.contains(i))
+                return false;
+        return true;
     }
 }
 

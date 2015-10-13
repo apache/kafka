@@ -21,51 +21,47 @@ import org.apache.kafka.copycat.util.ConnectorTaskId;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * An immutable snapshot of the configuration state of connectors and tasks in a Copycat cluster.
  */
 public class ClusterConfigState {
-    private final long rootOffset;
-    private final long connectorOffset;
-    private final Map<String, Integer> rootConfig;
+    private final long offset;
+    private final Map<String, Integer> connectorTaskCounts;
     private final Map<String, Map<String, String>> connectorConfigs;
     private final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
+    private final Set<String> inconsistentConnectors;
 
-    public ClusterConfigState(long rootOffset, long connectorOffset,
-                              Map<String, Integer> rootConfig,
+    public ClusterConfigState(long offset,
+                              Map<String, Integer> connectorTaskCounts,
                               Map<String, Map<String, String>> connectorConfigs,
-                              Map<ConnectorTaskId, Map<String, String>> taskConfigs) {
-        this.rootOffset = rootOffset;
-        this.connectorOffset = connectorOffset;
-        this.rootConfig = rootConfig;
+                              Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+                              Set<String> inconsistentConnectors) {
+        this.offset = offset;
+        this.connectorTaskCounts = connectorTaskCounts;
         this.connectorConfigs = connectorConfigs;
         this.taskConfigs = taskConfigs;
+        this.inconsistentConnectors = inconsistentConnectors;
     }
 
     /**
-     * Get the offset of the root configuration included in this cluster config state.
-     * @return the root offset
+     * Get the last offset read to generate this config state. This offset is not guaranteed to be perfectly consistent
+     * with the recorded state because some partial updates to task configs may have been read.
+     * @return the latest config offset
      */
-    public long rootOffset() {
-        return rootOffset;
-    }
-
-    /**
-     * Get the offset of the most recent connector configuration included in this cluster config state.
-     * @return the most recent connector config offset
-     */
-    public long connectorOffset() {
-        return connectorOffset;
+    public long offset() {
+        return offset;
     }
 
     /**
      * Get a list of the connectors in this configuration
      */
     public Collection<String> connectors() {
-        return rootConfig.keySet();
+        return connectorTaskCounts.keySet();
     }
 
     /**
@@ -92,7 +88,10 @@ public class ClusterConfigState {
      * @return the current set of connector task IDs
      */
     public Collection<ConnectorTaskId> tasks(String connectorName) {
-        Integer numTasks = rootConfig.get(connectorName);
+        if (inconsistentConnectors.contains(connectorName))
+            return Collections.EMPTY_LIST;
+
+        Integer numTasks = connectorTaskCounts.get(connectorName);
         if (numTasks == null)
             throw new IllegalArgumentException("Connector does not exist in current configuration.");
 
@@ -102,6 +101,22 @@ public class ClusterConfigState {
             taskIds.add(taskId);
         }
         return taskIds;
+    }
+
+    /**
+     * Get the set of connectors which have inconsistent data in this snapshot. These inconsistencies can occur due to
+     * partially completed writes combined with log compaction.
+     *
+     * Connectors in this set will appear in the output of {@link #connectors()} since their connector configuration is
+     * available, but not in the output of {@link #taskConfig(ConnectorTaskId)} since the task configs are incomplete.
+     *
+     * When a worker detects a connector in this state, it should request that the connector regenerate its task
+     * configurations.
+     *
+     * @return the set of inconsistent connectors
+     */
+    public Set<String> inconsistentConnectors() {
+        return inconsistentConnectors;
     }
 
 }

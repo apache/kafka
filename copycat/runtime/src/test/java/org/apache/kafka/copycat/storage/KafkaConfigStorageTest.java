@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +72,7 @@ public class KafkaConfigStorageTest {
 
     private static final List<String> CONNECTOR_IDS = Arrays.asList("connector1", "connector2");
     private static final List<String> CONNECTOR_CONFIG_KEYS = Arrays.asList("connector-connector1", "connector-connector2");
+    private static final List<String> COMMIT_TASKS_CONFIG_KEYS = Arrays.asList("commit-connector1", "commit-connector2");
 
     // Need a) connector with multiple tasks and b) multiple connectors
     private static final List<ConnectorTaskId> TASK_IDS = Arrays.asList(
@@ -95,8 +97,9 @@ public class KafkaConfigStorageTest {
             new Struct(KafkaConfigStorage.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)),
             new Struct(KafkaConfigStorage.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1))
     );
-    private static final Struct ROOT_CONFIG_STRUCT_EMPTY = new Struct(KafkaConfigStorage.ROOT_V0).put("connectors", Collections.EMPTY_MAP);
-    private static final Struct ROOT_CONFIG_STRUCT_TWO_TASK_CONNECTOR = new Struct(KafkaConfigStorage.ROOT_V0).put("connectors", Collections.singletonMap(CONNECTOR_IDS.get(0), 2));
+
+    private static final Struct TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR
+            = new Struct(KafkaConfigStorage.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 2);
 
     // The exact format doesn't matter here since both conversions are mocked
     private static final List<byte[]> CONFIGS_SERIALIZED = Arrays.asList(
@@ -175,24 +178,21 @@ public class KafkaConfigStorageTest {
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(-1, configState.rootOffset());
-        assertEquals(-1, configState.connectorOffset());
+        assertEquals(-1, configState.offset());
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
         // Writing should block until it is written and read back from Kafka
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
         configState = configStorage.snapshot();
-        assertEquals(-1, configState.rootOffset());
-        assertEquals(0, configState.connectorOffset());
+        assertEquals(0, configState.offset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
         // Second should also block and all configs should still be available
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1));
         configState = configStorage.snapshot();
-        assertEquals(-1, configState.rootOffset());
-        assertEquals(1, configState.connectorOffset());
+        assertEquals(1, configState.offset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(1), configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
@@ -216,8 +216,8 @@ public class KafkaConfigStorageTest {
                 "properties", SAMPLE_CONFIGS.get(1));
         expectReadToEnd(new LinkedHashMap<String, byte[]>());
         expectConvertWriteRead(
-                KafkaConfigStorage.ROOT_KEY, KafkaConfigStorage.ROOT_V0, CONFIGS_SERIALIZED.get(2),
-                "connectors", Collections.singletonMap(CONNECTOR_IDS.get(0), 2)); // Starts with 0 tasks, after update has 2
+                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigStorage.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
+                "tasks", 2); // Starts with 0 tasks, after update has 2
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         tasksReconfiguredCallback.onCompletion(null, Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
         EasyMock.expectLastCall();
@@ -226,7 +226,7 @@ public class KafkaConfigStorageTest {
         LinkedHashMap<String, byte[]> serializedConfigs = new LinkedHashMap<>();
         serializedConfigs.put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
         serializedConfigs.put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
-        serializedConfigs.put(KafkaConfigStorage.ROOT_KEY, CONFIGS_SERIALIZED.get(2));
+        serializedConfigs.put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
         expectReadToEnd(serializedConfigs);
 
         expectStop();
@@ -242,8 +242,7 @@ public class KafkaConfigStorageTest {
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(-1, configState.rootOffset());
-        assertEquals(-1, configState.connectorOffset());
+        assertEquals(-1, configState.offset());
         assertNull(configState.taskConfig(TASK_IDS.get(0)));
         assertNull(configState.taskConfig(TASK_IDS.get(1)));
 
@@ -256,13 +255,13 @@ public class KafkaConfigStorageTest {
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
-        assertEquals(2, configState.rootOffset());
-        assertEquals(-1, configState.connectorOffset());
+        assertEquals(2, configState.offset());
         String connectorName = CONNECTOR_IDS.get(0);
         assertEquals(Arrays.asList(connectorName), new ArrayList<>(configState.connectors()));
         assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(connectorName));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(1), configState.taskConfig(TASK_IDS.get(1)));
+        assertEquals(new HashSet<>(Collections.EMPTY_LIST), configState.inconsistentConnectors());
 
         configStorage.stop();
 
@@ -281,7 +280,7 @@ public class KafkaConfigStorageTest {
                 new ConsumerRecord<>(TOPIC, 0, 1, TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(1)),
                 new ConsumerRecord<>(TOPIC, 0, 2, TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(2)),
                 new ConsumerRecord<>(TOPIC, 0, 3, CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(3)),
-                new ConsumerRecord<>(TOPIC, 0, 4, KafkaConfigStorage.ROOT_KEY, CONFIGS_SERIALIZED.get(4)),
+                new ConsumerRecord<>(TOPIC, 0, 4, COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(4)),
                 // Connector after root update should make it through, task update shouldn't
                 new ConsumerRecord<>(TOPIC, 0, 5, CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(5)),
                 new ConsumerRecord<>(TOPIC, 0, 6, TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(6)));
@@ -290,7 +289,7 @@ public class KafkaConfigStorageTest {
         deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(3), CONNECTOR_CONFIG_STRUCTS.get(1));
-        deserialized.put(CONFIGS_SERIALIZED.get(4), ROOT_CONFIG_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(5), CONNECTOR_CONFIG_STRUCTS.get(2));
         deserialized.put(CONFIGS_SERIALIZED.get(6), TASK_CONFIG_STRUCTS.get(1));
         logOffset = 7;
@@ -307,8 +306,7 @@ public class KafkaConfigStorageTest {
 
         // Should see a single connector and its config should be the last one seen anywhere in the log
         ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(4, configState.rootOffset());
-        assertEquals(5, configState.connectorOffset());
+        assertEquals(6, configState.offset()); // Should always be last read, even if uncommitted
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // CONNECTOR_CONFIG_STRUCTS[2] -> SAMPLE_CONFIGS[2]
         assertEquals(SAMPLE_CONFIGS.get(2), configState.connectorConfig(CONNECTOR_IDS.get(0)));
@@ -317,6 +315,7 @@ public class KafkaConfigStorageTest {
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(1)));
+        assertEquals(new HashSet<>(Collections.EMPTY_LIST), configState.inconsistentConnectors());
 
         configStorage.stop();
 
@@ -327,7 +326,7 @@ public class KafkaConfigStorageTest {
     public void testPutTaskConfigsDoesNotResolveAllInconsistencies() throws Exception {
         // Test a case where a failure and compaction has left us in an inconsistent state when reading the log.
         // We start out by loading an initial configuration where we started to write a task update and failed before
-        // writing an updated root config, and then compaction cleaned up the earlier record.
+        // writing an the commit, and then compaction cleaned up the earlier record.
 
         expectConfigure();
         List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
@@ -335,18 +334,17 @@ public class KafkaConfigStorageTest {
                 // This is the record that has been compacted:
                 //new ConsumerRecord<>(TOPIC, 0, 1, TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(1)),
                 new ConsumerRecord<>(TOPIC, 0, 2, TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(2)),
-                new ConsumerRecord<>(TOPIC, 0, 4, KafkaConfigStorage.ROOT_KEY, CONFIGS_SERIALIZED.get(4)),
+                new ConsumerRecord<>(TOPIC, 0, 4, COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(4)),
                 new ConsumerRecord<>(TOPIC, 0, 5, TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(5)));
         LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap();
         deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(4), ROOT_CONFIG_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(5), TASK_CONFIG_STRUCTS.get(1));
         logOffset = 6;
         expectStart(existingRecords, deserialized);
 
-        // Two failed attempts to write new task configs
-        expectReadToEnd(new LinkedHashMap<String, byte[]>());
+        // One failed attempt to write new task configs
         expectReadToEnd(new LinkedHashMap<String, byte[]>());
 
         // Successful attempt to write new task config
@@ -356,15 +354,15 @@ public class KafkaConfigStorageTest {
                 "properties", SAMPLE_CONFIGS.get(0));
         expectReadToEnd(new LinkedHashMap<String, byte[]>());
         expectConvertWriteRead(
-                KafkaConfigStorage.ROOT_KEY, KafkaConfigStorage.ROOT_V0, CONFIGS_SERIALIZED.get(2),
-                "connectors", Collections.singletonMap(CONNECTOR_IDS.get(0), 1)); // Updated to just 1 task
+                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigStorage.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
+                "tasks", 1); // Updated to just 1 task
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         tasksReconfiguredCallback.onCompletion(null, Arrays.asList(TASK_IDS.get(0)));
         EasyMock.expectLastCall();
         // Records to be read by consumer as it reads to the end of the log
         LinkedHashMap<String, byte[]> serializedConfigs = new LinkedHashMap<>();
         serializedConfigs.put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
-        serializedConfigs.put(KafkaConfigStorage.ROOT_KEY, CONFIGS_SERIALIZED.get(2));
+        serializedConfigs.put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
         expectReadToEnd(serializedConfigs);
 
 
@@ -374,16 +372,16 @@ public class KafkaConfigStorageTest {
 
         configStorage.configure(DEFAULT_CONFIG_STORAGE_PROPS);
         configStorage.start();
-        // After reading the log, it should have been in an inconsistent state: we always apply the root updates to
+        // After reading the log, it should have been in an inconsistent state
         ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(4, configState.rootOffset());
-        assertEquals(0, configState.connectorOffset());
+        assertEquals(5, configState.offset()); // Should always be last read, not last committed
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
-        // Despite missing data, should still see 2 tasks
-        assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(CONNECTOR_IDS.get(0)));
+        // Inconsistent data should leave us with no tasks listed for the connector and an entry in the inconsistent list
+        assertEquals(Collections.EMPTY_LIST, configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertNull(configState.taskConfig(TASK_IDS.get(0)));
-        assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(1)));
+        assertNull(configState.taskConfig(TASK_IDS.get(1)));
+        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_IDS.get(0))), configState.inconsistentConnectors());
 
         // First try sending an invalid set of configs (can't possibly represent a valid config set for the tasks)
         try {
@@ -393,27 +391,18 @@ public class KafkaConfigStorageTest {
             // expected
         }
 
-        // Next, try to send an incomplete set of configs. Since replacing the one incorrect task config would be
-        // considered complete (we'd be reducing the connector to a single task), we instead add a new task
-        try {
-            configStorage.putTaskConfigs(Collections.singletonMap(TASK_IDS.get(2), SAMPLE_CONFIGS.get(0)));
-            fail("Should have failed due to incomplete task set.");
-        } catch (KafkaException e) {
-            // expected
-        }
-
-        // Finally, issue a write that has everything that is needed and it should be accepted. Note that in this case
+        // Next, issue a write that has everything that is needed and it should be accepted. Note that in this case
         // we are going to shrink the number of tasks to 1
         configStorage.putTaskConfigs(Collections.singletonMap(TASK_IDS.get(0), SAMPLE_CONFIGS.get(0)));
         // Validate updated config
         configState = configStorage.snapshot();
         // This is only two more ahead of the last one because multiple calls fail, and so their configs are not written
-        // to the topic. Only the last call with 1 task config + 1 root config actually gets written.
-        assertEquals(7, configState.rootOffset());
-        assertEquals(0, configState.connectorOffset());
+        // to the topic. Only the last call with 1 task config + 1 commit actually gets written.
+        assertEquals(7, configState.offset());
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         assertEquals(Arrays.asList(TASK_IDS.get(0)), configState.tasks(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
+        assertEquals(new HashSet<>(Collections.EMPTY_LIST), configState.inconsistentConnectors());
 
         configStorage.stop();
 
@@ -505,7 +494,7 @@ public class KafkaConfigStorageTest {
         Map<String, Map<String, String>> connectorConfigs = Whitebox.getInternalState(configStorage, "connectorConfigs");
         connectorConfigs.put(connectorName, connectorConfig);
 
-        Whitebox.<Map<String, Integer>>getInternalState(configStorage, "rootConfig").put(connectorName, taskConfigs.size());
+        Whitebox.<Map<String, Integer>>getInternalState(configStorage, "connectorTaskCounts").put(connectorName, taskConfigs.size());
     }
 
     // Generates a Map representation of Struct. Only does shallow traversal, so nested structs are not converted
