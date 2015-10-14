@@ -95,7 +95,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     zkUtils = ZkUtils.create(zkUrl,
                              zkConnectionTimeoutMs,
                              zkSessionTimeOutMs,
-                             ToolsUtils.isSecure(kafkaConfig.authLoginConfig))
+                             ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclZkPath)
 
     loadCache()
