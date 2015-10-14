@@ -21,12 +21,15 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class RecordCollector {
@@ -47,6 +50,7 @@ public class RecordCollector {
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final Callback callback = new Callback() {
+        @Override
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             if (exception == null) {
                 TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
@@ -64,9 +68,20 @@ public class RecordCollector {
     }
 
     public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+        send(record, keySerializer, valueSerializer, null);
+    }
+
+    public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
+                            StreamPartitioner<K, V> partitioner) {
         byte[] keyBytes = keySerializer.serialize(record.topic(), record.key());
         byte[] valBytes = valueSerializer.serialize(record.topic(), record.value());
-        this.producer.send(new ProducerRecord<>(record.topic(), keyBytes, valBytes), callback);
+        Integer partition = null;
+        if (partitioner != null) {
+            List<PartitionInfo> partitions = this.producer.partitionsFor(record.topic());
+            if (partitions != null)
+                partition = partitioner.partition(record.key(), record.value(), partitions.size());
+        }
+        this.producer.send(new ProducerRecord<>(record.topic(), partition, keyBytes, valBytes), callback);
     }
 
     public void flush() {
