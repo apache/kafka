@@ -161,6 +161,8 @@ class ConsoleConsumer(JmxMixin, PerformanceService):
             cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:
             cmd += " --from-beginning"
+        if self.consumer_timeout_ms is not None:
+            cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd
