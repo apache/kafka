@@ -30,6 +30,7 @@ import kafka.log.LogConfig
 import kafka.consumer.Whitelist
 import kafka.server.{ConfigType, OffsetManager}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.JaasUtils
 import kafka.coordinator.ConsumerCoordinator
 
 
@@ -52,7 +53,7 @@ object TopicCommand extends Logging {
     val zkUtils = ZkUtils.create(opts.options.valueOf(opts.zkConnectOpt), 
                                  30000,
                                  30000,
-                                 ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                                 JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     var exitCode = 0
     try {
       if(opts.options.has(opts.createOpt))

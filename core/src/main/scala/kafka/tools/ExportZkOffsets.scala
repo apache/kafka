@@ -19,8 +19,9 @@ package kafka.tools
 
 import java.io.FileWriter
 import joptsimple._
-import kafka.utils.{ToolsUtils, Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
+import kafka.utils.{Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
+import org.apache.kafka.common.security.JaasUtils
 
 
 /**
@@ -79,7 +80,7 @@ object ExportZkOffsets extends Logging {
       zkUtils = ZkUtils.create(zkConnect,
                                30000,
                                30000,
-                               ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                               JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
       
       var consumerGroups: Seq[String] = null
 

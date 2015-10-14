@@ -27,6 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
@@ -95,7 +96,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     zkUtils = ZkUtils.create(zkUrl,
                              zkConnectionTimeoutMs,
                              zkSessionTimeOutMs,
-                             ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                             JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclZkPath)
 
     loadCache()

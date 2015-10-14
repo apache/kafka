@@ -38,6 +38,7 @@ import org.apache.kafka.common.network.{Selectable, ChannelBuilders, NetworkRece
 import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.requests.{ControlledShutdownResponse, ControlledShutdownRequest, RequestSend}
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.utils.AppInfoParser
 
@@ -257,7 +258,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
       val zkClientForChrootCreation = ZkUtils.create(zkConnForChrootCreation, 
                                                      config.zkSessionTimeoutMs,
                                                      config.zkConnectionTimeoutMs,
-                                                     ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                                                     JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
       zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
       info("Created zookeeper path " + chroot)
       zkClientForChrootCreation.zkClient.close()
@@ -266,7 +267,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     val zkUtils = ZkUtils.create(config.zkConnect,
                                  config.zkSessionTimeoutMs,
                                  config.zkConnectionTimeoutMs,
-                                 ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                                 JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     zkUtils.setupCommonPaths()
     zkUtils
   }

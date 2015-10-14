@@ -23,6 +23,7 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 import collection._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.JaasUtils
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
@@ -57,7 +58,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       zkUtils = ZkUtils.create(zkConnect, 
                                30000,
                                30000,
-                               ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                               JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
       val partitionsForPreferredReplicaElection =
         if (!options.has(jsonFileOpt))
           zkUtils.getAllPartitions()

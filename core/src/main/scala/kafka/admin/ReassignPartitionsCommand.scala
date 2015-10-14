@@ -23,6 +23,7 @@ import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.JaasUtils
 
 object ReassignPartitionsCommand extends Logging {
 
@@ -41,7 +42,7 @@ object ReassignPartitionsCommand extends Logging {
     val zkUtils = ZkUtils.create(zkConnect, 
                                  30000,
                                  30000,
-                                 ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                                 JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     try {
       if(opts.options.has(opts.verifyOpt))
         verifyAssignment(zkUtils, opts)
