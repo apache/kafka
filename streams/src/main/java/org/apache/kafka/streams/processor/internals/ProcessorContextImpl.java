@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class ProcessorContextImpl implements ProcessorContext {
+public class ProcessorContextImpl implements ProcessorContext, RecordCollector.Supplier {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
 
@@ -75,6 +75,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         this.initialized = false;
     }
 
+    @Override
     public RecordCollector recordCollector() {
         return this.collector;
     }
