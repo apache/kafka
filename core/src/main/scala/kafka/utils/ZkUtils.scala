@@ -306,12 +306,14 @@ class ZkUtils(val zkClient: ZkClient,
    */
   def makeSurePersistentPathExists(path: String, acls: List[ACL] = DefaultAcls) {
     //Consumer path is kept open as different consumers will write under this node.
-    val acl = if (path == null || path.isEmpty || path.equals(ZkUtils.ConsumersPath)) {
+    val acl: List[ACL] = if (path == null || path.isEmpty || path.equals(ZkUtils.ConsumersPath)) {
       ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala.toList
     } else acls
 
     if (!zkClient.exists(path))
       ZkPath.createPersistent(zkClient, path, true, acl) //won't throw NoNodeException or NodeExistsException
+    else
+      ZkPath.setAcl(zkClient, path, acl)
   }
 
   /**
@@ -908,6 +910,11 @@ object ZkPath {
   def createPersistentSequential(client: ZkClient, path: String, data: Object, acls: List[ACL]): String = {
     checkNamespace(client)
     client.createPersistentSequential(path, data, acls)
+  }
+  
+  def setAcl(client: ZkClient, path: String, acls: List[ACL]) {
+    checkNamespace(client)
+    client.setAcl(path, acls)
   }
 }
 
