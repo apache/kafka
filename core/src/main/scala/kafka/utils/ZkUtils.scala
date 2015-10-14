@@ -115,8 +115,6 @@ class ZkUtils(val zkClient: ZkClient,
                               ZkUtils.BrokerSequenceIdPath,
                               ZkUtils.IsrChangeNotificationPath)
 
-  /** true if java.security.auth.login.config is set to some jaas file which has "Client" entry. **/
-
   val DefaultAcls: List[ACL] = if (isSecure) {
     (ZooDefs.Ids.CREATOR_ALL_ACL.asScala ++ ZooDefs.Ids.READ_ACL_UNSAFE.asScala).toList
   } else {
