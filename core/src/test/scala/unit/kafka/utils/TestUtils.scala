@@ -168,7 +168,7 @@ object TestUtils extends Logging {
       if (enableSSL)
         protocolAndPorts += "SSL" -> sslPort
       if (enableSasl)
-        protocolAndPorts += "PLAINTEXTSASL" -> saslPort
+        protocolAndPorts += "SASL_PLAINTEXT" -> saslPort
       protocolAndPorts.map { case (protocol, port) =>
         s"$protocol://localhost:$port"
       }.mkString(",")
@@ -431,7 +431,7 @@ object TestUtils extends Logging {
       producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
       producerProps.putAll(addSSLConfigs(Mode.CLIENT, false, trustStoreFile, "producer"))
     } else if (enableSasl) {
-      producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXTSASL")
+      producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT")
     }
     new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
   }
@@ -465,7 +465,7 @@ object TestUtils extends Logging {
       consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
       consumerProps.putAll(addSSLConfigs(Mode.CLIENT, false, trustStoreFile, "consumer"))
     } else if (enableSasl) {
-      consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXTSASL")
+      consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT")
     }
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }

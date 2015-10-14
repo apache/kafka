@@ -156,7 +156,7 @@ class QuotasTest extends KafkaServerTestHarness {
                                             RequestKeys.nameForKey(RequestKeys.ProduceKey),
                                             "Tracking throttle-time per client",
                                             "client-id", producerId2)
-    Assert.assertEquals("Should not have been throttled", Double.NaN, allMetrics(producerMetricName).value())
+    Assert.assertEquals("Should not have been throttled", 0.0, allMetrics(producerMetricName).value())
 
     // The "client" consumer does not get throttled.
     consume(consumers(1), numRecords)
@@ -167,7 +167,7 @@ class QuotasTest extends KafkaServerTestHarness {
                                             RequestKeys.nameForKey(RequestKeys.FetchKey),
                                             "Tracking throttle-time per client",
                                             "client-id", consumerId2)
-    Assert.assertEquals("Should not have been throttled", Double.NaN, allMetrics(consumerMetricName).value())
+    Assert.assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value())
   }
 
   def produce(p: KafkaProducer[Array[Byte], Array[Byte]], count: Int): Int = {

@@ -45,6 +45,8 @@ ext {
     gradleVersion = "2.4"
     buildVersionFileName = "kafka-version.properties"
 
+    userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
+
     skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
     shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
 
@@ -83,6 +85,14 @@ subprojects {
 
   sourceCompatibility = 1.7
 
+  if (JavaVersion.current().isJava8Compatible()) {
+    tasks.withType(Javadoc) {
+        // disable the crazy super-strict doclint tool in Java 8
+        //noinspection SpellCheckingInspection
+        options.addStringOption('Xdoclint:none', '-quiet')
+      }
+  }
+
   uploadArchives {
     repositories {
       signing {
@@ -116,7 +126,7 @@ subprojects {
   }
 
   tasks.withType(Test) {
-    maxParallelForks = Runtime.runtime.availableProcessors()
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
   }
 
   jar {

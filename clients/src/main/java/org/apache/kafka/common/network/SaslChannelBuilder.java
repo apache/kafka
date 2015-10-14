@@ -49,7 +49,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             this.loginManager = LoginManager.getLoginManager(mode, configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
-            if (this.securityProtocol == SecurityProtocol.SSLSASL) {
+            if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 this.sslFactory = new SSLFactory(mode);
                 this.sslFactory.configure(this.configs);
             }
@@ -63,7 +63,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             TransportLayer transportLayer;
-            if (this.securityProtocol == SecurityProtocol.SSLSASL) {
+            if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 transportLayer = new SSLTransportLayer(id, key,
                                                        sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
                                                                                   socketChannel.socket().getPort()));

@@ -40,14 +40,4 @@ public class MockTime implements Time {
         this.nanos += TimeUnit.NANOSECONDS.convert(ms, TimeUnit.MILLISECONDS);
     }
 
-    @Override
-    public long currentElapsedTime() {
-        return 0;
-    }
-
-    @Override
-    public long currentWallTime() {
-        return 0;
-    }
-
 }

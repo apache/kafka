@@ -77,20 +77,20 @@ class SaslConsumerTest extends SaslTestHarness with Logging {
     val config = KafkaConfig.fromProps(props, overridingProps)
     servers = Buffer(TestUtils.createServer(config))
 
-    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.PLAINTEXTSASL))
+    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT))
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.PLAINTEXTSASL))
+    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT))
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range")
 
     for (i <- 0 until producerCount)
-      producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.PLAINTEXTSASL),
+      producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT),
         acks = 1,
         enableSasl=true)
     for (i <- 0 until consumerCount)
-      consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.PLAINTEXTSASL),
+      consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT),
         groupId = "my-test",
         partitionAssignmentStrategy= "range",
         enableSasl=true)

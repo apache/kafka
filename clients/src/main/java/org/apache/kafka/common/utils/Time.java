@@ -24,31 +24,16 @@ public interface Time {
     /**
      * The current time in milliseconds
      */
-    public long milliseconds();
+    long milliseconds();
 
     /**
      * The current time in nanoseconds
      */
-    public long nanoseconds();
-
-    /**
-     * Returns time in milliseconds as does System.currentTimeMillis(),
-     * but uses elapsed time from an arbitrary epoch more like System.nanoTime().
-     * The difference is that if somebody changes the system clock,
-     * Time.currentElapsedTime will change but nanoTime won't.
-     * @return  The time in milliseconds from some arbitrary point in time.
-     */
-    public long currentElapsedTime();
-
-    /**
-     * Explicitly returns system dependent current wall time.
-     * @return Current time in msec.
-     */
-    public long currentWallTime();
+    long nanoseconds();
 
     /**
      * Sleep for the given number of milliseconds
      */
-    public void sleep(long ms);
+    void sleep(long ms);
 
 }

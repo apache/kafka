@@ -33,6 +33,8 @@ import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslException;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -65,6 +67,10 @@ public class SaslServerAuthenticator implements Authenticator {
     private NetworkSend netOutBuffer;
 
     public SaslServerAuthenticator(String node, final Subject subject) throws IOException {
+        if (subject == null)
+            throw new IllegalArgumentException("subject cannot be null");
+        if (subject.getPrincipals().isEmpty())
+            throw new IllegalArgumentException("subject must have at least one principal");
         this.node = node;
         this.subject = subject;
         saslServer = createSaslServer();
@@ -75,57 +81,56 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private SaslServer createSaslServer() throws IOException {
-        if (subject != null) {
-            // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
-            if (subject.getPrincipals().size() > 0) {
-                try {
-                    final SaslServerCallbackHandler saslServerCallbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration());
-                    final Principal servicePrincipal = subject.getPrincipals().iterator().next();
+        // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
+        final SaslServerCallbackHandler saslServerCallbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration());
+        final Principal servicePrincipal = subject.getPrincipals().iterator().next();
+        KerberosName kerberosName;
+        try {
+            kerberosName = new KerberosName(servicePrincipal.getName());
+        } catch (IllegalArgumentException e) {
+            throw new KafkaException("Principal has name with unexpected format " + servicePrincipal);
+        }
+        final String servicePrincipalName = kerberosName.serviceName();
+        final String serviceHostname = kerberosName.hostName();
 
-                    final String servicePrincipalNameAndHostname = servicePrincipal.getName();
-                    int indexOf = servicePrincipalNameAndHostname.indexOf("/");
-                    final String servicePrincipalName = servicePrincipalNameAndHostname.substring(0, indexOf);
-                    final String serviceHostnameAndKerbDomain = servicePrincipalNameAndHostname.substring(indexOf + 1, servicePrincipalNameAndHostname.length());
-                    indexOf = serviceHostnameAndKerbDomain.indexOf("@");
-                    final String serviceHostname = serviceHostnameAndKerbDomain.substring(0, indexOf);
-                    final String mech = "GSSAPI";
+        final String mech = "GSSAPI";
 
-                    LOG.debug("serviceHostname is '" + serviceHostname + "'");
-                    LOG.debug("servicePrincipalName is '" + servicePrincipalName + "'");
-                    LOG.debug("SASL mechanism is '" + mech + "'");
-                    boolean usingNativeJgss = Boolean.getBoolean("sun.security.jgss.native");
-                    if (usingNativeJgss) {
-                        try {
-                            GSSManager manager = GSSManager.getInstance();
-                            Oid krb5Mechanism = new Oid("1.2.840.113554.1.2.2");
-                            GSSName gssName = manager.createName(servicePrincipalName + "@" + serviceHostname, GSSName.NT_HOSTBASED_SERVICE);
-                            GSSCredential cred = manager.createCredential(gssName, GSSContext.INDEFINITE_LIFETIME, krb5Mechanism, GSSCredential.ACCEPT_ONLY);
-                            subject.getPrivateCredentials().add(cred);
-                        } catch (GSSException ex) {
-                            LOG.warn("Cannot add private credential to subject; clients authentication may fail", ex);
-                        }
-                    }
+        LOG.debug("Creating SaslServer for {} with mechanism {}", kerberosName, mech);
 
-                    try {
-                        return Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
-                            public SaslServer run() {
-                                try {
-                                    return Sasl.createSaslServer(mech, servicePrincipalName, serviceHostname, null, saslServerCallbackHandler);
-                                } catch (SaslException e) {
-                                    LOG.error("Kafka Server failed to create a SaslServer to interact with a client during session authentication: " + e);
-                                    return null;
-                                }
-                            }
-                        });
-                    } catch (PrivilegedActionException e) {
-                        LOG.error("KafkaBroker experienced a PrivilegedActionException exception while creating a SaslServer using a JAAS principal context:" + e);
-                    }
-                } catch (IndexOutOfBoundsException e) {
-                    LOG.error("Kafka Server principal name/hostname determination error: ", e);
-                }
+        // As described in http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/jgss-features.html:
+        // "To enable Java GSS to delegate to the native GSS library and its list of native mechanisms,
+        // set the system property "sun.security.jgss.native" to true"
+        // "In addition, when performing operations as a particular Subject, for example, Subject.doAs(...)
+        // or Subject.doAsPrivileged(...), the to-be-used GSSCredential should be added to Subject's
+        // private credential set. Otherwise, the GSS operations will fail since no credential is found."
+        boolean usingNativeJgss = Boolean.getBoolean("sun.security.jgss.native");
+        if (usingNativeJgss) {
+            try {
+                GSSManager manager = GSSManager.getInstance();
+                // This Oid is used to represent the Kerberos version 5 GSS-API mechanism. It is defined in
+                // RFC 1964.
+                Oid krb5Mechanism = new Oid("1.2.840.113554.1.2.2");
+                GSSName gssName = manager.createName(servicePrincipalName + "@" + serviceHostname, GSSName.NT_HOSTBASED_SERVICE);
+                GSSCredential cred = manager.createCredential(gssName, GSSContext.INDEFINITE_LIFETIME, krb5Mechanism, GSSCredential.ACCEPT_ONLY);
+                subject.getPrivateCredentials().add(cred);
+            } catch (GSSException ex) {
+                LOG.warn("Cannot add private credential to subject; clients authentication may fail", ex);
             }
         }
-        return null;
+
+        try {
+            return Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
+                public SaslServer run() {
+                    try {
+                        return Sasl.createSaslServer(mech, servicePrincipalName, serviceHostname, null, saslServerCallbackHandler);
+                    } catch (SaslException e) {
+                        throw new KafkaException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e);
+                    }
+                }
+            });
+        } catch (PrivilegedActionException e) {
+            throw new KafkaException("Kafka Broker experienced a PrivilegedActionException exception while creating a SaslServer using a JAAS principal context", e);
+        }
     }
 
     public void authenticate() throws IOException {

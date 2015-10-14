@@ -26,18 +26,14 @@ import kafka.consumer.ConsumerConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.config.SSLConfigs
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.config.ConfigDef.Importance._
-import org.apache.kafka.common.config.ConfigDef.Range._
-import org.apache.kafka.common.config.ConfigDef.Type._
 
-import org.apache.kafka.common.config.{ConfigException, AbstractConfig, ConfigDef}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SSLConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.PrincipalBuilder
-import scala.collection.{mutable, immutable, JavaConversions, Map}
 
+import scala.collection.{Map, immutable}
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -177,6 +173,7 @@ object Defaults {
   val SSLClientAuthRequested = "requested"
   val SSLClientAuthNone = "none"
   val SSLClientAuth = SSLClientAuthNone
+  val SSLCipherSuites = ""
 
   /** ********* Sasl configuration ***********/
   val SaslKerberosKinitCmd = SaslConfigs.DEFAULT_KERBEROS_KINIT_CMD
@@ -514,13 +511,11 @@ object KafkaConfig {
   val SaslKerberosTicketRenewJitterDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_DOC
   val SaslKerberosMinTimeBeforeReloginDoc = SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC
 
-
-
   private val configDef = {
-    import ConfigDef.Range._
-    import ConfigDef.ValidString._
-    import ConfigDef.Type._
     import ConfigDef.Importance._
+    import ConfigDef.Range._
+    import ConfigDef.Type._
+    import ConfigDef.ValidString._
 
     new ConfigDef()
 
@@ -670,12 +665,14 @@ object KafkaConfig {
       .define(SSLKeyManagerAlgorithmProp, STRING, Defaults.SSLKeyManagerAlgorithm, MEDIUM, SSLKeyManagerAlgorithmDoc)
       .define(SSLTrustManagerAlgorithmProp, STRING, Defaults.SSLTrustManagerAlgorithm, MEDIUM, SSLTrustManagerAlgorithmDoc)
       .define(SSLClientAuthProp, STRING, Defaults.SSLClientAuth, in(Defaults.SSLClientAuthRequired, Defaults.SSLClientAuthRequested, Defaults.SSLClientAuthNone), MEDIUM, SSLClientAuthDoc)
+      .define(SSLCipherSuitesProp, LIST, Defaults.SSLCipherSuites, MEDIUM, SSLCipherSuitesDoc)
 
       /** ********* Sasl Configuration ****************/
       .define(SaslKerberosKinitCmdProp, STRING, Defaults.SaslKerberosKinitCmd, MEDIUM, SaslKerberosKinitCmdDoc)
       .define(SaslKerberosTicketRenewWindowFactorProp, DOUBLE, Defaults.SaslKerberosTicketRenewWindowFactor, MEDIUM, SaslKerberosTicketRenewWindowFactorDoc)
       .define(SaslKerberosTicketRenewJitterProp, DOUBLE, Defaults.SaslKerberosTicketRenewJitter, MEDIUM, SaslKerberosTicketRenewJitterDoc)
       .define(SaslKerberosMinTimeBeforeReloginProp, LONG, Defaults.SaslKerberosMinTimeBeforeRelogin, MEDIUM, SaslKerberosMinTimeBeforeReloginDoc)
+
   }
 
   def configNames() = {
@@ -834,6 +831,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val sslKeyManagerAlgorithm = getString(KafkaConfig.SSLKeyManagerAlgorithmProp)
   val sslTrustManagerAlgorithm = getString(KafkaConfig.SSLTrustManagerAlgorithmProp)
   val sslClientAuth = getString(KafkaConfig.SSLClientAuthProp)
+  val sslCipher = getList(KafkaConfig.SSLCipherSuitesProp)
 
   /** ********* Sasl Configuration **************/
   val saslKerberosKinitCmd = getString(KafkaConfig.SaslKerberosKinitCmdProp)
@@ -979,6 +977,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     channelConfigs.put(SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm)
     channelConfigs.put(SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm)
     channelConfigs.put(SSLClientAuthProp, sslClientAuth)
+    channelConfigs.put(SSLCipherSuitesProp, sslCipher)
     channelConfigs.put(SaslKerberosKinitCmdProp, saslKerberosKinitCmd)
     channelConfigs.put(SaslKerberosTicketRenewWindowFactorProp, saslKerberosTicketRenewWindowFactor)
     channelConfigs.put(SaslKerberosTicketRenewJitterProp, saslKerberosTicketRenewJitter)

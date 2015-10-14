@@ -133,11 +133,12 @@ public class SaslClientAuthenticator implements Authenticator {
                     netInBuffer = null; // reset the networkReceive as we read all the data.
                     sendSaslToken(serverToken);
                 }
-                if (saslClient.isComplete())
+                if (saslClient.isComplete()) {
                     saslState = SaslState.COMPLETE;
+                    transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+                }
                 break;
             case COMPLETE:
-                transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
                 break;
             case FAILED:
                 throw new IOException("SASL handshake failed");
@@ -165,7 +166,7 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     public boolean complete() {
-        return saslClient.isComplete() && saslState == SaslState.COMPLETE;
+        return saslState == SaslState.COMPLETE;
     }
 
     public void close() throws IOException {

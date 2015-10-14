@@ -71,10 +71,13 @@ class ClientQuotaManagerTest {
       Assert.assertEquals(0, queueSizeMetric.value().toInt)
 
       // Create a spike.
-      // 400*10 + 2000 = 6000/10 = 600 bytes per second.
-      // (600 - quota)/quota*window-size = (600-500)/500*11 seconds = 2200
-      val sleepTime = clientMetrics.recordAndMaybeThrottle("unknown", 2000, callback)
-      Assert.assertEquals("Should be throttled", 2200, sleepTime)
+      // 400*10 + 2000 + 300 = 6300/10.5 = 600 bytes per second.
+      // (600 - quota)/quota*window-size = (600-500)/500*10.5 seconds = 2100
+      // 10.5 seconds because the last window is half complete
+      time.sleep(500)
+      val sleepTime = clientMetrics.recordAndMaybeThrottle("unknown", 2300, callback)
+
+      Assert.assertEquals("Should be throttled", 2100, sleepTime)
       Assert.assertEquals(1, queueSizeMetric.value().toInt)
       // After a request is delayed, the callback cannot be triggered immediately
       clientMetrics.throttledRequestReaper.doWork()

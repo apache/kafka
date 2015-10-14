@@ -36,8 +36,8 @@ public class ChannelBuilders {
                 requireNonNullMode(mode, securityProtocol);
                 channelBuilder = new SSLChannelBuilder(mode);
                 break;
-            case SSLSASL:
-            case PLAINTEXTSASL:
+            case SASL_SSL:
+            case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
                 channelBuilder = new SaslChannelBuilder(mode, securityProtocol);
                 break;

@@ -38,38 +38,25 @@ abstract public class Shell {
 
     private static final Logger LOG = LoggerFactory.getLogger(Shell.class);
 
-    private int exitCode;
-
-    /** return an array containing the command name & its parameters */
+    /** Return an array containing the command name and its parameters */
     protected abstract String[] execString();
 
     /** Parse the execution result */
-    protected abstract void parseExecResult(BufferedReader lines)
-        throws IOException;
+    protected abstract void parseExecResult(BufferedReader lines) throws IOException;
 
-    /**Time after which the executing script would be timedout*/
-    protected long timeOutInterval = 0L;
+    private final long timeout;
 
-    private long    interval;   // refresh interval in msec
-    private long    lastTime;   // last time the command was performed
+    private int exitCode;
     private Process process; // sub process used to execute the command
 
-    /**If or not script finished executing*/
+    /* If or not script finished executing */
     private volatile AtomicBoolean completed;
 
-    public static final Time TIME = new SystemTime();
-
-    public Shell() {
-        this(0L);
-    }
-
     /**
-     * @param interval the minimum duration to wait before re-executing the
-     *        command.
+     * @param timeout Specifies the time in milliseconds, after which the command will be killed. -1 means no timeout.
      */
-    public Shell(long interval) {
-        this.interval = interval;
-        this.lastTime = (interval < 0) ? 0 : -interval;
+    public Shell(long timeout) {
+        this.timeout = timeout;
     }
 
     /** get the exit code
@@ -86,10 +73,7 @@ abstract public class Shell {
         return process;
     }
 
-    /** check to see if a command needs to be executed and execute if needed */
     protected void run() throws IOException {
-        if (lastTime + interval > TIME.currentElapsedTime())
-            return;
         exitCode = 0; // reset for next run
         runCommand();
     }
@@ -97,55 +81,47 @@ abstract public class Shell {
     /** Run a command */
     private void runCommand() throws IOException {
         ProcessBuilder builder = new ProcessBuilder(execString());
-        Timer timeOutTimer = null;
-        ShellTimeoutTimerTask timeoutTimerTask = null;
+        Timer timeoutTimer = null;
         completed = new AtomicBoolean(false);
 
         process = builder.start();
-        if (timeOutInterval > 0) {
-            timeOutTimer = new Timer();
-            timeoutTimerTask = new ShellTimeoutTimerTask(
-                                                         this);
+        if (timeout > -1) {
+            timeoutTimer = new Timer();
             //One time scheduling.
-            timeOutTimer.schedule(timeoutTimerTask, timeOutInterval);
+            timeoutTimer.schedule(new ShellTimeoutTimerTask(this), timeout);
         }
-        final BufferedReader errReader =
-            new BufferedReader(new InputStreamReader(process
-                                                     .getErrorStream()));
-        BufferedReader inReader =
-            new BufferedReader(new InputStreamReader(process
-                                                     .getInputStream()));
+        final BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+        BufferedReader inReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         final StringBuffer errMsg = new StringBuffer();
 
         // read error and input streams as this would free up the buffers
         // free the error stream buffer
-        Thread errThread = new Thread() {
-                @Override
-                public void run() {
-                    try {
-                        String line = errReader.readLine();
-                        while ((line != null) && !isInterrupted()) {
-                            errMsg.append(line);
-                            errMsg.append(System.getProperty("line.separator"));
-                            line = errReader.readLine();
-                        }
-                    } catch (IOException ioe) {
-                        LOG.warn("Error reading the error stream", ioe);
+        Thread errThread = Utils.newThread("kafka-shell-thread", new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String line = errReader.readLine();
+                    while ((line != null) && !Thread.currentThread().isInterrupted()) {
+                        errMsg.append(line);
+                        errMsg.append(System.getProperty("line.separator"));
+                        line = errReader.readLine();
                     }
+                } catch (IOException ioe) {
+                    LOG.warn("Error reading the error stream", ioe);
                 }
-            };
-        try {
-            errThread.start();
-        } catch (IllegalStateException ise) { }
+            }
+        }, false);
+        errThread.start();
+
         try {
             parseExecResult(inReader); // parse the output
             // clear the input stream buffer
-            String line = inReader.readLine();
+            String line = null;
             while (line != null) {
                 line = inReader.readLine();
             }
             // wait for the process to finish and check the exit code
-            exitCode  = process.waitFor();
+            exitCode = process.waitFor();
             try {
                 // make sure that the error thread exits
                 errThread.join();
@@ -161,8 +137,8 @@ abstract public class Shell {
         } catch (InterruptedException ie) {
             throw new IOException(ie.toString());
         } finally {
-            if (timeOutTimer != null)
-                timeOutTimer.cancel();
+            if (timeoutTimer != null)
+                timeoutTimer.cancel();
 
             // close the input stream
             try {
@@ -180,7 +156,6 @@ abstract public class Shell {
             }
 
             process.destroy();
-            lastTime = TIME.currentElapsedTime();
         }
     }
 
@@ -212,26 +187,20 @@ abstract public class Shell {
      */
     public static class ShellCommandExecutor extends Shell {
 
-        private String[] command;
+        private final String[] command;
         private StringBuffer output;
-
-        public ShellCommandExecutor(String[] execString) {
-            this(execString, 0L);
-        }
-
 
         /**
          * Create a new instance of the ShellCommandExecutor to execute a command.
          *
          * @param execString The command to execute with arguments
          * @param timeout Specifies the time in milliseconds, after which the
-         *                command will be killed and the status marked as timedout.
-         *                If 0, the command will not be timed out.
+         *                command will be killed. -1 means no timeout.
          */
 
         public ShellCommandExecutor(String[] execString, long timeout) {
+            super(timeout);
             command = execString.clone();
-            timeOutInterval = timeout;
         }
 
 
@@ -244,11 +213,11 @@ abstract public class Shell {
             return command;
         }
 
-        protected void parseExecResult(BufferedReader lines) throws IOException {
+        protected void parseExecResult(BufferedReader reader) throws IOException {
             output = new StringBuffer();
             char[] buf = new char[512];
             int nRead;
-            while ((nRead = lines.read(buf, 0, buf.length)) > 0) {
+            while ((nRead = reader.read(buf, 0, buf.length)) > 0) {
                 output.append(buf, 0, nRead);
             }
         }
@@ -288,7 +257,7 @@ abstract public class Shell {
      * @return the output of the executed command.
      */
     public static String execCommand(String ... cmd) throws IOException {
-        return execCommand(cmd, 0L);
+        return execCommand(cmd, -1);
     }
 
     /**
@@ -296,7 +265,7 @@ abstract public class Shell {
      * Covers most of the simple cases without requiring the user to implement
      * the <code>Shell</code> interface.
      * @param cmd shell command to execute.
-     * @param timeout time in milliseconds after which script should be marked timeout
+     * @param timeout time in milliseconds after which script should be killed. -1 means no timeout.
      * @return the output of the executed command.
      */
     public static String execCommand(String[] cmd, long timeout) throws IOException {
@@ -310,7 +279,7 @@ abstract public class Shell {
      */
     private static class ShellTimeoutTimerTask extends TimerTask {
 
-        private Shell shell;
+        private final Shell shell;
 
         public ShellTimeoutTimerTask(Shell shell) {
             this.shell = shell;
