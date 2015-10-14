@@ -52,10 +52,11 @@ public class JaasUtils {
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
-            if (!zkSaslEnabled) {
+            if (isSecurityEnabled && !zkSaslEnabled) {
                 LOG.error("JAAS file is present, but system property " + 
-                         ZK_SASL_CLIENT + " is set to true");
-                throw new KafkaException("SASL for ZooKeeper client isn't enabled");
+                            ZK_SASL_CLIENT + " is set to false, which disables " +
+                            "SASL in the ZooKeeper client");
+                throw new KafkaException("Exception while determining if ZooKeeper is secure");
             }
         }
 
