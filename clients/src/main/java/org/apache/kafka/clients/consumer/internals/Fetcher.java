@@ -19,7 +19,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -27,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -493,8 +493,10 @@ public class Fetcher<K, V> {
                     } else if (buffer.capacity() >= this.fetchSize) {
                         // we did not read a single message from a max fetchable buffer
                         // because that message's size is larger than fetch size, in this case
-                        // log an error
-                        log.error("There is a single message whose size is larger than fetch size {} and hence cannot be ever returned", this.fetchSize);
+                        // throw the record too large exception
+                        throw new RecordTooLargeException("There is a single message whose size " +
+                            "is larger than the fetch size " + this.fetchSize +
+                            " and hence cannot be ever returned");
                     }
 
                     this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
