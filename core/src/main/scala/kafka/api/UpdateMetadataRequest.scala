@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
 import kafka.cluster.{Broker, BrokerEndPoint}
-import kafka.common.{AuthorizationException, ErrorMapping, KafkaException, TopicAndPartition}
+import kafka.common.{ErrorMapping, KafkaException, TopicAndPartition}
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import org.apache.kafka.common.protocol.SecurityProtocol
