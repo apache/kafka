@@ -58,7 +58,7 @@ case class ControlledShutdownRequest(versionId: Short,
   def sizeInBytes: Int = {
     2 + /* version id */
       4 + /* correlation id */
-      clientId.fold(0)(shortStringLength)
+      clientId.fold(0)(shortStringLength) +
       4 /* broker id */
   }
 
@@ -67,7 +67,7 @@ case class ControlledShutdownRequest(versionId: Short,
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val errorResponse = ControlledShutdownResponse(correlationId, ErrorMapping.codeFor(e.getCause.asInstanceOf[Class[Throwable]]), Set.empty[TopicAndPartition])
+    val errorResponse = ControlledShutdownResponse(correlationId, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), Set.empty[TopicAndPartition])
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 

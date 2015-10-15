@@ -38,6 +38,7 @@ import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.collection.mutable.Buffer
 
 class AuthorizerIntegrationTest extends KafkaServerTestHarness {
@@ -70,10 +71,10 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
 
   val partitionStateInfo = new PartitionStateInfo(new LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId,
-    LeaderAndIsr.initialLeaderEpoch, List(brokerId), LeaderAndIsr.initialZKVersion), KafkaController.InitialControllerEpoch), Set(brokerId))
+    Int.MaxValue, List(brokerId), LeaderAndIsr.initialZKVersion), KafkaController.InitialControllerEpoch), Set(brokerId))
   val endPoint = new EndPoint("localhost", 0, SecurityProtocol.PLAINTEXT)
   
-  val RequestKeyToRequest = Map[Short, RequestOrResponse](
+  val RequestKeyToRequest = mutable.LinkedHashMap[Short, RequestOrResponse](
     RequestKeys.MetadataKey -> new TopicMetadataRequest(List(topic), correlationId),
     RequestKeys.ProduceKey -> ProducerRequest(ProducerRequest.CurrentVersion, correlationId, clientId, 1, 100,
       collection.mutable.Map(topicAndPartition -> new ByteBufferMessageSet(ByteBuffer.wrap("test".getBytes)))),
@@ -82,15 +83,14 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     RequestKeys.OffsetCommitKey -> new OffsetCommitRequest(groupId = group, requestInfo = Map(topicAndPartition ->
       new OffsetAndMetadata(new OffsetMetadata(0)))),
     RequestKeys.OffsetFetchKey -> new OffsetFetchRequest(groupId = group, requestInfo = Seq(topicAndPartition)),
-    RequestKeys.ConsumerMetadataKey -> new ConsumerMetadataRequest(group = group)
-// TODO:All the following methods require clusterAction acls, when we don't provide those it never sends a response back.
-//    RequestKeys.UpdateMetadataKey -> UpdateMetadataRequest(UpdateMetadataRequest.CurrentVersion, correlationId, clientId, brokerId,
-//      KafkaController.InitialControllerEpoch, Map(topicAndPartition -> partitionStateInfo), Set(new Broker(brokerId, Map(SecurityProtocol.PLAINTEXT -> endPoint)))),
-//    RequestKeys.LeaderAndIsrKey -> new LeaderAndIsrRequest(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId,
-//      brokerId, KafkaController.InitialControllerEpoch, Map((topic, part) -> partitionStateInfo), Set(new BrokerEndPoint(brokerId,"localhost", 0))),
-//    RequestKeys.StopReplicaKey -> StopReplicaRequest(StopReplicaRequest.CurrentVersion, correlationId, clientId, brokerId,
-//      KafkaController.InitialControllerEpoch, true, Set(topicAndPartition)),
-//    RequestKeys.ControlledShutdownKey -> new ControlledShutdownRequest(ControlledShutdownRequest.CurrentVersion, correlationId, Some(clientId), brokerId)
+    RequestKeys.ConsumerMetadataKey -> new ConsumerMetadataRequest(group = group),
+    RequestKeys.UpdateMetadataKey -> UpdateMetadataRequest(UpdateMetadataRequest.CurrentVersion, correlationId, clientId, brokerId,
+      Int.MaxValue, Map(topicAndPartition -> partitionStateInfo), Set(new Broker(brokerId, Map(SecurityProtocol.PLAINTEXT -> endPoint)))),
+    RequestKeys.LeaderAndIsrKey -> new LeaderAndIsrRequest(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId,
+      brokerId, Int.MaxValue, Map((topic, part) -> partitionStateInfo), Set(new BrokerEndPoint(brokerId,"localhost", 0))),
+    RequestKeys.StopReplicaKey -> StopReplicaRequest(StopReplicaRequest.CurrentVersion, correlationId, clientId, brokerId,
+      Int.MaxValue, true, Set(topicAndPartition)),
+    RequestKeys.ControlledShutdownKey -> ControlledShutdownRequest(ControlledShutdownRequest.CurrentVersion, correlationId, Some(clientId), brokerId)
   )
 
   val RequestKeyToResponseDeserializer: Map[Short, (ByteBuffer) => RequestOrResponse] =
@@ -116,8 +116,8 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     RequestKeys.OffsetFetchKey -> ((resp: OffsetFetchResponse) => resp.requestInfo.find(_._1 == topicAndPartition).get._2.error),
     RequestKeys.ConsumerMetadataKey -> ((resp: ConsumerMetadataResponse) => resp.errorCode),
     RequestKeys.UpdateMetadataKey -> ((resp: UpdateMetadataResponse) => resp.errorCode),
-    RequestKeys.LeaderAndIsrKey -> ((resp: LeaderAndIsrResponse) => resp.errorCode),
-    RequestKeys.StopReplicaKey -> ((resp: StopReplicaResponse) => resp.errorCode),
+    RequestKeys.LeaderAndIsrKey -> ((resp: LeaderAndIsrResponse) => resp.responseMap.find(_._1 == (topic, part)).get._2),
+    RequestKeys.StopReplicaKey -> ((resp: StopReplicaResponse) => resp.responseMap.find(_._1 == topicAndPartition).get._2),
     RequestKeys.ControlledShutdownKey -> ((resp: ControlledShutdownResponse) => resp.errorCode)
   )
 
@@ -304,7 +304,6 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   }
 
   private def sendRequest(socket: Socket, id: Short, request: Array[Byte]) {
-    println(request.length)
     val outgoing = new DataOutputStream(socket.getOutputStream)
     outgoing.writeInt(request.length + 2)
     outgoing.writeShort(id)
