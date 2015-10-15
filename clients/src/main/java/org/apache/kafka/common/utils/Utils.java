@@ -590,7 +590,7 @@ public class Utils {
      * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
      * loaded Kafka.
      *
-     * This should be used whenever passing a ClassLoader to Class.ForName
+     * This should be used whenever passing a ClassLoader to Class.forName
      */
     public static ClassLoader getContextOrKafkaClassLoader() {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();

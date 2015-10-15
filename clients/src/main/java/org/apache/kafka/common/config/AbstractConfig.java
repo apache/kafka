@@ -189,7 +189,7 @@ public class AbstractConfig {
             try {
                 o = Utils.newInstance(klass, t);
             } catch (ClassNotFoundException e) {
-                throw new KafkaException(klass + " ClassNotFoundException exception occured");
+                throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
             }
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
