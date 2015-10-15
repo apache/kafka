@@ -231,7 +231,8 @@ class WorkerSinkTask implements WorkerTask {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
                 SchemaAndValue keyAndSchema = keyConverter.toCopycatData(msg.topic(), msg.key());
                 SchemaAndValue valueAndSchema = valueConverter.toCopycatData(msg.topic(), msg.value());
-                records.add(new SinkRecord(msg.topic(), msg.partition(),
+                records.add(
+                        new SinkRecord(msg.topic(), msg.partition(),
                                    keyAndSchema.schema(), keyAndSchema.value(),
                                    valueAndSchema.schema(), valueAndSchema.value(),
                                    msg.offset())

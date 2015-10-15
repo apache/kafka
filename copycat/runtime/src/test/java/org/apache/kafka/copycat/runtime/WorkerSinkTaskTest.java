@@ -164,8 +164,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
                         Collections.singletonList(new ConsumerRecord<>(TOPIC, 0, 0, RAW_KEY, RAW_VALUE))));
 
         // Exact data doesn't matter, but should be passed directly to sink task
-        EasyMock.expect(keyConverter.toCopycatData(EasyMock.eq(TOPIC), EasyMock.aryEq(RAW_KEY))).andReturn(
-            record);
+        EasyMock.expect(keyConverter.toCopycatData(EasyMock.eq(TOPIC), EasyMock.aryEq(RAW_KEY))).andReturn(record);
         EasyMock.expect(valueConverter.toCopycatData(EasyMock.eq(TOPIC), EasyMock.aryEq(RAW_VALUE))).andReturn(record);
         Capture<Collection<SinkRecord>> capturedRecords
                 = EasyMock.newCapture(CaptureType.ALL);
@@ -480,18 +479,14 @@ public class WorkerSinkTaskTest extends ThreadedTest {
                         Collections.singletonMap(
                             new TopicPartition(TOPIC, PARTITION),
                             Arrays.asList(
-                                new ConsumerRecord<>(TOPIC, PARTITION,
-                                                     FIRST_OFFSET + recordsReturned, RAW_KEY,
-                                                     RAW_VALUE)
+                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
                             )));
                     recordsReturned++;
                     return records;
                 }
             });
-        EasyMock.expect(keyConverter.toCopycatData(TOPIC, RAW_KEY)).andReturn(
-            new SchemaAndValue(KEY_SCHEMA, KEY));
-        EasyMock.expect(valueConverter.toCopycatData(TOPIC, RAW_VALUE)).andReturn(
-            new SchemaAndValue(VALUE_SCHEMA, VALUE));
+        EasyMock.expect(keyConverter.toCopycatData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
+        EasyMock.expect(valueConverter.toCopycatData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
         sinkTask.put(EasyMock.anyObject(Collection.class));
         return EasyMock.expectLastCall();
     }
