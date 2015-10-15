@@ -21,6 +21,7 @@ package org.apache.kafka.common.security.authenticator;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
+import java.util.Arrays;
 import java.util.Map;
 
 import java.security.Principal;
@@ -99,15 +100,14 @@ public class SaslClientAuthenticator implements Authenticator {
         try {
             return Subject.doAs(subject, new PrivilegedExceptionAction<SaslClient>() {
                 public SaslClient run() throws SaslException {
-                    LOG.debug("Client will use GSSAPI as SASL mechanism.");
                     String[] mechs = {"GSSAPI"};
-                    LOG.debug("creating sasl client: client=" + clientPrincipalName + ";service=" + servicePrincipal + ";serviceHostname=" + host);
-                    SaslClient saslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, null, new ClientCallbackHandler());
-                    return saslClient;
+                    LOG.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
+                        clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
+                    return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, null,
+                            new ClientCallbackHandler());
                 }
             });
         } catch (Exception e) {
-            LOG.error("Exception while trying to create SASL client", e);
             throw new KafkaException("Failed to create SASL client", e);
         }
     }
@@ -201,7 +201,6 @@ public class SaslClientAuthenticator implements Authenticator {
                     " `socketChannel.socket().getInetAddress().getHostName()` must match the hostname in `principal/hostname@realm`";
             }
             error += " Kafka Client will go to AUTH_FAILED state.";
-            LOG.error(error);
             throw new SaslException(error);
         }
     }
@@ -224,7 +223,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     // Call `setPassword` once we support obtaining a password from the user and update message below
                     LOG.warn("Could not login: the client is being asked for a password, but the Kafka" +
                              " client code does not currently support obtaining a password from the user." +
-                             " Make sure -Djava.security.auth.login.config property passed to JVM and " +
+                             " Make sure -Djava.security.auth.login.config property passed to JVM and" +
                              " the client is configured to use a ticket cache (using" +
                              " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
                              " FQDN of the Kafka broker you are trying to connect to.");
@@ -233,17 +232,11 @@ public class SaslClientAuthenticator implements Authenticator {
                     rc.setText(rc.getDefaultText());
                 } else if (callback instanceof AuthorizeCallback) {
                     AuthorizeCallback ac = (AuthorizeCallback) callback;
-                    String authid = ac.getAuthenticationID();
-                    String authzid = ac.getAuthorizationID();
-
-                    if (authid.equals(authzid))
-                        ac.setAuthorized(true);
-                    else
-                        ac.setAuthorized(false);
-
-
+                    String authId = ac.getAuthenticationID();
+                    String authzId = ac.getAuthorizationID();
+                    ac.setAuthorized(authId.equals(authzId));
                     if (ac.isAuthorized())
-                        ac.setAuthorizedID(authzid);
+                        ac.setAuthorizedID(authzId);
                 } else {
                     throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
                 }
