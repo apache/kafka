@@ -154,6 +154,11 @@ public class PartitionGroup {
         return recordQueue.size();
     }
 
+    public int topQueueSize() {
+        RecordQueue recordQueue = queuesByTime.peek();
+        return (recordQueue == null) ? 0 : recordQueue.size();
+    }
+
     public int numBuffered() {
         return totalBuffered;
     }

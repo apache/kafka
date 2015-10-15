@@ -231,33 +231,38 @@ public class StreamThread extends Thread {
     private void runLoop() {
         try {
             int totalNumBuffered = 0;
+            boolean requiresPoll = true;
 
             consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceListener);
 
             while (stillRunning()) {
-                long startPoll = time.milliseconds();
-
                 // try to fetch some records if necessary
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
+                if (requiresPoll) {
+                    long startPoll = time.milliseconds();
 
-                if (!records.isEmpty()) {
-                    for (StreamTask task : tasks.values()) {
-                        for (TopicPartition partition : task.partitions()) {
-                            task.addRecords(partition, records.records(partition));
+                    ConsumerRecords<byte[], byte[]> records = consumer.poll(totalNumBuffered == 0 ? this.pollTimeMs : 0);
+
+                    if (!records.isEmpty()) {
+                        for (StreamTask task : tasks.values()) {
+                            for (TopicPartition partition : task.partitions()) {
+                                task.addRecords(partition, records.records(partition));
+                            }
                         }
                     }
-                }
 
-                long endPoll = time.milliseconds();
-                sensors.pollTimeSensor.record(endPoll - startPoll);
+                    long endPoll = time.milliseconds();
+                    sensors.pollTimeSensor.record(endPoll - startPoll);
+                }
 
                 // try to process one record from each task
                 totalNumBuffered = 0;
+                requiresPoll = false;
 
                 for (StreamTask task : tasks.values()) {
                     long startProcess = time.milliseconds();
 
                     totalNumBuffered += task.process();
+                    requiresPoll = requiresPoll || task.requiresPoll();
 
                     sensors.processTimeSensor.record(time.milliseconds() - startProcess);
                 }
