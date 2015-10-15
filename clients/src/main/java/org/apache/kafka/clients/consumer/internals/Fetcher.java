@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -173,15 +174,15 @@ public class Fetcher<K, V> {
      * @return The map of topics and its partitions
      */
     public Map<String, List<PartitionInfo>> getAllTopics(long timeout) {
-        final HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
         long startTime = time.milliseconds();
 
         while (time.milliseconds() - startTime < timeout) {
             RequestFuture<ClientResponse> requestFuture = sendMetadataRequest();
             if (requestFuture != null) {
-                client.poll(requestFuture);
+                client.poll(requestFuture, timeout);
 
                 if (requestFuture.succeeded()) {
+                    HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
                     MetadataResponse response =
                         new MetadataResponse(requestFuture.value().responseBody());
 
@@ -190,16 +191,15 @@ public class Fetcher<K, V> {
                             topic, response.cluster().availablePartitionsForTopic(topic));
 
                     return topicsPartitionInfos;
-                }
-
-                if (!requestFuture.isRetriable())
+                } else if (requestFuture.failed() && !requestFuture.isRetriable()) {
                     throw requestFuture.exception();
+                }
             }
 
             Utils.sleep(retryBackoffMs);
         }
 
-        return topicsPartitionInfos;
+        throw new TimeoutException("Failed to get metadata for all topics after " + timeout + " ms.");
     }
 
     /**

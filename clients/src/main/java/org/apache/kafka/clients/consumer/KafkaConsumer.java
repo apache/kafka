@@ -1047,7 +1047,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     committed = this.subscriptions.committed(partition);
                 }
             } else {
-                Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
+                Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition), requestTimeoutMs);
                 committed = offsets.get(partition);
             }
 
@@ -1081,7 +1081,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
             if (parts == null) {
                 metadata.add(topic);
-                client.awaitMetadataUpdate();
+                client.awaitMetadataUpdate(requestTimeoutMs);
                 parts = metadata.fetch().partitionsForTopic(topic);
             }
             return parts;

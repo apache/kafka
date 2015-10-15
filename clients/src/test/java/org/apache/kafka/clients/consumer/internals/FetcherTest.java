@@ -29,6 +29,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -336,6 +337,11 @@ public class FetcherTest {
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopics(5000L);
 
         assertEquals(cluster.topics().size(), allTopics.size());
+    }
+
+    @Test(expected = TimeoutException.class)
+    public void testGetAllTopicsTimeout() {
+        fetcher.getAllTopics(0);
     }
 
     /*
