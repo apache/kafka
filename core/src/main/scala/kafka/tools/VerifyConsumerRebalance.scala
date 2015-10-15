@@ -19,7 +19,9 @@ package kafka.tools
 
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ToolsUtils, Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
+import org.apache.kafka.common.security._
+
+import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
 
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
@@ -51,7 +53,7 @@ object VerifyConsumerRebalance extends Logging {
       zkUtils = ZkUtils.create(zkConnect,
                                30000,
                                30000, 
-                               ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                               JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
       debug("zkConnect = %s; group = %s".format(zkConnect, group))
 

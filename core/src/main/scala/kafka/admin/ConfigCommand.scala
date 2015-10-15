@@ -21,11 +21,12 @@ import joptsimple._
 import java.util.Properties
 import kafka.log.LogConfig
 import kafka.server.ConfigType
-import kafka.utils.{ToolsUtils, ZkUtils, CommandLineUtils}
+import kafka.utils.{ZkUtils, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
 import scala.collection._
 import scala.collection.JavaConversions._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.JaasUtils
 
 
 /**
@@ -45,7 +46,7 @@ object ConfigCommand {
     val zkUtils = ZkUtils.create(opts.options.valueOf(opts.zkConnectOpt),
                                  30000,
                                  30000,
-                                 ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                                 JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
     try {
       if (opts.options.has(opts.alterOpt))

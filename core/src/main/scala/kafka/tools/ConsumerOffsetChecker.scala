@@ -25,6 +25,7 @@ import kafka.consumer.SimpleConsumer
 import kafka.api.{OffsetFetchResponse, OffsetFetchRequest, OffsetRequest}
 import kafka.common.{OffsetMetadataAndError, ErrorMapping, BrokerNotAvailableException, TopicAndPartition}
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.JaasUtils
 import scala.collection._
 import kafka.client.ClientUtils
 import kafka.network.BlockingChannel
@@ -154,7 +155,7 @@ object ConsumerOffsetChecker extends Logging {
       zkUtils = ZkUtils.create(zkConnect,
                                30000,
                                30000,
-                               ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                               JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
       val topicList = topics match {
         case Some(x) => x.split(",").view.toList

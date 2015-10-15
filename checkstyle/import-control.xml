@@ -31,6 +31,7 @@
   <allow pkg="org.powermock" />
 
   <allow pkg="javax.net.ssl" />
+  <allow pkg="javax.security.auth" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />

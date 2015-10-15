@@ -31,6 +31,7 @@ import scala.collection.{Set, mutable}
 import kafka.consumer.SimpleConsumer
 import collection.JavaConversions._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.JaasUtils
 
 
 object ConsumerGroupCommand {
@@ -51,7 +52,7 @@ object ConsumerGroupCommand {
     val zkUtils = ZkUtils.create(opts.options.valueOf(opts.zkConnectOpt), 
                                  30000,
                                  30000,
-                                 ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config")))
+                                 JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
     try {
       if (opts.options.has(opts.listOpt))
