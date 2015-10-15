@@ -93,8 +93,4 @@ public class SSLConfigs {
                                            + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
                                            + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
 
-    public static final String SSL_NEED_CLIENT_AUTH_DOC = "It can be REQUESTED . "
-        + "Default value is false";
-    public static final Boolean DEFAULT_SSL_NEED_CLIENT_AUTH = false;
-
 }
