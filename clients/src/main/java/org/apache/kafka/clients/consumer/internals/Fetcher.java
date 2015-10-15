@@ -478,17 +478,12 @@ public class Fetcher<K, V> {
 
                     int bytes = 0;
                     ByteBuffer buffer = partition.recordSet;
-
-                    System.out.println("partition " + tp +" received " + buffer);
-
                     MemoryRecords records = MemoryRecords.readableRecords(buffer);
                     List<ConsumerRecord<K, V>> parsed = new ArrayList<ConsumerRecord<K, V>>();
                     for (LogEntry logEntry : records) {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
                     }
-
-                    System.out.println("partition " + tp +" parsed " + parsed.size() + " with " + buffer.capacity() + " bytes, fetch size " + this.fetchSize);
 
                     if (!parsed.isEmpty()) {
                         ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
@@ -498,9 +493,10 @@ public class Fetcher<K, V> {
                     } else if (buffer.capacity() >= this.fetchSize) {
                         // we did not read a single message from a max fetchable buffer
                         // because that message's size is larger than fetch size, in this case
-                        // we should log an error and close gracefully
-                        throw new KafkaException("There is a single message whose size is larger than fetch size " + this.fetchSize + " and hence cannot be ever returned.");
+                        // log an error
+                        log.error("There is a single message whose size is larger than fetch size {} and hence cannot be ever returned", this.fetchSize);
                     }
+
                     this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
                     totalBytes += bytes;
                     totalCount += parsed.size();
