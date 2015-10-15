@@ -136,7 +136,7 @@ public class Login {
 
         // Refresh the Ticket Granting Ticket (TGT) periodically. How often to refresh is determined by the
         // TGT's existing expiry date and the configured minTimeBeforeRelogin. For testing and development,
-        // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running :
+        // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running:
         //  "modprinc -maxlife 3mins <principal>" in kadmin.
         t = Utils.newThread("kafka-kerberos-refresh-thread", new Runnable() {
             public void run() {
@@ -149,19 +149,20 @@ public class Login {
                     if (tgt == null) {
                         nextRefresh = now + minTimeBeforeRelogin;
                         nextRefreshDate = new Date(nextRefresh);
-                        log.warn("No TGT found: will try again at " + nextRefreshDate);
+                        log.warn("No TGT found: will try again at {}", nextRefreshDate);
                     } else {
                         nextRefresh = getRefreshTime(tgt);
                         long expiry = tgt.getEndTime().getTime();
                         Date expiryDate = new Date(expiry);
                         if (isUsingTicketCache && tgt.getRenewTill() != null && tgt.getRenewTill().getTime() >= expiry) {
-                            log.error("The TGT cannot be renewed beyond the next expiry date: " + expiryDate + "." +
+                            log.error("The TGT cannot be renewed beyond the next expiry date: {}." +
                                     "This process will not be able to authenticate new SASL connections after that " +
                                     "time (for example, it will not be able to authenticate a new connection with a Kafka " +
                                     "Broker).  Ask your system administrator to either increase the " +
-                                    "'renew until' time by doing : 'modprinc -maxrenewlife " + principal + "' within " +
-                                    "kadmin, or instead, to generate a keytab for " + principal + ". Because the TGT's " +
-                                    "expiry cannot be further extended by refreshing, exiting refresh thread now.");
+                                    "'renew until' time by doing : 'modprinc -maxrenewlife {} ' within " +
+                                    "kadmin, or instead, to generate a keytab for {}. Because the TGT's " +
+                                    "expiry cannot be further extended by refreshing, exiting refresh thread now.",
+                                    expiryDate, principal, principal);
                             return;
                         }
                         // determine how long to sleep from looking at ticket's expiry.
@@ -177,23 +178,23 @@ public class Login {
                                 // next scheduled refresh is sooner than (now + MIN_TIME_BEFORE_LOGIN).
                                 Date until = new Date(nextRefresh);
                                 Date newUntil = new Date(now + minTimeBeforeRelogin);
-                                log.warn("TGT refresh thread time adjusted from : " + until + " to : " + newUntil + " since "
-                                        + "the former is sooner than the minimum refresh interval ("
-                                        + minTimeBeforeRelogin / 1000 + " seconds) from now.");
+                                log.warn("TGT refresh thread time adjusted from {} to {} since the former is sooner " +
+                                        "than the minimum refresh interval ({} seconds) from now.",
+                                        until, newUntil, minTimeBeforeRelogin / 1000);
                             }
                             nextRefresh = Math.max(nextRefresh, now + minTimeBeforeRelogin);
                         }
                         nextRefreshDate = new Date(nextRefresh);
                         if (nextRefresh > expiry) {
-                            log.error("Next refresh: " + nextRefreshDate + " is later than expiry " + expiryDate
-                                    + ". This may indicate a clock skew problem. Check that this host and the KDC "
-                                    + "hosts' clocks are in sync. Exiting refresh thread.");
+                            log.error("Next refresh: {} is later than expiry {}. This may indicate a clock skew problem." +
+                                    "Check that this host and the KDC hosts' clocks are in sync. Exiting refresh thread.",
+                                    nextRefreshDate, expiryDate);
                             return;
                         }
                     }
                     if (now < nextRefresh) {
                         Date until = new Date(nextRefresh);
-                        log.info("TGT refresh sleeping until: " + until.toString());
+                        log.info("TGT refresh sleeping until: {}", until);
                         try {
                             Thread.sleep(nextRefresh - now);
                         } catch (InterruptedException ie) {
@@ -201,10 +202,10 @@ public class Login {
                             return;
                         }
                     } else {
-                        log.error("NextRefresh:" + nextRefreshDate + " is in the past: exiting refresh thread. Check"
+                        log.error("NextRefresh: {} is in the past: exiting refresh thread. Check"
                                 + " clock sync between this host and KDC - (KDC's clock is likely ahead of this host)."
                                 + " Manual intervention will be required for this client to successfully authenticate."
-                                + " Exiting refresh thread.");
+                                + " Exiting refresh thread.", nextRefreshDate);
                         return;
                     }
                     if (isUsingTicketCache) {
@@ -212,7 +213,7 @@ public class Login {
                         int retry = 1;
                         while (retry >= 0) {
                             try {
-                                log.debug("Running ticket cache refresh command: " + kinitCmd + " " + kinitArgs);
+                                log.debug("Running ticket cache refresh command: {} {}", kinitCmd, kinitArgs);
                                 Shell.execCommand(kinitCmd, kinitArgs);
                                 break;
                             } catch (Exception e) {
@@ -276,17 +277,13 @@ public class Login {
             try {
                 t.join();
             } catch (InterruptedException e) {
-                log.warn("Error while waiting for Login thread to shutdown: " + e);
+                log.warn("Error while waiting for Login thread to shutdown: " + e, e);
             }
         }
     }
 
     public Subject subject() {
         return subject;
-    }
-
-    public String loginContextName() {
-        return loginContextName;
     }
 
     private synchronized LoginContext login(final String loginContextName) throws LoginException {
@@ -311,8 +308,8 @@ public class Login {
     private long getRefreshTime(KerberosTicket tgt) {
         long start = tgt.getStartTime().getTime();
         long expires = tgt.getEndTime().getTime();
-        log.info("TGT valid starting at: " + tgt.getStartTime().toString());
-        log.info("TGT expires: " + tgt.getEndTime().toString());
+        log.info("TGT valid starting at: {}", tgt.getStartTime());
+        log.info("TGT expires: {}", tgt.getEndTime());
         long proposedRefresh = start + (long) ((expires - start) *
                 (ticketRenewWindowFactor + (ticketRenewJitter * RNG.nextDouble())));
 
@@ -328,7 +325,7 @@ public class Login {
         for (KerberosTicket ticket : tickets) {
             KerberosPrincipal server = ticket.getServer();
             if (server.getName().equals("krbtgt/" + server.getRealm() + "@" + server.getRealm())) {
-                log.debug("Found TGT " + ticket + ".");
+                log.debug("Found TGT {}.", ticket);
                 return ticket;
             }
         }
@@ -338,9 +335,8 @@ public class Login {
     private boolean hasSufficientTimeElapsed() {
         long now = currentElapsedTime();
         if (now - lastLogin < minTimeBeforeRelogin) {
-            log.warn("Not attempting to re-login since the last re-login was " +
-                    "attempted less than " + (minTimeBeforeRelogin / 1000) + " seconds" +
-                    " before.");
+            log.warn("Not attempting to re-login since the last re-login was attempted less than {} seconds before.",
+                    minTimeBeforeRelogin / 1000);
             return false;
         }
         return true;
@@ -361,7 +357,7 @@ public class Login {
         if (!hasSufficientTimeElapsed()) {
             return;
         }
-        log.info("Initiating logout for " + principal);
+        log.info("Initiating logout for {}", principal);
         synchronized (Login.class) {
             // register most recent relogin attempt
             lastLogin = currentElapsedTime();
@@ -372,7 +368,7 @@ public class Login {
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
             login = new LoginContext(loginContextName, subject);
-            log.info("Initiating re-login for " + principal);
+            log.info("Initiating re-login for {}", principal);
             login.login();
         }
     }
