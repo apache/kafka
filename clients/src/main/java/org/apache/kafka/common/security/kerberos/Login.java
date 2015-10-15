@@ -38,9 +38,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.security.NoSuchAlgorithmException;
-import java.security.URIParameter;
 import java.util.Date;
 import java.util.Random;
 import java.util.Set;
@@ -289,14 +286,6 @@ public class Login {
     private synchronized LoginContext login(final String loginContextName) throws LoginException {
         if (System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM) == null) {
             throw new IllegalArgumentException("You must pass " + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + " in secure mode.");
-        }
-
-        File configFile = new File(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM));
-        try {
-            Configuration loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configFile.toURI()));
-            Configuration.setConfiguration(loginConf);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
         }
 
         LoginContext loginContext = new LoginContext(loginContextName, callbackHandler);
