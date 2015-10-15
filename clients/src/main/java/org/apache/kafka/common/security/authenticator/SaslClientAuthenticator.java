@@ -151,7 +151,9 @@ public class SaslClientAuthenticator implements Authenticator {
                 byte[] saslToken = createSaslToken(serverToken);
                 if (saslToken != null) {
                     netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(saslToken));
-                    if (!flushNetOutBuffer())
+                    if (flushNetOutBuffer())
+                        transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+                    else
                         transportLayer.addInterestOps(SelectionKey.OP_WRITE);
                 }
             } catch (SaslException se) {
