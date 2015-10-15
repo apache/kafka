@@ -36,6 +36,7 @@ import org.apache.kafka.common.protocol.{Errors, ApiKeys}
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.utils.Time
 
+import scala.RuntimeException
 import scala.collection.{JavaConverters, Map, mutable}
 import JavaConverters._
 
@@ -99,6 +100,7 @@ class ReplicaFetcherThread(name: String,
       val TopicAndPartition(topic, partitionId) = topicAndPartition
       val replica = replicaMgr.getReplica(topic, partitionId).get
       val messageSet = partitionData.toByteBufferMessageSet
+      warnIfInvalid(messageSet)
 
       if (fetchOffset != replica.logEndOffset.messageOffset)
         throw new RuntimeException("Offset mismatch: fetched offset = %d, log end offset = %d.".format(fetchOffset, replica.logEndOffset.messageOffset))
@@ -119,6 +121,13 @@ class ReplicaFetcherThread(name: String,
         fatal("Disk error while replicating data.", e)
         Runtime.getRuntime.halt(1)
     }
+  }
+
+  def warnIfInvalid(messageSet: ByteBufferMessageSet): Unit = {
+    if (messageSet.sizeInBytes > 0 && messageSet.validBytes <= 0)
+      error("Replication is failing due to a message that is greater than replica.fetch.max.bytes. This " +
+        "generally occurs when the max.message.bytes has been overridden to exceed this " +
+        "value and a suitably large message has also been sent.")
   }
 
   /**
