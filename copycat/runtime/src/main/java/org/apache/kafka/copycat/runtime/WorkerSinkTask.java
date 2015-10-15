@@ -230,17 +230,15 @@ class WorkerSinkTask implements WorkerTask {
             for (ConsumerRecord<byte[], byte[]> msg : msgs) {
                 log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
                 SchemaAndValue keyAndSchema = keyConverter.toCopycatData(msg.topic(), msg.key());
-                SchemaAndValue
-                    valueAndSchema =
-                    valueConverter.toCopycatData(msg.topic(), msg.value());
-                records.add(
-                    new SinkRecord(msg.topic(), msg.partition(),
+                SchemaAndValue valueAndSchema = valueConverter.toCopycatData(msg.topic(), msg.value());
+                records.add(new SinkRecord(msg.topic(), msg.partition(),
                                    keyAndSchema.schema(), keyAndSchema.value(),
                                    valueAndSchema.schema(), valueAndSchema.value(),
                                    msg.offset())
                 );
             }
             Set<TopicPartition> assignment;
+            TopicPartition errorTopicPartition = null;
             boolean pause = false;
             while (true) {
                 try {
@@ -248,9 +246,9 @@ class WorkerSinkTask implements WorkerTask {
                     // After pause, consumer poll servers as a mechanism to heartbeat and
                     // remain group membership.
                     if (pause) {
-                        assignment = context.assignment();
-                        for (TopicPartition tp: assignment) {
-                            context.pause(tp);
+                        errorTopicPartition = context.erorrTopicPartition();
+                        if (errorTopicPartition != null) {
+                            context.pause(errorTopicPartition);
                         }
                         consumer.poll(0);
                     }
@@ -263,9 +261,8 @@ class WorkerSinkTask implements WorkerTask {
                     // log the exception and abort the task.
                     if (pause) {
                         consumer.poll(0);
-                        assignment = context.assignment();
-                        for (TopicPartition tp: assignment) {
-                            context.resume(tp);
+                        if (errorTopicPartition != null) {
+                            context.pause(errorTopicPartition);
                         }
                     }
                     break;

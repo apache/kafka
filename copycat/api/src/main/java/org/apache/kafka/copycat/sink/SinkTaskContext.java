@@ -30,7 +30,7 @@ import java.util.Set;
 @InterfaceStability.Unstable
 public abstract class SinkTaskContext {
     private Map<TopicPartition, Long> offsets;
-    private long rotateIntervalMs;
+    private TopicPartition errorTopicPart;
 
     public SinkTaskContext() {
         offsets = new HashMap<>();
@@ -57,6 +57,22 @@ public abstract class SinkTaskContext {
      */
     public Map<TopicPartition, Long> offsets() {
         return offsets;
+    }
+
+    /**
+     * Get the topic partition that throws Transient exception during message delivery
+     * @return the topic partition that has error
+     */
+    public TopicPartition erorrTopicPartition() {
+        return errorTopicPart;
+    }
+
+    /**
+     * Set the error topic partition
+     * @param errorTopicPart the topic partition with error
+     */
+    public void errorTopicPartition(TopicPartition errorTopicPart) {
+        this.errorTopicPart = errorTopicPart;
     }
 
     /**
