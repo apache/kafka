@@ -266,7 +266,7 @@ class LogCleaner(val config: CleanerConfig,
  * @param dupBufferLoadFactor The maximum percent full for the deduplication buffer
  * @param throttler The throttler instance to use for limiting I/O rate.
  * @param time The time instance
- * @param checkDone Check if the cleaning for a partition is aborted. If so, throw an exception
+ * @param checkDone Check if the cleaning for a partition is finished or aborted.
  */
 private[log] class Cleaner(val id: Int,
                            val offsetMap: OffsetMap,
