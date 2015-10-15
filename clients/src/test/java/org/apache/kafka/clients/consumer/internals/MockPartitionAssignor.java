@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.PartitionAssignor;
-import org.apache.kafka.common.Cluster;
+import org.apache.kafka.clients.consumer.AbstractPartitionAssignor;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
 import java.util.Map;
 
-public class MockPartitionAssignor implements PartitionAssignor {
+public class MockPartitionAssignor extends AbstractPartitionAssignor {
 
     private Map<String, List<TopicPartition>> result = null;
 
     @Override
-    public Map<String, List<TopicPartition>> assign(Map<String, List<String>> subscriptions, Cluster cluster) {
+    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
+                                                    Map<String, List<String>> subscriptions) {
         if (result == null)
             throw new IllegalStateException("Call to assign with no result prepared");
         return result;
@@ -36,7 +36,7 @@ public class MockPartitionAssignor implements PartitionAssignor {
 
     @Override
     public String name() {
-        return "mock-assignor";
+        return "consumer-mock-assignor";
     }
 
     public void clear() {

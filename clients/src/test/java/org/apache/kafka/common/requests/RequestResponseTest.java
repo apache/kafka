@@ -29,9 +29,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -181,7 +181,9 @@ public class RequestResponseTest {
 
     private AbstractRequest createJoinGroupRequest() {
         ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
-        return new JoinGroupRequest("consumer", "group1", Arrays.asList("range"), 30000, "consumer1", metadata);
+        List<JoinGroupRequest.GroupProtocol> protocols = new ArrayList<>();
+        protocols.add(new JoinGroupRequest.GroupProtocol("consumer-range", metadata));
+        return new JoinGroupRequest("group1", 30000, "consumer1", protocols);
     }
 
     private AbstractRequestResponse createJoinGroupResponse() {

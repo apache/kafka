@@ -20,59 +20,81 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 public class JoinGroupRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.JOIN_GROUP.id);
-    private static final String GROUP_PROTOCOL_KEY_NAME = "group_protocol";
     private static final String GROUP_ID_KEY_NAME = "group_id";
-    private static final String SUB_PROTOCOLS_KEY_NAME = "sub_protocols";
     private static final String SESSION_TIMEOUT_KEY_NAME = "session_timeout";
     private static final String MEMBER_ID_KEY_NAME = "member_id";
-    private static final String MEMBER_METADATA_KEY_NAME = "member_metadata";
+    private static final String GROUP_PROTOCOLS_KEY_NAME = "group_protocols";
+    private static final String PROTOCOL_NAME_KEY_NAME = "protocol_name";
+    private static final String PROTOCOL_METADATA_KEY_NAME = "protocol_metadata";
 
     public static final String UNKNOWN_MEMBER_ID = "";
 
-    private final String groupProtocol;
     private final String groupId;
-    private final Collection<String> subProtocols;
     private final int sessionTimeout;
     private final String memberId;
-    private final ByteBuffer memberMetadata;
+    private final List<GroupProtocol> groupProtocols;
 
-    public JoinGroupRequest(String groupProtocol,
-                            String groupId,
-                            Collection<String> subProtocols,
+    public static class GroupProtocol {
+        private final String name;
+        private final ByteBuffer metadata;
+
+        public GroupProtocol(String name, ByteBuffer metadata) {
+            this.name = name;
+            this.metadata = metadata;
+        }
+
+        public String name() {
+            return name;
+        }
+
+        public ByteBuffer metadata() {
+            return metadata;
+        }
+    }
+
+    public JoinGroupRequest(String groupId,
                             int sessionTimeout,
                             String memberId,
-                            ByteBuffer memberMetadata) {
+                            List<GroupProtocol> groupProtocols) {
         super(new Struct(CURRENT_SCHEMA));
-        struct.set(GROUP_PROTOCOL_KEY_NAME, groupProtocol);
         struct.set(GROUP_ID_KEY_NAME, groupId);
-        struct.set(SUB_PROTOCOLS_KEY_NAME, subProtocols.toArray());
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
         struct.set(MEMBER_ID_KEY_NAME, memberId);
-        struct.set(MEMBER_METADATA_KEY_NAME, memberMetadata);
-        this.groupProtocol = groupProtocol;
+
+        List<Struct> groupProtocolsList = new ArrayList<>();
+        for (GroupProtocol protocol : groupProtocols) {
+            Struct protocolStruct = struct.instance(GROUP_PROTOCOLS_KEY_NAME);
+            protocolStruct.set(PROTOCOL_NAME_KEY_NAME, protocol.name);
+            protocolStruct.set(PROTOCOL_METADATA_KEY_NAME, protocol.metadata);
+            groupProtocolsList.add(protocolStruct);
+        }
+
+        struct.set(GROUP_PROTOCOLS_KEY_NAME, groupProtocolsList.toArray());
         this.groupId = groupId;
-        this.subProtocols = subProtocols;
+        this.groupProtocols = groupProtocols;
         this.sessionTimeout = sessionTimeout;
         this.memberId = memberId;
-        this.memberMetadata = memberMetadata;
     }
 
     public JoinGroupRequest(Struct struct) {
         super(struct);
-        groupProtocol = struct.getString(GROUP_PROTOCOL_KEY_NAME);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
-        subProtocols = new ArrayList<>();
-        for (Object subProtocolObj : struct.getArray(SUB_PROTOCOLS_KEY_NAME))
-            subProtocols.add((String) subProtocolObj);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
-        memberMetadata = struct.getBytes(MEMBER_METADATA_KEY_NAME);
+
+        groupProtocols = new ArrayList<>();
+        for (Object groupProtocolObj : struct.getArray(GROUP_PROTOCOLS_KEY_NAME)) {
+            Struct groupProtocolStruct = (Struct) groupProtocolObj;
+            String name = groupProtocolStruct.getString(PROTOCOL_NAME_KEY_NAME);
+            ByteBuffer metadata = groupProtocolStruct.getBytes(PROTOCOL_METADATA_KEY_NAME);
+            groupProtocols.add(new GroupProtocol(name, metadata));
+        }
     }
 
     @Override
@@ -82,9 +104,9 @@ public class JoinGroupRequest extends AbstractRequest {
                 return new JoinGroupResponse(
                         Errors.forException(e).code(),
                         JoinGroupResponse.UNKNOWN_GENERATION_ID,
-                        JoinGroupResponse.UNKNOWN_SUB_PROTOCOL,
-                        JoinGroupResponse.UNKNOWN_MEMBER_ID,
-                        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+                        JoinGroupResponse.UNKNOWN_PROTOCOL,
+                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
+                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
                         Collections.<String, ByteBuffer>emptyMap());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -92,16 +114,8 @@ public class JoinGroupRequest extends AbstractRequest {
         }
     }
 
-    public String groupProtocol() {
-        return groupProtocol;
-    }
-
     public String groupId() {
         return groupId;
-    }
-
-    public Collection<String> subProtocols() {
-        return subProtocols;
     }
 
     public int sessionTimeout() {
@@ -112,8 +126,8 @@ public class JoinGroupRequest extends AbstractRequest {
         return memberId;
     }
 
-    public ByteBuffer memberMetadata() {
-        return memberMetadata;
+    public List<GroupProtocol> groupProtocols() {
+        return groupProtocols;
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer, int versionId) {

@@ -26,10 +26,12 @@ import static org.junit.Assert.assertTrue;
 
 public class RoundRobinAssignorTest {
 
+    private RoundRobinAssignor assignor = new RoundRobinAssignor();
+
+
     @Test
     public void testOneConsumerNoTopic() {
         String consumerId = "consumer";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
@@ -43,7 +45,6 @@ public class RoundRobinAssignorTest {
     public void testOneConsumerNonexistentTopic() {
         String topic = "topic";
         String consumerId = "consumer";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 0);
@@ -59,7 +60,6 @@ public class RoundRobinAssignorTest {
     public void testOneConsumerOneTopic() {
         String topic = "topic";
         String consumerId = "consumer";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
@@ -77,7 +77,6 @@ public class RoundRobinAssignorTest {
         String topic = "topic";
         String otherTopic = "other";
         String consumerId = "consumer";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
@@ -96,7 +95,6 @@ public class RoundRobinAssignorTest {
         String topic1 = "topic1";
         String topic2 = "topic2";
         String consumerId = "consumer";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 1);
@@ -115,7 +113,6 @@ public class RoundRobinAssignorTest {
         String topic = "topic";
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 1);
@@ -134,7 +131,6 @@ public class RoundRobinAssignorTest {
         String topic = "topic";
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
@@ -155,7 +151,6 @@ public class RoundRobinAssignorTest {
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
         String consumer3 = "consumer3";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 3);
@@ -183,7 +178,6 @@ public class RoundRobinAssignorTest {
         String topic2 = "topic2";
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
-        RoundRobinAssignor assignor = new RoundRobinAssignor();
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 3);

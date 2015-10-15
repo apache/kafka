@@ -86,13 +86,13 @@ private object GroupMetadata {
  *  2. generation id
  */
 @nonthreadsafe
-private[coordinator] class GroupMetadata(val groupId: String, val protocol: String) {
+private[coordinator] class GroupMetadata(val groupId: String) {
 
   private val members = new mutable.HashMap[String, MemberMetadata]
   private var state: GroupState = Stable
   var generationId = 0
   var leaderId: String = null
-  var subProtocol: String = null
+  var protocol: String = null
 
   def is(groupState: GroupState) = state == groupState
   def not(groupState: GroupState) = state != groupState
@@ -158,7 +158,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocol: Stri
   private def candidateProtocols = {
     // get the set of protocols that are commonly supported by all members
     allMembers
-      .map(_.subProtocols.toSet)
+      .map(_.protocols.toSet)
       .reduceLeft((commonProtocols, protocols) => commonProtocols & protocols)
   }
 
@@ -169,14 +169,14 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocol: Stri
   def initNextGeneration = {
     assert(notYetRejoinedMembers == List.empty[MemberMetadata])
     generationId += 1
-    subProtocol = selectProtocol
+    protocol = selectProtocol
     transitionTo(AwaitingSync)
   }
 
   def currentMemberMetadata: Map[String, Array[Byte]] = {
     if (is(Dead) || is(PreparingRebalance))
       throw new IllegalStateException("Cannot obtain member metadata for group in state %s".format(state))
-    members.map{ case (memberId, memberMetadata) => (memberId, memberMetadata.metadata)}.toMap
+    members.map{ case (memberId, memberMetadata) => (memberId, memberMetadata.metadata(protocol))}.toMap
   }
 
   private def assertValidTransition(targetState: GroupState) {

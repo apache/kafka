@@ -44,11 +44,38 @@ import scala.collection.Map
 private[coordinator] class MemberMetadata(val memberId: String,
                                           val groupId: String,
                                           val sessionTimeoutMs: Int,
-                                          var metadata: Array[Byte],
-                                          var subProtocols: Set[String]) {
-  def matches(metadata: Array[Byte], subProtocols: Set[String]): Boolean = {
-    util.Arrays.equals(metadata, this.metadata) && subProtocols == this.subProtocols
+                                          var supportedProtocols: List[(String, Array[Byte])]) {
+
+  var assignment: Array[Byte] = null
+
+  var awaitingJoinCallback: JoinGroupResult => Unit = null
+  var awaitingSyncCallback: (Array[Byte], Short) => Unit = null
+  var latestHeartbeat: Long = -1
+  var isLeaving: Boolean = false
+
+  def metadata(protocol: String): Array[Byte] = {
+    supportedProtocols.find(_._1 == protocol) match {
+      case Some((_, metadata)) => metadata
+      case None =>
+        throw new IllegalArgumentException("Member does not support protocol")
+    }
+
   }
+
+  def matches(protocols: List[(String, Array[Byte])]): Boolean = {
+    if (protocols.size != this.supportedProtocols.size)
+      return false
+
+    for (i <- 0 until protocols.size) {
+      val p1 = protocols(i)
+      val p2 = supportedProtocols(i)
+      if (p1._1 != p2._1 || !util.Arrays.equals(p1._2, p2._2))
+        return false
+    }
+    return true
+  }
+
+  def protocols = supportedProtocols.map(_._1)
 
   def hasAssignment(assignment: Array[Byte]): Boolean = {
     util.Arrays.equals(assignment, this.assignment)
@@ -59,17 +86,11 @@ private[coordinator] class MemberMetadata(val memberId: String,
    * indicated by the order of supported protocols and returns the first one also contained in the set
    */
   def vote(candidates: Set[String]): String = {
-    subProtocols.find(candidates.contains(_)) match {
-      case Some(protocol) => protocol
+    supportedProtocols.find({ case (protocol, _) => candidates.contains(protocol)}) match {
+      case Some((protocol, _)) => protocol
       case None =>
         throw new IllegalArgumentException("Member does not support any of the candidate protocols")
     }
   }
 
-  var assignment: Array[Byte] = null
-
-  var awaitingJoinCallback: JoinGroupResult => Unit = null
-  var awaitingSyncCallback: (Array[Byte], Short) => Unit = null
-  var latestHeartbeat: Long = -1
-  var isLeaving: Boolean = false
 }

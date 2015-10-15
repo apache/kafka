@@ -19,6 +19,8 @@ import org.apache.kafka.clients.consumer.ConsumerWakeupException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.PartitionAssignor;
+import org.apache.kafka.clients.consumer.PartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.PartitionAssignor.Subscription;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -33,6 +35,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.GenericType;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -43,11 +46,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,12 +58,11 @@ import java.util.Set;
 /**
  * This class manages the coordination process with the consumer coordinator.
  */
-public final class ConsumerCoordinator extends AbstractCoordinator<ConsumerProtocol.Subscription, ConsumerProtocol.Assignment>
-        implements Closeable {
+public final class ConsumerCoordinator extends AbstractCoordinator implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
-    private final Map<String, PartitionAssignor> assignorsMap;
+    private final Map<String, PartitionAssignor<?, ?>> protocolMap;
     private final org.apache.kafka.clients.Metadata metadata;
     private final MetadataSnapshot metadataSnapshot;
     private final ConsumerCoordinatorMetrics sensors;
@@ -87,8 +89,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator<ConsumerProto
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
                                long autoCommitIntervalMs) {
-        super(new ConsumerProtocol(),
-                client,
+        super(client,
                 groupId,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
@@ -106,9 +107,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator<ConsumerProto
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
         this.autoCommitEnabled = autoCommitEnabled;
 
-        this.assignorsMap = new HashMap<>();
+        this.protocolMap = new HashMap<>();
         for (PartitionAssignor assignor : assignors)
-            this.assignorsMap.put(assignor.name(), assignor);
+            this.protocolMap.put(assignor.name(), assignor);
 
         addMetadataListener();
 
@@ -118,14 +119,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator<ConsumerProto
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
     }
 
-    @Override
-    public ConsumerProtocol.Subscription metadata() {
-        return new ConsumerProtocol.Subscription(new ArrayList<>(subscriptions.subscription()));
+    private <S extends Subscription> ByteBuffer metadata(PartitionAssignor<S, ?> assignor) {
+        S subscription = assignor.subscription(subscriptions.subscription());
+        return assignor.subscriptionSchema().serialize(subscription);
     }
 
     @Override
-    public Collection<String> subProtocols() {
-        return assignorsMap.keySet();
+    public LinkedHashMap<String, ByteBuffer> metadata() {
+        LinkedHashMap<String, ByteBuffer> metadata = new LinkedHashMap<>();
+        for (PartitionAssignor<?, ?> assignor : protocolMap.values())
+            metadata.put(assignor.name(), metadata(assignor));
+        return metadata;
     }
 
     private void addMetadataListener() {
@@ -151,12 +155,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator<ConsumerProto
     }
 
     @Override
-    protected void onJoin(int generation, String memberId, ConsumerProtocol.Assignment assignment) {
+    protected void onJoin(int generation,
+                          String memberId,
+                          String assignmentStrategy,
+                          ByteBuffer assignment) {
+        PartitionAssignor<?, ?> assignor = protocolMap.get(assignmentStrategy);
+        if (assignor == null)
+            throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
+
+        List<TopicPartition> partitions = assignor.assignmentSchema()
+                .deserialize(assignment)
+                .partitions();
+
         // set the flag to refresh last committed offsets
         subscriptions.needRefreshCommits();
 
         // update partition assignment
-        subscriptions.changePartitionAssignment(assignment.partitions());
+        subscriptions.changePartitionAssignment(partitions);
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
@@ -170,47 +185,49 @@ public final class ConsumerCoordinator extends AbstractCoordinator<ConsumerProto
         }
     }
 
-    @Override
-    protected Map<String, ConsumerProtocol.Assignment> doSync(String leaderId,
-                                                              String assignmentStrategy,
-                                                              Map<String, ConsumerProtocol.Subscription> allSubscriptions) {
-        PartitionAssignor assignor = assignorsMap.get(assignmentStrategy);
-        if (assignor == null)
-            throw new IllegalStateException("Coordinator returned an incompatible assignment strategy");
+    private <S extends Subscription, A extends Assignment>  Map<String, ByteBuffer> doAssignment(PartitionAssignor<S, A> assignor,
+                                                                                                 Map<String, ByteBuffer> allSubscriptions) {
+        GenericType<S> subscriptionSchema = assignor.subscriptionSchema();
+        GenericType<A> assignmentSchema = assignor.assignmentSchema();
 
         Set<String> allSubscribedTopics = new HashSet<>();
-        Map<String, List<String>> subscriptions = new HashMap<>();
-        for (Map.Entry<String, ConsumerProtocol.Subscription> subscriptionEntry : allSubscriptions.entrySet()) {
-            List<String> topics = subscriptionEntry.getValue().topics();
-            subscriptions.put(subscriptionEntry.getKey(), topics);
-            allSubscribedTopics.addAll(topics);
+        Map<String, S> subscriptions = new HashMap<>();
+        for (Map.Entry<String, ByteBuffer> subscriptionEntry : allSubscriptions.entrySet()) {
+            S subscription = subscriptionSchema.deserialize(subscriptionEntry.getValue());
+            subscriptions.put(subscriptionEntry.getKey(), subscription);
+            allSubscribedTopics.addAll(subscription.topics());
         }
 
-        // the leader will begin watching for changes to any of the topics the group is interested in
+        // the leader will begin watching for changes to any of the topics the group is interested in,
+        // which ensures that all metadata changes will eventually be seen
         this.subscriptions.groupSubscribe(allSubscribedTopics);
         metadata.setTopics(this.subscriptions.groupSubscription());
         client.ensureFreshMetadata();
 
-        log.debug("Performing {} assignment for subscriptions {}", assignmentStrategy, subscriptions);
+        log.debug("Performing {} assignment for subscriptions {}", assignor.name(), subscriptions);
 
-        Map<String, List<TopicPartition>> assignment = assignor.assign(subscriptions, metadata.fetch());
-        fillMissingAssignments(allSubscriptions.keySet(), assignment);
+        Map<String, A> assignment = assignor.assign(metadata.fetch(), subscriptions);
 
         log.debug("Finished assignment: {}", assignment);
 
-        Map<String, ConsumerProtocol.Assignment> groupAssignment = new HashMap<>();
-        for (Map.Entry<String, List<TopicPartition>> assignmentEntry : assignment.entrySet())
-            groupAssignment.put(assignmentEntry.getKey(), new ConsumerProtocol.Assignment(assignmentEntry.getValue()));
+        Map<String, ByteBuffer> groupAssignment = new HashMap<>();
+        for (Map.Entry<String, A> assignmentEntry : assignment.entrySet()) {
+            ByteBuffer buffer = assignmentSchema.serialize(assignmentEntry.getValue());
+            groupAssignment.put(assignmentEntry.getKey(), buffer);
+        }
 
         return groupAssignment;
     }
 
-    private void fillMissingAssignments(Collection<String> members, Map<String, List<TopicPartition>> assignment) {
-        for (String member : members) {
-            if (!assignment.containsKey(member)) {
-                assignment.put(member, Collections.<TopicPartition>emptyList());
-            }
-        }
+    @Override
+    protected Map<String, ByteBuffer> doSync(String leaderId,
+                                             String assignmentStrategy,
+                                             Map<String, ByteBuffer> allSubscriptions) {
+        PartitionAssignor<?, ?> assignor = protocolMap.get(protocol);
+        if (assignor == null)
+            throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
+
+        return doAssignment(assignor, allSubscriptions);
     }
 
     @Override

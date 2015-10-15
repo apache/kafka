@@ -34,33 +34,32 @@ public class JoinGroupResponse extends AbstractRequestResponse {
      * GROUP_COORDINATOR_NOT_AVAILABLE (15)
      * NOT_COORDINATOR_FOR_GROUP (16)
      * INCONSISTENT_GROUP_PROTOCOL (23)
-     * UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY (24)
      * UNKNOWN_MEMBER_ID (25)
      * INVALID_SESSION_TIMEOUT (26)
      */
 
     private static final String GENERATION_ID_KEY_NAME = "generation_id";
-    private static final String SUB_PROTOCOL_KEY_NAME = "sub_protocol";
+    private static final String GROUP_PROTOCOL_KEY_NAME = "group_protocol";
     private static final String LEADER_ID_KEY_NAME = "leader_id";
     private static final String MEMBER_ID_KEY_NAME = "member_id";
     private static final String MEMBERS_KEY_NAME = "members";
 
     private static final String MEMBER_METADATA_KEY_NAME = "member_metadata";
 
-    public static final String UNKNOWN_SUB_PROTOCOL = "";
+    public static final String UNKNOWN_PROTOCOL = "";
     public static final int UNKNOWN_GENERATION_ID = -1;
     public static final String UNKNOWN_MEMBER_ID = "";
 
     private final short errorCode;
     private final int generationId;
-    private final String subProtocol;
+    private final String groupProtocol;
     private final String memberId;
     private final String leaderId;
     private final Map<String, ByteBuffer> members;
 
     public JoinGroupResponse(short errorCode,
                              int generationId,
-                             String subProtocol,
+                             String groupProtocol,
                              String memberId,
                              String leaderId,
                              Map<String, ByteBuffer> groupMembers) {
@@ -68,7 +67,7 @@ public class JoinGroupResponse extends AbstractRequestResponse {
 
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
-        struct.set(SUB_PROTOCOL_KEY_NAME, subProtocol);
+        struct.set(GROUP_PROTOCOL_KEY_NAME, groupProtocol);
         struct.set(MEMBER_ID_KEY_NAME, memberId);
         struct.set(LEADER_ID_KEY_NAME, leaderId);
 
@@ -83,7 +82,7 @@ public class JoinGroupResponse extends AbstractRequestResponse {
 
         this.errorCode = errorCode;
         this.generationId = generationId;
-        this.subProtocol = subProtocol;
+        this.groupProtocol = groupProtocol;
         this.memberId = memberId;
         this.leaderId = leaderId;
         this.members = groupMembers;
@@ -101,7 +100,7 @@ public class JoinGroupResponse extends AbstractRequestResponse {
         }
         errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
         generationId = struct.getInt(GENERATION_ID_KEY_NAME);
-        subProtocol = struct.getString(SUB_PROTOCOL_KEY_NAME);
+        groupProtocol = struct.getString(GROUP_PROTOCOL_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
         leaderId = struct.getString(LEADER_ID_KEY_NAME);
     }
@@ -114,8 +113,8 @@ public class JoinGroupResponse extends AbstractRequestResponse {
         return generationId;
     }
 
-    public String subProtocol() {
-        return subProtocol;
+    public String groupProtocol() {
+        return groupProtocol;
     }
 
     public String memberId() {

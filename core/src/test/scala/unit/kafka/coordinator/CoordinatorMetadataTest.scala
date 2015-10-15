@@ -46,7 +46,7 @@ class CoordinatorMetadataTest extends JUnitSuite {
   @Test
   def testGetGroup() {
     val groupId = "group"
-    val expected = coordinatorMetadata.addGroup(groupId, "consumer")
+    val expected = coordinatorMetadata.addGroup(groupId)
     val actual = coordinatorMetadata.getGroup(groupId)
     assertEquals(expected, actual)
   }
@@ -54,8 +54,8 @@ class CoordinatorMetadataTest extends JUnitSuite {
   @Test
   def testAddGroupReturnsPreexistingGroupIfItAlreadyExists() {
     val groupId = "group"
-    val group1 = coordinatorMetadata.addGroup(groupId, "consumer")
-    val group2 = coordinatorMetadata.addGroup(groupId, "consumer")
+    val group1 = coordinatorMetadata.addGroup(groupId)
+    val group2 = coordinatorMetadata.addGroup(groupId)
     assertEquals(group1, group2)
   }
 

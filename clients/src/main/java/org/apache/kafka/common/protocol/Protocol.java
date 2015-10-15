@@ -421,24 +421,22 @@ public class Protocol {
     public static final Schema[] CONTROLLED_SHUTDOWN_RESPONSE = new Schema[] {null, CONTROLLED_SHUTDOWN_RESPONSE_V1};
 
     /* Join group api */
+    public static final Schema JOIN_GROUP_REQUEST_PROTOCOL_V0 = new Schema(new Field("protocol_name", STRING),
+                                                                           new Field("protocol_metadata", BYTES));
+
     public static final Schema JOIN_GROUP_REQUEST_V0 = new Schema(new Field("group_id",
                                                                             STRING,
-                                                                            "The consumer group id."),
-                                                                  new Field("group_protocol",
-                                                                            STRING,
-                                                                            "Descriptive name for the protocol which the group implements"),
-                                                                  new Field("sub_protocols",
-                                                                            new ArrayOf(STRING),
-                                                                            "Sub-protocols that the member is compatible with"),
+                                                                            "The group id."),
                                                                   new Field("session_timeout",
                                                                             INT32,
                                                                             "The coordinator considers the consumer dead if it receives no heartbeat after this timeout in ms."),
                                                                   new Field("member_id",
                                                                             STRING,
                                                                             "The assigned consumer id or an empty string for a new consumer."),
-                                                                  new Field("member_metadata",
-                                                                            BYTES,
-                                                                            "Metadata associated with the group member"));
+                                                                  new Field("group_protocols",
+                                                                            new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0),
+                                                                            "List of protocols that the member supports"));
+
 
     public static final Schema JOIN_GROUP_RESPONSE_MEMBER_V0 = new Schema(new Field("member_id", STRING),
                                                                           new Field("member_metadata", BYTES));
@@ -446,9 +444,9 @@ public class Protocol {
                                                                    new Field("generation_id",
                                                                              INT32,
                                                                              "The generation of the consumer group."),
-                                                                   new Field("sub_protocol",
+                                                                   new Field("group_protocol",
                                                                              STRING,
-                                                                             "The subProtocol selected by the coordinator"),
+                                                                             "The group protocol selected by the coordinator"),
                                                                    new Field("leader_id",
                                                                              STRING,
                                                                              "The leader of the group"),
@@ -478,9 +476,9 @@ public class Protocol {
                                                                  new Field("group_generation_id",
                                                                            INT32,
                                                                            "The generation of the consumer group."),
-                                                                 new Field("consumer_id",
+                                                                 new Field("member_id",
                                                                            STRING,
-                                                                           "The consumer id assigned by the group coordinator."));
+                                                                           "The member id assigned by the group coordinator."));
 
     public static final Schema HEARTBEAT_RESPONSE_V0 = new Schema(new Field("error_code", INT16));
 

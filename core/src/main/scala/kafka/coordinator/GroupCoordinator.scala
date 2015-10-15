@@ -33,11 +33,11 @@ case class GroupManagerConfig(groupMinSessionTimeoutMs: Int,
                               groupMaxSessionTimeoutMs: Int)
 
 case class JoinGroupResult(members: Map[String, Array[Byte]],
-                      memberId: String,
-                      generationId: Int,
-                      subProtocol: String,
-                      leaderId: String,
-                      errorCode: Short)
+                           memberId: String,
+                           generationId: Int,
+                           subProtocol: String,
+                           leaderId: String,
+                           errorCode: Short)
 
 /**
  * GroupCoordinator handles general group membership and offset management.
@@ -121,9 +121,7 @@ class GroupCoordinator(val brokerId: Int,
   def handleJoinGroup(groupId: String,
                       memberId: String,
                       sessionTimeoutMs: Int,
-                      protocol: String,
-                      subProtocols: List[String],
-                      memberMetadata: Array[Byte],
+                      protocols: List[(String, Array[Byte])],
                       responseCallback: JoinCallback) {
     if (!isActive.get) {
       responseCallback(joinError(memberId, Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code))
@@ -141,11 +139,11 @@ class GroupCoordinator(val brokerId: Int,
         if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
           responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID.code))
         } else {
-          group = coordinatorMetadata.addGroup(groupId, protocol)
-          doJoinGroup(group, memberId, sessionTimeoutMs, protocol, subProtocols.toSet, memberMetadata, responseCallback)
+          group = coordinatorMetadata.addGroup(groupId)
+          doJoinGroup(group, memberId, sessionTimeoutMs, protocols, responseCallback)
         }
       } else {
-        doJoinGroup(group, memberId, sessionTimeoutMs, protocol, subProtocols.toSet, memberMetadata, responseCallback)
+        doJoinGroup(group, memberId, sessionTimeoutMs, protocols, responseCallback)
       }
     }
   }
@@ -153,12 +151,10 @@ class GroupCoordinator(val brokerId: Int,
   private def doJoinGroup(group: GroupMetadata,
                           memberId: String,
                           sessionTimeoutMs: Int,
-                          protocol: String,
-                          subProtocols: Set[String],
-                          metadata: Array[Byte],
+                          protocols: List[(String, Array[Byte])],
                           responseCallback: JoinCallback) {
     group synchronized {
-      if (group.protocol != protocol || !group.supportsProtocols(subProtocols)) {
+      if (!group.supportsProtocols(protocols.map(_._1).toSet)) {
         // if the new member does not support the group protocol, reject it
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL.code))
       } else if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID && !group.has(memberId)) {
@@ -176,18 +172,18 @@ class GroupCoordinator(val brokerId: Int,
 
           case PreparingRebalance =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(sessionTimeoutMs, metadata, subProtocols, group, responseCallback)
+              addMemberAndRebalance(sessionTimeoutMs, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
-              updateMemberAndRebalance(group, member, metadata, subProtocols, responseCallback)
+              updateMemberAndRebalance(group, member, protocols, responseCallback)
             }
 
           case AwaitingSync =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(sessionTimeoutMs, metadata, subProtocols, group, responseCallback)
+              addMemberAndRebalance(sessionTimeoutMs, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
-              if (member.matches(metadata, subProtocols)) {
+              if (member.matches(protocols)) {
                 // member is joining with the same metadata (which could be because it failed to
                 // receive the initial JoinGroup response), so just return current group information
                 // for the current generation.
@@ -199,26 +195,26 @@ class GroupCoordinator(val brokerId: Int,
                   },
                   memberId = memberId,
                   generationId = group.generationId,
-                  subProtocol = group.subProtocol,
+                  subProtocol = group.protocol,
                   leaderId = group.leaderId,
                   errorCode = Errors.NONE.code))
               } else {
                 // member has changed metadata, so force a rebalance
-                updateMemberAndRebalance(group, member, metadata, subProtocols, responseCallback)
+                updateMemberAndRebalance(group, member, protocols, responseCallback)
               }
             }
 
           case Stable =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               // if the member id is unknown, register the member to the group
-              addMemberAndRebalance(sessionTimeoutMs, metadata, subProtocols, group, responseCallback)
+              addMemberAndRebalance(sessionTimeoutMs, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
-              if (memberId == group.leaderId || !member.matches(metadata, subProtocols)) {
+              if (memberId == group.leaderId || !member.matches(protocols)) {
                 // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
                 // The latter allows the leader to trigger rebalances for changes affecting assignment
                 // which do not affect the member metadata (such as topic metadata changes for the consumer)
-                updateMemberAndRebalance(group, member, metadata, subProtocols, responseCallback)
+                updateMemberAndRebalance(group, member, protocols, responseCallback)
               } else {
                 // for followers with no actual change to their metadata, just return group information
                 // for the current generation which will allow them to issue SyncGroup
@@ -226,7 +222,7 @@ class GroupCoordinator(val brokerId: Int,
                   members = Map.empty,
                   memberId = memberId,
                   generationId = group.generationId,
-                  subProtocol = group.subProtocol,
+                  subProtocol = group.protocol,
                   leaderId = group.leaderId,
                   errorCode = Errors.NONE.code))
               }
@@ -468,12 +464,11 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def addMemberAndRebalance(sessionTimeoutMs: Int,
-                        metadata: Array[Byte],
-                        subProtocols: Set[String],
-                        group: GroupMetadata,
-                        callback: JoinCallback) = {
+                                    protocols: List[(String, Array[Byte])],
+                                    group: GroupMetadata,
+                                    callback: JoinCallback) = {
     val memberId = group.generateNextMemberId
-    val member = new MemberMetadata(memberId, group.groupId, sessionTimeoutMs, metadata, subProtocols)
+    val member = new MemberMetadata(memberId, group.groupId, sessionTimeoutMs, protocols)
     member.awaitingJoinCallback = callback
     group.add(member.memberId, member)
     maybePrepareRebalance(group)
@@ -485,15 +480,11 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,
-                           member: MemberMetadata,
-                           metadata: Array[Byte],
-                           subProtocols: Set[String],
-                           callback: JoinCallback) {
-    group.remove(member.memberId)
-    member.metadata = metadata
-    member.subProtocols = subProtocols
+                                       member: MemberMetadata,
+                                       protocols: List[(String, Array[Byte])],
+                                       callback: JoinCallback) {
+    member.supportedProtocols = protocols
     member.awaitingJoinCallback = callback
-    group.add(member.memberId, member)
     maybePrepareRebalance(group)
   }
 
@@ -569,7 +560,7 @@ class GroupCoordinator(val brokerId: Int,
             members=if (member.memberId == group.leaderId) { group.currentMemberMetadata } else { Map.empty },
             memberId=member.memberId,
             generationId=group.generationId,
-            subProtocol=group.subProtocol,
+            subProtocol=group.protocol,
             leaderId=group.leaderId,
             errorCode=Errors.NONE.code)
 

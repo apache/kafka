@@ -44,22 +44,40 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
  * AbstractCoordinator implements group management for a single group member by interacting with
  * a designated Kafka broker (the coordinator). Group semantics are provided by extending this class.
+ * See {@link ConsumerCoordinator} for example usage.
  *
- * @param <M> Type of member metadata, see {@link GroupProtocol}
- * @param <A> Type of member assignment, see {@link GroupProtocol}
+ * From a high level, Kafka's group management protocol consists of the following sequence of actions:
+ *
+ * <ol>
+ *     <li>Group Registration: Group members register with the coordinator providing their own metadata
+ *         (such as the set of topics they are interested in).</li>
+ *     <li>Group/Leader Selection: The coordinator select the members of the group and chooses one member
+ *         as the leader.</li>
+ *     <li>State Assignment: The leader collects the metadata from all the members of the group and
+ *         assigns state.</li>
+ *     <li>Group Stabilization: Each member receives the state assigned by the leader and begins
+ *         processing.</li>
+ * </ol>
+ *
+ * To leverage this protocol, an implementation must define the format of metadata provided by each
+ * member for group registration in {@link #metadata()} and the format of the state assignment provided
+ * by the leader in {@link #doSync(String, String, Map)} and becomes available to members in
+ * {@link #onJoin(int, String, String, ByteBuffer)}.
+ *
  */
-public abstract class AbstractCoordinator<M, A> {
+public abstract class AbstractCoordinator {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(AbstractCoordinator.class);
 
     private final Heartbeat heartbeat;
     private final HeartbeatTask heartbeatTask;
@@ -70,18 +88,17 @@ public abstract class AbstractCoordinator<M, A> {
     protected final Time time;
     protected final long retryBackoffMs;
     protected final long requestTimeoutMs;
-    private final GroupProtocol<M, A> groupProtocol;
 
     private boolean rejoinNeeded = true;
     protected Node coordinator;
     protected String memberId;
+    protected String protocol;
     protected int generation;
 
     /**
      * Initialize the coordination manager.
      */
-    public AbstractCoordinator(GroupProtocol<M, A> groupProtocol,
-                               ConsumerNetworkClient client,
+    public AbstractCoordinator(ConsumerNetworkClient client,
                                String groupId,
                                int sessionTimeoutMs,
                                int heartbeatIntervalMs,
@@ -91,7 +108,6 @@ public abstract class AbstractCoordinator<M, A> {
                                Time time,
                                long requestTimeoutMs,
                                long retryBackoffMs) {
-        this.groupProtocol = groupProtocol;
         this.client = client;
         this.time = time;
         this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
@@ -107,36 +123,38 @@ public abstract class AbstractCoordinator<M, A> {
     }
 
     /**
-     * Get the current list of protocols (and their associated metadata) supported
-     * by the local member.
-     * @return Non-empty list of supported protocols
+     * Get the current list of protocols and their associated metadata supported
+     * by the local member. The order of the protocols in the map indicates the preference
+     * of the protocol (the first entry is the most preferred). The coordinator takes this
+     * preference into account when selecting the generation protocol (generally more preferred
+     * protocols will be selected as long as all members support them and there is no disagreement
+     * on the preference).
+     * @return Non-empty map of supported protocols and metadata
      */
-    protected abstract M metadata();
+    protected abstract LinkedHashMap<String, ByteBuffer> metadata();
 
     /**
-     * Get the sub-protocols supported by this member. This will be used by the coordinator to verify
-     * compatibility among members
-     * @return A non-empty list of protocol names which this member supports
-     */
-    protected abstract Collection<String> subProtocols();
-
-    /**
-     * Invoked when a new group is joined.
+     * Invoked when a group member has successfully joined a group.
      * @param generation The generation that was joined
-     * @param memberId The identifier for the local member in the group.
-     * @param memberState
+     * @param memberId The identifier for the local member in the group
+     * @param protocol The protocol selected by the coordinator
+     * @param memberAssignment The assignment propagated from the group leader
      */
-    protected abstract void onJoin(int generation, String memberId, A memberState);
+    protected abstract void onJoin(int generation,
+                                   String memberId,
+                                   String protocol,
+                                   ByteBuffer memberAssignment);
 
     /**
      * Perform synchronization for the group. This is used by the leader to push state to all the members
-     * of the group (i.e. to push partition assignments in the case of the new consumer)
+     * of the group (e.g. to push partition assignments in the case of the new consumer)
      * @param leaderId The id of the leader (which is this member)
      * @param allMemberMetadata Metadata from all members of the group
-     * @return A map from each member to their assignment
+     * @return A map from each member to their state assignment
      */
-    protected abstract Map<String, A> doSync(String leaderId, String subProtocol, Map<String, M> allMemberMetadata);
-
+    protected abstract Map<String, ByteBuffer> doSync(String leaderId,
+                                                      String protocol,
+                                                      Map<String, ByteBuffer> allMemberMetadata);
 
     /**
      * Invoked when the group is left (whether because of shutdown, metadata change, stale generation, etc.)
@@ -163,10 +181,9 @@ public abstract class AbstractCoordinator<M, A> {
      * Check whether the group should be rejoined (e.g. if metadata changes)
      * @return true if it should, false otherwise
      */
-    public boolean needRejoin() {
+    protected boolean needRejoin() {
         return rejoinNeeded;
     }
-
 
     /**
      * Reset the generation/memberId tracked by this member
@@ -174,6 +191,7 @@ public abstract class AbstractCoordinator<M, A> {
     public void resetGeneration() {
         this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
         this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+        rejoinNeeded = true;
     }
 
     /**
@@ -196,11 +214,11 @@ public abstract class AbstractCoordinator<M, A> {
                 continue;
             }
 
-            RequestFuture<A> future = sendJoinGroupRequest();
+            RequestFuture<ByteBuffer> future = sendJoinGroupRequest();
             client.poll(future);
 
             if (future.succeeded()) {
-                onJoin(generation, memberId, future.value());
+                onJoin(generation, memberId, protocol, future.value());
                 heartbeatTask.reset();
             } else {
                 if (future.exception() instanceof UnknownMemberIdException)
@@ -224,7 +242,7 @@ public abstract class AbstractCoordinator<M, A> {
 
         @Override
         public void run(final long now) {
-            if (needRejoin() || coordinatorUnknown()) {
+            if (generation < 0 || needRejoin() || coordinatorUnknown()) {
                 // no need to send the heartbeat we're not using auto-assignment or if we are
                 // awaiting a rebalance
                 return;
@@ -267,21 +285,22 @@ public abstract class AbstractCoordinator<M, A> {
      * be polled to see if the request completed successfully.
      * @return A request future whose completion indicates the result of the JoinGroup request.
      */
-    private RequestFuture<A> sendJoinGroupRequest() {
+    private RequestFuture<ByteBuffer> sendJoinGroupRequest() {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
         // send a join group request to the coordinator
-        log.debug("(Re-)joining {} group {}", groupProtocol.name(), groupId);
+        log.debug("(Re-)joining group {}", groupId);
 
-        ByteBuffer metadata = serializeMetadata(metadata());
+        List<JoinGroupRequest.GroupProtocol> protocols = new ArrayList<>();
+        for (Map.Entry<String, ByteBuffer> metadataEntry : metadata().entrySet())
+            protocols.add(new JoinGroupRequest.GroupProtocol(metadataEntry.getKey(), metadataEntry.getValue()));
+
         JoinGroupRequest request = new JoinGroupRequest(
-                groupProtocol.name(),
                 groupId,
-                subProtocols(),
                 this.sessionTimeoutMs,
                 this.memberId,
-                metadata);
+                protocols);
 
         // create the request for the coordinator
         log.debug("Issuing request ({}: {}) to coordinator {}", ApiKeys.JOIN_GROUP, request, this.coordinator.id());
@@ -290,7 +309,7 @@ public abstract class AbstractCoordinator<M, A> {
     }
 
 
-    private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, A> {
+    private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, ByteBuffer> {
 
         @Override
         public JoinGroupResponse parse(ClientResponse response) {
@@ -298,7 +317,7 @@ public abstract class AbstractCoordinator<M, A> {
         }
 
         @Override
-        public void handle(JoinGroupResponse joinResponse, RequestFuture<A> future) {
+        public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
             // process the response
             short errorCode = joinResponse.errorCode();
             if (errorCode == Errors.NONE.code()) {
@@ -306,6 +325,7 @@ public abstract class AbstractCoordinator<M, A> {
                 AbstractCoordinator.this.memberId = joinResponse.memberId();
                 AbstractCoordinator.this.generation = joinResponse.generationId();
                 AbstractCoordinator.this.rejoinNeeded = false;
+                AbstractCoordinator.this.protocol = joinResponse.groupProtocol();
                 sensors.joinLatency.record(response.requestLatencyMs());
                 performSync(joinResponse).chain(future);
             } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
@@ -336,15 +356,14 @@ public abstract class AbstractCoordinator<M, A> {
         }
     }
 
-    private RequestFuture<A> performSync(JoinGroupResponse joinResponse) {
+    private RequestFuture<ByteBuffer> performSync(JoinGroupResponse joinResponse) {
         if (joinResponse.isLeader()) {
             try {
                 // perform the leader synchronization and send back the assignment for the group
-                Map<String, M> metadata = deserializeMetadata(joinResponse.members());
-                Map<String, A> groupAssignment = doSync(joinResponse.leaderId(), joinResponse.subProtocol(), metadata);
+                Map<String, ByteBuffer> groupAssignment = doSync(joinResponse.leaderId(), joinResponse.groupProtocol(),
+                        joinResponse.members());
 
-                SyncGroupRequest request = new SyncGroupRequest(groupId, generation,
-                        memberId, serializeAssignment(groupAssignment));
+                SyncGroupRequest request = new SyncGroupRequest(groupId, generation, memberId, groupAssignment);
                 log.debug("Issuing leader SyncGroup ({}: {}) to coordinator {}", ApiKeys.SYNC_GROUP, request, this.coordinator.id());
                 return sendSyncGroupRequest(request);
             } catch (RuntimeException e) {
@@ -359,14 +378,14 @@ public abstract class AbstractCoordinator<M, A> {
         }
     }
 
-    private RequestFuture<A> sendSyncGroupRequest(SyncGroupRequest request) {
+    private RequestFuture<ByteBuffer> sendSyncGroupRequest(SyncGroupRequest request) {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
         return client.send(coordinator, ApiKeys.SYNC_GROUP, request)
                 .compose(new SyncGroupRequestHandler());
     }
 
-    private class SyncGroupRequestHandler extends CoordinatorResponseHandler<SyncGroupResponse, A> {
+    private class SyncGroupRequestHandler extends CoordinatorResponseHandler<SyncGroupResponse, ByteBuffer> {
 
         @Override
         public SyncGroupResponse parse(ClientResponse response) {
@@ -375,12 +394,11 @@ public abstract class AbstractCoordinator<M, A> {
 
         @Override
         public void handle(SyncGroupResponse syncResponse,
-                           RequestFuture<A> future) {
+                           RequestFuture<ByteBuffer> future) {
             short errorCode = syncResponse.errorCode();
             if (errorCode == Errors.NONE.code()) {
                 try {
-                    Object assignment = groupProtocol.assignmentSchema().read(syncResponse.memberAssignment());
-                    future.complete(groupProtocol.assignmentSchema().validate(assignment));
+                    future.complete(syncResponse.memberAssignment());
                     sensors.syncLatency.record(response.requestLatencyMs());
                 } catch (SchemaException e) {
                     future.raise(e);
@@ -438,7 +456,10 @@ public abstract class AbstractCoordinator<M, A> {
                 this.coordinator = new Node(Integer.MAX_VALUE - groupMetadataResponse.node().id(),
                         groupMetadataResponse.node().host(),
                         groupMetadataResponse.node().port());
-                heartbeatTask.reset();
+
+                // start sending heartbeats only if we have a valid generation
+                if (generation > 0)
+                    heartbeatTask.reset();
                 future.complete(null);
             } else {
                 future.raise(Errors.forCode(groupMetadataResponse.errorCode()));
@@ -551,36 +572,6 @@ public abstract class AbstractCoordinator<M, A> {
         }
     }
 
-
-    private ByteBuffer serializeMetadata(M metadata) {
-        ByteBuffer metadataBuffer = ByteBuffer.allocate(groupProtocol.metadataSchema().sizeOf(metadata));
-        groupProtocol.metadataSchema().write(metadataBuffer, metadata);
-        metadataBuffer.flip();
-        return metadataBuffer;
-    }
-
-    private Map<String, M> deserializeMetadata(Map<String, ByteBuffer> metadata) {
-        GroupProtocol.GenericType<M> schema = groupProtocol.metadataSchema();
-        Map<String, M> res = new HashMap<>();
-        for (Map.Entry<String, ByteBuffer> metadataEntry : metadata.entrySet()) {
-            Object obj = schema.read(metadataEntry.getValue());
-            res.put(metadataEntry.getKey(), schema.validate(obj));
-        }
-        return res;
-    }
-
-    private Map<String, ByteBuffer> serializeAssignment(Map<String, A> state) {
-        GroupProtocol.GenericType<A> schema = groupProtocol.assignmentSchema();
-        Map<String, ByteBuffer> res = new HashMap<>();
-        for (Map.Entry<String, A> stateEntry : state.entrySet()) {
-            ByteBuffer buf = ByteBuffer.allocate(schema.sizeOf(stateEntry.getValue()));
-            schema.write(buf, stateEntry.getValue());
-            buf.flip();
-            res.put(stateEntry.getKey(), buf);
-        }
-        return res;
-    }
-
     private class GroupCoordinatorMetrics {
         public final Metrics metrics;
         public final String metricGrpName;
@@ -596,7 +587,7 @@ public abstract class AbstractCoordinator<M, A> {
             this.heartbeatLatency = metrics.sensor("heartbeat-latency");
             this.heartbeatLatency.add(new MetricName("heartbeat-response-time-max",
                 this.metricGrpName,
-                "The max time taken to receive a response to a hearbeat request",
+                "The max time taken to receive a response to a heartbeat request",
                 tags), new Max());
             this.heartbeatLatency.add(new MetricName("heartbeat-rate",
                 this.metricGrpName,

@@ -709,20 +709,20 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responseBody = new JoinGroupResponse(
         ErrorMapping.AuthorizationCode,
         JoinGroupResponse.UNKNOWN_GENERATION_ID,
-        JoinGroupResponse.UNKNOWN_SUB_PROTOCOL,
-        JoinGroupResponse.UNKNOWN_MEMBER_ID,
-        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        JoinGroupResponse.UNKNOWN_PROTOCOL,
+        JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
+        JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
         Map.empty[String, ByteBuffer])
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
       // let the coordinator to handle join-group
+      val protocols = joinGroupRequest.groupProtocols().map(protocol =>
+        (protocol.name, Utils.toArray(protocol.metadata))).toList
       coordinator.handleJoinGroup(
         joinGroupRequest.groupId(),
         joinGroupRequest.memberId(),
         joinGroupRequest.sessionTimeout(),
-        joinGroupRequest.groupProtocol(),
-        joinGroupRequest.subProtocols().toList,
-        Utils.toArray(joinGroupRequest.memberMetadata()),
+        protocols,
         sendResponseCallback)
     }
   }
@@ -771,7 +771,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // let the coordinator to handle heartbeat
       coordinator.handleHeartbeat(
         heartbeatRequest.groupId(),
-        heartbeatRequest.consumerId(),
+        heartbeatRequest.memberId(),
         heartbeatRequest.groupGenerationId(),
         sendResponseCallback)
     }

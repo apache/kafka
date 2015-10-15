@@ -29,7 +29,7 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Before
   def setUp() {
-    group = new GroupMetadata("range", "test")
+    group = new GroupMetadata("range")
   }
 
   @Test
