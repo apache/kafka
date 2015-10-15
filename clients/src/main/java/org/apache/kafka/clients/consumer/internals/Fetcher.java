@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -477,17 +478,28 @@ public class Fetcher<K, V> {
 
                     int bytes = 0;
                     ByteBuffer buffer = partition.recordSet;
+
+                    System.out.println("partition " + tp +" received " + buffer);
+
                     MemoryRecords records = MemoryRecords.readableRecords(buffer);
                     List<ConsumerRecord<K, V>> parsed = new ArrayList<ConsumerRecord<K, V>>();
                     for (LogEntry logEntry : records) {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
                     }
+
+                    System.out.println("partition " + tp +" parsed " + parsed.size() + " with " + buffer.capacity() + " bytes, fetch size " + this.fetchSize);
+
                     if (!parsed.isEmpty()) {
                         ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                         this.subscriptions.fetched(tp, record.offset() + 1);
                         this.records.add(new PartitionRecords<K, V>(fetchOffset, tp, parsed));
                         this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
+                    } else if (buffer.capacity() >= this.fetchSize) {
+                        // we did not read a single message from a max fetchable buffer
+                        // because that message's size is larger than fetch size, in this case
+                        // we should log an error and close gracefully
+                        throw new KafkaException("There is a single message whose size is larger than fetch size " + this.fetchSize + " and hence cannot be ever returned.");
                     }
                     this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
                     totalBytes += bytes;
