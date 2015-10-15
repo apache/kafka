@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -66,7 +67,7 @@ public class AbstractConfigTest {
         try {
             config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
             fail("Expected a config exception due to invalid props :" + props);
-        } catch (ConfigException e) {
+        } catch (KafkaException e) {
             // this is good
         }
     }

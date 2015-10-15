@@ -296,7 +296,7 @@ public class Utils {
      * @return the new instance
      */
     public static <T> T newInstance(String klass, Class<T> base) throws ClassNotFoundException {
-        return Utils.newInstance(Class.forName(klass).asSubclass(base));
+        return Utils.newInstance(Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base));
     }
 
     /**
@@ -578,4 +578,26 @@ public class Utils {
     public static <T> List<T> safe(List<T> other) {
         return other == null ? Collections.<T>emptyList() : other;
     }
+
+   /**
+    * Get the ClassLoader which loaded Kafka.
+    */
+    public static ClassLoader getKafkaClassLoader() {
+        return Utils.class.getClassLoader();
+    }
+
+    /**
+     * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
+     * loaded Kafka.
+     *
+     * This should be used whenever passing a ClassLoader to Class.forName
+     */
+    public static ClassLoader getContextOrKafkaClassLoader() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null)
+            return getKafkaClassLoader();
+        else
+            return cl;
+    }
+
 }
