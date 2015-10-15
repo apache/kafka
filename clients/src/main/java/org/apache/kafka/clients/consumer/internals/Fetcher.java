@@ -81,7 +81,7 @@ public class Fetcher<K, V> {
     private final Deserializer<V> valueDeserializer;
 
     private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
-    private final Set<TopicPartition> unauthorizedTopicPartition;
+    private final Set<TopicPartition> unauthorizedTopicPartitions;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -112,7 +112,7 @@ public class Fetcher<K, V> {
 
         this.records = new LinkedList<PartitionRecords<K, V>>();
         this.offsetOutOfRangePartitions = new HashMap<>();
-        this.unauthorizedTopicPartition = new HashSet<>();
+        this.unauthorizedTopicPartitions = new HashSet<>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
         this.retryBackoffMs = retryBackoffMs;
@@ -295,11 +295,11 @@ public class Fetcher<K, V> {
      * @throws ApiException
      */
     private void throwIfUnauthorized() throws ApiException {
-        if (!unauthorizedTopicPartition.isEmpty()) {
+        if (!unauthorizedTopicPartitions.isEmpty()) {
             StringBuilder sb = new StringBuilder();
-            for (TopicPartition topicPartition: unauthorizedTopicPartition)
+            for (TopicPartition topicPartition : unauthorizedTopicPartitions)
                 sb.append(topicPartition + ",");
-            unauthorizedTopicPartition.clear();
+            unauthorizedTopicPartitions.clear();
             throw new ApiException(String.format("Not authorized to read from %s", sb.substring(0, sb.length() - 1).toString()));
         }
     }
@@ -509,8 +509,8 @@ public class Fetcher<K, V> {
                         this.offsetOutOfRangePartitions.put(tp, fetchOffset);
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
                 } else if (partition.errorCode == Errors.AUTHORIZATION_FAILED.code()) {
-                    log.info("not authorized to read from topic {}.", tp.topic());
-                    unauthorizedTopicPartition.add(tp);
+                    log.warn("Not authorized to read from topic {}.", tp.topic());
+                    unauthorizedTopicPartitions.add(tp);
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else {

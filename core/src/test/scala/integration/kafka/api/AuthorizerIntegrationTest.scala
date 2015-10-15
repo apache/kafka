@@ -324,7 +324,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       this.producers.head.send(new ProducerRecord(tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes))
     }
     try {
-      futures.map(_.get)
+      futures.foreach(_.get)
     } catch {
       case e: ExecutionException => throw e.getCause
     }
