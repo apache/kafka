@@ -16,18 +16,17 @@
  */
 package org.apache.kafka.common.security.ssl;
 
-import java.util.Map;
-import java.util.List;
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SSLConfigs;
+
+import javax.net.ssl.*;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-
-import javax.net.ssl.*;
-
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.SSLConfigs;
+import java.util.List;
+import java.util.Map;
 
 
 public class SSLFactory implements Configurable {
@@ -60,12 +59,13 @@ public class SSLFactory implements Configurable {
 
         if (configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG) != null) {
             List<String> cipherSuitesList = (List<String>) configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG);
-            this.cipherSuites = (String[]) cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
+            if (!cipherSuitesList.isEmpty())
+                this.cipherSuites = cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
         }
 
         if (configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null) {
             List<String> enabledProtocolsList = (List<String>) configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
-            this.enabledProtocols =  (String[]) enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
+            this.enabledProtocols = enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
         }
 
         if (configs.containsKey(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)) {

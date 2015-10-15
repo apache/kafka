@@ -104,9 +104,10 @@ class CopycatStandaloneService(CopycatServiceBase):
 class CopycatDistributedService(CopycatServiceBase):
     """Runs Copycat in distributed mode."""
 
-    def __init__(self, context, num_nodes, kafka, files, offsets_topic="copycat-offsets"):
+    def __init__(self, context, num_nodes, kafka, files, offsets_topic="copycat-offsets", configs_topic="copycat-configs"):
         super(CopycatDistributedService, self).__init__(context, num_nodes, kafka, files)
         self.offsets_topic = offsets_topic
+        self.configs_topic = configs_topic
 
     def set_configs(self, config_template, connector_config_template):
         """

@@ -27,6 +27,7 @@ import java.nio.channels.ClosedByInterruptException
 import org.apache.log4j.Logger
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.utils.Utils
 import kafka.utils.CommandLineUtils
 import java.util.{ Random, Properties }
 import kafka.consumer.Consumer
@@ -203,6 +204,10 @@ object ConsumerPerformance {
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
     val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation.")
+    val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
+      .withRequiredArg
+      .describedAs("config file")
+      .ofType(classOf[String])
 
     val options = parser.parse(args: _*)
 
@@ -210,7 +215,10 @@ object ConsumerPerformance {
    
     val useNewConsumer = options.has(useNewConsumerOpt)
     
-    val props = new Properties
+    val props = if (options.has(consumerConfigOpt))
+      Utils.loadProps(options.valueOf(consumerConfigOpt))
+    else
+      new Properties
     if(useNewConsumer) {
       import org.apache.kafka.clients.consumer.ConsumerConfig
       props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))

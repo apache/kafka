@@ -245,11 +245,11 @@ public class StreamTask implements Punctuator {
      * Commit the current task state
      */
     public void commit() {
-        // 1) flush produced records in the downstream and change logs of local states
-        recordCollector.flush();
-
-        // 2) flush local state
+        // 1) flush local state
         stateMgr.flush();
+
+        // 2) flush produced records in the downstream and change logs of local states
+        recordCollector.flush();
 
         // 3) commit consumed offsets if it is dirty already
         if (commitOffsetNeeded) {

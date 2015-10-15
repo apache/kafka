@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -128,6 +129,13 @@ public class VerifiableProducer {
                 .metavar("ACKS")
                 .help("Acks required on each produced message. See Kafka docs on request.required.acks for details.");
 
+        parser.addArgument("--producer.config")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CONFIG_FILE")
+                .help("Producer config properties file.");
+
         return parser;
     }
   
@@ -143,6 +151,7 @@ public class VerifiableProducer {
             int maxMessages = res.getInt("maxMessages");
             String topic = res.getString("topic");
             int throughput = res.getInt("throughput");
+            String configFile = res.getString("producer.config");
 
             Properties producerProps = new Properties();
             producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
@@ -153,6 +162,13 @@ public class VerifiableProducer {
             producerProps.put(ProducerConfig.ACKS_CONFIG, Integer.toString(res.getInt("acks")));
             // No producer retries
             producerProps.put("retries", "0");
+            if (configFile != null) {
+                try {
+                    producerProps.putAll(Utils.loadProps(configFile));
+                } catch (IOException e) {
+                    throw new ArgumentParserException(e.getMessage(), parser);
+                }
+            }
 
             producer = new VerifiableProducer(producerProps, topic, throughput, maxMessages);
         } catch (ArgumentParserException e) {

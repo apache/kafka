@@ -32,7 +32,7 @@ trait BaseConsumer {
 
 case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: Array[Byte], value: Array[Byte])
 
-class NewShinyConsumer(topic: String, consumerProps: Properties) extends BaseConsumer {
+class NewShinyConsumer(topic: String, consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
   import scala.collection.JavaConversions._
 
@@ -41,8 +41,11 @@ class NewShinyConsumer(topic: String, consumerProps: Properties) extends BaseCon
   var recordIter = consumer.poll(0).iterator
 
   override def receive(): BaseConsumerRecord = {
-    while (!recordIter.hasNext)
-      recordIter = consumer.poll(Long.MaxValue).iterator
+    if (!recordIter.hasNext) {
+      recordIter = consumer.poll(timeoutMs).iterator
+      if (!recordIter.hasNext)
+        throw new ConsumerTimeoutException
+    }
 
     val record = recordIter.next
     BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)

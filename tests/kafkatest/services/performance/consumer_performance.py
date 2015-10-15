@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from kafkatest.services.performance import PerformanceService
+from kafkatest.utils.security_config import SecurityConfig
 
 import os
 
@@ -43,6 +44,7 @@ class ConsumerPerformanceService(PerformanceService):
         "num-fetch-threads", "Number of fetcher threads. Defaults to 1"
 
         "new-consumer", "Use the new consumer implementation."
+        "consumer.config", "Consumer config properties file."
     """
 
     # Root directory for persistent output
@@ -51,6 +53,7 @@ class ConsumerPerformanceService(PerformanceService):
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "consumer_performance.stdout")
     LOG_FILE = os.path.join(LOG_DIR, "consumer_performance.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "consumer.properties")
 
     logs = {
         "consumer_performance_output": {
@@ -62,9 +65,11 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, new_consumer=False, settings={}):
+    def __init__(self, context, num_nodes, kafka, security_protocol, topic, messages, new_consumer=False, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
+        self.security_config = SecurityConfig(security_protocol)
+        self.security_protocol = security_protocol
         self.topic = topic
         self.messages = messages
         self.new_consumer = new_consumer
@@ -119,6 +124,7 @@ class ConsumerPerformanceService(PerformanceService):
         cmd += " /opt/kafka/bin/kafka-consumer-perf-test.sh"
         for key, value in self.args.items():
             cmd += " --%s %s" % (key, value)
+        cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
@@ -131,6 +137,8 @@ class ConsumerPerformanceService(PerformanceService):
 
         log_config = self.render('tools_log4j.properties', log_file=ConsumerPerformanceService.LOG_FILE)
         node.account.create_file(ConsumerPerformanceService.LOG4J_CONFIG, log_config)
+        node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, str(self.security_config))
+        self.security_config.setup_node(node)
 
         cmd = self.start_cmd
         self.logger.debug("Consumer performance %d command: %s", idx, cmd)

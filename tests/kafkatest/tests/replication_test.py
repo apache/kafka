@@ -15,6 +15,8 @@
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
+from ducktape.mark import parametrize
+from ducktape.mark import matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -36,24 +38,18 @@ class ReplicationTest(Test):
 
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
-                                                                    "partitions": 3,
-                                                                    "replication-factor": 3,
-                                                                    "min.insync.replicas": 2}
-                                                                })
         self.producer_throughput = 10000
         self.num_producers = 1
         self.num_consumers = 1
 
     def setUp(self):
         self.zk.start()
-        self.kafka.start()
 
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
         return super(ReplicationTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    def run_with_failure(self, failure):
+    def run_with_failure(self, failure, interbroker_security_protocol):
         """This is the top-level test template.
 
         The steps are:
@@ -75,8 +71,18 @@ class ReplicationTest(Test):
         indicator that nothing is left to consume.
 
         """
-        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=3000, message_validator=is_int)
+        security_protocol='PLAINTEXT'
+        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, 
+                                  security_protocol=security_protocol,
+                                  interbroker_security_protocol=interbroker_security_protocol,
+                                  topics={self.topic: {
+                                               "partitions": 3,
+                                               "replication-factor": 3,
+                                               "min.insync.replicas": 2}
+                                         })
+        self.kafka.start()
+        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, security_protocol=security_protocol, throughput=self.producer_throughput)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, security_protocol=security_protocol, new_consumer=False, consumer_timeout_ms=3000, message_validator=is_int)
 
         # Produce in a background thread while driving broker failures
         self.producer.start()
@@ -149,14 +155,19 @@ class ReplicationTest(Test):
 
         return success, msg
 
-    def test_clean_shutdown(self):
-        self.run_with_failure(self.clean_shutdown)
+    
+    @matrix(interbroker_security_protocol=['PLAINTEXT', 'SSL'])
+    def test_clean_shutdown(self, interbroker_security_protocol):
+        self.run_with_failure(self.clean_shutdown, interbroker_security_protocol)
 
-    def test_hard_shutdown(self):
-        self.run_with_failure(self.hard_shutdown)
+    @matrix(interbroker_security_protocol=['PLAINTEXT', 'SSL'])
+    def test_hard_shutdown(self, interbroker_security_protocol):
+        self.run_with_failure(self.hard_shutdown, interbroker_security_protocol)
 
-    def test_clean_bounce(self):
-        self.run_with_failure(self.clean_bounce)
+    @matrix(interbroker_security_protocol=['PLAINTEXT', 'SSL'])
+    def test_clean_bounce(self, interbroker_security_protocol):
+        self.run_with_failure(self.clean_bounce, interbroker_security_protocol)
 
-    def test_hard_bounce(self):
-        self.run_with_failure(self.hard_bounce)
+    @matrix(interbroker_security_protocol=['PLAINTEXT', 'SSL'])
+    def test_hard_bounce(self, interbroker_security_protocol):
+        self.run_with_failure(self.hard_bounce, interbroker_security_protocol)
