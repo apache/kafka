@@ -31,6 +31,17 @@ import java.util.Map;
 
 public class RecordCollector {
 
+    /**
+     * A supplier of a {@link RecordCollector} instance.
+     */
+    public static interface Supplier {
+        /**
+         * Get the record collector.
+         * @return the record collector
+         */
+        public RecordCollector recordCollector();
+    }
+
     private static final Logger log = LoggerFactory.getLogger(RecordCollector.class);
 
     private final Producer<byte[], byte[]> producer;

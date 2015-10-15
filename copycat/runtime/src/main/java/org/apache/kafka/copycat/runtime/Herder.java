@@ -19,7 +19,7 @@ package org.apache.kafka.copycat.runtime;
 
 import org.apache.kafka.copycat.util.Callback;
 
-import java.util.Properties;
+import java.util.Map;
 
 /**
  * <p>
@@ -53,15 +53,24 @@ public interface Herder {
      * the leader herder if necessary.
      *
      * @param connectorProps user-specified properties for this job
-     * @param callback callback to invoke when the request completes
+     * @param callback       callback to invoke when the request completes
      */
-    void addConnector(Properties connectorProps, Callback<String> callback);
+    void addConnector(Map<String, String> connectorProps, Callback<String> callback);
 
     /**
      * Delete a connector job by name.
      *
-     * @param name name of the connector job to shutdown and delete
+     * @param name     name of the connector job to shutdown and delete
      * @param callback callback to invoke when the request completes
      */
     void deleteConnector(String name, Callback<Void> callback);
+
+    /**
+     * Requests reconfiguration of the task. This should only be triggered by
+     * {@link HerderConnectorContext}.
+     *
+     * @param connName name of the connector that should be reconfigured
+     */
+    void requestTaskReconfiguration(String connName);
+
 }

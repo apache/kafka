@@ -3,12 +3,13 @@ package kafka.admin
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{ToolsUtils, Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
+import org.apache.kafka.common.security.JaasUtils
 
 object ZkSecurityMigrator extends Logging {
 
   def main(args: Array[String]) {
     // Make sure that the JAAS file has been appropriately set
-    if(!ToolsUtils.isSecure(System.getProperty("java.security.auth.login.config"))) {
+    if(!JaasUtils.isSecure(System.getProperty("java.security.auth.login.config"))) {
       warn("No JAAS configuration file has been found. Please make sure that "
             + "you have set the system property %s correctly and that the file"
             + " is valid".format("java.security.auth.login.config"))

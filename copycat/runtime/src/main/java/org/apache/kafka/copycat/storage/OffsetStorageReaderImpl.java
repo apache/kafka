@@ -92,7 +92,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
                     continue;
                 }
                 Map<String, T> origKey = serializedToOriginal.get(rawEntry.getKey());
-                SchemaAndValue deserializedSchemaAndValue = valueConverter.toCopycatData(namespace, rawEntry.getValue().array());
+                SchemaAndValue deserializedSchemaAndValue = valueConverter.toCopycatData(namespace, rawEntry.getValue() != null ? rawEntry.getValue().array() : null);
                 Object deserializedValue = deserializedSchemaAndValue.value();
                 OffsetUtils.validateFormat(deserializedValue);
 
