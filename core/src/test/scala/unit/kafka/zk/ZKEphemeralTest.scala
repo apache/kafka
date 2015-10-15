@@ -34,7 +34,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
   @Test
   def testEphemeralNodeCleanup = {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
-    var zkUtils = ZkUtils.create(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
+    var zkUtils = ZkUtils.apply(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
 
     try {
       zkUtils.createEphemeralPathExpectConflict("/tmp/zktest", "node created")
@@ -46,7 +46,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     testData = zkUtils.readData("/tmp/zktest")._1
     Assert.assertNotNull(testData)
     zkUtils.close
-    zkUtils = ZkUtils.create(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
+    zkUtils = ZkUtils.apply(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
     val nodeExists = zkUtils.pathExists("/tmp/zktest")
     Assert.assertFalse(nodeExists)
   }

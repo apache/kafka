@@ -255,19 +255,19 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
     if (chroot.length > 1) {
       val zkConnForChrootCreation = config.zkConnect.substring(0, config.zkConnect.indexOf("/"))
-      val zkClientForChrootCreation = ZkUtils.create(zkConnForChrootCreation, 
+      val zkClientForChrootCreation = ZkUtils.apply(zkConnForChrootCreation, 
                                                      config.zkSessionTimeoutMs,
                                                      config.zkConnectionTimeoutMs,
-                                                     JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                                                     JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
       zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
       info("Created zookeeper path " + chroot)
       zkClientForChrootCreation.zkClient.close()
     }
 
-    val zkUtils = ZkUtils.create(config.zkConnect,
+    val zkUtils = ZkUtils.apply(config.zkConnect,
                                  config.zkSessionTimeoutMs,
                                  config.zkConnectionTimeoutMs,
-                                 JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                                 JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     zkUtils.setupCommonPaths()
     zkUtils
   }

@@ -34,12 +34,11 @@ public class JaasUtils {
     public static final String ZK_SASL_CLIENT = "zookeeper.sasl.client";
     public static final String ZK_LOGIN_CONTEXT_NAME_KEY = "zookeeper.sasl.clientconfig";
 
-    public static boolean isSecure(String loginConfigFile) {
+    public static boolean isZkSecurityEnabled(String loginConfigFile) {
         boolean isSecurityEnabled = false;
         boolean zkSaslEnabled = Boolean.getBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));
         String zkLoginContextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY, "Client");
-        
-        
+
         if (loginConfigFile != null && loginConfigFile.length() > 0) {
             File configFile = new File(loginConfigFile);
             if (!configFile.canRead()) {

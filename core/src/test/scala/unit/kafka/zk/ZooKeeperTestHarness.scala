@@ -34,7 +34,7 @@ trait ZooKeeperTestHarness extends JUnitSuite {
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
     zkPort = zookeeper.port
-    zkUtils = ZkUtils.create(zkConnect, zkSessionTimeout, zkConnectionTimeout, false)
+    zkUtils = ZkUtils.apply(zkConnect, zkSessionTimeout, zkConnectionTimeout, false)
   }
 
   @After

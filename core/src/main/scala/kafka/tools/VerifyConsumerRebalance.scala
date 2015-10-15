@@ -50,10 +50,10 @@ object VerifyConsumerRebalance extends Logging {
 
     var zkUtils: ZkUtils = null
     try {
-      zkUtils = ZkUtils.create(zkConnect,
+      zkUtils = ZkUtils.apply(zkConnect,
                                30000,
                                30000, 
-                               JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                               JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
       debug("zkConnect = %s; group = %s".format(zkConnect, group))
 
