@@ -1,5 +1,6 @@
 package kafka.admin
 
+import javax.security.auth.login.LoginException
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{ToolsUtils, Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
@@ -8,28 +9,33 @@ import org.apache.kafka.common.security.JaasUtils
 object ZkSecurityMigrator extends Logging {
 
   def main(args: Array[String]) {
-    // Make sure that the JAAS file has been appropriately set
-    if(!JaasUtils.isSecure(System.getProperty("java.security.auth.login.config"))) {
-      warn("No JAAS configuration file has been found. Please make sure that "
-            + "you have set the system property %s correctly and that the file"
-            + " is valid".format("java.security.auth.login.config"))
-      System.exit(0);
-    }
-
     val parser = new OptionParser()
 
-    val zkUrlOpt = parser.accepts("zookeeper.connect", "ZooKeeper connect string.").
+    val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").
+      withRequiredArg().ofType(classOf[String])
+    val zkUrlOpt = parser.accepts("connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
+                                  "takes a comma-separated list of host:port pairs.").
       withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
-    val zkSessionTimeoutOpt = parser.accepts("zookeeper.session.timeout", "ZooKeeper session timeout.").
-      withRequiredArg().defaultsTo("30000").ofType(classOf[Int])
-    val zkConnectionTimeoutOpt = parser.accepts("zookeeper.connection.timeout", "ZooKeeper session timeout.").
-      withRequiredArg().defaultsTo("30000").ofType(classOf[Int])
-    parser.accepts("help", "Print this message.")
-
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Validate that all partitions have a consumer for a given consumer group.")
+    val zkSessionTimeoutOpt = parser.accepts("session.timeout", "Sets the ZooKeeper session timeout.").
+      withRequiredArg().defaultsTo("30000").ofType(classOf[Integer])
+    val zkConnectionTimeoutOpt = parser.accepts("connection.timeout", "Sets the ZooKeeper connection timeout.").
+      withRequiredArg().defaultsTo("30000").ofType(classOf[Integer])
+    val helpOpt = parser.accepts("help", "Print usage information.")
 
     val options = parser.parse(args : _*)
+    if(options.has(helpOpt))
+      CommandLineUtils.printUsageAndDie(parser, "ZooKeeper Migration Tool Help")
+
+    if(!options.has(jaasFileOpt) ||
+      !JaasUtils.isSecure(System.getProperty(options.valueOf(jaasFileOpt)))) {
+      error("No JAAS configuration file has been found. Please make sure that "
+            + "you have set the option --jaas.file correctly and that the file"
+            + " is valid")
+      System.exit(1) 
+    }
+
+    val jaasFile = options.valueOf(jaasFileOpt)
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
     val zkUrl = options.valueOf(zkUrlOpt)
     val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt)
     val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt)
