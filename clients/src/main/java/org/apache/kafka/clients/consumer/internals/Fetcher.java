@@ -302,13 +302,23 @@ public class Fetcher<K, V> {
             throwIfOffsetOutOfRange();
 
             for (PartitionRecords<K, V> part : this.records) {
-                if (!subscriptions.isFetchable(part.partition)) {
-                    log.debug("Ignoring fetched records for {} since it is no longer fetchable", part.partition);
+                if (!subscriptions.isAssigned(part.partition)) {
+                    // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
+                    log.debug("Not returning fetched records for partition {} since it is no longer assigned", part.partition);
                     continue;
                 }
 
-                Long consumed = subscriptions.consumed(part.partition);
-                if (consumed != null && part.fetchOffset == consumed) {
+                // note that the consumed position should always be available
+                // as long as the partition is still assigned
+                long consumed = subscriptions.consumed(part.partition);
+                if (!subscriptions.isFetchable(part.partition)) {
+                    // this can happen when a partition consumption paused before fetched records are returned to the consumer's poll call
+                    log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", part.partition);
+
+                    // we also need to reset the fetch positions to pretend we did not fetch
+                    // this partition in the previous request at all
+                    subscriptions.fetched(part.partition, consumed);
+                } else if (part.fetchOffset == consumed) {
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
                     if (records == null) {
                         records = part.records;
@@ -445,8 +455,10 @@ public class Fetcher<K, V> {
             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 FetchResponse.PartitionData partition = entry.getValue();
-                if (!subscriptions.assignedPartitions().contains(tp)) {
-                    log.debug("Ignoring fetched data for partition {} which is no longer assigned.", tp);
+                if (!subscriptions.isFetchable(tp)) {
+                    // this can happen when a rebalance happened or a partition consumption paused
+                    // while fetch is still in-flight
+                    log.debug("Ignoring fetched records for partition {} since it is no longer fetchable", tp);
                 } else if (partition.errorCode == Errors.NONE.code()) {
                     long fetchOffset = request.fetchData().get(tp).offset;
 

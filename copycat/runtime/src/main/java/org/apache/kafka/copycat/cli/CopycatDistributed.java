@@ -20,9 +20,8 @@ package org.apache.kafka.copycat.cli;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.runtime.Copycat;
-import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.Worker;
-import org.apache.kafka.copycat.runtime.standalone.StandaloneHerder;
+import org.apache.kafka.copycat.runtime.distributed.DistributedHerder;
 import org.apache.kafka.copycat.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.copycat.util.Callback;
 import org.apache.kafka.copycat.util.FutureCallback;
@@ -59,7 +58,8 @@ public class CopycatDistributed {
 
         WorkerConfig workerConfig = new WorkerConfig(workerProps);
         Worker worker = new Worker(workerConfig, new KafkaOffsetBackingStore());
-        Herder herder = new StandaloneHerder(worker);
+        DistributedHerder herder = new DistributedHerder(worker);
+        herder.configure(workerConfig.originals());
         final Copycat copycat = new Copycat(worker, herder);
         copycat.start();
 
@@ -73,7 +73,7 @@ public class CopycatDistributed {
                             log.error("Failed to create job for {}", connectorPropsFile);
                     }
                 });
-                herder.addConnector(connectorProps, cb);
+                herder.addConnector(Utils.propsToStringMap(connectorProps), cb);
                 cb.get();
             }
         } catch (Throwable t) {

@@ -75,7 +75,7 @@ public class CopycatStandalone {
                             log.error("Failed to create job for {}", connectorPropsFile);
                     }
                 });
-                herder.addConnector(connectorProps, cb);
+                herder.addConnector(Utils.propsToStringMap(connectorProps), cb);
                 cb.get();
             }
         } catch (Throwable t) {

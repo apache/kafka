@@ -15,6 +15,8 @@
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
+from ducktape.mark import parametrize
+from ducktape.mark import matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -30,16 +32,20 @@ class ConsoleConsumerTest(Test):
 
         self.topic = "topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
-                                  topics={self.topic: {"partitions": 1, "replication-factor": 1}})
-        self.consumer = ConsoleConsumer(test_context, num_nodes=1, kafka=self.kafka, topic=self.topic)
 
     def setUp(self):
         self.zk.start()
+
+    @parametrize(security_protocol='SSL', new_consumer=True)
+    @matrix(security_protocol=['PLAINTEXT'], new_consumer=[False, True])
+    def test_lifecycle(self, security_protocol, new_consumer):
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
+                                  security_protocol=security_protocol,
+                                  topics={self.topic: {"partitions": 1, "replication-factor": 1}})
         self.kafka.start()
 
-    def test_lifecycle(self):
         t0 = time.time()
+        self.consumer = ConsoleConsumer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic, security_protocol=security_protocol, new_consumer=new_consumer)
         self.consumer.start()
         node = self.consumer.nodes[0]
 
