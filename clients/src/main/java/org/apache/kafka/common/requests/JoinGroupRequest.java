@@ -29,6 +29,7 @@ public class JoinGroupRequest extends AbstractRequest {
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String SESSION_TIMEOUT_KEY_NAME = "session_timeout";
     private static final String MEMBER_ID_KEY_NAME = "member_id";
+    private static final String PROTOCOL_TYPE_KEY_NAME = "protocol_type";
     private static final String GROUP_PROTOCOLS_KEY_NAME = "group_protocols";
     private static final String PROTOCOL_NAME_KEY_NAME = "protocol_name";
     private static final String PROTOCOL_METADATA_KEY_NAME = "protocol_metadata";
@@ -38,6 +39,7 @@ public class JoinGroupRequest extends AbstractRequest {
     private final String groupId;
     private final int sessionTimeout;
     private final String memberId;
+    private final String protocolType;
     private final List<GroupProtocol> groupProtocols;
 
     public static class GroupProtocol {
@@ -61,11 +63,13 @@ public class JoinGroupRequest extends AbstractRequest {
     public JoinGroupRequest(String groupId,
                             int sessionTimeout,
                             String memberId,
+                            String protocolType,
                             List<GroupProtocol> groupProtocols) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
         struct.set(MEMBER_ID_KEY_NAME, memberId);
+        struct.set(PROTOCOL_TYPE_KEY_NAME, protocolType);
 
         List<Struct> groupProtocolsList = new ArrayList<>();
         for (GroupProtocol protocol : groupProtocols) {
@@ -77,9 +81,10 @@ public class JoinGroupRequest extends AbstractRequest {
 
         struct.set(GROUP_PROTOCOLS_KEY_NAME, groupProtocolsList.toArray());
         this.groupId = groupId;
-        this.groupProtocols = groupProtocols;
         this.sessionTimeout = sessionTimeout;
         this.memberId = memberId;
+        this.protocolType = protocolType;
+        this.groupProtocols = groupProtocols;
     }
 
     public JoinGroupRequest(Struct struct) {
@@ -87,6 +92,7 @@ public class JoinGroupRequest extends AbstractRequest {
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
+        protocolType = struct.getString(PROTOCOL_TYPE_KEY_NAME);
 
         groupProtocols = new ArrayList<>();
         for (Object groupProtocolObj : struct.getArray(GROUP_PROTOCOLS_KEY_NAME)) {
@@ -128,6 +134,10 @@ public class JoinGroupRequest extends AbstractRequest {
 
     public List<GroupProtocol> groupProtocols() {
         return groupProtocols;
+    }
+
+    public String protocolType() {
+        return protocolType;
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer, int versionId) {

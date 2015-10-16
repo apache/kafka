@@ -60,9 +60,9 @@ private[coordinator] class CoordinatorMetadata(brokerId: Int) {
   /**
    * Add a group or get the group associated with the given groupId if it already exists
    */
-  def addGroup(groupId: String) = {
+  def addGroup(groupId: String, protocolType: String) = {
     inWriteLock(metadataLock) {
-      groups.getOrElseUpdate(groupId, new GroupMetadata(groupId))
+      groups.getOrElseUpdate(groupId, new GroupMetadata(groupId, protocolType))
     }
   }
 

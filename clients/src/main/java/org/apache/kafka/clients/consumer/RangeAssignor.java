@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
@@ -41,7 +42,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
 
     @Override
     public String name() {
-        return "consumer-range";
+        return "range";
     }
 
     private List<TopicPartition> partitions(String topic,

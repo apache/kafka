@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -28,9 +23,6 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.PartitionAssignor;
-import org.apache.kafka.clients.consumer.AbstractPartitionAssignor.Assignment;
-import org.apache.kafka.clients.consumer.AbstractPartitionAssignor.Subscription;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -39,7 +31,6 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.GenericType;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupMetadataResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -64,6 +55,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ConsumerCoordinatorTest {
 
@@ -677,15 +673,12 @@ public class ConsumerCoordinatorTest {
     }
 
     private Struct joinGroupLeaderResponse(int generationId, String memberId,
-                                           Map<String, List<String>> subscription,
+                                           Map<String, List<String>> subscriptions,
                                            short error) {
-        GenericType<Subscription> schema = partitionAssignor.subscriptionSchema();
         Map<String, ByteBuffer> metadata = new HashMap<>();
-        for (Map.Entry<String, List<String>> subscriptionEntry : subscription.entrySet()) {
-            PartitionAssignor.Subscription memberSubscription = new Subscription(subscriptionEntry.getValue());
-            ByteBuffer buf = ByteBuffer.allocate(schema.sizeOf(memberSubscription));
-            schema.write(buf, memberSubscription);
-            buf.flip();
+        for (Map.Entry<String, List<String>> subscriptionEntry : subscriptions.entrySet()) {
+            PartitionAssignor.Subscription subscription = new PartitionAssignor.Subscription(subscriptionEntry.getValue());
+            ByteBuffer buf = ConsumerProtocol.serializeSubscription(subscription);
             metadata.put(subscriptionEntry.getKey(), buf);
         }
         return new JoinGroupResponse(error, generationId, partitionAssignor.name(), memberId, memberId, metadata).toStruct();
@@ -697,11 +690,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private Struct syncGroupResponse(List<TopicPartition> partitions, short error) {
-        GenericType<Assignment> schema = partitionAssignor.assignmentSchema();
-        PartitionAssignor.Assignment assignment = new Assignment(partitions);
-        ByteBuffer buf = ByteBuffer.allocate(schema.sizeOf(assignment));
-        schema.write(buf, assignment);
-        buf.flip();
+        ByteBuffer buf = ConsumerProtocol.serializeAssignment(partitions);
         return new SyncGroupResponse(error, buf).toStruct();
     }
 

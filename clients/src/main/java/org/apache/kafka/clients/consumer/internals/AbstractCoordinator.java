@@ -123,6 +123,12 @@ public abstract class AbstractCoordinator {
     }
 
     /**
+     * Unique identifier for the class of protocols implements (e.g. "consumer" or "copycat").
+     * @return Non-null protocol type namej
+     */
+    protected abstract String protocolType();
+
+    /**
      * Get the current list of protocols and their associated metadata supported
      * by the local member. The order of the protocols in the map indicates the preference
      * of the protocol (the first entry is the most preferred). The coordinator takes this
@@ -300,6 +306,7 @@ public abstract class AbstractCoordinator {
                 groupId,
                 this.sessionTimeoutMs,
                 this.memberId,
+                protocolType(),
                 protocols);
 
         // create the request for the coordinator

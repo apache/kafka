@@ -433,6 +433,9 @@ public class Protocol {
                                                                   new Field("member_id",
                                                                             STRING,
                                                                             "The assigned consumer id or an empty string for a new consumer."),
+                                                                  new Field("protocol_type",
+                                                                            STRING,
+                                                                            "Unique name for class of protocols implemented by group"),
                                                                   new Field("group_protocols",
                                                                             new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0),
                                                                             "List of protocols that the member supports"));

@@ -121,6 +121,7 @@ class GroupCoordinator(val brokerId: Int,
   def handleJoinGroup(groupId: String,
                       memberId: String,
                       sessionTimeoutMs: Int,
+                      protocolType: String,
                       protocols: List[(String, Array[Byte])],
                       responseCallback: JoinCallback) {
     if (!isActive.get) {
@@ -139,11 +140,11 @@ class GroupCoordinator(val brokerId: Int,
         if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
           responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID.code))
         } else {
-          group = coordinatorMetadata.addGroup(groupId)
-          doJoinGroup(group, memberId, sessionTimeoutMs, protocols, responseCallback)
+          group = coordinatorMetadata.addGroup(groupId, protocolType)
+          doJoinGroup(group, memberId, sessionTimeoutMs, protocolType, protocols, responseCallback)
         }
       } else {
-        doJoinGroup(group, memberId, sessionTimeoutMs, protocols, responseCallback)
+        doJoinGroup(group, memberId, sessionTimeoutMs, protocolType, protocols, responseCallback)
       }
     }
   }
@@ -151,10 +152,11 @@ class GroupCoordinator(val brokerId: Int,
   private def doJoinGroup(group: GroupMetadata,
                           memberId: String,
                           sessionTimeoutMs: Int,
+                          protocolType: String,
                           protocols: List[(String, Array[Byte])],
                           responseCallback: JoinCallback) {
     group synchronized {
-      if (!group.supportsProtocols(protocols.map(_._1).toSet)) {
+      if (group.protocolType != protocolType || !group.supportsProtocols(protocols.map(_._1).toSet)) {
         // if the new member does not support the group protocol, reject it
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL.code))
       } else if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID && !group.has(memberId)) {

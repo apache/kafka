@@ -74,9 +74,11 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = false)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType,
+      protocols, isCoordinatorForGroup = false)
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP.code, joinGroupErrorCode)
   }
@@ -86,9 +88,11 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, ConsumerMinSessionTimeout - 1, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, ConsumerMinSessionTimeout - 1, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.INVALID_SESSION_TIMEOUT.code, joinGroupErrorCode)
   }
@@ -98,9 +102,10 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, ConsumerMaxSessionTimeout + 1, protocols,
+    val joinGroupResult = joinGroup(groupId, memberId, ConsumerMaxSessionTimeout + 1, protocolType, protocols,
       isCoordinatorForGroup = true)
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.INVALID_SESSION_TIMEOUT.code, joinGroupErrorCode)
@@ -111,9 +116,11 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = "memberId"
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.UNKNOWN_MEMBER_ID.code, joinGroupErrorCode)
   }
@@ -123,28 +130,49 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType,
+      protocols, isCoordinatorForGroup = true)
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
   }
 
   @Test
-  def testJoinGroupInconsistentGroupProtocol() {
+  def testJoinGroupInconsistentProtocolType() {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
 
     val otherMemberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, List(("range", metadata)),
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, "consumer", List(("range", metadata)),
       isCoordinatorForGroup = true)
     assertEquals(Errors.NONE.code, joinGroupResult.errorCode)
 
     EasyMock.reset(offsetManager)
-    val otherJoinGroupResult = joinGroup(groupId, otherMemberId, DefaultSessionTimeout, List(("roundrobin", metadata)),
+    val otherJoinGroupResult = joinGroup(groupId, otherMemberId, DefaultSessionTimeout, "copycat",
+      List(("range", metadata)), isCoordinatorForGroup = true)
+    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL.code, otherJoinGroupResult.errorCode)
+  }
+
+  @Test
+  def testJoinGroupInconsistentGroupProtocol() {
+    val groupId = "groupId"
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val protocolType = "consumer"
+    val metadata = Array[Byte]()
+
+    val otherMemberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, List(("range", metadata)),
       isCoordinatorForGroup = true)
+    assertEquals(Errors.NONE.code, joinGroupResult.errorCode)
+
+    EasyMock.reset(offsetManager)
+    val otherJoinGroupResult = joinGroup(groupId, otherMemberId, DefaultSessionTimeout, protocolType,
+      List(("roundrobin", metadata)), isCoordinatorForGroup = true)
     assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL.code, otherJoinGroupResult.errorCode)
   }
 
@@ -154,13 +182,15 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val otherMemberId = "memberId"
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     assertEquals(Errors.NONE.code, joinGroupResult.errorCode)
 
     EasyMock.reset(offsetManager)
-    val otherJoinGroupResult = joinGroup(groupId, otherMemberId, DefaultSessionTimeout, protocols,
+    val otherJoinGroupResult = joinGroup(groupId, otherMemberId, DefaultSessionTimeout, protocolType, protocols,
       isCoordinatorForGroup = true)
     assertEquals(Errors.UNKNOWN_MEMBER_ID.code, otherJoinGroupResult.errorCode)
   }
@@ -189,9 +219,11 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val otherMemberId = "memberId"
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
@@ -205,9 +237,11 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val assignedConsumerId = joinGroupResult.memberId
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
@@ -222,9 +256,11 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val assignedConsumerId = joinGroupResult.memberId
     val generationId = joinGroupResult.generationId
     val joinGroupErrorCode = joinGroupResult.errorCode
@@ -265,9 +301,11 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val assignedConsumerId = joinGroupResult.memberId
     val generationId = joinGroupResult.generationId
     assertEquals(Errors.NONE.code, joinGroupResult.errorCode)
@@ -288,9 +326,11 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val assignedConsumerId = joinGroupResult.memberId
     val generationId = joinGroupResult.generationId
     assertEquals(Errors.NONE.code, joinGroupResult.errorCode)
@@ -304,14 +344,15 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testSyncGroupFollowerAfterLeader() {
     val groupId = "groupId"
+    val protocolType = "consumer"
     val protocols = List(("range", Array[Byte]()))
 
     // this is a bit tedious, but basically we have to:
     // 1. join and sync with a single member (because we can't immediately join with two members)
     // 2. join and sync with the first member and a new member
 
-    val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
-      DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
+      protocolType, protocols, isCoordinatorForGroup = true)
     val firstMemberId = firstJoinResult.memberId
     val firstGenerationId = firstJoinResult.generationId
     assertEquals(firstMemberId, firstJoinResult.leaderId)
@@ -322,11 +363,12 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, firstSyncResult._2)
 
     EasyMock.reset(offsetManager)
-    val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
-      DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
+      protocolType, protocols, isCoordinatorForGroup = true)
 
     EasyMock.reset(offsetManager)
-    val joinFuture = sendJoinGroup(groupId, firstMemberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true);
+    val joinFuture = sendJoinGroup(groupId, firstMemberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true);
 
     val joinResult = await(joinFuture, DefaultSessionTimeout+100)
     val otherJoinResult = await(otherJoinFuture, DefaultSessionTimeout+100)
@@ -359,6 +401,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testSyncGroupLeaderAfterFollower() {
     val groupId = "groupId"
+    val protocolType = "consumer"
     val protocols = List(("range", Array[Byte]()))
 
     // this is a bit tedious, but basically we have to:
@@ -366,7 +409,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     // 2. join and sync with the first member and a new member
 
     val joinGroupResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
-      protocols, isCoordinatorForGroup = true)
+      protocolType, protocols, isCoordinatorForGroup = true)
     val firstMemberId = joinGroupResult.memberId
     val firstGenerationId = joinGroupResult.generationId
     assertEquals(firstMemberId, joinGroupResult.leaderId)
@@ -378,11 +421,12 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
     EasyMock.reset(offsetManager)
-    val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
-      DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
+      protocolType, protocols, isCoordinatorForGroup = true)
 
     EasyMock.reset(offsetManager)
-    val joinFuture = sendJoinGroup(groupId, firstMemberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true);
+    val joinFuture = sendJoinGroup(groupId, firstMemberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true);
 
     val joinResult = await(joinFuture, DefaultSessionTimeout+100)
     val otherJoinResult = await(otherJoinFuture, DefaultSessionTimeout+100)
@@ -440,11 +484,12 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   def testHeartbeatDuringRebalanceCausesRebalanceInProgress() {
     val groupId = "groupId"
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
     // First start up a group (with a slightly larger timeout to give us time to heartbeat when the rebalance starts)
     val joinGroupResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
-      protocols, isCoordinatorForGroup = true)
+      protocolType, protocols, isCoordinatorForGroup = true)
     val assignedConsumerId = joinGroupResult.memberId
     val initialGenerationId = joinGroupResult.generationId
     val joinGroupErrorCode = joinGroupResult.errorCode
@@ -452,7 +497,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     // Then join with a new consumer to trigger a rebalance
     EasyMock.reset(offsetManager)
-    sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout, protocols,
+    sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout, protocolType, protocols,
       isCoordinatorForGroup = true)
 
     // We should be in the middle of a rebalance, so the heartbeat should return rebalance in progress
@@ -467,16 +512,18 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val otherMemberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
+    val protocolType = "consumer"
     val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocols, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val initialGenerationId = joinGroupResult.generationId
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(1, initialGenerationId)
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(offsetManager)
-    val otherJoinGroupResult = joinGroup(groupId, otherMemberId, DefaultSessionTimeout, protocols,
+    val otherJoinGroupResult = joinGroup(groupId, otherMemberId, DefaultSessionTimeout, protocolType, protocols,
       isCoordinatorForGroup = true)
     val nextGenerationId = otherJoinGroupResult.generationId
     val otherJoinGroupErrorCode = otherJoinGroupResult.errorCode
@@ -572,13 +619,14 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   private def sendJoinGroup(groupId: String,
                             memberId: String,
                             sessionTimeout: Int,
+                            protocolType: String,
                             protocols: List[(String, Array[Byte])],
                             isCoordinatorForGroup: Boolean): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
     EasyMock.expect(offsetManager.partitionFor(groupId)).andReturn(1)
     EasyMock.expect(offsetManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.replay(offsetManager)
-    consumerCoordinator.handleJoinGroup(groupId, memberId, sessionTimeout, protocols, responseCallback)
+    consumerCoordinator.handleJoinGroup(groupId, memberId, sessionTimeout, protocolType, protocols, responseCallback)
     responseFuture
   }
 
@@ -611,9 +659,10 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   private def joinGroup(groupId: String,
                         memberId: String,
                         sessionTimeout: Int,
+                        protocolType: String,
                         protocols: List[(String, Array[Byte])],
                         isCoordinatorForGroup: Boolean): JoinGroupResult = {
-    val responseFuture = sendJoinGroup(groupId, memberId, sessionTimeout, protocols, isCoordinatorForGroup)
+    val responseFuture = sendJoinGroup(groupId, memberId, sessionTimeout, protocolType, protocols, isCoordinatorForGroup)
     // should only have to wait as long as session timeout, but allow some extra time in case of an unexpected delay
     Await.result(responseFuture, Duration(sessionTimeout+100, TimeUnit.MILLISECONDS))
   }

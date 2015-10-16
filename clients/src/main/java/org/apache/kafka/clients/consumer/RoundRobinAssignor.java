@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 
@@ -74,7 +75,7 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
     @Override
     public String name() {
-        return "consumer-roundrobin";
+        return "roundrobin";
     }
 
     private static class CircularIterator<T> implements Iterator<T> {

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.AbstractPartitionAssignor;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;

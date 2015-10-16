@@ -86,7 +86,7 @@ private object GroupMetadata {
  *  2. generation id
  */
 @nonthreadsafe
-private[coordinator] class GroupMetadata(val groupId: String) {
+private[coordinator] class GroupMetadata(val groupId: String, val protocolType: String) {
 
   private val members = new mutable.HashMap[String, MemberMetadata]
   private var state: GroupState = Stable
