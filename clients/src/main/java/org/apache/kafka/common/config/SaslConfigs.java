@@ -13,6 +13,8 @@
 
 package org.apache.kafka.common.config;
 
+import java.util.Collections;
+import java.util.List;
 
 public class SaslConfigs {
     /*
@@ -40,5 +42,9 @@ public class SaslConfigs {
     public static final String SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN = "sasl.kerberos.min.time.before.relogin";
     public static final String SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC = "LoginThread sleep time between refresh attempts";
     public static final long DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN = 1 * 60 * 1000L;
+
+    public static final String AUTH_TO_LOCAL = "kafka.security.auth.to.local";
+    public static final String AUTH_TO_LOCAL_DOC = "Rules for the mapping between principal names and operating system user names";
+    public static final List<String> DEFAULT_AUTH_TO_LOCAL = Collections.singletonList("DEFAULT");
 
 }
