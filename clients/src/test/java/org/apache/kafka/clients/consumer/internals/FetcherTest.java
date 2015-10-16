@@ -144,6 +144,7 @@ public class FetcherTest {
         fetcher.initFetches(cluster);
         client.prepareResponse(fetchResponse((ByteBuffer) records.flip().limit(this.fetchSize), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
+        fetcher.fetchedRecords();
     }
 
     @Test
