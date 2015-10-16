@@ -181,24 +181,19 @@ object TestUtils extends Logging {
 
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
-    val sslEnabled = enableSsl || shouldEnable(SecurityProtocol.SSL)
-    val saslSslEnabled = enableSaslSsl || shouldEnable(SecurityProtocol.SASL_SSL)
+    val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
+    if (enablePlaintext || shouldEnable(SecurityProtocol.PLAINTEXT))
+      protocolAndPorts += SecurityProtocol.PLAINTEXT -> port
+    if (enableSsl || shouldEnable(SecurityProtocol.SSL))
+      protocolAndPorts += SecurityProtocol.SSL -> sslPort
+    if (enableSaslPlaintext || shouldEnable(SecurityProtocol.SASL_PLAINTEXT))
+      protocolAndPorts += SecurityProtocol.SASL_PLAINTEXT -> saslPlaintextPort
+    if (enableSaslSsl || shouldEnable(SecurityProtocol.SASL_SSL))
+      protocolAndPorts += SecurityProtocol.SASL_SSL -> saslSslPort
 
-    val listeners = {
-
-      val protocolAndPorts = ArrayBuffer[(String, Int)]()
-      if (enablePlaintext || shouldEnable(SecurityProtocol.PLAINTEXT))
-        protocolAndPorts += ("PLAINTEXT" -> port)
-      if (sslEnabled)
-        protocolAndPorts += "SSL" -> sslPort
-      if (enableSaslPlaintext || shouldEnable(SecurityProtocol.SASL_PLAINTEXT))
-        protocolAndPorts += "SASL_PLAINTEXT" -> saslPlaintextPort
-      if (saslSslEnabled)
-        protocolAndPorts += "SASL_SSL" -> saslSslPort
-      protocolAndPorts.map { case (protocol, port) =>
-        s"$protocol://localhost:$port"
-      }.mkString(",")
-    }
+    val listeners = protocolAndPorts.map { case (protocol, port) =>
+      s"${protocol.name}://localhost:$port"
+    }.mkString(",")
 
     val props = new Properties
     if (nodeId >= 0) props.put("broker.id", nodeId.toString)
@@ -211,8 +206,8 @@ object TestUtils extends Logging {
     props.put("delete.topic.enable", enableDeleteTopic.toString)
     props.put("controlled.shutdown.retry.backoff.ms", "100")
 
-    if (sslEnabled || saslSslEnabled)
-      props.putAll(addSSLConfigs(Mode.SERVER, true, trustStoreFile, s"server$nodeId"))
+    if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
+      props.putAll(sslConfigs(Mode.SERVER, true, trustStoreFile, s"server$nodeId"))
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -443,29 +438,39 @@ object TestUtils extends Logging {
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
-                        enableSasl: Boolean = false,
-                        enableSSL: Boolean = false,
-                        trustStoreFile: Option[File] = None) : KafkaProducer[Array[Byte],Array[Byte]] = {
+                        securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                        trustStoreFile: Option[File] = None,
+                        props: Option[Properties] = None) : KafkaProducer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.producer.ProducerConfig
 
-    val producerProps = new Properties()
+    val producerProps = props.getOrElse(new Properties)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
     producerProps.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, metadataFetchTimeout.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
-    producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
-    producerProps.put(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
-    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
-    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    if (enableSSL) {
-      producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
-      producerProps.putAll(addSSLConfigs(Mode.CLIENT, false, trustStoreFile, "producer"))
-    } else if (enableSasl) {
-      producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT")
+
+    /* Only use these if not already set */
+    val defaultProps = Map(
+      ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> "100",
+      ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG -> "200",
+      ProducerConfig.LINGER_MS_CONFIG -> lingerMs.toString,
+      ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArraySerializer",
+      ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArraySerializer"
+    )
+    defaultProps.foreach { case (key, value) =>
+      if (!producerProps.containsKey(key)) producerProps.put(key, value)
     }
+
+    if (usesSslTransportLayer(securityProtocol))
+      producerProps.putAll(sslConfigs(Mode.CLIENT, false, trustStoreFile, "producer"))
+    producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+  }
+
+  private def usesSslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
+    case SecurityProtocol.SSL | SecurityProtocol.SASL_SSL => true
+    case _ => false
   }
 
   /**
@@ -477,8 +482,7 @@ object TestUtils extends Logging {
                         partitionFetchSize: Long = 4096L,
                         partitionAssignmentStrategy: String = "blah",
                         sessionTimeout: Int = 30000,
-                        enableSasl: Boolean = false,
-                        enableSSL: Boolean = false,
+                        securityProtocol: SecurityProtocol,
                         trustStoreFile: Option[File] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
 
@@ -493,12 +497,9 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, partitionAssignmentStrategy)
     consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeout.toString)
-    if (enableSSL) {
-      consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
-      consumerProps.putAll(addSSLConfigs(Mode.CLIENT, false, trustStoreFile, "consumer"))
-    } else if (enableSasl) {
-      consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT")
-    }
+    if (usesSslTransportLayer(securityProtocol))
+      consumerProps.putAll(sslConfigs(Mode.CLIENT, false, trustStoreFile, "consumer"))
+    consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
 
@@ -955,10 +956,10 @@ object TestUtils extends Logging {
     new String(bytes, encoding)
   }
 
-  def addSSLConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String): Properties = {
+  def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String): Properties = {
 
     val trustStore = trustStoreFile.getOrElse {
-      throw new Exception("enableSSL set to true but no trustStoreFile provided")
+      throw new Exception("SSL enabled but no trustStoreFile provided")
     }
 
 

@@ -83,12 +83,12 @@ class SaslIntegrationTest extends SaslTestHarness with Logging {
     for (i <- 0 until producerCount)
       producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT),
         acks = 1,
-        enableSasl=true)
+        securityProtocol = SecurityProtocol.SASL_PLAINTEXT)
     for (i <- 0 until consumerCount)
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT),
         groupId = "my-test",
         partitionAssignmentStrategy= "range",
-        enableSasl=true)
+        securityProtocol = SecurityProtocol.SASL_PLAINTEXT)
 
 
     // create the consumer offset topic

@@ -15,14 +15,11 @@
   * limitations under the License.
   */
 
-package kafka.server
+package kafka.api
 
-import java.io.File
-
-import kafka.api.SaslTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 
-class SaslSslReplicaFetchTest extends BaseReplicaFetchTest with SaslTestHarness {
-  protected def securityProtocol = SecurityProtocol.SASL_SSL
-  protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+class SaslPlaintextProducerSendTest extends BaseProducerSendTest with SaslTestHarness {
+  override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
+  protected def trustStoreFile = None
 }

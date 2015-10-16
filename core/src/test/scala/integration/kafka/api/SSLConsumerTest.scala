@@ -61,7 +61,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   def generateConfigs() =
-    TestUtils.createBrokerConfigs(numServers, zkConnect, false, enableSsl=true, trustStoreFile=Some(trustStoreFile)).map(KafkaConfig.fromProps(_, overridingProps))
+    TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL), trustStoreFile=Some(trustStoreFile)).map(KafkaConfig.fromProps(_, overridingProps))
 
   val topic = "topic"
   val part = 0
@@ -72,6 +72,8 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
+  override protected def securityProtocol: SecurityProtocol = SecurityProtocol.SSL
 
   @Before
   override def setUp() {
@@ -87,14 +89,14 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
     for (i <- 0 until producerCount)
       producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL),
                                                acks = 1,
-                                               enableSSL=true,
-                                               trustStoreFile=Some(trustStoreFile))
+                                               securityProtocol = SecurityProtocol.SSL,
+                                               trustStoreFile = Some(trustStoreFile))
     for (i <- 0 until consumerCount)
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SSL),
                                                groupId = "my-test",
                                                partitionAssignmentStrategy= "range",
-                                               enableSSL=true,
-                                               trustStoreFile=Some(trustStoreFile))
+                                               securityProtocol = SecurityProtocol.SSL,
+                                               trustStoreFile = Some(trustStoreFile))
 
 
     // create the consumer offset topic
