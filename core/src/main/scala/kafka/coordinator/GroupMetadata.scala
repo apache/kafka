@@ -30,18 +30,19 @@ private[coordinator] sealed trait GroupState { def state: Byte }
 /**
  * Group is preparing to rebalance
  *
- * action: respond to heartbeats with an ILLEGAL GENERATION error code
- * transition: some members have joined by the timeout => Rebalancing
+ * action: respond to heartbeats with an REBALANCE_IN_PROGRESS error code
+ *         respond to sync group with REBALANCE_IN_PROGRESS
+ * transition: some members have joined by the timeout => AwaitingSync
  *             all members have left the group => Dead
  */
 private[coordinator] case object PreparingRebalance extends GroupState { val state: Byte = 1 }
-
 
 /**
  * Group is awaiting state assignment from the leader
  *
  * action: respond to heartbeats with REBALANCE_IN_PROGRESS to have them rejoin
- * transition: state assignment received from leader => Stable
+ *         park sync group requests from followers until transition to Stable
+ * transition: sync group with state assignment received from leader => Stable
  *             join group with new member or new metadata => PreparingRebalance
  *             member failure detected => PreparingRebalance
  */
@@ -51,8 +52,11 @@ private[coordinator] case object AwaitingSync extends GroupState { val state: By
  * Group is stable
  *
  * action: respond to member heartbeats normally
+ *         sync group from followers and leader returns current assignment
+ *         join group from followers with matching metadata returns current group metadata
  * transition: member failure detected via heartbeat => PreparingRebalance
- *             member join-group received => PreparingRebalance
+ *             leader join-group received => PreparingRebalance
+ *             follower join-group with new metadata => PreparingRebalance
  */
 private[coordinator] case object Stable extends GroupState { val state: Byte = 3 }
 

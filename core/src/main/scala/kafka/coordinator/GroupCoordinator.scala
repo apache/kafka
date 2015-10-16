@@ -48,8 +48,7 @@ case class JoinGroupResult(members: Map[String, Array[Byte]],
 class GroupCoordinator(val brokerId: Int,
                        val groupConfig: GroupManagerConfig,
                        val offsetConfig: OffsetManagerConfig,
-                       private val offsetManager: OffsetManager,
-                       zkUtils: ZkUtils) extends Logging {
+                       private val offsetManager: OffsetManager) extends Logging {
   type JoinCallback = JoinGroupResult => Unit
   type SyncCallback = (Array[Byte], Short) => Unit
 
@@ -67,7 +66,7 @@ class GroupCoordinator(val brokerId: Int,
            replicaManager: ReplicaManager,
            zkUtils: ZkUtils,
            scheduler: KafkaScheduler) = this(brokerId, groupConfig, offsetConfig,
-    new OffsetManager(offsetConfig, replicaManager, zkUtils, scheduler), zkUtils)
+    new OffsetManager(offsetConfig, replicaManager, zkUtils, scheduler))
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -106,16 +105,6 @@ class GroupCoordinator(val brokerId: Int,
     heartbeatPurgatory.shutdown()
     rebalancePurgatory.shutdown()
     info("Shutdown complete.")
-  }
-
-  private def joinError(memberId: String, errorCode: Short): JoinGroupResult = {
-    JoinGroupResult(
-      members=Map.empty,
-      memberId=memberId,
-      generationId=0,
-      subProtocol=GroupCoordinator.NoProtocol,
-      leaderId=GroupCoordinator.NoLeader,
-      errorCode=errorCode)
   }
 
   def handleJoinGroup(groupId: String,
@@ -433,6 +422,16 @@ class GroupCoordinator(val brokerId: Int,
     offsetManager.removeOffsetsFromCacheForPartition(offsetTopicPartitionId)
   }
 
+  private def joinError(memberId: String, errorCode: Short): JoinGroupResult = {
+    JoinGroupResult(
+      members=Map.empty,
+      memberId=memberId,
+      generationId=0,
+      subProtocol=GroupCoordinator.NoProtocol,
+      leaderId=GroupCoordinator.NoLeader,
+      errorCode=errorCode)
+  }
+
   private def propagateAssignment(group: GroupMetadata,
                                   assignment: Map[String, Array[Byte]]) {
     for (member <- group.allMembers) {
@@ -596,7 +595,9 @@ class GroupCoordinator(val brokerId: Int,
   def partitionFor(group: String): Int = offsetManager.partitionFor(group)
 
   private def shouldKeepMemberAlive(member: MemberMetadata, heartbeatDeadline: Long) =
-    member.awaitingJoinCallback != null || member.latestHeartbeat + member.sessionTimeoutMs > heartbeatDeadline
+    member.awaitingJoinCallback != null ||
+      member.awaitingSyncCallback != null ||
+      member.latestHeartbeat + member.sessionTimeoutMs > heartbeatDeadline
 
   private def isCoordinatorForGroup(groupId: String) = offsetManager.leaderIsLocal(offsetManager.partitionFor(groupId))
 }
@@ -639,6 +640,6 @@ object GroupCoordinator {
     val groupConfig = GroupManagerConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, offsetManager, zkUtils)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, offsetManager)
   }
 }

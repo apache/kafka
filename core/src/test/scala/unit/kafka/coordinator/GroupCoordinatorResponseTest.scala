@@ -48,8 +48,8 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   type LeaveGroupCallback = Short => Unit
 
   val ConsumerMinSessionTimeout = 10
-  val ConsumerMaxSessionTimeout = 200
-  val DefaultSessionTimeout = 100
+  val ConsumerMaxSessionTimeout = 1000
+  val DefaultSessionTimeout = 500
   var consumerCoordinator: GroupCoordinator = null
   var offsetManager : OffsetManager = null
 
@@ -342,12 +342,138 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   }
 
   @Test
+  def testJoinGroupFromUnchangedFollowerDoesNotRebalance() {
+    val groupId = "groupId"
+    val protocolType = "consumer"
+    val protocols = List(("range", Array[Byte]()))
+
+    // to get a group of two members:
+    // 1. join and sync with a single member (because we can't immediately join with two members)
+    // 2. join and sync with the first member and a new member
+
+    val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
+      protocolType, protocols, isCoordinatorForGroup = true)
+    val firstMemberId = firstJoinResult.memberId
+    val firstGenerationId = firstJoinResult.generationId
+    assertEquals(firstMemberId, firstJoinResult.leaderId)
+    assertEquals(Errors.NONE.code, firstJoinResult.errorCode)
+
+    EasyMock.reset(offsetManager)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map.empty, true)
+    assertEquals(Errors.NONE.code, firstSyncResult._2)
+
+    EasyMock.reset(offsetManager)
+    val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
+      protocolType, protocols, isCoordinatorForGroup = true)
+
+    EasyMock.reset(offsetManager)
+    val joinFuture = sendJoinGroup(groupId, firstMemberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true);
+
+    val joinResult = await(joinFuture, DefaultSessionTimeout+100)
+    val otherJoinResult = await(otherJoinFuture, DefaultSessionTimeout+100)
+    assertEquals(Errors.NONE.code, joinResult.errorCode)
+    assertEquals(Errors.NONE.code, otherJoinResult.errorCode)
+    assertTrue(joinResult.generationId == otherJoinResult.generationId)
+
+    assertEquals(firstMemberId, joinResult.leaderId)
+    assertEquals(firstMemberId, otherJoinResult.leaderId)
+
+    val nextGenerationId = joinResult.generationId
+
+    // this shouldn't cause a rebalance since protocol information hasn't changed
+    EasyMock.reset(offsetManager)
+    val followerJoinResult = joinGroup(groupId, otherJoinResult.memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
+
+    assertEquals(Errors.NONE.code, followerJoinResult.errorCode)
+    assertEquals(nextGenerationId, followerJoinResult.generationId)
+  }
+
+  @Test
+  def testJoinGroupFromUnchangedLeaderShouldRebalance() {
+    val groupId = "groupId"
+    val protocolType = "consumer"
+    val protocols = List(("range", Array[Byte]()))
+
+    val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
+      protocolType, protocols, isCoordinatorForGroup = true)
+    val firstMemberId = firstJoinResult.memberId
+    val firstGenerationId = firstJoinResult.generationId
+    assertEquals(firstMemberId, firstJoinResult.leaderId)
+    assertEquals(Errors.NONE.code, firstJoinResult.errorCode)
+
+    EasyMock.reset(offsetManager)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map.empty, true)
+    assertEquals(Errors.NONE.code, firstSyncResult._2)
+
+    // join groups from the leader should force the group to rebalance, which allows the
+    // leader to push new assignments when local metadata changes
+
+    EasyMock.reset(offsetManager)
+    val secondJoinResult = joinGroup(groupId, firstMemberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
+
+    assertEquals(Errors.NONE.code, secondJoinResult.errorCode)
+    assertNotEquals(firstGenerationId, secondJoinResult.generationId)
+  }
+
+  @Test
+  def testLeaderFailureInSyncGroup() {
+    val groupId = "groupId"
+    val protocolType = "consumer"
+    val protocols = List(("range", Array[Byte]()))
+
+    // to get a group of two members:
+    // 1. join and sync with a single member (because we can't immediately join with two members)
+    // 2. join and sync with the first member and a new member
+
+    val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
+      protocolType, protocols, isCoordinatorForGroup = true)
+    val firstMemberId = firstJoinResult.memberId
+    val firstGenerationId = firstJoinResult.generationId
+    assertEquals(firstMemberId, firstJoinResult.leaderId)
+    assertEquals(Errors.NONE.code, firstJoinResult.errorCode)
+
+    EasyMock.reset(offsetManager)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map.empty, true)
+    assertEquals(Errors.NONE.code, firstSyncResult._2)
+
+    EasyMock.reset(offsetManager)
+    val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, DefaultSessionTimeout,
+      protocolType, protocols, isCoordinatorForGroup = true)
+
+    EasyMock.reset(offsetManager)
+    val joinFuture = sendJoinGroup(groupId, firstMemberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true);
+
+    val joinResult = await(joinFuture, DefaultSessionTimeout+100)
+    val otherJoinResult = await(otherJoinFuture, DefaultSessionTimeout+100)
+    assertEquals(Errors.NONE.code, joinResult.errorCode)
+    assertEquals(Errors.NONE.code, otherJoinResult.errorCode)
+    assertTrue(joinResult.generationId == otherJoinResult.generationId)
+
+    assertEquals(firstMemberId, joinResult.leaderId)
+    assertEquals(firstMemberId, otherJoinResult.leaderId)
+
+    val nextGenerationId = joinResult.generationId
+
+    // with no leader SyncGroup, the follower's request should failure with an error indicating
+    // that it should rejoin
+    EasyMock.reset(offsetManager)
+    val followerSyncFuture= sendSyncGroupFollower(groupId, nextGenerationId, otherJoinResult.memberId,
+      isCoordinatorForGroup = true)
+    val followerSyncResult = await(followerSyncFuture, DefaultSessionTimeout+100)
+    assertEquals(Errors.REBALANCE_IN_PROGRESS.code, followerSyncResult._2)
+  }
+
+  @Test
   def testSyncGroupFollowerAfterLeader() {
     val groupId = "groupId"
     val protocolType = "consumer"
     val protocols = List(("range", Array[Byte]()))
 
-    // this is a bit tedious, but basically we have to:
+    // to get a group of two members:
     // 1. join and sync with a single member (because we can't immediately join with two members)
     // 2. join and sync with the first member and a new member
 
@@ -404,7 +530,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val protocolType = "consumer"
     val protocols = List(("range", Array[Byte]()))
 
-    // this is a bit tedious, but basically we have to:
+    // to get a group of two members:
     // 1. join and sync with a single member (because we can't immediately join with two members)
     // 2. join and sync with the first member and a new member
 
@@ -673,7 +799,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
                                 memberId: String,
                                 isCoordinatorForGroup: Boolean): SyncGroupCallbackParams = {
     val responseFuture = sendSyncGroupFollower(groupId, generationId, memberId, isCoordinatorForGroup)
-    Await.result(responseFuture, Duration(200, TimeUnit.MILLISECONDS))
+    Await.result(responseFuture, Duration(DefaultSessionTimeout+100, TimeUnit.MILLISECONDS))
   }
 
   private def syncGroupLeader(groupId: String,
@@ -682,7 +808,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
                               assignment: Map[String, Array[Byte]],
                               isCoordinatorForGroup: Boolean): SyncGroupCallbackParams = {
     val responseFuture = sendSyncGroupLeader(groupId, generationId, memberId, assignment, isCoordinatorForGroup)
-    Await.result(responseFuture, Duration(200, TimeUnit.MILLISECONDS))
+    Await.result(responseFuture, Duration(DefaultSessionTimeout+100, TimeUnit.MILLISECONDS))
   }
 
   private def heartbeat(groupId: String,
