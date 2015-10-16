@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.List;
@@ -79,14 +80,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException {
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
-            TransportLayer transportLayer;
-            if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
-                transportLayer = new SSLTransportLayer(id, key,
-                                                       sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
-                                                                                  socketChannel.socket().getPort()));
-            } else {
-                transportLayer = new PlaintextTransportLayer(key);
-            }
+            TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosNameParser);
@@ -105,4 +99,15 @@ public class SaslChannelBuilder implements ChannelBuilder {
         this.principalBuilder.close();
         this.loginManager.release();
     }
+
+    protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
+        if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
+            return SSLTransportLayer.create(id, key,
+                sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
+                socketChannel.socket().getPort()));
+        } else {
+            return new PlaintextTransportLayer(key);
+        }
+    }
+
 }
