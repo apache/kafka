@@ -21,28 +21,24 @@ package org.apache.kafka.common.security.kerberos;
 import javax.security.auth.Subject;
 import javax.security.auth.login.LoginException;
 import java.io.IOException;
+import java.util.EnumMap;
 import java.util.Map;
 
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.LoginType;
 import org.apache.kafka.common.security.JaasUtils;
 
 public class LoginManager {
 
-    private static LoginManager serverInstance;
-    private static LoginManager clientInstance;
+    private static final EnumMap<LoginType, LoginManager> CACHED_INSTANCES = new EnumMap(LoginType.class);
 
     private final Login login;
     private final String serviceName;
-    private final Mode mode;
+    private final LoginType loginType;
     private int refCount;
 
-    private LoginManager(Mode mode, Map<String, ?> configs) throws IOException, LoginException {
-        String loginContext;
-        if (mode == Mode.SERVER)
-            loginContext = JaasUtils.LOGIN_CONTEXT_SERVER;
-        else
-            loginContext = JaasUtils.LOGIN_CONTEXT_CLIENT;
-        this.mode = mode;
+    private LoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
+        this.loginType = loginType;
+        String loginContext = loginType.contextName();
         this.serviceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
         login = new Login(loginContext, configs);
         login.startThreadIfNeeded();
@@ -57,22 +53,20 @@ public class LoginManager {
      *
      * This is a bit ugly and it would be nicer if we could pass the `LoginManager` to `ChannelBuilders.create` and
      * shut it down when the broker or clients are closed. It's straightforward to do the former, but it's more
-     * complicated to do the latter without making the consumer API a bit more complex.
+     * complicated to do the latter without making the consumer API more complex.
+     *
+     * @param loginType the type of the login context, it should be SERVER for the broker and CLIENT for the clients
+     *                  (i.e. consumer and producer)
+     * @param configs configuration as key/value pairs
      */
-    public static final LoginManager acquireLoginManager(Mode mode, Map<String, ?> configs) throws IOException, LoginException {
+    public static final LoginManager acquireLoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
         synchronized (LoginManager.class) {
-            switch (mode) {
-                case SERVER:
-                    if (serverInstance == null)
-                        serverInstance = new LoginManager(mode, configs);
-                    return serverInstance.acquire();
-                case CLIENT:
-                    if (clientInstance == null)
-                        clientInstance = new LoginManager(mode, configs);
-                    return clientInstance.acquire();
-                default:
-                    throw new IllegalArgumentException("Unsupported `mode` received " + mode);
+            LoginManager loginManager = CACHED_INSTANCES.get(loginType);
+            if (loginManager == null) {
+                loginManager = new LoginManager(loginType, configs);
+                CACHED_INSTANCES.put(loginType, loginManager);
             }
+            return loginManager.acquire();
         }
     }
 
@@ -97,13 +91,7 @@ public class LoginManager {
             if (refCount == 0)
                 throw new IllegalStateException("release called on LoginManager with refCount == 0");
             else if (refCount == 1) {
-                if (mode == Mode.SERVER)
-                    serverInstance = null;
-                else if (mode == Mode.CLIENT)
-                    clientInstance = null;
-                else
-                    throw new IllegalStateException("Unsupported `mode` " + mode);
-
+                CACHED_INSTANCES.remove(loginType);
                 login.shutdown();
             }
             --refCount;

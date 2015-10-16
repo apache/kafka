@@ -21,7 +21,7 @@ import kafka.utils._
 import org.apache.kafka.clients.{ClientResponse, ClientRequest, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.{TopicPartition, Node}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{Selectable, ChannelBuilders, Selector, NetworkReceive, Mode}
+import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, Selector, NetworkReceive, Mode}
 import org.apache.kafka.common.protocol.{SecurityProtocol, ApiKeys}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
@@ -96,7 +96,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         "controller-channel",
         Map("broker-id" -> broker.id.toString).asJava,
         false,
-        ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, config.channelConfigs)
+        ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.channelConfigs)
       )
       new NetworkClient(
         selector,

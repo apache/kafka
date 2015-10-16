@@ -34,21 +34,23 @@ public class SaslChannelBuilder implements ChannelBuilder {
 
     private final SecurityProtocol securityProtocol;
     private final Mode mode;
+    private final LoginType loginType;
 
     private LoginManager loginManager;
     private PrincipalBuilder principalBuilder;
     private SSLFactory sslFactory;
     private Map<String, ?> configs;
 
-    public SaslChannelBuilder(Mode mode, SecurityProtocol securityProtocol) {
+    public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol) {
         this.mode = mode;
+        this.loginType = loginType;
         this.securityProtocol = securityProtocol;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            this.loginManager = LoginManager.acquireLoginManager(mode, configs);
+            this.loginManager = LoginManager.acquireLoginManager(loginType, configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
