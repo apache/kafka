@@ -23,13 +23,15 @@ public class ChannelBuilders {
 
     /**
      * @param securityProtocol the securityProtocol
-     * @param mode the SSL mode, it must be non-null if `securityProcol` is `SSL` and it is ignored otherwise
+     * @param mode the mode, it must be non-null if `securityProtocol` is not `PLAINTEXT`;
+     *             it is ignored otherwise
+     * @param loginType the loginType, it must be non-null if `securityProtocol` is SASL_*; it is ignored otherwise
      * @param configs client/server configs
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
-    public static ChannelBuilder create(SecurityProtocol securityProtocol, Mode mode, Map<String, ?> configs) {
-        ChannelBuilder channelBuilder = null;
+    public static ChannelBuilder create(SecurityProtocol securityProtocol, Mode mode, LoginType loginType, Map<String, ?> configs) {
+        ChannelBuilder channelBuilder;
 
         switch (securityProtocol) {
             case SSL:
@@ -39,7 +41,9 @@ public class ChannelBuilders {
             case SASL_SSL:
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
-                channelBuilder = new SaslChannelBuilder(mode, securityProtocol);
+                if (loginType == null)
+                    throw new IllegalArgumentException("`loginType` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+                channelBuilder = new SaslChannelBuilder(mode, loginType, securityProtocol);
                 break;
             case PLAINTEXT:
             case TRACE:

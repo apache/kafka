@@ -180,6 +180,7 @@ object Defaults {
   val SaslKerberosTicketRenewWindowFactor = SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_WINDOW_FACTOR
   val SaslKerberosTicketRenewJitter = SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_JITTER
   val SaslKerberosMinTimeBeforeRelogin = SaslConfigs.DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN
+  val AuthToLocal = SaslConfigs.DEFAULT_AUTH_TO_LOCAL
 
 }
 
@@ -334,6 +335,7 @@ object KafkaConfig {
   val SaslKerberosTicketRenewWindowFactorProp = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR
   val SaslKerberosTicketRenewJitterProp = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER
   val SaslKerberosMinTimeBeforeReloginProp = SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN
+  val AuthToLocalProp = SaslConfigs.AUTH_TO_LOCAL
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -510,6 +512,7 @@ object KafkaConfig {
   val SaslKerberosTicketRenewWindowFactorDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC
   val SaslKerberosTicketRenewJitterDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_DOC
   val SaslKerberosMinTimeBeforeReloginDoc = SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC
+  val AuthToLocalDoc = SaslConfigs.AUTH_TO_LOCAL_DOC
 
   private val configDef = {
     import ConfigDef.Importance._
@@ -672,6 +675,7 @@ object KafkaConfig {
       .define(SaslKerberosTicketRenewWindowFactorProp, DOUBLE, Defaults.SaslKerberosTicketRenewWindowFactor, MEDIUM, SaslKerberosTicketRenewWindowFactorDoc)
       .define(SaslKerberosTicketRenewJitterProp, DOUBLE, Defaults.SaslKerberosTicketRenewJitter, MEDIUM, SaslKerberosTicketRenewJitterDoc)
       .define(SaslKerberosMinTimeBeforeReloginProp, LONG, Defaults.SaslKerberosMinTimeBeforeRelogin, MEDIUM, SaslKerberosMinTimeBeforeReloginDoc)
+      .define(AuthToLocalProp, LIST, Defaults.AuthToLocal, MEDIUM, AuthToLocalDoc)
 
   }
 
@@ -838,6 +842,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val saslKerberosTicketRenewWindowFactor = getDouble(KafkaConfig.SaslKerberosTicketRenewWindowFactorProp)
   val saslKerberosTicketRenewJitter = getDouble(KafkaConfig.SaslKerberosTicketRenewJitterProp)
   val saslKerberosMinTimeBeforeRelogin = getLong(KafkaConfig.SaslKerberosMinTimeBeforeReloginProp)
+  val authToLocal = getList(KafkaConfig.AuthToLocalProp)
 
   /** ********* Quota Configuration **************/
   val producerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp)
@@ -982,6 +987,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     channelConfigs.put(SaslKerberosTicketRenewWindowFactorProp, saslKerberosTicketRenewWindowFactor)
     channelConfigs.put(SaslKerberosTicketRenewJitterProp, saslKerberosTicketRenewJitter)
     channelConfigs.put(SaslKerberosMinTimeBeforeReloginProp, saslKerberosMinTimeBeforeRelogin)
+    channelConfigs.put(AuthToLocalProp, authToLocal)
     channelConfigs
   }
 

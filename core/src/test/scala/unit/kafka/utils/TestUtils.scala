@@ -137,17 +137,25 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a test config for the given node id
+   * Create a test config for the provided parameters.
+    *
+   * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
    */
   def createBrokerConfigs(numConfigs: Int,
     zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false,
-    enableSSL: Boolean = false,
-    enableSasl: Boolean = false,
-    trustStoreFile: Option[File] = None): Seq[Properties] = {
-    (0 until numConfigs).map(node => createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic,
-      enableSSL = enableSSL, enableSasl = enableSasl, trustStoreFile = trustStoreFile))
+    interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
+    trustStoreFile: Option[File] = None,
+    enablePlaintext: Boolean = true,
+    enableSsl: Boolean = false,
+    enableSaslPlaintext: Boolean = false,
+    enableSaslSsl: Boolean = false): Seq[Properties] = {
+    (0 until numConfigs).map { node =>
+      createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
+        interBrokerSecurityProtocol, trustStoreFile, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
+        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl)
+    }
   }
 
   def getBrokerListStrFromServers(servers: Seq[KafkaServer], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
@@ -155,20 +163,38 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a test config for the given node id
-   */
+    * Create a test config for the provided parameters.
+    *
+    * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
+    */
   def createBrokerConfig(nodeId: Int, zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false,
-    port: Int = RandomPort, enableSasl: Boolean = false, saslPort: Int = RandomPort, enableSSL: Boolean = false,
-    sslPort: Int = RandomPort, trustStoreFile: Option[File] = None): Properties = {
+    port: Int = RandomPort,
+    interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
+    trustStoreFile: Option[File] = None,
+    enablePlaintext: Boolean = true,
+    enableSaslPlaintext: Boolean = false, saslPlaintextPort: Int = RandomPort,
+    enableSsl: Boolean = false, sslPort: Int = RandomPort,
+    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort)
+  : Properties = {
+
+    def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
+
+    val sslEnabled = enableSsl || shouldEnable(SecurityProtocol.SSL)
+    val saslSslEnabled = enableSaslSsl || shouldEnable(SecurityProtocol.SASL_SSL)
 
     val listeners = {
-      val protocolAndPorts = ArrayBuffer("PLAINTEXT" -> port)
-      if (enableSSL)
+
+      val protocolAndPorts = ArrayBuffer[(String, Int)]()
+      if (enablePlaintext || shouldEnable(SecurityProtocol.PLAINTEXT))
+        protocolAndPorts += ("PLAINTEXT" -> port)
+      if (sslEnabled)
         protocolAndPorts += "SSL" -> sslPort
-      if (enableSasl)
-        protocolAndPorts += "SASL_PLAINTEXT" -> saslPort
+      if (enableSaslPlaintext || shouldEnable(SecurityProtocol.SASL_PLAINTEXT))
+        protocolAndPorts += "SASL_PLAINTEXT" -> saslPlaintextPort
+      if (saslSslEnabled)
+        protocolAndPorts += "SASL_SSL" -> saslSslPort
       protocolAndPorts.map { case (protocol, port) =>
         s"$protocol://localhost:$port"
       }.mkString(",")
@@ -184,8 +210,14 @@ object TestUtils extends Logging {
     props.put("controlled.shutdown.enable", enableControlledShutdown.toString)
     props.put("delete.topic.enable", enableDeleteTopic.toString)
     props.put("controlled.shutdown.retry.backoff.ms", "100")
-    if (enableSSL)
+
+    if (sslEnabled || saslSslEnabled)
       props.putAll(addSSLConfigs(Mode.SERVER, true, trustStoreFile, s"server$nodeId"))
+
+    interBrokerSecurityProtocol.foreach { protocol =>
+      props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
+    }
+
     props.put("port", port.toString)
     props
   }
@@ -923,19 +955,18 @@ object TestUtils extends Logging {
     new String(bytes, encoding)
   }
 
-  def addSSLConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File],  certAlias: String): Properties = {
-    if (!trustStoreFile.isDefined) {
+  def addSSLConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String): Properties = {
+
+    val trustStore = trustStoreFile.getOrElse {
       throw new Exception("enableSSL set to true but no trustStoreFile provided")
     }
 
+
     val sslConfigs = {
-      if (mode == Mode.SERVER) {
-        val sslConfigs = TestSSLUtils.createSSLConfig(true, true, mode, trustStoreFile.get, certAlias)
-        sslConfigs.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.SSL.name)
-        sslConfigs
-      }
+      if (mode == Mode.SERVER)
+        TestSSLUtils.createSSLConfig(true, true, mode, trustStore, certAlias)
       else
-        TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStoreFile.get, certAlias)
+        TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStore, certAlias)
     }
 
     val sslProps = new Properties()

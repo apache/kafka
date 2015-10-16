@@ -23,11 +23,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.io.IOException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class JaasUtils {
-    private static final Logger LOG = LoggerFactory.getLogger(JaasUtils.class);
     public static final String LOGIN_CONTEXT_SERVER = "KafkaServer";
     public static final String LOGIN_CONTEXT_CLIENT = "KafkaClient";
     public static final String SERVICE_NAME = "serviceName";
@@ -58,6 +54,10 @@ public class JaasUtils {
         throws ClassNotFoundException, NoSuchMethodException,
                IllegalArgumentException, IllegalAccessException,
                InvocationTargetException {
+
+        //TODO Find a way to avoid using these proprietary classes as access to Java 9 will block access by default
+        //due to the Jigsaw module system
+
         Object kerbConf;
         Class<?> classRef;
         Method getInstanceMethod;

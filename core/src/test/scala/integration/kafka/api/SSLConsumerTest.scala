@@ -61,7 +61,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   def generateConfigs() =
-    TestUtils.createBrokerConfigs(numServers, zkConnect, false, enableSSL=true, trustStoreFile=Some(trustStoreFile)).map(KafkaConfig.fromProps(_, overridingProps))
+    TestUtils.createBrokerConfigs(numServers, zkConnect, false, enableSsl=true, trustStoreFile=Some(trustStoreFile)).map(KafkaConfig.fromProps(_, overridingProps))
 
   val topic = "topic"
   val part = 0

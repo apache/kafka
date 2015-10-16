@@ -39,17 +39,23 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
   var adHocConfigs: Seq[KafkaConfig] = null
   val numConfigs: Int = 4
 
-  /* If this is `Some`, SSL will be enabled */
+  // This should be defined if `securityProtocol` uses SSL (eg SSL, SASL_SSL)
   protected def trustStoreFile: Option[File]
+  protected def securityProtocol: SecurityProtocol
 
   @Before
   override def setUp() {
     super.setUp()
-    val props = createBrokerConfigs(numConfigs, zkConnect, enableSSL = trustStoreFile.isDefined, trustStoreFile = trustStoreFile)
+    val props = createBrokerConfigs(numConfigs, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile)
     val configs: Seq[KafkaConfig] = props.map(KafkaConfig.fromProps)
     adHocConfigs = configs.takeRight(configs.size - 1) // Started and stopped by individual test cases
     server1 = TestUtils.createServer(configs.head)
-    brokerEndPoints = Seq(new Broker(server1.config.brokerId, server1.config.hostName, server1.boundPort()).getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+    brokerEndPoints = Seq(
+      // We are using the Scala clients and they don't support SSL. Once we move to the Java ones, we should use
+      // `securityProtocol` instead of PLAINTEXT below
+      new BrokerEndPoint(server1.config.brokerId, server1.config.hostName, server1.boundPort(SecurityProtocol.PLAINTEXT))
+    )
   }
 
   @After

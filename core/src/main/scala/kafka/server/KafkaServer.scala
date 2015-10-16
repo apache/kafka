@@ -21,7 +21,7 @@ import java.net.{SocketTimeoutException}
 import java.util
 
 import kafka.admin._
-import kafka.api.{KAFKA_090, ApiVersion}
+import kafka.api.KAFKA_090
 import kafka.log.LogConfig
 import kafka.log.CleanerConfig
 import kafka.log.LogManager
@@ -34,11 +34,10 @@ import kafka.utils._
 import org.apache.kafka.clients.{ManualMetadataUpdater, ClientRequest, NetworkClient}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
+import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
 import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.requests.{ControlledShutdownResponse, ControlledShutdownRequest, RequestSend}
-import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.utils.AppInfoParser
 
 import scala.collection.mutable
@@ -304,7 +303,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
-          ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, config.channelConfigs)
+          ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.channelConfigs)
         )
         new NetworkClient(
           selector,

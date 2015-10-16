@@ -20,6 +20,7 @@ package org.apache.kafka.common.security.authenticator;
 
 import java.io.IOException;
 
+import org.apache.kafka.common.security.kerberos.KerberosNameParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.security.auth.callback.Callback;
@@ -35,12 +36,13 @@ import org.apache.kafka.common.security.JaasUtils;
 
 public class SaslServerCallbackHandler implements CallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerCallbackHandler.class);
+    private final KerberosNameParser kerberosNameParser;
 
-    public SaslServerCallbackHandler(Configuration configuration) throws IOException {
+    public SaslServerCallbackHandler(Configuration configuration, KerberosNameParser kerberosNameParser) throws IOException {
         AppConfigurationEntry[] configurationEntries = configuration.getAppConfigurationEntry(JaasUtils.LOGIN_CONTEXT_SERVER);
-
         if (configurationEntries == null)
             throw new IOException("Could not find a 'KafkaServer' entry in this configuration: Kafka Server cannot start.");
+        this.kerberosNameParser = kerberosNameParser;
     }
 
     public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
@@ -66,7 +68,7 @@ public class SaslServerCallbackHandler implements CallbackHandler {
                 authorizationID);
         ac.setAuthorized(true);
 
-        KerberosName kerberosName = new KerberosName(authenticationID);
+        KerberosName kerberosName = kerberosNameParser.parse(authenticationID);
         try {
             String userName = kerberosName.shortName();
             LOG.info("Setting authorizedID: {}", userName);

@@ -14,13 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.network;
 
-package kafka.integration
+import org.apache.kafka.common.security.JaasUtils;
 
-import org.apache.kafka.common.protocol.SecurityProtocol
+/**
+ * The type of the login context, it should be SERVER for the broker and CLIENT for the clients (i.e. consumer and
+ * producer). It provides the the login context name which defines the section of the JAAS configuration file to be used
+ * for login.
+ */
+public enum LoginType {
+    CLIENT(JaasUtils.LOGIN_CONTEXT_CLIENT),
+    SERVER(JaasUtils.LOGIN_CONTEXT_SERVER);
 
-class PlaintextTopicMetadataTest extends BaseTopicMetadataTest {
-  protected def securityProtocol = SecurityProtocol.PLAINTEXT
-  protected def trustStoreFile = None
+    private final String contextName;
+
+    LoginType(String contextName) {
+        this.contextName = contextName;
+    }
+
+    public String contextName() {
+        return contextName;
+    }
 }
-
