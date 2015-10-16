@@ -21,6 +21,7 @@ import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import kafka.utils.{ZkUtils, CoreUtils}
 import org.junit.{After, Before}
 import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.common.security.JaasUtils
 
 trait ZooKeeperTestHarness extends JUnitSuite {
   var zkPort: Int = -1
@@ -29,12 +30,13 @@ trait ZooKeeperTestHarness extends JUnitSuite {
   val zkConnectionTimeout = 6000
   val zkSessionTimeout = 6000
   def zkConnect: String = "127.0.0.1:" + zkPort
+  def jaasFile: String = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "")
 
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
     zkPort = zookeeper.port
-    zkUtils = ZkUtils.apply(zkConnect, zkSessionTimeout, zkConnectionTimeout, false)
+    zkUtils = ZkUtils.apply(zkConnect, zkSessionTimeout, zkConnectionTimeout, JaasUtils.isZkSecurityEnabled(jaasFile))
   }
 
   @After

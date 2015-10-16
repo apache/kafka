@@ -4,17 +4,20 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.JaasUtils
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.{Before, BeforeClass, Test}
 
 class ZkAuthorizationTest extends ZooKeeperTestHarness {
   val jaasFile: String = "zk-digest-jaas.conf"
   
-  @Before
-  override def setUp() {
+  @BeforeClass
+  override def setUpClass() {
     val classLoader = getClass.getClassLoader
     val filePath = classLoader.getResource(jaasFile).getPath
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, filePath)
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, filePath)  
   }
+  
+  @Before
+  override def setUp() {}
   
   @Test
   def testIsZkSecurityEnabled() {
@@ -30,5 +33,10 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness {
         throw e
       }
     }
+  }
+  
+  @Test
+  def testZkUtils() {
+    
   }
 }
