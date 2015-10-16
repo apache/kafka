@@ -18,6 +18,7 @@ import javax.security.auth.login.Configuration
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.hadoop.minikdc.MiniKdc
+import org.apache.kafka.common.security.JaasUtils
 import org.junit.{After, Before}
 
 trait SaslTestHarness extends ZooKeeperTestHarness {
@@ -27,6 +28,8 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
 
   @Before
   override def setUp() {
+    // Clean-up global configuration set by other tests
+    Configuration.setConfiguration(null)
     val keytabFile = TestUtils.tempFile()
     val jaasFile = TestUtils.tempFile()
 
@@ -43,7 +46,7 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
 
     kdc.start()
     kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
-    System.setProperty("java.security.auth.login.config", jaasFile.getAbsolutePath)
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
     super.setUp
   }
 
@@ -51,7 +54,7 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
   override def tearDown() {
     super.tearDown
     kdc.stop()
-    System.clearProperty("java.security.auth.login.config")
+    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
   }
 }

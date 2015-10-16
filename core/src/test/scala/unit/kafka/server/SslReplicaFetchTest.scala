@@ -19,6 +19,9 @@ package kafka.server
 
 import java.io.File
 
+import org.apache.kafka.common.protocol.SecurityProtocol
+
 class SslReplicaFetchTest extends BaseReplicaFetchTest {
+  protected def securityProtocol = SecurityProtocol.SSL
   protected def trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 }

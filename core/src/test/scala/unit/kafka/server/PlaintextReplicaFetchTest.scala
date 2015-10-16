@@ -17,6 +17,9 @@
 
 package kafka.server
 
+import org.apache.kafka.common.protocol.SecurityProtocol
+
 class PlaintextReplicaFetchTest extends BaseReplicaFetchTest {
+  protected def securityProtocol = SecurityProtocol.PLAINTEXT
   protected def trustStoreFile = None
 }

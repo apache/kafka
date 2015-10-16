@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.SecurityProtocol
-import kafka.integration.KafkaServerTestHarness
 
 import kafka.utils.{TestUtils, Logging}
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -73,7 +72,7 @@ class SaslIntegrationTest extends SaslTestHarness with Logging {
   @Before
   override def setUp() {
     super.setUp()
-    val props =  TestUtils.createBrokerConfig(numServers, zkConnect, false, enableSasl=true)
+    val props =  TestUtils.createBrokerConfig(numServers, zkConnect, false, enableSaslPlaintext=true)
     val config = KafkaConfig.fromProps(props, overridingProps)
     servers = Buffer(TestUtils.createServer(config))
 

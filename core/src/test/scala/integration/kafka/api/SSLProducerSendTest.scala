@@ -43,7 +43,7 @@ class SSLProducerSendTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
 
   def generateConfigs() =
-    TestUtils.createBrokerConfigs(numServers, zkConnect, false, enableSSL=true, trustStoreFile=Some(trustStoreFile)).map(KafkaConfig.fromProps(_, overridingProps))
+    TestUtils.createBrokerConfigs(numServers, zkConnect, false, enableSsl=true, trustStoreFile=Some(trustStoreFile)).map(KafkaConfig.fromProps(_, overridingProps))
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
