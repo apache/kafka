@@ -77,10 +77,10 @@ object ExportZkOffsets extends Logging {
     val fileWriter : FileWriter  = new FileWriter(outfile)
     
     try {
-      zkUtils = ZkUtils.create(zkConnect,
+      zkUtils = ZkUtils.apply(zkConnect,
                                30000,
                                30000,
-                               JaasUtils.isSecure(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                               JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
       
       var consumerGroups: Seq[String] = null
 

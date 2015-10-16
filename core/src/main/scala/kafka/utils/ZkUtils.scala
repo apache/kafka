@@ -67,11 +67,18 @@ object ZkUtils {
   val EntityConfigChangesPath = "/config/changes"
   
   
-  def create(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isSecure: Boolean): ZkUtils = {
+  def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
-    new ZkUtils(zkClient, zkConnection, isSecure)
+    new ZkUtils(zkClient, zkConnection, isZkSecurityEnabled)
   }
   
+  /*
+   * Used in tests
+   */
+  def applyWithZkClient(zkClient: ZkClient, isZkSecurityEnabled: Boolean): ZkUtils = {
+    new ZkUtils(zkClient, null, isZkSecurityEnabled)
+  }
+
   def createZkClient(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int): ZkClient = {
     val zkClient = new ZkClient(zkUrl, sessionTimeout, connectionTimeout, ZKStringSerializer)
     zkClient
@@ -81,13 +88,6 @@ object ZkUtils {
     val zkConnection = new ZkConnection(zkUrl, sessionTimeout)
     val zkClient = new ZkClient(zkConnection, connectionTimeout, ZKStringSerializer)
     (zkClient, zkConnection)
-  }
-  
-  /*
-   * For tests
-   */
-  def createWithZkClient(zkClient: ZkClient, isSecure: Boolean): ZkUtils = {
-    new ZkUtils(zkClient, null, isSecure)
   }
 
   def maybeDeletePath(zkUrl: String, dir: String) {

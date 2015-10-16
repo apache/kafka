@@ -484,7 +484,7 @@ object TestUtils extends Logging {
   }
 
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
-    val zkUtils = ZkUtils.create(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
+    val zkUtils = ZkUtils.apply(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
     zkUtils.updatePersistentPath(path, offset.toString)
 
   }
