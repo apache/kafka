@@ -54,6 +54,10 @@ public class JaasUtils {
         throws ClassNotFoundException, NoSuchMethodException,
                IllegalArgumentException, IllegalAccessException,
                InvocationTargetException {
+
+        //TODO Find a way to avoid using these proprietary classes as access to Java 9 will block access by default
+        //due to the Jigsaw module system
+
         Object kerbConf;
         Class<?> classRef;
         Method getInstanceMethod;

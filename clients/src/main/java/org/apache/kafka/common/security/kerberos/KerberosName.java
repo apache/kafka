@@ -106,14 +106,6 @@ public class KerberosName {
     }
 
     /**
-     * Get the configured default realm.
-     * @return the default realm from the krb5.conf
-     */
-    public String getDefaultRealm() {
-        return DEFAULT_REALM;
-    }
-
-    /**
      * Put the name back together from the parts.
      */
     @Override
