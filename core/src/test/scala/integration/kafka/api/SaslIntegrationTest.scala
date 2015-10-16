@@ -42,7 +42,7 @@ import scala.collection.mutable.Buffer
 import scala.collection.JavaConversions._
 import kafka.coordinator.ConsumerCoordinator
 
-class SaslConsumerTest extends SaslTestHarness with Logging {
+class SaslIntegrationTest extends SaslTestHarness with Logging {
   val brokerId1 = 0
   var servers: Buffer[KafkaServer] = null
   val numServers = 1
