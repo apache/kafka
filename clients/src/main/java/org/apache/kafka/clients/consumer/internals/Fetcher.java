@@ -304,7 +304,8 @@ public class Fetcher<K, V> {
                 + copiedRecordTooLargePartitions
                 + " whose size is larger than the fetch size "
                 + this.fetchSize
-                + " and hence cannot be ever returned",
+                + " and hence cannot be ever returned."
+                + " Increase the fetch size, or decrease the maximum message size the broker will allow.",
                 copiedRecordTooLargePartitions);
     }
 
