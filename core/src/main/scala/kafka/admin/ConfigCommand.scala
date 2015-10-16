@@ -90,8 +90,10 @@ object ConfigCommand {
       case n: String => n.toInt
       case _ => -1
     }
-    if (maxMessageBytes > Defaults.MaxMessageSize)
-      warn(TopicCommand.longMessageSizeWarning(maxMessageBytes))
+    if (maxMessageBytes > Defaults.MaxMessageSize){
+      error(TopicCommand.longMessageSizeWarning(maxMessageBytes))
+      TopicCommand.askToProceed
+    }
   }
 
   private def describeConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions) {

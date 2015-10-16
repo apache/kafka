@@ -36,7 +36,6 @@ import org.apache.kafka.common.protocol.{Errors, ApiKeys}
 import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.utils.Time
 
-import scala.RuntimeException
 import scala.collection.{JavaConverters, Map, mutable}
 import JavaConverters._
 

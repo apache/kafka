@@ -341,28 +341,38 @@ object TopicCommand extends Logging {
       case _ => -1
     }
     if (maxMessageBytes > Defaults.MaxMessageSize)
-      if (replicas > 1)
+      if (replicas > 1) {
         error(longMessageSizeWarning(maxMessageBytes))
+        askToProceed
+      }
       else
         warn(shortMessageSizeWarning(maxMessageBytes))
+  }
+
+  def askToProceed: Unit = {
+    println("Are you sure you want to continue? [y/n]")
+    if (!Console.readLine().equalsIgnoreCase("y")) {
+      println("Ending your session")
+      System.exit(0)
+    }
   }
 
   def shortMessageSizeWarning(maxMessageBytes: Int): String = {
     "\n\n" +
       "*****************************************************************************************************\n" +
-      "*** WARNING: you are creating a topic where the the max.message.size is greater than the consumer ***\n" +
+      "*** WARNING: you are creating a topic where the the max.message.bytes is greater than the consumer ***\n" +
       "*** default. This operation is potentially dangerous. Consumers will get failures if their        ***\n" +
       "*** fetch.message.max.bytes < the value you are using.                                            ***\n" +
       "*****************************************************************************************************\n" +
       s"- value set here: $maxMessageBytes\n" +
       s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n" +
-      s"- Default Broker max.message.size: ${kafka.server.Defaults.MessageMaxBytes}\n\n"
+      s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n\n"
   }
 
   def longMessageSizeWarning(maxMessageBytes: Int): String = {
     "\n\n" +
       "****************************************************************************************************\n" +
-      "*** WARNING: you are creating a topic where the max.message.size is greater than the broker      ***\n" +
+      "*** WARNING: you are creating a topic where the max.message.bytes is greater than the broker      ***\n" +
       "*** default. This operation is dangerous. There are two potential side effects:                  ***\n" +
       "*** - Consumers will get failures if their fetch.message.max.bytes < the value you are using     ***\n" +
       "*** - Producer requests larger than replica.fetch.max.bytes will not replicate and hence have    ***\n" +
@@ -372,7 +382,7 @@ object TopicCommand extends Logging {
       "****************************************************************************************************\n" +
       s"- value set here: $maxMessageBytes\n" +
       s"- Default Broker replica.fetch.max.bytes: ${kafka.server.Defaults.ReplicaFetchMaxBytes}\n" +
-      s"- Default Broker max.message.size: ${kafka.server.Defaults.MessageMaxBytes}\n" +
+      s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n" +
       s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n\n"
   }
 }
