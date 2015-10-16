@@ -56,6 +56,7 @@ public class SchemaProjector {
      * @throws SchemaProjectorException
      */
     public static Object project(Schema source, Object record, Schema target) throws SchemaProjectorException {
+        checkMaybeCompatible(source, target);
         if (source.isOptional() && !target.isOptional()) {
             if (target.defaultValue() != null) {
                 if (record != null) {
@@ -69,13 +70,13 @@ public class SchemaProjector {
         } else {
             if (record != null) {
                 return projectRequiredSchema(source, record, target);
+            } else {
+                return null;
             }
-            return null;
         }
     }
 
     private static Object projectRequiredSchema(Schema source, Object record, Schema target) throws SchemaProjectorException {
-        checkMaybeCompatible(source, target);
         switch (target.type()) {
             case INT8:
             case INT16:

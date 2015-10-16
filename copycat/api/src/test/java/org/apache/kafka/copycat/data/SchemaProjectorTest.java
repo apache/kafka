@@ -351,7 +351,7 @@ public class SchemaProjectorTest {
         projected = SchemaProjector.project(Timestamp.SCHEMA, 34567L, Timestamp.SCHEMA);
         assertEquals(34567L, projected);
 
-        Schema namedSchame = SchemaBuilder.int32().name("invalidLogicalTypeName").build();
+        Schema namedSchema = SchemaBuilder.int32().name("invalidLogicalTypeName").build();
         for (Schema logicalTypeSchema: logicalTypeSchemas) {
             try {
                 SchemaProjector.project(logicalTypeSchema, null, Schema.BOOLEAN_SCHEMA);
@@ -361,7 +361,7 @@ public class SchemaProjectorTest {
             }
 
             try {
-                SchemaProjector.project(logicalTypeSchema, null, namedSchame);
+                SchemaProjector.project(logicalTypeSchema, null, namedSchema);
                 fail("Reader name is not a valid logical type name.");
             } catch (SchemaProjectorException e) {
                 // expected
