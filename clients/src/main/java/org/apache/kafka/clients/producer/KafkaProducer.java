@@ -679,7 +679,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Check and may be get the time elapsed since startTime.
+     * Check and maybe get the time elapsed since startTime.
      * Throws a {@link org.apache.kafka.common.errors.TimeoutException} if the  elapsed time
      * is more than the max time to block (max.block.ms)
      *
@@ -689,7 +689,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private long checkMaybeGetRemainingTime(long startTime) {
         long elapsedTime = time.milliseconds() - startTime;
         if (elapsedTime > maxBlockTimeMs) {
-            throw new TimeoutException("Request timed out");
+            throw new TimeoutException("Request timed out due to exceeding the maximum threshold of " + maxBlockTimeMs + " ms");
         }
         long remainingTime = maxBlockTimeMs - elapsedTime;
 
