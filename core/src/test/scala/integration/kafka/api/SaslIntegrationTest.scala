@@ -47,7 +47,7 @@ class SaslIntegrationTest extends SaslTestHarness with Logging {
   var servers: Buffer[KafkaServer] = null
   val numServers = 1
   val producerCount = 1
-  val consumerCount = 2
+  val consumerCount = 1
   val producerConfig = new Properties
   val consumerConfig = new Properties
 
@@ -57,8 +57,8 @@ class SaslIntegrationTest extends SaslTestHarness with Logging {
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   overridingProps.put(KafkaConfig.ConsumerMinSessionTimeoutMsProp, "100") // set small enough session timeout
 
-  val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-  val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  var consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+  var producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   val topic = "topic"
   val part = 0
@@ -78,11 +78,7 @@ class SaslIntegrationTest extends SaslTestHarness with Logging {
     servers = Buffer(TestUtils.createServer(config))
 
     producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT))
-    producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers, SecurityProtocol.SASL_PLAINTEXT))
-    consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range")
 
     for (i <- 0 until producerCount)
@@ -123,17 +119,17 @@ class SaslIntegrationTest extends SaslTestHarness with Logging {
     this.consumers(0).assign(List(tp))
     assertEquals(1, this.consumers(0).assignment.size)
     this.consumers(0).seek(tp, 0)
-    consumeRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
+    consumeAndVerifyRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
   }
 
   private def sendRecords(numRecords: Int) {
     val futures = (0 until numRecords).map { i =>
-      this.producers(0).send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
+      this.producers(0).send(new ProducerRecord(topic, part, ("key" + i).getBytes, ("value" + i).getBytes))
     }
     futures.map(_.get)
   }
 
-  private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int) {
+  private def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 300
     var iters = 0
@@ -151,6 +147,8 @@ class SaslIntegrationTest extends SaslTestHarness with Logging {
       assertEquals(topic, record.topic())
       assertEquals(part, record.partition())
       assertEquals(offset.toLong, record.offset())
+      assertEquals("key" + i, new String(record.key()))
+      assertEquals("value" + i, new String(record.value()))
     }
   }
 
