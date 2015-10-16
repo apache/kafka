@@ -31,11 +31,13 @@ import org.slf4j.LoggerFactory;
 
 public class SaslChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
+
+    private final SecurityProtocol securityProtocol;
+    private final Mode mode;
+
     private LoginManager loginManager;
     private PrincipalBuilder principalBuilder;
-    private SecurityProtocol securityProtocol;
     private SSLFactory sslFactory;
-    private Mode mode;
     private Map<String, ?> configs;
 
     public SaslChannelBuilder(Mode mode, SecurityProtocol securityProtocol) {
@@ -46,7 +48,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            this.loginManager = LoginManager.getLoginManager(mode, configs);
+            this.loginManager = LoginManager.acquireLoginManager(mode, configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
@@ -59,7 +61,6 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException {
-        KafkaChannel channel = null;
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             TransportLayer transportLayer;
@@ -76,16 +77,15 @@ public class SaslChannelBuilder implements ChannelBuilder {
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(), socketChannel.socket().getInetAddress().getHostName());
             authenticator.configure(transportLayer, this.principalBuilder, this.configs);
-            channel = new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
+            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
         }
-        return channel;
     }
 
     public void close()  {
         this.principalBuilder.close();
-        this.loginManager.close();
+        this.loginManager.release();
     }
 }
