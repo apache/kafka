@@ -4,8 +4,10 @@ import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.zookeeper.data.{ACL, Stat}
 import org.junit.Assert._
 import org.junit.{After, Before, BeforeClass, Test}
+import scala.collection.JavaConverters._
 
 
 class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
@@ -18,13 +20,11 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, filePath)
     System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
     super.setUp()
-    info("Finished setup")
   }
   
   @After
   override def tearDown() {
     super.tearDown()
-    Thread.sleep(2)
   }
   
   /**
@@ -33,7 +33,6 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
    */
   @Test
   def testIsZkSecurityEnabled() {
-    info("testIsZkSecurityEnabled")
     assertTrue(JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     assertFalse(JaasUtils.isZkSecurityEnabled(""))
     try {
@@ -47,7 +46,6 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
         throw e
       }
     }
-    info("testIsZkSecurityEnabled")
   }
   
   /**
@@ -56,24 +54,26 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
    */
   @Test
   def testZkUtils() {
-    info("Verifying that the initialization has worked.")
     assertTrue(zkUtils.isSecure)
-    info("Creating paths with secure acls")
     for (path <- zkUtils.persistentZkPaths) {
-      info("Processing path: " + path)
       zkUtils.makeSurePersistentPathExists(path)
-    }
-    
-    info("Check that non-authenticated clients can't modify the znodes")
-    System.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
-    val otherZkUtils = ZkUtils.apply(zkConnect, 30000, 30000, false)
-    for (path <- otherZkUtils.persistentZkPaths) {
-      try {
-        otherZkUtils.zkClient.writeData(path, "")
-        fail("Expected an exception")
-      } catch {
-        case e: Exception => {
-          // Expected
+      if(!path.equals(ZkUtils.ConsumersPath)) {
+        var stat: Stat = new Stat;
+        val aclListEntry = zkUtils.zkConnection.getZookeeper.getACL(path, stat)
+        assertTrue(aclListEntry.size == 2)
+        for (acl: ACL <- aclListEntry.asScala) {
+          info("Perms " + acl.getPerms + " and id" + acl.getId)
+          acl.getPerms match {
+            case 1 => {
+              assertTrue(acl.getId.getScheme.equals("world"))
+            }
+            case 31 => {
+              assertTrue(acl.getId.getScheme.equals("sasl"))
+            }
+            case _: Int => {
+             fail("Unrecognized ID scheme %d".format(acl.getPerms)) 
+            }
+          }
         }
       }
     }
