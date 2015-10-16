@@ -29,6 +29,17 @@ public class SyncGroupResponse extends AbstractRequestResponse {
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String MEMBER_ASSIGNMENT_KEY_NAME = "member_assignment";
 
+    /**
+     * Possible error codes:
+     *
+     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR_FOR_GROUP (16)
+     * ILLEGAL_GENERATION (22)
+     * UNKNOWN_MEMBER_ID (25)
+     * REBALANCE_IN_PROGRESS (30)
+     *
+     */
+
     private final short errorCode;
     private final ByteBuffer memberState;
 

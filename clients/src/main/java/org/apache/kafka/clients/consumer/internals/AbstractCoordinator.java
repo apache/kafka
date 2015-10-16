@@ -569,14 +569,6 @@ public abstract class AbstractCoordinator {
             handle(response, future);
         }
 
-        @Override
-        public void onFailure(RuntimeException e, RequestFuture<T> future) {
-            if (e instanceof DisconnectException) {
-                log.debug("Coordinator request failed", e);
-                coordinatorDead();
-            }
-            future.raise(e);
-        }
     }
 
     private class GroupCoordinatorMetrics {

@@ -84,6 +84,7 @@ private object GroupMetadata {
  *  State metadata:
  *  1. group state
  *  2. generation id
+ *  3. leader id
  */
 @nonthreadsafe
 private[coordinator] class GroupMetadata(val groupId: String, val protocolType: String) {
@@ -100,6 +101,8 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
   def get(memberId: String) = members(memberId)
 
   def add(memberId: String, member: MemberMetadata) {
+    assert(supportsProtocols(member.protocols))
+
     if (leaderId == null)
       leaderId = memberId
     members.put(memberId, member)
@@ -138,12 +141,12 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
     state = groupState
   }
 
-  private def selectProtocol: String = {
+  def selectProtocol: String = {
+    if (members.isEmpty)
+      throw new IllegalStateException("Cannot select protocol for empty group")
+
     // select the protocol for this group which is supported by all members
     val candidates = candidateProtocols
-
-    if (candidates.isEmpty)
-      throw new IllegalStateException("Attempt to create group with inconsistent protocols")
 
     // let each member vote for one of the protocols and choose the one with the most votes
     val votes: List[(String, Int)] = allMembers
@@ -158,7 +161,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
   private def candidateProtocols = {
     // get the set of protocols that are commonly supported by all members
     allMembers
-      .map(_.protocols.toSet)
+      .map(_.protocols)
       .reduceLeft((commonProtocols, protocols) => commonProtocols & protocols)
   }
 

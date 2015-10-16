@@ -22,7 +22,7 @@ import org.junit.{Before, Test}
 import org.scalatest.junit.JUnitSuite
 
 /**
- * Test group state transitions
+ * Test group state transitions and other GroupMetadata functionality
  */
 class GroupMetadataTest extends JUnitSuite {
   var group: GroupMetadata = null
@@ -153,6 +153,89 @@ class GroupMetadataTest extends JUnitSuite {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
     group.transitionTo(AwaitingSync)
+  }
+
+  @Test
+  def testSelectProtocol() {
+    val groupId = "groupId"
+
+    val sessionTimeoutMs = 10000
+
+    val memberId = "memberId"
+    val member = new MemberMetadata(memberId, groupId, sessionTimeoutMs,
+      List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
+    group.add(memberId, member)
+    assertEquals("range", group.selectProtocol)
+
+    val otherMemberId = "otherMemberId"
+    val otherMember = new MemberMetadata(otherMemberId, groupId, sessionTimeoutMs,
+      List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
+
+    group.add(otherMemberId, otherMember)
+    // now could be either range or robin since there is no majority preference
+    assertTrue(Set("range", "roundrobin")(group.selectProtocol))
+
+    val lastMemberId = "lastMemberId"
+    val lastMember = new MemberMetadata(lastMemberId, groupId, sessionTimeoutMs,
+      List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
+
+    group.add(lastMemberId, lastMember)
+    // now we should prefer 'roundrobin'
+    assertEquals("roundrobin", group.selectProtocol)
+  }
+
+  @Test(expected = classOf[IllegalStateException])
+  def testSelectProtocolRaisesIfNoMembers() {
+    group.selectProtocol
+    fail()
+  }
+
+  @Test
+  def testSelectProtocolChoosesCompatibleProtocol() {
+    val groupId = "groupId"
+
+    val sessionTimeoutMs = 10000
+
+    val memberId = "memberId"
+    val member = new MemberMetadata(memberId, groupId, sessionTimeoutMs,
+      List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
+    val otherMemberId = "otherMemberId"
+    val otherMember = new MemberMetadata(otherMemberId, groupId, sessionTimeoutMs,
+      List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
+
+    group.add(memberId, member)
+    group.add(otherMemberId, otherMember)
+    assertEquals("roundrobin", group.selectProtocol)
+  }
+
+  @Test
+  def testSupportsProtocols() {
+    val groupId = "groupId"
+
+    val sessionTimeoutMs = 10000
+
+    // by default, the group supports everything
+    assertTrue(group.supportsProtocols(Set("roundrobin", "range")))
+
+    val memberId = "memberId"
+    val member = new MemberMetadata(memberId, groupId, sessionTimeoutMs,
+      List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
+    group.add(memberId, member)
+    assertTrue(group.supportsProtocols(Set("roundrobin", "foo")))
+    assertTrue(group.supportsProtocols(Set("range", "foo")))
+    assertFalse(group.supportsProtocols(Set("foo", "bar")))
+
+    val otherMemberId = "otherMemberId"
+    val otherMember = new MemberMetadata(otherMemberId, groupId, sessionTimeoutMs,
+      List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
+
+    group.add(otherMemberId, otherMember)
+
+    assertTrue(group.supportsProtocols(Set("roundrobin", "foo")))
+    assertFalse(group.supportsProtocols(Set("range", "foo")))
   }
 
   private def assertState(group: GroupMetadata, targetState: GroupState) {

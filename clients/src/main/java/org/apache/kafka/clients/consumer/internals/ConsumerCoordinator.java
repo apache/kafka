@@ -75,7 +75,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                                int sessionTimeoutMs,
                                int heartbeatIntervalMs,
                                List<PartitionAssignor> assignors,
-                               org.apache.kafka.clients.Metadata metadata,
+                               Metadata metadata,
                                SubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix,

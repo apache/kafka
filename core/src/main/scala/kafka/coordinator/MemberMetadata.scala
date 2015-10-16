@@ -39,6 +39,9 @@ import scala.collection.Map
  * 1. Awaiting rebalance callback: when the group is in the prepare-rebalance state,
  *                                 its rebalance callback will be kept in the metadata if the
  *                                 member has sent the join group request
+ * 2. Awaiting sync callback: when the group is in the awaiting-sync state, its sync callback
+ *                            is kept in metadata until the leader provides the group assignment
+ *                            and the group transitions to stable
  */
 @nonthreadsafe
 private[coordinator] class MemberMetadata(val memberId: String,
@@ -47,21 +50,27 @@ private[coordinator] class MemberMetadata(val memberId: String,
                                           var supportedProtocols: List[(String, Array[Byte])]) {
 
   var assignment: Array[Byte] = null
-
   var awaitingJoinCallback: JoinGroupResult => Unit = null
   var awaitingSyncCallback: (Array[Byte], Short) => Unit = null
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
 
+  def protocols = supportedProtocols.map(_._1).toSet
+
+  /**
+   * Get metadata corresponding to the provided protocol.
+   */
   def metadata(protocol: String): Array[Byte] = {
     supportedProtocols.find(_._1 == protocol) match {
       case Some((_, metadata)) => metadata
       case None =>
         throw new IllegalArgumentException("Member does not support protocol")
     }
-
   }
 
+  /**
+   * Check if the provided protocol metadata matches the currently stored metadata.
+   */
   def matches(protocols: List[(String, Array[Byte])]): Boolean = {
     if (protocols.size != this.supportedProtocols.size)
       return false
@@ -73,12 +82,6 @@ private[coordinator] class MemberMetadata(val memberId: String,
         return false
     }
     return true
-  }
-
-  def protocols = supportedProtocols.map(_._1)
-
-  def hasAssignment(assignment: Array[Byte]): Boolean = {
-    util.Arrays.equals(assignment, this.assignment)
   }
 
   /**
