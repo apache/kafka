@@ -35,8 +35,8 @@ Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
     ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
 ### Running a particular test method within a unit test ###
-    ./gradlew core:test --tests kafka.api.test.ProducerFailureHandlingTest.testCannotSendToInternalTopic
-    ./gradlew clients:test --tests org.apache.kafka.clients.producer.MetadataTest.testMetadataUpdateWaitTime
+    ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
+    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
     
 
 ### Running a particular unit test with log4j output ###
