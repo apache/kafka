@@ -601,7 +601,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val tp = new TopicAndPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
 
-    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_CONSUMER_ID,
+    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
       OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp -> offset), true)
     assertEquals(Errors.NONE.code, commitOffsetResult(tp))
   }
@@ -677,15 +677,15 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
   @Test
   def testLeaveGroupUnknownConsumerExistingGroup() {
-    val groupProtocol = "consumer"
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val otherMemberId = "consumerId"
     val metadata = Array[Byte]()
-    val subProtocols = List("range")
+    val protocolType = "consumer"
+    val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, groupProtocol, subProtocols,
-      metadata, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
@@ -696,14 +696,14 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
   @Test
   def testValidLeaveGroup() {
-    val groupProtocol = "consumer"
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val metadata = Array[Byte]()
-    val subProtocols = List("range")
+    val protocolType = "consumer"
+    val protocols = List(("range", metadata))
 
-    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, groupProtocol, subProtocols,
-      metadata, isCoordinatorForGroup = true)
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
     val assignedMemberId = joinGroupResult.memberId
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.NONE.code, joinGroupErrorCode)

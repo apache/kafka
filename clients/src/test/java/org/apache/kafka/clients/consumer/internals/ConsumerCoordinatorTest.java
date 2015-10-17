@@ -480,7 +480,7 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(ClientRequest request) {
                 OffsetCommitRequest commitRequest = new OffsetCommitRequest(request.request().body());
-                return commitRequest.consumerId().equals(OffsetCommitRequest.DEFAULT_CONSUMER_ID) &&
+                return commitRequest.memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
                         commitRequest.generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
             }
         }, offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));

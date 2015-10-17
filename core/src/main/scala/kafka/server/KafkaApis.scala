@@ -271,7 +271,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // call coordinator to handle commit offset
       coordinator.handleCommitOffsets(
         offsetCommitRequest.groupId,
-        offsetCommitRequest.consumerId,
+        offsetCommitRequest.memberId,
         offsetCommitRequest.groupGenerationId,
         offsetData,
         sendResponseCallback)
