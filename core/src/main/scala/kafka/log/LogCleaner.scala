@@ -152,12 +152,9 @@ class LogCleaner(val config: CleanerConfig,
    * For testing, a way to know when work has completed. This method blocks until the
    * cleaner has processed up to the given offset on the specified topic/partition
    */
-  def awaitCleaned(topic: String, part: Int, offset: Long, timeout: Long = 30000L): Unit = {
-    while(true) {
-      val cleanedOffset = cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part))
-      if (cleanedOffset == None || cleanedOffset.get < offset) Thread.sleep(10)
-      else return
-    }
+  def awaitCleaned(topic: String, part: Int, offset: Long): Unit = {
+    while (cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part)).fold(true)(_ < offset))
+      Thread.sleep(10)
   }
   
   /**
