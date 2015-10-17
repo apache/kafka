@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{ConsumerMetadataRequest, OffsetCommitRequest, OffsetFetchRequest}
+import kafka.api.{GroupMetadataRequest, OffsetCommitRequest, OffsetFetchRequest}
 import kafka.consumer.SimpleConsumer
 import kafka.common.{OffsetMetadata, OffsetMetadataAndError, OffsetAndMetadata, ErrorMapping, TopicAndPartition}
 import kafka.utils._
@@ -56,7 +56,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     time = new MockTime()
     server = TestUtils.createServer(KafkaConfig.fromProps(config), time)
     simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "test-client")
-    val consumerMetadataRequest = ConsumerMetadataRequest(group)
+    val consumerMetadataRequest = GroupMetadataRequest(group)
     Stream.continually {
       val consumerMetadataResponse = simpleConsumer.send(consumerMetadataRequest)
       consumerMetadataResponse.coordinatorOpt.isDefined

@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import kafka.cluster.BrokerEndPoint
 import kafka.common.ErrorMapping
 
-object ConsumerMetadataResponse {
+object GroupMetadataResponse {
   val CurrentVersion = 0
 
   private val NoBrokerEndpointOpt = Some(BrokerEndPoint(id = -1, host = "", port = -1))
@@ -35,23 +35,23 @@ object ConsumerMetadataResponse {
     else
       None
 
-    ConsumerMetadataResponse(coordinatorOpt, errorCode, correlationId)
+    GroupMetadataResponse(coordinatorOpt, errorCode, correlationId)
   }
   
 }
 
-case class ConsumerMetadataResponse (coordinatorOpt: Option[BrokerEndPoint], errorCode: Short, correlationId: Int)
+case class GroupMetadataResponse (coordinatorOpt: Option[BrokerEndPoint], errorCode: Short, correlationId: Int)
   extends RequestOrResponse() {
 
   def sizeInBytes =
     4 + /* correlationId */
     2 + /* error code */
-    coordinatorOpt.orElse(ConsumerMetadataResponse.NoBrokerEndpointOpt).get.sizeInBytes
+    coordinatorOpt.orElse(GroupMetadataResponse.NoBrokerEndpointOpt).get.sizeInBytes
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
     buffer.putShort(errorCode)
-    coordinatorOpt.orElse(ConsumerMetadataResponse.NoBrokerEndpointOpt).foreach(_.writeTo(buffer))
+    coordinatorOpt.orElse(GroupMetadataResponse.NoBrokerEndpointOpt).foreach(_.writeTo(buffer))
   }
 
   def describe(details: Boolean) = toString

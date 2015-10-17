@@ -75,7 +75,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.ControlledShutdownKey => handleControlledShutdownRequest(request)
         case RequestKeys.OffsetCommitKey => handleOffsetCommitRequest(request)
         case RequestKeys.OffsetFetchKey => handleOffsetFetchRequest(request)
-        case RequestKeys.ConsumerMetadataKey => handleConsumerMetadataRequest(request)
+        case RequestKeys.GroupMetadataKey => handleGroupMetadataRequest(request)
         case RequestKeys.JoinGroupKey => handleJoinGroupRequest(request)
         case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
         case RequestKeys.LeaveGroupKey => handleLeaveGroupRequest(request)
@@ -662,29 +662,29 @@ class KafkaApis(val requestChannel: RequestChannel,
   /*
    * Handle a consumer metadata request
    */
-  def handleConsumerMetadataRequest(request: RequestChannel.Request) {
-    val consumerMetadataRequest = request.requestObj.asInstanceOf[ConsumerMetadataRequest]
+  def handleGroupMetadataRequest(request: RequestChannel.Request) {
+    val groupMetadataRequest = request.requestObj.asInstanceOf[GroupMetadataRequest]
 
-    if (!authorize(request.session, Read, new Resource(Group, consumerMetadataRequest.group))) {
-      val response = ConsumerMetadataResponse(None, ErrorMapping.AuthorizationCode, consumerMetadataRequest.correlationId)
+    if (!authorize(request.session, Read, new Resource(Group, groupMetadataRequest.group))) {
+      val response = GroupMetadataResponse(None, ErrorMapping.AuthorizationCode, groupMetadataRequest.correlationId)
       requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
     } else {
-      val partition = coordinator.partitionFor(consumerMetadataRequest.group)
+      val partition = coordinator.partitionFor(groupMetadataRequest.group)
 
       // get metadata (and create the topic if necessary)
       val offsetsTopicMetadata = getTopicMetadata(Set(GroupCoordinator.OffsetsTopicName), request.securityProtocol).head
 
-      val errorResponse = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, consumerMetadataRequest.correlationId)
+      val errorResponse = GroupMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, groupMetadataRequest.correlationId)
 
       val response =
         offsetsTopicMetadata.partitionsMetadata.find(_.partitionId == partition).map { partitionMetadata =>
           partitionMetadata.leader.map { leader =>
-            ConsumerMetadataResponse(Some(leader), ErrorMapping.NoError, consumerMetadataRequest.correlationId)
+            GroupMetadataResponse(Some(leader), ErrorMapping.NoError, groupMetadataRequest.correlationId)
           }.getOrElse(errorResponse)
         }.getOrElse(errorResponse)
 
       trace("Sending consumer metadata %s for correlation id %d to client %s."
-        .format(response, consumerMetadataRequest.correlationId, consumerMetadataRequest.clientId))
+        .format(response, groupMetadataRequest.correlationId, groupMetadataRequest.clientId))
       requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
     }
   }
