@@ -153,8 +153,11 @@ class LogCleaner(val config: CleanerConfig,
    * cleaner has processed up to the given offset on the specified topic/partition
    */
   def awaitCleaned(topic: String, part: Int, offset: Long, timeout: Long = 30000L): Unit = {
-    while(!cleanerManager.allCleanerCheckpoints.contains(TopicAndPartition(topic, part)))
-      Thread.sleep(10)
+    while(true) {
+      val cleanedOffset = cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part))
+      if (cleanedOffset == None || cleanedOffset.get < offset) Thread.sleep(10)
+      else return
+    }
   }
   
   /**

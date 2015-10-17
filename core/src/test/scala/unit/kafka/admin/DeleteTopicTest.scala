@@ -239,7 +239,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     writeDups(numKeys = 100, numDups = 3,log)
 
     // wait for cleaner to clean
-   server.logManager.cleaner.awaitCleaned(topicName,0,0)
+   server.logManager.cleaner.awaitCleaned(topicName, 0, 0)
 
     // delete topic
     AdminUtils.deleteTopic(zkClient, "test")
