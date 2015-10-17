@@ -58,6 +58,9 @@ public class RequestResponseTest {
                 createJoinGroupRequest(),
                 createJoinGroupRequest().getErrorResponse(0, new UnknownServerException()),
                 createJoinGroupResponse(),
+                createLeaveGroupRequest(),
+                createLeaveGroupRequest().getErrorResponse(0, new UnknownServerException()),
+                createLeaveGroupResponse(),
                 createListOffsetRequest(),
                 createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
                 createListOffsetResponse(),
@@ -182,6 +185,14 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createJoinGroupResponse() {
         return new JoinGroupResponse(Errors.NONE.code(), 1, "consumer1", Arrays.asList(new TopicPartition("test11", 1), new TopicPartition("test2", 1)));
+    }
+
+    private AbstractRequest createLeaveGroupRequest() {
+        return new LeaveGroupRequest("group1", "consumer1");
+    }
+
+    private AbstractRequestResponse createLeaveGroupResponse() {
+        return new LeaveGroupResponse(Errors.NONE.code());
     }
 
     private AbstractRequest createListOffsetRequest() {

@@ -30,7 +30,7 @@ First let's review some basic messaging terminology:
 
 So, at a high level, producers send messages over the network to the Kafka cluster which in turn serves them up to consumers like this:
 <div style="text-align: center; width: 100%">
-  <img src="../images/producer_consumer.png">
+  <img src="images/producer_consumer.png">
 </div>
 
 Communication between the clients and the servers is done with a simple, high-performance, language agnostic <a href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol">TCP protocol</a>. We provide a Java client for Kafka, but clients are available in <a href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">many languages</a>.
@@ -40,7 +40,7 @@ Let's first dive into the high-level abstraction Kafka provides&mdash;the topic.
 <p>
 A topic is a category or feed name to which messages are published. For each topic, the Kafka cluster maintains a partitioned log that looks like this:
 <div style="text-align: center; width: 100%">
-  <img src="../images/log_anatomy.png">
+  <img src="images/log_anatomy.png">
 </div>
 Each partition is an ordered, immutable sequence of messages that is continually appended to&mdash;a commit log. The messages in the partitions are each assigned a sequential id number called the <i>offset</i> that uniquely identifies each message within the partition.
 <p>
@@ -76,7 +76,7 @@ More commonly, however, we have found that topics have a small number of consume
 <p>
 
 <div style="float: right; margin: 20px; width: 500px" class="caption">
-  <img src="../images/consumer-groups.png"><br>
+  <img src="images/consumer-groups.png"><br>
   A two server Kafka cluster hosting four partitions (P0-P3) with two consumer groups. Consumer group A has two consumer instances and group B has four.
 </div>
 <p>

@@ -43,6 +43,8 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   type HeartbeatCallback = Short => Unit
   type CommitOffsetCallbackParams = Map[TopicAndPartition, Short]
   type CommitOffsetCallback = Map[TopicAndPartition, Short] => Unit
+  type LeaveGroupCallbackParams = Short
+  type LeaveGroupCallback = Short => Unit
 
   val ConsumerMinSessionTimeout = 10
   val ConsumerMaxSessionTimeout = 200
@@ -301,6 +303,56 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, otherJoinGroupErrorCode)
   }
 
+  @Test
+  def testLeaveGroupWrongCoordinator() {
+    val groupId = "groupId"
+    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+
+    val leaveGroupResult = leaveGroup(groupId, consumerId, isCoordinatorForGroup = false)
+    assertEquals(Errors.NOT_COORDINATOR_FOR_CONSUMER.code, leaveGroupResult)
+  }
+
+  @Test
+  def testLeaveGroupUnknownGroup() {
+    val groupId = "groupId"
+    val consumerId = "consumerId"
+
+    val leaveGroupResult = leaveGroup(groupId, consumerId, isCoordinatorForGroup = true)
+    assertEquals(Errors.UNKNOWN_CONSUMER_ID.code, leaveGroupResult)
+  }
+
+  @Test
+  def testLeaveGroupUnknownConsumerExistingGroup() {
+    val groupId = "groupId"
+    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val otherConsumerId = "consumerId"
+    val partitionAssignmentStrategy = "range"
+
+    val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = true)
+    val joinGroupErrorCode = joinGroupResult._4
+    assertEquals(Errors.NONE.code, joinGroupErrorCode)
+
+    EasyMock.reset(offsetManager)
+    val leaveGroupResult = leaveGroup(groupId, otherConsumerId, isCoordinatorForGroup = true)
+    assertEquals(Errors.UNKNOWN_CONSUMER_ID.code, leaveGroupResult)
+  }
+
+  @Test
+  def testValidLeaveGroup() {
+    val groupId = "groupId"
+    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val partitionAssignmentStrategy = "range"
+
+    val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = true)
+    val assignedConsumerId = joinGroupResult._2
+    val joinGroupErrorCode = joinGroupResult._4
+    assertEquals(Errors.NONE.code, joinGroupErrorCode)
+
+    EasyMock.reset(offsetManager)
+    val leaveGroupResult = leaveGroup(groupId, assignedConsumerId, isCoordinatorForGroup = true)
+    assertEquals(Errors.NONE.code, leaveGroupResult)
+  }
+
   private def setupJoinGroupCallback: (Future[JoinGroupCallbackParams], JoinGroupCallback) = {
     val responsePromise = Promise[JoinGroupCallbackParams]
     val responseFuture = responsePromise.future
@@ -320,6 +372,13 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     val responsePromise = Promise[CommitOffsetCallbackParams]
     val responseFuture = responsePromise.future
     val responseCallback: CommitOffsetCallback = offsets => responsePromise.success(offsets)
+    (responseFuture, responseCallback)
+  }
+
+  private def setupLeaveGroupCallback: (Future[LeaveGroupCallbackParams], LeaveGroupCallback) = {
+    val responsePromise = Promise[LeaveGroupCallbackParams]
+    val responseFuture = responsePromise.future
+    val responseCallback: LeaveGroupCallback = errorCode => responsePromise.success(errorCode)
     (responseFuture, responseCallback)
   }
 
@@ -373,6 +432,16 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
       .andAnswer(storeOffsetAnswer)
     EasyMock.replay(offsetManager)
     consumerCoordinator.handleCommitOffsets(groupId, consumerId, generationId, offsets, responseCallback)
+    Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
+    Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
+  }
+
+  private def leaveGroup(groupId: String, consumerId: String, isCoordinatorForGroup: Boolean): LeaveGroupCallbackParams = {
+    val (responseFuture, responseCallback) = setupHeartbeatCallback
+    EasyMock.expect(offsetManager.partitionFor(groupId)).andReturn(1)
+    EasyMock.expect(offsetManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
+    EasyMock.replay(offsetManager)
+    consumerCoordinator.handleLeaveGroup(groupId, consumerId, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
   }
 }

@@ -46,4 +46,5 @@ private[coordinator] class ConsumerMetadata(val consumerId: String,
   var awaitingRebalanceCallback: (Set[TopicAndPartition], String, Int, Short) => Unit = null
   var assignedTopicPartitions = Set.empty[TopicAndPartition]
   var latestHeartbeat: Long = -1
+  var isLeaving: Boolean = false
 }
