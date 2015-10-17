@@ -28,7 +28,7 @@ import kafka.log._
 import kafka.message.MessageSet
 import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
-import kafka.security.auth.{Authorizer, ClusterAction, ConsumerGroup, Create, Describe, Operation, Read, Resource, Topic, Write}
+import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
@@ -191,7 +191,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val (authorizedRequestInfo, unauthorizedRequestInfo) =  filteredRequestInfo.partition {
       case (topicAndPartition, offsetMetadata) =>
         authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic)) &&
-          authorize(request.session, Read, new Resource(ConsumerGroup, offsetCommitRequest.groupId))
+          authorize(request.session, Read, new Resource(Group, offsetCommitRequest.groupId))
     }
 
     // the callback for sending an offset commit response
@@ -613,7 +613,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val (authorizedTopicPartitions, unauthorizedTopicPartitions) = offsetFetchRequest.requestInfo.partition { topicAndPartition =>
       authorize(request.session, Describe, new Resource(Topic, topicAndPartition.topic)) &&
-        authorize(request.session, Read, new Resource(ConsumerGroup, offsetFetchRequest.groupId))
+        authorize(request.session, Read, new Resource(Group, offsetFetchRequest.groupId))
     }
 
     val authorizationError = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, ErrorMapping.AuthorizationCode)
@@ -665,7 +665,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleConsumerMetadataRequest(request: RequestChannel.Request) {
     val consumerMetadataRequest = request.requestObj.asInstanceOf[ConsumerMetadataRequest]
 
-    if (!authorize(request.session, Read, new Resource(ConsumerGroup, consumerMetadataRequest.group))) {
+    if (!authorize(request.session, Read, new Resource(Group, consumerMetadataRequest.group))) {
       val response = ConsumerMetadataResponse(None, ErrorMapping.AuthorizationCode, consumerMetadataRequest.correlationId)
       requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
     } else {
@@ -705,7 +705,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
 
-    if (!authorize(request.session, Read, new Resource(ConsumerGroup, joinGroupRequest.groupId()))) {
+    if (!authorize(request.session, Read, new Resource(Group, joinGroupRequest.groupId()))) {
       val responseBody = new JoinGroupResponse(
         ErrorMapping.AuthorizationCode,
         JoinGroupResponse.UNKNOWN_GENERATION_ID,
@@ -739,7 +739,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
 
-    if (!authorize(request.session, Read, new Resource(ConsumerGroup, syncGroupRequest.groupId()))) {
+    if (!authorize(request.session, Read, new Resource(Group, syncGroupRequest.groupId()))) {
       sendResponseCallback(Array[Byte](), ErrorMapping.AuthorizationCode)
     } else {
       coordinator.handleSyncGroup(
@@ -764,7 +764,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, response)))
     }
 
-    if (!authorize(request.session, Read, new Resource(ConsumerGroup, heartbeatRequest.groupId))) {
+    if (!authorize(request.session, Read, new Resource(Group, heartbeatRequest.groupId))) {
       val heartbeatResponse = new HeartbeatResponse(ErrorMapping.AuthorizationCode)
       requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, heartbeatResponse)))
     }
@@ -817,11 +817,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, response)))
     }
 
-    // let the coordinator to handle leave-group
-    coordinator.handleLeaveGroup(
-      leaveGroupRequest.groupId(),
-      leaveGroupRequest.consumerId(),
-      sendResponseCallback)
+    if (!authorize(request.session, Read, new Resource(Group, leaveGroupRequest.groupId))) {
+      val leaveGroupResponse = new LeaveGroupResponse(ErrorMapping.AuthorizationCode)
+      requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, leaveGroupResponse)))
+    } else {
+      // let the coordinator to handle leave-group
+      coordinator.handleLeaveGroup(
+        leaveGroupRequest.groupId(),
+        leaveGroupRequest.consumerId(),
+        sendResponseCallback)
+    }
   }
 
   def close() {
