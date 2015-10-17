@@ -44,7 +44,7 @@ object ZkSecurityMigrator extends Logging {
       CommandLineUtils.printUsageAndDie(parser, "ZooKeeper Migration Tool Help")
 
     if(!options.has(jaasFileOpt) ||
-      !JaasUtils.isSecure(System.getProperty(options.valueOf(jaasFileOpt)))) {
+      !JaasUtils.isSecure(options.valueOf(jaasFileOpt))) {
       error("No JAAS configuration file has been found. Please make sure that "
             + "you have set the option --jaas.file correctly and that the file"
             + " is valid")
@@ -57,7 +57,7 @@ object ZkSecurityMigrator extends Logging {
     val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt)
     val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt)
 
-    val zkUtils = ZkUtils.create(zkUrl, zkSessionTimeout, zkConnectionTimeout, true)
+    val zkUtils = ZkUtils.apply(zkUrl, zkSessionTimeout, zkConnectionTimeout, true)
     for (path <- zkUtils.persistentZkPaths) {
       zkUtils.makeSurePersistentPathExists(path)
     }
