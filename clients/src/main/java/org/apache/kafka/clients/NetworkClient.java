@@ -56,7 +56,7 @@ public class NetworkClient implements KafkaClient {
     private final MetadataUpdater metadataUpdater;
     
     /* a list of nodes we've connected to in the past */
-    private List<Node> nodesEverSeen;
+    private List<Integer> nodesEverSeen;
     private Map<Integer, Node> nodesEverSeenById;
 
     /* the state of each node's connection */
@@ -142,7 +142,7 @@ public class NetworkClient implements KafkaClient {
         this.correlation = 0;
         this.nodeIndexOffset = new Random().nextInt(Integer.MAX_VALUE);
         this.requestTimeoutMs = requestTimeoutMs;
-        this.nodesEverSeen = new ArrayList<Node>();
+        this.nodesEverSeen = new ArrayList<Integer>();
         this.nodesEverSeenById = new HashMap<Integer, Node>();
         this.time = time;
     }
@@ -390,7 +390,7 @@ public class NetworkClient implements KafkaClient {
             int offset = rand.nextInt(nodesEverSeen.size());
             for (int i = 0; i < nodesEverSeen.size(); i++) {
                 int idx = Utils.abs((offset + i) % nodesEverSeen.size());
-                Node node = nodesEverSeen.get(idx);
+                Node node = nodesEverSeenById.get(nodesEverSeen.get(idx));
                 log.debug("No node found. Trying previously-seen node with ID {}", node.id());
                 if (!this.connectionStates.isBlackedOut(node.idString(), now)) {
                     found = node;
@@ -610,11 +610,20 @@ public class NetworkClient implements KafkaClient {
          * @param nodes Current alive nodes
          */
         private void updateNodesEverSeen(List<Node> nodes) {
+            Node existing = null;
             for (Node n : nodes) {
-                if (!nodesEverSeenById.containsKey(n.id())) {
+                existing = nodesEverSeenById.get(n.id());
+                if (existing == null) {
                     nodesEverSeenById.put(n.id(), n);
                     log.debug("Adding node {} to nodes ever seen", n.id());
-                    nodesEverSeen.add(n);
+                    nodesEverSeen.add(n.id());
+                } else {
+                    // check if the nodes are really equal. There could be a case
+                    // where node.id() is the same but node has moved to different host
+                    if (!existing.equals(n)) {
+                        nodesEverSeenById.remove(existing.id());
+                        nodesEverSeenById.put(n.id(), n);
+                    }
                 }
             }
         }
