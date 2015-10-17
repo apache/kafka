@@ -15,12 +15,13 @@
 package kafka.api
 
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 
 import junit.framework.Assert
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.{KafkaServer, KafkaConfig}
-import kafka.utils.TestUtils
+import kafka.utils.{ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
@@ -28,7 +29,6 @@ import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 import scala.collection.mutable
@@ -44,8 +44,8 @@ class QuotasTest extends KafkaServerTestHarness {
   val overridingProps = new Properties()
 
   // Low enough quota that a producer sending a small payload in a tight loop should get throttled
-  overridingProps.put(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, "8000")
-  overridingProps.put(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, "2500")
+  overridingProps.put(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, "100")
+  overridingProps.put(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, "10")
 
   // un-throttled
   overridingProps.put(KafkaConfig.ProducerQuotaBytesPerSecondOverridesProp, producerId2 + "=" + Long.MaxValue)
@@ -116,7 +116,7 @@ class QuotasTest extends KafkaServerTestHarness {
 
   @After
   override def tearDown() {
-    producers.foreach( _.close )
+    producers.foreach( _.close(5, TimeUnit.SECONDS) )
     consumers.foreach( _.close )
     replicaConsumers.foreach( _.close )
     super.tearDown()
@@ -125,27 +125,54 @@ class QuotasTest extends KafkaServerTestHarness {
   @Test
   def testThrottledProducerConsumer() {
     val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
+    // Produce 1000 records without blocking. Wait until the throttle time metric reports true
+    produce(producers.head, 1000)
+    TestUtils.waitUntilTrue(() => allMetrics.contains(new MetricName("throttle-time",
+                                                                     RequestKeys.nameForKey(RequestKeys.ProduceKey),
+                                                                     "Tracking throttle-time per client",
+                                                                     "client-id", producerId1)),
+                            "Throttle time metric should exist for client " + producerId1)
 
-    val numRecords = 1000
-    produce(producers.head, numRecords)
+    TestUtils.waitUntilTrue(() => allMetrics(new MetricName("throttle-time",
+                                                            RequestKeys.nameForKey(RequestKeys.ProduceKey),
+                                                            "Tracking throttle-time per client",
+                                                            "client-id", producerId1)).value() > 0,
+                            "Producer should have been throttled")
 
-    val producerMetricName = new MetricName("throttle-time",
-                                    RequestKeys.nameForKey(RequestKeys.ProduceKey),
-                                    "Tracking throttle-time per client",
-                                    "client-id", producerId1)
-    Assert.assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
+    // Start an async consumer. Keep polling until the throttle time metric reports true
+    consumers.head.subscribe(topic1)
+    val asyncConsumer = new ShutdownableThread("AsyncConsumer") {
+      override def doWork(): Unit = consumers.head.poll(100)
+    }
+    asyncConsumer.start()
 
-    // Consumer should read in a bursty manner and get throttled immediately
-    consume(consumers.head, numRecords)
-    // The replica consumer should not be throttled also. Create a fetch request which will exceed the quota immediately
-    val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
+    try {
+      TestUtils.waitUntilTrue(() => allMetrics.contains(new MetricName("throttle-time",
+                                                                       RequestKeys.nameForKey(RequestKeys.FetchKey),
+                                                                       "Tracking throttle-time per client",
+                                                                       "client-id", consumerId1)),
+                              "Throttle time metric should exist for client " + consumerId1)
+
+      TestUtils.waitUntilTrue(() => allMetrics(new MetricName("throttle-time",
+                                                              RequestKeys.nameForKey(RequestKeys.FetchKey),
+                                                              "Tracking throttle-time per client",
+                                                              "client-id", consumerId1)).value() > 0,
+                              "Consumer should have been throttled")
+    } finally {
+      asyncConsumer.shutdown()
+    }
+
+    // The replica consumer should not be throttled also. Create a fetch request which should exceed the quota immediately.
+    // However no metric representing the throttle time will be created
+    val followerClientId = followerNode.config.brokerId
+    val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerClientId).build()
     replicaConsumers.head.fetch(request)
-    val consumerMetricName = new MetricName("throttle-time",
-                                            RequestKeys.nameForKey(RequestKeys.FetchKey),
-                                            "Tracking throttle-time per client",
-                                            "client-id", consumerId1)
-    Assert.assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
-  }
+    Assert.assertFalse("Throttle time metric should not exist for client " + followerClientId,
+                       allMetrics.contains(new MetricName("throttle-time",
+                                                          RequestKeys.nameForKey(RequestKeys.FetchKey),
+                                                          "Tracking throttle-time per client",
+                                                          "client-id", String.valueOf(followerClientId))))
+ }
 
   @Test
   def testProducerConsumerOverrideUnthrottled() {
@@ -160,9 +187,6 @@ class QuotasTest extends KafkaServerTestHarness {
 
     // The "client" consumer does not get throttled.
     consume(consumers(1), numRecords)
-    // The replica consumer should not be throttled also. Create a fetch request which will exceed the quota immediately
-    val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
-    replicaConsumers(1).fetch(request)
     val consumerMetricName = new MetricName("throttle-time",
                                             RequestKeys.nameForKey(RequestKeys.FetchKey),
                                             "Tracking throttle-time per client",
@@ -170,22 +194,21 @@ class QuotasTest extends KafkaServerTestHarness {
     Assert.assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value())
   }
 
-  def produce(p: KafkaProducer[Array[Byte], Array[Byte]], count: Int): Int = {
-    var numBytesProduced = 0
+  def produce(p: KafkaProducer[Array[Byte], Array[Byte]], count: Int) = {
     for (i <- 0 to count) {
-      val payload = i.toString.getBytes
-      numBytesProduced += payload.length
+      val payload = Array[Byte](100)
       p.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, null, null, payload),
              new ErrorLoggingCallback(topic1, null, null, true)).get()
       Thread.sleep(1)
     }
-    numBytesProduced
   }
+
 
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) {
     consumer.subscribe(List(topic1))
     var numConsumed = 0
     while (numConsumed < numRecords) {
+      import scala.collection.JavaConversions._
       for (cr <- consumer.poll(100)) {
         numConsumed += 1
       }
