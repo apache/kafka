@@ -98,8 +98,8 @@ class ClientQuotaManagerTest {
       time.sleep(500)
       val sleepTime = clientMetrics.recordAndMaybeThrottle("unknown", 2300, callback)
 
-      Assert.assertEquals("Should be throttled", 2100, sleepTime)
-      Assert.assertEquals(1, queueSizeMetric.value().toInt)
+      assertEquals("Should be throttled", 2100, sleepTime)
+      assertEquals(1, queueSizeMetric.value().toInt)
       // After a request is delayed, the callback cannot be triggered immediately
       clientMetrics.throttledRequestReaper.doWork()
       assertEquals(10, numCallbacks)
