@@ -156,7 +156,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        metrics = new Metrics(metricConfig, reporters, kafkaMetricsTime)
+        metrics = new Metrics(metricConfig, reporters, kafkaMetricsTime, true)
 
         brokerState.newState(Starting)
 

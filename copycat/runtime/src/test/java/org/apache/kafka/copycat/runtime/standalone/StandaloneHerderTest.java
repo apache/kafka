@@ -20,6 +20,7 @@ package org.apache.kafka.copycat.runtime.standalone;
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
+import org.apache.kafka.copycat.runtime.HerderConnectorContext;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.sink.SinkConnector;
 import org.apache.kafka.copycat.sink.SinkTask;
@@ -39,6 +40,8 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -54,7 +57,7 @@ public class StandaloneHerderTest {
     private Connector connector;
     @Mock protected Callback<String> createCallback;
 
-    private Properties connectorProps;
+    private Map<String, String> connectorProps;
     private Properties taskProps;
 
     @Before
@@ -62,9 +65,9 @@ public class StandaloneHerderTest {
         worker = PowerMock.createMock(Worker.class);
         herder = new StandaloneHerder(worker);
 
-        connectorProps = new Properties();
-        connectorProps.setProperty(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
-        connectorProps.setProperty(SinkConnector.TOPICS_CONFIG, TOPICS_LIST_STR);
+        connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
+        connectorProps.put(SinkConnector.TOPICS_CONFIG, TOPICS_LIST_STR);
         PowerMock.mockStatic(StandaloneHerder.class);
 
         // These can be anything since connectors can pass along whatever they want.
@@ -74,8 +77,8 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateSourceConnector() throws Exception {
-        connector = PowerMock.createMock(BogusSourceClass.class);
-        expectAdd(BogusSourceClass.class, BogusSourceTask.class, false);
+        connector = PowerMock.createMock(BogusSourceConnector.class);
+        expectAdd(BogusSourceConnector.class, BogusSourceTask.class, false);
         PowerMock.replayAll();
 
         herder.addConnector(connectorProps, createCallback);
@@ -85,8 +88,8 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateSinkConnector() throws Exception {
-        connector = PowerMock.createMock(BogusSinkClass.class);
-        expectAdd(BogusSinkClass.class, BogusSinkTask.class, true);
+        connector = PowerMock.createMock(BogusSinkConnector.class);
+        expectAdd(BogusSinkConnector.class, BogusSinkTask.class, true);
 
         PowerMock.replayAll();
 
@@ -97,8 +100,8 @@ public class StandaloneHerderTest {
 
     @Test
     public void testDestroyConnector() throws Exception {
-        connector = PowerMock.createMock(BogusSourceClass.class);
-        expectAdd(BogusSourceClass.class, BogusSourceTask.class, false);
+        connector = PowerMock.createMock(BogusSourceConnector.class);
+        expectAdd(BogusSourceConnector.class, BogusSourceTask.class, false);
         expectDestroy();
         PowerMock.replayAll();
 
@@ -114,32 +117,31 @@ public class StandaloneHerderTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testCreateAndStop() throws Exception {
+        connector = PowerMock.createMock(BogusSourceConnector.class);
+        expectAdd(BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectStop();
+        PowerMock.replayAll();
+
+        herder.addConnector(connectorProps, createCallback);
+        herder.stop();
+
+        PowerMock.verifyAll();
+    }
 
     private void expectAdd(Class<? extends Connector> connClass,
-                             Class<? extends Task> taskClass,
-                             boolean sink) throws Exception {
-        expectCreate(connClass, taskClass, sink, true);
-    }
-
-    private void expectRestore(Class<? extends Connector> connClass,
-                                 Class<? extends Task> taskClass) throws Exception {
-        // Restore never uses a callback. These tests always use sources
-        expectCreate(connClass, taskClass, false, false);
-    }
-
-    private void expectCreate(Class<? extends Connector> connClass,
-                                Class<? extends Task> taskClass,
-                                boolean sink, boolean expectCallback) throws Exception {
-        connectorProps.setProperty(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connClass.getName());
+                           Class<? extends Task> taskClass,
+                           boolean sink) throws Exception {
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connClass.getName());
 
         PowerMock.expectPrivate(StandaloneHerder.class, "instantiateConnector", connClass.getName())
                 .andReturn(connector);
-        if (expectCallback) {
-            createCallback.onCompletion(null, CONNECTOR_NAME);
-            PowerMock.expectLastCall();
-        }
 
-        connector.initialize(EasyMock.anyObject(StandaloneConnectorContext.class));
+        createCallback.onCompletion(null, CONNECTOR_NAME);
+        PowerMock.expectLastCall();
+
+        connector.initialize(EasyMock.anyObject(HerderConnectorContext.class));
         PowerMock.expectLastCall();
         connector.start(new Properties());
         PowerMock.expectLastCall();
@@ -171,13 +173,13 @@ public class StandaloneHerderTest {
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
-    private abstract class BogusSourceClass extends SourceConnector {
+    private abstract class BogusSourceConnector extends SourceConnector {
     }
 
     private abstract class BogusSourceTask extends SourceTask {
     }
 
-    private abstract class BogusSinkClass extends SinkConnector {
+    private abstract class BogusSinkConnector extends SinkConnector {
     }
 
     private abstract class BogusSinkTask extends SourceTask {

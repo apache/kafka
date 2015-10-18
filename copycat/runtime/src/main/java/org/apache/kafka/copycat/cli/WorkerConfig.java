@@ -57,13 +57,13 @@ public class WorkerConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_DOC =
             "Converter class for value Copycat data that implements the <code>Converter</code> interface.";
 
-    public static final String OFFSET_KEY_CONVERTER_CLASS_CONFIG = "offset.key.converter";
-    public static final String OFFSET_KEY_CONVERTER_CLASS_DOC =
-            "Converter class for offset key Copycat data that implements the <code>Converter</code> interface.";
+    public static final String INTERNAL_KEY_CONVERTER_CLASS_CONFIG = "internal.key.converter";
+    public static final String INTERNAL_KEY_CONVERTER_CLASS_DOC =
+            "Converter class for internal key Copycat data that implements the <code>Converter</code> interface. Used for converting data like offsets and configs.";
 
-    public static final String OFFSET_VALUE_CONVERTER_CLASS_CONFIG = "offset.value.converter";
-    public static final String OFFSET_VALUE_CONVERTER_CLASS_DOC =
-            "Converter class for offset value Copycat data that implements the <code>Converter</code> interface.";
+    public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";
+    public static final String INTERNAL_VALUE_CONVERTER_CLASS_DOC =
+            "Converter class for offset value Copycat data that implements the <code>Converter</code> interface. Used for converting data like offsets and configs.";
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -95,10 +95,10 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
-                .define(OFFSET_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, OFFSET_KEY_CONVERTER_CLASS_DOC)
-                .define(OFFSET_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, OFFSET_VALUE_CONVERTER_CLASS_DOC)
+                .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        Importance.HIGH, INTERNAL_KEY_CONVERTER_CLASS_DOC)
+                .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        Importance.HIGH, INTERNAL_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)
