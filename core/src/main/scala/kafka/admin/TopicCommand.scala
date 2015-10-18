@@ -52,9 +52,9 @@ object TopicCommand extends Logging {
     opts.checkArgs()
 
     val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt), 
-                                 30000,
-                                 30000,
-                                 JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                          30000,
+                          30000,
+                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     var exitCode = 0
     try {
       if(opts.options.has(opts.createOpt))

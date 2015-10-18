@@ -40,9 +40,9 @@ object ReassignPartitionsCommand extends Logging {
 
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
     val zkUtils = ZkUtils(zkConnect, 
-                                 30000,
-                                 30000,
-                                 JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                          30000,
+                          30000,
+                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     try {
       if(opts.options.has(opts.verifyOpt))
         verifyAssignment(zkUtils, opts)

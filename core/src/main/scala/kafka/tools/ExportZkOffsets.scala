@@ -78,9 +78,9 @@ object ExportZkOffsets extends Logging {
     
     try {
       zkUtils = ZkUtils(zkConnect,
-                               30000,
-                               30000,
-                               JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                        30000,
+                        30000,
+                        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
       
       var consumerGroups: Seq[String] = null
 

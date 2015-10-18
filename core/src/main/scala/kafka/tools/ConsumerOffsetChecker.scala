@@ -153,9 +153,9 @@ object ConsumerOffsetChecker extends Logging {
     var channel: BlockingChannel = null
     try {
       zkUtils = ZkUtils(zkConnect,
-                               30000,
-                               30000,
-                               JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                        30000,
+                        30000,
+                        JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
       val topicList = topics match {
         case Some(x) => x.split(",").view.toList
