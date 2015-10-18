@@ -149,12 +149,25 @@ class LogCleaner(val config: CleanerConfig,
   }
 
   /**
-   * For testing, a way to know when work has completed. This method blocks until the
+   * For testing, a way to know when work has completed. This method waits until the
    * cleaner has processed up to the given offset on the specified topic/partition
+   *
+   * @param topic The Topic to be cleaned
+   * @param part The partition of the topic to be cleaned
+   * @param offset The first dirty offset that the cleaner doesn't have to clean
+   * @param maxWaitMs The maximum time in ms to wait for cleaner
+   *
+   * @return A boolean indicating whether the work has completed before timeout
    */
-  def awaitCleaned(topic: String, part: Int, offset: Long): Unit = {
-    while (cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part)).fold(true)(_ < offset))
-      Thread.sleep(10)
+  def awaitCleaned(topic: String, part: Int, offset: Long, maxWaitMs: Long = 60000L): Boolean = {
+    var remainingWaitMs = maxWaitMs
+    while (cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part)).fold(true)(_ < offset)) {
+      if (remainingWaitMs == 0)
+        return false
+      Thread.sleep(math.min(100, remainingWaitMs))
+      remainingWaitMs = math.max(0, remainingWaitMs - 100)
+    }
+    return true
   }
   
   /**
