@@ -23,7 +23,7 @@ import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
-import kafka.utils.ZkUtils
+import kafka.utils.ZkUtils._
 import kafka.coordinator.ConsumerCoordinator
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging {
@@ -48,7 +48,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
     assertTrue("Properties after creation have incorrect value", props.getProperty(cleanupKey).equals(cleanupVal))
 
     // pre-create the topic config changes path to avoid a NoNodeException
-    zkUtils.createPersistentPath(ZkUtils.EntityConfigChangesPath)
+    zkUtils.createPersistentPath(EntityConfigChangesPath)
 
     // modify the topic to add new partitions
     val numPartitionsModified = 3
@@ -77,7 +77,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
 
     // delete the NormalTopic
     val deleteOpts = new TopicCommandOptions(Array("--topic", normalTopic))
-    val deletePath = zkUtils.getDeleteTopicPath(normalTopic)
+    val deletePath = getDeleteTopicPath(normalTopic)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkUtils.zkClient.exists(deletePath))
     TopicCommand.deleteTopic(zkUtils, deleteOpts)
     assertTrue("Delete path for topic should exist after deletion.", zkUtils.zkClient.exists(deletePath))
@@ -90,7 +90,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
 
     // try to delete the OffsetManager.OffsetsTopicName and make sure it doesn't
     val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", ConsumerCoordinator.OffsetsTopicName))
-    val deleteOffsetTopicPath = zkUtils.getDeleteTopicPath(ConsumerCoordinator.OffsetsTopicName)
+    val deleteOffsetTopicPath = getDeleteTopicPath(ConsumerCoordinator.OffsetsTopicName)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkUtils.zkClient.exists(deleteOffsetTopicPath))
     intercept[AdminOperationException] {
         TopicCommand.deleteTopic(zkUtils, deleteOffsetTopicOpts)

@@ -152,7 +152,7 @@ object ConsumerOffsetChecker extends Logging {
     var zkUtils: ZkUtils = null
     var channel: BlockingChannel = null
     try {
-      zkUtils = ZkUtils.apply(zkConnect,
+      zkUtils = ZkUtils(zkConnect,
                                30000,
                                30000,
                                JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))

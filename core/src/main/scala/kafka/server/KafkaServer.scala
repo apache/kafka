@@ -255,7 +255,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
     if (chroot.length > 1) {
       val zkConnForChrootCreation = config.zkConnect.substring(0, config.zkConnect.indexOf("/"))
-      val zkClientForChrootCreation = ZkUtils.apply(zkConnForChrootCreation, 
+      val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation, 
                                                      config.zkSessionTimeoutMs,
                                                      config.zkConnectionTimeoutMs,
                                                      JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
@@ -264,7 +264,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
       zkClientForChrootCreation.zkClient.close()
     }
 
-    val zkUtils = ZkUtils.apply(config.zkConnect,
+    val zkUtils = ZkUtils(config.zkConnect,
                                  config.zkSessionTimeoutMs,
                                  config.zkConnectionTimeoutMs,
                                  JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))

@@ -45,6 +45,7 @@ import kafka.common.TopicAndPartition
 import kafka.admin.AdminUtils
 import kafka.producer.ProducerConfig
 import kafka.log._
+import kafka.utils.ZkUtils._
 
 import org.junit.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
@@ -484,7 +485,7 @@ object TestUtils extends Logging {
   }
 
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
-    val zkUtils = ZkUtils.apply(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
+    val zkUtils = ZkUtils(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
     zkUtils.updatePersistentPath(path, offset.toString)
 
   }
@@ -564,7 +565,7 @@ object TestUtils extends Logging {
             newLeaderAndIsr.leaderEpoch += 1
             newLeaderAndIsr.zkVersion += 1
           }
-          zkUtils.updatePersistentPath(zkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
+          zkUtils.updatePersistentPath(getTopicPartitionLeaderAndIsrPath(topic, partition),
             zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch))
         } catch {
           case oe: Throwable => error("Error while electing leader for partition [%s,%d]".format(topic, partition), oe)
@@ -878,9 +879,9 @@ object TestUtils extends Logging {
   def verifyTopicDeletion(zkUtils: ZkUtils, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
     val topicAndPartitions = (0 until numPartitions).map(TopicAndPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
-    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(zkUtils.getDeleteTopicPath(topic)),
+    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getDeleteTopicPath(topic)),
       "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic))
-    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(zkUtils.getTopicPath(topic)),
+    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getTopicPath(topic)),
       "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
     // ensure that the topic-partition has been deleted from all brokers' replica managers
     TestUtils.waitUntilTrue(() =>

@@ -20,6 +20,7 @@ import kafka.log.Log
 import kafka.zk.ZooKeeperTestHarness
 import junit.framework.Assert._
 import kafka.utils.{ZkUtils, TestUtils}
+import kafka.utils.ZkUtils._
 import kafka.server.{KafkaServer, KafkaConfig}
 import org.junit.Test
 import java.util.Properties
@@ -55,7 +56,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
       servers.filter(s => s.config.brokerId != follower.config.brokerId)
         .forall(_.getLogManager().getLog(topicAndPartition).isEmpty), "Replicas 0,1 have not deleted log.")
     // ensure topic deletion is halted
-    TestUtils.waitUntilTrue(() => zkUtils.pathExists(zkUtils.getDeleteTopicPath(topic)),
+    TestUtils.waitUntilTrue(() => zkUtils.pathExists(getDeleteTopicPath(topic)),
       "Admin path /admin/delete_topic/test path deleted even when a follower replica is down")
     // restart follower replica
     follower.startup()
@@ -80,7 +81,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     controller.shutdown()
 
     // ensure topic deletion is halted
-    TestUtils.waitUntilTrue(() => zkUtils.pathExists(zkUtils.getDeleteTopicPath(topic)),
+    TestUtils.waitUntilTrue(() => zkUtils.pathExists(getDeleteTopicPath(topic)),
       "Admin path /admin/delete_topic/test path deleted even when a replica is down")
 
     controller.startup()
@@ -208,7 +209,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created")
     // test the topic path exists
-    assertTrue("Topic test mistakenly deleted", zkUtils.pathExists(zkUtils.getTopicPath(topic)))
+    assertTrue("Topic test mistakenly deleted", zkUtils.pathExists(getTopicPath(topic)))
     // topic test should have a leader
     val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0, 1000)
     assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
