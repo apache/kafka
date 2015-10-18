@@ -57,7 +57,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   // Store all the quota managers for each type of request
-  val quotaManagers: immutable.Map[Short, ClientQuotaManager] = instantiateQuotaManagers(config)
+  val quotaManagers: Map[Short, ClientQuotaManager] = instantiateQuotaManagers(config)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -783,7 +783,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   /*
    * Returns a Map of all quota managers configured. The request Api key is the key for the Map
    */
-  private def instantiateQuotaManagers(cfg: KafkaConfig): immutable.Map[Short, ClientQuotaManager] = {
+  private def instantiateQuotaManagers(cfg: KafkaConfig): Map[Short, ClientQuotaManager] = {
     val producerQuotaManagerCfg = ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
@@ -796,7 +796,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
 
-    val quotaManagers = immutable.Map[Short, ClientQuotaManager](
+    val quotaManagers = Map[Short, ClientQuotaManager](
       RequestKeys.ProduceKey ->
               new ClientQuotaManager(producerQuotaManagerCfg, metrics, RequestKeys.nameForKey(RequestKeys.ProduceKey), new org.apache.kafka.common.utils.SystemTime),
       RequestKeys.FetchKey ->

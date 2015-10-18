@@ -21,7 +21,8 @@ import java.util.Collections
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
-import org.junit.{Assert, Before, Test}
+import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.{Before, Test}
 
 class ClientQuotaManagerTest {
   private val time = new MockTime
@@ -47,33 +48,28 @@ class ClientQuotaManagerTest {
     clientMetrics.updateQuota("p2", new Quota(4000, true));
 
     try {
-      Assert.assertEquals("Default producer quota should be 500",
-                          new Quota(500, true), clientMetrics.quota("random-client-id"))
-      Assert.assertEquals("Should return the overridden value (2000)",
-                          new Quota(2000, true), clientMetrics.quota("p1"))
-      Assert.assertEquals("Should return the overridden value (4000)",
-                          new Quota(4000, true), clientMetrics.quota("p2"))
+      assertEquals("Default producer quota should be 500", new Quota(500, true), clientMetrics.quota("random-client-id"))
+      assertEquals("Should return the overridden value (2000)", new Quota(2000, true), clientMetrics.quota("p1"))
+      assertEquals("Should return the overridden value (4000)", new Quota(4000, true), clientMetrics.quota("p2"))
 
-      // p1 should be throttled using the default quota
+      // p1 should be throttled using the overridden quota
       var throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 2500 * config.numQuotaSamples, this.callback)
-      Assert.assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
+      assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
 
       // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
       // p1 should not longer be throttled after the quota change
       clientMetrics.updateQuota("p1", new Quota(3000, true));
-      Assert.assertEquals("Should return the newly overridden value (3000)",
-        new Quota(3000, true), clientMetrics.quota("p1"))
+      assertEquals("Should return the newly overridden value (3000)", new Quota(3000, true), clientMetrics.quota("p1"))
 
       throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 0, this.callback)
-      Assert.assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
+      assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
 
       // Case 3: Change quota back to default. Should be throttled again
       clientMetrics.updateQuota("p1", new Quota(500, true));
-      Assert.assertEquals("Should return the default value (500)",
-        new Quota(500, true), clientMetrics.quota("p1"))
+      assertEquals("Should return the default value (500)", new Quota(500, true), clientMetrics.quota("p1"))
 
       throttleTimeMs = clientMetrics.recordAndMaybeThrottle("p1", 0, this.callback)
-      Assert.assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
+      assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
     } finally {
       clientMetrics.shutdown()
     }
@@ -92,8 +88,8 @@ class ClientQuotaManagerTest {
         clientMetrics.recordAndMaybeThrottle("unknown", 400, callback)
         time.sleep(1000)
       }
-      Assert.assertEquals(10, numCallbacks)
-      Assert.assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(10, numCallbacks)
+      assertEquals(0, queueSizeMetric.value().toInt)
 
       // Create a spike.
       // 400*10 + 2000 + 300 = 6300/10.5 = 600 bytes per second.
@@ -106,13 +102,13 @@ class ClientQuotaManagerTest {
       Assert.assertEquals(1, queueSizeMetric.value().toInt)
       // After a request is delayed, the callback cannot be triggered immediately
       clientMetrics.throttledRequestReaper.doWork()
-      Assert.assertEquals(10, numCallbacks)
+      assertEquals(10, numCallbacks)
       time.sleep(sleepTime)
 
       // Callback can only be triggered after the the delay time passes
       clientMetrics.throttledRequestReaper.doWork()
-      Assert.assertEquals(0, queueSizeMetric.value().toInt)
-      Assert.assertEquals(11, numCallbacks)
+      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(11, numCallbacks)
 
       // Could continue to see delays until the bursty sample disappears
       for (i <- 0 until 10) {
@@ -120,8 +116,8 @@ class ClientQuotaManagerTest {
         time.sleep(1000)
       }
 
-      Assert.assertEquals("Should be unthrottled since bursty sample has rolled over",
-                          0, clientMetrics.recordAndMaybeThrottle("unknown", 0, callback))
+      assertEquals("Should be unthrottled since bursty sample has rolled over",
+                   0, clientMetrics.recordAndMaybeThrottle("unknown", 0, callback))
     } finally {
       clientMetrics.shutdown()
     }

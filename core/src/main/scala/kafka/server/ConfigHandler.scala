@@ -25,6 +25,7 @@ import kafka.api.RequestKeys
 import org.apache.kafka.common.metrics.Quota
 
 import scala.collection.mutable
+import scala.collection.Map
 
 /**
  * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
@@ -70,12 +71,12 @@ class ClientIdConfigHandler(private val quotaManagers: Map[Short, ClientQuotaMan
 
   def processConfigChanges(clientId : String, clientConfig : Properties) = {
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
-      quotaManagers.get(RequestKeys.ProduceKey).get.updateQuota(clientId,
+      quotaManagers(RequestKeys.ProduceKey).updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
     }
 
     if (clientConfig.containsKey(ClientConfigOverride.ConsumerOverride)) {
-      quotaManagers.get(RequestKeys.FetchKey).get.updateQuota(clientId,
+      quotaManagers(RequestKeys.FetchKey).updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ConsumerOverride).toLong, true))
     }
   }

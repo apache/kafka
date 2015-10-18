@@ -32,6 +32,7 @@ import org.junit.{After, Before, Test}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
+import scala.collection.Map
 import scala.collection.mutable
 
 class QuotasTest extends KafkaServerTestHarness {
@@ -108,24 +109,6 @@ class QuotasTest extends KafkaServerTestHarness {
     consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerId2)
     consumers += new KafkaConsumer(consumerProps)
     replicaConsumers += new SimpleConsumer("localhost", leaderNode.boundPort(), 1000000, 64*1024, consumerId2)
-
-    // Give effectively unlimited quota for producerId2 and consumerId2
-    val props = new Properties()
-    props.put(ClientConfigOverride.ProducerOverride, Long.MaxValue.toString)
-    props.put(ClientConfigOverride.ConsumerOverride, Long.MaxValue.toString)
-
-    AdminUtils.changeClientIdConfig(zkClient, producerId2, props)
-    AdminUtils.changeClientIdConfig(zkClient, consumerId2, props)
-
-    TestUtils.retry(10000) {
-      val quotaManagers: Map[Short, ClientQuotaManager] = leaderNode.apis.quotaManagers
-      val overrideProducerQuota = quotaManagers.get(RequestKeys.ProduceKey).get.quota(producerId2)
-      val overrideConsumerQuota = quotaManagers.get(RequestKeys.FetchKey).get.quota(consumerId2)
-
-      assertEquals(s"ClientId $producerId2 must have unlimited producer quota", Quota.lessThan(Long.MaxValue), overrideProducerQuota)
-      assertEquals(s"ClientId $consumerId2 must have unlimited consumer quota", Quota.lessThan(Long.MaxValue), overrideConsumerQuota)
-    }
-
   }
 
   @After
@@ -163,6 +146,24 @@ class QuotasTest extends KafkaServerTestHarness {
 
   @Test
   def testProducerConsumerOverrideUnthrottled() {
+    // Give effectively unlimited quota for producerId2 and consumerId2
+    val props = new Properties()
+    props.put(ClientConfigOverride.ProducerOverride, Long.MaxValue.toString)
+    props.put(ClientConfigOverride.ConsumerOverride, Long.MaxValue.toString)
+
+    AdminUtils.changeClientIdConfig(zkClient, producerId2, props)
+    AdminUtils.changeClientIdConfig(zkClient, consumerId2, props)
+
+    TestUtils.retry(10000) {
+      val quotaManagers: Map[Short, ClientQuotaManager] = leaderNode.apis.quotaManagers
+      val overrideProducerQuota = quotaManagers.get(RequestKeys.ProduceKey).get.quota(producerId2)
+      val overrideConsumerQuota = quotaManagers.get(RequestKeys.FetchKey).get.quota(consumerId2)
+
+      assertEquals(s"ClientId $producerId2 must have unlimited producer quota", Quota.upperBound(Long.MaxValue), overrideProducerQuota)
+      assertEquals(s"ClientId $consumerId2 must have unlimited consumer quota", Quota.upperBound(Long.MaxValue), overrideConsumerQuota)
+    }
+
+
     val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
     val numRecords = 1000
     produce(producers(1), numRecords)

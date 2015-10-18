@@ -29,6 +29,8 @@ import kafka.common._
 import kafka.log.LogConfig
 import kafka.admin.{AdminOperationException, AdminUtils}
 
+import scala.collection.Map
+
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
@@ -71,9 +73,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val overrideConsumerQuota = quotaManagers.get(RequestKeys.FetchKey).get.quota(clientId)
 
       assertEquals(s"ClientId $clientId must have overridden producer quota of 1000",
-        Quota.lessThan(1000), overrideProducerQuota)
-      assertEquals(s"ClientId $clientId must have overridden consumer quota of 2000",
-        Quota.lessThan(2000), overrideConsumerQuota)
+        Quota.upperBound(1000), overrideProducerQuota)
+        assertEquals(s"ClientId $clientId must have overridden consumer quota of 2000",
+        Quota.upperBound(2000), overrideConsumerQuota)
     }
   }
 

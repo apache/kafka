@@ -71,7 +71,7 @@ object ConfigType {
  *
  */
 class DynamicConfigManager(private val zkUtils: ZkUtils,
-                           private val configHandler : Map[String, ConfigHandler],
+                           private val configHandlers: Map[String, ConfigHandler],
                            private val changeExpirationMs: Long = 15*60*1000,
                            private val time: Time = SystemTime) extends Logging {
   private var lastExecutedChange = -1L
@@ -140,7 +140,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
           }
           val entityConfig = AdminUtils.fetchEntityConfig(zkUtils, entityType, entity)
           logger.info(s"Processing override for entityType: $entityType, entity: $entity with config: $entityConfig")
-          configHandler(entityType).processConfigChanges(entity, entityConfig)
+          configHandlers(entityType).processConfigChanges(entity, entityConfig)
 
         case o => throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
                                                              "{\"version\" : 1," +

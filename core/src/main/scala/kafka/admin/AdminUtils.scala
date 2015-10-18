@@ -379,15 +379,16 @@ object AdminUtils extends Logging {
   def fetchAllTopicConfigs(zkUtils: ZkUtils): Map[String, Properties] =
     zkUtils.getAllTopics().map(topic => (topic, fetchEntityConfig(zkUtils, ConfigType.Topic, topic))).toMap
 
+  def fetchAllEntityConfigs(zkUtils: ZkUtils, entityType: String): Map[String, Properties] =
+    ZkUtils.getAllEntitiesWithConfig(zkClient, entityType).map(entity => (entity, fetchEntityConfig(zkClient, entityType, entity))).toMap
+
   def fetchTopicMetadataFromZk(topic: String, zkUtils: ZkUtils): TopicMetadata =
-    fetchTopicMetadataFromZk(topic, zkUtils, new mutable.HashMap[Int, Broker])
+    fetchTopicMetadataFromZk(topic, zkClient, new mutable.HashMap[Int, Broker])
 
   def fetchTopicMetadataFromZk(topics: Set[String], zkUtils: ZkUtils): Set[TopicMetadata] = {
     val cachedBrokerInfo = new mutable.HashMap[Int, Broker]()
     topics.map(topic => fetchTopicMetadataFromZk(topic, zkUtils, cachedBrokerInfo))
   }
-
-
 
   private def fetchTopicMetadataFromZk(topic: String, zkUtils: ZkUtils, cachedBrokerInfo: mutable.HashMap[Int, Broker], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): TopicMetadata = {
     if(zkUtils.pathExists(getTopicPath(topic))) {

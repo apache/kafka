@@ -29,11 +29,11 @@ public final class Quota {
         this.upper = upper;
     }
 
-    public static Quota lessThan(double upperBound) {
+    public static Quota upperBound(double upperBound) {
         return new Quota(upperBound, true);
     }
 
-    public static Quota moreThan(double lowerBound) {
+    public static Quota lowerBound(double lowerBound) {
         return new Quota(lowerBound, false);
     }
 

@@ -52,7 +52,6 @@ object ClientQuotaManagerConfig {
   // Always have 10 whole windows + 1 current window
   val DefaultNumQuotaSamples = 11
   val DefaultQuotaWindowSizeSeconds = 1
-  val MaxThrottleTimeSeconds = 30
   // Purge sensors after 1 hour of inactivity
   val InactiveSensorExpirationTimeSeconds  = 3600
 }
@@ -70,7 +69,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val apiKey: String,
                          private val time: Time) extends Logging {
   private val overriddenQuota = new ConcurrentHashMap[String, Quota]()
-  private val defaultQuota = Quota.lessThan(config.quotaBytesPerSecondDefault)
+  private val defaultQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
   private val lock = new ReentrantReadWriteLock()
   private val delayQueue = new DelayQueue[ThrottledResponse]()
   val throttledRequestReaper = new ThrottledRequestReaper(delayQueue)
@@ -156,10 +155,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   /**
-   * Returns the consumer quota for the specified clientId
-   * @return
+   * Returns the quota for the specified clientId
    */
-  def quota(clientId: String): Quota = overriddenQuota.getOrDefault(clientId, defaultQuota)
+  def quota(clientId: String): Quota =
+    if (overriddenQuota.containsKey(clientId)) overriddenQuota.get(clientId) else defaultQuota;
 
   /*
    * This function either returns the sensors for a given client id or creates them if they don't exist
@@ -227,13 +226,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     ClientSensors(quotaSensor, throttleTimeSensor)
   }
 
-  private def getThrottleTimeSensorName(clientId: String): String = {
-    apiKey + "ThrottleTime-" + clientId
-  }
+  private def getThrottleTimeSensorName(clientId: String): String = apiKey + "ThrottleTime-" + clientId
 
-  private def getQuotaSensorName(clientId: String): String = {
-    apiKey + "-" + clientId
-  }
+  private def getQuotaSensorName(clientId: String): String = apiKey + "-" + clientId
 
   private def getQuotaMetricConfig(quota: Quota): MetricConfig = {
     new MetricConfig()
