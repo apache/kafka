@@ -20,7 +20,7 @@ package kafka.coordinator
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{threadsafe, ZkUtils, Logging}
-
+import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.{ZkClient, IZkDataListener}
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -33,7 +33,7 @@ import scala.collection.mutable
  */
 @threadsafe
 private[coordinator] class CoordinatorMetadata(brokerId: Int,
-                                               zkClient: ZkClient,
+                                               zkUtils: ZkUtils,
                                                maybePrepareRebalance: ConsumerGroupMetadata => Unit) {
 
   /**
@@ -159,19 +159,19 @@ private[coordinator] class CoordinatorMetadata(brokerId: Int,
   }
 
   private def getTopicPartitionCountFromZK(topic: String) = {
-    val topicData = ZkUtils.getPartitionAssignmentForTopics(zkClient, Seq(topic))
+    val topicData = zkUtils.getPartitionAssignmentForTopics(Seq(topic))
     topicData(topic).size
   }
 
   private def registerTopicPartitionChangeListener(topic: String) {
     val listener = new TopicPartitionChangeListener
     topicPartitionChangeListeners.put(topic, listener)
-    zkClient.subscribeDataChanges(ZkUtils.getTopicPath(topic), listener)
+    zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), listener)
   }
 
   private def deregisterTopicPartitionChangeListener(topic: String) {
     val listener = topicPartitionChangeListeners(topic)
-    zkClient.unsubscribeDataChanges(ZkUtils.getTopicPath(topic), listener)
+    zkUtils.zkClient.unsubscribeDataChanges(getTopicPath(topic), listener)
     topicPartitionChangeListeners.remove(topic)
   }
 

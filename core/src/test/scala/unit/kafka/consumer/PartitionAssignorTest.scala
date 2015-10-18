@@ -48,9 +48,9 @@ class PartitionAssignorTest extends Logging {
         ("g1c" + consumer, WildcardSubscriptionInfo(streamCount, ".*", isWhitelist = true))
       }).toSeq:_*)
       val scenario = Scenario("g1", topicPartitionCounts, subscriptions)
-      val zkClient = PartitionAssignorTest.setupZkClientMock(scenario)
-      EasyMock.replay(zkClient)
-      PartitionAssignorTest.assignAndVerify(scenario, assignor, zkClient, verifyAssignmentIsUniform = true)
+      val zkUtils = PartitionAssignorTest.setupZkClientMock(scenario)
+      EasyMock.replay(zkUtils.zkClient)
+      PartitionAssignorTest.assignAndVerify(scenario, assignor, zkUtils, verifyAssignmentIsUniform = true)
     })
   }
 
@@ -73,10 +73,10 @@ class PartitionAssignorTest extends Logging {
         ("g1c" + consumer, StaticSubscriptionInfo(streamCounts))
       }).toSeq:_*)
       val scenario = Scenario("g1", topicPartitionCounts, subscriptions)
-      val zkClient = PartitionAssignorTest.setupZkClientMock(scenario)
-      EasyMock.replay(zkClient)
+      val zkUtils = PartitionAssignorTest.setupZkClientMock(scenario)
+      EasyMock.replay(zkUtils.zkClient)
 
-      PartitionAssignorTest.assignAndVerify(scenario, assignor, zkClient)
+      PartitionAssignorTest.assignAndVerify(scenario, assignor, zkUtils)
     })
   }
 }
@@ -135,6 +135,7 @@ private object PartitionAssignorTest extends Logging {
     val consumers = java.util.Arrays.asList(scenario.subscriptions.keys.toSeq:_*)
 
     val zkClient = EasyMock.createStrictMock(classOf[ZkClient])
+    val zkUtils = ZkUtils(zkClient, false)
     EasyMock.checkOrder(zkClient, false)
 
     EasyMock.expect(zkClient.getChildren("/consumers/%s/ids".format(scenario.group))).andReturn(consumers)
@@ -149,21 +150,21 @@ private object PartitionAssignorTest extends Logging {
     scenario.topicPartitionCounts.foreach { case(topic, partitionCount) =>
       val replicaAssignment = Map((0 until partitionCount).map(partition => (partition.toString, Seq(0))):_*)
       EasyMock.expect(zkClient.readData("/brokers/topics/%s".format(topic), new Stat()))
-              .andReturn(ZkUtils.replicaAssignmentZkData(replicaAssignment))
+              .andReturn(zkUtils.replicaAssignmentZkData(replicaAssignment))
       EasyMock.expectLastCall().anyTimes()
     }
 
-    EasyMock.expect(zkClient.getChildren("/brokers/topics")).andReturn(
+    EasyMock.expect(zkUtils.zkClient.getChildren("/brokers/topics")).andReturn(
       java.util.Arrays.asList(scenario.topicPartitionCounts.keys.toSeq:_*))
     EasyMock.expectLastCall().anyTimes()
 
-    zkClient
+    zkUtils
   }
 
-  private def assignAndVerify(scenario: Scenario, assignor: PartitionAssignor, zkClient: ZkClient,
+  private def assignAndVerify(scenario: Scenario, assignor: PartitionAssignor, zkUtils: ZkUtils,
                               verifyAssignmentIsUniform: Boolean = false) {
     val assignments = scenario.subscriptions.map{ case(consumer, subscription)  =>
-      val ctx = new AssignmentContext("g1", consumer, excludeInternalTopics = true, zkClient)
+      val ctx = new AssignmentContext("g1", consumer, excludeInternalTopics = true, zkUtils)
       assignor.assign(ctx).get(consumer)
     }
 

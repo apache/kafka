@@ -23,6 +23,7 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
 import kafka.controller.KafkaController
+import org.apache.kafka.common.security.JaasUtils
 
 /**
  * This class handles zookeeper based leader election based on an ephemeral path. The election module does not handle
@@ -40,18 +41,18 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
   // create the election path in ZK, if one does not exist
   val index = electionPath.lastIndexOf("/")
   if (index > 0)
-    makeSurePersistentPathExists(controllerContext.zkClient, electionPath.substring(0, index))
+    controllerContext.zkUtils.makeSurePersistentPathExists(electionPath.substring(0, index))
   val leaderChangeListener = new LeaderChangeListener
 
   def startup {
     inLock(controllerContext.controllerLock) {
-      controllerContext.zkClient.subscribeDataChanges(electionPath, leaderChangeListener)
+      controllerContext.zkUtils.zkClient.subscribeDataChanges(electionPath, leaderChangeListener)
       elect
     }
   }
 
   private def getControllerID(): Int = {
-    readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
+    controllerContext.zkUtils.readDataMaybeNull(electionPath)._1 match {
        case Some(controller) => KafkaController.parseControllerId(controller)
        case None => -1
     }
@@ -75,7 +76,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     try {
       val zkCheckedEphemeral = new ZKCheckedEphemeral(electionPath,
                                                       electString,
-                                                      controllerContext.zkConnection.getZookeeper)
+                                                      controllerContext.zkUtils.zkConnection.getZookeeper,
+                                                      JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
       zkCheckedEphemeral.create()
       info(brokerId + " successfully elected as leader")
       leaderId = brokerId
@@ -105,7 +107,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
 
   def resign() = {
     leaderId = -1
-    deletePath(controllerContext.zkClient, electionPath)
+    controllerContext.zkUtils.deletePath(electionPath)
   }
 
   /**

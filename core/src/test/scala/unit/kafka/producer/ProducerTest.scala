@@ -100,7 +100,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   @Test
   def testUpdateBrokerPartitionInfo() {
     val topic = "new-topic"
-    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
+    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val props = new Properties()
     // no need to retry since the send will always fail
@@ -155,7 +155,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic with 1 partition and await leadership
-    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
+    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val producer1 = TestUtils.createProducer[String, String](
       brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
@@ -168,7 +168,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     producer1.send(new KeyedMessage[String, String](topic, "test", "test1"))
     producer1.send(new KeyedMessage[String, String](topic, "test", "test2"))
     // get the leader
-    val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, topic, 0)
+    val leaderOpt = zkUtils.getLeaderForPartition(topic, 0)
     assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
     val leader = leaderOpt.get
 
@@ -217,7 +217,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic
-    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
                           servers = servers)
 
     val producer = TestUtils.createProducer[String, String](
@@ -250,7 +250,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     // restart server 1
     server1.startup()
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
 
     try {
@@ -283,7 +283,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topics in ZK
-    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
 
     // do a simple test to make sure plumbing is okay
     try {
@@ -330,12 +330,12 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     try {
 
       // create topic
-      AdminUtils.createTopic(zkClient, "new-topic", 2, 1)
+      AdminUtils.createTopic(zkUtils, "new-topic", 2, 1)
       TestUtils.waitUntilTrue(() =>
-        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode,
+        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkUtils).errorCode != ErrorMapping.UnknownTopicOrPartitionCode,
         "Topic new-topic not created after timeout",
         waitTime = zookeeper.tickTime)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "new-topic", 0)
 
       producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
     } finally {
