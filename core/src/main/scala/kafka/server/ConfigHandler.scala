@@ -31,7 +31,7 @@ import scala.collection.Map
  * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
  */
 trait ConfigHandler {
-  def processConfigChanges(entityName : String, value : Properties)
+  def processConfigChanges(entityName: String, value: Properties)
 }
 
 /**
@@ -69,7 +69,7 @@ object ClientConfigOverride {
  */
 class ClientIdConfigHandler(private val quotaManagers: Map[Short, ClientQuotaManager]) extends ConfigHandler {
 
-  def processConfigChanges(clientId : String, clientConfig : Properties) = {
+  def processConfigChanges(clientId: String, clientConfig: Properties) = {
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
       quotaManagers(RequestKeys.ProduceKey).updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
