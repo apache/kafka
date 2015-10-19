@@ -228,8 +228,32 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(offsetManager)
+    val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.memberId, Map.empty, true)
+    val syncGroupErrorCode = syncGroupResult._2
+    assertEquals(Errors.NONE.code, syncGroupErrorCode)
+
+    EasyMock.reset(offsetManager)
     val heartbeatResult = heartbeat(groupId, otherMemberId, 1, isCoordinatorForGroup = true)
     assertEquals(Errors.UNKNOWN_MEMBER_ID.code, heartbeatResult)
+  }
+
+  @Test
+  def testHeartbeatRebalanceInProgress() {
+    val groupId = "groupId"
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val metadata = Array[Byte]()
+    val protocolType = "consumer"
+    val protocols = List(("range", metadata))
+
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
+      isCoordinatorForGroup = true)
+    val assignedMemberId = joinGroupResult.memberId
+    val joinGroupErrorCode = joinGroupResult.errorCode
+    assertEquals(Errors.NONE.code, joinGroupErrorCode)
+
+    EasyMock.reset(offsetManager)
+    val heartbeatResult = heartbeat(groupId, assignedMemberId, 2, isCoordinatorForGroup = true)
+    assertEquals(Errors.REBALANCE_IN_PROGRESS.code, heartbeatResult)
   }
 
   @Test
@@ -242,12 +266,17 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
       isCoordinatorForGroup = true)
-    val assignedConsumerId = joinGroupResult.memberId
+    val assignedMemberId = joinGroupResult.memberId
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(offsetManager)
-    val heartbeatResult = heartbeat(groupId, assignedConsumerId, 2, isCoordinatorForGroup = true)
+    val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map.empty, true)
+    val syncGroupErrorCode = syncGroupResult._2
+    assertEquals(Errors.NONE.code, syncGroupErrorCode)
+
+    EasyMock.reset(offsetManager)
+    val heartbeatResult = heartbeat(groupId, assignedMemberId, 2, isCoordinatorForGroup = true)
     assertEquals(Errors.ILLEGAL_GENERATION.code, heartbeatResult)
   }
 

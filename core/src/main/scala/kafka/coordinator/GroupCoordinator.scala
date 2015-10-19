@@ -57,7 +57,7 @@ class GroupCoordinator(val brokerId: Int,
   private val isActive = new AtomicBoolean(false)
 
   private var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = null
-  private var rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance] = null
+  private var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = null
   private var coordinatorMetadata: CoordinatorMetadata = null
 
   def this(brokerId: Int,
@@ -87,7 +87,7 @@ class GroupCoordinator(val brokerId: Int,
   def startup() {
     info("Starting up.")
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", brokerId)
-    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", brokerId)
+    joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", brokerId)
     coordinatorMetadata = new CoordinatorMetadata(brokerId)
     isActive.set(true)
     info("Startup complete.")
@@ -103,7 +103,7 @@ class GroupCoordinator(val brokerId: Int,
     offsetManager.shutdown()
     coordinatorMetadata.shutdown()
     heartbeatPurgatory.shutdown()
-    rebalancePurgatory.shutdown()
+    joinPurgatory.shutdown()
     info("Shutdown complete.")
   }
 
@@ -221,7 +221,7 @@ class GroupCoordinator(val brokerId: Int,
         }
 
         if (group.is(PreparingRebalance))
-          rebalancePurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+          joinPurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
       }
     }
   }
@@ -275,7 +275,6 @@ class GroupCoordinator(val brokerId: Int,
 
           case Stable =>
             // if the group is stable, we just return the current assignment
-            // TODO: should we return an error if the leader is trying to submit new synchronized state?
             val memberMetadata = group.get(memberId)
             responseCallback(memberMetadata.assignment, Errors.NONE.code)
             completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
@@ -304,12 +303,10 @@ class GroupCoordinator(val brokerId: Int,
           } else if (!group.has(consumerId)) {
             responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
           } else {
-            val consumer = group.get(consumerId)
-            removeHeartbeatForLeavingConsumer(group, consumer)
-            onMemberFailure(group, consumer)
+            val member = group.get(consumerId)
+            removeHeartbeatForLeavingMember(group, member)
+            onMemberFailure(group, member)
             responseCallback(Errors.NONE.code)
-            if (group.is(PreparingRebalance))
-              rebalancePurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
           }
         }
       }
@@ -336,12 +333,12 @@ class GroupCoordinator(val brokerId: Int,
         group synchronized {
           if (group.is(Dead)) {
             responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+          } else if (!group.is(Stable)) {
+            responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
           } else if (!group.has(memberId)) {
             responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
           } else if (generationId != group.generationId) {
             responseCallback(Errors.ILLEGAL_GENERATION.code)
-          } else if (!group.is(Stable)) {
-            responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
           } else {
             val member = group.get(memberId)
             completeAndScheduleNextHeartbeatExpiration(group, member)
@@ -448,7 +445,7 @@ class GroupCoordinator(val brokerId: Int,
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(memberKey))
   }
 
-  private def removeHeartbeatForLeavingConsumer(group: GroupMetadata, member: MemberMetadata) {
+  private def removeHeartbeatForLeavingMember(group: GroupMetadata, member: MemberMetadata) {
     member.isLeaving = true
     val consumerKey = ConsumerKey(member.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(consumerKey)
@@ -464,10 +461,6 @@ class GroupCoordinator(val brokerId: Int,
     group.add(member.memberId, member)
     maybePrepareRebalance(group)
     member
-  }
-
-  private def removeMember(group: GroupMetadata, member: MemberMetadata) {
-    group.remove(member.memberId)
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,
@@ -502,18 +495,22 @@ class GroupCoordinator(val brokerId: Int,
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
 
     val rebalanceTimeout = group.rebalanceTimeout
-    val delayedRebalance = new DelayedRebalance(this, group, rebalanceTimeout)
+    val delayedRebalance = new DelayedJoin(this, group, rebalanceTimeout)
     val consumerGroupKey = ConsumerGroupKey(group.groupId)
-    rebalancePurgatory.tryCompleteElseWatch(delayedRebalance, Seq(consumerGroupKey))
+    joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(consumerGroupKey))
   }
 
   private def onMemberFailure(group: GroupMetadata, member: MemberMetadata) {
     trace("Member %s in group %s has failed".format(member.memberId, group.groupId))
-    removeMember(group, member)
-    maybePrepareRebalance(group)
+    group.remove(member.memberId)
+    group.currentState match {
+      case Dead =>
+      case Stable | AwaitingSync => maybePrepareRebalance(group)
+      case PreparingRebalance => joinPurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+    }
   }
 
-  def tryCompleteRebalance(group: GroupMetadata, forceComplete: () => Boolean) = {
+  def tryCompleteJoin(group: GroupMetadata, forceComplete: () => Boolean) = {
     group synchronized {
       if (group.notYetRejoinedMembers.isEmpty)
         forceComplete()
@@ -521,16 +518,16 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def onExpirationRestabilize() {
+  def onExpireJoin() {
     // TODO: add metrics for restabilize timeouts
   }
 
-  def onCompleteRestabilize(group: GroupMetadata) {
+  def onCompleteJoin(group: GroupMetadata) {
     group synchronized {
       val failedMembers = group.notYetRejoinedMembers
       if (group.isEmpty || !failedMembers.isEmpty) {
         failedMembers.foreach { failedMember =>
-          removeMember(group, failedMember)
+          group.remove(failedMember.memberId)
           // TODO: cut the socket connection to the client
         }
 
@@ -571,7 +568,7 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def onExpirationHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long) {
+  def onExpireHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long) {
     group synchronized {
       if (!shouldKeepMemberAlive(member, heartbeatDeadline))
         onMemberFailure(group, member)
