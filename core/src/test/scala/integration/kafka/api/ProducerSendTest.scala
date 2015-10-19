@@ -91,7 +91,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      TestUtils.createTopic(zkClient, topic, 1, 2, servers)
+      TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
       // send a normal record
       val record0 = new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, "key".getBytes, "value".getBytes)
@@ -194,7 +194,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      TestUtils.createTopic(zkClient, topic, 1, 2, servers)
+      TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
       // non-blocking send a list of records
       val record0 = new ProducerRecord[Array[Byte],Array[Byte]](topic, null, "key".getBytes, "value".getBytes)
@@ -230,7 +230,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val leaders = TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
       val partition = 1
 
       // make sure leaders exist
@@ -289,7 +289,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
       assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
 
       // double check that the topic is created with leader elected
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
 
     } finally {
       if (producer != null) {
@@ -306,7 +306,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
   def testFlush() {
     var producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
     try {
-      TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
       val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "value".getBytes)
       for(i <- 0 until 50) {
         val responses = (0 until numRecords) map (i => producer.send(record))
@@ -328,7 +328,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
     var producer: KafkaProducer[Array[Byte],Array[Byte]] = null
     try {
       // create topic
-      val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val leaders = TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
       val leader0 = leaders(0)
       val leader1 = leaders(1)
 
@@ -372,7 +372,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
     var producer: KafkaProducer[Array[Byte],Array[Byte]] = null
     try {
       // create topic
-      val leaders = TestUtils.createTopic(zkClient, topic, 1, 2, servers)
+      val leaders = TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
       val leader = leaders(0)
 
       // create record

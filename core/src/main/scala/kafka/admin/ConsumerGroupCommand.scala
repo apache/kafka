@@ -31,6 +31,7 @@ import scala.collection.{Set, mutable}
 import kafka.consumer.SimpleConsumer
 import collection.JavaConversions._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.JaasUtils
 
 
 object ConsumerGroupCommand {
@@ -48,57 +49,60 @@ object ConsumerGroupCommand {
 
     opts.checkArgs()
 
-    val zkClient = ZkUtils.createZkClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000)
+    val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt), 
+                          30000,
+                          30000,
+                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
     try {
       if (opts.options.has(opts.listOpt))
-        list(zkClient)
+        list(zkUtils)
       else if (opts.options.has(opts.describeOpt))
-        describe(zkClient, opts)
+        describe(zkUtils, opts)
       else if (opts.options.has(opts.deleteOpt))
-        delete(zkClient, opts)
+        delete(zkUtils, opts)
     } catch {
       case e: Throwable =>
         println("Error while executing consumer group command " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
-      zkClient.close()
+      zkUtils.close()
     }
   }
 
-  def list(zkClient: ZkClient) {
-    ZkUtils.getConsumerGroups(zkClient).foreach(println)
+  def list(zkUtils: ZkUtils) {
+    zkUtils.getConsumerGroups().foreach(println)
   }
 
-  def describe(zkClient: ZkClient, opts: ConsumerGroupCommandOptions) {
+  def describe(zkUtils: ZkUtils, opts: ConsumerGroupCommandOptions) {
     val configs = parseConfigs(opts)
     val channelSocketTimeoutMs = configs.getProperty("channelSocketTimeoutMs", "600").toInt
     val channelRetryBackoffMs = configs.getProperty("channelRetryBackoffMsOpt", "300").toInt
     val group = opts.options.valueOf(opts.groupOpt)
-    val topics = ZkUtils.getTopicsByConsumerGroup(zkClient, group)
+    val topics = zkUtils.getTopicsByConsumerGroup(group)
     if (topics.isEmpty) {
       println("No topic available for consumer group provided")
     }
-    topics.foreach(topic => describeTopic(zkClient, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs))
+    topics.foreach(topic => describeTopic(zkUtils, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs))
   }
 
-  def delete(zkClient: ZkClient, opts: ConsumerGroupCommandOptions) {
+  def delete(zkUtils: ZkUtils, opts: ConsumerGroupCommandOptions) {
     if (opts.options.has(opts.groupOpt) && opts.options.has(opts.topicOpt)) {
-      deleteForTopic(zkClient, opts)
+      deleteForTopic(zkUtils, opts)
     }
     else if (opts.options.has(opts.groupOpt)) {
-      deleteForGroup(zkClient, opts)
+      deleteForGroup(zkUtils, opts)
     }
     else if (opts.options.has(opts.topicOpt)) {
-      deleteAllForTopic(zkClient, opts)
+      deleteAllForTopic(zkUtils, opts)
     }
   }
 
-  private def deleteForGroup(zkClient: ZkClient, opts: ConsumerGroupCommandOptions) {
+  private def deleteForGroup(zkUtils: ZkUtils, opts: ConsumerGroupCommandOptions) {
     val groups = opts.options.valuesOf(opts.groupOpt)
     groups.foreach { group =>
       try {
-        if (AdminUtils.deleteConsumerGroupInZK(zkClient, group))
+        if (AdminUtils.deleteConsumerGroupInZK(zkUtils, group))
           println("Deleted all consumer group information for group %s in zookeeper.".format(group))
         else
           println("Delete for group %s failed because its consumers are still active.".format(group))
@@ -110,13 +114,13 @@ object ConsumerGroupCommand {
     }
   }
 
-  private def deleteForTopic(zkClient: ZkClient, opts: ConsumerGroupCommandOptions) {
+  private def deleteForTopic(zkUtils: ZkUtils, opts: ConsumerGroupCommandOptions) {
     val groups = opts.options.valuesOf(opts.groupOpt)
     val topic = opts.options.valueOf(opts.topicOpt)
     Topic.validate(topic)
     groups.foreach { group =>
       try {
-        if (AdminUtils.deleteConsumerGroupInfoForTopicInZK(zkClient, group, topic))
+        if (AdminUtils.deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic))
           println("Deleted consumer group information for group %s topic %s in zookeeper.".format(group, topic))
         else
           println("Delete for group %s topic %s failed because its consumers are still active.".format(group, topic))
@@ -128,10 +132,10 @@ object ConsumerGroupCommand {
     }
   }
 
-  private def deleteAllForTopic(zkClient: ZkClient, opts: ConsumerGroupCommandOptions) {
+  private def deleteAllForTopic(zkUtils: ZkUtils, opts: ConsumerGroupCommandOptions) {
     val topic = opts.options.valueOf(opts.topicOpt)
     Topic.validate(topic)
-    AdminUtils.deleteAllConsumerGroupInfoForTopicInZK(zkClient, topic)
+    AdminUtils.deleteAllConsumerGroupInfoForTopicInZK(zkUtils, topic)
     println("Deleted consumer group information for all inactive consumer groups for topic %s in zookeeper.".format(topic))
   }
 
@@ -144,35 +148,35 @@ object ConsumerGroupCommand {
     props
   }
 
-  private def describeTopic(zkClient: ZkClient,
+  private def describeTopic(zkUtils: ZkUtils,
                             group: String,
                             topic: String,
                             channelSocketTimeoutMs: Int,
                             channelRetryBackoffMs: Int) {
-    val topicPartitions = getTopicPartitions(zkClient, topic)
-    val partitionOffsets = getPartitionOffsets(zkClient, group, topicPartitions, channelSocketTimeoutMs, channelRetryBackoffMs)
+    val topicPartitions = getTopicPartitions(zkUtils, topic)
+    val partitionOffsets = getPartitionOffsets(zkUtils, group, topicPartitions, channelSocketTimeoutMs, channelRetryBackoffMs)
     println("%s, %s, %s, %s, %s, %s, %s"
       .format("GROUP", "TOPIC", "PARTITION", "CURRENT OFFSET", "LOG END OFFSET", "LAG", "OWNER"))
     topicPartitions
       .sortBy { case topicPartition => topicPartition.partition }
       .foreach { topicPartition =>
-      describePartition(zkClient, group, topicPartition.topic, topicPartition.partition, partitionOffsets.get(topicPartition))
+      describePartition(zkUtils, group, topicPartition.topic, topicPartition.partition, partitionOffsets.get(topicPartition))
     }
   }
 
-  private def getTopicPartitions(zkClient: ZkClient, topic: String) = {
-    val topicPartitionMap = ZkUtils.getPartitionsForTopics(zkClient, Seq(topic))
+  private def getTopicPartitions(zkUtils: ZkUtils, topic: String) = {
+    val topicPartitionMap = zkUtils.getPartitionsForTopics(Seq(topic))
     val partitions = topicPartitionMap.getOrElse(topic, Seq.empty)
     partitions.map(TopicAndPartition(topic, _))
   }
 
-  private def getPartitionOffsets(zkClient: ZkClient,
+  private def getPartitionOffsets(zkUtils: ZkUtils,
                                   group: String,
                                   topicPartitions: Seq[TopicAndPartition],
                                   channelSocketTimeoutMs: Int,
                                   channelRetryBackoffMs: Int): Map[TopicAndPartition, Long] = {
     val offsetMap = mutable.Map[TopicAndPartition, Long]()
-    val channel = ClientUtils.channelToOffsetManager(group, zkClient, channelSocketTimeoutMs, channelRetryBackoffMs)
+    val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
     channel.send(OffsetFetchRequest(group, topicPartitions))
     val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
@@ -182,7 +186,7 @@ object ConsumerGroupCommand {
         // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
         // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
         try {
-          val offset = ZkUtils.readData(zkClient, topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
+          val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
           offsetMap.put(topicAndPartition, offset)
         } catch {
           case z: ZkNoNodeException =>
@@ -200,20 +204,20 @@ object ConsumerGroupCommand {
     offsetMap.toMap
   }
 
-  private def describePartition(zkClient: ZkClient,
+  private def describePartition(zkUtils: ZkUtils,
                                 group: String,
                                 topic: String,
                                 partition: Int,
                                 offsetOpt: Option[Long]) {
     val topicAndPartition = TopicAndPartition(topic, partition)
     val groupDirs = new ZKGroupTopicDirs(group, topic)
-    val owner = ZkUtils.readDataMaybeNull(zkClient, groupDirs.consumerOwnerDir + "/" + partition)._1
-    ZkUtils.getLeaderForPartition(zkClient, topic, partition) match {
+    val owner = zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/" + partition)._1
+    zkUtils.getLeaderForPartition(topic, partition) match {
       case Some(-1) =>
         println("%s, %s, %s, %s, %s, %s, %s"
           .format(group, topic, partition, offsetOpt.getOrElse("unknown"), "unknown", "unknown", owner.getOrElse("none")))
       case Some(brokerId) =>
-        val consumerOpt = getConsumer(zkClient, brokerId)
+        val consumerOpt = getConsumer(zkUtils, brokerId)
         consumerOpt match {
           case Some(consumer) =>
             val request =
@@ -231,9 +235,9 @@ object ConsumerGroupCommand {
     }
   }
 
-  private def getConsumer(zkClient: ZkClient, brokerId: Int): Option[SimpleConsumer] = {
+  private def getConsumer(zkUtils: ZkUtils, brokerId: Int): Option[SimpleConsumer] = {
     try {
-      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1 match {
+      zkUtils.readDataMaybeNull(ZkUtils.BrokerIdsPath + "/" + brokerId)._1 match {
         case Some(brokerInfoString) =>
           Json.parseFull(brokerInfoString) match {
             case Some(m) =>

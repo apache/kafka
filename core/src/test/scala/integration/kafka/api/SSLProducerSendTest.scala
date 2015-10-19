@@ -95,7 +95,7 @@ class SSLProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      TestUtils.createTopic(zkClient, topic, 1, 2, servers)
+      TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
       // send a normal record
       val record0 = new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, "key".getBytes, "value".getBytes)
@@ -159,7 +159,7 @@ class SSLProducerSendTest extends KafkaServerTestHarness {
     var producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile))
     try {
       // create topic
-      TestUtils.createTopic(zkClient, topic, 1, 2, servers)
+      TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
       // non-blocking send a list of records
       val record0 = new ProducerRecord[Array[Byte],Array[Byte]](topic, null, "key".getBytes, "value".getBytes)
@@ -194,7 +194,7 @@ class SSLProducerSendTest extends KafkaServerTestHarness {
     var producer = TestUtils.createNewProducer(TestUtils.getSSLBrokerListStrFromServers(servers), enableSSL=true, trustStoreFile=Some(trustStoreFile))
     try {
       // create topic
-      val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val leaders = TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
       val partition = 1
 
       // make sure leaders exist

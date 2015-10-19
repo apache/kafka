@@ -63,7 +63,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(this.zkClient, topic, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
   }
 
   @Test
@@ -147,7 +147,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   @Test
   def testAutoCommitOnRebalance() {
     val topic2 = "topic2"
-    TestUtils.createTopic(this.zkClient, topic2, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
 
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
@@ -186,17 +186,17 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(numRecords)
 
     val topic1: String = "tblablac" // matches subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic1, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic1, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic1, 0))
     sendRecords(1000, new TopicPartition(topic1, 1))
 
     val topic2: String = "tblablak" // does not match subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic2, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic2, 0))
     sendRecords(1000, new TopicPartition(topic2, 1))
 
     val topic3: String = "tblab1" // does not match subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic3, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic3, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic3, 0))
     sendRecords(1000, new TopicPartition(topic3, 1))
 
@@ -218,7 +218,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment()}")
 
     val topic4: String = "tsomec" // matches subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic4, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic4, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic4, 0))
     sendRecords(1000, new TopicPartition(topic4, 1))
 
@@ -242,7 +242,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(numRecords)
 
     val topic1: String = "tblablac" // matches subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic1, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic1, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic1, 0))
     sendRecords(1000, new TopicPartition(topic1, 1))
 
@@ -383,7 +383,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   @Test
   def testPartitionsFor() {
     val numParts = 2
-    TestUtils.createTopic(this.zkClient, "part-test", numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, "part-test", numParts, 1, this.servers)
     val parts = this.consumers(0).partitionsFor("part-test")
     assertNotNull(parts)
     assertEquals(2, parts.size)
@@ -396,9 +396,9 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     val topic1: String = "part-test-topic-1"
     val topic2: String = "part-test-topic-2"
     val topic3: String = "part-test-topic-3"
-    TestUtils.createTopic(this.zkClient, topic1, numParts, 1, this.servers)
-    TestUtils.createTopic(this.zkClient, topic2, numParts, 1, this.servers)
-    TestUtils.createTopic(this.zkClient, topic3, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic1, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic2, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic3, numParts, 1, this.servers)
 
     val topics = this.consumers.head.listTopics()
     assertNotNull(topics)
@@ -475,7 +475,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       this.consumers(0).assignment == subscriptions.asJava
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment}")
 
-    TestUtils.createTopic(this.zkClient, otherTopic, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, otherTopic, 2, serverCount, this.servers)
     this.consumers(0).subscribe(List(topic, otherTopic))
     TestUtils.waitUntilTrue(() => {
       this.consumers(0).poll(50)
@@ -486,7 +486,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   @Test
   def testShrinkingTopicSubscriptions() {
     val otherTopic = "other"
-    TestUtils.createTopic(this.zkClient, otherTopic, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, otherTopic, 2, serverCount, this.servers)
     val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
     val shrunkenSubscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     this.consumers(0).subscribe(List(topic, otherTopic))

@@ -18,7 +18,8 @@
 package kafka.coordinator
 
 import kafka.server.KafkaConfig
-import kafka.utils.{ZkUtils, TestUtils}
+import kafka.utils.{TestUtils, ZkUtils}
+import kafka.utils.ZkUtils._
 
 import org.junit.Assert._
 import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
@@ -33,14 +34,15 @@ import org.scalatest.junit.JUnitSuite
 class CoordinatorMetadataTest extends JUnitSuite {
   val DefaultNumPartitions = 8
   val DefaultNumReplicas = 2
-  var zkClient: ZkClient = null
+  var zkUtils: ZkUtils = null
   var coordinatorMetadata: CoordinatorMetadata = null
 
   @Before
   def setUp() {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    zkClient = EasyMock.createStrictMock(classOf[ZkClient])
-    coordinatorMetadata = new CoordinatorMetadata(KafkaConfig.fromProps(props).brokerId, zkClient, null)
+    val zkClient = EasyMock.createStrictMock(classOf[ZkClient])
+    zkUtils = ZkUtils(zkClient, false)
+    coordinatorMetadata = new CoordinatorMetadata(KafkaConfig.fromProps(props).brokerId, zkUtils, null)
   }
 
   @Test
@@ -77,8 +79,8 @@ class CoordinatorMetadataTest extends JUnitSuite {
     val topics = Set("a")
     coordinatorMetadata.addGroup(groupId, "range")
 
-    expectZkClientSubscribeDataChanges(zkClient, topics)
-    EasyMock.replay(zkClient)
+    expectZkClientSubscribeDataChanges(zkUtils, topics)
+    EasyMock.replay(zkUtils.zkClient)
     coordinatorMetadata.bindGroupToTopics(groupId, topics)
     assertEquals(Map("a" -> DefaultNumPartitions), coordinatorMetadata.partitionsPerTopic)
   }
@@ -91,8 +93,8 @@ class CoordinatorMetadataTest extends JUnitSuite {
     coordinatorMetadata.addGroup(group1, "range")
     coordinatorMetadata.addGroup(group2, "range")
 
-    expectZkClientSubscribeDataChanges(zkClient, topics)
-    EasyMock.replay(zkClient)
+    expectZkClientSubscribeDataChanges(zkUtils, topics)
+    EasyMock.replay(zkUtils.zkClient)
     coordinatorMetadata.bindGroupToTopics(group1, topics)
     coordinatorMetadata.bindGroupToTopics(group2, topics)
     assertEquals(Map("a" -> DefaultNumPartitions), coordinatorMetadata.partitionsPerTopic)
@@ -111,8 +113,8 @@ class CoordinatorMetadataTest extends JUnitSuite {
     val topics = Set("a")
     coordinatorMetadata.addGroup(groupId, "range")
 
-    expectZkClientSubscribeDataChanges(zkClient, topics)
-    EasyMock.replay(zkClient)
+    expectZkClientSubscribeDataChanges(zkUtils, topics)
+    EasyMock.replay(zkUtils.zkClient)
     coordinatorMetadata.bindGroupToTopics(groupId, topics)
     coordinatorMetadata.unbindGroupFromTopics(groupId, Set("b"))
     assertEquals(Map("a" -> DefaultNumPartitions), coordinatorMetadata.partitionsPerTopic)
@@ -126,8 +128,8 @@ class CoordinatorMetadataTest extends JUnitSuite {
     coordinatorMetadata.addGroup(group1, "range")
     coordinatorMetadata.addGroup(group2, "range")
 
-    expectZkClientSubscribeDataChanges(zkClient, topics)
-    EasyMock.replay(zkClient)
+    expectZkClientSubscribeDataChanges(zkUtils, topics)
+    EasyMock.replay(zkUtils.zkClient)
     coordinatorMetadata.bindGroupToTopics(group1, topics)
     coordinatorMetadata.bindGroupToTopics(group2, topics)
     coordinatorMetadata.unbindGroupFromTopics(group1, topics)
@@ -140,9 +142,9 @@ class CoordinatorMetadataTest extends JUnitSuite {
     val topics = Set("a")
     coordinatorMetadata.addGroup(groupId, "range")
 
-    expectZkClientSubscribeDataChanges(zkClient, topics)
-    expectZkClientUnsubscribeDataChanges(zkClient, topics)
-    EasyMock.replay(zkClient)
+    expectZkClientSubscribeDataChanges(zkUtils, topics)
+    expectZkClientUnsubscribeDataChanges(zkUtils.zkClient, topics)
+    EasyMock.replay(zkUtils.zkClient)
     coordinatorMetadata.bindGroupToTopics(groupId, topics)
     coordinatorMetadata.unbindGroupFromTopics(groupId, topics)
     assertEquals(Map.empty[String, Int], coordinatorMetadata.partitionsPerTopic)
@@ -163,8 +165,8 @@ class CoordinatorMetadataTest extends JUnitSuite {
     coordinatorMetadata.addGroup(group1, "range")
     coordinatorMetadata.addGroup(group2, "range")
 
-    expectZkClientSubscribeDataChanges(zkClient, topics)
-    EasyMock.replay(zkClient)
+    expectZkClientSubscribeDataChanges(zkUtils, topics)
+    EasyMock.replay(zkUtils.zkClient)
     coordinatorMetadata.bindGroupToTopics(group1, topics)
     coordinatorMetadata.bindGroupToTopics(group2, topics)
     coordinatorMetadata.removeGroup(group1, topics)
@@ -179,17 +181,17 @@ class CoordinatorMetadataTest extends JUnitSuite {
     val topics = Set("a")
     coordinatorMetadata.addGroup(groupId, "range")
 
-    expectZkClientSubscribeDataChanges(zkClient, topics)
-    expectZkClientUnsubscribeDataChanges(zkClient, topics)
-    EasyMock.replay(zkClient)
+    expectZkClientSubscribeDataChanges(zkUtils, topics)
+    expectZkClientUnsubscribeDataChanges(zkUtils.zkClient, topics)
+    EasyMock.replay(zkUtils.zkClient)
     coordinatorMetadata.bindGroupToTopics(groupId, topics)
     coordinatorMetadata.removeGroup(groupId, topics)
     assertNull(coordinatorMetadata.getGroup(groupId))
     assertEquals(Map.empty[String, Int], coordinatorMetadata.partitionsPerTopic)
   }
 
-  private def expectZkClientSubscribeDataChanges(zkClient: ZkClient, topics: Set[String]) {
-    topics.foreach(topic => expectZkClientSubscribeDataChange(zkClient, topic))
+  private def expectZkClientSubscribeDataChanges(zkUtils: ZkUtils, topics: Set[String]) {
+    topics.foreach(topic => expectZkClientSubscribeDataChange(zkUtils.zkClient, topic))
   }
 
   private def expectZkClientUnsubscribeDataChanges(zkClient: ZkClient, topics: Set[String]) {
@@ -200,14 +202,14 @@ class CoordinatorMetadataTest extends JUnitSuite {
     val replicaAssignment =
       (0 until DefaultNumPartitions)
       .map(partition => partition.toString -> (0 until DefaultNumReplicas).toSeq).toMap
-    val topicPath = ZkUtils.getTopicPath(topic)
+    val topicPath = getTopicPath(topic)
     EasyMock.expect(zkClient.readData(topicPath, new Stat()))
-      .andReturn(ZkUtils.replicaAssignmentZkData(replicaAssignment))
+      .andReturn(zkUtils.replicaAssignmentZkData(replicaAssignment))
     zkClient.subscribeDataChanges(EasyMock.eq(topicPath), EasyMock.isA(classOf[IZkDataListener]))
   }
 
   private def expectZkClientUnsubscribeDataChange(zkClient: ZkClient, topic: String) {
-    val topicPath = ZkUtils.getTopicPath(topic)
+    val topicPath = getTopicPath(topic)
     zkClient.unsubscribeDataChanges(EasyMock.eq(topicPath), EasyMock.isA(classOf[IZkDataListener]))
   }
 }

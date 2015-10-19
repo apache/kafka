@@ -97,14 +97,14 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
 
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkClient, ConsumerCoordinator.OffsetsTopicName,
+    TestUtils.createTopic(zkUtils, ConsumerCoordinator.OffsetsTopicName,
       overridingProps.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
       overridingProps.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
       servers(0).consumerCoordinator.offsetsTopicConfigs)
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(this.zkClient, topic, 1, numServers, this.servers)
+    TestUtils.createTopic(zkUtils, topic, 1, numServers, this.servers)
   }
 
   @After
@@ -193,7 +193,7 @@ class SSLConsumerTest extends KafkaServerTestHarness with Logging {
   @Test
   def testPartitionsFor() {
     val numParts = 2
-    TestUtils.createTopic(this.zkClient, "part-test", numParts, 1, this.servers)
+    TestUtils.createTopic(zkUtils, "part-test", numParts, 1, this.servers)
     val parts = this.consumers(0).partitionsFor("part-test")
     assertNotNull(parts)
     assertEquals(2, parts.length)

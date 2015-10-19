@@ -43,7 +43,7 @@ class ConsumerCoordinator(val brokerId: Int,
                           val groupConfig: GroupManagerConfig,
                           val offsetConfig: OffsetManagerConfig,
                           private val offsetManager: OffsetManager,
-                          zkClient: ZkClient) extends Logging {
+                          zkUtils: ZkUtils) extends Logging {
 
   this.logIdent = "[ConsumerCoordinator " + brokerId + "]: "
 
@@ -57,9 +57,9 @@ class ConsumerCoordinator(val brokerId: Int,
            groupConfig: GroupManagerConfig,
            offsetConfig: OffsetManagerConfig,
            replicaManager: ReplicaManager,
-           zkClient: ZkClient,
+           zkUtils: ZkUtils,
            scheduler: KafkaScheduler) = this(brokerId, groupConfig, offsetConfig,
-    new OffsetManager(offsetConfig, replicaManager, zkClient, scheduler), zkClient)
+    new OffsetManager(offsetConfig, replicaManager, zkUtils, scheduler), zkUtils)
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -81,7 +81,7 @@ class ConsumerCoordinator(val brokerId: Int,
     info("Starting up.")
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", brokerId)
     rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", brokerId)
-    coordinatorMetadata = new CoordinatorMetadata(brokerId, zkClient, maybePrepareRebalance)
+    coordinatorMetadata = new CoordinatorMetadata(brokerId, zkUtils, maybePrepareRebalance)
     isActive.set(true)
     info("Startup complete.")
   }
@@ -499,7 +499,7 @@ object ConsumerCoordinator {
   val OffsetsTopicName = "__consumer_offsets"
 
   def create(config: KafkaConfig,
-             zkClient: ZkClient,
+             zkUtils: ZkUtils,
              replicaManager: ReplicaManager,
              kafkaScheduler: KafkaScheduler): ConsumerCoordinator = {
     val offsetConfig = OffsetManagerConfig(maxMetadataSize = config.offsetMetadataMaxSize,
@@ -513,11 +513,11 @@ object ConsumerCoordinator {
     val groupConfig = GroupManagerConfig(consumerMinSessionTimeoutMs = config.consumerMinSessionTimeoutMs,
       consumerMaxSessionTimeoutMs = config.consumerMaxSessionTimeoutMs)
 
-    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkClient, kafkaScheduler)
+    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils, kafkaScheduler)
   }
 
   def create(config: KafkaConfig,
-             zkClient: ZkClient,
+             zkUtils: ZkUtils,
              offsetManager: OffsetManager): ConsumerCoordinator = {
     val offsetConfig = OffsetManagerConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
@@ -530,6 +530,6 @@ object ConsumerCoordinator {
     val groupConfig = GroupManagerConfig(consumerMinSessionTimeoutMs = config.consumerMinSessionTimeoutMs,
       consumerMaxSessionTimeoutMs = config.consumerMaxSessionTimeoutMs)
 
-    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, offsetManager, zkClient)
+    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, offsetManager, zkUtils)
   }
 }
