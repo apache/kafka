@@ -114,7 +114,13 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
-
+    /**
+     * Sends an empty message to the server to initiate the authentication process. It then evaluates server challenges
+     * via `SaslClient.evaluateChallenge` and returns client responses until authentication succeeds or fails.
+     *
+     * The messages are sent and received as size delimited bytes that consists of a 4 byte network-ordered size N
+     * followed by N bytes representing the opaque payload.
+     */
     public void authenticate() throws IOException {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
