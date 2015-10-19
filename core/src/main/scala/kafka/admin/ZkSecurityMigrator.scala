@@ -64,9 +64,17 @@ object ZkSecurityMigrator extends Logging {
           case Code.OK =>
             // Set ACL for each child
             Future {
+              val childPathBuilder = new StringBuilder
               for(child <- list) {
-                zkHandle.setACL(child, ZkUtils.DefaultAcls(true), -1, SetACLCallback, ctx)
-                zkHandle.getChildren(child, false, GetChildrenCallback, ctx)
+                childPathBuilder.clear
+                childPathBuilder.append(path)
+                childPathBuilder.append("/")
+                childPathBuilder.append(child)
+                
+                val childPath = childPathBuilder.toString
+                
+                zkHandle.setACL(childPath, ZkUtils.DefaultAcls(true), -1, SetACLCallback, ctx)
+                zkHandle.getChildren(childPath, false, GetChildrenCallback, ctx)
               }
             }(threadExecutionContext)
           case Code.CONNECTIONLOSS =>
