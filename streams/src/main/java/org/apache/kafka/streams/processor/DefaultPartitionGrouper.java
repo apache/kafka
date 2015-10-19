@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -35,15 +35,13 @@ import java.util.TreeMap;
 
 public class DefaultPartitionGrouper implements PartitionGrouper {
 
-    public Map<Integer, List<TopicPartition>> groups(Collection<Set<String>> topicGroups, KafkaConsumer<byte[], byte[]> consumer) {
-
-        List<List<String>> sortedTopicGroups = sort(topicGroups);
-
+    public Map<Integer, List<TopicPartition>> groups(Collection<Set<String>> topicGroups, Cluster metadata) {
         Map<Integer, List<TopicPartition>> groups = new HashMap<>();
+        List<List<String>> sortedTopicGroups = sort(topicGroups);
 
         int groupId = 0;
         for (List<String> topicGroup : sortedTopicGroups) {
-            int numPartitions = ensureCopartitioning(topicGroup, consumer);
+            int numPartitions = ensureCopartitioning(topicGroup, metadata);
 
             for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
                 ArrayList<TopicPartition> group = new ArrayList<>(topicGroup.size());
@@ -57,11 +55,11 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
         return Collections.unmodifiableMap(groups);
     }
 
-    protected int ensureCopartitioning(List<String> topicGroup, KafkaConsumer<byte[], byte[]> consumer) {
+    protected int ensureCopartitioning(List<String> topicGroup, Cluster metadata) {
         int numPartitions = -1;
 
         for (String topic : topicGroup) {
-            List<PartitionInfo> infos = consumer.partitionsFor(topic);
+            List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
 
             if (infos == null)
                 throw new KafkaException("topic not found :" + topic);

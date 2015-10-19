@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
@@ -27,6 +27,6 @@ import java.util.Set;
 
 public interface PartitionGrouper {
 
-    Map<Integer, List<TopicPartition>> groups(Collection<Set<String>> topicGroups, KafkaConsumer<byte[], byte[]> consumer);
+    Map<Integer, List<TopicPartition>> groups(Collection<Set<String>> topicGroups, Cluster metadata);
 
 }
