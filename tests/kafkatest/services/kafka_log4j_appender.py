@@ -15,7 +15,7 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka.directory import kafka_dir
 
 
 class KafkaLog4jAppender(BackgroundThreadService):
@@ -39,7 +39,7 @@ class KafkaLog4jAppender(BackgroundThreadService):
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
-        cmd = "/opt/%s/bin/" % KafkaService.kafka_dir(node)
+        cmd = "/opt/%s/bin/" % kafka_dir(node)
         cmd += "kafka-run-class.sh org.apache.kafka.clients.tools.VerifiableLog4jAppender"
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers())
 

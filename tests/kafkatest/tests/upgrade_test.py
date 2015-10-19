@@ -19,7 +19,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka.version import LATEST_0_8_2, TRUNK
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
-from kafkatest.services.kafka import property
+from kafkatest.services.kafka import config_property
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 
 
@@ -54,13 +54,13 @@ class TestUpgrade(ProduceConsumeValidateTest):
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
             node.version = TRUNK
-            node.config[property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
+            node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
             self.kafka.start_node(node)
 
         self.logger.info("Second pass bounce - remove inter.broker.protocol.version config")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
-            del node.config[property.INTER_BROKER_PROTOCOL_VERSION]
+            del node.config[config_property.INTER_BROKER_PROTOCOL_VERSION]
             self.kafka.start_node(node)
 
     def test_upgrade(self):

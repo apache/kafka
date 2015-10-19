@@ -28,7 +28,10 @@ import org.apache.kafka.common.utils.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -138,7 +141,29 @@ public class VerifiableProducer {
 
         return parser;
     }
-
+    
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     *                 
+     * Note: this duplication of org.apache.kafka.common.utils.Utils.loadProps is unfortunate 
+     * but *intentional*. In order to use VerifiableProducer in compatibility and upgrade tests, 
+     * we use VerifiableProducer from trunk tools package, and run it against 0.8.X.X kafka jars.
+     * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
+     */
+    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+        Properties props = new Properties();
+        InputStream propStream = null;
+        try {
+            propStream = new FileInputStream(filename);
+            props.load(propStream);
+        } finally {
+            if (propStream != null)
+                propStream.close();
+        }
+        return props;
+    }
+    
     /** Construct a VerifiableProducer object from command-line arguments. */
     public static VerifiableProducer createFromArgs(String[] args) {
         ArgumentParser parser = argParser();
@@ -164,7 +189,7 @@ public class VerifiableProducer {
             producerProps.put("retries", "0");
             if (configFile != null) {
                 try {
-                    producerProps.putAll(Utils.loadProps(configFile));
+                    producerProps.putAll(loadProps(configFile));
                 } catch (IOException e) {
                     throw new ArgumentParserException(e.getMessage(), parser);
                 }

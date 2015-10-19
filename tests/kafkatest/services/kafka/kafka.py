@@ -17,10 +17,11 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
 from config import KafkaConfig
-from kafkatest.services.kafka import property
+from kafkatest.services.kafka import config_property
 from kafkatest.services.kafka.version import TRUNK
+from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 
-from kafkatest.services.performance.jmx_mixin import JmxMixin
+from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.utils.security_config import SecurityConfig
 import json
 import re
@@ -29,7 +30,7 @@ import subprocess
 import time
 
 
-class KafkaService(Service):
+class KafkaService(JmxMixin, Service):
 
     logs = {
         "kafka_log": {
@@ -43,27 +44,8 @@ class KafkaService(Service):
             "collect_default": False}
     }
 
-    # "trunk" installation of kafka
-    KAFKA_TRUNK = "kafka-trunk"
-
-    @staticmethod
-    def kafka_dir(node=None):
-        """Return name of kafka directory for the given node.
-
-        This provides a convenient way to support different versions of kafka or kafka tools running
-        on different nodes.
-        """
-        if node is None:
-            return KafkaService.KAFKA_TRUNK
-
-        if not hasattr(node, "version"):
-            return KafkaService.KAFKA_TRUNK
-
-        return "kafka-" + str(node.version)
-
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
-
         """
         :type context
         :type zk: ZookeeperService
@@ -75,18 +57,24 @@ class KafkaService(Service):
         self.zk = zk
         self.quota_config = quota_config
 
-        if security_protocol == SecurityConfig.SSL or interbroker_security_protocol == SecurityConfig.SSL:
-            self.security_config = SecurityConfig(SecurityConfig.SSL)
-        else:
-            self.security_config = SecurityConfig(SecurityConfig.PLAINTEXT)
         self.security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
-        self.port = 9092 if security_protocol == SecurityConfig.PLAINTEXT else 9093
         self.topics = topics
 
         for node in self.nodes:
             node.version = version
-            node.config = KafkaConfig(**{property.BROKER_ID: self.idx(node)})
+            node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
+
+    @property
+    def security_config(self):
+        if self.security_protocol == SecurityConfig.SSL or self.interbroker_security_protocol == SecurityConfig.SSL:
+            return SecurityConfig(SecurityConfig.SSL)
+        else:
+            return SecurityConfig(SecurityConfig.PLAINTEXT)
+
+    @property
+    def port(self):
+        return 9092 if self.security_protocol == SecurityConfig.PLAINTEXT else 9093
 
     def start(self):
         Service.start(self)
@@ -100,27 +88,33 @@ class KafkaService(Service):
                 topic_cfg["topic"] = topic
                 self.create_topic(topic_cfg)
 
-    def start_node(self, node):
+    def prop_file(self, node):
         cfg = KafkaConfig(**node.config)
-        cfg[property.ADVERTISED_HOSTNAME] = node.account.hostname
-        cfg[property.ZOOKEEPER_CONNECT] = self.zk.connect_setting()
+        cfg[config_property.ADVERTISED_HOSTNAME] = node.account.hostname
+        cfg[config_property.ZOOKEEPER_CONNECT] = self.zk.connect_setting()
 
         # TODO - clean up duplicate configuration logic
-        props_file = cfg.render()
-        props_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
-            port=self.port, security_protocol=self.security_protocol, quota_config=self.quota_config,
-            interbroker_security_protocol=self.interbroker_security_protocol)
+        prop_file = cfg.render()
+        prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node))
 
-        self.logger.info("kafka.properties:")
-        self.logger.info(props_file)
-        node.account.create_file("/mnt/kafka.properties", props_file)
-        self.security_config.setup_node(node)
+        return prop_file
 
+    def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export LOG_DIR=/mnt/kafka-operational-logs/; "
-        cmd += "/opt/" + KafkaService.kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
-        self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
+        cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
+        return cmd
 
+    def start_node(self, node):
+        prop_file = self.prop_file(node)
+        self.logger.info("kafka.properties:")
+        self.logger.info(prop_file)
+        node.account.create_file("/mnt/kafka.properties", prop_file)
+
+        self.security_config.setup_node(node)
+
+        cmd = self.start_cmd(node)
+        self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log("/mnt/kafka.log") as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
@@ -170,10 +164,9 @@ class KafkaService(Service):
         """
         if node is None:
             node = self.nodes[0]
-        kafka_dir = KafkaService.kafka_dir(node)
         self.logger.info("Creating topic %s with settings %s", topic_cfg["topic"], topic_cfg)
 
-        cmd = "/opt/%s/bin/kafka-topics.sh " % kafka_dir
+        cmd = "/opt/%s/bin/kafka-topics.sh " % kafka_dir(node)
         cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
                 'zk_connect': self.zk.connect_setting(),
                 'topic': topic_cfg.get("topic"),
@@ -196,9 +189,8 @@ class KafkaService(Service):
     def describe_topic(self, topic, node=None):
         if node is None:
             node = self.nodes[0]
-        kafka_dir = KafkaService.kafka_dir(node)
         cmd = "/opt/%s/bin/kafka-topics.sh --zookeeper %s --topic %s --describe" % \
-              (kafka_dir, self.zk.connect_setting(), topic)
+              (kafka_dir(node), self.zk.connect_setting(), topic)
         output = ""
         for line in node.account.ssh_capture(cmd):
             output += line
@@ -209,7 +201,7 @@ class KafkaService(Service):
         """
         if node is None:
             node = self.nodes[0]
-        kafka_dir = KafkaService.kafka_dir(node)
+
         json_file = "/tmp/" + str(time.time()) + "_reassign.json"
 
         # reassignment to json
@@ -218,7 +210,7 @@ class KafkaService(Service):
 
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
-        cmd += "/opt/%s/bin/kafka-reassign-partitions.sh " % kafka_dir
+        cmd += "/opt/%s/bin/kafka-reassign-partitions.sh " % kafka_dir(node)
         cmd += "--zookeeper %(zk_connect)s "
         cmd += "--reassignment-json-file %(reassignment_file)s "
         cmd += "--verify" % {'zk_connect': self.zk.connect_setting(),
@@ -244,7 +236,6 @@ class KafkaService(Service):
         """
         if node is None:
             node = self.nodes[0]
-        kafka_dir = KafkaService.kafka_dir(node)
         json_file = "/tmp/" + str(time.time()) + "_reassign.json"
 
         # reassignment to json
@@ -253,7 +244,7 @@ class KafkaService(Service):
 
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
-        cmd += "/opt/%s/bin/kafka-reassign-partitions.sh " % kafka_dir
+        cmd += "/opt/%s/bin/kafka-reassign-partitions.sh " % kafka_dir(node)
         cmd += "--zookeeper %(zk_connect)s "
         cmd += "--reassignment-json-file %(reassignment_file)s "
         cmd += "--execute" % {'zk_connect': self.zk.connect_setting(),
@@ -278,7 +269,7 @@ class KafkaService(Service):
     def leader(self, topic, partition=0):
         """ Get the leader replica for the given topic and partition.
         """
-        kafka_dir = KafkaService.KAFKA_TRUNK
+        kafka_dir = KAFKA_TRUNK
         cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " %\
               (kafka_dir, self.zk.connect_setting())
         cmd += "get /brokers/topics/%s/partitions/%d/state" % (topic, partition)
@@ -310,7 +301,3 @@ class KafkaService(Service):
         This is the format expected by many config files.
         """
         return ','.join([node.account.hostname + ":" + str(self.port) for node in self.nodes])
-
-    def read_jmx_output_all_nodes(self):
-        for node in self.nodes:
-            self.read_jmx_output(self.idx(node), node)

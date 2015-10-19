@@ -17,6 +17,8 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 import subprocess, signal
 
+from kafkatest.services.kafka import KafkaService
+import signal
 
 class CopycatServiceBase(Service):
     """Base class for Copycat services providing some common settings and functionality"""

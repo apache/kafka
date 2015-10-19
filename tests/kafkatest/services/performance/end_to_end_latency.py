@@ -16,7 +16,7 @@
 from kafkatest.services.performance import PerformanceService
 from kafkatest.utils.security_config import SecurityConfig
 
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka.directory import kafka_dir
 
 
 class EndToEndLatencyService(PerformanceService):
@@ -53,7 +53,7 @@ class EndToEndLatencyService(PerformanceService):
             'ssl_config_file': ssl_config_file
         })
 
-        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.EndToEndLatency " % KafkaService.kafka_dir(node)
+        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.EndToEndLatency " % kafka_dir(node)
         cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d 20%(ssl_config_file)s" % args
         cmd += " | tee /mnt/end-to-end-latency.log"
 

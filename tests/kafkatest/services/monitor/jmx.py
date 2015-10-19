@@ -13,7 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.utils.util import wait_until
+
+from kafkatest.services.kafka.directory import kafka_dir
+import subprocess
+
+
 class JmxMixin(object):
+    """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
+
+    Note that this is not a service in its own right.
+    """
 
     def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=[]):
         self.jmx_object_names = jmx_object_names
@@ -30,11 +40,10 @@ class JmxMixin(object):
         node.account.ssh("rm -rf /mnt/jmx_tool.log", allow_fail=False)
 
     def start_jmx_tool(self, idx, node):
-        if self.started[idx-1] == True or self.jmx_object_names == None:
+        if self.started[idx-1] or self.jmx_object_names == None:
             return
-        self.started[idx-1] = True
 
-        cmd = "/opt/kafka/bin/kafka-run-class.sh kafka.tools.JmxTool " \
+        cmd = "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh kafka.tools.JmxTool " \
               "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
@@ -43,14 +52,27 @@ class JmxMixin(object):
         cmd += " | tee -a /mnt/jmx_tool.log"
 
         self.logger.debug("Start JmxTool %d command: %s", idx, cmd)
-        jmx_output = node.account.ssh_capture(cmd, allow_fail=False)
-        jmx_output.next()
+        node.account.ssh_capture(cmd, allow_fail=False)
+
+        self.logger.debug("Waiting for Jmx process to start")
+        wait_until(lambda: self.alive(node), timeout_sec=10, err_msg="Jmx process failed to start.")
+        self.started[idx-1] = True
+        self.logger.debug("Jmx process started")
+
+    def pids(self, node):
+        try:
+            cmd = "ps ax | grep -i JmxTool | grep java | grep -v grep | awk '{print $1}'"
+            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
+            return pid_arr
+        except (subprocess.CalledProcessError, ValueError) as e:
+            return []
+
+    def alive(self, node):
+        return len(self.pids(node)) > 0
 
     def read_jmx_output(self, idx, node):
         if self.started[idx-1] == False:
             return
-        self.maximum_jmx_value = {}
-        self.average_jmx_value = {}
         object_attribute_names = []
 
         cmd = "cat /mnt/jmx_tool.log"
@@ -64,7 +86,7 @@ class JmxMixin(object):
             self.jmx_stats[idx-1][time_sec] = {name : stats[i+1] for i, name in enumerate(object_attribute_names)}
 
         # do not calculate average and maximum of jmx stats until we have read output from all nodes
-        if any(len(time_to_stats)==0 for time_to_stats in self.jmx_stats):
+        if any(len(time_to_stats) == 0 for time_to_stats in self.jmx_stats):
             return
 
         start_time_sec = min([min(time_to_stats.keys()) for time_to_stats in self.jmx_stats])
@@ -72,10 +94,20 @@ class JmxMixin(object):
 
         for name in object_attribute_names:
             aggregates_per_time = []
-            for time_sec in xrange(start_time_sec, end_time_sec+1):
+            for time_sec in xrange(start_time_sec, end_time_sec + 1):
                 # assume that value is 0 if it is not read by jmx tool at the given time. This is appropriate for metrics such as bandwidth
                 values_per_node = [time_to_stats.get(time_sec, {}).get(name, 0) for time_to_stats in self.jmx_stats]
                 # assume that value is aggregated across nodes by sum. This is appropriate for metrics such as bandwidth
                 aggregates_per_time.append(sum(values_per_node))
-            self.average_jmx_value[name] = sum(aggregates_per_time)/len(aggregates_per_time)
-            self.maximum_jmx_value[name] = max(aggregates_per_time)
+
+            if len(aggregates_per_time) > 0:
+                self.average_jmx_value[name] = sum(aggregates_per_time) / len(aggregates_per_time)
+                self.maximum_jmx_value[name] = max(aggregates_per_time)
+            else:
+                self.logger.warn("No aggregate jmx statistics collected")
+                self.average_jmx_value[name] = None
+                self.maximum_jmx_value[name] = None
+
+    def read_jmx_output_all_nodes(self):
+        for node in self.nodes:
+            self.read_jmx_output(self.idx(node), node)

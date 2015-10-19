@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import property
+import config_property
 
 
 class KafkaConfig(dict):
@@ -24,10 +24,10 @@ class KafkaConfig(dict):
     """
 
     DEFAULTS = {
-        property.PORT: 9092,
-        property.SOCKET_RECEIVE_BUFFER_BYTES: 65536,
-        property.LOG_DIRS: "/mnt/kafka-logs",
-        property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: 2000
+        config_property.PORT: 9092,
+        config_property.SOCKET_RECEIVE_BUFFER_BYTES: 65536,
+        config_property.LOG_DIRS: "/mnt/kafka-logs",
+        config_property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: 2000
     }
 
     def __init__(self, **kwargs):

@@ -19,12 +19,16 @@ from ducktape.mark import parametrize
 from ducktape.mark import matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, LATEST_0_8_2
+from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka.version import LATEST_0_8_2
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.utils.remote_account import line_count, file_exists
 from kafkatest.services.verifiable_producer import VerifiableProducer
+from kafkatest.utils.security_config import SecurityConfig
+
 
 import time
+
 
 class ConsoleConsumerTest(Test):
     """Sanity checks on console consumer service class."""
@@ -33,27 +37,29 @@ class ConsoleConsumerTest(Test):
 
         self.topic = "topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
+                                  topics={self.topic: {"partitions": 1, "replication-factor": 1}})
+        self.consumer = ConsoleConsumer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic)
 
     def setUp(self):
         self.zk.start()
 
-    @parametrize(security_protocol='SSL', new_consumer=True)
-    @matrix(security_protocol=['PLAINTEXT'], new_consumer=[False, True])
+    @parametrize(security_protocol=SecurityConfig.SSL, new_consumer=True)
+    @matrix(security_protocol=[SecurityConfig.PLAINTEXT], new_consumer=[False, True])
     def test_lifecycle(self, security_protocol, new_consumer):
         """Check that console consumer starts/stops properly, and that we are capturing log output."""
 
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
-                                  security_protocol=security_protocol,
-                                  topics={self.topic: {"partitions": 1, "replication-factor": 1}})
+        self.kafka.security_protocol = security_protocol
         self.kafka.start()
 
+        self.consumer.security_protocol = security_protocol
+        self.consumer.new_consumer = new_consumer
 
         t0 = time.time()
-        self.consumer = ConsoleConsumer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic, security_protocol=security_protocol, new_consumer=new_consumer)
         self.consumer.start()
         node = self.consumer.nodes[0]
 
-        wait_until(lambda: self.consumer.alive(node), 
+        wait_until(lambda: self.consumer.alive(node),
             timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
         self.logger.info("consumer started in %s seconds " % str(time.time() - t0))
 
@@ -69,6 +75,8 @@ class ConsoleConsumerTest(Test):
 
     def test_version(self):
         """Check that console consumer v0.8.2.X successfully starts and consumes messages."""
+        self.kafka.start()
+
         num_messages = 1000
         self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
                                            max_messages=num_messages, throughput=1000)
