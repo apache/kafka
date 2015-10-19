@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.EnumMap;
 import java.util.Map;
 
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.LoginType;
 import org.apache.kafka.common.security.JaasUtils;
 
@@ -39,9 +40,26 @@ public class LoginManager {
     private LoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
         this.loginType = loginType;
         String loginContext = loginType.contextName();
-        this.serviceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
+        this.serviceName = getServiceName(loginContext, configs);
         login = new Login(loginContext, configs);
         login.startThreadIfNeeded();
+    }
+
+    private static String getServiceName(String loginContext, Map<String, ?> configs) throws IOException {
+        String jaasServiceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
+        String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
+        if (jaasServiceName != null && configServiceName != null && jaasServiceName != configServiceName) {
+            String message = "Conflicting serviceName values found in JAAS and Kafka configs " +
+                "value in JAAS file " + jaasServiceName + ", value in Kafka config " + configServiceName;
+            throw new IllegalArgumentException(message);
+        }
+
+        if (jaasServiceName != null)
+            return jaasServiceName;
+        if (configServiceName != null)
+            return configServiceName;
+
+        throw new IllegalArgumentException("No serviceName defined in either JAAS or Kafka config");
     }
 
     /**

@@ -25,6 +25,10 @@ public class SaslConfigs {
     public static final String SASL_KAFKA_SERVER_DOC = "The sasl kafka server realm. "
         + "Default will be from kafka jaas config";
 
+    public static final String SASL_KERBEROS_SERVICE_NAME = "sasl.kerberos.service.name";
+    public static final String SASL_KERBEROS_SERVICE_NAME_DOC = "The Kerberos principal name that Kafka runs as. "
+            + "This can be defined either in the JAAS config or in the Kakfa config.";
+
     public static final String SASL_KERBEROS_KINIT_CMD = "sasl.kerberos.kinit.cmd";
     public static final String SASL_KERBEROS_KINIT_CMD_DOC = "Kerberos kinit command path. "
         + "Default will be /usr/bin/kinit";

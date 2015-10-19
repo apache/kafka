@@ -508,6 +508,7 @@ class KafkaConfigTest {
         case KafkaConfig.SSLCipherSuitesProp => // ignore string
 
         //Sasl Configs
+        case KafkaConfig.SaslKerberosServiceNameProp => // ignore string
         case KafkaConfig.SaslKerberosKinitCmdProp =>
         case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
