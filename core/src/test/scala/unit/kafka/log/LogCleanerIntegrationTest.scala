@@ -56,9 +56,12 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val startSize = log.size
     cleaner.startup()
 
-    val lastCleaned = log.activeSegment.baseOffset
+    val firstDirty = log.activeSegment.baseOffset
     // wait until we clean up to base_offset of active segment - minDirtyMessages
-    cleaner.awaitCleaned("log", 0, lastCleaned)
+    cleaner.awaitCleaned("log", 0, firstDirty)
+
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
+    assertTrue("log cleaner should have processed up to offset " + firstDirty, lastCleaned >= firstDirty);
     
     val read = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends.toMap, read.toMap)
@@ -66,8 +69,12 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     // write some more stuff and validate again
     val appends2 = appends ++ writeDups(numKeys = 100, numDups = 3, log, CompressionCodec.getCompressionCodec(compressionCodec))
-    val lastCleaned2 = log.activeSegment.baseOffset
-    cleaner.awaitCleaned("log", 0, lastCleaned2)
+    val firstDirty2 = log.activeSegment.baseOffset
+    cleaner.awaitCleaned("log", 0, firstDirty2)
+
+    val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
+    assertTrue("log cleaner should have processed up to offset " + firstDirty2, lastCleaned2 >= firstDirty2);
+
     val read2 = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends2.toMap, read2.toMap)
 
@@ -82,7 +89,6 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     // we expect partition 0 to be gone
     assert(!checkpoints.contains(topics(0)))
-    
     cleaner.shutdown()
   }
 
@@ -111,6 +117,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     
   @After
   def teardown() {
+    time.scheduler.shutdown()
     CoreUtils.rm(logDir)
   }
   

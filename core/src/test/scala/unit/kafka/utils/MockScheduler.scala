@@ -43,6 +43,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   
   def shutdown() {
     this synchronized {
+      tasks.foreach(_.fun())
       tasks.clear()
     }
   }
