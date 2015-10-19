@@ -160,14 +160,13 @@ class LogCleaner(val config: CleanerConfig,
    * @return A boolean indicating whether the work has completed before timeout
    */
   def awaitCleaned(topic: String, part: Int, offset: Long, maxWaitMs: Long = 60000L): Boolean = {
+    def isCleaned = cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part)).fold(false)(_ >= offset)
     var remainingWaitMs = maxWaitMs
-    while (cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part)).fold(true)(_ < offset)) {
-      if (remainingWaitMs == 0)
-        return false
+    while (!isCleaned && remainingWaitMs > 0) {
       Thread.sleep(math.min(100, remainingWaitMs))
       remainingWaitMs = math.max(0, remainingWaitMs - 100)
     }
-    return true
+    return isCleaned
   }
   
   /**
