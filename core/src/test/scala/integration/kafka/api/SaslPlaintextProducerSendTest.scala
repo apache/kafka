@@ -21,5 +21,4 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 
 class SaslPlaintextProducerSendTest extends BaseProducerSendTest with SaslTestHarness {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
-  protected def trustStoreFile = None
 }

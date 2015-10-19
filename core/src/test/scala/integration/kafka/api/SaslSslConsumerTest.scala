@@ -16,7 +16,7 @@ import java.io.File
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 
-class SslConsumerTest extends BaseConsumerTest {
-  override protected def securityProtocol = SecurityProtocol.SSL
+class SaslSslConsumerTest extends BaseConsumerTest with SaslTestHarness {
+  override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 }

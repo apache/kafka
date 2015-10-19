@@ -21,13 +21,10 @@ import java.util.Properties
 
 import org.apache.kafka.clients.producer.{ProducerConfig, KafkaProducer}
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.Test
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
-  override protected def securityProtocol = SecurityProtocol.PLAINTEXT
-  protected def trustStoreFile = None
 
   @Test
   def testSerializerConstructors() {

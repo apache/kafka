@@ -23,5 +23,5 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 
 class SaslSslProducerSendTest extends BaseProducerSendTest with SaslTestHarness {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
-  protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 }

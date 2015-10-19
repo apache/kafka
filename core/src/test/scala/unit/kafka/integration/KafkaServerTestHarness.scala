@@ -17,6 +17,7 @@
 
 package kafka.integration
 
+import java.io.File
 import java.util.Arrays
 
 import kafka.common.KafkaException
@@ -54,6 +55,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   def bootstrapUrl = servers.map(s => s.config.hostName + ":" + s.boundPort()).mkString(",")
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  protected def trustStoreFile: Option[File] = None
 
   @Before
   override def setUp() {

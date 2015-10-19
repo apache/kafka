@@ -33,8 +33,6 @@ import org.junit.{After, Before, Test}
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
-  protected def trustStoreFile: Option[File]
-
   def generateConfigs = {
     val overridingProps = new Properties()
     val numServers = 2
