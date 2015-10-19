@@ -164,7 +164,7 @@ class LogCleaner(val config: CleanerConfig,
     var remainingWaitMs = maxWaitMs
     while (!isCleaned && remainingWaitMs > 0) {
       Thread.sleep(math.min(100, remainingWaitMs))
-      remainingWaitMs = math.max(0, remainingWaitMs - 100)
+      remainingWaitMs -= 100
     }
     return isCleaned
   }
