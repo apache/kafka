@@ -116,10 +116,9 @@ public class SaslClientAuthenticator implements Authenticator {
 
 
     public void authenticate() throws IOException {
-        if (netOutBuffer != null && !flushNetOutBuffer()) {
-            transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+        if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
-        }
+
         switch (saslState) {
             case INITIAL:
                 sendSaslToken(new byte[0]);
@@ -153,16 +152,22 @@ public class SaslClientAuthenticator implements Authenticator {
                 byte[] saslToken = createSaslToken(serverToken);
                 if (saslToken != null) {
                     netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(saslToken));
-                    if (flushNetOutBuffer())
-                        transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-                    else
-                        transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+                    flushNetOutBufferAndUpdateInterestOps();
                 }
             } catch (SaslException se) {
                 saslState = SaslState.FAILED;
                 throw new IOException("Failed to authenticate using SASL " + se);
             }
         }
+    }
+
+    private boolean flushNetOutBufferAndUpdateInterestOps() throws IOException {
+        boolean flushedCompletely = flushNetOutBuffer();
+        if (flushedCompletely)
+            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+        else
+            transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+        return flushedCompletely;
     }
 
     public Principal principal() {
