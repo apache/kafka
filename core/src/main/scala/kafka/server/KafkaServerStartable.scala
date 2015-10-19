@@ -17,11 +17,19 @@
 
 package kafka.server
 
-import kafka.utils.Logging
+import java.util.Properties
+
+import kafka.metrics.KafkaMetricsReporter
+import kafka.utils.{VerifiableProperties, Logging}
 
 
 class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
   private val server = new KafkaServer(serverConfig)
+
+  def this(serverProps: Properties) {
+    this(KafkaConfig.fromProps(serverProps))
+    KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
+  }
 
   def startup() {
     try {
