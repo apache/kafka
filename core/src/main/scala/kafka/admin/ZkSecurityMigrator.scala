@@ -115,6 +115,7 @@ object ZkSecurityMigrator extends Logging {
   }
   
   def main(args: Array[String]) {
+    var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser()
 
     val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").
@@ -132,16 +133,22 @@ object ZkSecurityMigrator extends Logging {
     if(options.has(helpOpt))
       CommandLineUtils.printUsageAndDie(parser, "ZooKeeper Migration Tool Help")
 
-    if(!options.has(jaasFileOpt) ||
-      !JaasUtils.isZkSecurityEnabled(options.valueOf(jaasFileOpt))) {
-      error("No JAAS configuration file has been found. Please make sure that "
-            + "you have set the option --jaas.file correctly and that the file"
-            + " is valid")
+    if ((jaasFile == null) && !options.has(jaasFileOpt)) {
+      error("No JAAS configuration file has been specified. Please make sure that you have set either "
+            + "the system property %s or the option %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "--jaas.file"))
+      System.exit(1)
+    }
+    
+    if (jaasFile == null) {
+      jaasFile = options.valueOf(jaasFileOpt)
+      System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
+    }
+    
+    if (JaasUtils.isZkSecurityEnabled(jaasFile)) {
+      error("Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile))
       System.exit(1) 
     }
 
-    val jaasFile = options.valueOf(jaasFileOpt)
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
     val zkUrl = options.valueOf(zkUrlOpt)
     val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt)
     val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt)
