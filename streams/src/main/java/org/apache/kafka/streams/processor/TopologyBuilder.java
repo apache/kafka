@@ -22,10 +22,13 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,10 +48,14 @@ import java.util.Set;
 public class TopologyBuilder {
 
     // list of node factories in a topological order
-    private ArrayList<NodeFactory> nodeFactories = new ArrayList<>();
+    private final ArrayList<NodeFactory> nodeFactories = new ArrayList<>();
 
-    private Set<String> nodeNames = new HashSet<>();
-    private Set<String> sourceTopicNames = new HashSet<>();
+    private final Set<String> nodeNames = new HashSet<>();
+    private final Set<String> sourceTopicNames = new HashSet<>();
+
+    private final PartitionGrouper partitionGrouper;
+    private final QuickUnion<String> nodeGroups = new QuickUnion<>();
+    private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
 
     private interface NodeFactory {
         ProcessorNode build();
@@ -111,9 +118,18 @@ public class TopologyBuilder {
     }
 
     /**
-     * Create a new builder.
+     * Create a new builder with the default PartitionGrouper.
      */
-    public TopologyBuilder() {}
+    public TopologyBuilder() {
+        this(new DefaultPartitionGrouper());
+    }
+
+    /**
+     * Create a new builder with the specified PartitionGrouper
+     */
+    public TopologyBuilder(PartitionGrouper partitionGrouper) {
+        this.partitionGrouper = partitionGrouper;
+    }
 
     /**
      * Add a new source that consumes the named topics and forwards the messages to child processor and/or sink nodes.
@@ -158,6 +174,9 @@ public class TopologyBuilder {
 
         nodeNames.add(name);
         nodeFactories.add(new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
+        nodeToTopics.put(name, topics.clone());
+        nodeGroups.add(name);
+
         return this;
     }
 
@@ -237,7 +256,58 @@ public class TopologyBuilder {
 
         nodeNames.add(name);
         nodeFactories.add(new ProcessorNodeFactory(name, parentNames, supplier));
+        nodeGroups.add(name);
         return this;
+    }
+
+    /**
+     * Declares that the streams of the specified processor nodes must be copartitioned.
+     *
+     * @param nodeName
+     * @param otherNodeNames
+     */
+    public void copartition(String nodeName, String... otherNodeNames) {
+        for (String other : otherNodeNames) {
+            nodeGroups.unite(nodeName, other);
+        }
+    }
+
+    /**
+     * Returns the grouped topics
+     *
+     * @return groups of topic names
+     */
+    public Collection<Set<String>> topicGroups() {
+        HashMap<String, Set<String>> topicGroupMap = new HashMap<>();
+
+        // collect topics by node groups
+        for (String nodeName : nodeNames) {
+            String[] topics = nodeToTopics.get(nodeName);
+            if (topics != null) {
+                String root = nodeGroups.root(nodeName);
+                Set<String> topicGroup = topicGroupMap.get(root);
+                if (topicGroup == null) {
+                    topicGroup = new HashSet<>();
+                    topicGroupMap.put(root, topicGroup);
+                }
+                topicGroup.addAll(Arrays.asList(topics));
+            }
+        }
+
+        // make the data unmodifiable, then return
+        List<Set<String>> topicGroups = new ArrayList<>(topicGroupMap.size());
+        for (Set<String> group : topicGroupMap.values()) {
+            topicGroups.add(Collections.unmodifiableSet(group));
+        }
+        return Collections.unmodifiableList(topicGroups);
+    }
+
+    /**
+     * Returns the instance of PartitionGrouper for this TopologyBuilder
+     * @return
+     */
+    public PartitionGrouper partitionGrouper() {
+        return partitionGrouper;
     }
 
     /**
