@@ -40,7 +40,7 @@ private[coordinator] case object PreparingRebalance extends GroupState { val sta
 /**
  * Group is awaiting state assignment from the leader
  *
- * action: respond to heartbeats with REBALANCE_IN_PROGRESS to have them rejoin
+ * action: respond to heartbeats with REBALANCE_IN_PROGRESS to have members rejoin
  *         park sync group requests from followers until transition to Stable
  * transition: sync group with state assignment received from leader => Stable
  *             join group with new member or new metadata => PreparingRebalance

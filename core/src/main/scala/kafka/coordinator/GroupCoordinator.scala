@@ -375,6 +375,8 @@ class GroupCoordinator(val brokerId: Int,
         group synchronized {
           if (group.is(Dead)) {
             responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID.code))
+          } else if (group.is(AwaitingSync)) {
+            responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS.code))
           } else if (!group.has(memberId)) {
             responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID.code))
           } else if (generationId != group.generationId) {
