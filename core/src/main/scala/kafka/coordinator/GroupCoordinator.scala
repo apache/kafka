@@ -392,25 +392,13 @@ class GroupCoordinator(val brokerId: Int,
   def handleFetchOffsets(groupId: String,
                          partitions: Seq[TopicAndPartition]): Map[TopicAndPartition, OffsetMetadataAndError] = {
     if (!isActive.get) {
-      partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.NotCoordinatorForGroup)}.toMap
+      partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.GroupCoordinatorNotAvailable)}.toMap
     } else if (!isCoordinatorForGroup(groupId)) {
       partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.NotCoordinatorForGroup)}.toMap
     } else {
-      val group = coordinatorMetadata.getGroup(groupId)
-      if (group == null) {
-        // if the group does not exist, it means this group is not relying
-        // on Kafka for partition management, and hence never send join-group
-        // request to the coordinator before; in this case blindly fetch the offsets
-        offsetManager.getOffsets(groupId, partitions)
-      } else {
-        group synchronized {
-          if (group.is(Dead)) {
-            partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownMember)}.toMap
-          } else {
-            offsetManager.getOffsets(groupId, partitions)
-          }
-        }
-      }
+      // return offsets blindly regardless the current group state since the group may be using
+      // Kafka commit storage without automatic group management
+      offsetManager.getOffsets(groupId, partitions)
     }
   }
 
