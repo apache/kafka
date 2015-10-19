@@ -30,8 +30,12 @@ private[coordinator] sealed trait GroupState { def state: Byte }
 /**
  * Group is preparing to rebalance
  *
- * action: respond to heartbeats with an REBALANCE_IN_PROGRESS error code
+ * action: respond to heartbeats with REBALANCE_IN_PROGRESS
  *         respond to sync group with REBALANCE_IN_PROGRESS
+ *         remove member on leave group request
+ *         park join group requests from new or existing members until all expected members have joined
+ *         allow offset commits from previous generation
+ *         allow offset fetch requests
  * transition: some members have joined by the timeout => AwaitingSync
  *             all members have left the group => Dead
  */
@@ -40,10 +44,13 @@ private[coordinator] case object PreparingRebalance extends GroupState { val sta
 /**
  * Group is awaiting state assignment from the leader
  *
- * action: respond to heartbeats with REBALANCE_IN_PROGRESS to have members rejoin
+ * action: respond to heartbeats with REBALANCE_IN_PROGRESS
+ *         respond to offset commits with REBALANCE_IN_PROGRESS
  *         park sync group requests from followers until transition to Stable
+ *         allow offset fetch requests
  * transition: sync group with state assignment received from leader => Stable
- *             join group with new member or new metadata => PreparingRebalance
+ *             join group from new member or existing member with updated metadata => PreparingRebalance
+ *             leave group from existing member => PreparingRebalance
  *             member failure detected => PreparingRebalance
  */
 private[coordinator] case object AwaitingSync extends GroupState { val state: Byte = 5}
@@ -52,9 +59,12 @@ private[coordinator] case object AwaitingSync extends GroupState { val state: By
  * Group is stable
  *
  * action: respond to member heartbeats normally
- *         sync group from followers and leader returns current assignment
- *         join group from followers with matching metadata returns current group metadata
+ *         respond to sync group from any member with current assignment
+ *         respond to join group from followers with matching metadata with current group metadata
+ *         allow offset commits from member of current generation
+ *         allow offset fetch requests
  * transition: member failure detected via heartbeat => PreparingRebalance
+ *             leave group from existing member => PreparingRebalance
  *             leader join-group received => PreparingRebalance
  *             follower join-group with new metadata => PreparingRebalance
  */
@@ -63,8 +73,13 @@ private[coordinator] case object Stable extends GroupState { val state: Byte = 3
 /**
  * Group has no more members
  *
- * action: none
- * transition: none
+ * action: respond to join group with UNKNOWN_MEMBER_ID
+ *         respond to sync group with UNKNOWN_MEMBER_ID
+ *         respond to heartbeat with UNKNOWN_MEMBER_ID
+ *         respond to leave group with UNKNOWN_MEMBER_ID
+ *         respond to offset commit with UNKNOWN_MEMBER_ID
+ *         allow offset fetch requests
+ * transition: Dead is a final state before group metadata is cleaned up, so there are no transitions
  */
 private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
 
