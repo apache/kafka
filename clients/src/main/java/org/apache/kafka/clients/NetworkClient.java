@@ -621,7 +621,6 @@ public class NetworkClient implements KafkaClient {
                     // check if the nodes are really equal. There could be a case
                     // where node.id() is the same but node has moved to different host
                     if (!existing.equals(n)) {
-                        nodesEverSeenById.remove(existing.id());
                         nodesEverSeenById.put(n.id(), n);
                     }
                 }
