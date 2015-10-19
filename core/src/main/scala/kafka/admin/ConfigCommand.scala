@@ -26,6 +26,7 @@ import org.I0Itec.zkclient.ZkClient
 import scala.collection._
 import scala.collection.JavaConversions._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.JaasUtils
 
 
 /**
@@ -42,52 +43,55 @@ object ConfigCommand {
 
     opts.checkArgs()
 
-    val zkClient = ZkUtils.createZkClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000)
+    val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt),
+                          30000,
+                          30000,
+                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
     try {
       if (opts.options.has(opts.alterOpt))
-        alterConfig(zkClient, opts)
+        alterConfig(zkUtils, opts)
       else if (opts.options.has(opts.describeOpt))
-        describeConfig(zkClient, opts)
+        describeConfig(zkUtils, opts)
     } catch {
       case e: Throwable =>
         println("Error while executing topic command " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
-      zkClient.close()
+      zkUtils.close()
     }
   }
 
-  private def alterConfig(zkClient: ZkClient, opts: ConfigCommandOptions) {
+  private def alterConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions) {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entityType = opts.options.valueOf(opts.entityType)
     val entityName = opts.options.valueOf(opts.entityName)
 
     // compile the final set of configs
-    val configs = AdminUtils.fetchEntityConfig(zkClient, entityType, entityName)
+    val configs = AdminUtils.fetchEntityConfig(zkUtils, entityType, entityName)
     configs.putAll(configsToBeAdded)
     configsToBeDeleted.foreach(config => configs.remove(config))
 
     if (entityType.equals(ConfigType.Topic)) {
-      AdminUtils.changeTopicConfig(zkClient, entityName, configs)
+      AdminUtils.changeTopicConfig(zkUtils, entityName, configs)
       println("Updated config for topic: \"%s\".".format(entityName))
     } else {
-      AdminUtils.changeClientIdConfig(zkClient, entityName, configs)
+      AdminUtils.changeClientIdConfig(zkUtils, entityName, configs)
       println("Updated config for clientId: \"%s\".".format(entityName))
     }
   }
 
-  private def describeConfig(zkClient: ZkClient, opts: ConfigCommandOptions) {
+  private def describeConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions) {
     val entityType = opts.options.valueOf(opts.entityType)
     val entityNames: Seq[String] =
       if (opts.options.has(opts.entityName))
         Seq(opts.options.valueOf(opts.entityName))
       else
-        ZkUtils.getAllEntitiesWithConfig(zkClient, entityType)
+        zkUtils.getAllEntitiesWithConfig(entityType)
 
     for (entityName <- entityNames) {
-      val configs = AdminUtils.fetchEntityConfig(zkClient, entityType, entityName)
+      val configs = AdminUtils.fetchEntityConfig(zkUtils, entityType, entityName)
       println("Configs for %s:%s are %s"
                       .format(entityType, entityName, configs.map(kv => kv._1 + "=" + kv._2).mkString(",")))
     }
