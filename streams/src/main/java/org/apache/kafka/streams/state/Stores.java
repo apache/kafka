@@ -54,8 +54,20 @@ public class Stores {
                             @Override
                             public InMemoryKeyValueFactory<K, V> inMemory() {
                                 return new InMemoryKeyValueFactory<K, V>() {
+                                    private int capacity = Integer.MAX_VALUE;
+
+                                    @Override
+                                    public InMemoryKeyValueFactory<K, V> maxEntries(int capacity) {
+                                        if (capacity < 1) throw new IllegalArgumentException("The capacity must be positive");
+                                        this.capacity = capacity;
+                                        return this;
+                                    }
+
                                     @Override
                                     public KeyValueStore<K, V> build() {
+                                        if (capacity < Integer.MAX_VALUE) {
+                                            return InMemoryLRUCacheStore.create(name, capacity, context, serdes, null);
+                                        }
                                         return new InMemoryKeyValueStore<>(name, context, serdes, null);
                                     }
                                 };
@@ -138,7 +150,7 @@ public class Stores {
     }
 
     /**
-     * The interface used to specify the type of values for key-value stores.
+     * The factory for creating off-heap key-value stores.
      * 
      * @param <K> the type of keys
      */
@@ -200,7 +212,6 @@ public class Stores {
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public abstract <V> KeyValueFactory<K, V> withValues(Serializer<V> valueSerializer, Deserializer<V> valueDeserializer);
-
     }
 
     /**
@@ -234,6 +245,16 @@ public class Stores {
      * @param <V> the type of values
      */
     public static interface InMemoryKeyValueFactory<K, V> {
+        /**
+         * Limits the in-memory key-value store to hold a maximum number of entries. The default is {@link Integer#MAX_VALUE}, which is
+         * equivalent to not placing a limit on the number of entries.
+         * 
+         * @param capacity the maximum capacity of the in-memory cache; should be one less than a power of 2
+         * @return this factory
+         * @throws IllegalArgumentException if the capacity is not positive
+         */
+        InMemoryKeyValueFactory<K, V> maxEntries(int capacity);
+
         /**
          * Return the new key-value store.
          * @return the key-value store; never null

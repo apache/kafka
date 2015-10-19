@@ -135,7 +135,7 @@ private object PartitionAssignorTest extends Logging {
     val consumers = java.util.Arrays.asList(scenario.subscriptions.keys.toSeq:_*)
 
     val zkClient = EasyMock.createStrictMock(classOf[ZkClient])
-    val zkUtils = ZkUtils.applyWithZkClient(zkClient, false)
+    val zkUtils = ZkUtils(zkClient, false)
     EasyMock.checkOrder(zkClient, false)
 
     EasyMock.expect(zkClient.getChildren("/consumers/%s/ids".format(scenario.group))).andReturn(consumers)

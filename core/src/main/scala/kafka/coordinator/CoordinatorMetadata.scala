@@ -20,7 +20,7 @@ package kafka.coordinator
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{threadsafe, ZkUtils, Logging}
-
+import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.{ZkClient, IZkDataListener}
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -166,12 +166,12 @@ private[coordinator] class CoordinatorMetadata(brokerId: Int,
   private def registerTopicPartitionChangeListener(topic: String) {
     val listener = new TopicPartitionChangeListener
     topicPartitionChangeListeners.put(topic, listener)
-    zkUtils.zkClient.subscribeDataChanges(zkUtils.getTopicPath(topic), listener)
+    zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), listener)
   }
 
   private def deregisterTopicPartitionChangeListener(topic: String) {
     val listener = topicPartitionChangeListeners(topic)
-    zkUtils.zkClient.unsubscribeDataChanges(zkUtils.getTopicPath(topic), listener)
+    zkUtils.zkClient.unsubscribeDataChanges(getTopicPath(topic), listener)
     topicPartitionChangeListeners.remove(topic)
   }
 

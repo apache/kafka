@@ -178,10 +178,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def connectZk() {
     info("Connecting to zookeeper instance at " + config.zkConnect)
-    zkUtils = ZkUtils.apply(config.zkConnect,
-                             config.zkSessionTimeoutMs,
-                             config.zkConnectionTimeoutMs,
-                             JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+    zkUtils = ZkUtils(config.zkConnect,
+                      config.zkSessionTimeoutMs,
+                      config.zkConnectionTimeoutMs,
+                      JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
   }
 
   // Blocks until the offset manager is located and a channel is established to it.
@@ -267,7 +267,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val zkWatchedEphemeral = new ZKCheckedEphemeral(dirs.
                                                     consumerRegistryDir + "/" + consumerIdString, 
                                                     consumerRegistrationInfo,
-                                                    zkUtils.zkConnection.getZookeeper)
+                                                    zkUtils.zkConnection.getZookeeper,
+                                                    false)
     zkWatchedEphemeral.create()
 
     info("end registering consumer " + consumerIdString + " in ZK")
@@ -668,7 +669,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         // We log an warning and register for child changes on brokers/id so that rebalance can be triggered when the brokers
         // are up.
         warn("no brokers found when trying to rebalance.")
-        zkUtils.zkClient.subscribeChildChanges(ZkUtils.BrokerIdsPath, loadBalancerListener)
+        zkUtils.zkClient.subscribeChildChanges(BrokerIdsPath, loadBalancerListener)
         true
       }
       else {

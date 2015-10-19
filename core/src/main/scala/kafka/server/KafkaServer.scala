@@ -157,7 +157,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        metrics = new Metrics(metricConfig, reporters, kafkaMetricsTime)
+        metrics = new Metrics(metricConfig, reporters, kafkaMetricsTime, true)
 
         brokerState.newState(Starting)
 
@@ -255,19 +255,19 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
     if (chroot.length > 1) {
       val zkConnForChrootCreation = config.zkConnect.substring(0, config.zkConnect.indexOf("/"))
-      val zkClientForChrootCreation = ZkUtils.apply(zkConnForChrootCreation, 
-                                                     config.zkSessionTimeoutMs,
-                                                     config.zkConnectionTimeoutMs,
-                                                     config.zkEnableSecureAcls)
+      val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation, 
+                                              config.zkSessionTimeoutMs,
+                                              config.zkConnectionTimeoutMs,
+                                              JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
       zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
       info("Created zookeeper path " + chroot)
       zkClientForChrootCreation.zkClient.close()
     }
 
-    val zkUtils = ZkUtils.apply(config.zkConnect,
-                                 config.zkSessionTimeoutMs,
-                                 config.zkConnectionTimeoutMs,
-                                 config.zkEnableSecureAcls)
+    val zkUtils = ZkUtils(config.zkConnect,
+                          config.zkSessionTimeoutMs,
+                          config.zkConnectionTimeoutMs,
+                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     zkUtils.setupCommonPaths()
     zkUtils
   }

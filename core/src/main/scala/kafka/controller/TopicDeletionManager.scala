@@ -23,8 +23,9 @@ import org.apache.kafka.common.requests.{StopReplicaResponse, AbstractRequestRes
 
 import collection.mutable
 import collection.JavaConverters._
-import kafka.utils.{ShutdownableThread, Logging, ZkUtils}
+import kafka.utils.{ShutdownableThread, Logging}
 import kafka.utils.CoreUtils._
+import kafka.utils.ZkUtils._
 import collection.Set
 import kafka.common.TopicAndPartition
 import java.util.concurrent.locks.ReentrantLock
@@ -289,9 +290,9 @@ class TopicDeletionManager(controller: KafkaController,
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
     val zkUtils = controllerContext.zkUtils
-    zkUtils.zkClient.deleteRecursive(zkUtils.getTopicPath(topic))
-    zkUtils.zkClient.deleteRecursive(zkUtils.getEntityConfigPath(ConfigType.Topic, topic))
-    zkUtils.zkClient.delete(zkUtils.getDeleteTopicPath(topic))
+    zkUtils.zkClient.deleteRecursive(getTopicPath(topic))
+    zkUtils.zkClient.deleteRecursive(getEntityConfigPath(ConfigType.Topic, topic))
+    zkUtils.zkClient.delete(getDeleteTopicPath(topic))
     controllerContext.removeTopic(topic)
   }
 

@@ -44,7 +44,7 @@ object ZkSecurityMigrator extends Logging {
       CommandLineUtils.printUsageAndDie(parser, "ZooKeeper Migration Tool Help")
 
     if(!options.has(jaasFileOpt) ||
-      !JaasUtils.isSecure(options.valueOf(jaasFileOpt))) {
+      !JaasUtils.isZkSecurityEnabled(options.valueOf(jaasFileOpt))) {
       error("No JAAS configuration file has been found. Please make sure that "
             + "you have set the option --jaas.file correctly and that the file"
             + " is valid")

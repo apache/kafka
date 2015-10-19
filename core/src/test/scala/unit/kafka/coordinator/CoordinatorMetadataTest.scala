@@ -18,7 +18,8 @@
 package kafka.coordinator
 
 import kafka.server.KafkaConfig
-import kafka.utils.{ZkUtils, TestUtils}
+import kafka.utils.{TestUtils, ZkUtils}
+import kafka.utils.ZkUtils._
 
 import org.junit.Assert._
 import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
@@ -40,7 +41,7 @@ class CoordinatorMetadataTest extends JUnitSuite {
   def setUp() {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     val zkClient = EasyMock.createStrictMock(classOf[ZkClient])
-    zkUtils = ZkUtils.applyWithZkClient(zkClient, false)
+    zkUtils = ZkUtils(zkClient, false)
     coordinatorMetadata = new CoordinatorMetadata(KafkaConfig.fromProps(props).brokerId, zkUtils, null)
   }
 
@@ -201,14 +202,14 @@ class CoordinatorMetadataTest extends JUnitSuite {
     val replicaAssignment =
       (0 until DefaultNumPartitions)
       .map(partition => partition.toString -> (0 until DefaultNumReplicas).toSeq).toMap
-    val topicPath = zkUtils.getTopicPath(topic)
+    val topicPath = getTopicPath(topic)
     EasyMock.expect(zkClient.readData(topicPath, new Stat()))
       .andReturn(zkUtils.replicaAssignmentZkData(replicaAssignment))
     zkClient.subscribeDataChanges(EasyMock.eq(topicPath), EasyMock.isA(classOf[IZkDataListener]))
   }
 
   private def expectZkClientUnsubscribeDataChange(zkClient: ZkClient, topic: String) {
-    val topicPath = zkUtils.getTopicPath(topic)
+    val topicPath = getTopicPath(topic)
     zkClient.unsubscribeDataChanges(EasyMock.eq(topicPath), EasyMock.isA(classOf[IZkDataListener]))
   }
 }

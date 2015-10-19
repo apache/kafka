@@ -49,10 +49,10 @@ object ConsumerGroupCommand {
 
     opts.checkArgs()
 
-    val zkUtils = ZkUtils.apply(opts.options.valueOf(opts.zkConnectOpt), 
-                                 30000,
-                                 30000,
-                                 JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+    val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt), 
+                          30000,
+                          30000,
+                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
 
     try {
       if (opts.options.has(opts.listOpt))
