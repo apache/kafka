@@ -41,7 +41,6 @@ class QuotasTest extends KafkaServerTestHarness {
   private val producerId2 = "QuotasTestProducer-2"
   private val consumerId1 = "QuotasTestConsumer-1"
   private val consumerId2 = "QuotasTestConsumer-2"
-  private val EPS = 0.000001
 
   val numServers = 2
   val overridingProps = new Properties()
@@ -171,7 +170,7 @@ class QuotasTest extends KafkaServerTestHarness {
                                             RequestKeys.nameForKey(RequestKeys.ProduceKey),
                                             "Tracking throttle-time per client",
                                             "client-id", producerId2)
-    assertEquals("Should not have been throttled", 0.0, allMetrics(producerMetricName).value(), EPS)
+    assertEquals("Should not have been throttled", 0.0, allMetrics(producerMetricName).value(), 0.0)
 
     // The "client" consumer does not get throttled.
     consume(consumers(1), numRecords)
@@ -182,7 +181,7 @@ class QuotasTest extends KafkaServerTestHarness {
                                             RequestKeys.nameForKey(RequestKeys.FetchKey),
                                             "Tracking throttle-time per client",
                                             "client-id", consumerId2)
-    assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value(), EPS)
+    assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value(), 0.0)
   }
 
   def produce(p: KafkaProducer[Array[Byte], Array[Byte]], count: Int): Int = {
