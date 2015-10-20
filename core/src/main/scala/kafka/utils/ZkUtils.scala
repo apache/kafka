@@ -961,6 +961,9 @@ class ZKCheckedEphemeral(path: String,
         case Code.SESSIONEXPIRED =>
           error("Session has expired while creating %s".format(path))
           setResult(Code.SESSIONEXPIRED)
+        case Code.INVALIDACL =>
+          error("Invalid ACL")
+          setResult(Code.INVALIDACL)
         case _ =>
           warn("ZooKeeper event while creating registration node: %s %s".format(path, Code.get(rc)))
           setResult(Code.get(rc))
@@ -986,6 +989,9 @@ class ZKCheckedEphemeral(path: String,
           case Code.SESSIONEXPIRED =>
             error("Session has expired while reading znode %s".format(path))
             setResult(Code.SESSIONEXPIRED)
+          case Code.INVALIDACL =>
+            error("Invalid ACL")
+            setResult(Code.INVALIDACL)
           case _ =>
             warn("ZooKeeper event while getting znode data: %s %s".format(path, Code.get(rc)))
             setResult(Code.get(rc))
@@ -1009,7 +1015,7 @@ class ZKCheckedEphemeral(path: String,
     } else {
       zkHandle.create(prefix,
                       new Array[Byte](0),
-                      ZkUtils. DefaultAcls(isSecure),
+                      DefaultAcls(isSecure),
                       CreateMode.PERSISTENT,
                       new StringCallback() {
                         def processResult(rc : Int,
@@ -1029,6 +1035,9 @@ class ZKCheckedEphemeral(path: String,
                             case Code.SESSIONEXPIRED =>
                               error("Session has expired while creating %s".format(path))
                               setResult(Code.get(rc))
+                            case Code.INVALIDACL =>
+                              error("Invalid ACL")
+                              setResult(Code.INVALIDACL)
                             case _ =>
                               warn("ZooKeeper event while creating registration node: %s %s".format(path, Code.get(rc)))
                               setResult(Code.get(rc))
