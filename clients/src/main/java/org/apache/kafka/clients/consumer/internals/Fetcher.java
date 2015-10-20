@@ -512,8 +512,8 @@ public class Fetcher<K, V> {
                         this.subscriptions.fetched(tp, record.offset() + 1);
                         this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                         this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
-                    } else if (buffer.capacity() >= this.fetchSize) {
-                        // we did not read a single message from a max fetchable buffer
+                    } else if (buffer.limit() > 0) {
+                        // we did not read a single message from a non-empty buffer
                         // because that message's size is larger than fetch size, in this case
                         // record this exception
                         this.recordTooLargePartitions.put(tp, fetchOffset);
