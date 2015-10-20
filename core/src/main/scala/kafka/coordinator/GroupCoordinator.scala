@@ -238,7 +238,7 @@ class GroupCoordinator(val brokerId: Int,
     } else {
       val group = coordinatorMetadata.getGroup(groupId)
       if (group == null)
-        responseCallback(Array.empty, Errors.ILLEGAL_GENERATION.code)
+        responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID.code)
       else
         doSyncGroup(group, generation, memberId, groupAssignment, responseCallback)
     }

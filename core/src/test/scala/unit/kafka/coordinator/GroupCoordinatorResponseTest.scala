@@ -322,7 +322,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val generation = 1
 
     val syncGroupResult = syncGroupFollower(groupId, generation, memberId, true)
-    assertEquals(Errors.ILLEGAL_GENERATION.code, syncGroupResult._2)
+    assertEquals(Errors.UNKNOWN_MEMBER_ID.code, syncGroupResult._2)
   }
 
   @Test
