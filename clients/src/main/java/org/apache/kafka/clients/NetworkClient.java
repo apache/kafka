@@ -58,7 +58,9 @@ public class NetworkClient implements KafkaClient {
     /* a list of nodes we've connected to in the past */
     private List<Integer> nodesEverSeen;
     private Map<Integer, Node> nodesEverSeenById;
-
+    /* random offset into nodesEverSeen list */
+    private Random randOffset;
+    
     /* the state of each node's connection */
     private final ClusterConnectionStates connectionStates;
 
@@ -142,8 +144,9 @@ public class NetworkClient implements KafkaClient {
         this.correlation = 0;
         this.nodeIndexOffset = new Random().nextInt(Integer.MAX_VALUE);
         this.requestTimeoutMs = requestTimeoutMs;
-        this.nodesEverSeen = new ArrayList<Integer>();
-        this.nodesEverSeenById = new HashMap<Integer, Node>();
+        this.nodesEverSeen = new ArrayList<>();
+        this.nodesEverSeenById = new HashMap<>();
+        this.randOffset = new Random();
         this.time = time;
     }
 
@@ -385,9 +388,7 @@ public class NetworkClient implements KafkaClient {
 
         // if we found no node in the current list, try one from the nodes seen before
         if (found == null && nodesEverSeen.size() > 0) {
-            // random offset into list
-            Random rand = new Random();
-            int offset = rand.nextInt(nodesEverSeen.size());
+            int offset = randOffset.nextInt(nodesEverSeen.size());
             for (int i = 0; i < nodesEverSeen.size(); i++) {
                 int idx = Utils.abs((offset + i) % nodesEverSeen.size());
                 Node node = nodesEverSeenById.get(nodesEverSeen.get(idx));
