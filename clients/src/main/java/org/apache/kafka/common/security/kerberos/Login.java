@@ -110,8 +110,8 @@ public class Login {
             isUsingTicketCache = false;
             principal = null;
         } else {
+            // there will only be a single entry
             AppConfigurationEntry entry = entries[0];
-            // there will only be a single entry, so this for() loop will only be iterated through once.
             if (entry.getOptions().get("useTicketCache") != null) {
                 String val = (String) entry.getOptions().get("useTicketCache");
                 isUsingTicketCache = val.equals("true");
@@ -284,8 +284,24 @@ public class Login {
     }
 
     private synchronized LoginContext login(final String loginContextName) throws LoginException {
-        if (System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM) == null) {
+        String jaasConfigFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
+        if (jaasConfigFile == null) {
             throw new IllegalArgumentException("You must pass " + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + " in secure mode.");
+        }
+
+        AppConfigurationEntry[] configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
+        if (configEntries == null) {
+            // Forcing a reload of the configuration in case it's been overridden by third-party code.
+            // Without this, our tests fail sometimes depending on the order the tests are executed.
+            // Singletons are bad.
+            Configuration.setConfiguration(null);
+            configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
+            if (configEntries == null) {
+                String errorMessage = "Could not find a '" + loginContextName + "' entry in `" + jaasConfigFile + "`.";
+                throw new IllegalArgumentException(errorMessage);
+            } else {
+                log.info("Found `" + loginContextName + "` in JAAS configuration after forced reload.");
+            }
         }
 
         LoginContext loginContext = new LoginContext(loginContextName, callbackHandler);

@@ -40,8 +40,8 @@ public class LoginManager {
     private LoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
         this.loginType = loginType;
         String loginContext = loginType.contextName();
-        this.serviceName = getServiceName(loginContext, configs);
         login = new Login(loginContext, configs);
+        this.serviceName = getServiceName(loginContext, configs);
         login.startThreadIfNeeded();
     }
 
