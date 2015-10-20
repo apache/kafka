@@ -45,7 +45,7 @@ public class StreamTask implements Punctuator {
 
     private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
 
-    private final int id;
+    private final long id;
     private final int maxBufferedSize;
 
     private final Consumer consumer;
@@ -76,7 +76,7 @@ public class StreamTask implements Punctuator {
      * @param config                the {@link StreamingConfig} specified by the user
      * @param metrics               the {@link StreamingMetrics} created by the thread
      */
-    public StreamTask(int id,
+    public StreamTask(long id,
                       Consumer<byte[], byte[]> consumer,
                       Producer<byte[], byte[]> producer,
                       Consumer<byte[], byte[]> restoreConsumer,
@@ -110,12 +110,13 @@ public class StreamTask implements Punctuator {
         // create the record recordCollector that maintains the produced offsets
         this.recordCollector = new RecordCollector(producer);
 
-        log.info("Creating restoration consumer client for stream task [" + id + "]");
+        log.info("Creating restoration consumer client for stream task #" + id());
 
         // create the processor state manager
         try {
-            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(id));
-            this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
+            int partition = (int) (id & 0xFFFFFFFF);
+            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(partition));
+            this.stateMgr = new ProcessorStateManager(partition, stateFile, restoreConsumer);
         } catch (IOException e) {
             throw new KafkaException("Error while creating the state manager", e);
         }
@@ -136,8 +137,8 @@ public class StreamTask implements Punctuator {
         this.processorContext.initialized();
     }
 
-    public int id() {
-        return id;
+    public String id() {
+        return (id >> 32) + ":" + (id & 0xFFFFFFFF);
     }
 
     public Set<TopicPartition> partitions() {

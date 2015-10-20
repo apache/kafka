@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
+import org.apache.kafka.streams.processor.PartitionGrouper;
 
 import java.util.Map;
 
@@ -70,6 +72,10 @@ public class StreamingConfig extends AbstractConfig {
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
     private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface.";
 
+    /** <code>partition.grouper</code> */
+    public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
+    private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>PartitionGrouper</code> interface.";
+
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
@@ -108,15 +114,15 @@ public class StreamingConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_ID_DOC)
                                 .define(STATE_DIR_CONFIG,
-                                    Type.STRING,
-                                    SYSTEM_TEMP_DIRECTORY,
-                                    Importance.MEDIUM,
-                                    STATE_DIR_DOC)
+                                        Type.STRING,
+                                        SYSTEM_TEMP_DIRECTORY,
+                                        Importance.MEDIUM,
+                                        STATE_DIR_DOC)
                                 .define(COMMIT_INTERVAL_MS_CONFIG,
-                                    Type.LONG,
-                                    30000,
-                                    Importance.HIGH,
-                                    COMMIT_INTERVAL_MS_DOC)
+                                        Type.LONG,
+                                        30000,
+                                        Importance.HIGH,
+                                        COMMIT_INTERVAL_MS_DOC)
                                 .define(POLL_MS_CONFIG,
                                         Type.LONG,
                                         100,
@@ -167,6 +173,11 @@ public class StreamingConfig extends AbstractConfig {
                                         Type.CLASS,
                                         Importance.HIGH,
                                         TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                                .define(PARTITION_GROUPER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        DefaultPartitionGrouper.class,
+                                        Importance.HIGH,
+                                        PARTITION_GROUPER_CLASS_DOC)
                                 .define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.STRING,
                                         Importance.HIGH,
@@ -190,8 +201,18 @@ public class StreamingConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC);
     }
 
+    public static class InternalConfig {
+        public static final String PARTITION_GROUPER_INSTANCE = "__partition.grouper.instance__";
+    }
+
     public StreamingConfig(Map<?, ?> props) {
         super(CONFIG, props);
+    }
+
+    public Map<String, Object> getConsumerConfigs(PartitionGrouper partitionGrouper) {
+        Map<String, Object> props = getConsumerConfigs();
+        props.put(StreamingConfig.InternalConfig.PARTITION_GROUPER_INSTANCE, partitionGrouper);
+        return props;
     }
 
     public Map<String, Object> getConsumerConfigs() {

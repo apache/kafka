@@ -33,23 +33,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-public class DefaultPartitionGrouper implements PartitionGrouper {
+public class DefaultPartitionGrouper extends PartitionGrouper {
 
-    public Map<Integer, List<TopicPartition>> groups(Collection<Set<String>> topicGroups, Cluster metadata) {
-        Map<Integer, List<TopicPartition>> groups = new HashMap<>();
+    public Map<Long, List<TopicPartition>> partitionGroups(Cluster metadata) {
+        Map<Long, List<TopicPartition>> groups = new HashMap<>();
         List<List<String>> sortedTopicGroups = sort(topicGroups);
 
-        int groupId = 0;
+        long groupId = 0;
         for (List<String> topicGroup : sortedTopicGroups) {
             int numPartitions = ensureCopartitioning(topicGroup, metadata);
 
             for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
+                long taskId = (groupId << 32) | (long) partitionId;
+
                 ArrayList<TopicPartition> group = new ArrayList<>(topicGroup.size());
                 for (String topic : topicGroup) {
                     group.add(new TopicPartition(topic, partitionId));
                 }
-                groups.put(groupId++, Collections.unmodifiableList(group));
+
+                groups.put(taskId, Collections.unmodifiableList(group));
             }
+            groupId++;
         }
 
         return Collections.unmodifiableMap(groups);

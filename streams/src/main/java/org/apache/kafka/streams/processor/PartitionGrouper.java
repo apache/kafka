@@ -25,8 +25,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public interface PartitionGrouper {
+public abstract class PartitionGrouper {
 
-    Map<Integer, List<TopicPartition>> groups(Collection<Set<String>> topicGroups, Cluster metadata);
+    protected Collection<Set<String>> topicGroups;
+
+    private Map<TopicPartition, Set<Long>> partitionToTaskIds;
+
+    /**
+     * Returns a map of task ids to groups of partitions. The task id is the 64 bit integer
+     * which uniquely identifies a task. The higher 32 bit integer is an id assigned to a topic group.
+     * The lower 32 bit integer is a partition id with which the task's local states are associated.
+     *
+     * @param metadata
+     * @return a map of task ids to groups of partitions
+     */
+    public abstract Map<Long, List<TopicPartition>> partitionGroups(Cluster metadata);
+
+    public final void topicGroups(Collection<Set<String>> topicGroups) {
+        this.topicGroups = topicGroups;
+    }
+
+    public final void partitionToTaskIds(Map<TopicPartition, Set<Long>> partitionToTaskIds) {
+        this.partitionToTaskIds = partitionToTaskIds;
+    }
+
+    public final Set<Long> taskIds(TopicPartition partition) {
+        return partitionToTaskIds.get(partition);
+    }
 
 }

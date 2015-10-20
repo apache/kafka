@@ -71,7 +71,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.restoreTime = this.metrics.addLatencySensor(metricGrp, name, "restore", "store-name", name);
 
         this.topic = name;
-        this.partition = context.id();
+        this.partition = context.statePartition();
 
         this.context = context;
 

@@ -44,7 +44,7 @@ public class ProcessorStateManager {
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     public static final String LOCK_FILE_NAME = ".lock";
 
-    private final int id;
+    private final int partition;
     private final File baseDir;
     private final FileLock directoryLock;
     private final Map<String, StateStore> stores;
@@ -52,8 +52,8 @@ public class ProcessorStateManager {
     private final Map<TopicPartition, Long> restoredOffsets;
     private final Map<TopicPartition, Long> checkpointedOffsets;
 
-    public ProcessorStateManager(int id, File baseDir, Consumer<byte[], byte[]> restoreConsumer) throws IOException {
-        this.id = id;
+    public ProcessorStateManager(int partition, File baseDir, Consumer<byte[], byte[]> restoreConsumer) throws IOException {
+        this.partition = partition;
         this.baseDir = baseDir;
         this.stores = new HashMap<>();
         this.restoreConsumer = restoreConsumer;
@@ -109,14 +109,14 @@ public class ProcessorStateManager {
         if (restoreConsumer.listTopics().containsKey(store.name())) {
             boolean partitionNotFound = true;
             for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(store.name())) {
-                if (partitionInfo.partition() == id) {
+                if (partitionInfo.partition() == partition) {
                     partitionNotFound = false;
                     break;
                 }
             }
 
             if (partitionNotFound)
-                throw new IllegalStateException("Store " + store.name() + "'s change log does not contain the partition for group " + id);
+                throw new IllegalStateException("Store " + store.name() + "'s change log does not contain the partition " + partition);
 
         } else {
             throw new IllegalStateException("Change log topic for store " + store.name() + " does not exist yet");
@@ -127,7 +127,7 @@ public class ProcessorStateManager {
         // ---- try to restore the state from change-log ---- //
 
         // subscribe to the store's partition
-        TopicPartition storePartition = new TopicPartition(store.name(), id);
+        TopicPartition storePartition = new TopicPartition(store.name(), partition);
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
         }
@@ -201,7 +201,7 @@ public class ProcessorStateManager {
 
             Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
             for (String storeName : stores.keySet()) {
-                TopicPartition part = new TopicPartition(storeName, id);
+                TopicPartition part = new TopicPartition(storeName, partition);
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {

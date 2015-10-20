@@ -53,7 +53,6 @@ public class TopologyBuilder {
     private final Set<String> nodeNames = new HashSet<>();
     private final Set<String> sourceTopicNames = new HashSet<>();
 
-    private final PartitionGrouper partitionGrouper;
     private final QuickUnion<String> nodeGroups = new QuickUnion<>();
     private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
 
@@ -118,18 +117,9 @@ public class TopologyBuilder {
     }
 
     /**
-     * Create a new builder with the default PartitionGrouper.
+     * Create a new builder.
      */
-    public TopologyBuilder() {
-        this(new DefaultPartitionGrouper());
-    }
-
-    /**
-     * Create a new builder with the specified PartitionGrouper
-     */
-    public TopologyBuilder(PartitionGrouper partitionGrouper) {
-        this.partitionGrouper = partitionGrouper;
-    }
+    public TopologyBuilder() {}
 
     /**
      * Add a new source that consumes the named topics and forwards the messages to child processor and/or sink nodes.
@@ -300,14 +290,6 @@ public class TopologyBuilder {
             topicGroups.add(Collections.unmodifiableSet(group));
         }
         return Collections.unmodifiableList(topicGroups);
-    }
-
-    /**
-     * Returns the instance of PartitionGrouper for this TopologyBuilder
-     * @return
-     */
-    public PartitionGrouper partitionGrouper() {
-        return partitionGrouper;
     }
 
     /**

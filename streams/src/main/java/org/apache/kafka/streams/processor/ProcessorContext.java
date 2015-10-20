@@ -26,11 +26,11 @@ import java.io.File;
 public interface ProcessorContext {
 
     /**
-     * Returns the partition group id
+     * Returns the state partition id
      *
-     * @return partition group id
+     * @return the state partition id
      */
-    int id();
+    int statePartition();
 
     /**
      * Returns the key serializer
@@ -73,11 +73,6 @@ public interface ProcessorContext {
      * @return StreamingMetrics
      */
     StreamingMetrics metrics();
-
-    /**
-     * Check if this process's incoming streams are joinable
-     */
-    boolean joinable();
 
     /**
      * Registers and possibly restores the specified storage engine.
