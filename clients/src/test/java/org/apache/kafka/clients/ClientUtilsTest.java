@@ -26,7 +26,6 @@ public class ClientUtilsTest {
     @Test
     public void testParseAndValidateAddresses() {
         check("127.0.0.1:8000");
-        check("mydomain.com:8080");
         check("[::1]:8000");
         check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
     }
@@ -34,6 +33,18 @@ public class ClientUtilsTest {
     @Test(expected = ConfigException.class)
     public void testNoPort() {
         check("127.0.0.1");
+    }
+
+    @Test
+    public void testDnsAtLeastOneResolved() {
+        check("localhost:8080");
+        check("mydomain.com:8080");
+        check("localhost:8080","unresolved-localhost:8080");
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testDnsUnresolved() {
+        check("unresolved-localhost:8080");
     }
 
     private void check(String... url) {

@@ -45,8 +45,10 @@ public class ClientUtils {
                     throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 try {
                     InetSocketAddress address = new InetSocketAddress(host, port);
-                    if (address.isUnresolved())
-                        throw new ConfigException("DNS resolution failed for url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                    if (address.isUnresolved()) {
+                        log.error("DNS resolution failed for url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                        continue;
+                    }
                     addresses.add(address);
                 } catch (NumberFormatException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
