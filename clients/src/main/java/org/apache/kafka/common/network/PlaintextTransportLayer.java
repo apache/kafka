@@ -52,10 +52,7 @@ public class PlaintextTransportLayer implements TransportLayer {
     @Override
     public void finishConnect() throws IOException {
         socketChannel.finishConnect();
-        int ops = key.interestOps();
-        ops &= ~SelectionKey.OP_CONNECT;
-        ops |= SelectionKey.OP_READ;
-        key.interestOps(ops);
+        key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
     }
 
     @Override

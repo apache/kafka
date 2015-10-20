@@ -74,8 +74,7 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     boolean hasPendingWrites();
 
     /**
-     * returns SSLSession.getPeerPrinicpal if SSLTransportLayer used
-     * for non-secure returns a "ANONYMOUS" as the peerPrincipal
+     * Returns `SSLSession.getPeerPrincipal` if SSLTransportLayer is used and `KakfaPrincipal.ANONYMOUS` otherwise.
      */
     Principal peerPrincipal() throws IOException;
 

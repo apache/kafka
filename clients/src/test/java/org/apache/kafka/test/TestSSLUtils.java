@@ -18,7 +18,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.config.SSLConfigs;
-import org.apache.kafka.common.security.ssl.SSLFactory;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.clients.CommonClientConfigs;
 
 import java.io.File;
@@ -177,13 +177,13 @@ public class TestSSLUtils {
         return certs;
     }
 
-    public static Map<String, Object> createSSLConfig(SSLFactory.Mode mode, File keyStoreFile, String password, String keyPassword,
+    public static Map<String, Object> createSSLConfig(Mode mode, File keyStoreFile, String password, String keyPassword,
                                                       File trustStoreFile, String trustStorePassword) {
         Map<String, Object> sslConfigs = new HashMap<String, Object>();
         sslConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
         sslConfigs.put(SSLConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
 
-        if (mode == SSLFactory.Mode.SERVER || (mode == SSLFactory.Mode.CLIENT && keyStoreFile != null)) {
+        if (mode == Mode.SERVER || (mode == Mode.CLIENT && keyStoreFile != null)) {
             sslConfigs.put(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
             sslConfigs.put(SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
             sslConfigs.put(SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
@@ -203,13 +203,13 @@ public class TestSSLUtils {
         return sslConfigs;
     }
 
-    public static  Map<String, Object> createSSLConfig(boolean useClientCert, boolean trustStore, SSLFactory.Mode mode, File trustStoreFile, String certAlias)
+    public static  Map<String, Object> createSSLConfig(boolean useClientCert, boolean trustStore, Mode mode, File trustStoreFile, String certAlias)
         throws IOException, GeneralSecurityException {
         Map<String, X509Certificate> certs = new HashMap<String, X509Certificate>();
         File keyStoreFile;
         String password;
 
-        if (mode == SSLFactory.Mode.SERVER)
+        if (mode == Mode.SERVER)
             password = "ServerPassword";
         else
             password = "ClientPassword";

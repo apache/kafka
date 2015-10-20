@@ -19,6 +19,7 @@ package org.apache.kafka.common.network;
 
 import java.security.Principal;
 import java.io.IOException;
+import java.util.Map;
 
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.KafkaException;
@@ -29,7 +30,7 @@ public class DefaultAuthenticator implements Authenticator {
     private PrincipalBuilder principalBuilder;
     private Principal principal;
 
-    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder) {
+    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
         this.transportLayer = transportLayer;
         this.principalBuilder = principalBuilder;
     }
@@ -54,7 +55,7 @@ public class DefaultAuthenticator implements Authenticator {
 
     /**
      * DefaultAuthenticator doesn't implement any additional authentication mechanism.
-     * @returns true
+     * @return true
      */
     public boolean complete() {
         return true;

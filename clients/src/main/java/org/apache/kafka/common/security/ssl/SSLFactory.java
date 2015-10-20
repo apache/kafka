@@ -19,19 +19,19 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SSLConfigs;
+import org.apache.kafka.common.network.Mode;
 
 import javax.net.ssl.*;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+
 import java.util.List;
 import java.util.Map;
 
-
 public class SSLFactory implements Configurable {
 
-    public enum Mode { CLIENT, SERVER };
     private String protocol;
     private String provider;
     private String kmfAlgorithm;

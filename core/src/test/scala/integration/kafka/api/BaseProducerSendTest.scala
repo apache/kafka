@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.io.File
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
@@ -26,20 +27,19 @@ import kafka.message.Message
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.SerializationException
-import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-class ProducerSendTest extends KafkaServerTestHarness {
-  val numServers = 2
+abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
-  val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
-
-  def generateConfigs() =
-    TestUtils.createBrokerConfigs(numServers, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
+  def generateConfigs = {
+    val overridingProps = new Properties()
+    val numServers = 2
+    overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
+    TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile).map(KafkaConfig.fromProps(_, overridingProps))
+  }
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
@@ -64,6 +64,10 @@ class ProducerSendTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
+  private def createProducer(brokerList: String, retries: Int = 0, lingerMs: Long = 0, props: Option[Properties] = None): KafkaProducer[Array[Byte],Array[Byte]] =
+    TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
+      retries = retries, lingerMs = lingerMs, props = props)
+
   /**
    * testSendOffset checks the basic send API behavior
    *
@@ -72,7 +76,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
    */
   @Test
   def testSendOffset() {
-    var producer = TestUtils.createNewProducer(brokerList)
+    val producer = createProducer(brokerList)
     val partition = new Integer(0)
 
     object callback extends Callback {
@@ -127,60 +131,29 @@ class ProducerSendTest extends KafkaServerTestHarness {
       assertEquals("Should have offset " + (numRecords + 4), numRecords + 4L, producer.send(record0, callback).get.offset)
 
     } finally {
-      if (producer != null) {
+      if (producer != null)
         producer.close()
-        producer = null
-      }
     }
   }
 
   @Test
-  def testSerializer() {
+  def testWrongSerializer() {
     // send a record with a wrong type should receive a serialization exception
     try {
-      val producer = createNewProducerWithWrongSerializer(brokerList)
-      val record5 = new ProducerRecord[Array[Byte],Array[Byte]](topic, new Integer(0), "key".getBytes, "value".getBytes)
+      val producer = createProducerWithWrongSerializer(brokerList)
+      val record5 = new ProducerRecord[Array[Byte], Array[Byte]](topic, new Integer(0), "key".getBytes, "value".getBytes)
       producer.send(record5)
       fail("Should have gotten a SerializationException")
     } catch {
       case se: SerializationException => // this is ok
     }
-
-    try {
-      createNewProducerWithNoSerializer(brokerList)
-      fail("Instantiating a producer without specifying a serializer should cause a ConfigException")
-    } catch {
-      case ce : ConfigException => // this is ok
-    }
-
-    // create a producer with explicit serializers should succeed
-    createNewProducerWithExplicitSerializer(brokerList)
   }
 
-  private def createNewProducerWithWrongSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
-    import org.apache.kafka.clients.producer.ProducerConfig
-
+  private def createProducerWithWrongSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
     val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
-    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
-  }
-
-  private def createNewProducerWithNoSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
-    import org.apache.kafka.clients.producer.ProducerConfig
-
-    val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
-  }
-
-  private def createNewProducerWithExplicitSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
-    import org.apache.kafka.clients.producer.ProducerConfig
-
-    val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps, new ByteArraySerializer, new ByteArraySerializer)
+    createProducer(brokerList, props = Some(producerProps))
   }
 
   /**
@@ -190,7 +163,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
    */
   @Test
   def testClose() {
-    var producer = TestUtils.createNewProducer(brokerList)
+    val producer = createProducer(brokerList)
 
     try {
       // create topic
@@ -204,7 +177,6 @@ class ProducerSendTest extends KafkaServerTestHarness {
 
       // close the producer
       producer.close()
-      producer = null
 
       // check that all messages have been acked via offset,
       // this also checks that messages with same key go to the same partition
@@ -212,10 +184,8 @@ class ProducerSendTest extends KafkaServerTestHarness {
       assertEquals("Should have offset " + numRecords, numRecords.toLong, response0.get.offset)
 
     } finally {
-      if (producer != null) {
+      if (producer != null)
         producer.close()
-        producer = null
-      }
     }
   }
 
@@ -226,7 +196,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
    */
   @Test
   def testSendToPartition() {
-    var producer = TestUtils.createNewProducer(brokerList)
+    val producer = createProducer(brokerList)
 
     try {
       // create topic
@@ -241,7 +211,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
         for (i <- 1 to numRecords)
           yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, null, ("value" + i).getBytes))
       val futures = responses.toList
-      futures.map(_.get)
+      futures.foreach(_.get)
       for (future <- futures)
         assertTrue("Request should have completed", future.isDone)
 
@@ -267,10 +237,8 @@ class ProducerSendTest extends KafkaServerTestHarness {
         assertEquals(i.toLong, messageSet1(i).offset)
       }
     } finally {
-      if (producer != null) {
+      if (producer != null)
         producer.close()
-        producer = null
-      }
     }
   }
 
@@ -281,7 +249,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
    */
   @Test
   def testAutoCreateTopic() {
-    var producer = TestUtils.createNewProducer(brokerList, retries = 5)
+    val producer = createProducer(brokerList, retries = 5)
 
     try {
       // Send a message to auto-create the topic
@@ -294,7 +262,6 @@ class ProducerSendTest extends KafkaServerTestHarness {
     } finally {
       if (producer != null) {
         producer.close()
-        producer = null
       }
     }
   }
@@ -304,7 +271,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
    */
   @Test
   def testFlush() {
-    var producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+    val producer = createProducer(brokerList, lingerMs = Long.MaxValue)
     try {
       TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
       val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "value".getBytes)
@@ -338,7 +305,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
 
       // Test closing from caller thread.
       for(i <- 0 until 50) {
-        producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        producer = createProducer(brokerList, lingerMs = Long.MaxValue)
         val responses = (0 until numRecords) map (i => producer.send(record0))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
         producer.close(0, TimeUnit.MILLISECONDS)
@@ -391,7 +358,7 @@ class ProducerSendTest extends KafkaServerTestHarness {
         }
       }
       for(i <- 0 until 50) {
-        producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        producer = createProducer(brokerList, lingerMs = Long.MaxValue)
         // send message to partition 0
         val responses = ((0 until numRecords) map (i => producer.send(record, new CloseCallback(producer))))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
