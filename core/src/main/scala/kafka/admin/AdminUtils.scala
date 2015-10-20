@@ -23,6 +23,7 @@ import kafka.cluster.{BrokerEndPoint, Broker}
 import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils._
+import kafka.utils.ZkUtils._
 import kafka.api.{TopicMetadata, PartitionMetadata}
 
 import java.util.Random
@@ -161,7 +162,7 @@ object AdminUtils extends Logging {
   
   def deleteTopic(zkUtils: ZkUtils, topic: String) {
     try {
-      zkUtils.createPersistentPath(zkUtils.getDeleteTopicPath(topic))
+      zkUtils.createPersistentPath(getDeleteTopicPath(topic))
     } catch {
       case e1: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
         "topic %s is already marked for deletion".format(topic))
@@ -224,8 +225,8 @@ object AdminUtils extends Logging {
   }
 
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean = 
-    zkUtils.zkClient.exists(zkUtils.getTopicPath(topic))
-    
+    zkUtils.zkClient.exists(getTopicPath(topic))
+
   def createTopic(zkUtils: ZkUtils,
                   topic: String,
                   partitions: Int, 
@@ -245,7 +246,7 @@ object AdminUtils extends Logging {
     Topic.validate(topic)
     require(partitionReplicaAssignment.values.map(_.size).toSet.size == 1, "All partitions should have the same number of replicas.")
 
-    val topicPath = zkUtils.getTopicPath(topic)
+    val topicPath = getTopicPath(topic)
 
     if (!update) {
       if (zkUtils.zkClient.exists(topicPath))
@@ -274,7 +275,7 @@ object AdminUtils extends Logging {
 
   private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
-      val zkPath = zkUtils.getTopicPath(topic)
+      val zkPath = getTopicPath(topic)
       val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => (e._1.toString -> e._2)))
 
       if (!update) {
@@ -342,14 +343,14 @@ object AdminUtils extends Logging {
       config
     }
     val map = Map("version" -> 1, "config" -> configMap)
-    zkUtils.updatePersistentPath(zkUtils.getEntityConfigPath(entityType, entityName), Json.encode(map))
+    zkUtils.updatePersistentPath(getEntityConfigPath(entityType, entityName), Json.encode(map))
   }
   
   /**
    * Read the entity (topic or client) config (if any) from zk
    */
   def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entity: String): Properties = {
-    val str: String = zkUtils.zkClient.readData(zkUtils.getEntityConfigPath(entityType, entity), true)
+    val str: String = zkUtils.zkClient.readData(getEntityConfigPath(entityType, entity), true)
     val props = new Properties()
     if(str != null) {
       Json.parseFull(str) match {
@@ -389,7 +390,7 @@ object AdminUtils extends Logging {
 
 
   private def fetchTopicMetadataFromZk(topic: String, zkUtils: ZkUtils, cachedBrokerInfo: mutable.HashMap[Int, Broker], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): TopicMetadata = {
-    if(zkUtils.pathExists(zkUtils.getTopicPath(topic))) {
+    if(zkUtils.pathExists(getTopicPath(topic))) {
       val topicPartitionAssignment = zkUtils.getPartitionAssignmentForTopics(List(topic)).get(topic).get
       val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
       val partitionMetadata = sortedPartitions.map { partitionMap =>

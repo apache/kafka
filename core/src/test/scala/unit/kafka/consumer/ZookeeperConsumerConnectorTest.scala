@@ -322,7 +322,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
 
   @Test
   def testLeaderSelectionForPartition() {
-    val zkUtils = ZkUtils.apply(zkConnect, 6000, 30000, false)
+    val zkUtils = ZkUtils(zkConnect, 6000, 30000, false)
 
     // create topic topic1 with 1 partition on broker 0
     createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = servers)

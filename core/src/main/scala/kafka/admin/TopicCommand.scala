@@ -22,6 +22,7 @@ import java.util.Properties
 import kafka.common.{Topic, AdminCommandFailedException}
 import kafka.utils.CommandLineUtils
 import kafka.utils._
+import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection._
@@ -50,10 +51,10 @@ object TopicCommand extends Logging {
 
     opts.checkArgs()
 
-    val zkUtils = ZkUtils.apply(opts.options.valueOf(opts.zkConnectOpt), 
-                                 30000,
-                                 30000,
-                                 JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+    val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt), 
+                          30000,
+                          30000,
+                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
     var exitCode = 0
     try {
       if(opts.options.has(opts.createOpt))
@@ -143,7 +144,7 @@ object TopicCommand extends Logging {
   def listTopics(zkUtils: ZkUtils, opts: TopicCommandOptions) {
     val topics = getTopics(zkUtils, opts)
     for(topic <- topics) {
-      if (zkUtils.pathExists(zkUtils.getDeleteTopicPath(topic))) {
+      if (zkUtils.pathExists(getDeleteTopicPath(topic))) {
         println("%s - marked for deletion".format(topic))
       } else {
         println(topic)
@@ -162,7 +163,7 @@ object TopicCommand extends Logging {
         if (Topic.InternalTopics.contains(topic)) {
           throw new AdminOperationException("Topic %s is a kafka internal topic and is not allowed to be marked for deletion.".format(topic))
         } else {
-          zkUtils.createPersistentPath(zkUtils.getDeleteTopicPath(topic))
+          zkUtils.createPersistentPath(getDeleteTopicPath(topic))
           println("Topic %s is marked for deletion.".format(topic))
           println("Note: This will have no impact if delete.topic.enable is not set to true.")
         }

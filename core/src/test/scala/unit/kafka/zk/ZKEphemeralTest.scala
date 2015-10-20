@@ -34,7 +34,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
   @Test
   def testEphemeralNodeCleanup = {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
-    var zkUtils = ZkUtils.apply(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
+    var zkUtils = ZkUtils(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
 
     try {
       zkUtils.createEphemeralPathExpectConflict("/tmp/zktest", "node created")
@@ -46,7 +46,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     testData = zkUtils.readData("/tmp/zktest")._1
     Assert.assertNotNull(testData)
     zkUtils.close
-    zkUtils = ZkUtils.apply(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
     val nodeExists = zkUtils.pathExists("/tmp/zktest")
     Assert.assertFalse(nodeExists)
   }
@@ -75,7 +75,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
 
   private def testCreation(path: String) {
     val zk = zkUtils.zkConnection.getZookeeper
-    val zwe = new ZKCheckedEphemeral(path, "", zk)
+    val zwe = new ZKCheckedEphemeral(path, "", zk, false)
     var created = false
     var counter = 10
 
@@ -104,7 +104,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     //Creates a second session
     val (_, zkConnection2) = ZkUtils.createZkClientAndConnection(zkConnect, zkSessionTimeoutMs, zkConnectionTimeout)
     val zk2 = zkConnection2.getZookeeper
-    var zwe = new ZKCheckedEphemeral(path, "", zk2)
+    var zwe = new ZKCheckedEphemeral(path, "", zk2, false)
 
     // Creates znode for path in the first session
     zk1.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
@@ -131,7 +131,7 @@ class ZKEphemeralTest extends ZooKeeperTestHarness {
     // Creates znode for path in the first session
     zk.create(path, Array[Byte](), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
     
-    var zwe = new ZKCheckedEphemeral(path, "", zk)
+    var zwe = new ZKCheckedEphemeral(path, "", zk, false)
     //Bootstraps the ZKWatchedEphemeral object
     var gotException = false;
     try {

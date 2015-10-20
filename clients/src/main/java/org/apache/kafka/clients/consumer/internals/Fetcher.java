@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -80,6 +81,7 @@ public class Fetcher<K, V> {
     private final Deserializer<V> valueDeserializer;
 
     private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
+    private final Map<TopicPartition, Long> recordTooLargePartitions;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -110,6 +112,7 @@ public class Fetcher<K, V> {
 
         this.records = new LinkedList<PartitionRecords<K, V>>();
         this.offsetOutOfRangePartitions = new HashMap<>();
+        this.recordTooLargePartitions = new HashMap<>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
         this.retryBackoffMs = retryBackoffMs;
@@ -288,6 +291,25 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * If any partition from previous fetchResponse gets a RecordTooLarge error, throw RecordTooLargeException
+     *
+     * @throws RecordTooLargeException If there is a message larger than fetch size and hence cannot be ever returned
+     */
+    private void throwIfRecordTooLarge() throws OffsetOutOfRangeException {
+        Map<TopicPartition, Long> copiedRecordTooLargePartitions = new HashMap<>(this.recordTooLargePartitions);
+        this.recordTooLargePartitions.clear();
+
+        if (!copiedRecordTooLargePartitions.isEmpty())
+            throw new RecordTooLargeException("There are some messages at [Partition=Offset]: "
+                + copiedRecordTooLargePartitions
+                + " whose size is larger than the fetch size "
+                + this.fetchSize
+                + " and hence cannot be ever returned."
+                + " Increase the fetch size, or decrease the maximum message size the broker will allow.",
+                copiedRecordTooLargePartitions);
+    }
+
+    /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
      * @return The fetched records per partition
@@ -300,6 +322,7 @@ public class Fetcher<K, V> {
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
             throwIfOffsetOutOfRange();
+            throwIfRecordTooLarge();
 
             for (PartitionRecords<K, V> part : this.records) {
                 if (!subscriptions.isAssigned(part.partition)) {
@@ -483,12 +506,19 @@ public class Fetcher<K, V> {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
                     }
+
                     if (!parsed.isEmpty()) {
                         ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                         this.subscriptions.fetched(tp, record.offset() + 1);
-                        this.records.add(new PartitionRecords<K, V>(fetchOffset, tp, parsed));
+                        this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                         this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
+                    } else if (buffer.capacity() >= this.fetchSize) {
+                        // we did not read a single message from a max fetchable buffer
+                        // because that message's size is larger than fetch size, in this case
+                        // record this exception
+                        this.recordTooLargePartitions.put(tp, fetchOffset);
                     }
+
                     this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
                     totalBytes += bytes;
                     totalCount += parsed.size();

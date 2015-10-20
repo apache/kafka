@@ -55,6 +55,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return JoinGroupRequest.parse(buffer, versionId);
             case HEARTBEAT:
                 return HeartbeatRequest.parse(buffer, versionId);
+            case LEAVE_GROUP:
+                return LeaveGroupRequest.parse(buffer, versionId);
             case STOP_REPLICA:
                 return StopReplicaRequest.parse(buffer, versionId);
             case CONTROLLED_SHUTDOWN_KEY:
