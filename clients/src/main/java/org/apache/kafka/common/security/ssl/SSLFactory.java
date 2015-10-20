@@ -83,12 +83,10 @@ public class SSLFactory implements Configurable {
         this.kmfAlgorithm = (String) configs.get(SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
         this.tmfAlgorithm = (String) configs.get(SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
 
-        if (checkKeyStoreConfigs(configs)) {
-            createKeystore((String) configs.get(SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG),
-                           (String) configs.get(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-                           (String) configs.get(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
-                           (String) configs.get(SSLConfigs.SSL_KEY_PASSWORD_CONFIG));
-        }
+        createKeystore((String) configs.get(SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG),
+                       (String) configs.get(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
+                       (String) configs.get(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
+                       (String) configs.get(SSLConfigs.SSL_KEY_PASSWORD_CONFIG));
 
         createTruststore((String) configs.get(SSLConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
                          (String) configs.get(SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
@@ -157,9 +155,9 @@ public class SSLFactory implements Configurable {
 
     private void createKeystore(String type, String path, String password, String keyPassword) {
         if (path == null && password != null) {
-            throw new KafkaException("SSL key store password is not specified.");
-        } else if (path != null && password == null) {
             throw new KafkaException("SSL key store is not specified, but key store password is specified.");
+        } else if (path != null && password == null) {
+            throw new KafkaException("SSL key store is specified, but key store password is not specified.");
         } else if (path != null && password != null) {
             this.keystore = new SecurityStore(type, path, password);
             this.keyPassword = keyPassword;
@@ -168,19 +166,12 @@ public class SSLFactory implements Configurable {
 
     private void createTruststore(String type, String path, String password) {
         if (path == null && password != null) {
-            throw new KafkaException("SSL key store password is not specified.");
+            throw new KafkaException("SSL trust store is not specified, but trust store password is specified.");
         } else if (path != null && password == null) {
-            throw new KafkaException("SSL key store is not specified, but key store password is specified.");
+            throw new KafkaException("SSL trust store is specified, but trust store password is not specified.");
         } else if (path != null && password != null) {
             this.truststore = new SecurityStore(type, path, password);
         }
-    }
-
-    private boolean checkKeyStoreConfigs(Map<String, ?> configs) {
-        return  configs.containsKey(SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG) &&
-                configs.containsKey(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG) &&
-                configs.containsKey(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) &&
-                configs.containsKey(SSLConfigs.SSL_KEY_PASSWORD_CONFIG);
     }
 
     private class SecurityStore {
