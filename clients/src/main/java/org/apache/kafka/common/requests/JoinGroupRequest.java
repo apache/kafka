@@ -33,7 +33,8 @@ public class JoinGroupRequest extends AbstractRequest {
     private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
     private static final String STRATEGY_KEY_NAME = "partition_assignment_strategy";
 
-    public static final String UNKNOWN_CONSUMER_ID = "";
+    private static final Schema CURRENT_RESPONSE_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.JOIN_GROUP.id);
+    private static final String GENERATION_ID_KEY_NAME = "group_generation_id";
 
     private final String groupId;
     private final int sessionTimeout;
@@ -73,8 +74,8 @@ public class JoinGroupRequest extends AbstractRequest {
             case 0:
                 return new JoinGroupResponse(
                         Errors.forException(e).code(),
-                        JoinGroupResponse.UNKNOWN_GENERATION_ID,
-                        JoinGroupResponse.UNKNOWN_CONSUMER_ID,
+                        (int) CURRENT_RESPONSE_SCHEMA.get(GENERATION_ID_KEY_NAME).defaultValue,
+                        CURRENT_RESPONSE_SCHEMA.get(CONSUMER_ID_KEY_NAME).defaultValue.toString(),
                         Collections.<TopicPartition>emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -108,5 +109,9 @@ public class JoinGroupRequest extends AbstractRequest {
 
     public static JoinGroupRequest parse(ByteBuffer buffer) {
         return new JoinGroupRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    }
+
+    public static String getDefaultConsumerId() {
+        return CURRENT_SCHEMA.get(CONSUMER_ID_KEY_NAME).defaultValue.toString();
     }
 }

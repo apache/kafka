@@ -239,7 +239,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // if it is v1 or not specified by user, we can use the default retention
       val offsetRetention =
         if (offsetCommitRequest.versionId <= 1 ||
-          offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME) {
+          offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.getDefaultRetentionId) {
           coordinator.offsetConfig.offsetsRetentionMs
         } else {
           offsetCommitRequest.retentionMs

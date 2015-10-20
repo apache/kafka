@@ -122,6 +122,16 @@ public class Schema extends Type {
     }
 
     /**
+     * Get a nested scheme its name
+     *
+     * @param name The name of the field
+     * @return The field
+     */
+    public Schema getNestedSchema(String name) {
+        return (Schema) ((ArrayOf) this.fieldsByName.get(name).type).type();
+    }
+
+    /**
      * Display a string representation of the schema
      */
     public String toString() {

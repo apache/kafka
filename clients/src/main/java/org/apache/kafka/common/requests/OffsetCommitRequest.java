@@ -16,6 +16,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -50,16 +51,6 @@ public class OffsetCommitRequest extends AbstractRequest {
     @Deprecated
     private static final String TIMESTAMP_KEY_NAME = "timestamp";         // for v0, v1
 
-    // default values for the current version
-    public static final int DEFAULT_GENERATION_ID = -1;
-    public static final String DEFAULT_CONSUMER_ID = "";
-    public static final long DEFAULT_RETENTION_TIME = -1L;
-
-    // default values for old versions,
-    // will be removed after these versions are deprecated
-    @Deprecated
-    public static final long DEFAULT_TIMESTAMP = -1L;            // for V0, V1
-
     private final String groupId;
     private final String consumerId;
     private final int generationId;
@@ -81,7 +72,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         }
 
         public PartitionData(long offset, String metadata) {
-            this(offset, DEFAULT_TIMESTAMP, metadata);
+            this(offset, getDefaultTimestamp(), metadata);
         }
     }
 
@@ -96,9 +87,9 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         initCommonFields(groupId, offsetData);
         this.groupId = groupId;
-        this.generationId = DEFAULT_GENERATION_ID;
-        this.consumerId = DEFAULT_CONSUMER_ID;
-        this.retentionTime = DEFAULT_RETENTION_TIME;
+        this.generationId = (int) CURRENT_SCHEMA.get(GENERATION_ID_KEY_NAME).defaultValue;
+        this.consumerId = CURRENT_SCHEMA.get(CONSUMER_ID_KEY_NAME).defaultValue.toString();
+        this.retentionTime = (long) CURRENT_SCHEMA.get(RETENTION_TIME_KEY_NAME).defaultValue;
         this.offsetData = offsetData;
     }
 
@@ -119,7 +110,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         this.groupId = groupId;
         this.generationId = generationId;
         this.consumerId = consumerId;
-        this.retentionTime = DEFAULT_RETENTION_TIME;
+        this.retentionTime = (long) CURRENT_SCHEMA.get(RETENTION_TIME_KEY_NAME).defaultValue;
         this.offsetData = offsetData;
     }
 
@@ -180,19 +171,19 @@ public class OffsetCommitRequest extends AbstractRequest {
         if (struct.hasField(GENERATION_ID_KEY_NAME))
             generationId = struct.getInt(GENERATION_ID_KEY_NAME);
         else
-            generationId = DEFAULT_GENERATION_ID;
+            generationId = (int) CURRENT_SCHEMA.get(GENERATION_ID_KEY_NAME).defaultValue;
 
         // This field only exists in v1.
         if (struct.hasField(CONSUMER_ID_KEY_NAME))
             consumerId = struct.getString(CONSUMER_ID_KEY_NAME);
         else
-            consumerId = DEFAULT_CONSUMER_ID;
+            consumerId = CURRENT_SCHEMA.get(CONSUMER_ID_KEY_NAME).defaultValue.toString();
 
         // This field only exists in v2
         if (struct.hasField(RETENTION_TIME_KEY_NAME))
             retentionTime = struct.getLong(RETENTION_TIME_KEY_NAME);
         else
-            retentionTime = DEFAULT_RETENTION_TIME;
+            retentionTime = (long) CURRENT_SCHEMA.get(RETENTION_TIME_KEY_NAME).defaultValue;
 
         offsetData = new HashMap<TopicPartition, PartitionData>();
         for (Object topicDataObj : struct.getArray(TOPICS_KEY_NAME)) {
@@ -262,5 +253,22 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     public static OffsetCommitRequest parse(ByteBuffer buffer) {
         return new OffsetCommitRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    }
+
+    public static int getDefaultGenerationId() {
+        return (int) CURRENT_SCHEMA.get(GENERATION_ID_KEY_NAME).defaultValue;
+    }
+
+    public static long getDefaultRetentionId() {
+        return (long) CURRENT_SCHEMA.get(RETENTION_TIME_KEY_NAME).defaultValue;
+    }
+
+    public static String getDefaultConsumerId() {
+        return CURRENT_SCHEMA.get(CONSUMER_ID_KEY_NAME).defaultValue.toString();
+    }
+
+    public static long getDefaultTimestamp() {
+        Field timestampField = CURRENT_SCHEMA.getNestedSchema(TOPICS_KEY_NAME).getNestedSchema(PARTITIONS_KEY_NAME).get(TIMESTAMP_KEY_NAME);
+        return timestampField == null ? -1L : (long) timestampField.defaultValue;
     }
 }

@@ -48,20 +48,20 @@ object OffsetCommitRequest extends Logging {
       if (versionId >= 1)
         buffer.getInt
       else
-        org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID
+        org.apache.kafka.common.requests.OffsetCommitRequest.getDefaultGenerationId
 
     val consumerId: String =
       if (versionId >= 1)
         readShortString(buffer)
       else
-        org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_CONSUMER_ID
+        org.apache.kafka.common.requests.OffsetCommitRequest.getDefaultConsumerId
 
     // version 2 specific fields
     val retentionMs: Long =
       if (versionId >= 2)
         buffer.getLong
       else
-        org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME
+        org.apache.kafka.common.requests.OffsetCommitRequest.getDefaultRetentionId
 
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
@@ -92,9 +92,9 @@ case class OffsetCommitRequest(groupId: String,
                                versionId: Short = OffsetCommitRequest.CurrentVersion,
                                correlationId: Int = 0,
                                clientId: String = OffsetCommitRequest.DefaultClientId,
-                               groupGenerationId: Int = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                               consumerId: String =  org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_CONSUMER_ID,
-                               retentionMs: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME)
+                               groupGenerationId: Int = org.apache.kafka.common.requests.OffsetCommitRequest.getDefaultGenerationId,
+                               consumerId: String =  org.apache.kafka.common.requests.OffsetCommitRequest.getDefaultConsumerId,
+                               retentionMs: Long = org.apache.kafka.common.requests.OffsetCommitRequest.getDefaultRetentionId)
     extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey)) {
 
   assert(versionId == 0 || versionId == 1 || versionId == 2,
