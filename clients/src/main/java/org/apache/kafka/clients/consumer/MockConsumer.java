@@ -26,8 +26,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.concurrent.CountDownLatch;
@@ -52,6 +54,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Map<TopicPartition, Long> endOffsets;
 
     private AtomicReference<CountDownLatch> pollLatch;
+    private Queue<Runnable> pollTasks;
     private KafkaException exception;
 
     private AtomicBoolean wakeup;
@@ -65,6 +68,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
         this.pollLatch = new AtomicReference<>();
+        this.pollTasks = new LinkedList<>();
         this.exception = null;
         this.wakeup = new AtomicBoolean(false);
     }
@@ -134,6 +138,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             synchronized (pollLatchCopy) {
                 // Will block until caller of waitUntilPollThen() finishes their callback.
             }
+        } else {
+            // Only run a scheduled task if we didn't just finish executing a waitForPollThen so we don't immediately
+            // execute the first scheduled task until the *next* poll
+            Runnable task = pollTasks.poll();
+            if (task != null)
+                task.run();
         }
 
         if (wakeup.get()) {
@@ -336,6 +346,17 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (task != null)
                 task.run();
         }
+    }
+
+    /**
+     * Schedule a task to be executed during a poll(). This is not synchronized, so it must be executed in the same
+     * thread as {@link #poll(long)} calls or in the body of a {@link #waitForPollThen(Runnable, long)} callback. One
+     * enqueued task will be executed per {@link #poll(long)} invocation. You can use this repeatedly to mock out
+     * multiple responses to poll invocations when you cannot guarantee synchronization.
+     * @param task the task to be executed
+     */
+    public void schedulePollTask(Runnable task) {
+        pollTasks.add(task);
     }
 
     public Set<TopicPartition> paused() {
