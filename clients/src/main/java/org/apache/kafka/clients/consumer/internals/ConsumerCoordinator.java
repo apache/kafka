@@ -18,6 +18,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerWakeupException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -157,18 +158,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
     protected void onJoin(int generation,
                           String memberId,
                           String assignmentStrategy,
-                          ByteBuffer assignment) {
+                          ByteBuffer assignmentBuffer) {
         PartitionAssignor assignor = protocolMap.get(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
-        List<TopicPartition> partitions = ConsumerProtocol.deserializeAssignment(assignment);
+        Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
         // set the flag to refresh last committed offsets
         subscriptions.needRefreshCommits();
 
         // update partition assignment
-        subscriptions.changePartitionAssignment(partitions);
+        subscriptions.changePartitionAssignment(assignment.partitions());
+
+        // give the assignor a chance to update internal state based on the received assignment
+        assignor.onAssignment(assignment);
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
@@ -206,12 +210,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
 
         log.debug("Performing {} assignment for subscriptions {}", assignor.name(), subscriptions);
 
-        Map<String, List<TopicPartition>> assignment = assignor.assign(metadata.fetch(), subscriptions);
+        Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
 
         log.debug("Finished assignment: {}", assignment);
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
-        for (Map.Entry<String, List<TopicPartition>> assignmentEntry : assignment.entrySet()) {
+        for (Map.Entry<String, Assignment> assignmentEntry : assignment.entrySet()) {
             ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignmentEntry.getValue());
             groupAssignment.put(assignmentEntry.getKey(), buffer);
         }

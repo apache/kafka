@@ -75,10 +75,10 @@ public class ConsumerProtocolTest {
 
     @Test
     public void serializeDeserializeAssignment() {
-        List<TopicPartition> assignment = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 2));
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignment);
-        List<TopicPartition> parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
-        assertEquals(toSet(assignment), toSet(parsedAssignment));
+        List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 2));
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
+        PartitionAssignor.Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
+        assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
     }
 
     @Test
@@ -88,6 +88,7 @@ public class ConsumerProtocolTest {
 
         Schema assignmentSchemaV100 = new Schema(
                 new Field(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(ConsumerProtocol.TOPIC_ASSIGNMENT_V0)),
+                new Field(ConsumerProtocol.USER_DATA_KEY_NAME, Type.BYTES),
                 new Field("foo", Type.STRING));
 
         Struct assignmentV100 = new Struct(assignmentSchemaV100);
@@ -95,6 +96,7 @@ public class ConsumerProtocolTest {
                 new Object[]{new Struct(ConsumerProtocol.TOPIC_ASSIGNMENT_V0)
                         .set(ConsumerProtocol.TOPIC_KEY_NAME, "foo")
                         .set(ConsumerProtocol.PARTITIONS_KEY_NAME, new Object[]{1})});
+        assignmentV100.set(ConsumerProtocol.USER_DATA_KEY_NAME, ByteBuffer.wrap(new byte[0]));
         assignmentV100.set("foo", "bar");
 
         Struct headerV100 = new Struct(ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_SCHEMA);
@@ -106,8 +108,8 @@ public class ConsumerProtocolTest {
 
         buffer.flip();
 
-        List<TopicPartition> partitions = ConsumerProtocol.deserializeAssignment(buffer);
-        assertEquals(toSet(Arrays.asList(new TopicPartition("foo", 1))), toSet(partitions));
+        PartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
+        assertEquals(toSet(Arrays.asList(new TopicPartition("foo", 1))), toSet(assignment.partitions()));
     }
 
     private static <T> Set<T> toSet(Collection<T> collection) {

@@ -690,7 +690,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private Struct syncGroupResponse(List<TopicPartition> partitions, short error) {
-        ByteBuffer buf = ConsumerProtocol.serializeAssignment(partitions);
+        ByteBuffer buf = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
         return new SyncGroupResponse(error, buf).toStruct();
     }
 

@@ -74,7 +74,8 @@ public class ConsumerProtocol {
             new Field(TOPIC_KEY_NAME, Type.STRING),
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
     public static final Schema ASSIGNMENT_V0 = new Schema(
-            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)));
+            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
+            new Field(USER_DATA_KEY_NAME, Type.BYTES));
 
     public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
         Struct struct = new Struct(SUBSCRIPTION_V0);
@@ -99,11 +100,12 @@ public class ConsumerProtocol {
         return new PartitionAssignor.Subscription(topics, userData);
     }
 
-    public static List<TopicPartition> deserializeAssignment(ByteBuffer buffer) {
+    public static PartitionAssignor.Assignment deserializeAssignment(ByteBuffer buffer) {
         Struct header = (Struct) CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
         checkVersionCompatibility(version);
         Struct struct = (Struct) ASSIGNMENT_V0.read(buffer);
+        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<TopicPartition> partitions = new ArrayList<>();
         for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
             Struct assignment = (Struct) structObj;
@@ -113,13 +115,14 @@ public class ConsumerProtocol {
                 partitions.add(new TopicPartition(topic, partition));
             }
         }
-        return partitions;
+        return new PartitionAssignor.Assignment(partitions, userData);
     }
 
-    public static ByteBuffer serializeAssignment(List<TopicPartition> partitions) {
+    public static ByteBuffer serializeAssignment(PartitionAssignor.Assignment assignment) {
         Struct struct = new Struct(ASSIGNMENT_V0);
+        struct.set(USER_DATA_KEY_NAME, assignment.userData());
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : asMap(partitions).entrySet()) {
+        for (Map.Entry<String, List<Integer>> topicEntry : asMap(assignment.partitions()).entrySet()) {
             Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
             topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
             topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());

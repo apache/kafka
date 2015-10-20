@@ -46,7 +46,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
-    public Map<String, List<TopicPartition>> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+    public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, List<String>> topicSubscriptions = new HashMap<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
@@ -64,7 +64,18 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);
         }
 
-        return assign(partitionsPerTopic, topicSubscriptions);
+        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
+
+        // this class has maintains no user data, so just wrap the results
+        Map<String, Assignment> assignments = new HashMap<>();
+        for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
+            assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
+        return assignments;
+    }
+
+    @Override
+    public void onAssignment(Assignment assignment) {
+        // this assignor maintains no internal state, so nothing to do
     }
 
     protected static <K, V> void put(Map<K, List<V>> map, K key, V value) {

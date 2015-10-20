@@ -52,7 +52,15 @@ public interface PartitionAssignor {
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */
-    Map<String, List<TopicPartition>> assign(Cluster metadata, Map<String, Subscription> subscriptions);
+    Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions);
+
+
+    /**
+     * Callback which is invoked when a group member receives its assignment from the leader.
+     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
+     */
+    void onAssignment(Assignment assignment);
+
 
     /**
      * Unique name for this assignor (e.g. "range" or "roundrobin")
@@ -60,9 +68,6 @@ public interface PartitionAssignor {
      */
     String name();
 
-    /**
-     * Minimum interface required for subscription implementations.
-     */
     class Subscription {
         private final List<String> topics;
         private final ByteBuffer userData;
@@ -73,12 +78,34 @@ public interface PartitionAssignor {
         }
 
         public Subscription(List<String> topics) {
-            this.topics = topics;
-            this.userData = ByteBuffer.wrap(new byte[0]);
+            this(topics, ByteBuffer.wrap(new byte[0]));
         }
 
         public List<String> topics() {
             return topics;
+        }
+
+        public ByteBuffer userData() {
+            return userData;
+        }
+
+    }
+
+    class Assignment {
+        private final List<TopicPartition> partitions;
+        private final ByteBuffer userData;
+
+        public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
+            this.partitions = partitions;
+            this.userData = userData;
+        }
+
+        public Assignment(List<TopicPartition> partitions) {
+            this(partitions, ByteBuffer.wrap(new byte[0]));
+        }
+
+        public List<TopicPartition> partitions() {
+            return partitions;
         }
 
         public ByteBuffer userData() {
