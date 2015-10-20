@@ -22,7 +22,8 @@ import collection.mutable.Buffer
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
-import kafka.utils.{Logging, ZkUtils, ReplicationUtils}
+import kafka.utils.{Logging, ReplicationUtils}
+import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.controller.Callbacks.CallbackBuilder
@@ -43,7 +44,7 @@ import kafka.utils.CoreUtils._
 class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val controllerContext = controller.controllerContext
   private val controllerId = controller.config.brokerId
-  private val zkClient = controllerContext.zkClient
+  private val zkUtils = controllerContext.zkUtils
   private val partitionState: mutable.Map[TopicAndPartition, PartitionState] = mutable.Map.empty
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
   private val hasStarted = new AtomicBoolean(false)
@@ -83,7 +84,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     deregisterTopicChangeListener()
     addPartitionsListener.foreach {
       case (topic, listener) =>
-        zkClient.unsubscribeDataChanges(ZkUtils.getTopicPath(topic), listener)
+        zkUtils.zkClient.unsubscribeDataChanges(getTopicPath(topic), listener)
     }
     addPartitionsListener.clear()
     if(controller.config.deleteTopicEnable)
@@ -289,9 +290,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           controller.epoch)
         debug("Initializing leader and isr for partition %s to %s".format(topicAndPartition, leaderIsrAndControllerEpoch))
         try {
-          ZkUtils.createPersistentPath(controllerContext.zkClient,
-            ZkUtils.getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
-            ZkUtils.leaderAndIsrZkData(leaderIsrAndControllerEpoch.leaderAndIsr, controller.epoch))
+          zkUtils.createPersistentPath(
+            getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
+            zkUtils.leaderAndIsrZkData(leaderIsrAndControllerEpoch.leaderAndIsr, controller.epoch))
           // NOTE: the above write can fail only if the current controller lost its zk session and the new controller
           // took over and initialized this partition. This can happen if the current controller went into a long
           // GC pause
@@ -301,7 +302,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         } catch {
           case e: ZkNodeExistsException =>
             // read the controller epoch
-            val leaderIsrAndEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkClient, topicAndPartition.topic,
+            val leaderIsrAndEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topicAndPartition.topic,
               topicAndPartition.partition).get
             val failMsg = ("encountered error while changing partition %s's state from New to Online since LeaderAndIsr path already " +
                            "exists with value %s and controller epoch %d")
@@ -342,7 +343,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         }
         // elect new leader or throw exception
         val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
-        val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topic, partition,
+        val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
           leaderAndIsr, controller.epoch, currentLeaderAndIsr.zkVersion)
         newLeaderAndIsr = leaderAndIsr
         newLeaderAndIsr.zkVersion = newVersion
@@ -370,34 +371,34 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   private def registerTopicChangeListener() = {
-    zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicChangeListener)
+    zkUtils.zkClient.subscribeChildChanges(BrokerTopicsPath, topicChangeListener)
   }
 
   private def deregisterTopicChangeListener() = {
-    zkClient.unsubscribeChildChanges(ZkUtils.BrokerTopicsPath, topicChangeListener)
+    zkUtils.zkClient.unsubscribeChildChanges(BrokerTopicsPath, topicChangeListener)
   }
 
   def registerPartitionChangeListener(topic: String) = {
     addPartitionsListener.put(topic, new AddPartitionsListener(topic))
-    zkClient.subscribeDataChanges(ZkUtils.getTopicPath(topic), addPartitionsListener(topic))
+    zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), addPartitionsListener(topic))
   }
 
   def deregisterPartitionChangeListener(topic: String) = {
-    zkClient.unsubscribeDataChanges(ZkUtils.getTopicPath(topic), addPartitionsListener(topic))
+    zkUtils.zkClient.unsubscribeDataChanges(getTopicPath(topic), addPartitionsListener(topic))
     addPartitionsListener.remove(topic)
   }
 
   private def registerDeleteTopicListener() = {
-    zkClient.subscribeChildChanges(ZkUtils.DeleteTopicsPath, deleteTopicsListener)
+    zkUtils.zkClient.subscribeChildChanges(DeleteTopicsPath, deleteTopicsListener)
   }
 
   private def deregisterDeleteTopicListener() = {
-    zkClient.unsubscribeChildChanges(ZkUtils.DeleteTopicsPath, deleteTopicsListener)
+    zkUtils.zkClient.unsubscribeChildChanges(DeleteTopicsPath, deleteTopicsListener)
   }
 
   private def getLeaderIsrAndEpochOrThrowException(topic: String, partition: Int): LeaderIsrAndControllerEpoch = {
     val topicAndPartition = TopicAndPartition(topic, partition)
-    ReplicationUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partition) match {
+    ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topic, partition) match {
       case Some(currentLeaderIsrAndEpoch) => currentLeaderIsrAndEpoch
       case None =>
         val failMsg = "LeaderAndIsr information doesn't exist for partition %s in %s state"
@@ -426,7 +427,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             val deletedTopics = controllerContext.allTopics -- currentChildren
             controllerContext.allTopics = currentChildren
 
-            val addedPartitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, newTopics.toSeq)
+            val addedPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(newTopics.toSeq)
             controllerContext.partitionReplicaAssignment = controllerContext.partitionReplicaAssignment.filter(p =>
               !deletedTopics.contains(p._1.topic))
             controllerContext.partitionReplicaAssignment.++=(addedPartitionReplicaAssignment)
@@ -449,7 +450,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    */
   class DeleteTopicsListener() extends IZkChildListener with Logging {
     this.logIdent = "[DeleteTopicsListener on " + controller.config.brokerId + "]: "
-    val zkClient = controllerContext.zkClient
+    val zkUtils = controllerContext.zkUtils
 
     /**
      * Invoked when a topic is being deleted
@@ -466,7 +467,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         val nonExistentTopics = topicsToBeDeleted.filter(t => !controllerContext.allTopics.contains(t))
         if(nonExistentTopics.size > 0) {
           warn("Ignoring request to delete non-existing topics " + nonExistentTopics.mkString(","))
-          nonExistentTopics.foreach(topic => ZkUtils.deletePathRecursive(zkClient, ZkUtils.getDeleteTopicPath(topic)))
+          nonExistentTopics.foreach(topic => zkUtils.deletePathRecursive(getDeleteTopicPath(topic)))
         }
         topicsToBeDeleted --= nonExistentTopics
         if(topicsToBeDeleted.size > 0) {
@@ -505,7 +506,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       inLock(controllerContext.controllerLock) {
         try {
           info("Add Partition triggered " + data.toString + " for path " + dataPath)
-          val partitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, List(topic))
+          val partitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic))
           val partitionsToBeAdded = partitionReplicaAssignment.filter(p =>
             !controllerContext.partitionReplicaAssignment.contains(p._1))
           if(controller.deleteTopicManager.isTopicQueuedUpForDeletion(topic))

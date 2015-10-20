@@ -51,6 +51,7 @@ class ConsumerPerformanceService(PerformanceService):
     PERSISTENT_ROOT = "/mnt/consumer_performance"
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "consumer_performance.stdout")
+    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "consumer_performance.stderr")
     LOG_FILE = os.path.join(LOG_DIR, "consumer_performance.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "consumer.properties")
@@ -59,7 +60,9 @@ class ConsumerPerformanceService(PerformanceService):
         "consumer_performance_output": {
             "path": STDOUT_CAPTURE,
             "collect_default": True},
-
+        "consumer_performance_stderr": {
+            "path": STDERR_CAPTURE,
+            "collect_default": True},
         "consumer_performance_log": {
             "path": LOG_FILE,
             "collect_default": True}
@@ -129,7 +132,8 @@ class ConsumerPerformanceService(PerformanceService):
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
 
-        cmd += " | tee %s" % ConsumerPerformanceService.STDOUT_CAPTURE
+        cmd += " 2>> %(stderr)s | tee -a %(stdout)s" % {'stdout': ConsumerPerformanceService.STDOUT_CAPTURE,
+                                                        'stderr': ConsumerPerformanceService.STDERR_CAPTURE}
         return cmd
 
     def _worker(self, idx, node):

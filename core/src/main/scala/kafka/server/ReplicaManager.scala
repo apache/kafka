@@ -99,7 +99,7 @@ class ReplicaManager(val config: KafkaConfig,
                      metrics: Metrics,
                      time: Time,
                      jTime: JTime,
-                     val zkClient: ZkClient,
+                     val zkUtils: ZkUtils,
                      scheduler: Scheduler,
                      val logManager: LogManager,
                      val isShuttingDown: AtomicBoolean,
@@ -163,7 +163,7 @@ class ReplicaManager(val config: KafkaConfig,
   def maybePropagateIsrChanges() {
     isrChangeSet synchronized {
       if (isrChangeSet.nonEmpty) {
-        ReplicationUtils.propagateIsrChanges(zkClient, isrChangeSet)
+        ReplicationUtils.propagateIsrChanges(zkUtils, isrChangeSet)
         isrChangeSet.clear()
       }
     }

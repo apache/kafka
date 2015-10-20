@@ -57,7 +57,7 @@ abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
 
     // create a topic and partition and await leadership
     for (topic <- List(topic1,topic2)) {
-      createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
+      createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     }
 
     // send test messages to leader

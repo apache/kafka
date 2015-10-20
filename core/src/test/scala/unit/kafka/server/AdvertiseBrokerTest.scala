@@ -49,7 +49,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
 
   @Test
   def testBrokerAdvertiseToZK {
-    val brokerInfo = ZkUtils.getBrokerInfo(zkClient, brokerId)
+    val brokerInfo = zkUtils.getBrokerInfo(brokerId)
     val endpoint = brokerInfo.get.endPoints.get(SecurityProtocol.PLAINTEXT).get
     assertEquals(advertisedHostName, endpoint.host)
     assertEquals(advertisedPort, endpoint.port)

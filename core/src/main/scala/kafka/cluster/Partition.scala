@@ -42,7 +42,7 @@ class Partition(val topic: String,
                 replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
   private val localBrokerId = replicaManager.config.brokerId
   private val logManager = replicaManager.logManager
-  private val zkClient = replicaManager.zkClient
+  private val zkUtils = replicaManager.zkUtils
   private val assignedReplicaMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock()
@@ -87,7 +87,7 @@ class Partition(val topic: String,
       case None =>
         if (isReplicaLocal(replicaId)) {
           val config = LogConfig.fromProps(logManager.defaultConfig.originals,
-                                           AdminUtils.fetchEntityConfig(zkClient, ConfigType.Topic, topic))
+                                           AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
           val log = logManager.createLog(TopicAndPartition(topic, partitionId), config)
           val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
           val offsetMap = checkpoint.read
@@ -426,7 +426,7 @@ class Partition(val topic: String,
 
   private def updateIsr(newIsr: Set[Replica]) {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(r => r.brokerId).toList, zkVersion)
-    val (updateSucceeded,newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topic, partitionId,
+    val (updateSucceeded,newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partitionId,
       newLeaderAndIsr, controllerEpoch, zkVersion)
 
     if(updateSucceeded) {
