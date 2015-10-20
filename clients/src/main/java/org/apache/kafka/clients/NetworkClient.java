@@ -56,10 +56,10 @@ public class NetworkClient implements KafkaClient {
     private final MetadataUpdater metadataUpdater;
     
     /* a list of nodes we've connected to in the past */
-    private List<Integer> nodesEverSeen;
-    private Map<Integer, Node> nodesEverSeenById;
+    private final List<Integer> nodesEverSeen;
+    private final Map<Integer, Node> nodesEverSeenById;
     /* random offset into nodesEverSeen list */
-    private Random randOffset;
+    private final Random randOffset;
     
     /* the state of each node's connection */
     private final ClusterConnectionStates connectionStates;
@@ -142,11 +142,12 @@ public class NetworkClient implements KafkaClient {
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
-        this.nodeIndexOffset = new Random().nextInt(Integer.MAX_VALUE);
+        this.randOffset = new Random();
+        this.nodeIndexOffset = this.randOffset.nextInt(Integer.MAX_VALUE);
         this.requestTimeoutMs = requestTimeoutMs;
         this.nodesEverSeen = new ArrayList<>();
         this.nodesEverSeenById = new HashMap<>();
-        this.randOffset = new Random();
+        
         this.time = time;
     }
 
