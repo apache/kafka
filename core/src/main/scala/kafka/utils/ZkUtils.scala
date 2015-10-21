@@ -91,7 +91,8 @@ object ZkUtils {
   }
   
   def DefaultAcls(isSecure: Boolean): java.util.List[ACL] = if (isSecure) {
-    val list = ZooDefs.Ids.CREATOR_ALL_ACL
+    val list = new java.util.ArrayList[ACL]
+    list.addAll(ZooDefs.Ids.CREATOR_ALL_ACL)
     list.addAll(ZooDefs.Ids.READ_ACL_UNSAFE)
     list
   } else {
@@ -1076,6 +1077,7 @@ class ZKCheckedEphemeral(path: String,
     val prefix = path.substring(0, index)
     val suffix = path.substring(index, path.length)
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
+    info("Is secure: " + isSecure)
     createRecursive(prefix, suffix)
     val result = waitUntilResolved()
     info("Result of znode creation is: %s".format(result))

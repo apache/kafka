@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-package unit.kafka.security.auth
+package kafka.security.auth
 
+import kafka.admin.ZkSecurityMigrator
 import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.KafkaException;
@@ -42,6 +43,8 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   @After
   override def tearDown() {
     super.tearDown()
+    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+    System.clearProperty(authProvider)
   }
 
   /**
@@ -76,22 +79,86 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       zkUtils.makeSurePersistentPathExists(path)
       if(!path.equals(ZkUtils.ConsumersPath)) {
         var stat: Stat = new Stat;
-        val aclListEntry = zkUtils.zkConnection.getZookeeper.getACL(path, stat)
-        assertTrue(aclListEntry.size == 2)
-        for (acl: ACL <- aclListEntry.asScala) {
-          info("Perms " + acl.getPerms + " and id" + acl.getId)
-          acl.getPerms match {
-            case 1 => {
-              assertTrue(acl.getId.getScheme.equals("world"))
-            }
-            case 31 => {
-              assertTrue(acl.getId.getScheme.equals("sasl"))
-            }
-            case _: Int => {
-             fail("Unrecognized ID scheme %d".format(acl.getPerms))
-            }
-          }
+        val aclList = zkUtils.zkConnection.getZookeeper.getACL(path, stat)
+        assertTrue(aclList.size == 2)
+        for (acl: ACL <- aclList.asScala) {
+          assertTrue(isAclSecure(acl))
         }
+      }
+    }
+    // Test that can create: createEphemeralPathExpectConflict
+    zkUtils.createEphemeralPathExpectConflict("/a", "")
+    verify("/a")
+    // Test that can create: createPersistentPath
+    zkUtils.createPersistentPath("/b")
+    verify("/b")
+    // Test that can create: createSequentialPersistentPath
+    val seqPath = zkUtils.createSequentialPersistentPath("/c", "")
+    verify(seqPath)
+    // Test that can update: updateEphemeralPath
+    zkUtils.updateEphemeralPath("/a", "updated")
+    val valueA: String = zkUtils.zkClient.readData("/a")
+    assertTrue(valueA.equals("updated"))
+    // Test that can update: updatePersistentPath
+    zkUtils.updatePersistentPath("/b", "updated")
+    val valueB: String = zkUtils.zkClient.readData("/b")
+    assertTrue(valueB.equals("updated"))
+
+    info("Leaving testZkUtils")
+  }
+
+  @Test
+  def testZkMigrationTool() {
+    assertTrue(zkUtils.isSecure)
+    info("zkConnect string: %s".format(zkConnect))
+    val unsecureZkUtils = ZkUtils(zkConnect, 30000, 30000, false)
+    for (path <- zkUtils.persistentZkPaths) {
+      unsecureZkUtils.makeSurePersistentPathExists(path)
+      // Create a child for each znode to exercise the recurrent
+      // traversal of the data tree
+      unsecureZkUtils.createPersistentPath(path + "/fpjwashere", "")
+    }
+    ZkSecurityMigrator.run(Array("--connect=" + zkConnect)) 
+    for (path <- zkUtils.persistentZkPaths) {
+      zkUtils.makeSurePersistentPathExists(path)
+      if(!path.equals(ZkUtils.ConsumersPath)) {
+        var stat: Stat = new Stat
+        val listParent = zkUtils.zkConnection.getZookeeper.getACL(path, stat)
+        assertTrue(listParent.size == 2)
+        for (acl: ACL <- listParent.asScala) {
+          assertTrue(path, isAclSecure(acl))
+        }
+
+        val listChild = zkUtils.zkConnection.getZookeeper.getACL(path + "/fpjwashere", stat)
+        assertTrue(listChild.size == 2)
+        for (acl: ACL <- listChild.asScala) {
+          assertTrue(path + "/fpjwashere", isAclSecure(acl))
+        }
+      }
+    }
+  }
+
+  def verify(path: String): Boolean = {
+    var stat: Stat = new Stat;
+    val list = zkUtils.zkConnection.getZookeeper.getACL(path, stat)
+    var result: Boolean = true
+    for (acl: ACL <- list.asScala) {
+           result = result && isAclSecure(acl)
+    }
+    result
+  }
+
+  def isAclSecure(acl: ACL): Boolean = {
+    info("Perms " + acl.getPerms + " and id" + acl.getId)
+    acl.getPerms match {
+      case 1 => {
+        acl.getId.getScheme.equals("world")
+      }
+      case 31 => {
+        acl.getId.getScheme.equals("sasl")
+      }
+      case _: Int => {
+        false
       }
     }
   }

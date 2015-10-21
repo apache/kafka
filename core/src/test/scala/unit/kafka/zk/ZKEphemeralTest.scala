@@ -19,6 +19,7 @@ package kafka.zk
 
 import java.util.ArrayList
 import java.util.Collection
+import javax.security.auth.login.Configuration
 
 import kafka.consumer.ConsumerConfig
 import kafka.utils.ZkUtils
@@ -59,15 +60,17 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, filePath)
       System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
       if(!JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM))) {
-        fail("Not enabled")
-      }
+        fail("Secure access not enabled")
+     }
     }
     super.setUp
   }
   
   @After
   override def tearDown() {
-    super.tearDown()
+    super.tearDown
+    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+    System.clearProperty(authProvider)
   }
   
   @Test
@@ -99,19 +102,12 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
    */
   @Test
   def testZkWatchedEphemeral = {
-    val path = "/zwe-test"
+    var path = "/zwe-test"
+    testCreation(path)
+    path = "/zwe-test-parent/zwe-test"
     testCreation(path)
   }
  
-  /**
-   * Tests recursive creation
-   */
-  @Test
-  def testZkWatchedEphemeralRecursive = {
-    val path = "/zwe-test-parent/zwe-test"
-    testCreation(path)
-  }
-
   private def testCreation(path: String) {
     val zk = zkUtils.zkConnection.getZookeeper
     val zwe = new ZKCheckedEphemeral(path, "", zk, JaasUtils.isZkSecurityEnabled(confFile))
