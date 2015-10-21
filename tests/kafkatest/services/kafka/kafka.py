@@ -126,7 +126,7 @@ class KafkaService(JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "ps ax | grep -i kafka.properties | grep java | grep -v grep | awk '{print $1}'"
+            cmd = "ps ax | grep -i %s | grep java | grep -v grep | awk '{print $1}'" % kafka_dir(node)
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (subprocess.CalledProcessError, ValueError) as e:

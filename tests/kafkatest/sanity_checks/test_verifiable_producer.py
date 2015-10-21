@@ -59,7 +59,9 @@ class TestVerifiableProducer(Test):
 
         # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring
         # that this check works with TRUNK
-        assert is_version(node, node.version.vstring, "VerifiableProducer")
+        # When running VerifiableProducer 0.8.X, both trunk version and 0.8.X should show up because of the way
+        # verifiable producer pulls in some trunk directories into its classpath
+        assert is_version(node, [node.version.vstring, TRUNK.vstring], "VerifiableProducer")
 
         self.producer.wait()
         num_produced = self.producer.num_acked

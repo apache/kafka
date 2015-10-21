@@ -23,16 +23,20 @@ def kafkatest_version():
 
 
 def _kafka_jar_versions(proc_string):
-    """Return all kafka versions explicitly in the process classpath"""
-    versions = re.findall("kafka_[0-9\.]+-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string)
+    """Use a rough heuristic to find all kafka versions explicitly in the process classpath"""
+    versions = re.findall("kafka-[a-z]+-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string)
+    versions.extend(re.findall("kafka-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string))
+
     return set(versions)
 
 
-def is_version(node, version, proc_grep_string="kafka.properties"):
+def is_version(node, version_list, proc_grep_string="kafka"):
     """Heuristic to check that only the specified version appears in the classpath of the process
     A useful tool to aid in checking that service version apis are working correctly.
     """
     lines = [l for l in node.account.ssh_capture("ps ax | grep %s | grep -v grep" % proc_grep_string)]
     assert len(lines) == 1
 
-    return _kafka_jar_versions(lines[0]) == {str(version)}
+    versions = _kafka_jar_versions(lines[0])
+    return versions == {str(v) for v in version_list}
+
