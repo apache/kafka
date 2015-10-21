@@ -38,7 +38,6 @@ class EmbeddedZookeeper() {
   val port = zookeeper.getClientPort()
 
   def shutdown() {
-    info("Shutting down")
     CoreUtils.swallow(zookeeper.shutdown())
     CoreUtils.swallow(factory.shutdown())
     CoreUtils.rm(logDir)

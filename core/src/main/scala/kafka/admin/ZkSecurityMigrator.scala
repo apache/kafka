@@ -204,8 +204,4 @@ object ZkSecurityMigrator extends Logging {
           e.printStackTrace()
     }
   }
-  
-  def main(args: Array[String]) {
-      run(args)
-  }
 }
