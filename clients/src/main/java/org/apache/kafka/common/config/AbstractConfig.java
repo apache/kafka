@@ -109,7 +109,7 @@ public class AbstractConfig {
         Set<String> unusedKeys = this.unused();
         Properties unusedProps = new Properties();
         for (String key : unusedKeys)
-            unusedProps.put(key, this.originals().get(key));
+            unusedProps.put(key, this.originals.get(key));
         return unusedProps;
     }
 
