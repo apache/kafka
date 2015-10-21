@@ -45,15 +45,11 @@ public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
     // Copycat format - any types should be accepted here
     private static final Map<String, String> OFFSET_KEY = Collections.singletonMap("key", "key");
-    private static final List<Object> OFFSET_KEY_WRAPPED = Arrays.asList(NAMESPACE, OFFSET_KEY);
     private static final Map<String, Integer> OFFSET_VALUE = Collections.singletonMap("key", 12);
 
     // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
-    private static final Map<ByteBuffer, ByteBuffer> OFFSETS_SERIALIZED
-            = Collections.singletonMap(ByteBuffer.wrap(OFFSET_KEY_SERIALIZED),
-            ByteBuffer.wrap(OFFSET_VALUE_SERIALIZED));
 
     @Mock private OffsetBackingStore store;
     @Mock private Converter keyConverter;
@@ -79,11 +75,46 @@ public class OffsetStorageWriterTest {
     public void testWriteFlush() throws Exception {
         @SuppressWarnings("unchecked")
         Callback<Void> callback = PowerMock.createMock(Callback.class);
-        expectStore(callback, false);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, false, null);
 
         PowerMock.replayAll();
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
+
+        assertTrue(writer.beginFlush());
+        writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
+
+        PowerMock.verifyAll();
+    }
+
+    // It should be possible to set offset values to null
+    @Test
+    public void testWriteNullValueFlush() throws Exception {
+        @SuppressWarnings("unchecked")
+        Callback<Void> callback = PowerMock.createMock(Callback.class);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, callback, false, null);
+
+        PowerMock.replayAll();
+
+        writer.offset(OFFSET_KEY, null);
+
+        assertTrue(writer.beginFlush());
+        writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
+
+        PowerMock.verifyAll();
+    }
+
+    // It should be possible to use null keys. These aren't actually stored as null since the key is wrapped to include
+    // info about the namespace (connector)
+    @Test
+    public void testWriteNullKeyFlush() throws Exception {
+        @SuppressWarnings("unchecked")
+        Callback<Void> callback = PowerMock.createMock(Callback.class);
+        expectStore(null, null, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, false, null);
+
+        PowerMock.replayAll();
+
+        writer.offset(null, OFFSET_VALUE);
 
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
@@ -112,9 +143,9 @@ public class OffsetStorageWriterTest {
         @SuppressWarnings("unchecked")
         final Callback<Void> callback = PowerMock.createMock(Callback.class);
         // First time the write fails
-        expectStore(callback, true);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, true, null);
         // Second time it succeeds
-        expectStore(callback, false);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, false, null);
         // Third time it has no data to flush so we won't get past beginFlush()
 
         PowerMock.replayAll();
@@ -135,7 +166,7 @@ public class OffsetStorageWriterTest {
         final Callback<Void> callback = PowerMock.createMock(Callback.class);
         // Trigger the send, but don't invoke the callback so we'll still be mid-flush
         CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
-        expectStore(null, false, allowStoreCompleteCountdown);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, null, false, allowStoreCompleteCountdown);
 
         PowerMock.replayAll();
 
@@ -165,7 +196,7 @@ public class OffsetStorageWriterTest {
         CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
         // In this test, the write should be cancelled so the callback will not be invoked and is not
         // passed to the expectStore call
-        expectStore(null, false, allowStoreCompleteCountdown);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, null, false, allowStoreCompleteCountdown);
 
         PowerMock.replayAll();
 
@@ -180,13 +211,13 @@ public class OffsetStorageWriterTest {
         PowerMock.verifyAll();
     }
 
-    private void expectStore(final Callback<Void> callback, final boolean fail) {
-        expectStore(callback, fail, null);
-    }
-
     /**
      * Expect a request to store data to the underlying OffsetBackingStore.
      *
+     * @param key the key for the offset
+     * @param keySerialized serialized version of the key
+     * @param value the value for the offset
+     * @param valueSerialized serialized version of the value
      * @param callback the callback to invoke when completed, or null if the callback isn't
      *                 expected to be invoked
      * @param fail if true, treat
@@ -195,14 +226,20 @@ public class OffsetStorageWriterTest {
      *                          ensure tests complete.
      * @return the captured set of ByteBuffer key-value pairs passed to the storage layer
      */
-    private void expectStore(final Callback<Void> callback,
+    private void expectStore(Map<String, String> key, byte[] keySerialized,
+                             Map<String, Integer> value, byte[] valueSerialized,
+                             final Callback<Void> callback,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
-        EasyMock.expect(keyConverter.fromCopycatData(NAMESPACE, null, OFFSET_KEY_WRAPPED)).andReturn(OFFSET_KEY_SERIALIZED);
-        EasyMock.expect(valueConverter.fromCopycatData(NAMESPACE, null, OFFSET_VALUE)).andReturn(OFFSET_VALUE_SERIALIZED);
+        List<Object> keyWrapped = Arrays.asList(NAMESPACE, key);
+        EasyMock.expect(keyConverter.fromCopycatData(NAMESPACE, null, keyWrapped)).andReturn(keySerialized);
+        EasyMock.expect(valueConverter.fromCopycatData(NAMESPACE, null, value)).andReturn(valueSerialized);
 
         final Capture<Callback<Void>> storeCallback = Capture.newInstance();
-        EasyMock.expect(store.set(EasyMock.eq(OFFSETS_SERIALIZED), EasyMock.capture(storeCallback)))
+        final Map<ByteBuffer, ByteBuffer> offsetsSerialized = Collections.singletonMap(
+                keySerialized == null ? null : ByteBuffer.wrap(keySerialized),
+                valueSerialized == null ? null : ByteBuffer.wrap(valueSerialized));
+        EasyMock.expect(store.set(EasyMock.eq(offsetsSerialized), EasyMock.capture(storeCallback)))
                 .andAnswer(new IAnswer<Future<Void>>() {
                     @Override
                     public Future<Void> answer() throws Throwable {

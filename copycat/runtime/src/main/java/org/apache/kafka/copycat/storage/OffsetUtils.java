@@ -34,6 +34,11 @@ public class OffsetUtils {
     }
 
     public static <K, V> void validateFormat(Map<K, V> offsetData) {
+        // Both keys and values for offsets may be null. For values, this is a useful way to delete offsets or indicate
+        // that there's not usable concept of offsets in your source system.
+        if (offsetData == null)
+            return;
+
         for (Map.Entry<K, V> entry : offsetData.entrySet()) {
             if (!(entry.getKey() instanceof String))
                 throw new DataException("Offsets may only use String keys");
