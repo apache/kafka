@@ -19,7 +19,6 @@ package kafka.server
 
 import java.nio.ByteBuffer
 
-import kafka.api._
 import kafka.admin.AdminUtils
 import kafka.api._
 import kafka.common._
