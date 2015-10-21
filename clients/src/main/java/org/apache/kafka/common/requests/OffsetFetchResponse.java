@@ -41,9 +41,6 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
     private static final String METADATA_KEY_NAME = "metadata";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
-    public static final long INVALID_OFFSET = -1L;
-    public static final String NO_METADATA = "";
-
     /**
      * Possible error code:
      *
@@ -122,5 +119,15 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
 
     public static OffsetFetchResponse parse(ByteBuffer buffer) {
         return new OffsetFetchResponse((Struct) CURRENT_SCHEMA.read(buffer));
+    }
+
+    public static long getInvalidOffset() {
+        return (long) CURRENT_SCHEMA.getNestedSchema(RESPONSES_KEY_NAME).getNestedSchema(PARTITIONS_KEY_NAME)
+                .get(COMMIT_OFFSET_KEY_NAME).defaultValue;
+    }
+
+    public static String getEmptyMetadata() {
+        return (String) CURRENT_SCHEMA.getNestedSchema(RESPONSES_KEY_NAME).getNestedSchema(PARTITIONS_KEY_NAME)
+                .get(METADATA_KEY_NAME).defaultValue;
     }
 }

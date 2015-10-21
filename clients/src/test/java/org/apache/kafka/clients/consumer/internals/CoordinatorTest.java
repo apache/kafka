@@ -383,8 +383,8 @@ public class CoordinatorTest {
             @Override
             public boolean matches(ClientRequest request) {
                 OffsetCommitRequest commitRequest = new OffsetCommitRequest(request.request().body());
-                return commitRequest.consumerId().equals(OffsetCommitRequest.DEFAULT_CONSUMER_ID) &&
-                        commitRequest.generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
+                return commitRequest.consumerId().equals(OffsetCommitRequest.getDefaultConsumerId()) &&
+                        commitRequest.generationId() == OffsetCommitRequest.getDefaultGenerationId();
             }
         }, offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
 

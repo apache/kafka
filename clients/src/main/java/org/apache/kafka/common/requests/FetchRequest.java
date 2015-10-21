@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 public class FetchRequest extends AbstractRequest {
     
-    public static final int CONSUMER_REPLICA_ID = -1;
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.FETCH.id);
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String MAX_WAIT_KEY_NAME = "max_wait_time";
@@ -63,7 +62,7 @@ public class FetchRequest extends AbstractRequest {
      * Create a non-replica fetch request
      */
     public FetchRequest(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
-        this(CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData);
+        this((int) CURRENT_SCHEMA.get(REPLICA_ID_KEY_NAME).defaultValue, maxWait, minBytes, fetchData);
     }
 
     /**
@@ -125,8 +124,8 @@ public class FetchRequest extends AbstractRequest {
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
-                    FetchResponse.INVALID_HIGHWATERMARK,
-                    FetchResponse.EMPTY_RECORD_SET);
+                    FetchResponse.getInvalidHighWatermark(),
+                    FetchResponse.getEmptyRecordSet());
             responseData.put(entry.getKey(), partitionResponse);
         }
 

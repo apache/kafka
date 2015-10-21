@@ -121,7 +121,7 @@ class ConsumerCoordinator(val brokerId: Int,
       // exist we should reject the request
       var group = coordinatorMetadata.getGroup(groupId)
       if (group == null) {
-        if (consumerId != JoinGroupRequest.UNKNOWN_CONSUMER_ID) {
+        if (consumerId != JoinGroupRequest.getDefaultConsumerId) {
           responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
         } else {
           group = coordinatorMetadata.addGroup(groupId, partitionAssignmentStrategy)
@@ -148,7 +148,7 @@ class ConsumerCoordinator(val brokerId: Int,
         responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
       } else if (partitionAssignmentStrategy != group.partitionAssignmentStrategy) {
         responseCallback(Set.empty, consumerId, 0, Errors.INCONSISTENT_PARTITION_ASSIGNMENT_STRATEGY.code)
-      } else if (consumerId != JoinGroupRequest.UNKNOWN_CONSUMER_ID && !group.has(consumerId)) {
+      } else if (consumerId != JoinGroupRequest.getDefaultConsumerId && !group.has(consumerId)) {
         // if the consumer trying to register with a un-recognized id, send the response to let
         // it reset its consumer id and retry
         responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
@@ -161,7 +161,7 @@ class ConsumerCoordinator(val brokerId: Int,
         completeAndScheduleNextHeartbeatExpiration(group, consumer)
         responseCallback(consumer.assignedTopicPartitions, consumerId, group.generationId, Errors.NONE.code)
       } else {
-        val consumer = if (consumerId == JoinGroupRequest.UNKNOWN_CONSUMER_ID) {
+        val consumer = if (consumerId == JoinGroupRequest.getDefaultConsumerId) {
           // if the consumer id is unknown, register this consumer to the group
           val generatedConsumerId = group.generateNextConsumerId
           val consumer = addConsumer(generatedConsumerId, topics, sessionTimeoutMs, group)

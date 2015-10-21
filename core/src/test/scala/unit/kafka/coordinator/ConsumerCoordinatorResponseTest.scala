@@ -71,7 +71,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testJoinGroupWrongCoordinator() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = false)
@@ -82,7 +82,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testJoinGroupUnknownPartitionAssignmentStrategy() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "foo"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = true)
@@ -93,7 +93,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testJoinGroupSessionTimeoutTooSmall() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, ConsumerMinSessionTimeout - 1, isCoordinatorForGroup = true)
@@ -104,7 +104,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testJoinGroupSessionTimeoutTooLarge() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, ConsumerMaxSessionTimeout + 1, isCoordinatorForGroup = true)
@@ -126,7 +126,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testValidJoinGroup() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = true)
@@ -137,8 +137,8 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testJoinGroupInconsistentPartitionAssignmentStrategy() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
-    val otherConsumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
+    val otherConsumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
     val otherPartitionAssignmentStrategy = "roundrobin"
 
@@ -155,7 +155,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testJoinGroupUnknownConsumerExistingGroup() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val otherConsumerId = "consumerId"
     val partitionAssignmentStrategy = "range"
 
@@ -190,7 +190,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testHeartbeatUnknownConsumerExistingGroup() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val otherConsumerId = "consumerId"
     val partitionAssignmentStrategy = "range"
 
@@ -206,7 +206,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testHeartbeatIllegalGeneration() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = true)
@@ -222,7 +222,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testValidHeartbeat() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = true)
@@ -253,8 +253,8 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     val tp = new TopicAndPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
 
-    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_CONSUMER_ID,
-      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp -> offset), true)
+    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.getDefaultConsumerId,
+      OffsetCommitRequest.getDefaultGenerationId, Map(tp -> offset), true)
     assertEquals(Errors.NONE.code, commitOffsetResult(tp))
   }
 
@@ -264,7 +264,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     val partitionAssignmentStrategy = "range"
 
     // First start up a group (with a slightly larger timeout to give us time to heartbeat when the rebalance starts)
-    val joinGroupResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_CONSUMER_ID, partitionAssignmentStrategy,
+    val joinGroupResult = joinGroup(groupId, JoinGroupRequest.getDefaultConsumerId, partitionAssignmentStrategy,
       DefaultSessionTimeout, isCoordinatorForGroup = true)
     val assignedConsumerId = joinGroupResult._2
     val initialGenerationId = joinGroupResult._3
@@ -273,7 +273,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
 
     // Then join with a new consumer to trigger a rebalance
     EasyMock.reset(offsetManager)
-    sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_CONSUMER_ID, partitionAssignmentStrategy,
+    sendJoinGroup(groupId, JoinGroupRequest.getDefaultConsumerId, partitionAssignmentStrategy,
       DefaultSessionTimeout, isCoordinatorForGroup = true)
 
     // We should be in the middle of a rebalance, so the heartbeat should return rebalance in progress
@@ -285,8 +285,8 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testGenerationIdIncrementsOnRebalance() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
-    val otherConsumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
+    val otherConsumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = true)
@@ -306,7 +306,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testLeaveGroupWrongCoordinator() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
 
     val leaveGroupResult = leaveGroup(groupId, consumerId, isCoordinatorForGroup = false)
     assertEquals(Errors.NOT_COORDINATOR_FOR_CONSUMER.code, leaveGroupResult)
@@ -324,7 +324,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testLeaveGroupUnknownConsumerExistingGroup() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val otherConsumerId = "consumerId"
     val partitionAssignmentStrategy = "range"
 
@@ -340,7 +340,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   @Test
   def testValidLeaveGroup() {
     val groupId = "groupId"
-    val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
+    val consumerId = JoinGroupRequest.getDefaultConsumerId
     val partitionAssignmentStrategy = "range"
 
     val joinGroupResult = joinGroup(groupId, consumerId, partitionAssignmentStrategy, DefaultSessionTimeout, isCoordinatorForGroup = true)

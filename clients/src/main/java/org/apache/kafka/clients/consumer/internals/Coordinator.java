@@ -102,8 +102,8 @@ public final class Coordinator implements Closeable {
                        long autoCommitIntervalMs) {
         this.client = client;
         this.time = time;
-        this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
-        this.consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
+        this.generation = OffsetCommitRequest.getDefaultGenerationId();
+        this.consumerId = JoinGroupRequest.getDefaultConsumerId();
         this.groupId = groupId;
         this.consumerCoordinator = null;
         this.subscriptions = subscriptions;
@@ -353,7 +353,7 @@ public final class Coordinator implements Closeable {
                 future.complete(null);
             } else if (errorCode == Errors.UNKNOWN_CONSUMER_ID.code()) {
                 // reset the consumer id and retry immediately
-                Coordinator.this.consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
+                Coordinator.this.consumerId = JoinGroupRequest.getDefaultConsumerId();
                 log.info("Attempt to join group {} failed due to unknown consumer id, resetting and retrying.",
                         groupId);
                 future.raise(Errors.UNKNOWN_CONSUMER_ID);
@@ -453,8 +453,8 @@ public final class Coordinator implements Closeable {
      * Reset the generation/consumerId tracked by this consumer.
      */
     public void resetGeneration() {
-        this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
-        this.consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
+        this.generation = OffsetCommitRequest.getDefaultGenerationId();
+        this.consumerId = JoinGroupRequest.getDefaultConsumerId();
     }
 
     /**
@@ -483,7 +483,7 @@ public final class Coordinator implements Closeable {
         OffsetCommitRequest req = new OffsetCommitRequest(this.groupId,
                 this.generation,
                 this.consumerId,
-                OffsetCommitRequest.DEFAULT_RETENTION_TIME,
+                OffsetCommitRequest.getDefaultRetentionId(),
                 offsetData);
 
         return client.send(consumerCoordinator, ApiKeys.OFFSET_COMMIT, req)
@@ -720,7 +720,7 @@ public final class Coordinator implements Closeable {
                 future.raise(Errors.ILLEGAL_GENERATION);
             } else if (error == Errors.UNKNOWN_CONSUMER_ID.code()) {
                 log.info("Attempt to heart beat failed since consumer id is not valid, reset it and try to re-join group.");
-                consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
+                consumerId = JoinGroupRequest.getDefaultConsumerId();
                 subscriptions.needReassignment();
                 future.raise(Errors.UNKNOWN_CONSUMER_ID);
             } else {

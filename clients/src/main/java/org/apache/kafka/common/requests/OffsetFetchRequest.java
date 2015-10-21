@@ -89,8 +89,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<TopicPartition, OffsetFetchResponse.PartitionData>();
 
         for (TopicPartition partition: partitions) {
-            responseData.put(partition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-                    OffsetFetchResponse.NO_METADATA,
+            responseData.put(partition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.getInvalidOffset(),
+                    OffsetFetchResponse.getEmptyMetadata(),
                     Errors.forException(e).code()));
         }
 

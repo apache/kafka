@@ -46,9 +46,6 @@ public class FetchResponse extends AbstractRequestResponse {
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
-    // Default throttle time
-    private static final int DEFAULT_THROTTLE_TIME = 0;
-
   /**
      * Possible error code:
      *
@@ -61,9 +58,6 @@ public class FetchResponse extends AbstractRequestResponse {
 
     private static final String HIGH_WATERMARK_KEY_NAME = "high_watermark";
     private static final String RECORD_SET_KEY_NAME = "record_set";
-
-    public static final long INVALID_HIGHWATERMARK = -1L;
-    public static final ByteBuffer EMPTY_RECORD_SET = ByteBuffer.allocate(0);
 
     private final Map<TopicPartition, PartitionData> responseData;
     private final int throttleTime;
@@ -88,7 +82,7 @@ public class FetchResponse extends AbstractRequestResponse {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, 0)));
         initCommonFields(responseData);
         this.responseData = responseData;
-        this.throttleTime = DEFAULT_THROTTLE_TIME;
+        this.throttleTime = (int) CURRENT_SCHEMA.get(THROTTLE_TIME_KEY_NAME).defaultValue;
     }
 
   /**
@@ -120,7 +114,8 @@ public class FetchResponse extends AbstractRequestResponse {
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
-        this.throttleTime = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
+        this.throttleTime = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME)
+                : (int) CURRENT_SCHEMA.get(THROTTLE_TIME_KEY_NAME).defaultValue;
     }
 
     private void initCommonFields(Map<TopicPartition, PartitionData> responseData) {
@@ -161,5 +156,15 @@ public class FetchResponse extends AbstractRequestResponse {
 
     public static FetchResponse parse(ByteBuffer buffer, int version) {
         return new FetchResponse((Struct) ProtoUtils.responseSchema(ApiKeys.FETCH.id, version).read(buffer));
+    }
+
+    public static long getInvalidHighWatermark() {
+        return (long) CURRENT_SCHEMA.getNestedSchema(RESPONSES_KEY_NAME).getNestedSchema(PARTITIONS_KEY_NAME)
+                .get(HIGH_WATERMARK_KEY_NAME).defaultValue;
+    }
+
+    public static ByteBuffer getEmptyRecordSet() {
+        return (ByteBuffer) CURRENT_SCHEMA.getNestedSchema(RESPONSES_KEY_NAME).getNestedSchema(PARTITIONS_KEY_NAME)
+                .get(RECORD_SET_KEY_NAME).defaultValue;
     }
 }

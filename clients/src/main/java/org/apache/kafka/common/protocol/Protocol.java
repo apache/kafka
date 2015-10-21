@@ -20,6 +20,8 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 
+import java.nio.ByteBuffer;
+
 import static org.apache.kafka.common.protocol.types.Type.*;
 
 public class Protocol {
@@ -130,6 +132,9 @@ public class Protocol {
                                                                                new Field("offset",
                                                                                          INT64,
                                                                                          "Message offset to be committed."),
+                                                                               new Field("timestamp",
+                                                                                         INT64,
+                                                                                         "Timestamp of the commit", -1L),
                                                                                new Field("metadata",
                                                                                          STRING,
                                                                                          "Any associated metadata the client wants to keep."));
@@ -142,7 +147,7 @@ public class Protocol {
                                                                                          "Message offset to be committed."),
                                                                                new Field("timestamp",
                                                                                          INT64,
-                                                                                         "Timestamp of the commit"),
+                                                                                         "Timestamp of the commit", -1L),
                                                                                new Field("metadata",
                                                                                          STRING,
                                                                                          "Any associated metadata the client wants to keep."));
@@ -203,13 +208,13 @@ public class Protocol {
                                                                                "The consumer group id."),
                                                                      new Field("group_generation_id",
                                                                                INT32,
-                                                                               "The generation of the consumer group."),
+                                                                               "The generation of the consumer group.", -1),
                                                                      new Field("consumer_id",
                                                                                STRING,
-                                                                               "The consumer id assigned by the group coordinator."),
+                                                                               "The consumer id assigned by the group coordinator.", ""),
                                                                      new Field("retention_time",
                                                                                INT64,
-                                                                               "Time period in ms to retain the offset."),
+                                                                               "Time period in ms to retain the offset.", -1L),
                                                                      new Field("topics",
                                                                                new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2),
                                                                                "Topics to commit offsets."));
@@ -265,10 +270,10 @@ public class Protocol {
                                                                                          "Topic partition id."),
                                                                                new Field("offset",
                                                                                          INT64,
-                                                                                         "Last committed message offset."),
+                                                                                         "Last committed message offset.", -1L),
                                                                                new Field("metadata",
                                                                                          STRING,
-                                                                                         "Any associated metadata the client wants to keep."),
+                                                                                         "Any associated metadata the client wants to keep.", ""),
                                                                                new Field("error_code", INT16));
 
     public static final Schema OFFSET_FETCH_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING),
@@ -343,7 +348,7 @@ public class Protocol {
 
     public static final Schema FETCH_REQUEST_V0 = new Schema(new Field("replica_id",
                                                                        INT32,
-                                                                       "Broker id of the follower. For normal consumers, use -1."),
+                                                                       "Broker id of the follower. For normal consumers, use -1.", -1),
                                                              new Field("max_wait_time",
                                                                        INT32,
                                                                        "Maximum time in ms to wait for the response."),
@@ -363,14 +368,21 @@ public class Protocol {
                                                                         new Field("error_code", INT16),
                                                                         new Field("high_watermark",
                                                                                   INT64,
-                                                                                  "Last committed offset."),
-                                                                        new Field("record_set", BYTES));
+                                                                                  "Last committed offset.", -1L),
+                                                                        new Field("record_set",
+                                                                                  BYTES,
+                                                                                  "Partition bytes.", ByteBuffer.allocate(0)));
 
     public static final Schema FETCH_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING),
                                                                     new Field("partition_responses",
                                                                               new ArrayOf(FETCH_RESPONSE_PARTITION_V0)));
 
-    public static final Schema FETCH_RESPONSE_V0 = new Schema(new Field("responses",
+    public static final Schema FETCH_RESPONSE_V0 = new Schema(new Field("throttle_time_ms",
+                                                                        INT32,
+                                                                        "Duration in milliseconds for which the request was throttled" +
+                                                                                " due to quota violation. (Zero if the request did not violate any quota.)",
+                                                                        0),
+                                                              new Field("responses",
                                                                         new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
     public static final Schema FETCH_RESPONSE_V1 = new Schema(new Field("throttle_time_ms",
                                                                         INT32,
@@ -427,7 +439,7 @@ public class Protocol {
                                                                             "An array of topics to subscribe to."),
                                                                   new Field("consumer_id",
                                                                             STRING,
-                                                                            "The assigned consumer id or an empty string for a new consumer."),
+                                                                            "The assigned consumer id or an empty string for a new consumer.", ""),
                                                                   new Field("partition_assignment_strategy",
                                                                             STRING,
                                                                             "The strategy for the coordinator to assign partitions."));
@@ -437,10 +449,10 @@ public class Protocol {
     public static final Schema JOIN_GROUP_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
                                                                    new Field("group_generation_id",
                                                                              INT32,
-                                                                             "The generation of the consumer group."),
+                                                                             "The generation of the consumer group.", -1),
                                                                    new Field("consumer_id",
                                                                              STRING,
-                                                                             "The consumer id assigned by the group coordinator."),
+                                                                             "The consumer id assigned by the group coordinator.", ""),
                                                                    new Field("assigned_partitions",
                                                                              new ArrayOf(JOIN_GROUP_RESPONSE_TOPIC_V0)));
 

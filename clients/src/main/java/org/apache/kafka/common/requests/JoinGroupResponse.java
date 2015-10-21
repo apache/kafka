@@ -44,9 +44,6 @@ public class JoinGroupResponse extends AbstractRequestResponse {
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
-    public static final int UNKNOWN_GENERATION_ID = -1;
-    public static final String UNKNOWN_CONSUMER_ID = "";
-
     private final short errorCode;
     private final int generationId;
     private final String consumerId;

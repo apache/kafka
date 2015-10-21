@@ -43,7 +43,6 @@ public class ProduceResponse extends AbstractRequestResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     public static final long INVALID_OFFSET = -1L;
-    private static final int DEFAULT_THROTTLE_TIME = 0;
 
     /**
      * Possible error code:
@@ -64,7 +63,7 @@ public class ProduceResponse extends AbstractRequestResponse {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.PRODUCE.id, 0)));
         initCommonFields(responses);
         this.responses = responses;
-        this.throttleTime = DEFAULT_THROTTLE_TIME;
+        this.throttleTime = (int) CURRENT_SCHEMA.get(THROTTLE_TIME_KEY_NAME).defaultValue;
     }
 
     /**
