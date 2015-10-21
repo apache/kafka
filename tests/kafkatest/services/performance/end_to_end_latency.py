@@ -54,12 +54,13 @@ class EndToEndLatencyService(PerformanceService):
         })
 
         cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.EndToEndLatency " % kafka_dir(node)
-        cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d 20%(ssl_config_file)s" % args
+        cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d 20 %(ssl_config_file)s" % args
         cmd += " | tee /mnt/end-to-end-latency.log"
 
         self.logger.debug("End-to-end latency %d command: %s", idx, cmd)
         results = {}
         for line in node.account.ssh_capture(cmd):
+            self.logger.debug(line)
             if line.startswith("Avg latency:"):
                 results['latency_avg_ms'] = float(line.split()[2])
             if line.startswith("Percentiles"):
