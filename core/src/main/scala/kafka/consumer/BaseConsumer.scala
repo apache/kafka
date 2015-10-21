@@ -19,8 +19,6 @@ package kafka.consumer
 
 import java.util.Properties
 
-import kafka.javaapi.consumer.ConsumerRebalanceListener
-
 /**
  * A base consumer used to abstract both old and new consumer
  * this class should be removed (along with BaseProducer) be removed
@@ -35,12 +33,10 @@ trait BaseConsumer {
 
 case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: Array[Byte], value: Array[Byte])
 
-trait BaseConsumerRebalanceListener
-  extends ConsumerRebalanceListener with org.apache.kafka.clients.consumer.ConsumerRebalanceListener
-
 class NewShinyConsumer(topic: String, consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
-  import scala.collection.JavaConversions._
+
+import scala.collection.JavaConversions._
 
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
   consumer.subscribe(List(topic))

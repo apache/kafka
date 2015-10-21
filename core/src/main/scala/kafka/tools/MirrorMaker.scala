@@ -26,7 +26,7 @@ import java.util.{Collections, Properties}
 import com.yammer.metrics.core.Gauge
 import joptsimple.OptionParser
 import kafka.client.ClientUtils
-import kafka.consumer.{BaseConsumerRebalanceListener, BaseConsumerRecord, ConsumerIterator, BaseConsumer, Blacklist, ConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
+import kafka.consumer.{BaseConsumerRecord, ConsumerIterator, BaseConsumer, Blacklist, ConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
 import kafka.javaapi.consumer.ConsumerRebalanceListener
 import kafka.message.MessageAndMetadata
 import kafka.metrics.KafkaMetricsGroup
@@ -200,47 +200,51 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
       val useNewConsumer = options.has(useNewConsumerOpt)
 
-      // Set consumer rebalance listener.
-      // Custom rebalance listener will be invoked after internal listener finishes its work.
-      val customRebalanceListener = {
-        val customRebalanceListenerClass = options.valueOf(consumerRebalanceListenerOpt)
-        if (customRebalanceListenerClass != null) {
-          val rebalanceListenerArgs = options.valueOf(rebalanceListenerArgsOpt)
-          if (rebalanceListenerArgs != null) {
-            if (useNewConsumer)
-              Some(CoreUtils.createObject[org.apache.kafka.clients.consumer.ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
-            else
-              Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
-          } else {
-            if (useNewConsumer)
-              Some(CoreUtils.createObject[org.apache.kafka.clients.consumer.ConsumerRebalanceListener](customRebalanceListenerClass))
-            else
-              Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass))
-          }
-        } else {
-          None
-        }
-      }
-
       // Create consumers
       val mirrorMakerConsumers = if (!useNewConsumer) {
-        if (customRebalanceListener.isDefined && !customRebalanceListener.get.isInstanceOf[ConsumerRebalanceListener])
+        val customRebalanceListener = {
+          val customRebalanceListenerClass = options.valueOf(consumerRebalanceListenerOpt)
+          if (customRebalanceListenerClass != null) {
+            val rebalanceListenerArgs = options.valueOf(rebalanceListenerArgsOpt)
+            if (rebalanceListenerArgs != null) {
+              Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
+            } else {
+              Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass))
+            }
+          } else {
+            None
+          }
+        }
+
+        if (customRebalanceListener.exists(!_.isInstanceOf[ConsumerRebalanceListener]))
           throw new IllegalArgumentException("The rebalance listener should be an instance of kafka.consumer.ConsumerRebalanceListener")
         createOldConsumers(
           numStreams,
           options.valueOf(consumerConfigOpt),
-          Option(customRebalanceListener.orNull.asInstanceOf[ConsumerRebalanceListener]),
+          customRebalanceListener,
           Option(options.valueOf(whitelistOpt)),
           Option(options.valueOf(blacklistOpt)))
       } else {
-        if (customRebalanceListener.isDefined &&
-          !customRebalanceListener.get.isInstanceOf[org.apache.kafka.clients.consumer.ConsumerRebalanceListener])
+        val customRebalanceListener = {
+          val customRebalanceListenerClass = options.valueOf(consumerRebalanceListenerOpt)
+          if (customRebalanceListenerClass != null) {
+            val rebalanceListenerArgs = options.valueOf(rebalanceListenerArgsOpt)
+            if (rebalanceListenerArgs != null) {
+                Some(CoreUtils.createObject[org.apache.kafka.clients.consumer.ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
+            } else {
+                Some(CoreUtils.createObject[org.apache.kafka.clients.consumer.ConsumerRebalanceListener](customRebalanceListenerClass))
+            }
+          } else {
+            None
+          }
+        }
+        if (customRebalanceListener.exists(!_.isInstanceOf[org.apache.kafka.clients.consumer.ConsumerRebalanceListener]))
           throw new IllegalArgumentException("The rebalance listener should be an instance of" +
             "org.apache.kafka.clients.consumer.ConsumerRebalanceListner")
         createNewConsumers(
           numStreams,
           options.valueOf(consumerConfigOpt),
-          Option(customRebalanceListener.orNull.asInstanceOf[org.apache.kafka.clients.consumer.ConsumerRebalanceListener]),
+          customRebalanceListener,
           Option(options.valueOf(whitelistOpt)))
       }
 
@@ -300,7 +304,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       throw new IllegalArgumentException("Either whitelist or blacklist should be defined!")
     (0 until numStreams) map { i =>
       val consumer = new MirrorMakerOldConsumer(connectors(i), filterSpec)
-      val consumerRebalanceListener = new InternalRebalanceListener(consumer, customRebalanceListener, None)
+      val consumerRebalanceListener = new InternalRebalanceListenerForOldConsumer(consumer, customRebalanceListener)
       connectors(i).setConsumerRebalanceListener(consumerRebalanceListener)
       consumer
     }
@@ -489,7 +493,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def init() {
       debug("Initiating new consumer")
-      val consumerRebalanceListener = new InternalRebalanceListener(this, None, customRebalanceListener)
+      val consumerRebalanceListener = new InternalRebalanceListenerForNewConsumer(this, customRebalanceListener)
       if (whitelistOpt.isDefined)
         consumer.subscribe(Pattern.compile(whitelistOpt.get), consumerRebalanceListener)
     }
@@ -516,7 +520,38 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     override def commit() {
       consumer.commitSync()
     }
+  }
 
+  private class InternalRebalanceListenerForNewConsumer(mirrorMakerConsumer: MirrorMakerBaseConsumer,
+                                                        customRebalanceListenerForNewConsumer: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener])
+    extends org.apache.kafka.clients.consumer.ConsumerRebalanceListener {
+
+    override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
+      producer.flush()
+      commitOffsets(mirrorMakerConsumer)
+      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsAssigned(partitions))
+    }
+
+    override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
+      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsAssigned(partitions))
+    }
+  }
+
+  private class InternalRebalanceListenerForOldConsumer(mirrorMakerConsumer: MirrorMakerBaseConsumer,
+                                                        customRebalanceListenerForOldConsumer: Option[ConsumerRebalanceListener])
+    extends ConsumerRebalanceListener {
+
+    override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]) {
+      producer.flush()
+      commitOffsets(mirrorMakerConsumer)
+      // invoke custom consumer rebalance listener
+      customRebalanceListenerForOldConsumer.foreach(_.beforeReleasingPartitions(partitionOwnership))
+    }
+
+    override def beforeStartingFetchers(consumerId: String,
+                                        partitionAssignment: java.util.Map[String, java.util.Map[java.lang.Integer, ConsumerThreadId]]) {
+      customRebalanceListenerForOldConsumer.foreach(_.beforeStartingFetchers(consumerId, partitionAssignment))
+    }
   }
 
   private class MirrorMakerProducer(val producerProps: Properties) {
@@ -563,37 +598,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         }
         numDroppedMessages.incrementAndGet()
       }
-    }
-  }
-
-  private class InternalRebalanceListener(mirrorMakerConsumer: MirrorMakerBaseConsumer,
-                                          customRebalanceListenerForOldConsumer: Option[ConsumerRebalanceListener],
-                                          customRebalanceListenerForNewConsumer: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener])
-    extends BaseConsumerRebalanceListener {
-
-    private def flushAndCommit() {
-      producer.flush()
-      commitOffsets(mirrorMakerConsumer)
-    }
-
-    override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]) {
-      flushAndCommit()
-      // invoke custom consumer rebalance listener
-      customRebalanceListenerForOldConsumer.foreach(_.beforeReleasingPartitions(partitionOwnership))
-    }
-
-    override def beforeStartingFetchers(consumerId: String,
-                                        partitionAssignment: java.util.Map[String, java.util.Map[java.lang.Integer, ConsumerThreadId]]) {
-      customRebalanceListenerForOldConsumer.foreach(_.beforeStartingFetchers(consumerId, partitionAssignment))
-    }
-
-    override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
-      flushAndCommit()
-      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsAssigned(partitions))
-    }
-
-    override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
-      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsAssigned(partitions))
     }
   }
 
