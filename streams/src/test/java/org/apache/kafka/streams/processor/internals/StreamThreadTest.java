@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import java.io.File;
@@ -55,6 +56,13 @@ public class StreamThreadTest {
     private TopicPartition t1p2 = new TopicPartition("topic1", 2);
     private TopicPartition t2p1 = new TopicPartition("topic2", 1);
     private TopicPartition t2p2 = new TopicPartition("topic2", 2);
+    private TopicPartition t3p1 = new TopicPartition("topic3", 1);
+    private TopicPartition t3p2 = new TopicPartition("topic3", 2);
+
+    private final long g1p1 = (0L << 32) | 1L; // TODO: (1L << 32 | 1L)
+    private final long g1p2 = (0L << 32) | 2L; // TODO: (1L << 32 | 1L)
+    private final long g2p1 = (0L << 32) | 1L; // TODO: (2L << 32 | 1L)
+    private final long g2p2 = (0L << 32) | 2L; // TODO: (2L << 32 | 2L)
 
     private Properties configProps() {
         return new Properties() {
@@ -73,7 +81,7 @@ public class StreamThreadTest {
     private static class TestStreamTask extends StreamTask {
         public boolean committed = false;
 
-        public TestStreamTask(int id,
+        public TestStreamTask(long id,
                               Consumer<byte[], byte[]> consumer,
                               Producer<byte[], byte[]> producer,
                               Consumer<byte[], byte[]> restoreConsumer,
@@ -102,12 +110,15 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
 
         TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source0", "topic0");
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
+        builder.addSource("source3", "topic3");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source2", "source3");
 
         StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", new Metrics(), new SystemTime()) {
             @Override
-            protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+            protected StreamTask createStreamTask(long id, Collection<TopicPartition> partitionsForTask) {
                 return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
             }
         };
@@ -128,8 +139,8 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(1));
-        assertEquals(expectedGroup1, thread.tasks().get(1).partitions());
+        assertTrue(thread.tasks().containsKey(g1p1));
+        assertEquals(expectedGroup1, thread.tasks().get(g1p1).partitions());
         assertEquals(1, thread.tasks().size());
 
         revokedPartitions = assignedPartitions;
@@ -139,8 +150,8 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(2));
-        assertEquals(expectedGroup2, thread.tasks().get(2).partitions());
+        assertTrue(thread.tasks().containsKey(g1p2));
+        assertEquals(expectedGroup2, thread.tasks().get(g1p2).partitions());
         assertEquals(1, thread.tasks().size());
 
         revokedPartitions = assignedPartitions;
@@ -151,25 +162,41 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(1));
-        assertTrue(thread.tasks().containsKey(2));
-        assertEquals(expectedGroup1, thread.tasks().get(1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(2).partitions());
+        assertTrue(thread.tasks().containsKey(g1p1));
+        assertTrue(thread.tasks().containsKey(g1p2));
+        assertEquals(expectedGroup1, thread.tasks().get(g1p1).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(g1p2).partitions());
         assertEquals(2, thread.tasks().size());
 
         revokedPartitions = assignedPartitions;
-        assignedPartitions = Arrays.asList(t1p1, t1p2, t2p1, t2p2);
-        expectedGroup1 = new HashSet<>(Arrays.asList(t1p1, t2p1));
-        expectedGroup2 = new HashSet<>(Arrays.asList(t1p2, t2p2));
+        assignedPartitions = Arrays.asList(t2p1, t2p2, t3p1, t3p2);
+        expectedGroup1 = new HashSet<>(Arrays.asList(t2p1, t3p1));
+        expectedGroup2 = new HashSet<>(Arrays.asList(t2p2, t3p2));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(1));
-        assertTrue(thread.tasks().containsKey(2));
-        assertEquals(expectedGroup1, thread.tasks().get(1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(2).partitions());
+        assertTrue(thread.tasks().containsKey(g2p1));
+        assertTrue(thread.tasks().containsKey(g2p2));
+        assertEquals(expectedGroup1, thread.tasks().get(g2p1).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(g2p2).partitions());
         assertEquals(2, thread.tasks().size());
+
+        /* TODO:
+        revokedPartitions = assignedPartitions;
+        assignedPartitions = Arrays.asList(t1p1, t2p1, t3p1);
+        expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
+        expectedGroup2 = new HashSet<>(Arrays.asList(t2p1, t3p1));
+
+        rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        rebalanceListener.onPartitionsAssigned(assignedPartitions);
+
+        assertTrue(thread.tasks().containsKey(g1p1));
+        assertTrue(thread.tasks().containsKey(g2p1));
+        assertEquals(expectedGroup1, thread.tasks().get(g1p1).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(g2p1).partitions());
+        assertEquals(2, thread.tasks().size());
+        */
 
         revokedPartitions = assignedPartitions;
         assignedPartitions = Collections.emptyList();
@@ -214,7 +241,7 @@ public class StreamThreadTest {
                     super.maybeClean();
                 }
                 @Override
-                protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+                protected StreamTask createStreamTask(long id, Collection<TopicPartition> partitionsForTask) {
                     return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
                 }
             };
@@ -235,7 +262,7 @@ public class StreamThreadTest {
             Map<Integer, StreamTask> prevTasks;
 
             //
-            // Assign t1p1 and t1p2. This should create Task 1 & 2
+            // Assign t1p1 and t1p2. This should create Task g1p1 & g1p2
             //
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
@@ -258,7 +285,7 @@ public class StreamThreadTest {
             assertTrue(stateDir3.exists());
             assertTrue(extraDir.exists());
 
-            // all state directories except for task 1 & 2 will be removed. the extra directory should still exists
+            // all state directories except for task g1p1 & g1p2 will be removed. the extra directory should still exists
             mockTime.sleep(11L);
             thread.maybeClean();
             assertTrue(stateDir1.exists());
@@ -267,7 +294,7 @@ public class StreamThreadTest {
             assertTrue(extraDir.exists());
 
             //
-            // Revoke t1p1 and t1p2. This should remove Task 1 & 2
+            // Revoke t1p1 and t1p2. This should remove Task g1p1 & g1p2
             //
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
@@ -286,7 +313,7 @@ public class StreamThreadTest {
             // no task
             assertTrue(thread.tasks().isEmpty());
 
-            // all state directories for task 1 & 2 still exist before the cleanup delay time
+            // all state directories for task g1p1 & g1p2 still exist before the cleanup delay time
             mockTime.sleep(cleanupDelay - 10L);
             thread.maybeClean();
             assertTrue(stateDir1.exists());
@@ -294,7 +321,7 @@ public class StreamThreadTest {
             assertFalse(stateDir3.exists());
             assertTrue(extraDir.exists());
 
-            // all state directories for task 1 & 2 are removed
+            // all state directories for task g1p1 & g1p2 are removed
             mockTime.sleep(11L);
             thread.maybeClean();
             assertFalse(stateDir1.exists());
@@ -332,7 +359,7 @@ public class StreamThreadTest {
                     super.maybeCommit();
                 }
                 @Override
-                protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+                protected StreamTask createStreamTask(long id, Collection<TopicPartition> partitionsForTask) {
                     return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
                 }
             };

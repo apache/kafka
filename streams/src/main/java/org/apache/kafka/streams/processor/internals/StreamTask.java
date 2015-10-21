@@ -117,7 +117,7 @@ public class StreamTask implements Punctuator {
         // create the processor state manager
         try {
             int partition = (int) (id & 0xFFFFFFFF);
-            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(partition));
+            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Long.toString(id));
             this.stateMgr = new ProcessorStateManager(partition, stateFile, restoreConsumer);
         } catch (IOException e) {
             throw new KafkaException("Error while creating the state manager", e);
@@ -139,8 +139,8 @@ public class StreamTask implements Punctuator {
         this.processorContext.initialized();
     }
 
-    public String id() {
-        return (id >> 32) + ":" + (id & 0xFFFFFFFF);
+    public long id() {
+        return id;
     }
 
     public Set<TopicPartition> partitions() {

@@ -54,6 +54,7 @@ public class TopologyBuilder {
     private final Set<String> sourceTopicNames = new HashSet<>();
 
     private final QuickUnion<String> nodeGroups = new QuickUnion<>();
+    private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
     private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
 
     private interface NodeFactory {
@@ -247,49 +248,75 @@ public class TopologyBuilder {
         nodeNames.add(name);
         nodeFactories.add(new ProcessorNodeFactory(name, parentNames, supplier));
         nodeGroups.add(name);
+        nodeGroups.unite(name, parentNames);
         return this;
     }
 
     /**
-     * Declares that the streams of the specified processor nodes must be copartitioned.
-     *
-     * @param nodeName
-     * @param otherNodeNames
-     */
-    public void copartition(String nodeName, String... otherNodeNames) {
-        for (String other : otherNodeNames) {
-            nodeGroups.unite(nodeName, other);
-        }
-    }
-
-    /**
-     * Returns the grouped topics
+     * Returns the topic groups.
+     * A topic group is a group of topics in the same task.
      *
      * @return groups of topic names
      */
     public Collection<Set<String>> topicGroups() {
-        HashMap<String, Set<String>> topicGroupMap = new HashMap<>();
+        List<Set<String>> topicGroups = new ArrayList<>();
 
-        // collect topics by node groups
-        for (String nodeName : nodeNames) {
-            String[] topics = nodeToTopics.get(nodeName);
-            if (topics != null) {
-                String root = nodeGroups.root(nodeName);
-                Set<String> topicGroup = topicGroupMap.get(root);
-                if (topicGroup == null) {
-                    topicGroup = new HashSet<>();
-                    topicGroupMap.put(root, topicGroup);
-                }
-                topicGroup.addAll(Arrays.asList(topics));
+        for (Set<String> nodeGroup : generateNodeGroups(nodeGroups)) {
+            Set<String> topicGroup = new HashSet<>();
+            for (String node : nodeGroup) {
+                String[] topics = nodeToTopics.get(node);
+                if (topics != null)
+                    topicGroup.addAll(Arrays.asList(topics));
             }
+            topicGroups.add(Collections.unmodifiableSet(topicGroup));
         }
 
-        // make the data unmodifiable, then return
-        List<Set<String>> topicGroups = new ArrayList<>(topicGroupMap.size());
-        for (Set<String> group : topicGroupMap.values()) {
-            topicGroups.add(Collections.unmodifiableSet(group));
-        }
         return Collections.unmodifiableList(topicGroups);
+    }
+
+    private Collection<Set<String>> generateNodeGroups(QuickUnion<String> grouping) {
+        HashMap<String, Set<String>> nodeGroupMap = new HashMap<>();
+
+        for (String nodeName : nodeNames) {
+            String root = grouping.root(nodeName);
+            Set<String> nodeGroup = nodeGroupMap.get(root);
+            if (nodeGroup == null) {
+                nodeGroup = new HashSet<>();
+                nodeGroupMap.put(root, nodeGroup);
+            }
+            nodeGroup.add(nodeName);
+        }
+
+        return nodeGroupMap.values();
+    }
+
+    /**
+     * Asserts that the streams of the specified source nodes must be copartitioned.
+     *
+     * @param sourceNodes a set of source node names
+     */
+    public void copartitionSources(Collection<String> sourceNodes) {
+        copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
+    }
+
+    /**
+     * Returns the copartition groups.
+     * A copartition group is a group of topics that are required to be copartitioned.
+     *
+     * @return groups of topic names
+     */
+    public Collection<Set<String>> copartitionGroups() {
+        List<Set<String>> list = new ArrayList<>(copartitionSourceGroups.size());
+        for (Set<String> nodeNames : copartitionSourceGroups) {
+            Set<String> copartitionGroup = new HashSet<>();
+            for (String node : nodeNames) {
+                String[] topics = nodeToTopics.get(node);
+                if (topics != null)
+                    copartitionGroup.addAll(Arrays.asList(topics));
+            }
+            list.add(Collections.unmodifiableSet(copartitionGroup));
+        }
+        return Collections.unmodifiableList(list);
     }
 
     /**

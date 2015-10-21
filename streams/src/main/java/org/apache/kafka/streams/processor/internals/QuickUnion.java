@@ -28,6 +28,10 @@ public class QuickUnion<T> {
         ids.put(id, id);
     }
 
+    public boolean exists(T id) {
+        return ids.containsKey(id);
+    }
+
     public T root(T id) {
         T current = id;
         T parent = ids.get(current);
@@ -46,7 +50,13 @@ public class QuickUnion<T> {
         return current;
     }
 
-    public void unite(T id1, T id2) {
+    public void unite(T id1, T... idList) {
+        for (T id2 : idList) {
+            unitePair(id1, id2);
+        }
+    }
+
+    private void unitePair(T id1, T id2) {
         T root1 = root(id1);
         T root2 = root(id2);
 

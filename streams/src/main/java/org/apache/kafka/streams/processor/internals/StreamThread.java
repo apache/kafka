@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
@@ -48,12 +49,16 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -71,7 +76,7 @@ public class StreamThread extends Thread {
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
 
-    private final Map<Integer, StreamTask> tasks;
+    private final Map<Long, StreamTask> tasks;
     private final String clientId;
     private final Time time;
     private final File stateDir;
@@ -194,7 +199,7 @@ public class StreamThread extends Thread {
         running.set(false);
     }
 
-    public Map<Integer, StreamTask> tasks() {
+    public Map<Long, StreamTask> tasks() {
         return Collections.unmodifiableMap(tasks);
     }
 
@@ -235,6 +240,8 @@ public class StreamThread extends Thread {
         try {
             int totalNumBuffered = 0;
             boolean requiresPoll = true;
+
+            ensureCopartitioning(builder.copartitionGroups());
 
             partitionGrouper.topicGroups(builder.topicGroups());
             consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceListener);
@@ -369,7 +376,7 @@ public class StreamThread extends Thread {
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
-                        Integer id = Integer.parseInt(dir.getName());
+                        Long id = Long.parseLong(dir.getName());
 
                         // try to acquire the exclusive lock on the state directory
                         FileLock directoryLock = null;
@@ -401,7 +408,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+    protected StreamTask createStreamTask(long id, Collection<TopicPartition> partitionsForTask) {
         sensors.taskCreationSensor.record();
 
         return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, builder.build(), config, sensors);
@@ -412,7 +419,7 @@ public class StreamThread extends Thread {
 
         // TODO: change this hard-coded co-partitioning behavior
         for (TopicPartition partition : partitions) {
-            final Integer id = partition.partition();
+            final Long id = (long) partition.partition();
             StreamTask task = tasks.get(id);
             if (task == null) {
                 // get the partitions for the task
@@ -450,6 +457,46 @@ public class StreamThread extends Thread {
         }
         tasks.clear();
     }
+
+    private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
+        for (Set<String> copartitionGroup : copartitionGroups) {
+            ensureCopartitioning(copartitionGroup);
+        }
+    }
+
+    private void ensureCopartitioning(Set<String> copartitionGroup) {
+        int numPartitions = -1;
+
+        for (String topic : copartitionGroup) {
+            List<PartitionInfo> infos = consumer.partitionsFor(topic);
+
+            if (infos == null)
+                throw new KafkaException("topic not found: " + topic);
+
+            if (numPartitions == -1) {
+                numPartitions = infos.size();
+            } else if (numPartitions != infos.size()) {
+                String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
+                Arrays.sort(topics);
+                throw new KafkaException("topics not copartitioned: [" + toString(Arrays.asList(topics), ",") + "]");
+            }
+        }
+    }
+
+    protected <T> CharSequence toString(Collection<T> coll, String separator) {
+        StringBuilder sb = new StringBuilder();
+        Iterator<T> iter = coll.iterator();
+        if (iter.hasNext()) {
+            sb.append(iter.next().toString());
+
+            while (iter.hasNext()) {
+                sb.append(separator);
+                sb.append(iter.next().toString());
+            }
+        }
+        return sb;
+    }
+
 
     private class StreamingMetricsImpl implements StreamingMetrics {
         final Metrics metrics;

@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,40 +40,35 @@ public class DefaultPartitionGrouper extends PartitionGrouper {
 
         long groupId = 0;
         for (List<String> topicGroup : sortedTopicGroups) {
-            int numPartitions = ensureCopartitioning(topicGroup, metadata);
+            for (String topic : topicGroup) {
+                List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
 
-            for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
-                long taskId = (groupId << 32) | (long) partitionId;
+                if (infos == null)
+                    throw new KafkaException("topic not found :" + topic);
 
-                ArrayList<TopicPartition> group = new ArrayList<>(topicGroup.size());
-                for (String topic : topicGroup) {
+                int numPartitions = infos.size();
+
+                for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
+                    long taskId = (groupId << 32) | (long) partitionId;
+
+                    List<TopicPartition> group = groups.get(taskId);
+
+                    if (group == null) {
+                        group = new ArrayList<>(topicGroup.size());
+                        groups.put(taskId, group);
+                    }
                     group.add(new TopicPartition(topic, partitionId));
                 }
-
-                groups.put(taskId, Collections.unmodifiableList(group));
             }
             groupId++;
         }
 
-        return Collections.unmodifiableMap(groups);
-    }
-
-    protected int ensureCopartitioning(List<String> topicGroup, Cluster metadata) {
-        int numPartitions = -1;
-
-        for (String topic : topicGroup) {
-            List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
-
-            if (infos == null)
-                throw new KafkaException("topic not found :" + topic);
-
-            if (numPartitions == -1) {
-                numPartitions = infos.size();
-            } else if (numPartitions != infos.size()) {
-                throw new KafkaException("not copartitioned : [" + toString(topicGroup, ", ") + "]");
-            }
+        // make the data unmodifiable, then return
+        Map<Long, List<TopicPartition>> unmodifiableGroups = new HashMap<>();
+        for (Map.Entry<Long, List<TopicPartition>> entry : groups.entrySet()) {
+            unmodifiableGroups.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
         }
-        return numPartitions;
+        return Collections.unmodifiableMap(unmodifiableGroups);
     }
 
     protected List<List<String>> sort(Collection<Set<String>> topicGroups) {
@@ -94,17 +88,4 @@ public class DefaultPartitionGrouper extends PartitionGrouper {
         return list;
     }
 
-    protected <T> CharSequence toString(Collection<T> set, String separator) {
-        StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = set.iterator();
-        if (iter.hasNext()) {
-            sb.append(iter.next().toString());
-
-            while (iter.hasNext()) {
-                sb.append(separator);
-                sb.append(iter.next().toString());
-            }
-        }
-        return sb;
-    }
 }
