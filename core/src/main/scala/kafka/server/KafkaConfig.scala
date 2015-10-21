@@ -168,7 +168,6 @@ object Defaults {
   val SSLClientAuthRequested = "requested"
   val SSLClientAuthNone = "none"
   val SSLClientAuth = SSLClientAuthNone
-  val SSLCipherSuites = ""
 
   /** ********* Sasl configuration ***********/
   val SaslKerberosKinitCmd = SaslConfigs.DEFAULT_KERBEROS_KINIT_CMD
@@ -666,7 +665,7 @@ object KafkaConfig {
       .define(SSLTrustManagerAlgorithmProp, STRING, Defaults.SSLTrustManagerAlgorithm, MEDIUM, SSLTrustManagerAlgorithmDoc)
       .define(SSLEndpointIdentificationAlgorithmProp, STRING, LOW, SSLEndpointIdentificationAlgorithmDoc, false)
       .define(SSLClientAuthProp, STRING, Defaults.SSLClientAuth, in(Defaults.SSLClientAuthRequired, Defaults.SSLClientAuthRequested, Defaults.SSLClientAuthNone), MEDIUM, SSLClientAuthDoc)
-      .define(SSLCipherSuitesProp, LIST, Defaults.SSLCipherSuites, MEDIUM, SSLCipherSuitesDoc)
+      .define(SSLCipherSuitesProp, LIST, MEDIUM, SSLCipherSuitesDoc, false)
 
       /** ********* Sasl Configuration ****************/
       .define(SaslKerberosServiceNameProp, STRING, MEDIUM, SaslKerberosServiceNameDoc, false)

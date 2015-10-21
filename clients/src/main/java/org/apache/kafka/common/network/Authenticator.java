@@ -17,10 +17,6 @@
 
 package org.apache.kafka.common.network;
 
-/**
- * Authentication for Channel
- */
-
 import java.io.IOException;
 import java.util.Map;
 import java.security.Principal;
@@ -28,6 +24,9 @@ import java.security.Principal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.KafkaException;
 
+/**
+ * Authentication for Channel
+ */
 public interface Authenticator {
 
     /**

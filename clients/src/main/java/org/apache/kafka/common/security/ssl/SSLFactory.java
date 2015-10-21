@@ -47,7 +47,6 @@ public class SSLFactory implements Configurable {
     private boolean wantClientAuth;
     private final Mode mode;
 
-
     public SSLFactory(Mode mode) {
         this.mode = mode;
     }
@@ -57,23 +56,21 @@ public class SSLFactory implements Configurable {
         this.protocol =  (String) configs.get(SSLConfigs.SSL_PROTOCOL_CONFIG);
         this.provider = (String) configs.get(SSLConfigs.SSL_PROVIDER_CONFIG);
 
-        if (configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG) != null) {
-            List<String> cipherSuitesList = (List<String>) configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG);
-            if (!cipherSuitesList.isEmpty())
-                this.cipherSuites = cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
-        }
 
-        if (configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null) {
-            List<String> enabledProtocolsList = (List<String>) configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
+        List<String> cipherSuitesList = (List<String>) configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG);
+        if (cipherSuitesList != null)
+            this.cipherSuites = cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
+
+        List<String> enabledProtocolsList = (List<String>) configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
+        if (enabledProtocolsList != null)
             this.enabledProtocols = enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
-        }
 
-        if (configs.containsKey(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)) {
-            this.endpointIdentification = (String) configs.get(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-        }
+        String endpointIdentification = (String) configs.get(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+        if (endpointIdentification != null)
+            this.endpointIdentification = endpointIdentification;
 
-        if (configs.containsKey(SSLConfigs.SSL_CLIENT_AUTH_CONFIG)) {
-            String clientAuthConfig = (String) configs.get(SSLConfigs.SSL_CLIENT_AUTH_CONFIG);
+        String clientAuthConfig = (String) configs.get(SSLConfigs.SSL_CLIENT_AUTH_CONFIG);
+        if (clientAuthConfig != null) {
             if (clientAuthConfig.equals("required"))
                 this.needClientAuth = true;
             else if (clientAuthConfig.equals("requested"))
