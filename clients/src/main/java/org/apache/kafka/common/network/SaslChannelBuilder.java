@@ -104,7 +104,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
             return SSLTransportLayer.create(id, key,
                 sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
-                socketChannel.socket().getPort()));
+                    socketChannel.socket().getPort()));
         } else {
             return new PlaintextTransportLayer(key);
         }

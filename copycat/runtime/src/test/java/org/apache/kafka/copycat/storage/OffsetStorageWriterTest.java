@@ -52,12 +52,15 @@ public class OffsetStorageWriterTest {
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
     private static final Map<ByteBuffer, ByteBuffer> OFFSETS_SERIALIZED
-            = Collections.singletonMap(ByteBuffer.wrap(OFFSET_KEY_SERIALIZED),
+        = Collections.singletonMap(ByteBuffer.wrap(OFFSET_KEY_SERIALIZED),
             ByteBuffer.wrap(OFFSET_VALUE_SERIALIZED));
 
-    @Mock private OffsetBackingStore store;
-    @Mock private Converter keyConverter;
-    @Mock private Converter valueConverter;
+    @Mock
+    private OffsetBackingStore store;
+    @Mock
+    private Converter keyConverter;
+    @Mock
+    private Converter valueConverter;
     private OffsetStorageWriter writer;
 
     private static Exception exception = new RuntimeException("error");
@@ -187,9 +190,9 @@ public class OffsetStorageWriterTest {
     /**
      * Expect a request to store data to the underlying OffsetBackingStore.
      *
-     * @param callback the callback to invoke when completed, or null if the callback isn't
-     *                 expected to be invoked
-     * @param fail if true, treat
+     * @param callback          the callback to invoke when completed, or null if the callback isn't
+     *                          expected to be invoked
+     * @param fail              if true, treat
      * @param waitForCompletion if non-null, a CountDownLatch that should be awaited on before
      *                          invoking the callback. A (generous) timeout is still imposed to
      *                          ensure tests complete.
@@ -203,25 +206,25 @@ public class OffsetStorageWriterTest {
 
         final Capture<Callback<Void>> storeCallback = Capture.newInstance();
         EasyMock.expect(store.set(EasyMock.eq(OFFSETS_SERIALIZED), EasyMock.capture(storeCallback)))
-                .andAnswer(new IAnswer<Future<Void>>() {
-                    @Override
-                    public Future<Void> answer() throws Throwable {
-                        return service.submit(new Callable<Void>() {
-                            @Override
-                            public Void call() throws Exception {
-                                if (waitForCompletion != null)
-                                    assertTrue(waitForCompletion.await(10000, TimeUnit.MILLISECONDS));
+            .andAnswer(new IAnswer<Future<Void>>() {
+                @Override
+                public Future<Void> answer() throws Throwable {
+                    return service.submit(new Callable<Void>() {
+                        @Override
+                        public Void call() throws Exception {
+                            if (waitForCompletion != null)
+                                assertTrue(waitForCompletion.await(10000, TimeUnit.MILLISECONDS));
 
-                                if (fail) {
-                                    storeCallback.getValue().onCompletion(exception, null);
-                                } else {
-                                    storeCallback.getValue().onCompletion(null, null);
-                                }
-                                return null;
+                            if (fail) {
+                                storeCallback.getValue().onCompletion(exception, null);
+                            } else {
+                                storeCallback.getValue().onCompletion(null, null);
                             }
-                        });
-                    }
-                });
+                            return null;
+                        }
+                    });
+                }
+            });
         if (callback != null) {
             if (fail) {
                 callback.onCompletion(EasyMock.eq(exception), EasyMock.eq((Void) null));

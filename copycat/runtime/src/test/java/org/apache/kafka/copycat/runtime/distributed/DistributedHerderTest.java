@@ -44,7 +44,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({DistributedHerder.class})
+@PrepareForTest({ DistributedHerder.class })
 @PowerMockIgnore("javax.management.*")
 public class DistributedHerderTest {
     private static final List<String> CONNECTOR_NAMES = Arrays.asList("source-test1", "source-test2", "sink-test3");
@@ -54,10 +54,13 @@ public class DistributedHerderTest {
 
     private static final Map<String, String> CONFIG_STORAGE_CONFIG = Collections.singletonMap(KafkaConfigStorage.CONFIG_TOPIC_CONFIG, "config-topic");
 
-    @Mock private KafkaConfigStorage configStorage;
+    @Mock
+    private KafkaConfigStorage configStorage;
     private DistributedHerder herder;
-    @Mock private Worker worker;
-    @Mock private Callback<String> createCallback;
+    @Mock
+    private Worker worker;
+    @Mock
+    private Callback<String> createCallback;
 
     private Map<String, Map<String, String>> connectorProps;
     private Map<String, Class<? extends Connector>> connectorClasses;
@@ -222,7 +225,7 @@ public class DistributedHerderTest {
             connectorConfigs.put(connName, connectorProps.get(connName));
         }
         EasyMock.expect(configStorage.snapshot())
-                .andReturn(new ClusterConfigState(1, rootConfig, connectorConfigs, Collections.EMPTY_MAP, Collections.EMPTY_SET));
+            .andReturn(new ClusterConfigState(1, rootConfig, connectorConfigs, Collections.EMPTY_MAP, Collections.EMPTY_SET));
 
         // Restore never uses a callback
         for (String connectorName : connectorNames)
@@ -231,7 +234,7 @@ public class DistributedHerderTest {
 
     private void expectInstantiateConnector(String connectorName, boolean expectCallback) throws Exception {
         PowerMock.expectPrivate(DistributedHerder.class, "instantiateConnector", connectorClasses.get(connectorName).getName())
-                .andReturn(connectors.get(connectorName));
+            .andReturn(connectors.get(connectorName));
         if (expectCallback) {
             createCallback.onCompletion(null, connectorName);
             PowerMock.expectLastCall();
@@ -247,7 +250,7 @@ public class DistributedHerderTest {
         EasyMock.<Class<? extends Task>>expect(connector.taskClass()).andReturn(connectorTaskClasses.get(connectorName));
 
         EasyMock.expect(connector.taskConfigs(ConnectorConfig.TASKS_MAX_DEFAULT))
-                .andReturn(Arrays.asList(taskProps));
+            .andReturn(Arrays.asList(taskProps));
         // And we should instantiate the tasks. For a sink task, we should see added properties for
         // the input topic partitions
         Properties generatedTaskProps = new Properties();

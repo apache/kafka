@@ -91,11 +91,12 @@ public abstract class ShutdownableThread extends Thread {
     /**
      * Shutdown the thread, first trying to shut down gracefully using the specified timeout, then
      * forcibly interrupting the thread.
+     *
      * @param gracefulTimeout the maximum time to wait for a graceful exit
-     * @param unit the time unit of the timeout argument
+     * @param unit            the time unit of the timeout argument
      */
     public void shutdown(long gracefulTimeout, TimeUnit unit)
-            throws InterruptedException {
+        throws InterruptedException {
         boolean success = gracefulShutdown(gracefulTimeout, unit);
         if (!success)
             forceShutdown();
@@ -103,8 +104,9 @@ public abstract class ShutdownableThread extends Thread {
 
     /**
      * Attempt graceful shutdown
+     *
      * @param timeout the maximum time to wait
-     * @param unit the time unit of the timeout argument
+     * @param unit    the time unit of the timeout argument
      * @return true if successful, false if the timeout elapsed
      */
     public boolean gracefulShutdown(long timeout, TimeUnit unit) throws InterruptedException {
@@ -122,8 +124,9 @@ public abstract class ShutdownableThread extends Thread {
 
     /**
      * Awaits shutdown of this thread, waiting up to the timeout.
+     *
      * @param timeout the maximum time to wait
-     * @param unit the time unit of the timeout argument
+     * @param unit    the time unit of the timeout argument
      * @return true if successful, false if the timeout elapsed
      * @throws InterruptedException
      */
