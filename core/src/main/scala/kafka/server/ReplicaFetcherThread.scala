@@ -84,7 +84,8 @@ class ReplicaFetcherThread(name: String,
       0,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       brokerConfig.replicaSocketReceiveBufferBytes,
-      brokerConfig.requestTimeoutMs
+      brokerConfig.requestTimeoutMs,
+      time
     )
   }
 
