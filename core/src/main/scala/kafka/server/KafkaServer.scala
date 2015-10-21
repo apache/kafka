@@ -209,7 +209,15 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         /* start dynamic config manager */
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager),
-                                                           ConfigType.Client -> new ClientIdConfigHandler)
+                                                           ConfigType.Client -> new ClientIdConfigHandler(apis.quotaManagers))
+
+        // Apply all existing client configs to the ClientIdConfigHandler to bootstrap the overrides
+        // TODO: Move this logic to DynamicConfigManager
+        AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client).foreach {
+          case (clientId, properties) => dynamicConfigHandlers(ConfigType.Client).processConfigChanges(clientId, properties)
+        }
+
+        // Create the config manager. start listening to notifications
         dynamicConfigManager = new DynamicConfigManager(zkUtils, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
