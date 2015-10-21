@@ -16,10 +16,17 @@ package org.apache.kafka.common.config;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.kafka.common.security.authenticator.SaslMechanism;
+
 public class SaslConfigs {
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
+    
+    public static final String SASL_MECHANISM = "sasl.mechanism";
+    public static final String SASL_MECHANISM_DOC = "The sasl mechanism. "
+        + "Default will be GSSAPI";
+    public static final String DEFAULT_SASL_MECHANISM = SaslMechanism.GSSAPI.mechanismName();
 
     public static final String SASL_KERBEROS_SERVICE_NAME = "sasl.kerberos.service.name";
     public static final String SASL_KERBEROS_SERVICE_NAME_DOC = "The Kerberos principal name that Kafka runs as. "

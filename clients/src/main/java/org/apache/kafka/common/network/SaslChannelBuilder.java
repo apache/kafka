@@ -22,7 +22,8 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-import org.apache.kafka.common.security.kerberos.LoginManager;
+import org.apache.kafka.common.security.authenticator.LoginManager;
+import org.apache.kafka.common.security.authenticator.SaslMechanism;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
 import org.apache.kafka.common.security.ssl.SslFactory;
@@ -30,7 +31,6 @@ import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +46,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private SslFactory sslFactory;
     private Map<String, ?> configs;
     private KerberosShortNamer kerberosShortNamer;
+    private SaslMechanism mechanism;
 
     public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol) {
         this.mode = mode;
@@ -56,7 +57,9 @@ public class SaslChannelBuilder implements ChannelBuilder {
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            this.loginManager = LoginManager.acquireLoginManager(loginType, configs);
+            String mechanismName = (String) this.configs.get(SaslConfigs.SASL_MECHANISM);
+            mechanism = mechanismName == null ? SaslMechanism.GSSAPI : SaslMechanism.fromMechanismName(mechanismName);
+            this.loginManager = LoginManager.acquireLoginManager(loginType, mechanism, configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
 
@@ -67,14 +70,17 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 defaultRealm = "";
             }
 
-            List<String> principalToLocalRules = (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES);
-            if (principalToLocalRules != null)
-                kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
+            if (mechanism == SaslMechanism.GSSAPI) {
+                List<String> principalToLocalRules = (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES);
+                if (principalToLocalRules != null)
+                    kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
+            }
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 this.sslFactory = new SslFactory(mode);
                 this.sslFactory.configure(this.configs);
             }
+                
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -86,10 +92,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
-                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosShortNamer);
+                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosShortNamer, mechanism);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
-                        socketChannel.socket().getInetAddress().getHostName());
+                        socketChannel.socket().getInetAddress().getHostName(), mechanism);
             authenticator.configure(transportLayer, this.principalBuilder, this.configs);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
         } catch (Exception e) {

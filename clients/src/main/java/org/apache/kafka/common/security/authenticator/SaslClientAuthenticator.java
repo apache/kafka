@@ -22,8 +22,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Map;
-
 import java.security.Principal;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -47,7 +47,6 @@ import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.KafkaException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,40 +73,65 @@ public class SaslClientAuthenticator implements Authenticator {
     private NetworkSend netOutBuffer;
 
     private SaslState saslState = SaslState.INITIAL;
+    private SaslMechanism mechanism;
 
-    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host) throws IOException {
+    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host, SaslMechanism mechanism) throws IOException {
         this.node = node;
         this.subject = subject;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
+        this.mechanism = mechanism;
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) throws KafkaException {
         try {
             this.transportLayer = transportLayer;
 
-            // determine client principal from subject.
-            Principal clientPrincipal = subject.getPrincipals().iterator().next();
-            this.clientPrincipalName = clientPrincipal.getName();
-            this.saslClient = createSaslClient();
+            switch (mechanism) {
+                case GSSAPI:
+                    this.saslClient = createSaslKerberosClient();
+                    break;
+                case PLAIN:
+                    this.saslClient = createSaslPlainClient();
+                    break;
+                default:
+                    throw new KafkaException("Unsupported SASL mechanism " + mechanism);
+            }
         } catch (Exception e) {
             throw new KafkaException("Failed to configure SaslClientAuthenticator", e);
         }
     }
 
-    private SaslClient createSaslClient() {
+    private SaslClient createSaslKerberosClient() {
         try {
+            // determine client principal from subject.
+            Principal clientPrincipal = subject.getPrincipals().iterator().next();
+            this.clientPrincipalName = clientPrincipal.getName();
             return Subject.doAs(subject, new PrivilegedExceptionAction<SaslClient>() {
                 public SaslClient run() throws SaslException {
-                    String[] mechs = {"GSSAPI"};
+                    String[] mechs = {mechanism.mechanismName()};
                     LOG.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                         clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
                     return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, null,
-                            new ClientCallbackHandler());
+                            new ClientCallbackHandler(subject, mechanism));
                 }
             });
         } catch (PrivilegedActionException e) {
             throw new KafkaException("Failed to create SaslClient", e.getCause());
+        }
+    }
+    
+    private SaslClient createSaslPlainClient() {
+        try {
+            String[] mechs = {mechanism.mechanismName()};
+            Iterator<?> iterator = subject.getPublicCredentials().iterator();
+            clientPrincipalName = iterator.hasNext() ? (String) iterator.next() : null;
+            LOG.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
+                        clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
+            return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, null,
+                            new ClientCallbackHandler(subject, mechanism));
+        } catch (Exception e) {
+            throw new KafkaException("Failed to create SASL/PLAIN client", e);
         }
     }
 
@@ -124,7 +148,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
         switch (saslState) {
             case INITIAL:
-                sendSaslToken(new byte[0]);
+                sendSaslToken(new byte[0], true);
                 saslState = SaslState.INTERMEDIATE;
                 break;
             case INTERMEDIATE:
@@ -135,7 +159,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     byte[] serverToken = new byte[netInBuffer.payload().remaining()];
                     netInBuffer.payload().get(serverToken, 0, serverToken.length);
                     netInBuffer = null; // reset the networkReceive as we read all the data.
-                    sendSaslToken(serverToken);
+                    sendSaslToken(serverToken, false);
                 }
                 if (saslClient.isComplete()) {
                     saslState = SaslState.COMPLETE;
@@ -149,10 +173,10 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
-    private void sendSaslToken(byte[] serverToken) throws IOException {
+    private void sendSaslToken(byte[] serverToken, boolean isInitial) throws IOException {
         if (!saslClient.isComplete()) {
             try {
-                byte[] saslToken = createSaslToken(serverToken);
+                byte[] saslToken = createSaslToken(serverToken, isInitial);
                 if (saslToken != null) {
                     netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(saslToken));
                     flushNetOutBufferAndUpdateInterestOps();
@@ -185,16 +209,20 @@ public class SaslClientAuthenticator implements Authenticator {
         saslClient.dispose();
     }
 
-    private byte[] createSaslToken(final byte[] saslToken) throws SaslException {
-        if (saslToken == null)
+    private byte[] createSaslToken(final byte[] saslToken, boolean isInitial) throws SaslException {
+        if (saslToken == null) {
             throw new SaslException("Error authenticating with the Kafka Broker: received a `null` saslToken.");
+        }
 
         try {
-            return Subject.doAs(subject, new PrivilegedExceptionAction<byte[]>() {
-                public byte[] run() throws SaslException {
-                    return saslClient.evaluateChallenge(saslToken);
-                }
-            });
+            if (isInitial && !saslClient.hasInitialResponse())
+                return saslToken;
+            else
+                return Subject.doAs(subject, new PrivilegedExceptionAction<byte[]>() {
+                    public byte[] run() throws SaslException {
+                        return saslClient.evaluateChallenge(saslToken);
+                    }
+                });
         } catch (PrivilegedActionException e) {
             String error = "An error: (" + e + ") occurred when evaluating SASL token received from the Kafka Broker.";
             // Try to provide hints to use about what went wrong so they can fix their configuration.
@@ -222,6 +250,13 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     public static class ClientCallbackHandler implements CallbackHandler {
+        
+        private Subject subject;
+        private SaslMechanism mechanism;
+        public ClientCallbackHandler(Subject subject, SaslMechanism mechanism) {
+            this.subject = subject;
+            this.mechanism = mechanism;
+        }
 
         public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
             for (Callback callback : callbacks) {
@@ -229,13 +264,20 @@ public class SaslClientAuthenticator implements Authenticator {
                     NameCallback nc = (NameCallback) callback;
                     nc.setName(nc.getDefaultName());
                 } else if (callback instanceof PasswordCallback) {
-                    // Call `setPassword` once we support obtaining a password from the user and update message below
-                    throw new UnsupportedCallbackException(callback, "Could not login: the client is being asked for a password, but the Kafka" +
+                    if (mechanism == SaslMechanism.PLAIN) {
+                        Iterator<?> iterator = subject.getPrivateCredentials().iterator();
+                        if (iterator.hasNext())
+                            ((PasswordCallback) callback).setPassword(((String) iterator.next()).toCharArray());
+                    } else {
+                     // Call `setPassword` once we support obtaining a password from the user and update message below
+                        throw new UnsupportedCallbackException(callback, "Could not login: the client is being asked for a password, but the Kafka" +
                              " client code does not currently support obtaining a password from the user." +
                              " Make sure -Djava.security.auth.login.config property passed to JVM and" +
                              " the client is configured to use a ticket cache (using" +
                              " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
                              " FQDN of the Kafka broker you are trying to connect to.");
+                        
+                    }
                 } else if (callback instanceof RealmCallback) {
                     RealmCallback rc = (RealmCallback) callback;
                     rc.setText(rc.getDefaultText());

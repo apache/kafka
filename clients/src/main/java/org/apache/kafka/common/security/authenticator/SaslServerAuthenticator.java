@@ -19,10 +19,8 @@ package org.apache.kafka.common.security.authenticator;
 
 import java.io.IOException;
 import java.util.Map;
-
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
-
 import java.security.Principal;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -44,7 +42,6 @@ import org.ietf.jgss.GSSName;
 import org.ietf.jgss.Oid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.NetworkSend;
@@ -59,7 +56,6 @@ public class SaslServerAuthenticator implements Authenticator {
     private final SaslServer saslServer;
     private final Subject subject;
     private final String node;
-    private final KerberosShortNamer kerberosNamer;
 
     // assigned in `configure`
     private TransportLayer transportLayer;
@@ -67,26 +63,36 @@ public class SaslServerAuthenticator implements Authenticator {
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
+    private SaslMechanism mechanism;
 
-    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser) throws IOException {
+    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser, SaslMechanism mechanism) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
-        if (subject.getPrincipals().isEmpty())
-            throw new IllegalArgumentException("subject must have at least one principal");
         this.node = node;
         this.subject = subject;
-        this.kerberosNamer = kerberosNameParser;
-        saslServer = createSaslServer();
+        this.mechanism = mechanism;
+        final SaslServerCallbackHandler saslServerCallbackHandler = new SaslServerCallbackHandler(
+                Configuration.getConfiguration(), kerberosNameParser);
+        switch (mechanism) {
+            case GSSAPI:
+                if (subject.getPrincipals().isEmpty())
+                    throw new IllegalArgumentException("subject must have at least one principal");
+                saslServer = createSaslKerberosServer(saslServerCallbackHandler);
+                break;
+            case PLAIN:
+                saslServer = createSaslPlainServer(saslServerCallbackHandler);
+                break;
+            default:
+                throw new KafkaException("Unsupported SASL mechanism " + mechanism);
+        }
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
         this.transportLayer = transportLayer;
     }
 
-    private SaslServer createSaslServer() throws IOException {
+    private SaslServer createSaslKerberosServer(final SaslServerCallbackHandler saslServerCallbackHandler) throws IOException {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
-        final SaslServerCallbackHandler saslServerCallbackHandler = new SaslServerCallbackHandler(
-                Configuration.getConfiguration(), kerberosNamer);
         final Principal servicePrincipal = subject.getPrincipals().iterator().next();
         KerberosName kerberosName;
         try {
@@ -97,7 +103,7 @@ public class SaslServerAuthenticator implements Authenticator {
         final String servicePrincipalName = kerberosName.serviceName();
         final String serviceHostname = kerberosName.hostName();
 
-        final String mech = "GSSAPI";
+        final String mech = mechanism.mechanismName();
 
         LOG.debug("Creating SaslServer for {} with mechanism {}", kerberosName, mech);
 
@@ -130,6 +136,15 @@ public class SaslServerAuthenticator implements Authenticator {
             });
         } catch (PrivilegedActionException e) {
             throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
+        }
+    }
+    
+    private SaslServer createSaslPlainServer(final SaslServerCallbackHandler saslServerCallbackHandler) throws IOException {
+        LOG.debug("Creating SaslServer with mechanism {}", mechanism);
+        try {
+            return Sasl.createSaslServer(mechanism.mechanismName(), "kafka", "kafkahost", null, saslServerCallbackHandler);
+        } catch (SaslException e) {
+            throw new KafkaException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e);
         }
     }
 
