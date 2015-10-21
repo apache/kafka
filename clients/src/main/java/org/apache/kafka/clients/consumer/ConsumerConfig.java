@@ -182,8 +182,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.HIGH,
                                         HEARTBEAT_INTERVAL_MS_DOC)
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-                                        Type.CLASS,
-                                        RangeAssignor.class,
+                                        Type.LIST,
+                                        RangeAssignor.class.getName(),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
