@@ -13,7 +13,7 @@
 package kafka.api
 
 import java.util.regex.Pattern
-import java.{lang, util}
+import java.util
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -31,11 +31,10 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import kafka.coordinator.ConsumerCoordinator
 
-
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
  */
-class ConsumerTest extends IntegrationTestHarness with Logging {
+abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
   val producerCount = 1
   val consumerCount = 2
@@ -54,7 +53,6 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   this.serverConfig.setProperty(KafkaConfig.ConsumerMinSessionTimeoutMsProp, "100") // set small enough session timeout
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
-  this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
@@ -64,7 +62,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(this.zkClient, topic, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
   }
 
   @Test
@@ -77,7 +75,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(1, this.consumers(0).assignment.size)
     
     this.consumers(0).seek(tp, 0)
-    consumeRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
+    consumeAndVerifyRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
 
     // check async commit callbacks
     val commitCallback = new CountConsumerCommitCallback()
@@ -116,11 +114,41 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  def testAutoCommitOnCloseAfterWakeup() {
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    val numRecords = 10000
+    sendRecords(numRecords)
+
+    consumer0.subscribe(List(topic))
+
+    val assignment = Set(tp, tp2)
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == assignment.asJava
+    }, s"Expected partitions ${assignment.asJava} but actually got ${consumer0.assignment()}")
+
+    // should auto-commit seeked positions before closing
+    consumer0.seek(tp, 300)
+    consumer0.seek(tp2, 500)
+
+    // wakeup the consumer before closing to simulate trying to break a poll
+    // loop from another thread
+    consumer0.wakeup()
+    consumer0.close()
+
+    // now we should see the committed positions from another consumer
+    assertEquals(300, this.consumers(0).committed(tp).offset)
+    assertEquals(500, this.consumers(0).committed(tp2).offset)
+  }
+
+  @Test
   def testAutoCommitOnRebalance() {
     val topic2 = "topic2"
-    TestUtils.createTopic(this.zkClient, topic2, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
 
-    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
 
     val numRecords = 10000
@@ -157,17 +185,17 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(numRecords)
 
     val topic1: String = "tblablac" // matches subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic1, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic1, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic1, 0))
     sendRecords(1000, new TopicPartition(topic1, 1))
 
     val topic2: String = "tblablak" // does not match subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic2, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic2, 0))
     sendRecords(1000, new TopicPartition(topic2, 1))
 
     val topic3: String = "tblab1" // does not match subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic3, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic3, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic3, 0))
     sendRecords(1000, new TopicPartition(topic3, 1))
 
@@ -189,7 +217,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment()}")
 
     val topic4: String = "tsomec" // matches subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic4, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic4, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic4, 0))
     sendRecords(1000, new TopicPartition(topic4, 1))
 
@@ -213,7 +241,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     sendRecords(numRecords)
 
     val topic1: String = "tblablac" // matches subscribed pattern
-    TestUtils.createTopic(this.zkClient, topic1, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic1, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic1, 0))
     sendRecords(1000, new TopicPartition(topic1, 1))
 
@@ -270,7 +298,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   def testAutoOffsetReset() {
     sendRecords(1)
     this.consumers(0).assign(List(tp))
-    consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
+    consumeAndVerifyRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
   @Test
@@ -286,19 +314,19 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
     consumer.seekToBeginning(tp)
     assertEquals(0, consumer.position(tp), 0)
-    consumeRecords(consumer, numRecords = 1, startingOffset = 0)
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
     val mid = totalRecords / 2
     consumer.seek(tp, mid)
     assertEquals(mid, consumer.position(tp))
-    consumeRecords(consumer, numRecords = 1, startingOffset = mid.toInt)
+    consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt)
   }
 
   @Test
   def testGroupConsumption() {
     sendRecords(10)
     this.consumers(0).subscribe(List(topic))
-    consumeRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
+    consumeAndVerifyRecords(this.consumers(0), numRecords = 1, startingOffset = 0)
   }
 
 
@@ -339,7 +367,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     this.consumers(0).commitSync()
     assertEquals(0L, this.consumers(0).committed(tp).offset)
 
-    consumeRecords(this.consumers(0), 5, 0)
+    consumeAndVerifyRecords(this.consumers(0), 5, 0)
     assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers(0).position(tp))
     this.consumers(0).commitSync()
     assertEquals("Committed offset should be returned", 5L, this.consumers(0).committed(tp).offset)
@@ -348,13 +376,13 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
     // another consumer in the same group should get the same position
     this.consumers(1).assign(List(tp))
-    consumeRecords(this.consumers(1), 1, 5)
+    consumeAndVerifyRecords(this.consumers(1), 1, 5)
   }
 
   @Test
   def testPartitionsFor() {
     val numParts = 2
-    TestUtils.createTopic(this.zkClient, "part-test", numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, "part-test", numParts, 1, this.servers)
     val parts = this.consumers(0).partitionsFor("part-test")
     assertNotNull(parts)
     assertEquals(2, parts.size)
@@ -367,9 +395,9 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     val topic1: String = "part-test-topic-1"
     val topic2: String = "part-test-topic-2"
     val topic3: String = "part-test-topic-3"
-    TestUtils.createTopic(this.zkClient, topic1, numParts, 1, this.servers)
-    TestUtils.createTopic(this.zkClient, topic2, numParts, 1, this.servers)
-    TestUtils.createTopic(this.zkClient, topic3, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic1, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic2, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic3, numParts, 1, this.servers)
 
     val topics = this.consumers.head.listTopics()
     assertNotNull(topics)
@@ -446,7 +474,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       this.consumers(0).assignment == subscriptions.asJava
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers(0).assignment}")
 
-    TestUtils.createTopic(this.zkClient, otherTopic, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, otherTopic, 2, serverCount, this.servers)
     this.consumers(0).subscribe(List(topic, otherTopic))
     TestUtils.waitUntilTrue(() => {
       this.consumers(0).poll(50)
@@ -457,7 +485,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   @Test
   def testShrinkingTopicSubscriptions() {
     val otherTopic = "other"
-    TestUtils.createTopic(this.zkClient, otherTopic, 2, serverCount, this.servers)
+    TestUtils.createTopic(this.zkUtils, otherTopic, 2, serverCount, this.servers)
     val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
     val shrunkenSubscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     this.consumers(0).subscribe(List(topic, otherTopic))
@@ -477,12 +505,12 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   def testPartitionPauseAndResume() {
     sendRecords(5)
     this.consumers(0).assign(List(tp))
-    consumeRecords(this.consumers(0), 5, 0)
+    consumeAndVerifyRecords(this.consumers(0), 5, 0)
     this.consumers(0).pause(tp)
     sendRecords(5)
     assertTrue(this.consumers(0).poll(0).isEmpty)
     this.consumers(0).resume(tp)
-    consumeRecords(this.consumers(0), 5, 5)
+    consumeAndVerifyRecords(this.consumers(0), 5, 5)
   }
 
   @Test
@@ -493,7 +521,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
     sendRecords(5)
     consumer0.subscribe(List(topic))
-    consumeRecords(consumer0, 5, 0)
+    consumeAndVerifyRecords(consumer0, 5, 0)
     consumer0.pause(tp)
 
     // subscribe to a new topic to trigger a rebalance
@@ -501,7 +529,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
     // after rebalance, our position should be reset and our pause state lost,
     // so we should be able to consume from the beginning
-    consumeRecords(consumer0, 0, 5)
+    consumeAndVerifyRecords(consumer0, 0, 5)
   }
 
   private class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
@@ -522,20 +550,20 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   }
 
   private def sendRecords(numRecords: Int, tp: TopicPartition) {
-    val futures = (0 until numRecords).map { i =>
-      this.producers(0).send(new ProducerRecord(tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes))
-    }
-    futures.map(_.get)
+    (0 until numRecords).map { i =>
+      this.producers(0).send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i".getBytes, s"value $i".getBytes))
+    }.foreach(_.get)
   }
 
-  private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int) {
+  private def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int, startingOffset: Int,
+                                      startingKeyAndValueIndex: Int = 0) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 300
     var iters = 0
     while (records.size < numRecords) {
       for (record <- consumer.poll(50).asScala)
         records.add(record)
-      if(iters > maxIters)
+      if (iters > maxIters)
         throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
       iters += 1
     }
@@ -545,6 +573,9 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       assertEquals(topic, record.topic())
       assertEquals(part, record.partition())
       assertEquals(offset.toLong, record.offset())
+      val keyAndValueIndex = startingKeyAndValueIndex + i
+      assertEquals(s"key $keyAndValueIndex", new String(record.key()))
+      assertEquals(s"value $keyAndValueIndex", new String(record.value()))
     }
   }
 

@@ -34,9 +34,10 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
-import org.apache.kafka.streams.state.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateUtils;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.junit.After;
@@ -44,19 +45,12 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Properties;
 
 public class ProcessorTopologyTest {
 
     private static final Serializer<String> STRING_SERIALIZER = new StringSerializer();
     private static final Deserializer<String> STRING_DESERIALIZER = new StringDeserializer();
-    private static final File STATE_DIR = new File("build/data").getAbsoluteFile();
 
     protected static final String INPUT_TOPIC = "input-topic";
     protected static final String OUTPUT_TOPIC_1 = "output-topic-1";
@@ -69,10 +63,11 @@ public class ProcessorTopologyTest {
 
     @Before
     public void setup() {
-        STATE_DIR.mkdirs();
+        // Create a new directory in which we'll put all of the state for this test, enabling running tests in parallel ...
+        File localState = StateUtils.tempDir();
         Properties props = new Properties();
         props.setProperty(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamingConfig.STATE_DIR_CONFIG, STATE_DIR.getAbsolutePath());
+        props.setProperty(StreamingConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
         props.setProperty(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
         props.setProperty(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.setProperty(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -87,36 +82,16 @@ public class ProcessorTopologyTest {
             driver.close();
         }
         driver = null;
-        if (STATE_DIR.exists()) {
-            try {
-                Files.walkFileTree(STATE_DIR.toPath(), new SimpleFileVisitor<Path>() {
-                    @Override
-                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                        Files.delete(file);
-                        return FileVisitResult.CONTINUE;
-                    }
-    
-                    @Override
-                    public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                        Files.delete(dir);
-                        return FileVisitResult.CONTINUE;
-                    }
-    
-                });
-            } catch (IOException e) {
-                // do nothing
-            }
-        }
     }
-
+    
     @Test
     public void testTopologyMetadata() {
         final TopologyBuilder builder = new TopologyBuilder();
 
         builder.addSource("source-1", "topic-1");
         builder.addSource("source-2", "topic-2", "topic-3");
-        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
-        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-1", "source-2");
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-1", "source-2");
         builder.addSink("sink-1", "topic-3", "processor-1");
         builder.addSink("sink-2", "topic-4", "processor-1", "processor-2");
 
@@ -289,7 +264,7 @@ public class ProcessorTopologyTest {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = new InMemoryKeyValueStore<>(storeName, context);
+            store = Stores.create(storeName, context).withStringKeys().withStringValues().inMemory().build();
         }
 
         @Override
@@ -306,12 +281,17 @@ public class ProcessorTopologyTest {
             }
             context().forward(Long.toString(streamTime), count);
         }
+        
+        @Override
+        public void close() {
+            store.close();
+        }
     }
 
-    protected ProcessorSupplier define(final Processor processor) {
-        return new ProcessorSupplier() {
+    protected <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
+        return new ProcessorSupplier<K, V>() {
             @Override
-            public Processor get() {
+            public Processor<K, V> get() {
                 return processor;
             }
         };

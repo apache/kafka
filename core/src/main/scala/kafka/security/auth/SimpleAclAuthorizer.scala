@@ -27,6 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
@@ -59,7 +60,7 @@ object SimpleAclAuthorizer {
   //notification node which gets updated with the resource name when acl on a resource is changed.
   val AclChangedZkPath = "/kafka-acl-changes"
 
-  //prefix of all the change notificiation sequence node.
+  //prefix of all the change notification sequence node.
   val AclChangedPrefix = "acl_changes_"
 }
 
@@ -67,7 +68,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private val authorizerLogger = Logger.getLogger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
-  private var zkClient: ZkClient = null
+  private var zkUtils: ZkUtils = null
   private var aclChangeListener: ZkNodeChangeNotificationListener = null
 
   private val aclCache = new scala.collection.mutable.HashMap[Resource, Set[Acl]]
@@ -92,16 +93,19 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val zkConnectionTimeoutMs = configs.getOrElse(SimpleAclAuthorizer.ZkConnectionTimeOutProp, kafkaConfig.zkConnectionTimeoutMs).toString.toInt
     val zkSessionTimeOutMs = configs.getOrElse(SimpleAclAuthorizer.ZkSessionTimeOutProp, kafkaConfig.zkSessionTimeoutMs).toString.toInt
 
-    zkClient = ZkUtils.createZkClient(zkUrl, zkConnectionTimeoutMs, zkSessionTimeOutMs)
-    ZkUtils.makeSurePersistentPathExists(zkClient, SimpleAclAuthorizer.AclZkPath)
+    zkUtils = ZkUtils(zkUrl,
+                      zkConnectionTimeoutMs,
+                      zkSessionTimeOutMs,
+                      JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+    zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclZkPath)
 
     loadCache()
 
-    ZkUtils.makeSurePersistentPathExists(zkClient, SimpleAclAuthorizer.AclChangedZkPath)
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificaitonHandler)
+    zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclChangedZkPath)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificaitonHandler)
     aclChangeListener.init()
 
-    zkClient.subscribeStateChanges(ZkStateChangeListener)
+    zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
@@ -162,17 +166,17 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       val updatedAcls = getAcls(resource) ++ acls
       val path = toResourcePath(resource)
 
-      if (ZkUtils.pathExists(zkClient, path))
-        ZkUtils.updatePersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
+      if (zkUtils.pathExists(path))
+        zkUtils.updatePersistentPath(path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
       else
-        ZkUtils.createPersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
+        zkUtils.createPersistentPath(path, Json.encode(Acl.toJsonCompatibleMap(updatedAcls)))
 
       updateAclChangedFlag(resource)
     }
   }
 
   override def removeAcls(aclsTobeRemoved: Set[Acl], resource: Resource): Boolean = {
-    if (ZkUtils.pathExists(zkClient, toResourcePath(resource))) {
+    if (zkUtils.pathExists(toResourcePath(resource))) {
       val existingAcls = getAcls(resource)
       val filteredAcls = existingAcls.filter((acl: Acl) => !aclsTobeRemoved.contains(acl))
 
@@ -180,9 +184,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       if (aclNeedsRemoval) {
         val path: String = toResourcePath(resource)
         if (filteredAcls.nonEmpty)
-          ZkUtils.updatePersistentPath(zkClient, path, Json.encode(Acl.toJsonCompatibleMap(filteredAcls)))
+          zkUtils.updatePersistentPath(path, Json.encode(Acl.toJsonCompatibleMap(filteredAcls)))
         else
-          ZkUtils.deletePath(zkClient, toResourcePath(resource))
+          zkUtils.deletePath(toResourcePath(resource))
 
         updateAclChangedFlag(resource)
       }
@@ -192,8 +196,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def removeAcls(resource: Resource): Boolean = {
-    if (ZkUtils.pathExists(zkClient, toResourcePath(resource))) {
-      ZkUtils.deletePath(zkClient, toResourcePath(resource))
+    if (zkUtils.pathExists(toResourcePath(resource))) {
+      zkUtils.deletePath(toResourcePath(resource))
       updateAclChangedFlag(resource)
       true
     } else false
@@ -206,7 +210,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def getAclsFromZk(resource: Resource): Set[Acl] = {
-    val aclJson = ZkUtils.readDataMaybeNull(zkClient, toResourcePath(resource))._1
+    val aclJson = zkUtils.readDataMaybeNull(toResourcePath(resource))._1
     aclJson.map(Acl.fromJson).getOrElse(Set.empty)
   }
 
@@ -224,11 +228,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def loadCache()  {
     var acls = Set.empty[Acl]
-    val resourceTypes = ZkUtils.getChildren(zkClient, SimpleAclAuthorizer.AclZkPath)
+    val resourceTypes = zkUtils.getChildren(SimpleAclAuthorizer.AclZkPath)
     for (rType <- resourceTypes) {
       val resourceType = ResourceType.fromString(rType)
       val resourceTypePath = SimpleAclAuthorizer.AclZkPath + "/" + resourceType.name
-      val resourceNames = ZkUtils.getChildren(zkClient, resourceTypePath)
+      val resourceNames = zkUtils.getChildren(resourceTypePath)
       for (resourceName <- resourceNames) {
         acls = getAclsFromZk(Resource(resourceType, resourceName.toString))
         updateCache(new Resource(resourceType, resourceName), acls)
@@ -255,7 +259,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: Resource) {
-    ZkUtils.createSequentialPersistentPath(zkClient, SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
+    zkUtils.createSequentialPersistentPath(SimpleAclAuthorizer.AclChangedZkPath + "/" + SimpleAclAuthorizer.AclChangedPrefix, resource.toString)
   }
 
   object AclChangedNotificaitonHandler extends NotificationHandler {

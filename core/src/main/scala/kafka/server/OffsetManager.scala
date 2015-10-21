@@ -87,7 +87,7 @@ object OffsetManagerConfig {
 
 class OffsetManager(val config: OffsetManagerConfig,
                     replicaManager: ReplicaManager,
-                    zkClient: ZkClient,
+                    zkUtils: ZkUtils,
                     scheduler: Scheduler) extends Logging with KafkaMetricsGroup {
 
   /* offsets and metadata cache */
@@ -449,7 +449,7 @@ class OffsetManager(val config: OffsetManagerConfig,
    */
   private def getOffsetsTopicPartitionCount = {
     val topic = ConsumerCoordinator.OffsetsTopicName
-    val topicData = ZkUtils.getPartitionAssignmentForTopics(zkClient, Seq(topic))
+    val topicData = zkUtils.getPartitionAssignmentForTopics(Seq(topic))
     if (topicData(topic).nonEmpty)
       topicData(topic).size
     else

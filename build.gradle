@@ -282,6 +282,8 @@ project(':core') {
     compile.exclude module: 'jmxtools'
     compile.exclude module: 'mail'
     compile.exclude module: 'netty'
+    // To prevent a UniqueResourceException due the same resource existing in both
+    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
     testCompile.exclude module: 'api-ldap-schema-data'
   }
 

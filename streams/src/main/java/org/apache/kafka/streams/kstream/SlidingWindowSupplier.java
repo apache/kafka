@@ -26,7 +26,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.FilteredIterator;
 import org.apache.kafka.streams.kstream.internals.WindowSupport;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.Stamped;
@@ -186,7 +185,7 @@ public class SlidingWindowSupplier<K, V> implements WindowSupplier<K, V> {
             IntegerSerializer intSerializer = new IntegerSerializer();
             ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
 
-            RecordCollector collector = ((ProcessorContextImpl) context).recordCollector();
+            RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
             for (Map.Entry<K, ValueList<V>> entry : map.entrySet()) {
                 ValueList<V> values = entry.getValue();

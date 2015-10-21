@@ -17,9 +17,9 @@
 
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.util.Iterator;
 import java.util.List;
@@ -28,33 +28,28 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 
 /**
- * An in-memory key-value store based on a TreeMap
+ * An in-memory key-value store based on a TreeMap.
  *
  * @param <K> The key type
  * @param <V> The value type
+ * 
+ * @see Stores#create(String, ProcessorContext)
  */
 public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
-    public InMemoryKeyValueStore(String name, ProcessorContext context) {
-        this(name, context, new SystemTime());
-    }
-
-    public InMemoryKeyValueStore(String name, ProcessorContext context, Time time) {
-        super(name, new MemoryStore<K, V>(name, context), context, "in-memory-state", time);
+    protected InMemoryKeyValueStore(String name, ProcessorContext context, Serdes<K, V> serdes, Time time) {
+        super(name, new MemoryStore<K, V>(name), context, serdes, "in-memory-state", time != null ? time : new SystemTime());
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
 
         private final String name;
         private final NavigableMap<K, V> map;
-        private final ProcessorContext context;
 
-        @SuppressWarnings("unchecked")
-        public MemoryStore(String name, ProcessorContext context) {
+        public MemoryStore(String name) {
             super();
             this.name = name;
             this.map = new TreeMap<>();
-            this.context = context;
         }
 
         @Override

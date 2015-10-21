@@ -24,5 +24,5 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 
 class SaslSslReplicaFetchTest extends BaseReplicaFetchTest with SaslTestHarness {
   protected def securityProtocol = SecurityProtocol.SASL_SSL
-  protected def trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 }

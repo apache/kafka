@@ -161,12 +161,7 @@ object Defaults {
   val SSLProtocol = SSLConfigs.DEFAULT_SSL_PROTOCOL
   val SSLEnabledProtocols = SSLConfigs.DEFAULT_ENABLED_PROTOCOLS
   val SSLKeystoreType = SSLConfigs.DEFAULT_SSL_KEYSTORE_TYPE
-  val SSLKeystoreLocation = "/tmp/ssl.keystore.jks"
-  val SSLKeystorePassword = "keystore_password"
-  val SSLKeyPassword = "key_password"
   val SSLTruststoreType = SSLConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE
-  val SSLTruststoreLocation = SSLConfigs.DEFAULT_TRUSTSTORE_LOCATION
-  val SSLTruststorePassword = SSLConfigs.DEFAULT_TRUSTSTORE_PASSWORD
   val SSLKeyManagerAlgorithm = SSLConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM
   val SSLTrustManagerAlgorithm = SSLConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM
   val SSLClientAuthRequired = "required"
@@ -330,7 +325,8 @@ object KafkaConfig {
   val SSLEndpointIdentificationAlgorithmProp = SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
   val SSLClientAuthProp = SSLConfigs.SSL_CLIENT_AUTH_CONFIG
 
-  /** ********* SSL Configuration ****************/
+  /** ********* SASL Configuration ****************/
+  val SaslKerberosServiceNameProp = SaslConfigs.SASL_KERBEROS_SERVICE_NAME
   val SaslKerberosKinitCmdProp = SaslConfigs.SASL_KERBEROS_KINIT_CMD
   val SaslKerberosTicketRenewWindowFactorProp = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR
   val SaslKerberosTicketRenewJitterProp = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER
@@ -508,6 +504,7 @@ object KafkaConfig {
   val SSLClientAuthDoc = SSLConfigs.SSL_CLIENT_AUTH_DOC
 
   /** ********* Sasl Configuration ****************/
+  val SaslKerberosServiceNameDoc = SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC
   val SaslKerberosKinitCmdDoc = SaslConfigs.SASL_KERBEROS_KINIT_CMD_DOC
   val SaslKerberosTicketRenewWindowFactorDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC
   val SaslKerberosTicketRenewJitterDoc = SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_DOC
@@ -659,18 +656,19 @@ object KafkaConfig {
       .define(SSLProviderProp, STRING, MEDIUM, SSLProviderDoc, false)
       .define(SSLEnabledProtocolsProp, LIST, Defaults.SSLEnabledProtocols, MEDIUM, SSLEnabledProtocolsDoc)
       .define(SSLKeystoreTypeProp, STRING, Defaults.SSLKeystoreType, MEDIUM, SSLKeystoreTypeDoc)
-      .define(SSLKeystoreLocationProp, STRING, Defaults.SSLKeystoreLocation, MEDIUM, SSLKeystoreLocationDoc)
-      .define(SSLKeystorePasswordProp, STRING, Defaults.SSLKeystorePassword, MEDIUM, SSLKeystorePasswordDoc)
-      .define(SSLKeyPasswordProp, STRING, Defaults.SSLKeyPassword, MEDIUM, SSLKeyPasswordDoc)
+      .define(SSLKeystoreLocationProp, STRING, MEDIUM, SSLKeystoreLocationDoc, false)
+      .define(SSLKeystorePasswordProp, STRING, MEDIUM, SSLKeystorePasswordDoc, false)
+      .define(SSLKeyPasswordProp, STRING, MEDIUM, SSLKeyPasswordDoc, false)
       .define(SSLTruststoreTypeProp, STRING, Defaults.SSLTruststoreType, MEDIUM, SSLTruststoreTypeDoc)
-      .define(SSLTruststoreLocationProp, STRING, Defaults.SSLTruststoreLocation, MEDIUM, SSLTruststoreLocationDoc)
-      .define(SSLTruststorePasswordProp, STRING, Defaults.SSLTruststorePassword, MEDIUM, SSLTruststorePasswordDoc)
+      .define(SSLTruststoreLocationProp, STRING, MEDIUM, SSLTruststoreLocationDoc, false)
+      .define(SSLTruststorePasswordProp, STRING, MEDIUM, SSLTruststorePasswordDoc, false)
       .define(SSLKeyManagerAlgorithmProp, STRING, Defaults.SSLKeyManagerAlgorithm, MEDIUM, SSLKeyManagerAlgorithmDoc)
       .define(SSLTrustManagerAlgorithmProp, STRING, Defaults.SSLTrustManagerAlgorithm, MEDIUM, SSLTrustManagerAlgorithmDoc)
       .define(SSLClientAuthProp, STRING, Defaults.SSLClientAuth, in(Defaults.SSLClientAuthRequired, Defaults.SSLClientAuthRequested, Defaults.SSLClientAuthNone), MEDIUM, SSLClientAuthDoc)
       .define(SSLCipherSuitesProp, LIST, Defaults.SSLCipherSuites, MEDIUM, SSLCipherSuitesDoc)
 
       /** ********* Sasl Configuration ****************/
+      .define(SaslKerberosServiceNameProp, STRING, MEDIUM, SaslKerberosServiceNameDoc, false)
       .define(SaslKerberosKinitCmdProp, STRING, Defaults.SaslKerberosKinitCmd, MEDIUM, SaslKerberosKinitCmdDoc)
       .define(SaslKerberosTicketRenewWindowFactorProp, DOUBLE, Defaults.SaslKerberosTicketRenewWindowFactor, MEDIUM, SaslKerberosTicketRenewWindowFactorDoc)
       .define(SaslKerberosTicketRenewJitterProp, DOUBLE, Defaults.SaslKerberosTicketRenewJitter, MEDIUM, SaslKerberosTicketRenewJitterDoc)
@@ -838,6 +836,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val sslCipher = getList(KafkaConfig.SSLCipherSuitesProp)
 
   /** ********* Sasl Configuration **************/
+  val saslKerberosServiceName = getString(KafkaConfig.SaslKerberosServiceNameProp)
   val saslKerberosKinitCmd = getString(KafkaConfig.SaslKerberosKinitCmdProp)
   val saslKerberosTicketRenewWindowFactor = getDouble(KafkaConfig.SaslKerberosTicketRenewWindowFactorProp)
   val saslKerberosTicketRenewJitter = getDouble(KafkaConfig.SaslKerberosTicketRenewJitterProp)
@@ -865,7 +864,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     val millis: java.lang.Long =
       Option(getLong(KafkaConfig.LogRetentionTimeMillisProp)).getOrElse(
         Option(getInt(KafkaConfig.LogRetentionTimeMinutesProp)) match {
-          case Some(mins) =>  millisInMinute * mins
+          case Some(mins) => millisInMinute * mins
           case None => getInt(KafkaConfig.LogRetentionTimeHoursProp) * millisInHour
         })
 
@@ -969,25 +968,30 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   def channelConfigs: java.util.Map[String, Object] = {
     val channelConfigs = new java.util.HashMap[String, Object]()
     import kafka.server.KafkaConfig._
-    channelConfigs.put(PrincipalBuilderClassProp, Class.forName(principalBuilderClass))
-    channelConfigs.put(SSLProtocolProp, sslProtocol)
-    channelConfigs.put(SSLEnabledProtocolsProp, sslEnabledProtocols)
-    channelConfigs.put(SSLKeystoreTypeProp, sslKeystoreType)
-    channelConfigs.put(SSLKeystoreLocationProp, sslKeystoreLocation)
-    channelConfigs.put(SSLKeystorePasswordProp, sslKeystorePassword)
-    channelConfigs.put(SSLKeyPasswordProp, sslKeyPassword)
-    channelConfigs.put(SSLTruststoreTypeProp, sslTruststoreType)
-    channelConfigs.put(SSLTruststoreLocationProp, sslTruststoreLocation)
-    channelConfigs.put(SSLTruststorePasswordProp, sslTruststorePassword)
-    channelConfigs.put(SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm)
-    channelConfigs.put(SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm)
-    channelConfigs.put(SSLClientAuthProp, sslClientAuth)
-    channelConfigs.put(SSLCipherSuitesProp, sslCipher)
-    channelConfigs.put(SaslKerberosKinitCmdProp, saslKerberosKinitCmd)
-    channelConfigs.put(SaslKerberosTicketRenewWindowFactorProp, saslKerberosTicketRenewWindowFactor)
-    channelConfigs.put(SaslKerberosTicketRenewJitterProp, saslKerberosTicketRenewJitter)
-    channelConfigs.put(SaslKerberosMinTimeBeforeReloginProp, saslKerberosMinTimeBeforeRelogin)
-    channelConfigs.put(AuthToLocalProp, authToLocal)
+    Seq(
+      (PrincipalBuilderClassProp, Class.forName(principalBuilderClass)),
+      (SSLProtocolProp, sslProtocol),
+      (SSLEnabledProtocolsProp, sslEnabledProtocols),
+      (SSLKeystoreTypeProp, sslKeystoreType),
+      (SSLKeystoreLocationProp, sslKeystoreLocation),
+      (SSLKeystorePasswordProp, sslKeystorePassword),
+      (SSLKeyPasswordProp, sslKeyPassword),
+      (SSLTruststoreTypeProp, sslTruststoreType),
+      (SSLTruststoreLocationProp, sslTruststoreLocation),
+      (SSLTruststorePasswordProp, sslTruststorePassword),
+      (SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm),
+      (SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm),
+      (SSLClientAuthProp, sslClientAuth),
+      (SSLCipherSuitesProp, sslCipher),
+      (SaslKerberosServiceNameProp, saslKerberosServiceName),
+      (SaslKerberosKinitCmdProp, saslKerberosKinitCmd),
+      (SaslKerberosTicketRenewWindowFactorProp, saslKerberosTicketRenewWindowFactor),
+      (SaslKerberosTicketRenewJitterProp, saslKerberosTicketRenewJitter),
+      (SaslKerberosMinTimeBeforeReloginProp, saslKerberosMinTimeBeforeRelogin),
+      (AuthToLocalProp, authToLocal)
+    ).foreach { case (key, value) =>
+      if (value != null) channelConfigs.put(key, value)
+    }
     channelConfigs
   }
 

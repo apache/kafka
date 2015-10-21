@@ -22,6 +22,7 @@ import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.Herder;
+import org.apache.kafka.copycat.runtime.HerderConnectorContext;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.sink.SinkConnector;
 import org.apache.kafka.copycat.sink.SinkTask;
@@ -65,7 +66,7 @@ public class StandaloneHerder implements Herder {
     }
 
     @Override
-    public synchronized void addConnector(Properties connectorProps,
+    public synchronized void addConnector(Map<String, String> connectorProps,
                                           Callback<String> callback) {
         try {
             ConnectorState connState = createConnector(connectorProps);
@@ -91,8 +92,18 @@ public class StandaloneHerder implements Herder {
         }
     }
 
-    // Creates the and configures the connector. Does not setup any tasks
-    private ConnectorState createConnector(Properties connectorProps) {
+    @Override
+    public synchronized void requestTaskReconfiguration(String connName) {
+        ConnectorState state = connectors.get(connName);
+        if (state == null) {
+            log.error("Task that requested reconfiguration does not exist: {}", connName);
+            return;
+        }
+        updateConnectorTasks(state);
+    }
+
+    // Creates and configures the connector. Does not setup any tasks
+    private ConnectorState createConnector(Map<String, String> connectorProps) {
         ConnectorConfig connConfig = new ConnectorConfig(connectorProps);
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         String className = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
@@ -114,7 +125,7 @@ public class StandaloneHerder implements Herder {
             // may be caused by user code
             throw new CopycatException("Failed to create connector instance", t);
         }
-        connector.initialize(new StandaloneConnectorContext(this, connName));
+        connector.initialize(new HerderConnectorContext(this, connName));
         try {
             connector.start(configs);
         } catch (CopycatException e) {
@@ -220,21 +231,6 @@ public class StandaloneHerder implements Herder {
     private void updateConnectorTasks(ConnectorState state) {
         removeConnectorTasks(state);
         createConnectorTasks(state);
-    }
-
-    /**
-     * Requests reconfiguration of the task. This should only be triggered by
-     * {@link StandaloneConnectorContext}.
-     *
-     * @param connName name of the connector that should be reconfigured
-     */
-    public synchronized void requestTaskReconfiguration(String connName) {
-        ConnectorState state = connectors.get(connName);
-        if (state == null) {
-            log.error("Task that requested reconfiguration does not exist: {}", connName);
-            return;
-        }
-        updateConnectorTasks(state);
     }
 
 

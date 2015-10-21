@@ -43,7 +43,7 @@ class ConsumerCoordinator(val brokerId: Int,
                           val groupConfig: GroupManagerConfig,
                           val offsetConfig: OffsetManagerConfig,
                           private val offsetManager: OffsetManager,
-                          zkClient: ZkClient) extends Logging {
+                          zkUtils: ZkUtils) extends Logging {
 
   this.logIdent = "[ConsumerCoordinator " + brokerId + "]: "
 
@@ -57,9 +57,9 @@ class ConsumerCoordinator(val brokerId: Int,
            groupConfig: GroupManagerConfig,
            offsetConfig: OffsetManagerConfig,
            replicaManager: ReplicaManager,
-           zkClient: ZkClient,
+           zkUtils: ZkUtils,
            scheduler: KafkaScheduler) = this(brokerId, groupConfig, offsetConfig,
-    new OffsetManager(offsetConfig, replicaManager, zkClient, scheduler), zkClient)
+    new OffsetManager(offsetConfig, replicaManager, zkUtils, scheduler), zkUtils)
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -81,7 +81,7 @@ class ConsumerCoordinator(val brokerId: Int,
     info("Starting up.")
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", brokerId)
     rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", brokerId)
-    coordinatorMetadata = new CoordinatorMetadata(brokerId, zkClient, maybePrepareRebalance)
+    coordinatorMetadata = new CoordinatorMetadata(brokerId, zkUtils, maybePrepareRebalance)
     isActive.set(true)
     info("Startup complete.")
   }
@@ -184,6 +184,38 @@ class ConsumerCoordinator(val brokerId: Int,
 
         if (group.is(PreparingRebalance))
           rebalancePurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+      }
+    }
+  }
+
+  def handleLeaveGroup(groupId: String, consumerId: String, responseCallback: Short => Unit) {
+    if (!isActive.get) {
+      responseCallback(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code)
+    } else if (!isCoordinatorForGroup(groupId)) {
+      responseCallback(Errors.NOT_COORDINATOR_FOR_CONSUMER.code)
+    } else {
+      val group = coordinatorMetadata.getGroup(groupId)
+      if (group == null) {
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
+        // joining without specified consumer id,
+        responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
+      } else {
+        group synchronized {
+          if (group.is(Dead)) {
+            responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
+          } else if (!group.has(consumerId)) {
+            responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
+          } else {
+            val consumer = group.get(consumerId)
+            removeHeartbeatForLeavingConsumer(group, consumer)
+            onConsumerFailure(group, consumer)
+            responseCallback(Errors.NONE.code)
+            if (group.is(PreparingRebalance))
+              rebalancePurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+          }
+        }
       }
     }
   }
@@ -311,6 +343,12 @@ class ConsumerCoordinator(val brokerId: Int,
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(consumerKey))
   }
 
+  private def removeHeartbeatForLeavingConsumer(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
+    consumer.isLeaving = true
+    val consumerKey = ConsumerKey(consumer.groupId, consumer.consumerId)
+    heartbeatPurgatory.checkAndComplete(consumerKey)
+  }
+
   private def addConsumer(consumerId: String,
                           topics: Set[String],
                           sessionTimeoutMs: Int,
@@ -370,7 +408,7 @@ class ConsumerCoordinator(val brokerId: Int,
     info("Stabilized group %s generation %s".format(group.groupId, group.generationId))
   }
 
-  private def onConsumerHeartbeatExpired(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
+  private def onConsumerFailure(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
     trace("Consumer %s in group %s has failed".format(consumer.consumerId, group.groupId))
     removeConsumer(group, consumer)
     maybePrepareRebalance(group)
@@ -389,7 +427,7 @@ class ConsumerCoordinator(val brokerId: Int,
 
   def tryCompleteRebalance(group: ConsumerGroupMetadata, forceComplete: () => Boolean) = {
     group synchronized {
-      if (group.notYetRejoinedConsumers == List.empty[ConsumerMetadata])
+      if (group.notYetRejoinedConsumers.isEmpty)
         forceComplete()
       else false
     }
@@ -431,7 +469,7 @@ class ConsumerCoordinator(val brokerId: Int,
 
   def tryCompleteHeartbeat(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group synchronized {
-      if (shouldKeepConsumerAlive(consumer, heartbeatDeadline))
+      if (shouldKeepConsumerAlive(consumer, heartbeatDeadline) || consumer.isLeaving)
         forceComplete()
       else false
     }
@@ -440,7 +478,7 @@ class ConsumerCoordinator(val brokerId: Int,
   def onExpirationHeartbeat(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, heartbeatDeadline: Long) {
     group synchronized {
       if (!shouldKeepConsumerAlive(consumer, heartbeatDeadline))
-        onConsumerHeartbeatExpired(group, consumer)
+        onConsumerFailure(group, consumer)
     }
   }
 
@@ -461,7 +499,7 @@ object ConsumerCoordinator {
   val OffsetsTopicName = "__consumer_offsets"
 
   def create(config: KafkaConfig,
-             zkClient: ZkClient,
+             zkUtils: ZkUtils,
              replicaManager: ReplicaManager,
              kafkaScheduler: KafkaScheduler): ConsumerCoordinator = {
     val offsetConfig = OffsetManagerConfig(maxMetadataSize = config.offsetMetadataMaxSize,
@@ -475,11 +513,11 @@ object ConsumerCoordinator {
     val groupConfig = GroupManagerConfig(consumerMinSessionTimeoutMs = config.consumerMinSessionTimeoutMs,
       consumerMaxSessionTimeoutMs = config.consumerMaxSessionTimeoutMs)
 
-    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkClient, kafkaScheduler)
+    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils, kafkaScheduler)
   }
 
   def create(config: KafkaConfig,
-             zkClient: ZkClient,
+             zkUtils: ZkUtils,
              offsetManager: OffsetManager): ConsumerCoordinator = {
     val offsetConfig = OffsetManagerConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
@@ -492,6 +530,6 @@ object ConsumerCoordinator {
     val groupConfig = GroupManagerConfig(consumerMinSessionTimeoutMs = config.consumerMinSessionTimeoutMs,
       consumerMaxSessionTimeoutMs = config.consumerMaxSessionTimeoutMs)
 
-    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, offsetManager, zkClient)
+    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, offsetManager, zkUtils)
   }
 }

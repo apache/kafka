@@ -44,7 +44,7 @@ trait NotificationHandler {
  * @param changeExpirationMs
  * @param time
  */
-class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
+class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
                                        private val seqNodeRoot: String,
                                        private val seqNodePrefix: String,
                                        private val notificationHandler: NotificationHandler,
@@ -56,8 +56,8 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
    * create seqNodeRoot and begin watching for any new children nodes.
    */
   def init() {
-    ZkUtils.makeSurePersistentPathExists(zkClient, seqNodeRoot)
-    zkClient.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
+    zkUtils.makeSurePersistentPathExists(seqNodeRoot)
+    zkUtils.zkClient.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
     processAllNotifications()
   }
 
@@ -65,7 +65,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
    * Process all changes
    */
   def processAllNotifications() {
-    val changes = zkClient.getChildren(seqNodeRoot)
+    val changes = zkUtils.zkClient.getChildren(seqNodeRoot)
     processNotifications(changes.asScala.sorted)
   }
 
@@ -80,7 +80,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
         val changeId = changeNumber(notification)
         if (changeId > lastExecutedChange) {
           val changeZnode = seqNodeRoot + "/" + notification
-          val (data, stat) = ZkUtils.readDataMaybeNull(zkClient, changeZnode)
+          val (data, stat) = zkUtils.readDataMaybeNull(changeZnode)
           data map (notificationHandler.processNotification(_)) getOrElse(logger.warn(s"read null data from $changeZnode when processing notification $notification"))
         }
         lastExecutedChange = changeId
@@ -97,11 +97,11 @@ class ZkNodeChangeNotificationListener(private val zkClient: ZkClient,
   private def purgeObsoleteNotifications(now: Long, notifications: Seq[String]) {
     for (notification <- notifications.sorted) {
       val notificationNode = seqNodeRoot + "/" + notification
-      val (data, stat) = ZkUtils.readDataMaybeNull(zkClient, notificationNode)
+      val (data, stat) = zkUtils.readDataMaybeNull(notificationNode)
       if (data.isDefined) {
         if (now - stat.getCtime > changeExpirationMs) {
           debug(s"Purging change notification $notificationNode")
-          ZkUtils.deletePath(zkClient, notificationNode)
+          zkUtils.deletePath(notificationNode)
         }
       }
     }

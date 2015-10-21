@@ -25,7 +25,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.util.HashSet;
@@ -35,6 +34,7 @@ import java.util.Set;
 public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
+    protected final Serdes<K, V> serialization;
 
     private final Time time;
     private final Sensor putTime;
@@ -50,12 +50,16 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final String topic;
     private final int partition;
     private final Set<K> dirty;
+    private final Set<K> removed;
     private final int maxDirty;
+    private final int maxRemoved;
     private final ProcessorContext context;
 
     // always wrap the logged store with the metered store
-    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, ProcessorContext context, String metricGrp, Time time) {
+    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, ProcessorContext context,
+                                Serdes<K, V> serialization, String metricGrp, Time time) {
         this.inner = inner;
+        this.serialization = serialization;
 
         this.time = time;
         this.metrics = context.metrics();
@@ -74,13 +78,15 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.context = context;
 
         this.dirty = new HashSet<K>();
-        this.maxDirty = 100;        // TODO: this needs to be configurable
+        this.removed = new HashSet<K>();
+        this.maxDirty = 100; // TODO: this needs to be configurable
+        this.maxRemoved = 100; // TODO: this needs to be configurable
 
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();
         try {
-            final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keyDeserializer();
-            final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueDeserializer();
+            final Deserializer<K> keyDeserializer = serialization.keyDeserializer();
+            final Deserializer<V> valDeserializer = serialization.valueDeserializer();
 
             context.register(this, new StateRestoreCallback() {
                 @Override
@@ -121,8 +127,8 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             this.inner.put(key, value);
 
             this.dirty.add(key);
-            if (this.dirty.size() > this.maxDirty)
-                logChange();
+            this.removed.remove(key);
+            maybeLogChange();
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
@@ -135,11 +141,12 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             this.inner.putAll(entries);
 
             for (Entry<K, V> entry : entries) {
-                this.dirty.add(entry.key());
+                K key = entry.key();
+                this.dirty.add(key);
+                this.removed.remove(key);
             }
 
-            if (this.dirty.size() > this.maxDirty)
-                logChange();
+            maybeLogChange();
         } finally {
             this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
         }
@@ -151,14 +158,26 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         try {
             V value = this.inner.delete(key);
 
-            this.dirty.add(key);
-            if (this.dirty.size() > this.maxDirty)
-                logChange();
+            this.dirty.remove(key);
+            this.removed.add(key);
+            maybeLogChange();
 
             return value;
         } finally {
             this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
         }
+    }
+
+    /**
+     * Called when the underlying {@link #inner} {@link KeyValueStore} removes an entry in response to a call from this
+     * store other than {@link #delete(Object)}.
+     * 
+     * @param key the key for the entry that the inner store removed
+     */
+    protected void removed(K key) {
+        this.dirty.remove(key);
+        this.removed.add(key);
+        maybeLogChange();
     }
 
     @Override
@@ -187,16 +206,25 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
-    private void logChange() {
-        RecordCollector collector = ((ProcessorContextImpl) context).recordCollector();
-        Serializer<K> keySerializer = (Serializer<K>) context.keySerializer();
-        Serializer<V> valueSerializer = (Serializer<V>) context.valueSerializer();
+    private void maybeLogChange() {
+        if (this.dirty.size() > this.maxDirty || this.removed.size() > this.maxRemoved)
+            logChange();
+    }
 
+    private void logChange() {
+        RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         if (collector != null) {
+            Serializer<K> keySerializer = serialization.keySerializer();
+            Serializer<V> valueSerializer = serialization.valueSerializer();
+
+            for (K k : this.removed) {
+                collector.send(new ProducerRecord<>(this.topic, this.partition, k, (V) null), keySerializer, valueSerializer);
+            }
             for (K k : this.dirty) {
                 V v = this.inner.get(k);
                 collector.send(new ProducerRecord<>(this.topic, this.partition, k, v), keySerializer, valueSerializer);
             }
+            this.removed.clear();
             this.dirty.clear();
         }
     }

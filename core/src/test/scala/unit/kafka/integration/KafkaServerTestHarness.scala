@@ -17,12 +17,14 @@
 
 package kafka.integration
 
+import java.io.File
 import java.util.Arrays
 
 import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Before}
 
 import scala.collection.mutable.Buffer
@@ -52,13 +54,16 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   def bootstrapUrl = servers.map(s => s.config.hostName + ":" + s.boundPort()).mkString(",")
 
+  protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  protected def trustStoreFile: Option[File] = None
+
   @Before
   override def setUp() {
     super.setUp
     if(configs.size <= 0)
       throw new KafkaException("Must supply at least one server config.")
     servers = configs.map(TestUtils.createServer(_)).toBuffer
-    brokerList = TestUtils.getBrokerListStrFromServers(servers)
+    brokerList = TestUtils.getBrokerListStrFromServers(servers, securityProtocol)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
   }

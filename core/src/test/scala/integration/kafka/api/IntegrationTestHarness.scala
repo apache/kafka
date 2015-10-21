@@ -23,7 +23,7 @@ import kafka.utils.TestUtils
 import java.util.Properties
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import kafka.server.{OffsetManager, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.junit.{After, Before}
 import scala.collection.mutable.Buffer
@@ -41,11 +41,12 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   lazy val consumerConfig = new Properties
   lazy val serverConfig = new Properties
 
-  var consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-  var producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+  val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   override def generateConfigs() = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect)
+    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile)
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
   }
@@ -66,7 +67,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       consumers += new KafkaConsumer(consumerConfig)
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkClient, ConsumerCoordinator.OffsetsTopicName,
+    TestUtils.createTopic(zkUtils, ConsumerCoordinator.OffsetsTopicName,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,

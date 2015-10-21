@@ -137,11 +137,16 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
+    /**
+     * Evaluates client responses via `SaslServer.evaluateResponse` and returns the issued challenge to the client until
+     * authentication succeeds or fails.
+     *
+     * The messages are sent and received as size delimited bytes that consists of a 4 byte network-ordered size N
+     * followed by N bytes representing the opaque payload.
+     */
     public void authenticate() throws IOException {
-        if (netOutBuffer != null && !flushNetOutBuffer()) {
-            transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+        if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
-        }
 
         if (saslServer.isComplete()) {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
@@ -161,10 +166,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 byte[] response = saslServer.evaluateResponse(clientToken);
                 if (response != null) {
                     netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
-                    if (flushNetOutBuffer())
-                        transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-                    else
-                        transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+                    flushNetOutBufferAndUpdateInterestOps();
                 }
             } catch (Exception e) {
                 throw new IOException(e);
@@ -182,6 +184,15 @@ public class SaslServerAuthenticator implements Authenticator {
 
     public void close() throws IOException {
         saslServer.dispose();
+    }
+
+    private boolean flushNetOutBufferAndUpdateInterestOps() throws IOException {
+        boolean flushedCompletely = flushNetOutBuffer();
+        if (flushedCompletely)
+            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+        else
+            transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+        return flushedCompletely;
     }
 
     private boolean flushNetOutBuffer() throws IOException {

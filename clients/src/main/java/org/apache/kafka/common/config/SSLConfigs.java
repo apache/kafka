@@ -66,11 +66,9 @@ public class SSLConfigs {
 
     public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
     public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file. ";
-    public static final String DEFAULT_TRUSTSTORE_LOCATION = "/tmp/ssl.truststore.jks";
 
     public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
     public static final String SSL_TRUSTSTORE_PASSWORD_DOC = "The password for the trust store file. ";
-    public static final String DEFAULT_TRUSTSTORE_PASSWORD = "truststore_password";
 
     public static final String SSL_KEYMANAGER_ALGORITHM_CONFIG = "ssl.keymanager.algorithm";
     public static final String SSL_KEYMANAGER_ALGORITHM_DOC = "The algorithm used by key manager factory for SSL connections. "
@@ -94,9 +92,5 @@ public class SSLConfigs {
                                            + " <li><code>ssl.client.auth=requested</code> This means client authentication is optional."
                                            + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
                                            + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
-
-    public static final String SSL_NEED_CLIENT_AUTH_DOC = "It can be REQUESTED . "
-        + "Default value is false";
-    public static final Boolean DEFAULT_SSL_NEED_CLIENT_AUTH = false;
 
 }

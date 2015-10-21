@@ -263,7 +263,7 @@ public class ConfigDef {
                     if (value instanceof Class)
                         return (Class<?>) value;
                     else if (value instanceof String)
-                        return Class.forName(trimmed);
+                        return Class.forName(trimmed, true, Utils.getContextOrKafkaClassLoader());
                     else
                         throw new ConfigException(name, value, "Expected a Class instance or class name.");
                 default:
