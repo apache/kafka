@@ -23,11 +23,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.InvalidMetadataException;
-import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -315,7 +311,7 @@ public class Fetcher<K, V> {
             for (TopicPartition topicPartition : unauthorizedTopicPartitions)
                 sb.append(topicPartition + ",");
             unauthorizedTopicPartitions.clear();
-            throw new ApiException(String.format("Not authorized to read from %s", sb.substring(0, sb.length() - 1).toString()));
+            throw new AuthorizationException(String.format("Not authorized to read from %s", sb.substring(0, sb.length() - 1).toString()));
         }
     }
      /**
