@@ -16,9 +16,10 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.clients.consumer.internals.Coordinator;
+import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -43,7 +44,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -403,7 +403,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final String JMX_PREFIX = "kafka.consumer";
 
     private String clientId;
-    private final Coordinator coordinator;
+    private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
     private final Fetcher<K, V> fetcher;
@@ -416,7 +416,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long retryBackoffMs;
     private long requestTimeoutMs;
     private boolean closed = false;
-    private Metadata.Listener metadataListener;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
@@ -527,15 +526,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
+                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), time);
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs);
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase());
             this.subscriptions = new SubscriptionState(offsetResetStrategy);
-            this.coordinator = new Coordinator(this.client,
+            List<PartitionAssignor> assignors = config.getConfiguredInstances(
+                    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+                    PartitionAssignor.class);
+            this.coordinator = new ConsumerCoordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
                     config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
-                    config.getString(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    assignors,
+                    this.metadata,
                     this.subscriptions,
                     metrics,
                     metricGrpPrefix,
@@ -543,7 +546,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.time,
                     requestTimeoutMs,
                     retryBackoffMs,
-                    new Coordinator.DefaultOffsetCommitCallback(),
+                    new ConsumerCoordinator.DefaultOffsetCommitCallback(),
                     config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
                     config.getLong(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
             if (keyDeserializer == null) {
@@ -652,7 +655,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
             this.subscriptions.subscribe(topics, listener);
-            metadata.setTopics(topics);
+            metadata.setTopics(subscriptions.groupSubscription());
         } finally {
             release();
         }
@@ -699,22 +702,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             log.debug("Subscribed to pattern: {}", pattern);
-            metadataListener = new Metadata.Listener() {
-                @Override
-                public void onMetadataUpdate(Cluster cluster) {
-                    final List<String> topicsToSubscribe = new ArrayList<>();
-
-                    for (String topic : cluster.topics())
-                        if (subscriptions.getSubscribedPattern().matcher(topic).matches())
-                            topicsToSubscribe.add(topic);
-
-                    subscriptions.changeSubscription(topicsToSubscribe);
-                    metadata.setTopics(topicsToSubscribe);
-                }
-            };
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
-            this.metadata.addListener(metadataListener);
         } finally {
             release();
         }
@@ -729,7 +718,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.subscriptions.unsubscribe();
             this.coordinator.resetGeneration();
             this.metadata.needMetadataForAllTopics(false);
-            this.metadata.removeListener(metadataListener);
         } finally {
             release();
         }
@@ -778,6 +766,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             offset reset policy has been configured.
      * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
+     * @throws org.apache.kafka.clients.consumer.ConsumerWakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
@@ -817,6 +806,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
+     * @throws org.apache.kafka.clients.consumer.ConsumerWakeupException if {@link #wakeup()} is called before or while this function is called
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
@@ -855,6 +845,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller).
+     *
+     * @throws org.apache.kafka.clients.consumer.ConsumerWakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public void commitSync() {
@@ -877,6 +869,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller).
      *
      * @param offsets A map of offsets by partition with associated metadata
+     * @throws org.apache.kafka.clients.consumer.ConsumerWakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -1001,6 +994,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The offset
      * @throws NoOffsetForPartitionException If a position hasn't been set for a given partition, and no reset policy is
      *             available.
+     * @throws org.apache.kafka.clients.consumer.ConsumerWakeupException if {@link #wakeup()} is called before or while this function is called
      */
     public long position(TopicPartition partition) {
         acquire();
@@ -1027,6 +1021,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partition The partition to check
      * @return The last committed offset and metadata or null if there was no prior commit
+     * @throws org.apache.kafka.clients.consumer.ConsumerWakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
@@ -1064,6 +1059,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param topic The topic to get partition metadata for
      * @return The list of partitions
+     * @throws org.apache.kafka.clients.consumer.ConsumerWakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1071,12 +1067,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Cluster cluster = this.metadata.fetch();
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
-            if (parts == null) {
-                metadata.add(topic);
-                client.awaitMetadataUpdate();
-                parts = metadata.fetch().partitionsForTopic(topic);
-            }
-            return parts;
+            if (parts != null)
+                return parts;
+
+            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topic), requestTimeoutMs);
+            return topicMetadata.get(topic);
         } finally {
             release();
         }
@@ -1087,12 +1082,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * server.
      *
      * @return The map of topics and its partitions
+     * @throws org.apache.kafka.clients.consumer.ConsumerWakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {
         acquire();
         try {
-            return fetcher.getAllTopics(requestTimeoutMs);
+            return fetcher.getAllTopicMetadata(requestTimeoutMs);
         } finally {
             release();
         }

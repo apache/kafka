@@ -29,6 +29,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -53,6 +54,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -124,6 +126,25 @@ public class FetcherTest {
             assertEquals(offset, record.offset());
             offset += 1;
         }
+    }
+
+    @Test(expected = RecordTooLargeException.class)
+    public void testFetchRecordTooLarge() {
+        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.seek(tp, 0);
+
+        // prepare large record
+        MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
+        byte[] bytes = new byte[this.fetchSize];
+        new Random().nextBytes(bytes);
+        records.append(1L, null, bytes);
+        records.close();
+
+        // resize the limit of the buffer to pretend it is only fetch-size large
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse((ByteBuffer) records.flip().limit(this.fetchSize), Errors.NONE.code(), 100L, 0));
+        consumerClient.poll(0);
+        fetcher.fetchedRecords();
     }
 
     @Test
@@ -329,11 +350,11 @@ public class FetcherTest {
 
     @Test
     public void testGetAllTopics() throws InterruptedException {
-        // sending response before request, as getAllTopics is a blocking call
+        // sending response before request, as getTopicMetadata is a blocking call
         client.prepareResponse(
             new MetadataResponse(cluster, Collections.<String, Errors>emptyMap()).toStruct());
 
-        Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopics(5000L);
+        Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
 
         assertEquals(cluster.topics().size(), allTopics.size());
     }

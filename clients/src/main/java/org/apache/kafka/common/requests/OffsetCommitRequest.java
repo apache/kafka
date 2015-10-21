@@ -34,7 +34,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.OFFSET_COMMIT.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String GENERATION_ID_KEY_NAME = "group_generation_id";
-    private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
+    private static final String MEMBER_ID_KEY_NAME = "member_id";
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String RETENTION_TIME_KEY_NAME = "retention_time";
 
@@ -52,7 +52,7 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     // default values for the current version
     public static final int DEFAULT_GENERATION_ID = -1;
-    public static final String DEFAULT_CONSUMER_ID = "";
+    public static final String DEFAULT_MEMBER_ID = "";
     public static final long DEFAULT_RETENTION_TIME = -1L;
 
     // default values for old versions,
@@ -61,7 +61,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     public static final long DEFAULT_TIMESTAMP = -1L;            // for V0, V1
 
     private final String groupId;
-    private final String consumerId;
+    private final String memberId;
     private final int generationId;
     private final long retentionTime;
     private final Map<TopicPartition, PartitionData> offsetData;
@@ -97,7 +97,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         initCommonFields(groupId, offsetData);
         this.groupId = groupId;
         this.generationId = DEFAULT_GENERATION_ID;
-        this.consumerId = DEFAULT_CONSUMER_ID;
+        this.memberId = DEFAULT_MEMBER_ID;
         this.retentionTime = DEFAULT_RETENTION_TIME;
         this.offsetData = offsetData;
     }
@@ -106,19 +106,19 @@ public class OffsetCommitRequest extends AbstractRequest {
      * Constructor for version 1.
      * @param groupId
      * @param generationId
-     * @param consumerId
+     * @param memberId
      * @param offsetData
      */
     @Deprecated
-    public OffsetCommitRequest(String groupId, int generationId, String consumerId, Map<TopicPartition, PartitionData> offsetData) {
+    public OffsetCommitRequest(String groupId, int generationId, String memberId, Map<TopicPartition, PartitionData> offsetData) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, 1)));
 
         initCommonFields(groupId, offsetData);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
-        struct.set(CONSUMER_ID_KEY_NAME, consumerId);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
         this.groupId = groupId;
         this.generationId = generationId;
-        this.consumerId = consumerId;
+        this.memberId = memberId;
         this.retentionTime = DEFAULT_RETENTION_TIME;
         this.offsetData = offsetData;
     }
@@ -127,20 +127,20 @@ public class OffsetCommitRequest extends AbstractRequest {
      * Constructor for version 2.
      * @param groupId
      * @param generationId
-     * @param consumerId
+     * @param memberId
      * @param retentionTime
      * @param offsetData
      */
-    public OffsetCommitRequest(String groupId, int generationId, String consumerId, long retentionTime, Map<TopicPartition, PartitionData> offsetData) {
+    public OffsetCommitRequest(String groupId, int generationId, String memberId, long retentionTime, Map<TopicPartition, PartitionData> offsetData) {
         super(new Struct(CURRENT_SCHEMA));
 
         initCommonFields(groupId, offsetData);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
-        struct.set(CONSUMER_ID_KEY_NAME, consumerId);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
         struct.set(RETENTION_TIME_KEY_NAME, retentionTime);
         this.groupId = groupId;
         this.generationId = generationId;
-        this.consumerId = consumerId;
+        this.memberId = memberId;
         this.retentionTime = retentionTime;
         this.offsetData = offsetData;
     }
@@ -183,10 +183,10 @@ public class OffsetCommitRequest extends AbstractRequest {
             generationId = DEFAULT_GENERATION_ID;
 
         // This field only exists in v1.
-        if (struct.hasField(CONSUMER_ID_KEY_NAME))
-            consumerId = struct.getString(CONSUMER_ID_KEY_NAME);
+        if (struct.hasField(MEMBER_ID_KEY_NAME))
+            memberId = struct.getString(MEMBER_ID_KEY_NAME);
         else
-            consumerId = DEFAULT_CONSUMER_ID;
+            memberId = DEFAULT_MEMBER_ID;
 
         // This field only exists in v2
         if (struct.hasField(RETENTION_TIME_KEY_NAME))
@@ -243,8 +243,8 @@ public class OffsetCommitRequest extends AbstractRequest {
         return generationId;
     }
 
-    public String consumerId() {
-        return consumerId;
+    public String memberId() {
+        return memberId;
     }
 
     public long retentionTime() {

@@ -200,6 +200,7 @@ public class Selector implements Selectable {
             log.error("Exception closing nioSelector:", se);
         }
         sensors.close();
+        channelBuilder.close();
     }
 
     /**

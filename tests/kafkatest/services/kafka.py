@@ -15,14 +15,15 @@
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-
+from kafkatest.services.performance.jmx_mixin import JmxMixin
+from kafkatest.utils.security_config import SecurityConfig
 import json
 import re
 import signal
 import time
 
 
-class KafkaService(Service):
+class KafkaService(JmxMixin, Service):
 
     logs = {
         "kafka_log": {
@@ -33,18 +34,28 @@ class KafkaService(Service):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, zk, topics=None):
+    def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
+                 topics=None, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
         """
         :type context
         :type zk: ZookeeperService
         :type topics: dict
         """
-        super(KafkaService, self).__init__(context, num_nodes)
+        Service.__init__(self, context, num_nodes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         self.zk = zk
+        if security_protocol == SecurityConfig.SSL or interbroker_security_protocol == SecurityConfig.SSL:
+            self.security_config = SecurityConfig(SecurityConfig.SSL)
+        else:
+            self.security_config = SecurityConfig(SecurityConfig.PLAINTEXT)
+        self.security_protocol = security_protocol
+        self.interbroker_security_protocol = interbroker_security_protocol
+        self.port = 9092 if security_protocol == SecurityConfig.PLAINTEXT else 9093
         self.topics = topics
+        self.quota_config = quota_config
 
     def start(self):
-        super(KafkaService, self).start()
+        Service.start(self)
 
         # Create topics if necessary
         if self.topics is not None:
@@ -56,16 +67,20 @@ class KafkaService(Service):
                 self.create_topic(topic_cfg)
 
     def start_node(self, node):
-        props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node))
+        props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node),
+            port = self.port, security_protocol = self.security_protocol, quota_config=self.quota_config,
+            interbroker_security_protocol=self.interbroker_security_protocol)
         self.logger.info("kafka.properties:")
         self.logger.info(props_file)
         node.account.create_file("/mnt/kafka.properties", props_file)
+        self.security_config.setup_node(node)
 
-        cmd = "/opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid"
+        cmd = "JMX_PORT=%d /opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid" % self.jmx_port
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log("/mnt/kafka.log") as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
+        self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
             raise Exception("No process ids recorded on node %s" % str(node))
 
@@ -95,8 +110,10 @@ class KafkaService(Service):
         node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=False)
 
     def clean_node(self, node):
+        JmxMixin.clean_node(self, node)
         node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log /mnt/kafka.pid", allow_fail=False)
+        self.security_config.clean_node(node)
 
     def create_topic(self, topic_cfg):
         node = self.nodes[0] # any node is fine here
@@ -227,4 +244,10 @@ class KafkaService(Service):
         return self.get_node(leader_idx)
 
     def bootstrap_servers(self):
-        return ','.join([node.account.hostname + ":9092" for node in self.nodes])
+        """Get the broker list to connect to Kafka using the specified security protocol
+        """
+        return ','.join([node.account.hostname + ":" + `self.port` for node in self.nodes])
+
+    def read_jmx_output_all_nodes(self):
+        for node in self.nodes:
+            self.read_jmx_output(self.idx(node), node)

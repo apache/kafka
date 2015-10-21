@@ -24,16 +24,16 @@ public interface Time {
     /**
      * The current time in milliseconds
      */
-    public long milliseconds();
+    long milliseconds();
 
     /**
      * The current time in nanoseconds
      */
-    public long nanoseconds();
+    long nanoseconds();
 
     /**
      * Sleep for the given number of milliseconds
      */
-    public void sleep(long ms);
+    void sleep(long ms);
 
 }

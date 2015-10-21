@@ -15,10 +15,13 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.utils.util import wait_until
+from kafkatest.services.performance.jmx_mixin import JmxMixin
+from kafkatest.services.performance import PerformanceService
+from kafkatest.utils.security_config import SecurityConfig
 
 import os
 import subprocess
-
+import itertools
 
 def is_int(msg):
     """Default method used to check whether text pulled from console consumer is a message.
@@ -71,7 +74,7 @@ Option                                  Description
 """
 
 
-class ConsoleConsumer(BackgroundThreadService):
+class ConsoleConsumer(JmxMixin, PerformanceService):
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/console_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stdout")
@@ -93,13 +96,16 @@ class ConsoleConsumer(BackgroundThreadService):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, message_validator=None, from_beginning=True, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, kafka, topic, security_protocol=None, new_consumer=None, message_validator=None,
+                 from_beginning=True, consumer_timeout_ms=None, client_id="console-consumer", jmx_object_names=None, jmx_attributes=[]):
         """
         Args:
             context:                    standard context
             num_nodes:                  number of nodes to use (this should be 1)
             kafka:                      kafka service
             topic:                      consume from this topic
+            security_protocol:          security protocol for Kafka connections
+            new_consumer:               use new Kafka consumer if True
             message_validator:          function which returns message or None
             from_beginning:             consume from beginning if True, else from the end
             consumer_timeout_ms:        corresponds to consumer.timeout.ms. consumer process ends if time between
@@ -107,8 +113,10 @@ class ConsoleConsumer(BackgroundThreadService):
                                         waiting for the consumer to stop is a pretty good way to consume all messages
                                         in a topic.
         """
-        super(ConsoleConsumer, self).__init__(context, num_nodes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
+        PerformanceService.__init__(self, context, num_nodes)
         self.kafka = kafka
+        self.new_consumer = new_consumer
         self.args = {
             'topic': topic,
         }
@@ -118,6 +126,20 @@ class ConsoleConsumer(BackgroundThreadService):
         self.from_beginning = from_beginning
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
+        self.client_id = client_id
+
+        # Process client configuration
+        self.prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms, client_id=self.client_id)
+
+        # Add security properties to the config. If security protocol is not specified,
+        # use the default in the template properties.
+        self.security_config = SecurityConfig(security_protocol, self.prop_file)
+        self.security_protocol = self.security_config.security_protocol
+        if self.new_consumer is None:
+            self.new_consumer = self.security_protocol == SecurityConfig.SSL
+        if self.security_protocol == SecurityConfig.SSL and not self.new_consumer:
+            raise Exception("SSL protocol is supported only with the new consumer")
+        self.prop_file += str(self.security_config)
 
     @property
     def start_cmd(self):
@@ -126,14 +148,21 @@ class ConsoleConsumer(BackgroundThreadService):
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
+        args['jmx_port'] = self.jmx_port
 
         cmd = "export LOG_DIR=%s;" % ConsoleConsumer.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsoleConsumer.LOG4J_CONFIG
-        cmd += " /opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s --zookeeper %(zk_connect)s" \
+        cmd += " JMX_PORT=%(jmx_port)d /opt/kafka/bin/kafka-console-consumer.sh --topic %(topic)s" \
             " --consumer.config %(config_file)s" % args
 
+        if self.new_consumer:
+            cmd += " --new-consumer --bootstrap-server %s"  % self.kafka.bootstrap_servers()
+        else:
+            cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:
             cmd += " --from-beginning"
+        if self.consumer_timeout_ms is not None:
+            cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd
@@ -153,14 +182,10 @@ class ConsoleConsumer(BackgroundThreadService):
         node.account.ssh("mkdir -p %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload config file
-        if self.consumer_timeout_ms is not None:
-            prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms)
-        else:
-            prop_file = self.render('console_consumer.properties')
-
         self.logger.info("console_consumer.properties:")
-        self.logger.info(prop_file)
-        node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
+        self.logger.info(self.prop_file)
+        node.account.create_file(ConsoleConsumer.CONFIG_FILE, self.prop_file)
+        self.security_config.setup_node(node)
 
         # Create and upload log properties
         log_config = self.render('tools_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
@@ -169,18 +194,24 @@ class ConsoleConsumer(BackgroundThreadService):
         # Run and capture output
         cmd = self.start_cmd
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
-        for line in node.account.ssh_capture(cmd, allow_fail=False):
+
+        consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
+        first_line = consumer_output.next()
+        self.start_jmx_tool(idx, node)
+        for line in itertools.chain([first_line], consumer_output):
             msg = line.strip()
             if self.message_validator is not None:
                 msg = self.message_validator(msg)
             if msg is not None:
                 self.messages_consumed[idx].append(msg)
 
+        self.read_jmx_output(idx, node)
+
     def start_node(self, node):
-        super(ConsoleConsumer, self).start_node(node)
+        PerformanceService.start_node(self, node)
 
     def stop_node(self, node):
-        node.account.kill_process("java", allow_fail=True)
+        node.account.kill_process("console_consumer", allow_fail=True)
         wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.2,
                    err_msg="Timed out waiting for consumer to stop.")
 
@@ -188,6 +219,7 @@ class ConsoleConsumer(BackgroundThreadService):
         if self.alive(node):
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
-        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
+        JmxMixin.clean_node(self, node)
+        PerformanceService.clean_node(self, node)
         node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
-
+        self.security_config.clean_node(node)

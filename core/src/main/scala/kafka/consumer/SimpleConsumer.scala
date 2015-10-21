@@ -112,9 +112,9 @@ class SimpleConsumer(val host: String,
     TopicMetadataResponse.readFrom(response.payload())
   }
 
-  def send(request: ConsumerMetadataRequest): ConsumerMetadataResponse = {
+  def send(request: GroupMetadataRequest): GroupMetadataResponse = {
     val response = sendRequest(request)
-    ConsumerMetadataResponse.readFrom(response.payload())
+    GroupMetadataResponse.readFrom(response.payload())
   }
 
   /**

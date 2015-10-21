@@ -218,7 +218,7 @@ object CoreUtils extends Logging {
    * Create an instance of the class with the given class name
    */
   def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className).asInstanceOf[Class[T]]
+    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }

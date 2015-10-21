@@ -64,6 +64,8 @@ public class StreamTask implements Punctuator {
     private StampedRecord currRecord = null;
     private ProcessorNode currNode = null;
 
+    private boolean requiresPoll = true;
+
     /**
      * Create {@link StreamTask} with its assigned partitions
      *
@@ -173,8 +175,12 @@ public class StreamTask implements Punctuator {
             StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
             // if there is no record to process, return immediately
-            if (record == null)
+            if (record == null) {
+                requiresPoll = true;
                 return 0;
+            }
+
+            requiresPoll = false;
 
             try {
                 // process the record by passing to the source node of the topology
@@ -196,6 +202,11 @@ public class StreamTask implements Punctuator {
                 // decreased to the threshold, we can then resume the consumption on this partition
                 if (partitionGroup.numBuffered(partition) == this.maxBufferedSize) {
                     consumer.resume(partition);
+                    requiresPoll = true;
+                }
+
+                if (partitionGroup.topQueueSize() <= this.maxBufferedSize) {
+                    requiresPoll = true;
                 }
             } finally {
                 this.currRecord = null;
@@ -204,6 +215,10 @@ public class StreamTask implements Punctuator {
 
             return partitionGroup.numBuffered();
         }
+    }
+
+    public boolean requiresPoll() {
+        return requiresPoll;
     }
 
     /**
@@ -245,11 +260,11 @@ public class StreamTask implements Punctuator {
      * Commit the current task state
      */
     public void commit() {
-        // 1) flush produced records in the downstream and change logs of local states
-        recordCollector.flush();
-
-        // 2) flush local state
+        // 1) flush local state
         stateMgr.flush();
+
+        // 2) flush produced records in the downstream and change logs of local states
+        recordCollector.flush();
 
         // 3) commit consumed offsets if it is dirty already
         if (commitOffsetNeeded) {

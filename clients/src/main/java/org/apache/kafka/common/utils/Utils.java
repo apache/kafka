@@ -23,12 +23,15 @@ import java.io.StringWriter;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Properties;
@@ -48,6 +51,18 @@ public class Utils {
     public static final String NL = System.getProperty("line.separator");
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
+    /**
+     * Get a sorted list representation of a collection.
+     * @param collection The collection to sort
+     * @param <T> The class of objects in the collection
+     * @return An unmodifiable sorted list with the contents of the collection
+     */
+    public static <T extends Comparable<? super T>> List<T> sorted(Collection<T> collection) {
+        List<T> res = new ArrayList<>(collection);
+        Collections.sort(res);
+        return Collections.unmodifiableList(res);
+    }
 
     /**
      * Turn the given UTF8 byte array into a string
@@ -110,6 +125,21 @@ public class Utils {
              | (in.read() << 8 * 2)
              | (in.read() << 8 * 3);
     }
+
+    /**
+     * Get the little-endian value of an integer as a byte array.
+     * @param val The value to convert to a litte-endian array
+     * @return The little-endian encoded array of bytes for the value
+     */
+    public static byte[] toArrayLE(int val) {
+        return new byte[] {
+            (byte) (val >> 8 * 0),
+            (byte) (val >> 8 * 1),
+            (byte) (val >> 8 * 2),
+            (byte) (val >> 8 * 3)
+        };
+    }
+
 
     /**
      * Read an unsigned integer stored in little-endian format from a byte array
@@ -294,7 +324,7 @@ public class Utils {
      * @return the new instance
      */
     public static <T> T newInstance(String klass, Class<T> base) throws ClassNotFoundException {
-        return Utils.newInstance(Class.forName(klass).asSubclass(base));
+        return Utils.newInstance(Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base));
     }
 
     /**
@@ -417,6 +447,17 @@ public class Utils {
                 propStream.close();
         }
         return props;
+    }
+
+    /**
+     * Converts a Properties object to a Map<String, String>, calling {@link #toString} to ensure all keys and values
+     * are Strings.
+     */
+    public static Map<String, String> propsToStringMap(Properties props) {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<Object, Object> entry : props.entrySet())
+            result.put(entry.getKey().toString(), entry.getValue().toString());
+        return result;
     }
 
     /**
@@ -565,4 +606,26 @@ public class Utils {
     public static <T> List<T> safe(List<T> other) {
         return other == null ? Collections.<T>emptyList() : other;
     }
+
+   /**
+    * Get the ClassLoader which loaded Kafka.
+    */
+    public static ClassLoader getKafkaClassLoader() {
+        return Utils.class.getClassLoader();
+    }
+
+    /**
+     * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
+     * loaded Kafka.
+     *
+     * This should be used whenever passing a ClassLoader to Class.forName
+     */
+    public static ClassLoader getContextOrKafkaClassLoader() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null)
+            return getKafkaClassLoader();
+        else
+            return cl;
+    }
+
 }

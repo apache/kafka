@@ -35,18 +35,18 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private val HostsString = Hosts.mkString(AclCommand.Delimiter.toString)
 
   private val TopicResources = Set(new Resource(Topic, "test-1"), new Resource(Topic, "test-2"))
-  private val ConsumerGroupResources = Set(new Resource(ConsumerGroup, "testGroup-1"), new Resource(ConsumerGroup, "testGroup-2"))
+  private val GroupResources = Set(new Resource(Group, "testGroup-1"), new Resource(Group, "testGroup-2"))
 
   private val ResourceToCommand = Map[Set[Resource], Array[String]](
     TopicResources -> Array("--topic", "test-1,test-2"),
     Set(Resource.ClusterResource) -> Array("--cluster"),
-    ConsumerGroupResources -> Array("--consumer-group", "testGroup-1,testGroup-2")
+    GroupResources -> Array("--group", "testGroup-1,testGroup-2")
   )
 
   private val ResourceToOperations = Map[Set[Resource], (Set[Operation], Array[String])](
     TopicResources -> (Set(Read, Write, Describe), Array("--operations", "Read,Write,Describe")),
     Set(Resource.ClusterResource) -> (Set(Create, ClusterAction), Array("--operations", "Create,ClusterAction")),
-    ConsumerGroupResources -> (Set(Read).toSet[Operation], Array("--operations", "Read"))
+    GroupResources -> (Set(Read).toSet[Operation], Array("--operations", "Read"))
   )
 
   private val ProducerResourceToAcls = Map[Set[Resource], Set[Acl]](
@@ -56,7 +56,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private val ConsumerResourceToAcls = Map[Set[Resource], Set[Acl]](
     TopicResources -> AclCommand.getAcls(Users, Allow, Set(Read, Describe), Hosts),
-    ConsumerGroupResources -> AclCommand.getAcls(Users, Allow, Set(Read), Hosts)
+    GroupResources -> AclCommand.getAcls(Users, Allow, Set(Read), Hosts)
   )
 
   private val CmdToResourcesToAcl = Map[Array[String], Map[Set[Resource], Set[Acl]]](

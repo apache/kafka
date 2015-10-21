@@ -35,9 +35,8 @@ Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
     ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
 ### Running a particular test method within a unit test ###
-    ./gradlew core:test --tests kafka.api.test.ProducerFailureHandlingTest.testCannotSendToInternalTopic
-    ./gradlew clients:test --tests org.apache.kafka.clients.producer.MetadataTest.testMetadataUpdateWaitTime
-    
+    ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
+    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
 
 ### Running a particular unit test with log4j output ###
     change the log4j setting in either clients/src/test/resources/log4j.properties or core/src/test/resources/log4j.properties
@@ -104,6 +103,12 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
 	
 ### Running checkstyle on the java code ###
     ./gradlew checkstyleMain checkstyleTest
+
+### Limit the number of processes for each task ###
+    ./gradlew -Dorg.gradle.project.maxParallelForks=1 test
+
+This will most commonly be useful for automated builds where the full resources of the host running the build and tests
+may not be dedicated to Kafka's build.
 
 ### Running in Vagrant ###
 

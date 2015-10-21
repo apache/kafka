@@ -51,7 +51,8 @@ object ConsoleConsumer extends Logging {
 
     val consumer =
       if (conf.useNewConsumer) {
-        new NewShinyConsumer(conf.topicArg, getNewConsumerProps(conf))
+        val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+        new NewShinyConsumer(conf.topicArg, getNewConsumerProps(conf), timeoutMs)
       } else {
         checkZk(conf)
         new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
@@ -100,8 +101,8 @@ object ConsoleConsumer extends Logging {
         consumer.receive()
       } catch {
         case e: Throwable => {
-          error("Error processing message, stopping consumer: ", e)
-          consumer.stop()
+          error("Error processing message, terminating consumer process: ", e)
+          // Consumer will be closed
           return
         }
       }
@@ -112,7 +113,7 @@ object ConsoleConsumer extends Logging {
           if (skipMessageOnError) {
             error("Error processing message, skipping this message: ", e)
           } else {
-            consumer.stop()
+            // Consumer will be closed
             throw e
           }
       }
@@ -149,6 +150,8 @@ object ConsoleConsumer extends Logging {
 
     if (config.options.has(config.deleteConsumerOffsetsOpt))
       ZkUtils.maybeDeletePath(config.options.valueOf(config.zkConnectOpt), "/consumers/" + config.consumerProps.getProperty("group.id"))
+    if (config.timeoutMs >= 0)
+      props.put("consumer.timeout.ms", config.timeoutMs.toString)
 
     props
   }
@@ -204,6 +207,10 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("num_messages")
       .ofType(classOf[java.lang.Integer])
+    val timeoutMsOpt = parser.accepts("timeout-ms", "If specified, exit if no message is available for consumption for the specified interval.")
+      .withRequiredArg
+      .describedAs("timeout_ms")
+      .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
     val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
@@ -246,6 +253,7 @@ object ConsoleConsumer extends Logging {
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
     val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
+    val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)

@@ -14,7 +14,6 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.ssl.SSLFactory;
 
 import java.util.Map;
 
@@ -24,19 +23,27 @@ public class ChannelBuilders {
 
     /**
      * @param securityProtocol the securityProtocol
-     * @param mode the SSL mode, it must be non-null if `securityProcol` is `SSL` and it is ignored otherwise
+     * @param mode the mode, it must be non-null if `securityProtocol` is not `PLAINTEXT`;
+     *             it is ignored otherwise
+     * @param loginType the loginType, it must be non-null if `securityProtocol` is SASL_*; it is ignored otherwise
      * @param configs client/server configs
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
-    public static ChannelBuilder create(SecurityProtocol securityProtocol, SSLFactory.Mode mode, Map<String, ?> configs) {
-        ChannelBuilder channelBuilder = null;
+    public static ChannelBuilder create(SecurityProtocol securityProtocol, Mode mode, LoginType loginType, Map<String, ?> configs) {
+        ChannelBuilder channelBuilder;
 
         switch (securityProtocol) {
             case SSL:
-                if (mode == null)
-                    throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `SSL`");
+                requireNonNullMode(mode, securityProtocol);
                 channelBuilder = new SSLChannelBuilder(mode);
+                break;
+            case SASL_SSL:
+            case SASL_PLAINTEXT:
+                requireNonNullMode(mode, securityProtocol);
+                if (loginType == null)
+                    throw new IllegalArgumentException("`loginType` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+                channelBuilder = new SaslChannelBuilder(mode, loginType, securityProtocol);
                 break;
             case PLAINTEXT:
             case TRACE:
@@ -49,4 +56,10 @@ public class ChannelBuilders {
         channelBuilder.configure(configs);
         return channelBuilder;
     }
+
+    private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {
+        if (mode == null)
+            throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+    }
+
 }
