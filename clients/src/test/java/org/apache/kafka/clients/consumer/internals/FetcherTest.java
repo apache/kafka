@@ -350,11 +350,11 @@ public class FetcherTest {
 
     @Test
     public void testGetAllTopics() throws InterruptedException {
-        // sending response before request, as getAllTopics is a blocking call
+        // sending response before request, as getTopicMetadata is a blocking call
         client.prepareResponse(
             new MetadataResponse(cluster, Collections.<String, Errors>emptyMap()).toStruct());
 
-        Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopics(5000L);
+        Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
 
         assertEquals(cluster.topics().size(), allTopics.size());
     }

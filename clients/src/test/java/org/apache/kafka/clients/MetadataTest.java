@@ -195,7 +195,6 @@ public class MetadataTest {
             new HashSet<>(Arrays.asList("topic", "topic1")), topics);
     }
 
-
     private Thread asyncFetch(final String topic) {
         Thread thread = new Thread() {
             public void run() {

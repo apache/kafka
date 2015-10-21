@@ -20,9 +20,9 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class ConsumerMetadataResponse extends AbstractRequestResponse {
+public class GroupMetadataResponse extends AbstractRequestResponse {
     
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.CONSUMER_METADATA.id);
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.GROUP_METADATA.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String COORDINATOR_KEY_NAME = "coordinator";
 
@@ -34,7 +34,7 @@ public class ConsumerMetadataResponse extends AbstractRequestResponse {
     private final short errorCode;
     private final Node node;
 
-    public ConsumerMetadataResponse(short errorCode, Node node) {
+    public GroupMetadataResponse(short errorCode, Node node) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
         Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
@@ -46,7 +46,7 @@ public class ConsumerMetadataResponse extends AbstractRequestResponse {
         this.node = node;
     }
 
-    public ConsumerMetadataResponse(Struct struct) {
+    public GroupMetadataResponse(Struct struct) {
         super(struct);
         errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
         Struct broker = (Struct) struct.get(COORDINATOR_KEY_NAME);
@@ -64,7 +64,7 @@ public class ConsumerMetadataResponse extends AbstractRequestResponse {
         return node;
     }
 
-    public static ConsumerMetadataResponse parse(ByteBuffer buffer) {
-        return new ConsumerMetadataResponse((Struct) CURRENT_SCHEMA.read(buffer));
+    public static GroupMetadataResponse parse(ByteBuffer buffer) {
+        return new GroupMetadataResponse((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

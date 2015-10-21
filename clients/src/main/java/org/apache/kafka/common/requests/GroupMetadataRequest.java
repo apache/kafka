@@ -21,21 +21,21 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class ConsumerMetadataRequest extends AbstractRequest {
+public class GroupMetadataRequest extends AbstractRequest {
     
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.CONSUMER_METADATA.id);
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.GROUP_METADATA.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
 
     private final String groupId;
 
-    public ConsumerMetadataRequest(String groupId) {
+    public GroupMetadataRequest(String groupId) {
         super(new Struct(CURRENT_SCHEMA));
 
         struct.set(GROUP_ID_KEY_NAME, groupId);
         this.groupId = groupId;
     }
 
-    public ConsumerMetadataRequest(Struct struct) {
+    public GroupMetadataRequest(Struct struct) {
         super(struct);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
     }
@@ -44,10 +44,10 @@ public class ConsumerMetadataRequest extends AbstractRequest {
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         switch (versionId) {
             case 0:
-                return new ConsumerMetadataResponse(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
+                return new GroupMetadataResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.CONSUMER_METADATA.id)));
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.GROUP_METADATA.id)));
         }
     }
 
@@ -55,11 +55,11 @@ public class ConsumerMetadataRequest extends AbstractRequest {
         return groupId;
     }
 
-    public static ConsumerMetadataRequest parse(ByteBuffer buffer, int versionId) {
-        return new ConsumerMetadataRequest(ProtoUtils.parseRequest(ApiKeys.CONSUMER_METADATA.id, versionId, buffer));
+    public static GroupMetadataRequest parse(ByteBuffer buffer, int versionId) {
+        return new GroupMetadataRequest(ProtoUtils.parseRequest(ApiKeys.GROUP_METADATA.id, versionId, buffer));
     }
 
-    public static ConsumerMetadataRequest parse(ByteBuffer buffer) {
-        return new ConsumerMetadataRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    public static GroupMetadataRequest parse(ByteBuffer buffer) {
+        return new GroupMetadataRequest((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

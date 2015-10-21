@@ -29,9 +29,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -151,11 +151,11 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createConsumerMetadataRequest() {
-        return new ConsumerMetadataRequest("test-group");
+        return new GroupMetadataRequest("test-group");
     }
 
     private AbstractRequestResponse createConsumerMetadataResponse() {
-        return new ConsumerMetadataResponse((short) 1, new Node(10, "host1", 2014));
+        return new GroupMetadataResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
     }
 
     private AbstractRequest createFetchRequest() {
@@ -180,11 +180,17 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createJoinGroupRequest() {
-        return new JoinGroupRequest("group1", 30000, Arrays.asList("topic1"), "consumer1", "strategy1");
+        ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
+        List<JoinGroupRequest.GroupProtocol> protocols = new ArrayList<>();
+        protocols.add(new JoinGroupRequest.GroupProtocol("consumer-range", metadata));
+        return new JoinGroupRequest("group1", 30000, "consumer1", "consumer", protocols);
     }
 
     private AbstractRequestResponse createJoinGroupResponse() {
-        return new JoinGroupResponse(Errors.NONE.code(), 1, "consumer1", Arrays.asList(new TopicPartition("test11", 1), new TopicPartition("test2", 1)));
+        Map<String, ByteBuffer> members = new HashMap<>();
+        members.put("consumer1", ByteBuffer.wrap(new byte[]{}));
+        members.put("consumer2", ByteBuffer.wrap(new byte[]{}));
+        return new JoinGroupResponse(Errors.NONE.code(), 1, "range", "consumer1", "leader", members);
     }
 
     private AbstractRequest createLeaveGroupRequest() {

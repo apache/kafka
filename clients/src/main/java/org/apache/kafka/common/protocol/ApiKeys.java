@@ -30,10 +30,11 @@ public enum ApiKeys {
     CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown"),
     OFFSET_COMMIT(8, "OffsetCommit"),
     OFFSET_FETCH(9, "OffsetFetch"),
-    CONSUMER_METADATA(10, "ConsumerMetadata"),
+    GROUP_METADATA(10, "GroupMetadata"),
     JOIN_GROUP(11, "JoinGroup"),
     HEARTBEAT(12, "Heartbeat"),
-    LEAVE_GROUP(13, "LeaveGroup");
+    LEAVE_GROUP(13, "LeaveGroup"),
+    SYNC_GROUP(14, "SyncGroup");
 
     private static ApiKeys[] codeToType;
     public static final int MAX_API_KEY;
