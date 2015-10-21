@@ -95,8 +95,8 @@ class KafkaService(JmxMixin, Service):
 
         # TODO - clean up duplicate configuration logic
         prop_file = cfg.render()
-        prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node))
-
+        prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
+                                  security_config=self.security_config, port=self.port)
         return prop_file
 
     def start_cmd(self, node):
