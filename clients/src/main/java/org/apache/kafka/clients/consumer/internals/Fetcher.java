@@ -167,20 +167,31 @@ public class Fetcher<K, V> {
         }
     }
 
-
+    /**
+     * Get topic metadata for all topics in the cluster
+     * @param timeout time for which getting topic metadata is attempted
+     * @return The map of topics with their partition information
+     */
+    public Map<String, List<PartitionInfo>> getAllTopicMetadata(long timeout) {
+        return getTopicMetadata(null, timeout);
+    }
 
     /**
      * Get metadata for all topics present in Kafka cluster
      *
-     * @param timeout time for which getting all topics is attempted
-     * @return The map of topics and its partitions
+     * @param topics The list of topics to fetch or null to fetch all
+     * @param timeout time for which getting topic metadata is attempted
+     * @return The map of topics with their partition information
      */
-    public Map<String, List<PartitionInfo>> getAllTopics(long timeout) {
+    public Map<String, List<PartitionInfo>> getTopicMetadata(List<String> topics, long timeout) {
+        if (topics != null && topics.isEmpty())
+            return Collections.emptyMap();
+
         final HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
         long startTime = time.milliseconds();
 
         while (time.milliseconds() - startTime < timeout) {
-            RequestFuture<ClientResponse> requestFuture = sendMetadataRequest();
+            RequestFuture<ClientResponse> requestFuture = sendMetadataRequest(topics);
             if (requestFuture != null) {
                 client.poll(requestFuture);
 
@@ -209,11 +220,12 @@ public class Fetcher<K, V> {
      * Send Metadata Request to least loaded node in Kafka cluster asynchronously
      * @return A future that indicates result of sent metadata request
      */
-    public RequestFuture<ClientResponse> sendMetadataRequest() {
+    public RequestFuture<ClientResponse> sendMetadataRequest(List<String> topics) {
+        if (topics == null)
+            topics = Collections.emptyList();
         final Node node = client.leastLoadedNode();
         return node == null ? null :
-            client.send(
-                node, ApiKeys.METADATA, new MetadataRequest(Collections.<String>emptyList()));
+            client.send(node, ApiKeys.METADATA, new MetadataRequest(topics));
     }
 
     /**
@@ -448,8 +460,9 @@ public class Fetcher<K, V> {
                 long fetched = this.subscriptions.fetched(partition);
                 long consumed = this.subscriptions.consumed(partition);
                 // Only fetch data for partitions whose previously fetched data has been consumed
-                if (consumed == fetched)
+                if (consumed == fetched) {
                     fetch.put(partition, new FetchRequest.PartitionData(fetched, this.fetchSize));
+                }
             }
         }
 

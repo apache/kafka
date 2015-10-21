@@ -23,16 +23,15 @@ import kafka.common.{Topic, AdminCommandFailedException}
 import kafka.utils.CommandLineUtils
 import kafka.utils._
 import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection._
 import scala.collection.JavaConversions._
-import kafka.log.LogConfig
-import kafka.consumer.Whitelist
-import kafka.server.{ConfigType, OffsetManager}
+import kafka.log.{Defaults, LogConfig}
+import kafka.consumer.{ConsumerConfig, Whitelist}
+import kafka.server.ConfigType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
-import kafka.coordinator.ConsumerCoordinator
+import kafka.coordinator.GroupCoordinator
 
 
 object TopicCommand extends Logging {
@@ -96,11 +95,13 @@ object TopicCommand extends Logging {
       println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.")
     if (opts.options.has(opts.replicaAssignmentOpt)) {
       val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
+      warnOnMaxMessagesChange(configs, assignment.valuesIterator.next().length)
       AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignment, configs, update = false)
     } else {
       CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
       val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
       val replicas = opts.options.valueOf(opts.replicationFactorOpt).intValue
+      warnOnMaxMessagesChange(configs, replicas)
       AdminUtils.createTopic(zkUtils, topic, partitions, replicas, configs)
     }
     println("Created topic \"%s\".".format(topic))
@@ -128,7 +129,7 @@ object TopicCommand extends Logging {
       }
 
       if(opts.options.has(opts.partitionsOpt)) {
-        if (topic == ConsumerCoordinator.OffsetsTopicName) {
+        if (topic == GroupCoordinator.OffsetsTopicName) {
           throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
         }
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +
@@ -332,5 +333,55 @@ object TopicCommand extends Logging {
       CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
         allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt)
     }
+  }
+  def warnOnMaxMessagesChange(configs: Properties, replicas: Integer): Unit = {
+    val maxMessageBytes =  configs.get(LogConfig.MaxMessageBytesProp) match {
+      case n: String => n.toInt
+      case _ => -1
+    }
+    if (maxMessageBytes > Defaults.MaxMessageSize)
+      if (replicas > 1) {
+        error(longMessageSizeWarning(maxMessageBytes))
+        askToProceed
+      }
+      else
+        warn(shortMessageSizeWarning(maxMessageBytes))
+  }
+
+  def askToProceed: Unit = {
+    println("Are you sure you want to continue? [y/n]")
+    if (!Console.readLine().equalsIgnoreCase("y")) {
+      println("Ending your session")
+      System.exit(0)
+    }
+  }
+
+  def shortMessageSizeWarning(maxMessageBytes: Int): String = {
+    "\n\n" +
+      "*****************************************************************************************************\n" +
+      "*** WARNING: you are creating a topic where the the max.message.bytes is greater than the consumer ***\n" +
+      "*** default. This operation is potentially dangerous. Consumers will get failures if their        ***\n" +
+      "*** fetch.message.max.bytes < the value you are using.                                            ***\n" +
+      "*****************************************************************************************************\n" +
+      s"- value set here: $maxMessageBytes\n" +
+      s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n" +
+      s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n\n"
+  }
+
+  def longMessageSizeWarning(maxMessageBytes: Int): String = {
+    "\n\n" +
+      "****************************************************************************************************\n" +
+      "*** WARNING: you are creating a topic where the max.message.bytes is greater than the broker      ***\n" +
+      "*** default. This operation is dangerous. There are two potential side effects:                  ***\n" +
+      "*** - Consumers will get failures if their fetch.message.max.bytes < the value you are using     ***\n" +
+      "*** - Producer requests larger than replica.fetch.max.bytes will not replicate and hence have    ***\n" +
+      "***   a higher risk of data loss                                                                 ***\n" +
+      "*** You should ensure both of these settings are greater than the value set here before using    ***\n" +
+      "*** this topic.                                                                                  ***\n" +
+      "****************************************************************************************************\n" +
+      s"- value set here: $maxMessageBytes\n" +
+      s"- Default Broker replica.fetch.max.bytes: ${kafka.server.Defaults.ReplicaFetchMaxBytes}\n" +
+      s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n" +
+      s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n\n"
   }
 }

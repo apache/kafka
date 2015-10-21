@@ -58,7 +58,14 @@ public class SSLTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
-    public SSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
+    public static SSLTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
+        SSLTransportLayer transportLayer = new SSLTransportLayer(channelId, key, sslEngine);
+        transportLayer.startHandshake();
+        return transportLayer;
+    }
+
+    // Prefer `create`, only use this in tests
+    SSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();

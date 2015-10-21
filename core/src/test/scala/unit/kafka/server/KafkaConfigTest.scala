@@ -465,8 +465,8 @@ class KafkaConfigTest {
         case KafkaConfig.ControlledShutdownMaxRetriesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ControlledShutdownRetryBackoffMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ControlledShutdownEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
-        case KafkaConfig.ConsumerMinSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.ConsumerMaxSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.GroupMinSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.GroupMaxSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.OffsetMetadataMaxSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.OffsetsLoadBufferSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.OffsetsTopicReplicationFactorProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
@@ -506,6 +506,14 @@ class KafkaConfigTest {
         case KafkaConfig.SSLTrustManagerAlgorithmProp =>
         case KafkaConfig.SSLClientAuthProp => // ignore string
         case KafkaConfig.SSLCipherSuitesProp => // ignore string
+
+        //Sasl Configs
+        case KafkaConfig.SaslKerberosServiceNameProp => // ignore string
+        case KafkaConfig.SaslKerberosKinitCmdProp =>
+        case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
+        case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
+        case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
+        case KafkaConfig.AuthToLocalProp => // ignore string
 
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }

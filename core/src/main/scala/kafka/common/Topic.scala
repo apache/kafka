@@ -18,7 +18,7 @@
 package kafka.common
 
 import util.matching.Regex
-import kafka.coordinator.ConsumerCoordinator
+import kafka.coordinator.GroupCoordinator
 
 
 object Topic {
@@ -26,7 +26,7 @@ object Topic {
   private val maxNameLength = 255
   private val rgx = new Regex(legalChars + "+")
 
-  val InternalTopics = Set(ConsumerCoordinator.OffsetsTopicName)
+  val InternalTopics = Set(GroupCoordinator.OffsetsTopicName)
 
   def validate(topic: String) {
     if (topic.length <= 0)
