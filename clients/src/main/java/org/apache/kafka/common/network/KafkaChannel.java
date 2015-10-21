@@ -61,11 +61,9 @@ public class KafkaChannel {
     }
 
     /**
-     * Does handshake of transportLayer and Authentication using configured authenticator
+     * Does handshake of transportLayer and authentication using configured authenticator
      */
     public void prepare() throws IOException {
-        if (transportLayer.ready() && authenticator.complete())
-            return;
         if (!transportLayer.ready())
             transportLayer.handshake();
         if (transportLayer.ready() && !authenticator.complete())
