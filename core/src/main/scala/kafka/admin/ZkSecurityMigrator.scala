@@ -149,7 +149,9 @@ object ZkSecurityMigrator extends Logging {
 
     val options = parser.parse(args : _*)
     if(options.has(helpOpt))
-      CommandLineUtils.printUsageAndDie(parser, "ZooKeeper Migration Tool Help")
+      CommandLineUtils.printUsageAndDie(parser, "ZooKeeper Migration Tool Help. This tool updates the ACLs of "
+                                                + "znodes as part of the process of setting up ZooKeeper "
+                                                + "authentication.")
 
     if ((jaasFile == null) && !options.has(jaasFileOpt)) {
       error("No JAAS configuration file has been specified. Please make sure that you have set either "

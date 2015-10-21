@@ -318,8 +318,6 @@ class ZkUtils(val zkClient: ZkClient,
 
     if (!zkClient.exists(path))
       ZkPath.createPersistent(zkClient, path, true, acl) //won't throw NoNodeException or NodeExistsException
-    else
-      ZkPath.setAcl(zkClient, path, acl)
   }
 
   /**
