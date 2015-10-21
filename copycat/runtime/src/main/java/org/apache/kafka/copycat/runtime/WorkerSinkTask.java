@@ -108,6 +108,9 @@ class WorkerSinkTask implements WorkerTask {
     /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
     public void poll(long timeoutMs) {
         try {
+            rewind();
+            long backOffMs = context.backoffMs();
+            timeoutMs = Math.max(timeoutMs, backOffMs);
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
             ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
             log.trace("{} polling returned {} messages", id, msgs.count());
@@ -236,6 +239,21 @@ class WorkerSinkTask implements WorkerTask {
         }
     }
 
+    private void rewind() {
+        Set<TopicPartition> rewinds = context.rewinds();
+        if (rewinds.isEmpty()) {
+            return;
+        }
+        Map<TopicPartition, Long> offsets = context.offsets();
+        for (TopicPartition tp: rewinds) {
+            Long offset = offsets.get(tp);
+            if (offset != null) {
+                log.trace("Rewind {} to offset {}.", tp, offset);
+                consumer.seek(tp, offset);
+            }
+        }
+        rewinds.clear();
+    }
 
     private class WorkerSinkTaskContext extends SinkTaskContext {
         @Override

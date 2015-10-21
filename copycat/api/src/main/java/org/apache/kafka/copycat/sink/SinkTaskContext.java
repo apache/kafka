@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -30,9 +31,12 @@ import java.util.Set;
 @InterfaceStability.Unstable
 public abstract class SinkTaskContext {
     private Map<TopicPartition, Long> offsets;
+    private long backoffMs = -1L;
+    private Set<TopicPartition> rewinds;
 
     public SinkTaskContext() {
         offsets = new HashMap<>();
+        rewinds = new HashSet<>();
     }
 
     /**
@@ -56,6 +60,40 @@ public abstract class SinkTaskContext {
      */
     public Map<TopicPartition, Long> offsets() {
         return offsets;
+    }
+
+    /**
+     * Set the backoff timeout. SinkTasks should use this to indicate that they need to retry certain
+     * operations after the backoff timeout.
+     * @param backoffMs the backoff timeout in milliseconds.
+     */
+    public void backoffMs(long backoffMs) {
+        this.backoffMs = backoffMs;
+    }
+
+    /**
+     * Get the backoff in milliseconds set by SinkTasks. Used by the Copycat framework.
+     * @return the backoff timeout in milliseconds.
+     */
+    public long backoffMs() {
+        return backoffMs;
+    }
+
+    /**
+     * Set the topics that needs to rewind. SinkTask should use this to indicate that some topic
+     * partitions needs to rewind.
+     * @param rewinds The set of topic partitions that needs to rewind.
+     */
+    public void rewinds(Set<TopicPartition> rewinds) {
+        this.rewinds = rewinds;
+    }
+
+    /**
+     * Get the topic partitions that needs to rewind.
+     * @return the set of topic partitions that needs to rewind.
+     */
+    public Set<TopicPartition> rewinds() {
+        return rewinds;
     }
 
     /**

@@ -17,9 +17,14 @@
 
 package org.apache.kafka.copycat.runtime;
 
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
@@ -31,7 +36,11 @@ import org.apache.kafka.copycat.storage.Converter;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.apache.kafka.copycat.util.MockTime;
 import org.apache.kafka.copycat.util.ThreadedTest;
-import org.easymock.*;
+import org.easymock.Capture;
+import org.easymock.CaptureType;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
+import org.easymock.IExpectationSetters;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -47,6 +56,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -349,6 +359,58 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testRewind() throws Exception {
+        Properties taskProps = new Properties();
+        expectInitializeTask(taskProps);
+        final long startOffset = 40L;
+
+        expectOnePoll().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                sinkTaskContext.getValue().rewinds(new HashSet<>(Arrays.asList(TOPIC_PARTITION)));
+                sinkTaskContext.getValue().offset(
+                    Collections.singletonMap(TOPIC_PARTITION, startOffset));
+                return null;
+            }
+        });
+
+        expectOnePoll().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                Set<TopicPartition> rewinds = sinkTaskContext.getValue().rewinds();
+                assertEquals(1, rewinds.size());
+                assertEquals(new HashSet<>(Arrays.asList(TOPIC_PARTITION)), rewinds);
+                return null;
+            }
+        });
+        consumer.seek(TOPIC_PARTITION, startOffset);
+        EasyMock.expectLastCall();
+
+
+        expectOnePoll().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                Set<TopicPartition> rewinds = sinkTaskContext.getValue().rewinds();
+                assertEquals(0, rewinds.size());
+                return null;
+            }
+        });
+
+        expectStopTask(3);
+
+        PowerMock.replayAll();
+
+        workerTask.start(taskProps);
+        workerThread.iteration();
+        workerThread.iteration();
+        workerThread.iteration();
+        workerTask.stop();
+        // No need for awaitStop since the thread is mocked
+        workerTask.close();
+
+        PowerMock.verifyAll();
+    }
 
     private void expectInitializeTask(Properties taskProps) throws Exception {
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));
