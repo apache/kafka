@@ -17,12 +17,14 @@
 
 package kafka.admin
 
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import javax.security.auth.login.LoginException
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
+import org.I0Itec.zkclient.exception.ZkException
 import kafka.utils.{ToolsUtils, Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils, ZkPath}
 import org.apache.kafka.common.security.JaasUtils
 
@@ -39,6 +41,8 @@ import scala.collection._
 import scala.concurrent._
 
 object ZkSecurityMigrator extends Logging {
+  val counter = new AtomicInteger(0)
+  var exception: ZkException = null
   val workQueue = new LinkedBlockingQueue[Runnable]
   val threadExecutionContext = 
     ExecutionContext.fromExecutor(new ThreadPoolExecutor(1,
@@ -48,6 +52,7 @@ object ZkSecurityMigrator extends Logging {
                                                          workQueue))
 
   def setAclsRecursively(zkUtils: ZkUtils, path: String) {
+    counter.incrementAndGet()
     zkUtils.zkConnection.getZookeeper.getChildren(path, false, GetChildrenCallback, zkUtils)
   }
 
@@ -56,27 +61,32 @@ object ZkSecurityMigrator extends Logging {
                         path: String,
                         ctx: Object,
                         children: java.util.List[String]) {
-        val list = children.asScala.toList
+        val list = if(children == null)
+          null
+        else
+          children.asScala.toList
         val zkUtils: ZkUtils = ctx.asInstanceOf[ZkUtils]
         val zkHandle = zkUtils.zkConnection.getZookeeper
         
         Code.get(rc) match {
           case Code.OK =>
             // Set ACL for each child
-            Future {
-              val childPathBuilder = new StringBuilder
-              for(child <- list) {
-                childPathBuilder.clear
-                childPathBuilder.append(path)
-                childPathBuilder.append("/")
-                childPathBuilder.append(child)
-                
-                val childPath = childPathBuilder.toString
-                
-                zkHandle.setACL(childPath, ZkUtils.DefaultAcls(true), -1, SetACLCallback, ctx)
-                zkHandle.getChildren(childPath, false, GetChildrenCallback, ctx)
-              }
-            }(threadExecutionContext)
+            if(list != null) 
+              Future {
+                val childPathBuilder = new StringBuilder
+                for(child <- list) {
+                  childPathBuilder.clear
+                  childPathBuilder.append(path)
+                  childPathBuilder.append("/")
+                  childPathBuilder.append(child)
+
+                  val childPath = childPathBuilder.toString
+                  counter.incrementAndGet()
+                  zkHandle.setACL(childPath, ZkUtils.DefaultAcls(true), -1, SetACLCallback, ctx)
+                  zkHandle.getChildren(childPath, false, GetChildrenCallback, ctx)
+                }
+                counter.decrementAndGet()
+              }(threadExecutionContext)
           case Code.CONNECTIONLOSS =>
             setAclsRecursively(zkUtils, path)
           case Code.NONODE =>
@@ -85,10 +95,10 @@ object ZkSecurityMigrator extends Logging {
             // Starting a new session isn't really a problem, but it'd complicate
             // the logic of the tool, so we quit and let the user re-run it.
             error("ZooKeeper session expired while changing ACLs")
-            System.exit(1)
+            exception = throw ZkException.create(KeeperException.create(rc))
           case _ =>
             error("Unexpected return code: %d".format(rc))
-            System.exit(1)
+            exception = throw ZkException.create(KeeperException.create(rc))
         }
       }
   }
@@ -104,6 +114,7 @@ object ZkSecurityMigrator extends Logging {
       Code.get(rc) match {
           case Code.OK =>
             info("Successfully set ACLs for %s".format(path))
+            counter.decrementAndGet()
           case Code.CONNECTIONLOSS =>
             Future {
               zkHandle.setACL(path, ZkUtils.DefaultAcls(true), -1, SetACLCallback, ctx)
@@ -114,10 +125,10 @@ object ZkSecurityMigrator extends Logging {
             // Starting a new session isn't really a problem, but it'd complicate
             // the logic of the tool, so we quit and let the user re-run it.
             error("ZooKeeper session expired while changing ACLs")
-            System.exit(1)
+            exception = throw ZkException.create(KeeperException.create(rc))
           case _ =>
             error("Unexpected return code: %d".format(rc))
-            System.exit(1)   
+            exception = throw ZkException.create(KeeperException.create(rc))   
       }
     }
   }
@@ -126,15 +137,14 @@ object ZkSecurityMigrator extends Logging {
     var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser()
 
-    val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").
-      withRequiredArg().ofType(classOf[String])
+    val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").withOptionalArg().ofType(classOf[String])
     val zkUrlOpt = parser.accepts("connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
                                   "takes a comma-separated list of host:port pairs.").
       withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
     val zkSessionTimeoutOpt = parser.accepts("session.timeout", "Sets the ZooKeeper session timeout.").
-      withRequiredArg().defaultsTo("30000").ofType(classOf[Integer])
+      withRequiredArg().ofType(classOf[java.lang.Integer])
     val zkConnectionTimeoutOpt = parser.accepts("connection.timeout", "Sets the ZooKeeper connection timeout.").
-      withRequiredArg().defaultsTo("30000").ofType(classOf[Integer])
+      withRequiredArg().defaultsTo("30000").ofType(classOf[java.lang.Integer])
     val helpOpt = parser.accepts("help", "Print usage information.")
 
     val options = parser.parse(args : _*)
@@ -144,7 +154,7 @@ object ZkSecurityMigrator extends Logging {
     if ((jaasFile == null) && !options.has(jaasFileOpt)) {
       error("No JAAS configuration file has been specified. Please make sure that you have set either "
             + "the system property %s or the option %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "--jaas.file"))
-      System.exit(1)
+      throw new IllegalArgumentException("Incorrect configuration")
     }
     
     if (jaasFile == null) {
@@ -152,20 +162,47 @@ object ZkSecurityMigrator extends Logging {
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
     }
     
-    if (JaasUtils.isZkSecurityEnabled(jaasFile)) {
+    if (!JaasUtils.isZkSecurityEnabled(jaasFile)) {
       error("Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile))
-      System.exit(1) 
+      throw new IllegalArgumentException("Incorrect configuration") 
     }
 
     val zkUrl = options.valueOf(zkUrlOpt)
-    val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt)
-    val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt)
 
-    val zkUtils = ZkUtils.apply(zkUrl, zkSessionTimeout, zkConnectionTimeout, true)
+    /* TODO: Need to fix this before it is checked in, not compiling
+     * val zkSessionTimeout = if (options.has(zkSessionTimeoutOpt)) {
+       options.valueOf(zkSessionTimeoutOpt).intValue
+     } else {
+       30000
+     }
+     val zkConnectionTimeout = if (options.has(zkConnectionTimeoutOpt)) {
+       options.valueOf(zkConnectionTimeoutOpt).intValue
+     } else {
+       30000
+     }*/
+    val zkUtils = ZkUtils.apply(zkUrl, 30000, 30000, true)
+
     for (path <- zkUtils.persistentZkPaths) {
       zkUtils.makeSurePersistentPathExists(path)
       setAclsRecursively(zkUtils, path)
-    } 
+    }
+
+    while(counter.get > 0 && exception != null) {
+      Thread.sleep(100)
+    }
+
+    if(exception != null) {
+      throw exception
+    }
+  }
+
+  def main(args: Array[String]) {
+    try{
+      run(args)
+    } catch {
+        case e: Exception =>
+          e.printStackTrace()
+    }
   }
   
   def main(args: Array[String]) {
