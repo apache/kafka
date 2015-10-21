@@ -127,6 +127,15 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
+     * Ensure our metadata is fresh (if an update is expected, this will block
+     * until it has completed).
+     */
+    public void ensureFreshMetadata() {
+        if (this.metadata.timeToNextUpdate(time.milliseconds()) == 0)
+            awaitMetadataUpdate();
+    }
+
+    /**
      * Wakeup an active poll. This will cause the polling thread to throw an exception either
      * on the current poll if one is active, or the next poll.
      */
@@ -175,7 +184,8 @@ public class ConsumerNetworkClient implements Closeable {
     private void poll(long timeout, long now) {
         // send all the requests we can send now
         pollUnsentRequests(now);
-
+        now = time.milliseconds();
+        
         // ensure we don't poll any longer than the deadline for
         // the next scheduled task
         timeout = Math.min(timeout, delayedTasks.nextTimeout(now));
@@ -190,7 +200,7 @@ public class ConsumerNetworkClient implements Closeable {
         pollUnsentRequests(now);
 
         // fail all requests that couldn't be sent
-        clearUnsentRequests(now);
+        clearUnsentRequests();
 
     }
 
@@ -228,11 +238,13 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     private void pollUnsentRequests(long now) {
-        while (trySend(now))
+        while (trySend(now)) {
             clientPoll(0, now);
+            now = time.milliseconds();
+        }
     }
 
-    private void clearUnsentRequests(long now) {
+    private void clearUnsentRequests() {
         // clear all unsent requests and fail their corresponding futures
         for (Map.Entry<Node, List<ClientRequest>> requestEntry: unsent.entrySet()) {
             Iterator<ClientRequest> iterator = requestEntry.getValue().iterator();
@@ -273,7 +285,7 @@ public class ConsumerNetworkClient implements Closeable {
     private void clientPoll(long timeout, long now) {
         client.poll(timeout, now);
         if (wakeup.get()) {
-            clearUnsentRequests(now);
+            clearUnsentRequests();
             wakeup.set(false);
             throw new ConsumerWakeupException();
         }

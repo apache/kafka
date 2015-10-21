@@ -14,26 +14,26 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
- * not a coordinator for.
+ * The broker returns this error code for consumer metadata requests or offset commit requests if the offsets topic has
+ * not yet been created.
  */
-public class NotCoordinatorForConsumerException extends RetriableException {
+public class GroupCoordinatorNotAvailableException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public NotCoordinatorForConsumerException() {
+    public GroupCoordinatorNotAvailableException() {
         super();
     }
 
-    public NotCoordinatorForConsumerException(String message) {
+    public GroupCoordinatorNotAvailableException(String message) {
         super(message);
     }
 
-    public NotCoordinatorForConsumerException(String message, Throwable cause) {
+    public GroupCoordinatorNotAvailableException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public NotCoordinatorForConsumerException(Throwable cause) {
+    public GroupCoordinatorNotAvailableException(Throwable cause) {
         super(cause);
     }
 

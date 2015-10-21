@@ -206,8 +206,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val resourceToAcls = Map[Resource, Set[Acl]](
       new Resource(Topic, Resource.WildCardResource) -> Set[Acl](new Acl(user2, Allow, WildCardHost, Read)),
       new Resource(Cluster, Resource.WildCardResource) -> Set[Acl](new Acl(user2, Allow, host1, Read)),
-      new Resource(ConsumerGroup, Resource.WildCardResource) -> acls,
-      new Resource(ConsumerGroup, "test-ConsumerGroup") -> acls
+      new Resource(Group, Resource.WildCardResource) -> acls,
+      new Resource(Group, "test-ConsumerGroup") -> acls
     )
 
     resourceToAcls foreach { case (key, value) => changeAclAndVerify(Set.empty[Acl], value, Set.empty[Acl], key) }

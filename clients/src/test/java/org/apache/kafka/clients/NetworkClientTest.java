@@ -52,10 +52,12 @@ public class NetworkClientTest {
     private int nodeId = 1;
     private Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     private Node node = cluster.nodes().get(0);
-    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs);
-
+    private long reconnectBackoffMsTest = 10 * 1000;
+    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest, 
+            64 * 1024, 64 * 1024, requestTimeoutMs, time);
+    
     private NetworkClient clientWithStaticNodes = new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-            "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs);
+            "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
 
     @Before
     public void setup() {
@@ -149,6 +151,31 @@ public class NetworkClientTest {
         assertEquals(node.idString(), disconnectedNode);
     }
 
+    @Test
+    public void testLeastLoadedNode() {
+        Node leastNode = null;
+        client.ready(node, time.milliseconds());
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+        
+        // leastloadednode should be our single node
+        leastNode = client.leastLoadedNode(time.milliseconds());
+        assertEquals("There should be one leastloadednode", leastNode.id(), node.id());
+        
+        // sleep for longer than reconnect backoff
+        time.sleep(reconnectBackoffMsTest);
+        
+        // CLOSE node 
+        selector.close(node.idString());
+        
+        client.poll(1, time.milliseconds());
+        assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
+        leastNode = client.leastLoadedNode(time.milliseconds());
+        assertEquals("There should be NO leastloadednode", leastNode, null);
+        
+    }
+    
     private static class TestCallbackHandler implements RequestCompletionHandler {
         public boolean executed = false;
         public ClientResponse response;

@@ -10,31 +10,24 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-
 package org.apache.kafka.common.errors;
 
-/**
- * The broker returns this error code for consumer metadata requests or offset commit requests if the offsets topic has
- * not yet been created.
- */
-public class ConsumerCoordinatorNotAvailableException extends RetriableException {
-
+public class UnknownMemberIdException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public ConsumerCoordinatorNotAvailableException() {
+    public UnknownMemberIdException() {
         super();
     }
 
-    public ConsumerCoordinatorNotAvailableException(String message) {
-        super(message);
-    }
-
-    public ConsumerCoordinatorNotAvailableException(String message, Throwable cause) {
+    public UnknownMemberIdException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public ConsumerCoordinatorNotAvailableException(Throwable cause) {
-        super(cause);
+    public UnknownMemberIdException(String message) {
+        super(message);
     }
 
+    public UnknownMemberIdException(Throwable cause) {
+        super(cause);
+    }
 }
