@@ -31,7 +31,7 @@ object AclCommand {
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
     Topic -> Set(Read, Write, Describe),
-    ConsumerGroup -> Set(Read),
+    Group -> Set(Read),
     Cluster -> Set(Create, ClusterAction)
   )
 
@@ -146,14 +146,14 @@ object AclCommand {
     val resources = getResource(opts)
 
     val topics: Set[Resource] = getResource(opts).filter(_.resourceType == Topic)
-    val consumerGroups: Set[Resource] = resources.filter(_.resourceType == ConsumerGroup)
+    val groups: Set[Resource] = resources.filter(_.resourceType == Group)
 
     //Read,Describe on topic, Read on consumerGroup + Create on cluster
 
     val acls = getAcl(opts, Set(Read, Describe))
 
     topics.map(_ -> acls).toMap[Resource, Set[Acl]] ++
-      consumerGroups.map(_ -> getAcl(opts, Set(Read))).toMap[Resource, Set[Acl]]
+      groups.map(_ -> getAcl(opts, Set(Read))).toMap[Resource, Set[Acl]]
   }
 
   private def getCliResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -221,10 +221,10 @@ object AclCommand {
       resources += Resource.ClusterResource
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valuesOf(opts.groupOpt).asScala.foreach(consumerGroup => resources += new Resource(ConsumerGroup, consumerGroup.trim))
+      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resources += new Resource(Group, group.trim))
 
     if (resources.isEmpty && dieIfNoResourceFound)
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --consumer-group <group>")
+      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group>")
 
     resources
   }
@@ -266,16 +266,16 @@ object AclCommand {
       .withValuesSeparatedBy(Delimiter)
 
     val clusterOpt = parser.accepts("cluster", "Add/Remove cluster acls.")
-    val groupOpt = parser.accepts("consumer-group", "Comma separated list of consumer groups to which the acls should be added or removed. " +
-      "A value of * indicates the acls should apply to all consumer-groups.")
+    val groupOpt = parser.accepts("group", "Comma separated list of groups to which the acls should be added or removed. " +
+      "A value of * indicates the acls should apply to all groups.")
       .withRequiredArg
-      .describedAs("consumer-group")
+      .describedAs("group")
       .ofType(classOf[String])
       .withValuesSeparatedBy(Delimiter)
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add acls.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove acls.")
-    val listOpt = parser.accepts("list", "List acls for the specified resource, use --topic <topic> or --consumer-group <group> or --cluster to specify a resource.")
+    val listOpt = parser.accepts("list", "List acls for the specified resource, use --topic <topic> or --group <group> or --cluster to specify a resource.")
 
     val operationsOpt = parser.accepts("operations", "Comma separated list of operations, default is All. Valid operation names are: " + Newline +
       Operation.values.map("\t" + _).mkString(Newline) + Newline)
@@ -320,7 +320,7 @@ object AclCommand {
       "This will generate acls that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")
 
     val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove acls for consumer role. " +
-      "This will generate acls that allows READ,DESCRIBE on topic and READ on consumer-group.")
+      "This will generate acls that allows READ,DESCRIBE on topic and READ on group.")
 
     val helpOpt = parser.accepts("help", "Print usage information.")
 
@@ -343,7 +343,7 @@ object AclCommand {
         CommandLineUtils.printUsageAndDie(parser, "With --producer you must specify a --topic")
 
       if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && options.has(clusterOpt))))
-        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --consumer-group and no --cluster option should be specified.")
+        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --group and no --cluster option should be specified.")
     }
   }
 

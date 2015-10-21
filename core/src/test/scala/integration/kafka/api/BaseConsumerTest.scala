@@ -29,7 +29,7 @@ import org.junit.{Test, Before}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import kafka.coordinator.ConsumerCoordinator
+import kafka.coordinator.GroupCoordinator
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
@@ -50,7 +50,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.ConsumerMinSessionTimeoutMsProp, "100") // set small enough session timeout
+  this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -154,7 +154,16 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     val numRecords = 10000
     sendRecords(numRecords)
 
-    consumer0.subscribe(List(topic))
+    val rebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+        // keep partitions paused in this test so that we can verify the commits based on specific seeks
+        partitions.foreach(consumer0.pause(_))
+      }
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
+    }
+
+    consumer0.subscribe(List(topic), rebalanceListener)
 
     val assignment = Set(tp, tp2)
     TestUtils.waitUntilTrue(() => {
@@ -166,11 +175,11 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     consumer0.seek(tp2, 500)
 
     // change subscription to trigger rebalance
-    consumer0.subscribe(List(topic, topic2))
+    consumer0.subscribe(List(topic, topic2), rebalanceListener)
 
     val newAssignment = Set(tp, tp2, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
     TestUtils.waitUntilTrue(() => {
-      consumer0.poll(50)
+      val records = consumer0.poll(50)
       consumer0.assignment() == newAssignment.asJava
     }, s"Expected partitions ${newAssignment.asJava} but actually got ${consumer0.assignment()}")
 
@@ -421,9 +430,9 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       consumer0.poll(50)
     
     // get metadata for the topic
-    var parts = consumer0.partitionsFor(ConsumerCoordinator.OffsetsTopicName).asScala
+    var parts = consumer0.partitionsFor(GroupCoordinator.OffsetsTopicName).asScala
     while(parts == null)
-      parts = consumer0.partitionsFor(ConsumerCoordinator.OffsetsTopicName).asScala
+      parts = consumer0.partitionsFor(GroupCoordinator.OffsetsTopicName).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts(0).leader())
     
@@ -436,6 +445,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       consumer0.poll(50)
 
     assertEquals(2, listener.callsToAssigned)
+
+    // only expect one revocation since revoke is not invoked on initial membership
     assertEquals(2, listener.callsToRevoked)
 
     consumer0.close()

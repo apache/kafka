@@ -10,24 +10,31 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-public class UnknownConsumerIdException extends ApiException {
+/**
+ * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
+ * not a coordinator for.
+ */
+public class NotCoordinatorForGroupException extends RetriableException {
+
     private static final long serialVersionUID = 1L;
 
-    public UnknownConsumerIdException() {
+    public NotCoordinatorForGroupException() {
         super();
     }
 
-    public UnknownConsumerIdException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public UnknownConsumerIdException(String message) {
+    public NotCoordinatorForGroupException(String message) {
         super(message);
     }
 
-    public UnknownConsumerIdException(Throwable cause) {
+    public NotCoordinatorForGroupException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public NotCoordinatorForGroupException(Throwable cause) {
         super(cause);
     }
+
 }

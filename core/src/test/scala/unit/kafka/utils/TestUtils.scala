@@ -49,12 +49,10 @@ import kafka.utils.ZkUtils._
 
 import org.junit.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.clients.consumer.{RangeAssignor, KafkaConsumer}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.ssl.SSLFactory
-import org.apache.kafka.common.config.SSLConfigs
 import org.apache.kafka.test.TestSSLUtils
 
 import scala.collection.Map
@@ -481,7 +479,7 @@ object TestUtils extends Logging {
                         groupId: String,
                         autoOffsetReset: String = "earliest",
                         partitionFetchSize: Long = 4096L,
-                        partitionAssignmentStrategy: String = "blah",
+                        partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
                         sessionTimeout: Int = 30000,
                         securityProtocol: SecurityProtocol,
                         trustStoreFile: Option[File] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {

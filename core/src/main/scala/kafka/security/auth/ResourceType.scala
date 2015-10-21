@@ -33,8 +33,8 @@ case object Topic extends ResourceType {
   val name = "Topic"
 }
 
-case object ConsumerGroup extends ResourceType {
-  val name = "ConsumerGroup"
+case object Group extends ResourceType {
+  val name = "Group"
 }
 
 
@@ -45,5 +45,5 @@ object ResourceType {
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
   }
 
-  def values: Seq[ResourceType] = List(Cluster, Topic, ConsumerGroup)
+  def values: Seq[ResourceType] = List(Cluster, Topic, Group)
 }

@@ -20,7 +20,7 @@ package kafka.javaapi
 import java.nio.ByteBuffer
 import kafka.cluster.BrokerEndPoint
 
-class ConsumerMetadataResponse(private val underlying: kafka.api.ConsumerMetadataResponse) {
+class GroupMetadataResponse(private val underlying: kafka.api.GroupMetadataResponse) {
 
   def errorCode = underlying.errorCode
 
@@ -30,11 +30,11 @@ class ConsumerMetadataResponse(private val underlying: kafka.api.ConsumerMetadat
   }
 
   override def equals(other: Any) = canEqual(other) && {
-    val otherConsumerMetadataResponse = other.asInstanceOf[kafka.javaapi.ConsumerMetadataResponse]
+    val otherConsumerMetadataResponse = other.asInstanceOf[kafka.javaapi.GroupMetadataResponse]
     this.underlying.equals(otherConsumerMetadataResponse.underlying)
   }
 
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.ConsumerMetadataResponse]
+  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.GroupMetadataResponse]
 
   override def hashCode = underlying.hashCode
 
@@ -42,6 +42,6 @@ class ConsumerMetadataResponse(private val underlying: kafka.api.ConsumerMetadat
 
 }
 
-object ConsumerMetadataResponse {
-  def readFrom(buffer: ByteBuffer) = new ConsumerMetadataResponse(kafka.api.ConsumerMetadataResponse.readFrom(buffer))
+object GroupMetadataResponse {
+  def readFrom(buffer: ByteBuffer) = new GroupMetadataResponse(kafka.api.GroupMetadataResponse.readFrom(buffer))
 }
