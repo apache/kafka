@@ -651,7 +651,7 @@ object KafkaConfig {
 
 
       /** ********* SSL Configuration ****************/
-      .define(PrincipalBuilderClassProp, STRING, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
+      .define(PrincipalBuilderClassProp, CLASS, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
       .define(SSLProtocolProp, STRING, Defaults.SSLProtocol, MEDIUM, SSLProtocolDoc)
       .define(SSLProviderProp, STRING, MEDIUM, SSLProviderDoc, false)
       .define(SSLEnabledProtocolsProp, LIST, Defaults.SSLEnabledProtocols, MEDIUM, SSLEnabledProtocolsDoc)
@@ -709,8 +709,8 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)
   val zkSessionTimeoutMs: Int = getInt(KafkaConfig.ZkSessionTimeoutMsProp)
-  val zkConnectionTimeoutMs: java.lang.Integer =
-    Option(getInt(KafkaConfig.ZkConnectionTimeoutMsProp)).getOrElse(getInt(KafkaConfig.ZkSessionTimeoutMsProp))
+  val zkConnectionTimeoutMs: Int =
+    Option(getInt(KafkaConfig.ZkConnectionTimeoutMsProp)).map(_.toInt).getOrElse(getInt(KafkaConfig.ZkSessionTimeoutMsProp))
   val zkSyncTimeMs: Int = getInt(KafkaConfig.ZkSyncTimeMsProp)
 
   /** ********* General Configuration ***********/
@@ -819,7 +819,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val metricReporterClasses: java.util.List[MetricsReporter] = getConfiguredInstances(KafkaConfig.MetricReporterClassesProp, classOf[MetricsReporter])
 
   /** ********* SSL Configuration **************/
-  val principalBuilderClass = getString(KafkaConfig.PrincipalBuilderClassProp)
+  val principalBuilderClass = getClass(KafkaConfig.PrincipalBuilderClassProp)
   val sslProtocol = getString(KafkaConfig.SSLProtocolProp)
   val sslProvider = getString(KafkaConfig.SSLProviderProp)
   val sslEnabledProtocols = getList(KafkaConfig.SSLEnabledProtocolsProp)
@@ -924,7 +924,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
 
   private def getMetricClasses(metricClasses: java.util.List[String]): java.util.List[MetricsReporter] = {
 
-    val reporterList = new util.ArrayList[MetricsReporter]();
+    val reporterList = new util.ArrayList[MetricsReporter]()
     val iterator = metricClasses.iterator()
 
     while (iterator.hasNext) {
@@ -963,36 +963,6 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
       "offsets.commit.required.acks must be greater or equal -1 and less or equal to offsets.topic.replication.factor")
     require(BrokerCompressionCodec.isValid(compressionType), "compression.type : " + compressionType + " is not valid." +
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
-  }
-
-  def channelConfigs: java.util.Map[String, Object] = {
-    val channelConfigs = new java.util.HashMap[String, Object]()
-    import kafka.server.KafkaConfig._
-    Seq(
-      (PrincipalBuilderClassProp, Class.forName(principalBuilderClass)),
-      (SSLProtocolProp, sslProtocol),
-      (SSLEnabledProtocolsProp, sslEnabledProtocols),
-      (SSLKeystoreTypeProp, sslKeystoreType),
-      (SSLKeystoreLocationProp, sslKeystoreLocation),
-      (SSLKeystorePasswordProp, sslKeystorePassword),
-      (SSLKeyPasswordProp, sslKeyPassword),
-      (SSLTruststoreTypeProp, sslTruststoreType),
-      (SSLTruststoreLocationProp, sslTruststoreLocation),
-      (SSLTruststorePasswordProp, sslTruststorePassword),
-      (SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm),
-      (SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm),
-      (SSLClientAuthProp, sslClientAuth),
-      (SSLCipherSuitesProp, sslCipher),
-      (SaslKerberosServiceNameProp, saslKerberosServiceName),
-      (SaslKerberosKinitCmdProp, saslKerberosKinitCmd),
-      (SaslKerberosTicketRenewWindowFactorProp, saslKerberosTicketRenewWindowFactor),
-      (SaslKerberosTicketRenewJitterProp, saslKerberosTicketRenewJitter),
-      (SaslKerberosMinTimeBeforeReloginProp, saslKerberosMinTimeBeforeRelogin),
-      (AuthToLocalProp, authToLocal)
-    ).foreach { case (key, value) =>
-      if (value != null) channelConfigs.put(key, value)
-    }
-    channelConfigs
   }
 
 }
