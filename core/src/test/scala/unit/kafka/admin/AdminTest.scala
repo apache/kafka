@@ -435,9 +435,9 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
     // Write config without notification to ZK.
     val configMap = Map[String, String] ("producer_byte_rate" -> "1000", "consumer_byte_rate" -> "2000")
     val map = Map("version" -> 1, "config" -> configMap)
-    ZkUtils.updatePersistentPath(zkClient, ZkUtils.getEntityConfigPath(ConfigType.Client, clientId), Json.encode(map))
+    zkUtils.updatePersistentPath(ZkUtils.getEntityConfigPath(ConfigType.Client, clientId), Json.encode(map))
 
-    val configInZk: Map[String, Properties] = AdminUtils.fetchAllEntityConfigs(zkClient, ConfigType.Client)
+    val configInZk: Map[String, Properties] = AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client)
     assertEquals("Must have 1 overriden client config", 1, configInZk.size)
     assertEquals(props, configInZk(clientId))
 

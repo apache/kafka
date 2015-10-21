@@ -150,8 +150,8 @@ class QuotasTest extends KafkaServerTestHarness {
     props.put(ClientConfigOverride.ProducerOverride, Long.MaxValue.toString)
     props.put(ClientConfigOverride.ConsumerOverride, Long.MaxValue.toString)
 
-    AdminUtils.changeClientIdConfig(zkClient, producerId2, props)
-    AdminUtils.changeClientIdConfig(zkClient, consumerId2, props)
+    AdminUtils.changeClientIdConfig(zkUtils, producerId2, props)
+    AdminUtils.changeClientIdConfig(zkUtils, consumerId2, props)
 
     TestUtils.retry(10000) {
       val quotaManagers: Map[Short, ClientQuotaManager] = leaderNode.apis.quotaManagers

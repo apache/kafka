@@ -213,7 +213,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         // Apply all existing client configs to the ClientIdConfigHandler to bootstrap the overrides
         // TODO: Move this logic to DynamicConfigManager
-        AdminUtils.fetchAllEntityConfigs(zkClient, ConfigType.Client).foreach {
+        AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client).foreach {
           case (clientId, properties) => dynamicConfigHandlers(ConfigType.Client).processConfigChanges(clientId, properties)
         }
 
