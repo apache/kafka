@@ -27,17 +27,28 @@ import org.apache.kafka.common.utils.AbstractIterator;
  */
 public class MemoryRecords implements Records {
 
+    private final static int WRITE_LIMIT_FOR_READABLE_ONLY = -1;
+
+    // the compressor used for appends-only
     private final Compressor compressor;
-    private final int capacity;
-    private final int sizeLimit;
+
+    // the write limit for writable buffer, which may be smaller than the buffer capacity
+    private final int writeLimit;
+
+    // the capacity of the initial buffer, which is only used for de-allocation of writable records
+    private final int initCapacity;
+
+    // the underlying buffer used for read; while the records are still writable it is null
     private ByteBuffer buffer;
+
+    // indicate if the memory records is writable or not (i.e. used for appends or read-only)
     private boolean writable;
 
     // Construct a writable memory records
-    private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int sizeLimit) {
+    private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int writeLimit) {
         this.writable = writable;
-        this.capacity = buffer.capacity();
-        this.sizeLimit = sizeLimit;
+        this.writeLimit = writeLimit;
+        this.initCapacity = buffer.capacity();
         if (this.writable) {
             this.buffer = null;
             this.compressor = new Compressor(buffer, type);
@@ -47,16 +58,17 @@ public class MemoryRecords implements Records {
         }
     }
 
-    public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type, int capacity) {
-        return new MemoryRecords(buffer, type, true, capacity);
+    public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type, int writeLimit) {
+        return new MemoryRecords(buffer, type, true, writeLimit);
     }
 
     public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type) {
+        // use the buffer capacity as the default write limit
         return emptyRecords(buffer, type, buffer.capacity());
     }
 
     public static MemoryRecords readableRecords(ByteBuffer buffer) {
-        return new MemoryRecords(buffer, CompressionType.NONE, false, buffer.capacity());
+        return new MemoryRecords(buffer, CompressionType.NONE, false, WRITE_LIMIT_FOR_READABLE_ONLY);
     }
 
     /**
@@ -90,25 +102,24 @@ public class MemoryRecords implements Records {
 
     /**
      * Check if we have room for a new record containing the given key/value pair
-     * 
+     *
      * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
      * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
      * re-allocation in the underlying byte buffer stream.
-     * 
-     * Also note that besides the records' capacity, there is also a size limit for the batch. This size limit may be
-     * smaller than the capacity (e.g. when appending a single message whose size is larger than the batch size, the
-     * capacity will be the message size, but the size limit will still be the batch size), and when the records' size
-     * has exceed this limit we also mark this record as full.
+     *
+     * There is an exception case when appending a single message whose size is larger than the batch size, the
+     * capacity will be the message size which is larger than the write limit, i.e. the batch size. In this case
+     * the checking should be based on the capacity of the initialized buffer rather than the write limit in order
+     * to accept this single record.
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
-        return this.writable && this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD +
-                                                 Record.recordSize(key, value) &&
-               this.sizeLimit >= this.compressor.estimatedBytesWritten();
+        return this.writable && this.compressor.numRecordsWritten() == 0 ?
+            this.initCapacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value) :
+            this.writeLimit >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value);
     }
 
     public boolean isFull() {
-        return !this.writable || this.capacity <= this.compressor.estimatedBytesWritten() ||
-               this.sizeLimit <= this.compressor.estimatedBytesWritten();
+        return !this.writable || this.writeLimit <= this.compressor.estimatedBytesWritten();
     }
 
     /**
@@ -120,11 +131,6 @@ public class MemoryRecords implements Records {
             writable = false;
             buffer = compressor.buffer();
         }
-    }
-
-    /** Write the records in this set to the given channel */
-    public int writeTo(GatheringByteChannel channel) throws IOException {
-        return channel.write(buffer);
     }
 
     /**
@@ -145,31 +151,40 @@ public class MemoryRecords implements Records {
     }
 
     /**
-     * Return the capacity of the buffer
+     * Return the capacity of the initial buffer, for writable records
+     * it may be different from the current buffer's capacity
      */
-    public int capacity() {
-        return this.capacity;
+    public int initialCapacity() {
+        return this.initCapacity;
     }
 
     /**
-     * Get the byte buffer that backs this records instance
+     * Get the byte buffer that backs this records instance for reading
      */
     public ByteBuffer buffer() {
+        if (writable)
+            throw new IllegalStateException("The memory records must not be writable any more before getting its underlying buffer");
+
         return buffer.duplicate();
     }
 
     /**
      * Return a flipped duplicate of the closed buffer to reading records
+     *
+     * NOTE: only used for tests
      */
     public ByteBuffer flip() {
         if (writable)
-            throw new IllegalStateException("The memory records need to be closed for write before rewinding for read");
+            throw new IllegalStateException("The memory records must not be writable any more before rewinding for read");
 
         return (ByteBuffer) buffer.flip();
     }
 
     @Override
     public Iterator<LogEntry> iterator() {
+        if (writable)
+            throw new IllegalStateException("The memory records must not be writable any more before iterating");
+
         ByteBuffer copy = this.buffer.duplicate();
         return new RecordsIterator(copy, CompressionType.NONE, false);
     }
