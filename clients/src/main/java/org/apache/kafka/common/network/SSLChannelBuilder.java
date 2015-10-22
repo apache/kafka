@@ -70,6 +70,6 @@ public class SSLChannelBuilder implements ChannelBuilder {
         SocketChannel socketChannel = (SocketChannel) key.channel();
         return SSLTransportLayer.create(id, key,
             sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
-            socketChannel.socket().getPort()));
+                socketChannel.socket().getPort()));
     }
 }

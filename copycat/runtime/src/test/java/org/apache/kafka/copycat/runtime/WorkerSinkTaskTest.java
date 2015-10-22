@@ -77,14 +77,17 @@ public class WorkerSinkTaskTest extends ThreadedTest {
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private Time time;
-    @Mock private SinkTask sinkTask;
+    @Mock
+    private SinkTask sinkTask;
     private Capture<SinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
-    @Mock private Converter keyConverter;
+    @Mock
+    private Converter keyConverter;
     @Mock
     private Converter valueConverter;
     private WorkerSinkTask workerTask;
-    @Mock private KafkaConsumer<byte[], byte[]> consumer;
+    @Mock
+    private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskThread workerThread;
 
     private long recordsReturned;
@@ -103,8 +106,8 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         workerProps.setProperty("internal.value.converter.schemas.enable", "false");
         workerConfig = new WorkerConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer", "createWorkerThread"},
-                taskId, sinkTask, workerConfig, keyConverter, valueConverter, time);
+            WorkerSinkTask.class, new String[]{"createConsumer", "createWorkerThread"},
+            taskId, sinkTask, workerConfig, keyConverter, valueConverter, time);
 
         recordsReturned = 0;
     }
@@ -135,7 +138,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
             assertEquals(1, recs.size());
             for (SinkRecord rec : recs) {
                 SinkRecord referenceSinkRecord
-                        = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset);
+                    = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset);
                 assertEquals(referenceSinkRecord, rec);
                 offset++;
             }
@@ -150,15 +153,15 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         SchemaAndValue record = new SchemaAndValue(Schema.INT32_SCHEMA, 12);
 
         ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
-                Collections.singletonMap(
-                        new TopicPartition(TOPIC, 0),
-                        Collections.singletonList(new ConsumerRecord<>(TOPIC, 0, 0, RAW_KEY, RAW_VALUE))));
+            Collections.singletonMap(
+                new TopicPartition(TOPIC, 0),
+                Collections.singletonList(new ConsumerRecord<>(TOPIC, 0, 0, RAW_KEY, RAW_VALUE))));
 
         // Exact data doesn't matter, but should be passed directly to sink task
         EasyMock.expect(keyConverter.toCopycatData(EasyMock.eq(TOPIC), EasyMock.aryEq(RAW_KEY))).andReturn(record);
         EasyMock.expect(valueConverter.toCopycatData(EasyMock.eq(TOPIC), EasyMock.aryEq(RAW_VALUE))).andReturn(record);
         Capture<Collection<SinkRecord>> capturedRecords
-                = EasyMock.newCapture(CaptureType.ALL);
+            = EasyMock.newCapture(CaptureType.ALL);
         sinkTask.put(EasyMock.capture(capturedRecords));
         EasyMock.expectLastCall();
 
@@ -180,7 +183,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         expectInitializeTask(taskProps);
         // Make each poll() take the offset commit interval
         Capture<Collection<SinkRecord>> capturedRecords
-                = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
+            = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetFlush(1L, null, null, 0, true);
         expectStopTask(2);
 
@@ -207,7 +210,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
 
         expectInitializeTask(taskProps);
         Capture<Collection<SinkRecord>> capturedRecords
-                = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
+            = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetFlush(1L, new RuntimeException(), null, 0, true);
         expectStopTask(2);
 
@@ -231,7 +234,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
 
         expectInitializeTask(taskProps);
         Capture<Collection<SinkRecord>> capturedRecords
-                = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
+            = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         expectOffsetFlush(1L, null, new Exception(), 0, true);
         expectStopTask(2);
 
@@ -257,7 +260,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         expectInitializeTask(taskProps);
         // Cut down amount of time to pass in each poll so we trigger exactly 1 offset commit
         Capture<Collection<SinkRecord>> capturedRecords
-                = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT / 2);
+            = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT / 2);
         expectOffsetFlush(2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false);
         expectStopTask(4);
 
@@ -292,7 +295,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
             @Override
             public Object answer() throws Throwable {
                 assertEquals(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3)),
-                        sinkTaskContext.getValue().assignment());
+                    sinkTaskContext.getValue().assignment());
                 return null;
             }
         });
@@ -357,12 +360,12 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.expectLastCall();
 
         PowerMock.expectPrivate(workerTask, "createConsumer", taskProps)
-                .andReturn(consumer);
+            .andReturn(consumer);
         workerThread = PowerMock.createPartialMock(WorkerSinkTaskThread.class, new String[]{"start"},
-                workerTask, "mock-worker-thread", time,
-                workerConfig);
+            workerTask, "mock-worker-thread", time,
+            workerConfig);
         PowerMock.expectPrivate(workerTask, "createWorkerThread")
-                .andReturn(workerThread);
+            .andReturn(workerThread);
         workerThread.start();
         PowerMock.expectLastCall();
     }
@@ -387,21 +390,21 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         // Stub out all the consumer stream/iterator responses, which we just want to verify occur,
         // but don't care about the exact details here.
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andStubAnswer(
-                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-                    @Override
-                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                        // "Sleep" so time will progress
-                        time.sleep(pollDelayMs);
-                        ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
-                                Collections.singletonMap(
-                                        new TopicPartition(TOPIC, PARTITION),
-                                        Arrays.asList(
-                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
-                                        )));
-                        recordsReturned++;
-                        return records;
-                    }
-                });
+            new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                @Override
+                public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                    // "Sleep" so time will progress
+                    time.sleep(pollDelayMs);
+                    ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
+                        Collections.singletonMap(
+                            new TopicPartition(TOPIC, PARTITION),
+                            Arrays.asList(
+                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
+                            )));
+                    recordsReturned++;
+                    return records;
+                }
+            });
         EasyMock.expect(keyConverter.toCopycatData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).anyTimes();
         EasyMock.expect(valueConverter.toCopycatData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
         Capture<Collection<SinkRecord>> capturedRecords = EasyMock.newCapture(CaptureType.ALL);
@@ -415,21 +418,21 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         // returning empty data, we return one record. The expectation is that the data will be ignored by the
         // response behavior specified using the return value of this method.
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
-                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-                    @Override
-                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                        // "Sleep" so time will progress
-                        time.sleep(1L);
-                        ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
-                                Collections.singletonMap(
-                                        new TopicPartition(TOPIC, PARTITION),
-                                        Arrays.asList(
-                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
-                                        )));
-                        recordsReturned++;
-                        return records;
-                    }
-                });
+            new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                @Override
+                public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                    // "Sleep" so time will progress
+                    time.sleep(1L);
+                    ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
+                        Collections.singletonMap(
+                            new TopicPartition(TOPIC, PARTITION),
+                            Arrays.asList(
+                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
+                            )));
+                    recordsReturned++;
+                    return records;
+                }
+            });
         EasyMock.expect(keyConverter.toCopycatData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
         EasyMock.expect(valueConverter.toCopycatData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
         sinkTask.put(EasyMock.anyObject(Collection.class));
@@ -437,21 +440,21 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     }
 
     private Capture<OffsetCommitCallback> expectOffsetFlush(final long expectedMessages,
-                                                              final RuntimeException flushError,
-                                                              final Exception consumerCommitError,
-                                                              final long consumerCommitDelayMs,
-                                                              final boolean invokeCallback)
-            throws Exception {
+                                                            final RuntimeException flushError,
+                                                            final Exception consumerCommitError,
+                                                            final long consumerCommitDelayMs,
+                                                            final boolean invokeCallback)
+        throws Exception {
         final long finalOffset = FIRST_OFFSET + expectedMessages - 1;
 
         EasyMock.expect(consumer.assignment()).andReturn(Collections.singleton(TOPIC_PARTITION));
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andAnswer(
-                new IAnswer<Long>() {
-                    @Override
-                    public Long answer() throws Throwable {
-                        return FIRST_OFFSET + recordsReturned - 1;
-                    }
+            new IAnswer<Long>() {
+                @Override
+                public Long answer() throws Throwable {
+                    return FIRST_OFFSET + recordsReturned - 1;
                 }
+            }
         );
 
         sinkTask.flush(Collections.singletonMap(TOPIC_PARTITION, new OffsetAndMetadata(finalOffset)));
@@ -464,7 +467,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         final Capture<OffsetCommitCallback> capturedCallback = EasyMock.newCapture();
         final Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(TOPIC_PARTITION, new OffsetAndMetadata(finalOffset));
         consumer.commitAsync(EasyMock.eq(offsets),
-                EasyMock.capture(capturedCallback));
+            EasyMock.capture(capturedCallback));
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {

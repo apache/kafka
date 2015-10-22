@@ -46,16 +46,18 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({StandaloneHerder.class})
+@PrepareForTest({ StandaloneHerder.class })
 @PowerMockIgnore("javax.management.*")
 public class StandaloneHerderTest {
     private static final String CONNECTOR_NAME = "test";
     private static final String TOPICS_LIST_STR = "topic1,topic2";
 
     private StandaloneHerder herder;
-    @Mock protected Worker worker;
+    @Mock
+    protected Worker worker;
     private Connector connector;
-    @Mock protected Callback<String> createCallback;
+    @Mock
+    protected Callback<String> createCallback;
 
     private Map<String, String> connectorProps;
     private Properties taskProps;
@@ -136,7 +138,7 @@ public class StandaloneHerderTest {
         connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connClass.getName());
 
         PowerMock.expectPrivate(StandaloneHerder.class, "instantiateConnector", connClass.getName())
-                .andReturn(connector);
+            .andReturn(connector);
 
         createCallback.onCompletion(null, CONNECTOR_NAME);
         PowerMock.expectLastCall();
@@ -150,7 +152,7 @@ public class StandaloneHerderTest {
         EasyMock.<Class<? extends Task>>expect(connector.taskClass()).andReturn(taskClass);
 
         EasyMock.expect(connector.taskConfigs(ConnectorConfig.TASKS_MAX_DEFAULT))
-                .andReturn(Arrays.asList(taskProps));
+            .andReturn(Arrays.asList(taskProps));
         // And we should instantiate the tasks. For a sink task, we should see added properties for
         // the input topic partitions
         Properties generatedTaskProps = new Properties();

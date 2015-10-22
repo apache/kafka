@@ -34,9 +34,9 @@ public class FileStreamSinkConnectorTest {
 
     private static final String MULTIPLE_TOPICS = "test1,test2";
     private static final String[] MULTIPLE_TOPICS_LIST
-            = MULTIPLE_TOPICS.split(",");
+        = MULTIPLE_TOPICS.split(",");
     private static final List<TopicPartition> MULTIPLE_TOPICS_PARTITIONS = Arrays.asList(
-            new TopicPartition("test1", 1), new TopicPartition("test2", 2)
+        new TopicPartition("test1", 1), new TopicPartition("test2", 2)
     );
     private static final String FILENAME = "/afilename";
 
