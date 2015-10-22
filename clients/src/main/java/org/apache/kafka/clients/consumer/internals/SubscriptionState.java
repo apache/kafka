@@ -129,11 +129,15 @@ public class SubscriptionState {
     }
 
     public void needReassignment() {
-        //
         this.groupSubscription.retainAll(subscription);
         this.needsPartitionAssignment = true;
     }
 
+    /**
+     * Change the assignment to the specified partitions provided by the user,
+     * note this is different from {@link #changePartitionAssignment(Collection)}
+     * whose input partitions are provided by the subscribed coordinator.
+     */
     public void assign(List<TopicPartition> partitions) {
         if (!this.subscription.isEmpty() || this.subscribedPattern != null)
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
@@ -146,6 +150,8 @@ public class SubscriptionState {
                 addAssignedPartition(partition);
 
         this.assignment.keySet().retainAll(this.userAssignment);
+
+        this.needsPartitionAssignment = false;
     }
 
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -306,6 +312,10 @@ public class SubscriptionState {
         return this.needsPartitionAssignment;
     }
 
+    /**
+     * Change the assignment to the specified partitions returned from the coordinator,
+     * note this is different from {@link #assign(List)} which directly set the assignment from user inputs
+     */
     public void changePartitionAssignment(Collection<TopicPartition> assignments) {
         for (TopicPartition tp : assignments)
             if (!this.subscription.contains(tp.topic()))
