@@ -184,8 +184,11 @@ public class WorkerCoordinatorTest {
         assertFalse(coordinator.needRejoin());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
-        assertEquals(Collections.singletonList(connectorId), rebalanceListener.assignedConnectors);
-        assertEquals(Collections.emptyList(), rebalanceListener.assignedTasks);
+        assertFalse(rebalanceListener.assignment.failed());
+        assertEquals(1L, rebalanceListener.assignment.offset());
+        assertEquals("leader", rebalanceListener.assignment.leader());
+        assertEquals(Collections.singletonList(connectorId), rebalanceListener.assignment.connectors());
+        assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
 
         PowerMock.verifyAll();
     }
@@ -218,8 +221,10 @@ public class WorkerCoordinatorTest {
         assertFalse(coordinator.needRejoin());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
-        assertEquals(Collections.emptyList(), rebalanceListener.assignedConnectors);
-        assertEquals(Collections.singletonList(taskId0), rebalanceListener.assignedTasks);
+        assertFalse(rebalanceListener.assignment.failed());
+        assertEquals(1L, rebalanceListener.assignment.offset());
+        assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
+        assertEquals(Collections.singletonList(taskId0), rebalanceListener.assignment.tasks());
 
         PowerMock.verifyAll();
     }
@@ -279,8 +284,10 @@ public class WorkerCoordinatorTest {
 
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
-        assertEquals(Collections.emptyList(), rebalanceListener.assignedConnectors);
-        assertEquals(Collections.singletonList(taskId0), rebalanceListener.assignedTasks);
+        assertFalse(rebalanceListener.assignment.failed());
+        assertEquals(1L, rebalanceListener.assignment.offset());
+        assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
+        assertEquals(Collections.singletonList(taskId0), rebalanceListener.assignment.tasks());
 
         // and join the group again
         coordinator.requestRejoin();
@@ -293,8 +300,10 @@ public class WorkerCoordinatorTest {
         assertEquals(Collections.emptyList(), rebalanceListener.revokedConnectors);
         assertEquals(Collections.singletonList(taskId0), rebalanceListener.revokedTasks);
         assertEquals(2, rebalanceListener.assignedCount);
-        assertEquals(Collections.singletonList(connectorId), rebalanceListener.assignedConnectors);
-        assertEquals(Collections.emptyList(), rebalanceListener.assignedTasks);
+        assertFalse(rebalanceListener.assignment.failed());
+        assertEquals(1L, rebalanceListener.assignment.offset());
+        assertEquals(Collections.singletonList(connectorId), rebalanceListener.assignment.connectors());
+        assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
 
         PowerMock.verifyAll();
     }
@@ -401,30 +410,24 @@ public class WorkerCoordinatorTest {
 
 
     private static class MockRebalanceListener implements WorkerRebalanceListener {
-        public long configOffset = -1;
-        public String leader;
+        public CopycatProtocol.Assignment assignment = null;
+
+        public String revokedLeader;
         public Collection<String> revokedConnectors;
         public Collection<ConnectorTaskId> revokedTasks;
-
-        public Collection<String> assignedConnectors;
-        public Collection<ConnectorTaskId> assignedTasks;
 
         public int revokedCount = 0;
         public int assignedCount = 0;
 
-
         @Override
-        public void onAssigned(long configOffset, String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
-            this.configOffset = configOffset;
-            this.leader = leader;
-            this.assignedConnectors = connectors;
-            this.assignedTasks = tasks;
+        public void onAssigned(CopycatProtocol.Assignment assignment) {
+            this.assignment = assignment;
             assignedCount++;
         }
 
         @Override
         public void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
-            this.leader = leader;
+            this.revokedLeader = leader;
             this.revokedConnectors = connectors;
             this.revokedTasks = tasks;
             revokedCount++;

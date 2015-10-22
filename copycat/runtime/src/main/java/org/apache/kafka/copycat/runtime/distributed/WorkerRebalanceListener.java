@@ -22,17 +22,17 @@ import org.apache.kafka.copycat.util.ConnectorTaskId;
 import java.util.Collection;
 
 /**
- * Listener for rebalance events in the worker group. This is only invoked when rebalancing and assignment is successful.
+ * Listener for rebalance events in the worker group.
  */
 public interface WorkerRebalanceListener {
     /**
-     * Invoked when a new, valid assignment is created by joining the Copycat worker group. Note that this is not
-     * invoked when if a join group cycle completes but assignment failed (e.g. due to config offset mismatches).
+     * Invoked when a new assignment is created by joining the Copycat worker group. This is invoked for both successful
+     * and unsuccessful assignments.
      */
-    void onAssigned(long configOffset, String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
+    void onAssigned(CopycatProtocol.Assignment assignment);
 
     /**
-     * Invoked when a rebalance operation starts, revoking ownership for the set of
+     * Invoked when a rebalance operation starts, revoking ownership for the set of connectors and tasks.
      */
     void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
 }

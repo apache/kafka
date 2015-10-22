@@ -19,6 +19,7 @@ package org.apache.kafka.copycat.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.ConsumerWakeupException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.connector.ConnectorContext;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
@@ -53,6 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class DistributedHerder implements Herder, Runnable {
     private static final Logger log = LoggerFactory.getLogger(DistributedHerder.class);
 
+    private final DistributedHerderConfig config;
     private final Worker worker;
     private final KafkaConfigStorage configStorage;
     private ClusterConfigState configState;
@@ -63,8 +65,8 @@ public class DistributedHerder implements Herder, Runnable {
 
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
-    private boolean isLeader;
-    private boolean rebalancing;
+    private boolean rebalanceResolved;
+    private CopycatProtocol.Assignment assignment;
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
@@ -90,13 +92,11 @@ public class DistributedHerder implements Herder, Runnable {
         }
         configState = ClusterConfigState.EMPTY;
 
-        DistributedHerderConfig config = new DistributedHerderConfig(configs);
+        this.config = new DistributedHerderConfig(configs);
         this.member = member != null ? member : new WorkerGroupMember(config, this.configStorage, rebalanceListener());
         stopping = new AtomicBoolean(false);
 
-        isLeader = false;
-        rebalancing = true;
-
+        rebalanceResolved = true; // If we still need to follow up after a rebalance occurred, starting up tasks
         needsReconfigRebalance = false;
     }
 
@@ -135,6 +135,8 @@ public class DistributedHerder implements Herder, Runnable {
 
         try {
             member.ensureActive();
+            // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
+            if (!handleRebalanceCompleted()) return;
         } catch (ConsumerWakeupException e) {
             // May be due to a request from another thread, or might be stopping. If the latter, we need to check the
             // flag immediately. If the former, we need to re-run the ensureActive call since we can't handle requests
@@ -191,6 +193,8 @@ public class DistributedHerder implements Herder, Runnable {
         // Let the group take any actions it needs to
         try {
             member.poll(Long.MAX_VALUE);
+            // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
+            if (!handleRebalanceCompleted()) return;
         } catch (ConsumerWakeupException e) { // FIXME should not be ConsumerWakeupException
             // Ignore. Just indicates we need to check the exit flag, for requested actions, etc.
         }
@@ -265,7 +269,7 @@ public class DistributedHerder implements Herder, Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        if (!isLeader)
+                        if (!isLeader())
                             throw new NotLeaderException("Only the leader can add connectors.");
 
                         log.debug("Submitting connector config {}", connName);
@@ -296,7 +300,7 @@ public class DistributedHerder implements Herder, Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        if (!isLeader)
+                        if (!isLeader())
                             throw new NotLeaderException("Only the leader can delete connectors.");
 
                         log.debug("Submitting null connector config {}", connName);
@@ -329,6 +333,120 @@ public class DistributedHerder implements Herder, Runnable {
         member.wakeup();
     }
 
+
+    private boolean isLeader() {
+        return assignment != null && member.memberId().equals(assignment.leader());
+    }
+
+    /**
+     * Handle post-assignment operations, either trying to resolve issues that kept assignment from completing, getting
+     * this node into sync and its work started. Since
+     *
+     * @return false if we couldn't finish
+     */
+    private boolean handleRebalanceCompleted() {
+        if (this.rebalanceResolved)
+            return true;
+
+        rebalanceResolved = true;
+
+        // We need to handle a variety of cases after a rebalance:
+        // 1. Assignment failed
+        //  1a. We are the leader for the round. We will be leader again if we rejoin now, so we need to catch up before
+        //      even attempting to. If we can't we should drop out of the group because we will block everyone from making
+        //      progress. We can backoff and try rejoining later.
+        //  1b. We are not the leader. We might need to catch up. If we're already caught up we can rejoin immediately,
+        //      otherwise, we just want to wait indefinitely to catch up and rejoin whenver we're finally ready.
+        // 2. Assignment succeeded.
+        //  2a. We are caught up on configs. Awesome! We can proceed to run our assigned work.
+        //  2b. We need to try to catch up. We can do this potentially indefinitely because if it takes to long, we'll
+        //      be kicked out of the group anyway due to lack of heartbeats.
+
+        boolean needsReadToEnd = false;
+        long syncConfigsTimeoutMs = Long.MAX_VALUE;
+        boolean backoffOnFailure = false;
+        boolean needsRejoin = false;
+        if (assignment.failed()) {
+            needsRejoin = true;
+            if (isLeader()) {
+                log.warn("Join group completed, but assignment failed and we are the leader. Reading to end of config and retrying.");
+                needsReadToEnd = true;
+                syncConfigsTimeoutMs = config.getInt(DistributedHerderConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
+                backoffOnFailure = true;
+            } else if (configState.offset() < assignment.offset()) {
+                log.warn("Join group completed, but assignment failed and we lagging. Reading to end of config and retrying.");
+                needsReadToEnd = true;
+            } else {
+                log.warn("Join group completed, but assignment failed. We were up to date, so just retrying.");
+            }
+        } else {
+            if (configState.offset() < assignment.offset()) {
+                log.warn("Catching up to assignment's config offset.");
+                needsReadToEnd = true;
+            }
+        }
+
+        if (needsReadToEnd) {
+            log.info("Current config state offset {} is behind group assignment {}, reading to end of config log", configState.offset(), assignment.offset());
+            try {
+                configStorage.readToEnd().get(syncConfigsTimeoutMs, TimeUnit.MILLISECONDS);
+                configState = configStorage.snapshot();
+                log.info("Finished reading to end of log and updated config snapshot, new config log offset: {}", configState.offset());
+            } catch (TimeoutException e) {
+                log.warn("Didn't reach end of config log quickly enough", e);
+                // TODO: With explicit leave group support, it would be good to explicitly leave the group *before* this
+                // backoff since it'll be longer than the session timeout
+                if (backoffOnFailure)
+                    backoff(config.getInt(DistributedHerderConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG));
+                // Force exiting this method to avoid creating any connectors/tasks and require immediate rejoining if
+                // we timed out. This should only happen if we were the leader and didn't finish quickly enough, in which
+                // case we've waited a long time and should have already left the group OR the timeout should have been
+                // very long and not having finished also indicates we've waited longer than the session timeout.
+                needsRejoin = true;
+            } catch (InterruptedException | ExecutionException e) {
+                throw new CopycatException("Error trying to catch up after assignment", e);
+            }
+        }
+
+        if (needsRejoin) {
+            member.requestRejoin();
+            return false;
+        }
+
+        // Should still validate that they match since we may have gone *past* the required offset, in which case we
+        // should *not* start any tasks and rejoin
+        if (configState.offset() != assignment.offset()) {
+            log.info("Current config state offset {} does not match group assignment {}. Forcing rebalance.", configState.offset(), assignment.offset());
+            member.requestRejoin();
+            return false;
+        }
+
+        // Start assigned connectors and tasks
+        log.info("Starting connectors and tasks using config offset {}", assignment.offset());
+        for (String connectorName : assignment.connectors()) {
+            try {
+                startConnector(connectorName);
+            } catch (ConfigException e) {
+                log.error("Couldn't instantiate connector " + connectorName, e);
+            }
+        }
+        for (ConnectorTaskId taskId : assignment.tasks()) {
+            try {
+                log.info("Starting task {}", taskId);
+                Map<String, String> configs = configState.taskConfig(taskId);
+                TaskConfig taskConfig = new TaskConfig(configs);
+                worker.addTask(taskId, taskConfig);
+            } catch (ConfigException e) {
+                log.error("Couldn't instantiate task " + taskId, e);
+            }
+        }
+
+        return true;
+    }
+
+    private void backoff(long ms) {
+        Utils.sleep(ms);
+    }
 
     // Helper for starting a connector with the given name, which will extract & parse the config, generate connector
     // context and add to the worker. This needs to be called from within the main worker thread for this herder.
@@ -450,60 +568,23 @@ public class DistributedHerder implements Herder, Runnable {
     private WorkerRebalanceListener rebalanceListener() {
         return new WorkerRebalanceListener() {
             @Override
-            public void onAssigned(long configOffset, String leader,
-                                   Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
-                log.info("Rebalance completed (offset: {}, leader: {}, connectors: {}, tasks: {})",
-                        configOffset, leader, connectors, tasks);
-
-                rebalancing = false;
-                isLeader = member.memberId().equals(leader);
-
-                if (configState.offset() < configOffset) {
-                    log.info("Current config state offset {} is behind group assignment {}, reading to end of config log", configState.offset(), configOffset);
-                    try {
-                        // TODO: Configurable timeout?
-                        configStorage.readToEnd().get(500, TimeUnit.MILLISECONDS);
-                        configState = configStorage.snapshot();
-                        log.info("Finished reading to end of log and updated config snapshot, new config log offset: {}", configState.offset());
-                    } catch (TimeoutException | InterruptedException | ExecutionException e) {
-                        log.info("Didn't reach end of config log quickly enough to avoid rebalance", e);
-                    }
-                }
-
-                if (configOffset != configState.offset()) {
-                    log.info("Current config state offset {} does not match group assignment {}. Forcing rebalance.", configState.offset(), configOffset);
-                    member.requestRejoin();
-                    return;
-                }
-
-                // Start assigned connectors and tasks
-                log.info("Starting connectors and tasks using config offset {}", configOffset);
-                for (String connectorName : connectors) {
-                    try {
-                        startConnector(connectorName);
-                    } catch (ConfigException e) {
-                        log.error("Couldn't instantiate connector " + connectorName, e);
-                    }
-                }
-                for (ConnectorTaskId taskId : tasks) {
-                    try {
-                        log.info("Starting task {}", taskId);
-                        Map<String, String> configs = configState.taskConfig(taskId);
-                        TaskConfig taskConfig = new TaskConfig(configs);
-                        worker.addTask(taskId, taskConfig);
-                    } catch (ConfigException e) {
-                        log.error("Couldn't instantiate task " + taskId, e);
-                    }
-                }
+            public void onAssigned(CopycatProtocol.Assignment assignment) {
+                // This callback just logs the info and saves it. The actual response is handled in the main loop, which
+                // ensures the group member's logic for rebalancing can complete, potentially long-running steps to
+                // catch up (or backoff if we fail) not executed in a callback, and so we'll be able to invoke other
+                // group membership actions (e.g., we may need to explicitly leave the group if we cannot handle the
+                // assigned tasks).
+                log.info("Joined group and got assignment: {}", assignment);
+                DistributedHerder.this.assignment = assignment;
+                rebalanceResolved = false;
             }
 
             @Override
             public void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
                 log.info("Rebalance started");
 
-                // Note that we don't revoke leadership here. During a rebalance, it is still important to have a leader that
-                // can write configs, offsets, etc.
-                rebalancing = true;
+                // Note that since we don't reset the assignment, we we don't revoke leadership here. During a rebalance,
+                // it is still important to have a leader that can write configs, offsets, etc.
 
                 // TODO: Parallelize this. We should be able to request all connectors and tasks to stop, then wait on all of
                 // them to finish

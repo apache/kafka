@@ -35,6 +35,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
@@ -44,14 +46,17 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 @RunWith(PowerMockRunner.class)
+@PrepareForTest(DistributedHerder.class)
+@PowerMockIgnore("javax.management.*")
 public class DistributedHerderTest {
     private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
     static {
         HERDER_CONFIG.put(KafkaConfigStorage.CONFIG_TOPIC_CONFIG, "config-topic");
         HERDER_CONFIG.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        HERDER_CONFIG.put(DistributedHerderConfig.GROUP_ID_CONFIG, "test--copycat-group");
+        HERDER_CONFIG.put(DistributedHerderConfig.GROUP_ID_CONFIG, "test-copycat-group");
     }
 
     private static final String CONN1 = "sourceA";
@@ -95,7 +100,8 @@ public class DistributedHerderTest {
     public void setUp() throws Exception {
         worker = PowerMock.createMock(Worker.class);
 
-        herder = new DistributedHerder(worker, HERDER_CONFIG, configStorage, member);
+        herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff"},
+                worker, HERDER_CONFIG, configStorage, member);
         connectorConfigCallback = Whitebox.invokeMethod(herder, "connectorConfigCallback");
         taskConfigCallback = Whitebox.invokeMethod(herder, "taskConfigCallback");
         rebalanceListener = Whitebox.invokeMethod(herder, "rebalanceListener");
@@ -105,7 +111,8 @@ public class DistributedHerderTest {
     public void testJoinAssignment() {
         // Join group and get assignment
         EasyMock.expect(member.memberId()).andStubReturn("member");
-        expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1), SNAPSHOT, true);
+        expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1));
+        expectPostRebalanceCatchup(SNAPSHOT);
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
         EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
@@ -144,7 +151,8 @@ public class DistributedHerderTest {
     @Test
     public void testCreateConnector() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
-        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(), SNAPSHOT, true);
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
 
         member.wakeup();
         PowerMock.expectLastCall();
@@ -168,7 +176,8 @@ public class DistributedHerderTest {
     public void testDestroyConnector() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         // Start with one connector
-        expectRebalance(1, Arrays.asList(CONN1), Collections.<ConnectorTaskId>emptyList(), SNAPSHOT, true);
+        expectRebalance(1, Arrays.asList(CONN1), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
         EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
@@ -197,8 +206,8 @@ public class DistributedHerderTest {
         // If a connector was added, we need to rebalance
         EasyMock.expect(member.memberId()).andStubReturn("member");
 
-        // join
-        expectRebalance(-1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(), null, false);
+        // join, no configs so no need to catch up on config topic
+        expectRebalance(-1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -212,7 +221,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         // Performs rebalance and gets new assignment
         expectRebalance(Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(),
-                1, Arrays.asList(CONN1), Collections.<ConnectorTaskId>emptyList(), null, false);
+                CopycatProtocol.Assignment.NO_ERROR, 1, Arrays.asList(CONN1), Collections.<ConnectorTaskId>emptyList());
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
         EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
@@ -237,7 +246,8 @@ public class DistributedHerderTest {
         EasyMock.expect(worker.connectorNames()).andStubReturn(Collections.singleton(CONN1));
 
         // join
-        expectRebalance(1, Arrays.asList(CONN1), Collections.<ConnectorTaskId>emptyList(), SNAPSHOT, true);
+        expectRebalance(1, Arrays.asList(CONN1), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
         EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
@@ -272,7 +282,7 @@ public class DistributedHerderTest {
         EasyMock.expect(member.memberId()).andStubReturn("member");
 
         // join
-        expectRebalance(-1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(), null, false);
+        expectRebalance(-1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -286,7 +296,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         // Performs rebalance and gets new assignment
         expectRebalance(Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(),
-                1, Collections.<String>emptyList(), Arrays.asList(TASK0), null, false);
+                CopycatProtocol.Assignment.NO_ERROR, 1, Collections.<String>emptyList(), Arrays.asList(TASK0));
         worker.addTask(EasyMock.eq(TASK0), EasyMock.<TaskConfig>anyObject());
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
@@ -303,37 +313,71 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testJoinLeaderCatchUpFails() throws Exception {
+        // Join group and as leader fail to do assignment
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(),
+                CopycatProtocol.Assignment.CONFIG_MISMATCH, 1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        // Reading to end of log times out
+        TestFuture<Void> readToEndFuture = new TestFuture<>();
+        readToEndFuture.resolveOnGet(new TimeoutException());
+        EasyMock.expect(configStorage.readToEnd()).andReturn(readToEndFuture);
+        PowerMock.expectPrivate(herder, "backoff", DistributedHerderConfig.WORKER_UNSYNC_BACKOFF_MS_DEFAULT);
+        member.requestRejoin();
+
+        // After backoff, restart the process and this time succeed
+        expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1));
+        expectPostRebalanceCatchup(SNAPSHOT);
+
+        worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
+        PowerMock.expectLastCall();
+        EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        worker.addTask(EasyMock.eq(TASK1), EasyMock.<TaskConfig>anyObject());
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.tick();
+        herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testInconsistentConfigs() throws Exception {
         // FIXME: if we have inconsistent configs, we need to request forced reconfig + write of the connector's task configs
         // This requires inter-worker communication, so needs the REST API
     }
 
 
-    // Handles common initial part of rebalance callback. Does not handle instantiation of connectors and tasks.
-    private void expectRebalance(final long offset, final Collection<String> assignedConnectors, final List<ConnectorTaskId> assignedTasks, final ClusterConfigState snapshot, final boolean readToEnd) {
-        expectRebalance(null, null, offset, assignedConnectors, assignedTasks, snapshot, readToEnd);
+    private void expectRebalance(final long offset, final List<String> assignedConnectors, final List<ConnectorTaskId> assignedTasks) {
+        expectRebalance(null, null, CopycatProtocol.Assignment.NO_ERROR, offset, assignedConnectors, assignedTasks);
     }
 
+    // Handles common initial part of rebalance callback. Does not handle instantiation of connectors and tasks.
     private void expectRebalance(final Collection<String> revokedConnectors, final List<ConnectorTaskId> revokedTasks,
-                                 final long offset, final Collection<String> assignedConnectors, final List<ConnectorTaskId> assignedTasks, final ClusterConfigState snapshot,
-                                 final boolean readToEnd) {
+                                 final short error, final long offset, final List<String> assignedConnectors, final List<ConnectorTaskId> assignedTasks) {
         member.ensureActive();
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
                 if (revokedConnectors != null)
                     rebalanceListener.onRevoked("leader", revokedConnectors, revokedTasks);
-                rebalanceListener.onAssigned(offset, "leader", assignedConnectors, assignedTasks);
+                CopycatProtocol.Assignment assignment = new CopycatProtocol.Assignment(
+                        error, "leader", offset, assignedConnectors, assignedTasks);
+                rebalanceListener.onAssigned(assignment);
                 return null;
             }
         });
-        if (readToEnd) {
-            TestFuture<Void> readToEndFuture = new TestFuture<>();
-            readToEndFuture.resolveOnGet((Void) null);
-            EasyMock.expect(configStorage.readToEnd()).andReturn(readToEndFuture);
-        }
-        if (snapshot != null)
-            EasyMock.expect(configStorage.snapshot()).andReturn(snapshot);
+    }
+
+    private void expectPostRebalanceCatchup(final ClusterConfigState readToEndSnapshot) {
+        TestFuture<Void> readToEndFuture = new TestFuture<>();
+        readToEndFuture.resolveOnGet((Void) null);
+        EasyMock.expect(configStorage.readToEnd()).andReturn(readToEndFuture);
+        EasyMock.expect(configStorage.snapshot()).andReturn(readToEndSnapshot);
     }
 
 

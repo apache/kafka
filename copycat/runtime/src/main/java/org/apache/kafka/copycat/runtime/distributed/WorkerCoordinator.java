@@ -109,14 +109,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     @Override
     protected void onJoin(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
         assignmentSnapshot = CopycatProtocol.deserializeAssignment(memberAssignment);
-        if (assignmentSnapshot.failed()) {
-            log.warn("Join group completed, but assignment failed. Reading to end of config and retrying.");
-        } else {
-            log.info("Joined group and got assignment: {}", assignmentSnapshot);
-            rejoinRequested = false;
-            listener.onAssigned(assignmentSnapshot.offset(), assignmentSnapshot.leader(),
-                    assignmentSnapshot.connectors(), assignmentSnapshot.tasks());
-        }
+        // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment
+        // error (the leader couldn't make the assignment) or we are behind the config and cannot yet work on our assigned
+        // tasks. It's the responsibility of the code driving this process to decide how to react (e.g. trying to get
+        // up to date, try to rejoin again, leaving the group and backing off, etc.).
+        rejoinRequested = false;
+        listener.onAssigned(assignmentSnapshot);
     }
 
     @Override

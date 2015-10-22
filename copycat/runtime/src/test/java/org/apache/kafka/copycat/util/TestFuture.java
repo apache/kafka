@@ -102,8 +102,14 @@ public class TestFuture<T> implements Future<T> {
             }
         }
 
-        if (exception != null)
-            throw new ExecutionException(exception);
+        if (exception != null) {
+            if (exception instanceof TimeoutException)
+                throw (TimeoutException) exception;
+            else if (exception instanceof InterruptedException)
+                throw (InterruptedException) exception;
+            else
+                throw new ExecutionException(exception);
+        }
         return result;
     }
 
