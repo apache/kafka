@@ -327,7 +327,7 @@ object TopicCommand extends Logging {
 
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
 
-    val forceOpt = parser.accepts("force", "Suppress console prompts etc")
+    val forceOpt = parser.accepts("force", "Suppress console prompts")
 
     val options = parser.parse(args : _*)
 

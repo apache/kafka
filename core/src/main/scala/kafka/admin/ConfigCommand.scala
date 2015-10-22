@@ -85,7 +85,7 @@ object ConfigCommand {
     }
   }
 
-  def warnOnMaxMessagesChange(configs: Properties, force :Boolean): Unit = {
+  def warnOnMaxMessagesChange(configs: Properties, force: Boolean): Unit = {
     val maxMessageBytes = configs.get(LogConfig.MaxMessageBytesProp) match {
       case n: String => n.toInt
       case _ => -1
@@ -165,7 +165,7 @@ object ConfigCommand {
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
     val helpOpt = parser.accepts("help", "Print usage information.")
-    val forceOpt = parser.accepts("force", "Suppress console prompts etc")
+    val forceOpt = parser.accepts("force", "Suppress console prompts")
     val options = parser.parse(args : _*)
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
