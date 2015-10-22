@@ -493,7 +493,7 @@ public class SSLTransportLayerTest {
 
         public TestSSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, 
                 Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) throws IOException {
-            super(channelId, key, sslEngine);
+            super(channelId, key, sslEngine, false);
             this.netReadBufSize = new ResizeableBufferSize(netReadBufSize);
             this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSize);
             this.appBufSize = new ResizeableBufferSize(appBufSize);

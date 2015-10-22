@@ -132,7 +132,7 @@ abstract class AbstractFetcherThread(name: String,
                       case None => currentPartitionFetchState.offset
                     }
                     partitionMap.put(topicAndPartition, new PartitionFetchState(newOffset))
-                    fetcherLagStats.getFetcherLagStats(topic, partitionId).lag = partitionData.highWatermark - newOffset
+                    fetcherLagStats.getFetcherLagStats(topic, partitionId).lag = Math.max(0L, partitionData.highWatermark - newOffset)
                     fetcherStats.byteRate.mark(validBytes)
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
                     processPartitionData(topicAndPartition, currentPartitionFetchState.offset, partitionData)

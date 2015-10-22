@@ -39,7 +39,7 @@ public class Avg extends SampledStat {
             total += s.value;
             count += s.eventCount;
         }
-        return total / count;
+        return count == 0 ? 0 : total / count;
     }
 
 }

@@ -30,7 +30,6 @@ import kafka.network._
 import kafka.network.RequestChannel.{Session, Response}
 import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
@@ -55,7 +54,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   // Store all the quota managers for each type of request
-  private val quotaManagers = instantiateQuotaManagers(config)
+  val quotaManagers: Map[Short, ClientQuotaManager] = instantiateQuotaManagers(config)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -784,14 +783,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def instantiateQuotaManagers(cfg: KafkaConfig): Map[Short, ClientQuotaManager] = {
     val producerQuotaManagerCfg = ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
-      quotaBytesPerSecondOverrides = cfg.producerQuotaBytesPerSecondOverrides,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
 
     val consumerQuotaManagerCfg = ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
-      quotaBytesPerSecondOverrides = cfg.consumerQuotaBytesPerSecondOverrides,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
