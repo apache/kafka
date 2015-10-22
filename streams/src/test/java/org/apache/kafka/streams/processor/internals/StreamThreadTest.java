@@ -206,7 +206,6 @@ public class StreamThreadTest {
         assertEquals(expectedGroup2, thread.tasks().get(task5).partitions());
         assertEquals(2, thread.tasks().size());
 
-        /* TODO:
         revokedPartitions = assignedPartitions;
         assignedPartitions = Arrays.asList(t1p1, t2p1, t3p1);
         expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
@@ -215,12 +214,11 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(g1p1));
-        assertTrue(thread.tasks().containsKey(g2p1));
-        assertEquals(expectedGroup1, thread.tasks().get(g1p1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(g2p1).partitions());
+        assertTrue(thread.tasks().containsKey(task1));
+        assertTrue(thread.tasks().containsKey(task4));
+        assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task4).partitions());
         assertEquals(2, thread.tasks().size());
-        */
 
         revokedPartitions = assignedPartitions;
         assignedPartitions = Collections.emptyList();
@@ -289,7 +287,7 @@ public class StreamThreadTest {
             Map<Integer, StreamTask> prevTasks;
 
             //
-            // Assign t1p1 and t1p2. This should create Task g1p1 & g1p2
+            // Assign t1p1 and t1p2. This should create task1 & task2
             //
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
@@ -312,7 +310,7 @@ public class StreamThreadTest {
             assertTrue(stateDir3.exists());
             assertTrue(extraDir.exists());
 
-            // all state directories except for task g1p1 & g1p2 will be removed. the extra directory should still exists
+            // all state directories except for task task2 & task3 will be removed. the extra directory should still exists
             mockTime.sleep(11L);
             thread.maybeClean();
             assertTrue(stateDir1.exists());
@@ -321,7 +319,7 @@ public class StreamThreadTest {
             assertTrue(extraDir.exists());
 
             //
-            // Revoke t1p1 and t1p2. This should remove Task g1p1 & g1p2
+            // Revoke t1p1 and t1p2. This should remove task1 & task2
             //
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
@@ -340,7 +338,7 @@ public class StreamThreadTest {
             // no task
             assertTrue(thread.tasks().isEmpty());
 
-            // all state directories for task g1p1 & g1p2 still exist before the cleanup delay time
+            // all state directories for task task1 & task2 still exist before the cleanup delay time
             mockTime.sleep(cleanupDelay - 10L);
             thread.maybeClean();
             assertTrue(stateDir1.exists());
@@ -348,7 +346,7 @@ public class StreamThreadTest {
             assertFalse(stateDir3.exists());
             assertTrue(extraDir.exists());
 
-            // all state directories for task g1p1 & g1p2 are removed
+            // all state directories for task task1 & task2 are removed
             mockTime.sleep(11L);
             thread.maybeClean();
             assertFalse(stateDir1.exists());
