@@ -76,7 +76,7 @@ public class StreamThread extends Thread {
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
 
-    private final Map<Long, StreamTask> tasks;
+    private final Map<Integer, StreamTask> tasks;
     private final String clientId;
     private final Time time;
     private final File stateDir;
@@ -127,6 +127,7 @@ public class StreamThread extends Thread {
         this.builder = builder;
         this.clientId = clientId;
         this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
+        this.partitionGrouper.topicGroups(builder.topicGroups());
 
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
@@ -199,7 +200,7 @@ public class StreamThread extends Thread {
         running.set(false);
     }
 
-    public Map<Long, StreamTask> tasks() {
+    public Map<Integer, StreamTask> tasks() {
         return Collections.unmodifiableMap(tasks);
     }
 
@@ -243,7 +244,6 @@ public class StreamThread extends Thread {
 
             ensureCopartitioning(builder.copartitionGroups());
 
-            partitionGrouper.topicGroups(builder.topicGroups());
             consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceListener);
 
             while (stillRunning()) {
@@ -376,7 +376,7 @@ public class StreamThread extends Thread {
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
-                        Long id = Long.parseLong(dir.getName());
+                        int id = Integer.parseInt(dir.getName());
 
                         // try to acquire the exclusive lock on the state directory
                         FileLock directoryLock = null;
@@ -408,34 +408,35 @@ public class StreamThread extends Thread {
         }
     }
 
-    protected StreamTask createStreamTask(long id, Collection<TopicPartition> partitionsForTask) {
+    protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
         sensors.taskCreationSensor.record();
 
         return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, builder.build(), config, sensors);
     }
 
     private void addPartitions(Collection<TopicPartition> assignment) {
-        HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
-        // TODO: change this hard-coded co-partitioning behavior
-        for (TopicPartition partition : partitions) {
-            final Long id = (long) partition.partition();
-            StreamTask task = tasks.get(id);
-            if (task == null) {
-                // get the partitions for the task
-                HashSet<TopicPartition> partitionsForTask = new HashSet<>();
-                for (TopicPartition part : partitions)
-                    if (part.partition() == id)
-                        partitionsForTask.add(part);
+        HashMap<Integer, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
-                // create the task
-                try {
-                    task = createStreamTask(id, partitionsForTask);
-                } catch (Exception e) {
-                    log.error("Failed to create a task #" + id + " in thread [" + this.getName() + "]: ", e);
-                    throw e;
+        for (TopicPartition partition : assignment) {
+            Set<Integer> taskIds = partitionGrouper.taskIds(partition);
+            for (Integer taskId : taskIds) {
+                Set<TopicPartition> partitions = partitionsForTask.get(taskId);
+                if (partitions == null) {
+                    partitions = new HashSet<>();
+                    partitionsForTask.put(taskId, partitions);
                 }
-                tasks.put(id, task);
+                partitions.add(partition);
+            }
+        }
+
+        // create the tasks
+        for (Integer taskId : partitionsForTask.keySet()) {
+            try {
+                tasks.put(taskId, createStreamTask(taskId, partitionsForTask.get(taskId)));
+            } catch (Exception e) {
+                log.error("Failed to create a task #" + taskId + " in thread [" + this.getName() + "]: ", e);
+                throw e;
             }
         }
 
@@ -456,6 +457,10 @@ public class StreamThread extends Thread {
             sensors.taskDestructionSensor.record();
         }
         tasks.clear();
+    }
+
+    public PartitionGrouper partitionGrouper() {
+        return partitionGrouper;
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
@@ -496,7 +501,6 @@ public class StreamThread extends Thread {
         }
         return sb;
     }
-
 
     private class StreamingMetricsImpl implements StreamingMetrics {
         final Metrics metrics;

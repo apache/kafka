@@ -34,41 +34,47 @@ import java.util.TreeMap;
 
 public class DefaultPartitionGrouper extends PartitionGrouper {
 
-    public Map<Long, List<TopicPartition>> partitionGroups(Cluster metadata) {
-        Map<Long, List<TopicPartition>> groups = new HashMap<>();
+    public Map<Integer, List<TopicPartition>> partitionGroups(Cluster metadata) {
+        Map<Integer, List<TopicPartition>> groups = new HashMap<>();
         List<List<String>> sortedTopicGroups = sort(topicGroups);
 
-        long groupId = 0;
+        int taskId = 0;
         for (List<String> topicGroup : sortedTopicGroups) {
-            for (String topic : topicGroup) {
-                List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
+            int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
 
-                if (infos == null)
-                    throw new KafkaException("topic not found :" + topic);
+            for (int partitionId = 0; partitionId < maxNumPartitions; partitionId++) {
+                List<TopicPartition> group = new ArrayList<>(topicGroup.size());
 
-                int numPartitions = infos.size();
-
-                for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
-                    long taskId = (groupId << 32) | (long) partitionId;
-
-                    List<TopicPartition> group = groups.get(taskId);
-
-                    if (group == null) {
-                        group = new ArrayList<>(topicGroup.size());
-                        groups.put(taskId, group);
+                for (String topic : topicGroup) {
+                    if (partitionId < metadata.partitionsForTopic(topic).size()) {
+                        group.add(new TopicPartition(topic, partitionId));
                     }
-                    group.add(new TopicPartition(topic, partitionId));
                 }
+                groups.put(taskId++, group);
             }
-            groupId++;
         }
 
         // make the data unmodifiable, then return
-        Map<Long, List<TopicPartition>> unmodifiableGroups = new HashMap<>();
-        for (Map.Entry<Long, List<TopicPartition>> entry : groups.entrySet()) {
+        Map<Integer, List<TopicPartition>> unmodifiableGroups = new HashMap<>();
+        for (Map.Entry<Integer, List<TopicPartition>> entry : groups.entrySet()) {
             unmodifiableGroups.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
         }
         return Collections.unmodifiableMap(unmodifiableGroups);
+    }
+
+    protected int maxNumPartitions(Cluster metadata, List<String> topics) {
+        int maxNumPartitions = 0;
+        for (String topic : topics) {
+            List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
+
+            if (infos == null)
+                throw new KafkaException("topic not found :" + topic);
+
+            int numPartitions = infos.size();
+            if (numPartitions > maxNumPartitions)
+                maxNumPartitions = numPartitions;
+        }
+        return maxNumPartitions;
     }
 
     protected List<List<String>> sort(Collection<Set<String>> topicGroups) {

@@ -25,8 +25,12 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -34,6 +38,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
@@ -59,10 +64,28 @@ public class StreamThreadTest {
     private TopicPartition t3p1 = new TopicPartition("topic3", 1);
     private TopicPartition t3p2 = new TopicPartition("topic3", 2);
 
-    private final long g1p1 = (0L << 32) | 1L; // TODO: (1L << 32 | 1L)
-    private final long g1p2 = (0L << 32) | 2L; // TODO: (1L << 32 | 1L)
-    private final long g2p1 = (0L << 32) | 1L; // TODO: (2L << 32 | 1L)
-    private final long g2p2 = (0L << 32) | 2L; // TODO: (2L << 32 | 2L)
+    private List<PartitionInfo> infos = Arrays.asList(
+            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 2, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic3", 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic3", 1, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic3", 2, Node.noNode(), new Node[0], new Node[0])
+    );
+
+    private Cluster metadata = new Cluster(Arrays.asList(Node.noNode()), infos);
+
+    PartitionAssignor.Subscription subscription = new PartitionAssignor.Subscription(Arrays.asList("topic1", "topic2", "topic3"));
+
+    // task0 is unused
+    private final int task1 = 1;
+    private final int task2 = 2;
+    // task3 is unused
+    private final int task4 = 4;
+    private final int task5 = 5;
 
     private Properties configProps() {
         return new Properties() {
@@ -81,7 +104,7 @@ public class StreamThreadTest {
     private static class TestStreamTask extends StreamTask {
         public boolean committed = false;
 
-        public TestStreamTask(long id,
+        public TestStreamTask(int id,
                               Consumer<byte[], byte[]> consumer,
                               Producer<byte[], byte[]> producer,
                               Consumer<byte[], byte[]> restoreConsumer,
@@ -110,7 +133,6 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
 
         TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("source0", "topic0");
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
         builder.addSource("source3", "topic3");
@@ -118,10 +140,12 @@ public class StreamThreadTest {
 
         StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", new Metrics(), new SystemTime()) {
             @Override
-            protected StreamTask createStreamTask(long id, Collection<TopicPartition> partitionsForTask) {
+            protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
                 return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
             }
         };
+
+        initPartitionGrouper(thread);
 
         ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
 
@@ -139,8 +163,8 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(g1p1));
-        assertEquals(expectedGroup1, thread.tasks().get(g1p1).partitions());
+        assertTrue(thread.tasks().containsKey(task1));
+        assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
         assertEquals(1, thread.tasks().size());
 
         revokedPartitions = assignedPartitions;
@@ -150,8 +174,8 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(g1p2));
-        assertEquals(expectedGroup2, thread.tasks().get(g1p2).partitions());
+        assertTrue(thread.tasks().containsKey(task2));
+        assertEquals(expectedGroup2, thread.tasks().get(task2).partitions());
         assertEquals(1, thread.tasks().size());
 
         revokedPartitions = assignedPartitions;
@@ -162,10 +186,10 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(g1p1));
-        assertTrue(thread.tasks().containsKey(g1p2));
-        assertEquals(expectedGroup1, thread.tasks().get(g1p1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(g1p2).partitions());
+        assertTrue(thread.tasks().containsKey(task1));
+        assertTrue(thread.tasks().containsKey(task2));
+        assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task2).partitions());
         assertEquals(2, thread.tasks().size());
 
         revokedPartitions = assignedPartitions;
@@ -176,10 +200,10 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        assertTrue(thread.tasks().containsKey(g2p1));
-        assertTrue(thread.tasks().containsKey(g2p2));
-        assertEquals(expectedGroup1, thread.tasks().get(g2p1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(g2p2).partitions());
+        assertTrue(thread.tasks().containsKey(task4));
+        assertTrue(thread.tasks().containsKey(task5));
+        assertEquals(expectedGroup1, thread.tasks().get(task4).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task5).partitions());
         assertEquals(2, thread.tasks().size());
 
         /* TODO:
@@ -240,11 +264,14 @@ public class StreamThreadTest {
                 public void maybeClean() {
                     super.maybeClean();
                 }
+
                 @Override
-                protected StreamTask createStreamTask(long id, Collection<TopicPartition> partitionsForTask) {
+                protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
                     return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
                 }
             };
+
+            initPartitionGrouper(thread);
 
             ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
 
@@ -358,11 +385,14 @@ public class StreamThreadTest {
                 public void maybeCommit() {
                     super.maybeCommit();
                 }
+
                 @Override
-                protected StreamTask createStreamTask(long id, Collection<TopicPartition> partitionsForTask) {
+                protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
                     return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
                 }
             };
+
+            initPartitionGrouper(thread);
 
             ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
 
@@ -413,5 +443,20 @@ public class StreamThreadTest {
         } finally {
             Utils.delete(baseDir);
         }
+    }
+
+    private void initPartitionGrouper(StreamThread thread) {
+        PartitionGrouper partitionGrouper = thread.partitionGrouper();
+
+        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+
+        partitionAssignor.configure(
+                Collections.singletonMap(StreamingConfig.InternalConfig.PARTITION_GROUPER_INSTANCE, partitionGrouper)
+        );
+
+        Map<String, PartitionAssignor.Assignment> assignments =
+                partitionAssignor.assign(metadata, Collections.singletonMap("client", subscription));
+
+        partitionAssignor.onAssignment(assignments.get("client"));
     }
 }
