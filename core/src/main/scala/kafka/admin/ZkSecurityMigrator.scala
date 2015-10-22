@@ -184,7 +184,7 @@ object ZkSecurityMigrator extends Logging {
      }*/
     val zkUtils = ZkUtils.apply(zkUrl, 30000, 30000, true)
 
-    for (path <- zkUtils.persistentZkPaths) {
+    for (path <- zkUtils.securePersistentZkPaths) {
       zkUtils.makeSurePersistentPathExists(path)
       setAclsRecursively(zkUtils, path)
     }

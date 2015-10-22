@@ -149,6 +149,15 @@ class ZkUtils(val zkClient: ZkClient,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath)
 
+  val securePersistentZkPaths = Seq(BrokerIdsPath,
+                                    BrokerTopicsPath,
+                                    EntityConfigChangesPath,
+                                    getEntityConfigRootPath(ConfigType.Topic),
+                                    getEntityConfigRootPath(ConfigType.Client),
+                                    DeleteTopicsPath,
+                                    BrokerSequenceIdPath,
+                                    IsrChangeNotificationPath)
+
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
   
   def getController(): Int = {
