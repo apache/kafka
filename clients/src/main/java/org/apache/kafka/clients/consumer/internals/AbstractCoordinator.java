@@ -124,7 +124,7 @@ public abstract class AbstractCoordinator {
 
     /**
      * Unique identifier for the class of protocols implements (e.g. "consumer" or "copycat").
-     * @return Non-null protocol type namej
+     * @return Non-null protocol type name
      */
     protected abstract String protocolType();
 
@@ -464,6 +464,8 @@ public abstract class AbstractCoordinator {
                         groupMetadataResponse.node().host(),
                         groupMetadataResponse.node().port());
 
+                client.tryConnect(coordinator);
+
                 // start sending heartbeats only if we have a valid generation
                 if (generation > 0)
                     heartbeatTask.reset();
@@ -475,11 +477,19 @@ public abstract class AbstractCoordinator {
     }
 
     /**
-     * Check if we know who the coordinator is.
+     * Check if we know who the coordinator is and we have an active connection
      * @return true if the coordinator is unknown
      */
     public boolean coordinatorUnknown() {
-        return this.coordinator == null;
+        if (coordinator == null)
+            return true;
+
+        if (client.connectionFailed(coordinator)) {
+            coordinatorDead();
+            return true;
+        }
+
+        return false;
     }
 
 
