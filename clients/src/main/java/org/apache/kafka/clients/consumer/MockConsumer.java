@@ -76,7 +76,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public void rebalance(Collection<TopicPartition> newAssignment) {
         // TODO: Rebalance callbacks
         this.records.clear();
-        this.subscriptions.changePartitionAssignment(newAssignment);
+        this.subscriptions.assignFromSubscribed(newAssignment);
     }
 
     @Override
@@ -112,7 +112,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void assign(List<TopicPartition> partitions) {
         ensureNotClosed();
-        this.subscriptions.assign(partitions);
+        this.subscriptions.assignFromUser(partitions);
     }
 
     @Override

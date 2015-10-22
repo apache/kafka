@@ -110,7 +110,7 @@ public class FetcherTest {
     @Test
     public void testFetchNormal() {
         List<ConsumerRecord<byte[], byte[]>> records;
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         // normal fetch
@@ -130,7 +130,7 @@ public class FetcherTest {
 
     @Test(expected = RecordTooLargeException.class)
     public void testFetchRecordTooLarge() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         // prepare large record
@@ -150,13 +150,13 @@ public class FetcherTest {
     @Test
     public void testFetchDuringRebalance() {
         subscriptions.subscribe(Arrays.asList(topicName), listener);
-        subscriptions.changePartitionAssignment(Arrays.asList(tp));
+        subscriptions.assignFromSubscribed(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
 
         // Now the rebalance happens and fetch positions are cleared
-        subscriptions.changePartitionAssignment(Arrays.asList(tp));
+        subscriptions.assignFromSubscribed(Arrays.asList(tp));
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
 
@@ -166,7 +166,7 @@ public class FetcherTest {
 
     @Test
     public void testInFlightFetchOnPausedPartition() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -179,7 +179,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchOnPausedPartition() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         subscriptions.pause(tp);
@@ -189,7 +189,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchNotLeaderForPartition() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -201,7 +201,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchUnknownTopicOrPartition() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -213,7 +213,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchOffsetOutOfRange() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -227,7 +227,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchedRecordsAfterSeek() {
-        subscriptionsNoAutoReset.assign(Arrays.asList(tp));
+        subscriptionsNoAutoReset.assignFromUser(Arrays.asList(tp));
         subscriptionsNoAutoReset.seek(tp, 0);
 
         fetcherNoAutoReset.initFetches(cluster);
@@ -240,7 +240,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchOffsetOutOfRangeException() {
-        subscriptionsNoAutoReset.assign(Arrays.asList(tp));
+        subscriptionsNoAutoReset.assignFromUser(Arrays.asList(tp));
         subscriptionsNoAutoReset.seek(tp, 0);
 
         fetcherNoAutoReset.initFetches(cluster);
@@ -259,7 +259,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchDisconnected() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
@@ -278,7 +278,7 @@ public class FetcherTest {
     public void testUpdateFetchPositionToCommitted() {
         // unless a specific reset is expected, the default behavior is to reset to the committed
         // position if one is present
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.committed(tp, new OffsetAndMetadata(5));
 
         fetcher.updateFetchPositions(Collections.singleton(tp));
@@ -289,7 +289,7 @@ public class FetcherTest {
 
     @Test
     public void testUpdateFetchPositionResetToDefaultOffset() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         // with no commit position, we should reset using the default strategy defined above (EARLIEST)
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
@@ -303,7 +303,7 @@ public class FetcherTest {
 
     @Test
     public void testUpdateFetchPositionResetToLatestOffset() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
@@ -317,7 +317,7 @@ public class FetcherTest {
 
     @Test
     public void testUpdateFetchPositionResetToEarliestOffset() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
@@ -331,7 +331,7 @@ public class FetcherTest {
 
     @Test
     public void testUpdateFetchPositionDisconnect() {
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
 
         // First request gets a disconnect
@@ -365,7 +365,7 @@ public class FetcherTest {
     @Test
     public void testQuotaMetrics() throws Exception {
         List<ConsumerRecord<byte[], byte[]>> records;
-        subscriptions.assign(Arrays.asList(tp));
+        subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.seek(tp, 0);
 
         // normal fetch

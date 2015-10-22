@@ -169,7 +169,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         subscriptions.needRefreshCommits();
 
         // update partition assignment
-        subscriptions.changePartitionAssignment(assignment.partitions());
+        subscriptions.assignFromSubscribed(assignment.partitions());
 
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
