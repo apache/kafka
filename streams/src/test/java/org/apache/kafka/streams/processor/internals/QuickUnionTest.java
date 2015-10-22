@@ -23,12 +23,13 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 public class QuickUnionTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testQuickUnion() {
+    public void testUnite() {
         QuickUnion<Long> qu = new QuickUnion<>();
 
         long[] ids = {
@@ -62,6 +63,28 @@ public class QuickUnionTest {
         assertEquals(qu.root(2L), qu.root(3L));
         assertEquals(qu.root(3L), qu.root(4L));
         assertEquals(qu.root(4L), qu.root(5L));
+    }
+
+    @Test
+    public void testUniteMany() {
+        QuickUnion<Long> qu = new QuickUnion<>();
+
+        long[] ids = {
+            1L, 2L, 3L, 4L, 5L
+        };
+
+        for (long id : ids) {
+            qu.add(id);
+        }
+
+        assertEquals(5, roots(qu, ids).size());
+
+        qu.unite(1L, 2L, 3L, 4L);
+        assertEquals(2, roots(qu, ids).size());
+        assertEquals(qu.root(1L), qu.root(2L));
+        assertEquals(qu.root(2L), qu.root(3L));
+        assertEquals(qu.root(3L), qu.root(4L));
+        assertNotEquals(qu.root(1L), qu.root(5L));
     }
 
     private Set<Long> roots(QuickUnion<Long> qu, long... ids) {
