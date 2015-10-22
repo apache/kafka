@@ -58,11 +58,12 @@ object ZkSecurityMigrator extends Logging {
   var zkUtils: ZkUtils = null
   
   def setAclsRecursively(path: String) {
+    info("Setting ACL for path %s".format(path))
     val setPromise = Promise[String]
     val childrenPromise = Promise[String]
-    futures :+ setPromise.future
-    futures :+ childrenPromise.future
-    zkUtils.zkConnection.getZookeeper.setACL(path, ZkUtils.DefaultAcls(true), -1, SetACLCallback, setPromise)
+    futures = futures :+ setPromise.future
+    futures = futures :+ childrenPromise.future
+    zkUtils.zkConnection.getZookeeper.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, setPromise)
     zkUtils.zkConnection.getZookeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
   }
 
@@ -71,7 +72,7 @@ object ZkSecurityMigrator extends Logging {
                         path: String,
                         ctx: Object,
                         children: java.util.List[String]) {
-        val list = Option(children).map(_.asScala)
+        //val list = Option(children).map(_.asScala)
         val zkHandle = zkUtils.zkConnection.getZookeeper
         val promise = ctx.asInstanceOf[Promise[String]]
         Code.get(rc) match {
@@ -79,17 +80,17 @@ object ZkSecurityMigrator extends Logging {
             // Set ACL for each child 
               Future {
                 val childPathBuilder = new StringBuilder
-                list.foreach(child => {
+                for(child <- children.asScala) {
                   childPathBuilder.clear
                   childPathBuilder.append(path)
                   childPathBuilder.append("/")
-                  childPathBuilder.append(child)
+                  childPathBuilder.append(child.mkString)
 
-                  val childPath = childPathBuilder.toString
+                  val childPath = childPathBuilder.mkString
                   setAclsRecursively(childPath)
-                })
+                }
+                promise success "done"
               }(threadExecutionContext)
-              promise success "done"
           case Code.CONNECTIONLOSS =>
             Future {
               zkHandle.getChildren(path, false, GetChildrenCallback, ctx)
@@ -122,7 +123,7 @@ object ZkSecurityMigrator extends Logging {
             promise success "done"
           case Code.CONNECTIONLOSS =>
             Future {
-              zkHandle.setACL(path, ZkUtils.DefaultAcls(true), -1, SetACLCallback, ctx)
+              zkHandle.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, ctx)
             }(threadExecutionContext)
           case Code.NONODE =>
             warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
@@ -174,31 +175,40 @@ object ZkSecurityMigrator extends Logging {
       throw new IllegalArgumentException("Incorrect configuration") 
     }
 
-    var goSecure: Boolean = options.valueOf(goOpt) match {
+    val goSecure: Boolean = options.valueOf(goOpt) match {
       case "secure" =>
+        info("Making it secure")
         true
       case "unsecure" =>
+        info("Making it unsecure")
         false
       case _ =>
         CommandLineUtils.printUsageAndDie(parser, usageMessage)
     }
     val zkUrl = options.valueOf(zkUrlOpt)
-    val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt).intValue
-    val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt).intValue
+    val zkSessionTimeout = 6000 //options.valueOf(zkSessionTimeoutOpt).intValue
+    val zkConnectionTimeout = 6000 //options.valueOf(zkConnectionTimeoutOpt).intValue
     zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, goSecure)
-
+    
     for (path <- zkUtils.securePersistentZkPaths) {
-        zkUtils.makeSurePersistentPathExists(path)
-        setAclsRecursively(path)
+      info("Securing " + path)
+      zkUtils.makeSurePersistentPathExists(path)
+      setAclsRecursively(path)
     }
 
-    while(futures.size > 0) {
-      val head::tail = futures
-      Await.result(head, Duration.Inf)
-      head.value match {
-        case Some(Success(v)) => // nothing to do
-        case Some(Failure(e)) => throw e
+    try {
+      while(futures.size > 0) {
+        val head::tail = futures
+        Await.result(head, Duration.Inf)
+        head.value match {
+          case Some(Success(v)) => // nothing to do
+          case Some(Failure(e)) => throw e
+        }
+        futures = tail
+        info("Size of future list is %d".format(futures.size))
       }
+    } finally {
+      zkUtils.close
     }
   }
 
