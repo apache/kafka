@@ -127,6 +127,15 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet())
             allConfigs.put(entry.getKey(), CopycatProtocol.deserializeMetadata(entry.getValue()));
 
+        long maxOffset = findMaxMemberConfigOffset(allConfigs);
+        Long leaderOffset = ensureLeaderConfig(maxOffset);
+        if (leaderOffset == null)
+            return fillAssignmentsAndSerialize(allConfigs.keySet(), CopycatProtocol.Assignment.CONFIG_MISMATCH,
+                    leaderId, maxOffset, new HashMap<String, List<String>>(), new HashMap<String, List<ConnectorTaskId>>());
+        return performTaskAssignment(leaderId, leaderOffset, allConfigs);
+    }
+
+    private long findMaxMemberConfigOffset(Map<String, CopycatProtocol.ConfigState> allConfigs) {
         // The new config offset is the maximum seen by any member. We always perform assignment using this offset,
         // even if some members have fallen behind. The config offset used to generate the assignment is included in
         // the response so members that have fallen behind will not use the assignment until they have caught up.
@@ -141,10 +150,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
         log.debug("Max config offset root: {}, local snapshot config offsets root: {}",
                 maxOffset, configSnapshot.offset());
+        return maxOffset;
+    }
 
+    private Long ensureLeaderConfig(long maxOffset) {
         // If this leader is behind some other members, we can't do assignment
-        Map<String, List<String>> connectorAssignments = new HashMap<>();
-        Map<String, List<ConnectorTaskId>> taskAssignments = new HashMap<>();
         if (configSnapshot.offset() < maxOffset) {
             // We might be able to take a new snapshot to catch up immediately and avoid another round of syncing here.
             // Alternatively, if this node has already passed the maximum reported by any other member of the group, it
@@ -153,13 +163,19 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             if (updatedSnapshot.offset() < maxOffset) {
                 log.info("Was selected to perform assignments, but do not have latest config found in sync request. " +
                         "Returning an empty configuration to trigger re-sync.");
-                return fillAssignmentsAndSerialize(allConfigs.keySet(), CopycatProtocol.Assignment.CONFIG_MISMATCH,
-                        leaderId, maxOffset, connectorAssignments, taskAssignments);
+                return null;
             } else {
                 configSnapshot = updatedSnapshot;
-                maxOffset = configSnapshot.offset();
+                return configSnapshot.offset();
             }
         }
+
+        return maxOffset;
+    }
+
+    private Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset, Map<String, CopycatProtocol.ConfigState> allConfigs) {
+        Map<String, List<String>> connectorAssignments = new HashMap<>();
+        Map<String, List<ConnectorTaskId>> taskAssignments = new HashMap<>();
 
         // Perform round-robin task assignment
         CircularIterator<String> memberIt = new CircularIterator<>(sorted(allConfigs.keySet()));
