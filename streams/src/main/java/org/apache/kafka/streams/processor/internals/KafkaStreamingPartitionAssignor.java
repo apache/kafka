@@ -24,6 +24,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.PartitionGrouper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -34,6 +36,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Configurable {
+
+    private static final Logger log = LoggerFactory.getLogger(KafkaStreamingPartitionAssignor.class);
 
     private PartitionGrouper partitionGrouper;
     private Map<TopicPartition, Set<Integer>> partitionToTaskIds;
@@ -80,8 +84,10 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
                     ids.add(taskId);
                 }
             }
+            ByteBuffer buf = ByteBuffer.allocate(4 + ids.size() * 4);
+            //version
+            buf.putInt(1);
             // encode task ids
-            ByteBuffer buf = ByteBuffer.allocate(ids.size() * 4);
             for (Integer id : ids) {
                 buf.putInt(id);
             }
@@ -96,20 +102,26 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     public void onAssignment(Assignment assignment) {
         List<TopicPartition> partitions = assignment.partitions();
         ByteBuffer data = assignment.userData();
+        data.rewind();
 
         Map<TopicPartition, Set<Integer>> partitionToTaskIds = new HashMap<>();
 
-        int i = 0;
-        for (TopicPartition partition : partitions) {
-            Set<Integer> taskIds = partitionToTaskIds.get(partition);
-            if (taskIds == null) {
-                taskIds = new HashSet<>();
-                partitionToTaskIds.put(partition, taskIds);
+        // check version
+        int version = data.getInt();
+        if (version == 1) {
+            for (TopicPartition partition : partitions) {
+                Set<Integer> taskIds = partitionToTaskIds.get(partition);
+                if (taskIds == null) {
+                    taskIds = new HashSet<>();
+                    partitionToTaskIds.put(partition, taskIds);
+                }
+                // decode a task id
+                taskIds.add(data.getInt());
             }
-            // decode a task id
-            data.rewind();
-            taskIds.add(data.getInt(i * 4));
-            i++;
+        } else {
+            KafkaException ex = new KafkaException("unknown assignment data version: " + version);
+            log.error(ex.getMessage(), ex);
+            throw ex;
         }
         this.partitionToTaskIds = partitionToTaskIds;
     }
