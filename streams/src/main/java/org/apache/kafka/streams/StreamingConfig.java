@@ -213,6 +213,7 @@ public class StreamingConfig extends AbstractConfig {
     public Map<String, Object> getConsumerConfigs(PartitionGrouper partitionGrouper) {
         Map<String, Object> props = getConsumerConfigs();
         props.put(StreamingConfig.InternalConfig.PARTITION_GROUPER_INSTANCE, partitionGrouper);
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
         return props;
     }
 
@@ -221,7 +222,6 @@ public class StreamingConfig extends AbstractConfig {
 
         // set consumer default property values
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
 
         // remove properties that are not required for consumers
         props.remove(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG);
