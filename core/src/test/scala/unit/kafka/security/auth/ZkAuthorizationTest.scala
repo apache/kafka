@@ -108,31 +108,54 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   }
 
   @Test
-  def testZkMigrationTool() {
+  def testZkMigration() {
     assertTrue(zkUtils.isSecure)
+    migration(true)
+  }
+  
+  @Test
+  def testZkAntiMigration() {
+    assertTrue(!zkUtils.isSecure)
+    migration(false)
+  }
+  
+  private def migration(secure: Boolean) {
     info("zkConnect string: %s".format(zkConnect))
-    val unsecureZkUtils = ZkUtils(zkConnect, 30000, 30000, false)
-    for (path <- zkUtils.persistentZkPaths) {
-      unsecureZkUtils.makeSurePersistentPathExists(path)
+    val otherZkUtils = ZkUtils(zkConnect, 30000, 30000, !secure)
+    for (path <- zkUtils.securePersistentZkPaths) {
+      otherZkUtils.makeSurePersistentPathExists(path)
       // Create a child for each znode to exercise the recurrent
       // traversal of the data tree
-      unsecureZkUtils.createPersistentPath(path + "/fpjwashere", "")
+      otherZkUtils.createPersistentPath(path + "/fpjwashere", "")
     }
-    ZkSecurityMigrator.run(Array("--connect=" + zkConnect)) 
-    for (path <- zkUtils.persistentZkPaths) {
+    val goOpt: String = secure match {
+      case true =>
+        "secure"
+      case false =>
+        "unsecure"
+    }
+    ZkSecurityMigrator.run(Array("--kafka.go=%s --zookeeper.connect=%s".format(goOpt, zkConnect))) 
+    for (path <- zkUtils.securePersistentZkPaths) {
       zkUtils.makeSurePersistentPathExists(path)
       if(!path.equals(ZkUtils.ConsumersPath)) {
         var stat: Stat = new Stat
         val listParent = zkUtils.zkConnection.getZookeeper.getACL(path, stat)
         assertTrue(listParent.size == 2)
         for (acl: ACL <- listParent.asScala) {
-          assertTrue(path, isAclSecure(acl))
+          if(secure)
+            assertTrue(path, isAclSecure(acl))
+          else
+            assertTrue(path, isAclUnsecure(acl))
         }
 
-        val listChild = zkUtils.zkConnection.getZookeeper.getACL(path + "/fpjwashere", stat)
+        val childPath = path + "/fpjwashere"
+        val listChild = zkUtils.zkConnection.getZookeeper.getACL(childPath, stat)
         assertTrue(listChild.size == 2)
         for (acl: ACL <- listChild.asScala) {
-          assertTrue(path + "/fpjwashere", isAclSecure(acl))
+          if(secure)
+            assertTrue(childPath, isAclSecure(acl))
+          else
+            assertTrue(childPath, isAclUnsecure(acl))
         }
       }
     }
@@ -156,6 +179,18 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       }
       case 31 => {
         acl.getId.getScheme.equals("sasl")
+      }
+      case _: Int => {
+        false
+      }
+    }
+  }
+  
+  def isAclUnsecure(acl: ACL): Boolean = {
+    info("Perms " + acl.getPerms + " and id" + acl.getId)
+    acl.getPerms match {
+      case 31 => {
+        acl.getId.getScheme.equals("world")
       }
       case _: Int => {
         false
