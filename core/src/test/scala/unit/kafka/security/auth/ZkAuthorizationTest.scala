@@ -110,54 +110,70 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   @Test
   def testZkMigration() {
     assertTrue(zkUtils.isSecure)
-    migration(true)
-  }
-  
-  @Test
-  def testZkAntiMigration() {
-    assertTrue(!zkUtils.isSecure)
-    migration(false)
-  }
-  
-  private def migration(secure: Boolean) {
-    info("zkConnect string: %s".format(zkConnect))
-    val otherZkUtils = ZkUtils(zkConnect, 30000, 30000, !secure)
-    for (path <- zkUtils.securePersistentZkPaths) {
-      otherZkUtils.makeSurePersistentPathExists(path)
-      // Create a child for each znode to exercise the recurrent
-      // traversal of the data tree
-      otherZkUtils.createPersistentPath(path + "/fpjwashere", "")
-    }
-    val goOpt: String = secure match {
-      case true =>
-        "secure"
-      case false =>
-        "unsecure"
-    }
-    ZkSecurityMigrator.run(Array("--kafka.go=%s --zookeeper.connect=%s".format(goOpt, zkConnect))) 
-    for (path <- zkUtils.securePersistentZkPaths) {
-      zkUtils.makeSurePersistentPathExists(path)
-      if(!path.equals(ZkUtils.ConsumersPath)) {
+    val otherZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
+    try {
+      info("zkConnect string: %s".format(zkConnect))
+      for (path <- otherZkUtils.securePersistentZkPaths) {
+        info("Creating " + path)
+        otherZkUtils.makeSurePersistentPathExists(path)
+        // Create a child for each znode to exercise the recurrent
+        // traversal of the data tree
+        otherZkUtils.createPersistentPath(path + "/fpjwashere", "")
+      }
+      ZkSecurityMigrator.run(Array("--kafka.go=secure", "--zookeeper.connect=%s".format(zkConnect)))
+      info("Done with migration")
+      for (path <- zkUtils.securePersistentZkPaths) {
+        zkUtils.makeSurePersistentPathExists(path)
         var stat: Stat = new Stat
         val listParent = zkUtils.zkConnection.getZookeeper.getACL(path, stat)
         assertTrue(listParent.size == 2)
         for (acl: ACL <- listParent.asScala) {
-          if(secure)
-            assertTrue(path, isAclSecure(acl))
-          else
-            assertTrue(path, isAclUnsecure(acl))
+          assertTrue(path, isAclSecure(acl))
+        }
+        val childPath = path + "/fpjwashere"
+        val listChild = zkUtils.zkConnection.getZookeeper.getACL(childPath, stat)
+        assertTrue("Path and size: %s, %d".format(childPath, listChild.size), listChild.size == 2)
+        for (acl: ACL <- listChild.asScala) {
+          assertTrue(childPath, isAclSecure(acl))
+        }
+      }
+    } finally {
+      otherZkUtils.close()
+    }
+  }
+  
+  @Test
+  def testZkAntiMigration() {
+    info("zkConnect string: %s".format(zkConnect))
+    val otherZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
+    try {
+      for (path <- zkUtils.securePersistentZkPaths) {
+        info("Creating " + path)
+        zkUtils.makeSurePersistentPathExists(path)
+        // Create a child for each znode to exercise the recurrent
+        // traversal of the data tree
+        zkUtils.createPersistentPath(path + "/fpjwashere", "")
+      }
+      ZkSecurityMigrator.run(Array("--kafka.go=unsecure", "--zookeeper.connect=%s".format(zkConnect)))
+      info("Done with migration")
+      for (path <- otherZkUtils.securePersistentZkPaths) {
+        otherZkUtils.makeSurePersistentPathExists(path)
+        var stat: Stat = new Stat
+        val listParent = otherZkUtils.zkConnection.getZookeeper.getACL(path, stat)
+        assertTrue(path, listParent.size == 1)
+        for (acl: ACL <- listParent.asScala) {
+          assertTrue(path, isAclUnsecure(acl))
         }
 
         val childPath = path + "/fpjwashere"
-        val listChild = zkUtils.zkConnection.getZookeeper.getACL(childPath, stat)
-        assertTrue(listChild.size == 2)
+        val listChild = otherZkUtils.zkConnection.getZookeeper.getACL(childPath, stat)
+        assertTrue(childPath, listChild.size == 1)
         for (acl: ACL <- listChild.asScala) {
-          if(secure)
-            assertTrue(childPath, isAclSecure(acl))
-          else
-            assertTrue(childPath, isAclUnsecure(acl))
+          assertTrue(childPath, isAclUnsecure(acl))
         }
       }
+    } finally {
+      otherZkUtils.close()
     }
   }
 
