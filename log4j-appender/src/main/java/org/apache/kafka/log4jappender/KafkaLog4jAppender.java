@@ -17,11 +17,14 @@
 
 package org.apache.kafka.log4jappender;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LoggingEvent;
@@ -36,18 +39,18 @@ import java.util.concurrent.Future;
  */
 public class KafkaLog4jAppender extends AppenderSkeleton {
 
-    private static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    private static final String COMPRESSION_TYPE_CONFIG = "compression.type";
-    private static final String ACKS_CONFIG = "acks";
-    private static final String RETRIES_CONFIG = "retries";
-    private static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
-    private static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
-    private static final String SECURITY_PROTOCOL = "security.protocol";
-    private static final String SSL_TRUSTSTORE_LOCATION = "ssl.truststore.location";
-    private static final String SSL_TRUSTSTORE_PASSWORD = "ssl.truststore.password";
-    private static final String SSL_KEYSTORE_TYPE = "ssl.keystore.type";
-    private static final String SSL_KEYSTORE_LOCATION = "ssl.keystore.location";
-    private static final String SSL_KEYSTORE_PASSWORD = "ssl.keystore.password";
+    private static final String BOOTSTRAP_SERVERS_CONFIG = ProducerConfig.BOOTSTRAP_SERVERS_CONFIG;
+    private static final String COMPRESSION_TYPE_CONFIG = ProducerConfig.COMPRESSION_TYPE_CONFIG;
+    private static final String ACKS_CONFIG = ProducerConfig.ACKS_CONFIG;
+    private static final String RETRIES_CONFIG = ProducerConfig.RETRIES_CONFIG;
+    private static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+    private static final String VALUE_SERIALIZER_CLASS_CONFIG = ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+    private static final String SECURITY_PROTOCOL = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+    private static final String SSL_TRUSTSTORE_LOCATION = SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
+    private static final String SSL_TRUSTSTORE_PASSWORD = SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
+    private static final String SSL_KEYSTORE_TYPE = SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG;
+    private static final String SSL_KEYSTORE_LOCATION = SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
+    private static final String SSL_KEYSTORE_PASSWORD = SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
 
     private String brokerList = null;
     private String topic = null;
