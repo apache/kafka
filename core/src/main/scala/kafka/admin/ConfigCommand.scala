@@ -69,7 +69,7 @@ object ConfigCommand {
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entityType = opts.options.valueOf(opts.entityType)
     val entityName = opts.options.valueOf(opts.entityName)
-    warnOnMaxMessagesChange(configsToBeAdded)
+    warnOnMaxMessagesChange(configsToBeAdded, opts.options.has(opts.forceOpt))
 
     // compile the final set of configs
     val configs = AdminUtils.fetchEntityConfig(zkUtils, entityType, entityName)
@@ -85,14 +85,15 @@ object ConfigCommand {
     }
   }
 
-  def warnOnMaxMessagesChange(configs: Properties): Unit = {
+  def warnOnMaxMessagesChange(configs: Properties, force :Boolean): Unit = {
     val maxMessageBytes = configs.get(LogConfig.MaxMessageBytesProp) match {
       case n: String => n.toInt
       case _ => -1
     }
     if (maxMessageBytes > Defaults.MaxMessageSize){
       error(TopicCommand.longMessageSizeWarning(maxMessageBytes))
-      TopicCommand.askToProceed
+      if (!force)
+        TopicCommand.askToProceed
     }
   }
 
@@ -107,14 +108,14 @@ object ConfigCommand {
     for (entityName <- entityNames) {
       val configs = AdminUtils.fetchEntityConfig(zkUtils, entityType, entityName)
       println("Configs for %s:%s are %s"
-                      .format(entityType, entityName, configs.map(kv => kv._1 + "=" + kv._2).mkString(",")))
+        .format(entityType, entityName, configs.map(kv => kv._1 + "=" + kv._2).mkString(",")))
     }
   }
 
   private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val configsToBeAdded = opts.options.valuesOf(opts.addConfig).map(_.split("""\s*=\s*"""))
     require(configsToBeAdded.forall(config => config.length == 2),
-            "Invalid entity config: all configs to be added must be in the format \"key=val\".")
+      "Invalid entity config: all configs to be added must be in the format \"key=val\".")
     val props = new Properties
     configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).trim))
     if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
@@ -164,6 +165,7 @@ object ConfigCommand {
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
     val helpOpt = parser.accepts("help", "Print usage information.")
+    val forceOpt = parser.accepts("force", "Suppress console prompts etc")
     val options = parser.parse(args : _*)
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
