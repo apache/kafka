@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import java.io.IOException;
-import java.nio.channels.GatheringByteChannel;
-
 /**
  * A binary format which consists of a 4 byte size, an 8 byte offset, and the record bytes. See {@link MemoryRecords}
  * for the in-memory representation.

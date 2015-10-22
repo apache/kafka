@@ -16,7 +16,6 @@ import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
 
 import org.apache.kafka.common.KafkaException;
@@ -36,7 +35,7 @@ public class MemoryRecords implements Records {
     private final int writeLimit;
 
     // the capacity of the initial buffer, which is only used for de-allocation of writable records
-    private final int initCapacity;
+    private final int initialCapacity;
 
     // the underlying buffer used for read; while the records are still writable it is null
     private ByteBuffer buffer;
@@ -48,7 +47,7 @@ public class MemoryRecords implements Records {
     private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int writeLimit) {
         this.writable = writable;
         this.writeLimit = writeLimit;
-        this.initCapacity = buffer.capacity();
+        this.initialCapacity = buffer.capacity();
         if (this.writable) {
             this.buffer = null;
             this.compressor = new Compressor(buffer, type);
@@ -107,14 +106,14 @@ public class MemoryRecords implements Records {
      * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
      * re-allocation in the underlying byte buffer stream.
      *
-     * There is an exception case when appending a single message whose size is larger than the batch size, the
+     * There is an exceptional case when appending a single message whose size is larger than the batch size, the
      * capacity will be the message size which is larger than the write limit, i.e. the batch size. In this case
      * the checking should be based on the capacity of the initialized buffer rather than the write limit in order
      * to accept this single record.
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
         return this.writable && this.compressor.numRecordsWritten() == 0 ?
-            this.initCapacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value) :
+            this.initialCapacity >= Records.LOG_OVERHEAD + Record.recordSize(key, value) :
             this.writeLimit >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value);
     }
 
@@ -155,7 +154,7 @@ public class MemoryRecords implements Records {
      * it may be different from the current buffer's capacity
      */
     public int initialCapacity() {
-        return this.initCapacity;
+        return this.initialCapacity;
     }
 
     /**
