@@ -125,31 +125,39 @@ object ZkSecurityMigrator extends Logging {
             // Starting a new session isn't really a problem, but it'd complicate
             // the logic of the tool, so we quit and let the user re-run it.
             error("ZooKeeper session expired while changing ACLs")
-            exception = throw ZkException.create(KeeperException.create(rc))
+            exception = throw ZkException.create(KeeperException.create(Code.get(rc)))
           case _ =>
             error("Unexpected return code: %d".format(rc))
-            exception = throw ZkException.create(KeeperException.create(rc))   
+            exception = throw ZkException.create(KeeperException.create(Code.get(rc)))   
       }
     }
+  }
+  
+  def outputUsage(parser: OptionParser) {
+    CommandLineUtils.printUsageAndDie(parser, "ZooKeeper Migration Tool Help. This tool updates the ACLs of "
+                                                + "znodes as part of the process of setting up ZooKeeper "
+                                                + "authentication.")
   }
   
   def run(args: Array[String]) {
     var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser()
 
+    val goOpt = parser.accepts("kafka.go", "Indicates whether to make this cluster secure or unsecure. The "
+        + " options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])
     val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").withOptionalArg().ofType(classOf[String])
-    val zkUrlOpt = parser.accepts("connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
-                                  "takes a comma-separated list of host:port pairs.").
-      withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
-    val zkSessionTimeoutOpt = parser.accepts("session.timeout", "Sets the ZooKeeper session timeout.").
-      withRequiredArg().ofType(classOf[java.lang.Integer])
-    val zkConnectionTimeoutOpt = parser.accepts("connection.timeout", "Sets the ZooKeeper connection timeout.").
+    val zkUrlOpt = parser.accepts("zookeeper.connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
+      "takes a comma-separated list of host:port pairs.").withRequiredArg().defaultsTo("localhost:2181").
+      ofType(classOf[String])
+    val zkSessionTimeoutOpt = parser.accepts("zookeeper.session.timeout", "Sets the ZooKeeper session timeout.").
+      withRequiredArg().defaultsTo("30000").ofType(classOf[java.lang.Integer])
+    val zkConnectionTimeoutOpt = parser.accepts("zookeeper.connection.timeout", "Sets the ZooKeeper connection timeout.").
       withRequiredArg().defaultsTo("30000").ofType(classOf[java.lang.Integer])
     val helpOpt = parser.accepts("help", "Print usage information.")
 
     val options = parser.parse(args : _*)
     if(options.has(helpOpt))
-      CommandLineUtils.printUsageAndDie(parser, "ZooKeeper Migration Tool Help")
+      outputUsage(parser)
 
     if ((jaasFile == null) && !options.has(jaasFileOpt)) {
       error("No JAAS configuration file has been specified. Please make sure that you have set either "
@@ -167,22 +175,21 @@ object ZkSecurityMigrator extends Logging {
       throw new IllegalArgumentException("Incorrect configuration") 
     }
 
+    var goSecure: Boolean = false
+    val go = options.valueOf(goOpt) match {
+      case "secure" =>
+        goSecure = true
+      case "unsecure" =>
+        goSecure = false
+      case _ =>
+        outputUsage(parser)
+    }
     val zkUrl = options.valueOf(zkUrlOpt)
+    val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt).intValue
+    val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt).intValue
+    val zkUtils = ZkUtils.apply(zkUrl, zkSessionTimeout, zkConnectionTimeout, goSecure)
 
-    /* TODO: Need to fix this before it is checked in, not compiling
-     * val zkSessionTimeout = if (options.has(zkSessionTimeoutOpt)) {
-       options.valueOf(zkSessionTimeoutOpt).intValue
-     } else {
-       30000
-     }
-     val zkConnectionTimeout = if (options.has(zkConnectionTimeoutOpt)) {
-       options.valueOf(zkConnectionTimeoutOpt).intValue
-     } else {
-       30000
-     }*/
-    val zkUtils = ZkUtils.apply(zkUrl, 30000, 30000, true)
-
-    for (path <- zkUtils.persistentZkPaths) {
+    for (path <- zkUtils.securePersistentZkPaths) {
       zkUtils.makeSurePersistentPathExists(path)
       setAclsRecursively(zkUtils, path)
     }

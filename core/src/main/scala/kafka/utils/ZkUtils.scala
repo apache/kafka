@@ -150,6 +150,15 @@ class ZkUtils(val zkClient: ZkClient,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath)
 
+  val securePersistentZkPaths = Seq(BrokerIdsPath,
+                                    BrokerTopicsPath,
+                                    EntityConfigChangesPath,
+                                    getEntityConfigRootPath(ConfigType.Topic),
+                                    getEntityConfigRootPath(ConfigType.Client),
+                                    DeleteTopicsPath,
+                                    BrokerSequenceIdPath,
+                                    IsrChangeNotificationPath)
+
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
   
   def getController(): Int = {
@@ -319,8 +328,6 @@ class ZkUtils(val zkClient: ZkClient,
 
     if (!zkClient.exists(path))
       ZkPath.createPersistent(zkClient, path, true, acl) //won't throw NoNodeException or NodeExistsException
-    else
-      ZkPath.setAcl(zkClient, path, acl)
   }
 
   /**
