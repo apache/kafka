@@ -503,6 +503,7 @@ class KafkaConfigTest {
         case KafkaConfig.SSLKeyManagerAlgorithmProp =>
         case KafkaConfig.SSLTrustManagerAlgorithmProp =>
         case KafkaConfig.SSLClientAuthProp => // ignore string
+        case KafkaConfig.SSLEndpointIdentificationAlgorithmProp => // ignore string
         case KafkaConfig.SSLCipherSuitesProp => // ignore string
 
         //Sasl Configs
