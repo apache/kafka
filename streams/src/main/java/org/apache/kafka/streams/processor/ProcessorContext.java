@@ -26,11 +26,11 @@ import java.io.File;
 public interface ProcessorContext {
 
     /**
-     * Returns the state partition id
+     * Returns the task id
      *
-     * @return the state partition id
+     * @return the task id
      */
-    int statePartition();
+    int id();
 
     /**
      * Returns the key serializer

@@ -35,7 +35,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
 
-    private final long id;
+    private final int id;
     private final StreamTask task;
     private final StreamingMetrics metrics;
     private final RecordCollector collector;
@@ -49,7 +49,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     private boolean initialized;
 
     @SuppressWarnings("unchecked")
-    public ProcessorContextImpl(long id,
+    public ProcessorContextImpl(int id,
                                 StreamTask task,
                                 StreamingConfig config,
                                 RecordCollector collector,
@@ -79,8 +79,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public int statePartition() {
-        return (int) (id & 0xFFFFFFFFL);
+    public int id() {
+        return id;
     }
 
     @Override

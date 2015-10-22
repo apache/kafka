@@ -83,7 +83,7 @@ public class SlidingWindowSupplier<K, V> implements WindowSupplier<K, V> {
         @Override
         public void init(ProcessorContext context) {
             this.context = context;
-            this.partition = context.statePartition();
+            this.partition = context.id();
             SlidingWindowRegistryCallback restoreFunc = new SlidingWindowRegistryCallback();
             context.register(this, restoreFunc);
 

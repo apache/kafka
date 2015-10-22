@@ -245,7 +245,7 @@ public class KeyValueStoreTestDriver<K, V> {
         this.context = new MockProcessorContext(null, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(),
                 serdes.valueDeserializer(), recordCollector) {
             @Override
-            public int statePartition() {
+            public int id() {
                 return 1;
             }
 

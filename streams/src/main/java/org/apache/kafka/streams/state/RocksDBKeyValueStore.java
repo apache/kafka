@@ -81,7 +81,7 @@ public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
         public RocksDBStore(String name, ProcessorContext context, Serdes<K, V> serdes) {
             this.topic = name;
-            this.partition = context.statePartition();
+            this.partition = context.id();
             this.context = context;
             this.serdes = serdes;
 

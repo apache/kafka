@@ -82,7 +82,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public int statePartition() {
+    public int id() {
         return 0;
     }
 
