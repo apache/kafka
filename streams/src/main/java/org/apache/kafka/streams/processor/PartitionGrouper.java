@@ -33,9 +33,7 @@ public abstract class PartitionGrouper {
     private KafkaStreamingPartitionAssignor partitionAssignor = null;
 
     /**
-     * Returns a map of task ids to groups of partitions. The task id is the 64 bit integer
-     * which uniquely identifies a task. The higher 32 bit integer is an id assigned to a topic group.
-     * The lower 32 bit integer is a partition id with which the task's local states are associated.
+     * Returns a map of task ids to groups of partitions.
      *
      * @param metadata
      * @return a map of task ids to groups of partitions
