@@ -258,7 +258,7 @@ public class Login {
                     }
                 }
             }
-        }, false);
+        }, true);
     }
 
     public void startThreadIfNeeded() {
