@@ -31,10 +31,12 @@ class CopycatDistributedFileTest(KafkaTest):
     OFFSETS_TOPIC = "copycat-offsets"
     CONFIG_TOPIC = "copycat-configs"
 
-    FIRST_INPUT_LISTS = [["foo", "bar", "baz"], ["foo2", "bar2", "baz2"]]
-    FIRST_INPUTS = ["\n".join(input_list) + "\n" for input_list in FIRST_INPUT_LISTS]
-    SECOND_INPUT_LISTS = [["razz", "ma", "tazz"], ["razz2", "ma2", "tazz2"]]
-    SECOND_INPUTS = ["\n".join(input_list) + "\n" for input_list in SECOND_INPUT_LISTS]
+    # Since tasks can be assigned to any node and we're testing with files, we need to make sure the content is the same
+    # across all nodes.
+    FIRST_INPUT_LIST = ["foo", "bar", "baz"]
+    FIRST_INPUTS = "\n".join(FIRST_INPUT_LIST) + "\n"
+    SECOND_INPUT_LIST = ["razz", "ma", "tazz"]
+    SECOND_INPUTS = "\n".join(SECOND_INPUT_LIST) + "\n"
 
     SCHEMA = { "type": "string", "optional": False }
 
@@ -43,13 +45,7 @@ class CopycatDistributedFileTest(KafkaTest):
             'test' : { 'partitions': 1, 'replication-factor': 1 }
         })
 
-        # FIXME these should have multiple nodes. However, currently the connectors are submitted via command line,
-        # which means we would get duplicates. Both would run, but they would have conflicting keys for offsets and
-        # configs. Until we have real distributed coordination of workers with unified connector submission, we need
-        # to restrict each of these to a single node.
-        self.num_nodes = 1
-        self.source = CopycatDistributedService(test_context, self.num_nodes, self.kafka, [self.INPUT_FILE])
-        self.sink = CopycatDistributedService(test_context, self.num_nodes, self.kafka, [self.OUTPUT_FILE])
+        self.cc = CopycatDistributedService(test_context, 2, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE])
 
     def test_file_source_and_sink(self, converter="org.apache.kafka.copycat.json.JsonConverter", schemas=True):
         assert converter != None, "converter type must be set"
@@ -58,33 +54,40 @@ class CopycatDistributedFileTest(KafkaTest):
         self.value_converter = converter
         self.schemas = schemas
 
-        # These need to be set
-        self.source.set_configs(self.render("copycat-distributed.properties"), self.render("copycat-file-source.properties"))
-        self.sink.set_configs(self.render("copycat-distributed.properties"), self.render("copycat-file-sink.properties"))
+        self.cc.set_configs(self.render("copycat-distributed.properties"), [self.render("copycat-file-source.properties"), self.render("copycat-file-sink.properties")])
 
-        self.source.start()
-        self.sink.start()
+        self.cc.start()
 
-        # Generating data on the source node should generate new records and create new output on the sink node
-        for node, input in zip(self.source.nodes, self.FIRST_INPUTS):
-            node.account.ssh("echo -e -n " + repr(input) + " >> " + self.INPUT_FILE)
-        wait_until(lambda: self.validate_output(self.FIRST_INPUT_LISTS[:self.num_nodes]), timeout_sec=60, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
+        # Generating data on the source node should generate new records and create new output on the sink node. Timeouts
+        # here need to be more generous than they are for standalone mode because a) it takes longer to write configs,
+        # do rebalancing of the group, etc, and b) without explicit leave group support, rebalancing takes awhile
+        for node in self.cc.nodes:
+            node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
+        wait_until(lambda: self.validate_output(self.FIRST_INPUT_LIST), timeout_sec=120, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
 
         # Restarting both should result in them picking up where they left off,
         # only processing new data.
-        self.source.restart()
-        self.sink.restart()
+        self.cc.restart()
 
-        for node, input in zip(self.source.nodes, self.SECOND_INPUTS):
-            node.account.ssh("echo -e -n " + repr(input) + " >> " + self.INPUT_FILE)
-        wait_until(lambda: self.validate_output(self.FIRST_INPUT_LISTS[:self.num_nodes] + self.SECOND_INPUT_LISTS[:self.num_nodes]), timeout_sec=60, err_msg="Sink output file never converged to the same state as the input file")
+        for node in self.cc.nodes:
+            node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
+        wait_until(lambda: self.validate_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=120, err_msg="Sink output file never converged to the same state as the input file")
 
-    def validate_output(self, inputs):
+    def validate_output(self, input):
+        input_set = set(input)
+        # Output needs to be collected from all nodes because we can't be sure where the tasks will be scheduled.
+        # Between the first and second rounds, we might even end up with half the data on each node.
+        output_set = set(itertools.chain(*[
+            [line.strip() for line in self.file_contents(node, self.OUTPUT_FILE)] for node in self.cc.nodes
+        ]))
+        #print input_set, output_set
+        return input_set == output_set
+
+
+    def file_contents(self, node, file):
         try:
-            input_set = set(itertools.chain(*inputs))
-            output_set = set(itertools.chain(*[
-                [line.strip() for line in node.account.ssh_capture("cat " + self.OUTPUT_FILE)] for node in self.sink.nodes
-            ]))
-            return input_set == output_set
+            # Convert to a list here or the CalledProcessError may be returned during a call to the generator instead of
+            # immediately
+            return list(node.account.ssh_capture("cat " + file))
         except subprocess.CalledProcessError:
-            return False
+            return []

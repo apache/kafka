@@ -23,7 +23,7 @@ import java.io.Serializable;
  * Unique ID for a single task. It includes a unique connector ID and a task ID that is unique within
  * the connector.
  */
-public class ConnectorTaskId implements Serializable {
+public class ConnectorTaskId implements Serializable, Comparable<ConnectorTaskId> {
     private final String connector;
     private final int task;
 
@@ -67,5 +67,13 @@ public class ConnectorTaskId implements Serializable {
     @Override
     public String toString() {
         return connector + '-' + task;
+    }
+
+    @Override
+    public int compareTo(ConnectorTaskId o) {
+        int connectorCmp = connector.compareTo(o.connector);
+        if (connectorCmp != 0)
+            return connectorCmp;
+        return ((Integer) task).compareTo(o.task);
     }
 }

@@ -146,6 +146,7 @@
     <allow pkg="org.apache.kafka.copycat.data" />
     <allow pkg="org.apache.kafka.copycat.errors" />
     <allow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.test"/>
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.copycat.connector" />

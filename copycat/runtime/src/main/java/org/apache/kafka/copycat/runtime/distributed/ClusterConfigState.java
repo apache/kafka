@@ -19,10 +19,8 @@ package org.apache.kafka.copycat.runtime.distributed;
 
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -30,6 +28,10 @@ import java.util.Set;
  * An immutable snapshot of the configuration state of connectors and tasks in a Copycat cluster.
  */
 public class ClusterConfigState {
+    public static final ClusterConfigState EMPTY = new ClusterConfigState(-1, Collections.<String, Integer>emptyMap(),
+            Collections.<String, Map<String, String>>emptyMap(), Collections.<ConnectorTaskId, Map<String, String>>emptyMap(),
+            Collections.<String>emptySet());
+
     private final long offset;
     private final Map<String, Integer> connectorTaskCounts;
     private final Map<String, Map<String, String>> connectorConfigs;
@@ -60,8 +62,8 @@ public class ClusterConfigState {
     /**
      * Get a list of the connectors in this configuration
      */
-    public Collection<String> connectors() {
-        return connectorTaskCounts.keySet();
+    public Set<String> connectors() {
+        return connectorConfigs.keySet();
     }
 
     /**
@@ -83,19 +85,29 @@ public class ClusterConfigState {
     }
 
     /**
+     * Get the number of tasks assigned for the given conncetor.
+     * @param connectorName name of the connector to look up tasks for
+     * @return the number of tasks
+     */
+    public int taskCount(String connectorName) {
+        Integer count = connectorTaskCounts.get(connectorName);
+        return count == null ? 0 : count;
+    }
+
+    /**
      * Get the current set of task IDs for the specified connector.
      * @param connectorName the name of the connector to look up task configs for
      * @return the current set of connector task IDs
      */
-    public Collection<ConnectorTaskId> tasks(String connectorName) {
+    public Set<ConnectorTaskId> tasks(String connectorName) {
         if (inconsistentConnectors.contains(connectorName))
-            return Collections.EMPTY_LIST;
+            return Collections.emptySet();
 
         Integer numTasks = connectorTaskCounts.get(connectorName);
         if (numTasks == null)
-            throw new IllegalArgumentException("Connector does not exist in current configuration.");
+            return Collections.emptySet();
 
-        List<ConnectorTaskId> taskIds = new ArrayList<>();
+        Set<ConnectorTaskId> taskIds = new HashSet<>();
         for (int taskIndex = 0; taskIndex < numTasks; taskIndex++) {
             ConnectorTaskId taskId = new ConnectorTaskId(connectorName, taskIndex);
             taskIds.add(taskId);
@@ -119,4 +131,14 @@ public class ClusterConfigState {
         return inconsistentConnectors;
     }
 
+    @Override
+    public String toString() {
+        return "ClusterConfigState{" +
+                "offset=" + offset +
+                ", connectorTaskCounts=" + connectorTaskCounts +
+                ", connectorConfigs=" + connectorConfigs +
+                ", taskConfigs=" + taskConfigs +
+                ", inconsistentConnectors=" + inconsistentConnectors +
+                '}';
+    }
 }

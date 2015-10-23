@@ -21,6 +21,7 @@ import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.HerderConnectorContext;
+import org.apache.kafka.copycat.runtime.TaskConfig;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.sink.SinkConnector;
 import org.apache.kafka.copycat.sink.SinkTask;
@@ -35,22 +36,21 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({StandaloneHerder.class})
-@PowerMockIgnore("javax.management.*")
 public class StandaloneHerderTest {
     private static final String CONNECTOR_NAME = "test";
+    private static final List<String> TOPICS_LIST = Arrays.asList("topic1", "topic2");
     private static final String TOPICS_LIST_STR = "topic1,topic2";
+    private static final int DEFAULT_MAX_TASKS = 1;
 
     private StandaloneHerder herder;
     @Mock protected Worker worker;
@@ -58,7 +58,7 @@ public class StandaloneHerderTest {
     @Mock protected Callback<String> createCallback;
 
     private Map<String, String> connectorProps;
-    private Properties taskProps;
+    private Map<String, String> taskProps;
 
     @Before
     public void setup() {
@@ -68,11 +68,10 @@ public class StandaloneHerderTest {
         connectorProps = new HashMap<>();
         connectorProps.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
         connectorProps.put(SinkConnector.TOPICS_CONFIG, TOPICS_LIST_STR);
-        PowerMock.mockStatic(StandaloneHerder.class);
 
         // These can be anything since connectors can pass along whatever they want.
-        taskProps = new Properties();
-        taskProps.setProperty("foo", "bar");
+        taskProps = new HashMap<>();
+        taskProps.put("foo", "bar");
     }
 
     @Test
@@ -121,7 +120,9 @@ public class StandaloneHerderTest {
     public void testCreateAndStop() throws Exception {
         connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(BogusSourceConnector.class, BogusSourceTask.class, false);
+        // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         expectStop();
+
         PowerMock.replayAll();
 
         herder.addConnector(connectorProps, createCallback);
@@ -135,36 +136,30 @@ public class StandaloneHerderTest {
                            boolean sink) throws Exception {
         connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connClass.getName());
 
-        PowerMock.expectPrivate(StandaloneHerder.class, "instantiateConnector", connClass.getName())
-                .andReturn(connector);
+        worker.addConnector(EasyMock.eq(new ConnectorConfig(connectorProps)), EasyMock.anyObject(HerderConnectorContext.class));
+        PowerMock.expectLastCall();
 
         createCallback.onCompletion(null, CONNECTOR_NAME);
         PowerMock.expectLastCall();
 
-        connector.initialize(EasyMock.anyObject(HerderConnectorContext.class));
-        PowerMock.expectLastCall();
-        connector.start(new Properties());
-        PowerMock.expectLastCall();
-
-        // Just return the connector properties for the individual task we generate by default
-        EasyMock.<Class<? extends Task>>expect(connector.taskClass()).andReturn(taskClass);
-
-        EasyMock.expect(connector.taskConfigs(ConnectorConfig.TASKS_MAX_DEFAULT))
-                .andReturn(Arrays.asList(taskProps));
         // And we should instantiate the tasks. For a sink task, we should see added properties for
         // the input topic partitions
-        Properties generatedTaskProps = new Properties();
+        Map<String, String> generatedTaskProps = new HashMap<>();
         generatedTaskProps.putAll(taskProps);
+        generatedTaskProps.put(TaskConfig.TASK_CLASS_CONFIG, taskClass.getName());
         if (sink)
-            generatedTaskProps.setProperty(SinkTask.TOPICS_CONFIG, TOPICS_LIST_STR);
-        worker.addTask(new ConnectorTaskId(CONNECTOR_NAME, 0), taskClass.getName(), generatedTaskProps);
+            generatedTaskProps.put(SinkTask.TOPICS_CONFIG, TOPICS_LIST_STR);
+        EasyMock.expect(worker.reconfigureConnectorTasks(CONNECTOR_NAME, DEFAULT_MAX_TASKS, TOPICS_LIST))
+                .andReturn(Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), generatedTaskProps));
+
+        worker.addTask(new ConnectorTaskId(CONNECTOR_NAME, 0), new TaskConfig(generatedTaskProps));
         PowerMock.expectLastCall();
     }
 
     private void expectStop() {
         worker.stopTask(new ConnectorTaskId(CONNECTOR_NAME, 0));
         EasyMock.expectLastCall();
-        connector.stop();
+        worker.stopConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
     }
 

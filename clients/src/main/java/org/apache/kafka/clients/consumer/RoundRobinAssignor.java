@@ -14,11 +14,11 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
@@ -76,39 +76,6 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
     @Override
     public String name() {
         return "roundrobin";
-    }
-
-    private static class CircularIterator<T> implements Iterator<T> {
-        int i = 0;
-        private List<T> list;
-
-        public CircularIterator(List<T> list) {
-            if (list.isEmpty()) {
-                throw new IllegalArgumentException("CircularIterator can only be used on non-empty lists");
-            }
-            this.list = list;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return true;
-        }
-
-        @Override
-        public T next() {
-            T next = list.get(i);
-            i = (i + 1) % list.size();
-            return next;
-        }
-
-        public T peek() {
-            return list.get(i);
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
-        }
     }
 
 }

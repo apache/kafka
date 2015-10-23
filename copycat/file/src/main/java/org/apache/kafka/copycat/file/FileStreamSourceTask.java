@@ -56,7 +56,7 @@ public class FileStreamSourceTask extends SourceTask {
         }
         topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
         if (topic == null)
-            throw new CopycatException("ConsoleSourceTask config missing topic setting");
+            throw new CopycatException("FileStreamSourceTask config missing topic setting");
     }
 
     @Override
@@ -88,6 +88,7 @@ public class FileStreamSourceTask extends SourceTask {
                     streamOffset = 0L;
                 }
                 reader = new BufferedReader(new InputStreamReader(stream));
+                log.debug("Opened {} for reading", logFilename());
             } catch (FileNotFoundException e) {
                 log.warn("Couldn't find file for FileStreamSourceTask, sleeping to wait for it to be created");
                 synchronized (this) {
@@ -113,6 +114,7 @@ public class FileStreamSourceTask extends SourceTask {
             int nread = 0;
             while (readerCopy.ready()) {
                 nread = readerCopy.read(buffer, offset, buffer.length - offset);
+                log.trace("Read {} bytes from {}", nread, logFilename());
 
                 if (nread > 0) {
                     offset += nread;
@@ -126,6 +128,7 @@ public class FileStreamSourceTask extends SourceTask {
                     do {
                         line = extractLine();
                         if (line != null) {
+                            log.trace("Read a line from {}", logFilename());
                             if (records == null)
                                 records = new ArrayList<>();
                             records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, VALUE_SCHEMA, line));
@@ -183,10 +186,12 @@ public class FileStreamSourceTask extends SourceTask {
         log.trace("Stopping");
         synchronized (this) {
             try {
-                stream.close();
-                log.trace("Closed input stream");
+                if (stream != null && stream != System.in) {
+                    stream.close();
+                    log.trace("Closed input stream");
+                }
             } catch (IOException e) {
-                log.error("Failed to close ConsoleSourceTask stream: ", e);
+                log.error("Failed to close FileStreamSourceTask stream: ", e);
             }
             this.notify();
         }
@@ -198,5 +203,9 @@ public class FileStreamSourceTask extends SourceTask {
 
     private Map<String, Long> offsetValue(Long pos) {
         return Collections.singletonMap(POSITION_FIELD, pos);
+    }
+
+    private String logFilename() {
+        return filename == null ? "stdin" : filename;
     }
 }
