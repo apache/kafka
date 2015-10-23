@@ -170,16 +170,8 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
         case Code.OK =>
           // Set ACL for each child
           Future {
-            val childPathBuilder = new StringBuilder
-            for(child <- children.asScala) {
-              childPathBuilder.clear
-              childPathBuilder.append(path)
-              childPathBuilder.append("/")
-              childPathBuilder.append(child.mkString)
-
-              val childPath = childPathBuilder.mkString
-              setAclsRecursively(childPath)
-            }
+            for (child <- children.asScala)
+              setAclsRecursively(s"$path/$child")
             promise success "done"
           }
         case Code.CONNECTIONLOSS =>
