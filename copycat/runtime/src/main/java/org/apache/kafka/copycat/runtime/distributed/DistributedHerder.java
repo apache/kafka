@@ -49,15 +49,34 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Distributed "herder" that coordinates with other workers to spread work across multiple processes.
+ * <p>
+ *     Distributed "herder" that coordinates with other workers to spread work across multiple processes.
+ * </p>
+ * <p>
+ *     Under the hood, this is implemented as a group managed by Kafka's group membership facilities (i.e. the generalized
+ *     group/consumer coordinator). Each instance of DistributedHerder joins the group and indicates what it's current
+ *     configuration state is (where it is in the configuration log). The group coordinator selects one member to take
+ *     this information and assign each instance a subset of the active connectors & tasks to execute. This assignment
+ *     is currently performed in a simple round-robin fashion, but this is not guaranteed -- the herder may also choose
+ *     to, e.g., use a sticky assignment to avoid the usual start/stop costs associated with connectors and tasks. Once
+ *     an assignment is received, the DistributedHerder simply runs its assigned connectors and tasks in a Worker.
+ * </p>
+ * <p>
+ *     In addition to distributing work, the DistributedHerder uses the leader determined during the work assignment
+ *     to select a leader for this generation of the group who is responsible for other tasks that can only be performed
+ *     by a single node at a time. Most importantly, this includes writing updated configurations for connectors and tasks,
+ *     (and therefore, also for creating, destroy, and scaling up/down connectors).
+ * </p>
  */
 public class DistributedHerder implements Herder, Runnable {
     private static final Logger log = LoggerFactory.getLogger(DistributedHerder.class);
 
-    private final DistributedHerderConfig config;
     private final Worker worker;
     private final KafkaConfigStorage configStorage;
     private ClusterConfigState configState;
+
+    private final int workerSyncTimeoutMs;
+    private final int workerUnsyncBackoffMs;
 
     private final WorkerGroupMember member;
     private final AtomicBoolean stopping;
@@ -92,7 +111,10 @@ public class DistributedHerder implements Herder, Runnable {
         }
         configState = ClusterConfigState.EMPTY;
 
-        this.config = new DistributedHerderConfig(configs);
+        DistributedHerderConfig config = new DistributedHerderConfig(configs);
+        this.workerSyncTimeoutMs = config.getInt(DistributedHerderConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
+        this.workerUnsyncBackoffMs = config.getInt(DistributedHerderConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
+
         this.member = member != null ? member : new WorkerGroupMember(config, this.configStorage, rebalanceListener());
         stopping = new AtomicBoolean(false);
 
@@ -364,15 +386,13 @@ public class DistributedHerder implements Herder, Runnable {
 
         boolean needsReadToEnd = false;
         long syncConfigsTimeoutMs = Long.MAX_VALUE;
-        boolean backoffOnFailure = false;
         boolean needsRejoin = false;
         if (assignment.failed()) {
             needsRejoin = true;
             if (isLeader()) {
                 log.warn("Join group completed, but assignment failed and we are the leader. Reading to end of config and retrying.");
                 needsReadToEnd = true;
-                syncConfigsTimeoutMs = config.getInt(DistributedHerderConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
-                backoffOnFailure = true;
+                syncConfigsTimeoutMs = workerSyncTimeoutMs;
             } else if (configState.offset() < assignment.offset()) {
                 log.warn("Join group completed, but assignment failed and we lagging. Reading to end of config and retrying.");
                 needsReadToEnd = true;
@@ -387,25 +407,12 @@ public class DistributedHerder implements Herder, Runnable {
         }
 
         if (needsReadToEnd) {
-            log.info("Current config state offset {} is behind group assignment {}, reading to end of config log", configState.offset(), assignment.offset());
-            try {
-                configStorage.readToEnd().get(syncConfigsTimeoutMs, TimeUnit.MILLISECONDS);
-                configState = configStorage.snapshot();
-                log.info("Finished reading to end of log and updated config snapshot, new config log offset: {}", configState.offset());
-            } catch (TimeoutException e) {
-                log.warn("Didn't reach end of config log quickly enough", e);
-                // TODO: With explicit leave group support, it would be good to explicitly leave the group *before* this
-                // backoff since it'll be longer than the session timeout
-                if (backoffOnFailure)
-                    backoff(config.getInt(DistributedHerderConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG));
-                // Force exiting this method to avoid creating any connectors/tasks and require immediate rejoining if
-                // we timed out. This should only happen if we were the leader and didn't finish quickly enough, in which
-                // case we've waited a long time and should have already left the group OR the timeout should have been
-                // very long and not having finished also indicates we've waited longer than the session timeout.
+            // Force exiting this method to avoid creating any connectors/tasks and require immediate rejoining if
+            // we timed out. This should only happen if we were the leader and didn't finish quickly enough, in which
+            // case we've waited a long time and should have already left the group OR the timeout should have been
+            // very long and not having finished also indicates we've waited longer than the session timeout.
+            if (!readConfigToEnd(syncConfigsTimeoutMs))
                 needsRejoin = true;
-            } catch (InterruptedException | ExecutionException e) {
-                throw new CopycatException("Error trying to catch up after assignment", e);
-            }
         }
 
         if (needsRejoin) {
@@ -421,13 +428,48 @@ public class DistributedHerder implements Herder, Runnable {
             return false;
         }
 
+        startWork();
+
+        return true;
+    }
+
+    /**
+     * Try to read to the end of the config log within the given timeout
+     * @param timeoutMs maximum time to wait to sync to the end of the log
+     * @return true if successful, false if timed out
+     */
+    private boolean readConfigToEnd(long timeoutMs) {
+        log.info("Current config state offset {} is behind group assignment {}, reading to end of config log", configState.offset(), assignment.offset());
+        try {
+            configStorage.readToEnd().get(timeoutMs, TimeUnit.MILLISECONDS);
+            configState = configStorage.snapshot();
+            log.info("Finished reading to end of log and updated config snapshot, new config log offset: {}", configState.offset());
+            return true;
+        } catch (TimeoutException e) {
+            log.warn("Didn't reach end of config log quickly enough", e);
+            // TODO: With explicit leave group support, it would be good to explicitly leave the group *before* this
+            // backoff since it'll be longer than the session timeout
+            if (isLeader())
+                backoff(workerUnsyncBackoffMs);
+            return false;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new CopycatException("Error trying to catch up after assignment", e);
+        }
+    }
+
+    private void backoff(long ms) {
+        Utils.sleep(ms);
+    }
+
+    private void startWork() {
         // Start assigned connectors and tasks
         log.info("Starting connectors and tasks using config offset {}", assignment.offset());
         for (String connectorName : assignment.connectors()) {
             try {
                 startConnector(connectorName);
             } catch (ConfigException e) {
-                log.error("Couldn't instantiate connector " + connectorName, e);
+                log.error("Couldn't instantiate connector " + connectorName + " because it has an invalid connector " +
+                        "configuration. This connector will not execute until reconfigured.", e);
             }
         }
         for (ConnectorTaskId taskId : assignment.tasks()) {
@@ -437,15 +479,10 @@ public class DistributedHerder implements Herder, Runnable {
                 TaskConfig taskConfig = new TaskConfig(configs);
                 worker.addTask(taskId, taskConfig);
             } catch (ConfigException e) {
-                log.error("Couldn't instantiate task " + taskId, e);
+                log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
+                        "configuration. This task will not execute until reconfigured.", e);
             }
         }
-
-        return true;
-    }
-
-    private void backoff(long ms) {
-        Utils.sleep(ms);
     }
 
     // Helper for starting a connector with the given name, which will extract & parse the config, generate connector
