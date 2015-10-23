@@ -26,8 +26,8 @@ import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkException
 import kafka.utils.{ToolsUtils, Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils, ZkPath}
+import org.apache.log4j.Level
 import org.apache.kafka.common.security.JaasUtils
-
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.data.Stat
@@ -35,7 +35,6 @@ import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.ZooDefs.Ids
 import org.apache.zookeeper.ZooKeeper
-
 import scala.collection.JavaConverters._
 import scala.collection._
 import scala.concurrent._
@@ -121,6 +120,7 @@ object ZkSecurityMigrator extends Logging {
             }(threadExecutionContext)
           case Code.NONODE =>
             warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
+            promise success "done"
           case Code.SESSIONEXPIRED =>
             // Starting a new session isn't really a problem, but it'd complicate
             // the logic of the tool, so we quit and let the user re-run it.
@@ -151,6 +151,7 @@ object ZkSecurityMigrator extends Logging {
             }(threadExecutionContext)
           case Code.NONODE =>
             warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
+            promise success "done"
           case Code.SESSIONEXPIRED =>
             // Starting a new session isn't really a problem, but it'd complicate
             // the logic of the tool, so we quit and let the user re-run it.
@@ -167,8 +168,8 @@ object ZkSecurityMigrator extends Logging {
     var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser()
 
-    val goOpt = parser.accepts("kafka.go", "Indicates whether to make this cluster secure or unsecure. The "
-        + " options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])
+    val goOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
+        + " The options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])
     val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").withOptionalArg().ofType(classOf[String])
     val zkUrlOpt = parser.accepts("zookeeper.connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
       "takes a comma-separated list of host:port pairs.").withRequiredArg().defaultsTo("localhost:2181").
@@ -184,18 +185,24 @@ object ZkSecurityMigrator extends Logging {
       CommandLineUtils.printUsageAndDie(parser, usageMessage)
 
     if ((jaasFile == null) && !options.has(jaasFileOpt)) {
-      error("No JAAS configuration file has been specified. Please make sure that you have set either "
-            + "the system property %s or the option %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "--jaas.file"))
-      throw new IllegalArgumentException("Incorrect configuration")
+     val errorMsg = ("No JAAS configuration file has been specified. Please make sure that you have set either " + 
+                    "the system property %s or the option %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "--jaas.file")) 
+     if(logger.isEnabledFor(Level.ERROR))
+       error(errorMsg)
+     System.err.println("ERROR: %s".format(errorMsg))
+     throw new IllegalArgumentException("Incorrect configuration")
     }
-    
+
     if (jaasFile == null) {
       jaasFile = options.valueOf(jaasFileOpt)
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
     }
-    
+
     if (!JaasUtils.isZkSecurityEnabled(jaasFile)) {
-      error("Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile))
+      val errorMsg = "Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile)
+      if(logger.isEnabledFor(Level.ERROR))
+        error(errorMsg)
+      System.err.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration") 
     }
 

@@ -924,11 +924,6 @@ object ZkPath {
     checkNamespace(client)
     client.createPersistentSequential(path, data, acls)
   }
-
-  def setAcl(client: ZkClient, path: String, acls: java.util.List[ACL]) {
-    checkNamespace(client)
-    client.setAcl(path, acls)
-  }
 }
 
 /**
