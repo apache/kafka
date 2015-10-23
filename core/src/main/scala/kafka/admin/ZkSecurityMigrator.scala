@@ -225,19 +225,14 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
 
       @tailrec
       def recurse(): Unit = {
-        val future = synchronized { 
+        val future = futures.synchronized { 
           info("Size of future list is %d".format(futures.size))
-          futures.headOption match {
-            case Some(future) =>
-              futures.dequeue
-              Some(future)
-          case None =>
-              None
-          }
+          futures.headOption
         }
         future match {
           case Some(a) =>
             Await.result(a, 6000 millis)
+            futures.synchronized { futures.dequeue }
             recurse
           case None =>
         }
