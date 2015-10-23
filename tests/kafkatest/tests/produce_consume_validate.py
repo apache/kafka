@@ -49,6 +49,11 @@ class ProduceConsumeValidateTest(Test):
             if not self.producer.alive(node):
                 self.logger.warn("Producer on %s is not alive and probably should be." % str(node.account))
 
+        # Check that producer is still successfully producing
+        currently_acked = self.producer.num_acked
+        wait_until(lambda: self.producer.num_acked > currently_acked + 5, timeout_sec=10,
+             err_msg="Expected producer to still be producing.")
+
         self.producer.stop()
         self.consumer.wait()
 

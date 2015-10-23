@@ -19,8 +19,6 @@ import config_property
 class KafkaConfig(dict):
     """A dictionary-like container class which allows for definition of overridable default values,
     which is also capable of "rendering" itself as a useable server.properties file.
-
-    For consistency of presentation, subclass SortedDict, which maintains ordering by key.
     """
 
     DEFAULTS = {

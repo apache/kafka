@@ -25,6 +25,7 @@ import itertools
 import os
 import subprocess
 
+
 def is_int(msg):
     """Default method used to check whether text pulled from console consumer is a message.
 
@@ -146,7 +147,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         if hasattr(node, "version") and node.version <= LATEST_0_8_2:
             # in 0.8.2.X and earlier, console consumer does not have --timeout-ms option
             # instead, we have to pass it through the config file
-            prop_file += "consumer.timeout.ms=" + str(self.consumer_timeout_ms)
+            prop_file += "\nconsumer.timeout.ms=%s\n" % str(self.consumer_timeout_ms)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
@@ -162,17 +163,22 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         args['zk_connect'] = self.kafka.zk.connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
+        args['log_dir'] = ConsoleConsumer.LOG_DIR
+        args['log4j_config'] = ConsoleConsumer.LOG4J_CONFIG
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
+        args['jmx_port'] = self.jmx_port
+        args['kafka_dir'] = kafka_dir(node)
+        args['broker_list'] = self.kafka.bootstrap_servers()
 
-        cmd = "export JMX_PORT=%s; " % self.jmx_port
-        cmd += "export LOG_DIR=%s; " % ConsoleConsumer.LOG_DIR
-        cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ConsoleConsumer.LOG4J_CONFIG
-        cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-console-consumer.sh "
-        cmd += "--topic %(topic)s --consumer.config %(config_file)s" % args
+        cmd = "export JMX_PORT=%(jmx_port)s; " \
+              "export LOG_DIR=%(log_dir)s; " \
+              "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
+              "/opt/%(kafka_dir)s/bin/kafka-console-consumer.sh " \
+              "--topic %(topic)s --consumer.config %(config_file)s" % args
 
         if self.new_consumer:
-            cmd += " --new-consumer --bootstrap-server %s" % self.kafka.bootstrap_servers()
+            cmd += " --new-consumer --bootstrap-server %(broker_list)s" % args
         else:
             cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:

@@ -94,11 +94,6 @@ class QuotaTest(Test):
         success, msg = self.validate(self.kafka, producer, consumer)
         assert success, msg
 
-        """
-        kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=default_id:OneMinuteRate
-        kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=default_id:OneMinuteRate
-        """
-
     def validate(self, broker, producer, consumer):
         """
         For each client_id we validate that:

@@ -60,7 +60,6 @@ class EndToEndLatencyService(PerformanceService):
         self.logger.debug("End-to-end latency %d command: %s", idx, cmd)
         results = {}
         for line in node.account.ssh_capture(cmd):
-            self.logger.debug(line)
             if line.startswith("Avg latency:"):
                 results['latency_avg_ms'] = float(line.split()[2])
             if line.startswith("Percentiles"):

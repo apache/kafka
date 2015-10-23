@@ -127,6 +127,7 @@ class KafkaService(JmxMixin, Service):
         """Return process ids associated with running processes on the given node."""
         try:
             cmd = "ps ax | grep -i %s | grep java | grep -v grep | awk '{print $1}'" % kafka_dir(node)
+
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (subprocess.CalledProcessError, ValueError) as e:
@@ -202,7 +203,7 @@ class KafkaService(JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
 
-        json_file = "/tmp/" + str(time.time()) + "_reassign.json"
+        json_file = "/tmp/%s_reassign.json" % str(time.time())
 
         # reassignment to json
         json_str = json.dumps(reassignment)
@@ -211,11 +212,10 @@ class KafkaService(JmxMixin, Service):
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
         cmd += "/opt/%s/bin/kafka-reassign-partitions.sh " % kafka_dir(node)
-        cmd += "--zookeeper %(zk_connect)s "
-        cmd += "--reassignment-json-file %(reassignment_file)s "
-        cmd += "--verify" % {'zk_connect': self.zk.connect_setting(),
-                                'reassignment_file': json_file}
-        cmd += " && sleep 1 && rm -f %s" % json_file
+        cmd += "--zookeeper %s " % self.zk.connect_setting()
+        cmd += "--reassignment-json-file %s " % json_file
+        cmd += "--verify "
+        cmd += "&& sleep 1 && rm -f %s" % json_file
 
         # send command
         self.logger.info("Verifying parition reassignment...")
@@ -236,7 +236,7 @@ class KafkaService(JmxMixin, Service):
         """
         if node is None:
             node = self.nodes[0]
-        json_file = "/tmp/" + str(time.time()) + "_reassign.json"
+        json_file = "/tmp/%s_reassign.json" % str(time.time())
 
         # reassignment to json
         json_str = json.dumps(reassignment)
@@ -245,10 +245,9 @@ class KafkaService(JmxMixin, Service):
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
         cmd += "/opt/%s/bin/kafka-reassign-partitions.sh " % kafka_dir(node)
-        cmd += "--zookeeper %(zk_connect)s "
-        cmd += "--reassignment-json-file %(reassignment_file)s "
-        cmd += "--execute" % {'zk_connect': self.zk.connect_setting(),
-                                'reassignment_file': json_file}
+        cmd += "--zookeeper %s " % self.zk.connect_setting()
+        cmd += "--reassignment-json-file %s " % json_file
+        cmd += "--execute"
         cmd += " && sleep 1 && rm -f %s" % json_file
 
         # send command
@@ -262,7 +261,7 @@ class KafkaService(JmxMixin, Service):
         self.logger.debug(output)
 
     def restart_node(self, node, clean_shutdown=True):
-        """Restart the given node, waiting wait_sec in between stopping and starting up again."""
+        """Restart the given node."""
         self.stop_node(node, clean_shutdown)
         self.start_node(node)
 
