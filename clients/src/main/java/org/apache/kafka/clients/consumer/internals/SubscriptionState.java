@@ -28,8 +28,8 @@ import java.util.regex.Pattern;
 
 /**
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition
- * is "assigned" either directly with {@link #assignFromUser(List)} (manual assignment)
- * or with {@link #assignFromSubscribed(Collection)} (automatic assignment).
+ * is "assigned" either directly with {@link #assignFromUser(Collection)} (manual assignment)
+ * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
  *
  * Once assigned, the partition is not considered "fetchable" until its initial position has
  * been set with {@link #seek(TopicPartition, long)}. Fetchable partitions track a fetch
@@ -138,7 +138,7 @@ public class SubscriptionState {
      * note this is different from {@link #assignFromSubscribed(Collection)}
      * whose input partitions are provided from the subscribed topics.
      */
-    public void assignFromUser(List<TopicPartition> partitions) {
+    public void assignFromUser(Collection<TopicPartition> partitions) {
         if (!this.subscription.isEmpty() || this.subscribedPattern != null)
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
 
@@ -156,7 +156,7 @@ public class SubscriptionState {
 
     /**
      * Change the assignment to the specified partitions returned from the coordinator,
-     * note this is different from {@link #assignFromUser(List)} which directly set the assignment from user inputs
+     * note this is different from {@link #assignFromUser(Collection)} which directly set the assignment from user inputs
      */
     public void assignFromSubscribed(Collection<TopicPartition> assignments) {
         for (TopicPartition tp : assignments)

@@ -630,7 +630,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * assignment (if there is one). Note that it is not possible to combine topic subscription with group management
      * with manual partition assignment through {@link #assign(List)}.
      *
-     * If the given list of topics is empty, then it treated the same as {@link #unsubscribe()}.
+     * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
      * As part of group management, the consumer will keep track of the list of consumers that belong to a particular
@@ -675,7 +675,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * assignment (if there is one). It is not possible to combine topic subscription with group management
      * with manual partition assignment through {@link #assign(List)}.
      *
-     * If the given list of topics is empty, then it treated the same as {@link #unsubscribe()}.
+     * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
      * This is a short-hand for {@link #subscribe(List, ConsumerRebalanceListener)}, which
