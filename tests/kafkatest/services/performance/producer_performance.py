@@ -13,16 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.utils.util import wait_until
-
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
+import itertools
 from kafkatest.utils.security_config import SecurityConfig
 from kafkatest.services.kafka.directory import kafka_dir
-
-import itertools
-import subprocess
-
 
 class ProducerPerformanceService(JmxMixin, PerformanceService):
 
@@ -36,7 +31,6 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
                  intermediate_stats=False, client_id="producer-performance", jmx_object_names=None, jmx_attributes=[]):
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         PerformanceService.__init__(self, context, num_nodes)
-
         self.kafka = kafka
         self.security_config = SecurityConfig(security_protocol)
         self.security_protocol = security_protocol
@@ -50,32 +44,25 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         self.intermediate_stats = intermediate_stats
         self.client_id = client_id
 
-    def pids(self, node):
-        try:
-            cmd = "ps ax | grep -i ProducerPerformance | grep java | grep -v grep | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
-            return []
-
-    def alive(self, node):
-        return len(self.pids(node)) > 0
-
     def _worker(self, idx, node):
         args = self.args.copy()
-        args.update({'bootstrap_servers': self.kafka.bootstrap_servers(), 'client_id': self.client_id})
-
-        cmd = "export JMX_PORT=%s; " % str(self.jmx_port)
-        cmd += "/opt/%s/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance " % kafka_dir(node)
-        cmd += "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
+        args.update({
+            'bootstrap_servers': self.kafka.bootstrap_servers(),
+            'jmx_port': self.jmx_port,
+            'client_id': self.client_id,
+            'kafka_directory': kafka_dir(node)
+            })
+        cmd = "JMX_PORT=%(jmx_port)d /opt/%(kafka_directory)s/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance " \
+              "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
 
         self.security_config.setup_node(node)
         if self.security_protocol == SecurityConfig.SSL:
             self.settings.update(self.security_config.properties)
-
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
         cmd += " | tee /mnt/producer-performance.log"
+
+        self.logger.debug("Producer performance %d command: %s", idx, cmd)
 
         def parse_stats(line):
             parts = line.split(',')
@@ -90,15 +77,11 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
                 'latency_99th_ms': float(parts[6].split()[0]),
                 'latency_999th_ms': float(parts[7].split()[0]),
             }
-
         last = None
-
-        self.logger.debug("Producer performance %d command: %s", idx, cmd)
         producer_output = node.account.ssh_capture(cmd)
-        wait_until(lambda: self.alive(node), timeout_sec=10, err_msg=self.__class__.__name__ + " took too long to start.")
-
+        first_line = producer_output.next()
         self.start_jmx_tool(idx, node)
-        for line in producer_output:
+        for line in itertools.chain([first_line], producer_output):
             if self.intermediate_stats:
                 try:
                     self.stats[idx-1].append(parse_stats(line))

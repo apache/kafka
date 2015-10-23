@@ -21,6 +21,7 @@ from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.utils.security_config import SecurityConfig
 
+import itertools
 import os
 import subprocess
 
@@ -95,9 +96,9 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         "consumer_log": {
             "path": LOG_FILE,
             "collect_default": True}
-        }
+    }
 
-    def __init__(self, context, num_nodes, kafka, topic, security_protocol=SecurityConfig.PLAINTEXT, new_consumer=None, message_validator=None,
+    def __init__(self, context, num_nodes, kafka, topic, security_protocol=SecurityConfig.PLAINTEXT, new_consumer=False, message_validator=None,
                  from_beginning=True, consumer_timeout_ms=None, version=TRUNK, client_id="console-consumer", jmx_object_names=None, jmx_attributes=[]):
         """
         Args:
@@ -177,13 +178,13 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         if self.from_beginning:
             cmd += " --from-beginning"
 
-        if hasattr(node, "version"):
+        if self.consumer_timeout_ms is not None:
             # version 0.8.X and below do not support --timeout-ms option
             # This will be added in the properties file instead
-            if self.consumer_timeout_ms is not None and node.version > LATEST_0_8_2:
-                cmd += " --timeout-ms %s" % self.consumer_timeout_ms
-        else:
-            if self.consumer_timeout_ms is not None:
+            version_greater_than_0_8_X = (hasattr(node, "version") and node.version > LATEST_0_8_2) or \
+                                         not hasattr(node, "version")
+
+            if version_greater_than_0_8_X:
                 cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
@@ -220,15 +221,11 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
 
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
-        wait_until(lambda: self.alive(node), timeout_sec=10, err_msg="ConsoleConsumer did not start in a reasonable amount of time.")
-
-        # Calling next() here blocks until the first line of output from the consumer,
-        # which provides a rough mechanism for guaranteeing that the consumer process has started.
-        # Note however that if nothing is produced, this blocks forever.
+        first_line = consumer_output.next()
 
         self.start_jmx_tool(idx, node)
 
-        for line in consumer_output:
+        for line in itertools.chain([first_line], consumer_output):
             msg = line.strip()
             if self.message_validator is not None:
                 msg = self.message_validator(msg)

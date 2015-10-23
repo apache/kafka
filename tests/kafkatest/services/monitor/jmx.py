@@ -13,18 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.utils.util import wait_until
-
 from kafkatest.services.kafka.directory import kafka_dir
-import subprocess
-
 
 class JmxMixin(object):
     """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
 
     Note that this is not a service in its own right.
     """
-
     def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=[]):
         self.jmx_object_names = jmx_object_names
         self.jmx_attributes = jmx_attributes
@@ -40,11 +35,11 @@ class JmxMixin(object):
         node.account.ssh("rm -rf /mnt/jmx_tool.log", allow_fail=False)
 
     def start_jmx_tool(self, idx, node):
-        if self.started[idx-1] or self.jmx_object_names == None:
+        if self.started[idx-1] or self.jmx_object_names is None:
             return
 
-        cmd = "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh kafka.tools.JmxTool " \
-              "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
+        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.JmxTool " \
+              "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % (kafka_dir(node), self.jmx_port)
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
         for jmx_attribute in self.jmx_attributes:
@@ -52,27 +47,15 @@ class JmxMixin(object):
         cmd += " | tee -a /mnt/jmx_tool.log"
 
         self.logger.debug("Start JmxTool %d command: %s", idx, cmd)
-        node.account.ssh_capture(cmd, allow_fail=False)
+        jmx_output = node.account.ssh_capture(cmd, allow_fail=False)
+        jmx_output.next()
 
-        self.logger.debug("Waiting for Jmx process to start")
-        wait_until(lambda: self.alive(node), timeout_sec=10, err_msg="Jmx process failed to start.")
         self.started[idx-1] = True
-        self.logger.debug("Jmx process started")
-
-    def pids(self, node):
-        try:
-            cmd = "ps ax | grep -i JmxTool | grep java | grep -v grep | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
-            return []
-
-    def alive(self, node):
-        return len(self.pids(node)) > 0
 
     def read_jmx_output(self, idx, node):
         if self.started[idx-1] == False:
             return
+
         object_attribute_names = []
 
         cmd = "cat /mnt/jmx_tool.log"
@@ -99,14 +82,8 @@ class JmxMixin(object):
                 values_per_node = [time_to_stats.get(time_sec, {}).get(name, 0) for time_to_stats in self.jmx_stats]
                 # assume that value is aggregated across nodes by sum. This is appropriate for metrics such as bandwidth
                 aggregates_per_time.append(sum(values_per_node))
-
-            if len(aggregates_per_time) > 0:
-                self.average_jmx_value[name] = sum(aggregates_per_time) / len(aggregates_per_time)
-                self.maximum_jmx_value[name] = max(aggregates_per_time)
-            else:
-                self.logger.warn("No aggregate jmx statistics collected")
-                self.average_jmx_value[name] = None
-                self.maximum_jmx_value[name] = None
+            self.average_jmx_value[name] = sum(aggregates_per_time) / len(aggregates_per_time)
+            self.maximum_jmx_value[name] = max(aggregates_per_time)
 
     def read_jmx_output_all_nodes(self):
         for node in self.nodes:
