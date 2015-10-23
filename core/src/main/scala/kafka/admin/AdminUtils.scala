@@ -226,7 +226,7 @@ object AdminUtils extends Logging {
 
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean = 
     zkUtils.zkClient.exists(getTopicPath(topic))
-    
+
   def createTopic(zkUtils: ZkUtils,
                   topic: String,
                   partitions: Int, 

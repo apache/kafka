@@ -112,7 +112,7 @@ object ZkUtils {
    * Get calls that only depend on static paths
    */
   def getTopicPath(topic: String): String = {
-    BrokerTopicsPath + "/" + topic
+    ZkUtils.BrokerTopicsPath + "/" + topic
   }
 
   def getTopicPartitionsPath(topic: String): String = {
@@ -126,7 +126,7 @@ object ZkUtils {
     getTopicPartitionPath(topic, partitionId) + "/" + "state"
     
   def getEntityConfigRootPath(entityType: String): String =
-    EntityConfigPath + "/" + entityType
+    ZkUtils.EntityConfigPath + "/" + entityType
 
   def getEntityConfigPath(entityType: String, entity: String): String =
     getEntityConfigRootPath(entityType) + "/" + entity
@@ -148,6 +148,15 @@ class ZkUtils(val zkClient: ZkClient,
                               DeleteTopicsPath,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath)
+
+  val securePersistentZkPaths = Seq(BrokerIdsPath,
+                                    BrokerTopicsPath,
+                                    EntityConfigChangesPath,
+                                    getEntityConfigRootPath(ConfigType.Topic),
+                                    getEntityConfigRootPath(ConfigType.Client),
+                                    DeleteTopicsPath,
+                                    BrokerSequenceIdPath,
+                                    IsrChangeNotificationPath)
 
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
   
@@ -713,7 +722,7 @@ class ZkUtils(val zkClient: ZkClient,
   def deletePartition(brokerId: Int, topic: String) {
     val brokerIdPath = BrokerIdsPath + "/" + brokerId
     zkClient.delete(brokerIdPath)
-    val brokerPartTopicPath = BrokerTopicsPath + "/" + topic + "/" + brokerId
+    val brokerPartTopicPath = ZkUtils.BrokerTopicsPath + "/" + topic + "/" + brokerId
     zkClient.delete(brokerPartTopicPath)
   }
 
