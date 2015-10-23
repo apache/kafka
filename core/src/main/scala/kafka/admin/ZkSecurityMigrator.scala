@@ -17,29 +17,24 @@
 
 package kafka.admin
 
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import javax.security.auth.login.LoginException
 import joptsimple.OptionParser
-import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkException
-import kafka.utils.{ToolsUtils, Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils, ZkPath}
+import kafka.utils.{Logging, ZkUtils, CommandLineUtils}
 import org.apache.log4j.Level
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
-import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.data.Stat
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.ZooDefs.Ids
-import org.apache.zookeeper.ZooKeeper
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent._
 import scala.concurrent.duration._
-import scala.util._
 
 /**
  * This tool is to be used when making access to ZooKeeper authenticated or 
@@ -69,100 +64,6 @@ object ZkSecurityMigrator extends Logging {
   val usageMessage = ("ZooKeeper Migration Tool Help. This tool updates the ACLs of "
                       + "znodes as part of the process of setting up ZooKeeper "
                       + "authentication.")
-  val workQueue = new LinkedBlockingQueue[Runnable]
-  val threadExecutionContext = 
-    ExecutionContext.fromExecutor(new ThreadPoolExecutor(1,
-                                                         Runtime.getRuntime().availableProcessors(),
-                                                         5000,
-                                                         TimeUnit.MILLISECONDS,
-                                                         workQueue))
-  var futures: List[Future[String]] = List()
-  var exception: ZkException = null
-  var zkUtils: ZkUtils = null
-  
-  def setAclsRecursively(path: String) {
-    info("Setting ACL for path %s".format(path))
-    val setPromise = Promise[String]
-    val childrenPromise = Promise[String]
-    futures = futures :+ setPromise.future
-    futures = futures :+ childrenPromise.future
-    zkUtils.zkConnection.getZookeeper.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, setPromise)
-    zkUtils.zkConnection.getZookeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
-  }
-
-  object GetChildrenCallback extends ChildrenCallback {
-      def processResult(rc: Int,
-                        path: String,
-                        ctx: Object,
-                        children: java.util.List[String]) {
-        //val list = Option(children).map(_.asScala)
-        val zkHandle = zkUtils.zkConnection.getZookeeper
-        val promise = ctx.asInstanceOf[Promise[String]]
-        Code.get(rc) match {
-          case Code.OK =>
-            // Set ACL for each child 
-              Future {
-                val childPathBuilder = new StringBuilder
-                for(child <- children.asScala) {
-                  childPathBuilder.clear
-                  childPathBuilder.append(path)
-                  childPathBuilder.append("/")
-                  childPathBuilder.append(child.mkString)
-
-                  val childPath = childPathBuilder.mkString
-                  setAclsRecursively(childPath)
-                }
-                promise success "done"
-              }(threadExecutionContext)
-          case Code.CONNECTIONLOSS =>
-            Future {
-              zkHandle.getChildren(path, false, GetChildrenCallback, ctx)
-            }(threadExecutionContext)
-          case Code.NONODE =>
-            warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
-            promise success "done"
-          case Code.SESSIONEXPIRED =>
-            // Starting a new session isn't really a problem, but it'd complicate
-            // the logic of the tool, so we quit and let the user re-run it.
-            error("ZooKeeper session expired while changing ACLs")
-            promise failure ZkException.create(KeeperException.create(Code.get(rc)))
-          case _ =>
-            error("Unexpected return code: %d".format(rc))
-            promise failure ZkException.create(KeeperException.create(Code.get(rc)))
-        }
-      }
-  }
-  
-  object SetACLCallback extends StatCallback {
-    def processResult(rc: Int,
-                      path: String,
-                      ctx: Object,
-                      stat: Stat) {
-      val zkHandle = zkUtils.zkConnection.getZookeeper
-      val promise = ctx.asInstanceOf[Promise[String]]
-      
-      Code.get(rc) match {
-          case Code.OK =>
-            info("Successfully set ACLs for %s".format(path))
-            promise success "done"
-          case Code.CONNECTIONLOSS =>
-            Future {
-              zkHandle.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, ctx)
-            }(threadExecutionContext)
-          case Code.NONODE =>
-            warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
-            promise success "done"
-          case Code.SESSIONEXPIRED =>
-            // Starting a new session isn't really a problem, but it'd complicate
-            // the logic of the tool, so we quit and let the user re-run it.
-            error("ZooKeeper session expired while changing ACLs")
-            promise failure ZkException.create(KeeperException.create(Code.get(rc)))
-          case _ =>
-            error("Unexpected return code: %d".format(rc))
-            promise failure ZkException.create(KeeperException.create(Code.get(rc)))   
-      }
-    }
-  }
 
   def run(args: Array[String]) {
     var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
@@ -219,28 +120,9 @@ object ZkSecurityMigrator extends Logging {
     val zkUrl = options.valueOf(zkUrlOpt)
     val zkSessionTimeout = 6000 //options.valueOf(zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = 6000 //options.valueOf(zkConnectionTimeoutOpt).intValue
-    zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, goSecure)
-    
-    for (path <- zkUtils.securePersistentZkPaths) {
-      info("Securing " + path)
-      zkUtils.makeSurePersistentPathExists(path)
-      setAclsRecursively(path)
-    }
-
-    try {
-      while(futures.size > 0) {
-        val head::tail = futures
-        Await.result(head, Duration.Inf)
-        head.value match {
-          case Some(Success(v)) => // nothing to do
-          case Some(Failure(e)) => throw e
-        }
-        futures = tail
-        info("Size of future list is %d".format(futures.size))
-      }
-    } finally {
-      zkUtils.close
-    }
+    val zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, goSecure)
+    val migrator = new ZkSecurityMigrator(zkUtils)
+    migrator.run()
   }
 
   def main(args: Array[String]) {
@@ -251,4 +133,121 @@ object ZkSecurityMigrator extends Logging {
           e.printStackTrace()
     }
   }
+}
+
+class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
+  private val workQueue = new LinkedBlockingQueue[Runnable]
+  private implicit val threadExecutionContext =
+    ExecutionContext.fromExecutor(new ThreadPoolExecutor(1,
+      Runtime.getRuntime().availableProcessors(),
+      5000,
+      TimeUnit.MILLISECONDS,
+      workQueue))
+
+  private val futures = new ArrayBuffer[Future[String]]
+
+  private def setAclsRecursively(path: String) = {
+    info("Setting ACL for path %s".format(path))
+    val setPromise = Promise[String]
+    val childrenPromise = Promise[String]
+    futures.synchronized {
+      futures += setPromise.future
+      futures += childrenPromise.future
+    }
+    zkUtils.zkConnection.getZookeeper.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, setPromise)
+    zkUtils.zkConnection.getZookeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
+  }
+
+  private object GetChildrenCallback extends ChildrenCallback {
+    def processResult(rc: Int,
+                      path: String,
+                      ctx: Object,
+                      children: java.util.List[String]) {
+      //val list = Option(children).map(_.asScala)
+      val zkHandle = zkUtils.zkConnection.getZookeeper
+      val promise = ctx.asInstanceOf[Promise[String]]
+      Code.get(rc) match {
+        case Code.OK =>
+          // Set ACL for each child
+          Future {
+            for (child <- children.asScala)
+              setAclsRecursively(s"$path/$child")
+            promise success "done"
+          }
+        case Code.CONNECTIONLOSS =>
+          Future {
+            zkHandle.getChildren(path, false, GetChildrenCallback, ctx)
+          }
+        case Code.NONODE =>
+          warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
+          promise success "done"
+        case Code.SESSIONEXPIRED =>
+          // Starting a new session isn't really a problem, but it'd complicate
+          // the logic of the tool, so we quit and let the user re-run it.
+          error("ZooKeeper session expired while changing ACLs")
+          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+        case _ =>
+          error("Unexpected return code: %d".format(rc))
+          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+      }
+    }
+  }
+
+  private object SetACLCallback extends StatCallback {
+    def processResult(rc: Int,
+                      path: String,
+                      ctx: Object,
+                      stat: Stat) {
+      val zkHandle = zkUtils.zkConnection.getZookeeper
+      val promise = ctx.asInstanceOf[Promise[String]]
+
+      Code.get(rc) match {
+        case Code.OK =>
+          info("Successfully set ACLs for %s".format(path))
+          promise success "done"
+        case Code.CONNECTIONLOSS =>
+          Future {
+            zkHandle.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, ctx)
+          }(threadExecutionContext)
+        case Code.NONODE =>
+          warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
+          promise success "done"
+        case Code.SESSIONEXPIRED =>
+          // Starting a new session isn't really a problem, but it'd complicate
+          // the logic of the tool, so we quit and let the user re-run it.
+          error("ZooKeeper session expired while changing ACLs")
+          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+        case _ =>
+          error("Unexpected return code: %d".format(rc))
+          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+      }
+    }
+  }
+
+  private def run(): Unit = {
+    try {
+      for (path <- zkUtils.securePersistentZkPaths) {
+        info("Securing " + path)
+        zkUtils.makeSurePersistentPathExists(path)
+        setAclsRecursively(path)
+      }
+
+      @tailrec
+      def recurse(): Unit = {
+        val future = futures.synchronized { futures.headOption }
+        future match {
+          case Some(a) =>
+            Await.result(a, Duration.Inf)
+            recurse
+          case None =>
+        }
+      }
+      recurse()
+      info("Size of future list is %d".format(futures.size))
+
+    } finally {
+      zkUtils.close
+    }
+  }
+
 }
