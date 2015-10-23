@@ -135,14 +135,7 @@ object ZkSecurityMigrator extends Logging {
 
 class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
   private val workQueue = new LinkedBlockingQueue[Runnable]
-  //private implicit val threadExecutionContext =
-  //  ExecutionContext.fromExecutor(new ThreadPoolExecutor(1,
-  //    Runtime.getRuntime().availableProcessors(),
-  //    5000,
-  //    TimeUnit.MILLISECONDS,
-  //    workQueue))
-
-  private var futures = new Queue[Future[String]]
+  private val futures = new Queue[Future[String]]
 
   private def setAclsRecursively(path: String) = {
     info("Setting ACL for path %s".format(path))
