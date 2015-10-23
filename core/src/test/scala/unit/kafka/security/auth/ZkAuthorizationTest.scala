@@ -108,73 +108,51 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
 
   @Test
   def testZkMigration() {
-    assertTrue(zkUtils.isSecure)
-    val otherZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
+    val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false) 
     try {
-      info("zkConnect string: %s".format(zkConnect))
-      for (path <- otherZkUtils.securePersistentZkPaths) {
-        info("Creating " + path)
-        otherZkUtils.makeSurePersistentPathExists(path)
-        // Create a child for each znode to exercise the recurrent
-        // traversal of the data tree
-        otherZkUtils.createPersistentPath(path + "/fpjwashere", "")
-      }
-      ZkSecurityMigrator.run(Array("--zookeeper.acl=secure", "--zookeeper.connect=%s".format(zkConnect)))
-      info("Done with migration")
-      for (path <- zkUtils.securePersistentZkPaths) {
-        zkUtils.makeSurePersistentPathExists(path)
-        val listParent = (zkUtils.zkConnection.getAcl(path)).getKey
-        assertTrue(listParent.size == 2)
-        for (acl: ACL <- listParent.asScala) {
-          assertTrue(path, isAclSecure(acl))
-        }
-        val childPath = path + "/fpjwashere"
-        val listChild = (zkUtils.zkConnection.getAcl(childPath)).getKey
-        assertTrue("Path and size: %s, %d".format(childPath, listChild.size), listChild.size == 2)
-        for (acl: ACL <- listChild.asScala) {
-          assertTrue(childPath, isAclSecure(acl))
-        }
-      }
+      testMigration(unsecureZkUtils, zkUtils)
     } finally {
-      otherZkUtils.close()
+      unsecureZkUtils.close()
     }
   }
-  
+
   @Test
   def testZkAntiMigration() {
-    info("zkConnect string: %s".format(zkConnect))
-    val otherZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
+    val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
     try {
-      for (path <- zkUtils.securePersistentZkPaths) {
-        info("Creating " + path)
-        zkUtils.makeSurePersistentPathExists(path)
-        // Create a child for each znode to exercise the recurrent
-        // traversal of the data tree
-        zkUtils.createPersistentPath(path + "/fpjwashere", "")
-      }
-      ZkSecurityMigrator.run(Array("--zookeeper.acl=unsecure", "--zookeeper.connect=%s".format(zkConnect)))
-      info("Done with migration")
-      for (path <- otherZkUtils.securePersistentZkPaths) {
-        otherZkUtils.makeSurePersistentPathExists(path)
-        val listParent = (otherZkUtils.zkConnection.getAcl(path)).getKey
-        assertTrue(path, listParent.size == 1)
-        for (acl: ACL <- listParent.asScala) {
-          assertTrue(path, isAclUnsecure(acl))
-        }
-
-        val childPath = path + "/fpjwashere"
-        val listChild = (otherZkUtils.zkConnection.getAcl(childPath)).getKey
-        assertTrue(childPath, listChild.size == 1)
-        for (acl: ACL <- listChild.asScala) {
-          assertTrue(childPath, isAclUnsecure(acl))
-        }
-      }
+      testMigration(zkUtils, unsecureZkUtils)
     } finally {
-      otherZkUtils.close()
+      unsecureZkUtils.close()
     }
   }
 
-  def verify(path: String): Boolean = {
+  private def testMigration(firstZk: ZkUtils, secondZk: ZkUtils) {
+    info("zkConnect string: %s".format(zkConnect))
+    for (path <- firstZk.securePersistentZkPaths) {
+      info("Creating " + path)
+      firstZk.makeSurePersistentPathExists(path)
+      // Create a child for each znode to exercise the recurrent
+      // traversal of the data tree
+      firstZk.createPersistentPath(path + "/fpjwashere", "")
+    }
+    val secureOpt: String  = secondZk.isSecure match {
+      case true => "secure"
+      case false => "unsecure"
+    }
+    ZkSecurityMigrator.run(Array("--zookeeper.acl=%s".format(secureOpt), "--zookeeper.connect=%s".format(zkConnect)))
+    info("Done with migration")
+    for (path <- secondZk.securePersistentZkPaths) {
+      secondZk.makeSurePersistentPathExists(path)
+      val listParent = (secondZk.zkConnection.getAcl(path)).getKey
+      assertTrue(path, isAclCorrect(listParent, secondZk.isSecure))
+
+      val childPath = path + "/fpjwashere"
+      val listChild = (secondZk.zkConnection.getAcl(childPath)).getKey
+      assertTrue(childPath, isAclCorrect(listChild, secondZk.isSecure))
+    }
+  }
+
+  private def verify(path: String): Boolean = {
     val list = (zkUtils.zkConnection.getAcl(path)).getKey
     var result: Boolean = true
     for (acl: ACL <- list.asScala) {
@@ -183,7 +161,25 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
     result
   }
 
-  def isAclSecure(acl: ACL): Boolean = {
+  private def isAclCorrect(list: java.util.List[ACL], secure: Boolean): Boolean = {
+    var flag = true
+    // Check length
+    secure match {
+      case true => flag = flag && list.size == 2
+      case false => flag = flag && list.size == 1
+    }
+    
+    // Check ACL
+    for (acl: ACL <- list.asScala) {
+      secure match {
+        case true => flag = flag && isAclSecure(acl)
+        case false => flag = flag && isAclUnsecure(acl)
+      }
+    }
+    flag
+  }
+  
+  private def isAclSecure(acl: ACL): Boolean = {
     info("Perms " + acl.getPerms + " and id" + acl.getId)
     acl.getPerms match {
       case 1 => {
@@ -198,7 +194,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
     }
   }
   
-  def isAclUnsecure(acl: ACL): Boolean = {
+  private def isAclUnsecure(acl: ACL): Boolean = {
     info("Perms " + acl.getPerms + " and id" + acl.getId)
     acl.getPerms match {
       case 31 => {
