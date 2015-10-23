@@ -88,8 +88,7 @@ object ZkSecurityMigrator extends Logging {
     if ((jaasFile == null) && !options.has(jaasFileOpt)) {
      val errorMsg = ("No JAAS configuration file has been specified. Please make sure that you have set either " + 
                     "the system property %s or the option %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "--jaas.file")) 
-     error(errorMsg)
-     System.err.println("ERROR: %s".format(errorMsg))
+     System.out.println("ERROR: %s".format(errorMsg))
      throw new IllegalArgumentException("Incorrect configuration")
     }
 
@@ -100,8 +99,7 @@ object ZkSecurityMigrator extends Logging {
 
     if (!JaasUtils.isZkSecurityEnabled(jaasFile)) {
       val errorMsg = "Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile)
-      error(errorMsg)
-      System.err.println("ERROR: %s".format(errorMsg))
+      System.out.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration") 
     }
 
@@ -170,10 +168,10 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
         case Code.SESSIONEXPIRED =>
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
-          error("ZooKeeper session expired while changing ACLs")
+          System.out.println("ZooKeeper session expired while changing ACLs")
           promise failure ZkException.create(KeeperException.create(Code.get(rc)))
         case _ =>
-          error("Unexpected return code: %d".format(rc))
+          System.out.println("Unexpected return code: %d".format(rc))
           promise failure ZkException.create(KeeperException.create(Code.get(rc)))
       }
     }
@@ -194,15 +192,15 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
         case Code.CONNECTIONLOSS =>
             zkHandle.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, ctx)
         case Code.NONODE =>
-          warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
+          warn("Znode is gone, it could be have been legitimately deleted: %s".format(path))
           promise success "done"
         case Code.SESSIONEXPIRED =>
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
-          error("ZooKeeper session expired while changing ACLs")
+          System.out.println("ZooKeeper session expired while changing ACLs")
           promise failure ZkException.create(KeeperException.create(Code.get(rc)))
         case _ =>
-          error("Unexpected return code: %d".format(rc))
+          System.out.println("Unexpected return code: %d".format(rc))
           promise failure ZkException.create(KeeperException.create(Code.get(rc)))
       }
     }
