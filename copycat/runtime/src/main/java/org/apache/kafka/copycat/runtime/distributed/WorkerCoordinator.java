@@ -107,7 +107,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected void onJoin(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
+    protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
         assignmentSnapshot = CopycatProtocol.deserializeAssignment(memberAssignment);
         // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment
         // error (the leader couldn't make the assignment) or we are behind the config and cannot yet work on our assigned
@@ -118,7 +118,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected Map<String, ByteBuffer> doSync(String leaderId, String protocol, Map<String, ByteBuffer> allMemberMetadata) {
+    protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, Map<String, ByteBuffer> allMemberMetadata) {
         log.debug("Performing task assignment");
 
         Map<String, CopycatProtocol.ConfigState> allConfigs = new HashMap<>();
@@ -227,7 +227,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected void onLeave(int generation, String memberId) {
+    protected void onJoinPrepare(int generation, String memberId) {
         log.debug("Revoking previous assignment {}", assignmentSnapshot);
         if (assignmentSnapshot != null && !assignmentSnapshot.failed())
             listener.onRevoked(assignmentSnapshot.leader(), assignmentSnapshot.connectors(), assignmentSnapshot.tasks());

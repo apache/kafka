@@ -155,10 +155,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
     }
 
     @Override
-    protected void onJoin(int generation,
-                          String memberId,
-                          String assignmentStrategy,
-                          ByteBuffer assignmentBuffer) {
+    protected void onJoinComplete(int generation,
+                                  String memberId,
+                                  String assignmentStrategy,
+                                  ByteBuffer assignmentBuffer) {
         PartitionAssignor assignor = protocolMap.get(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -187,9 +187,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
     }
 
     @Override
-    protected Map<String, ByteBuffer> doSync(String leaderId,
-                                             String assignmentStrategy,
-                                             Map<String, ByteBuffer> allSubscriptions) {
+    protected Map<String, ByteBuffer> performAssignment(String leaderId,
+                                                        String assignmentStrategy,
+                                                        Map<String, ByteBuffer> allSubscriptions) {
         PartitionAssignor assignor = protocolMap.get(protocol);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -224,7 +224,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
     }
 
     @Override
-    protected void onLeave(int generation, String memberId) {
+    protected void onJoinPrepare(int generation, String memberId) {
         // commit offsets prior to rebalance if auto-commit enabled
         maybeAutoCommitOffsetsSync();
 
