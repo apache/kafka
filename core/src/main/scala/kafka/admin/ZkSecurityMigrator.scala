@@ -68,8 +68,7 @@ object ZkSecurityMigrator extends Logging {
   def run(args: Array[String]) {
     var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser()
-
-    val goOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
+    val zkAclOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
         + " The options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])
     val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").withOptionalArg().ofType(classOf[String])
     val zkUrlOpt = parser.accepts("zookeeper.connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
@@ -88,8 +87,7 @@ object ZkSecurityMigrator extends Logging {
     if ((jaasFile == null) && !options.has(jaasFileOpt)) {
      val errorMsg = ("No JAAS configuration file has been specified. Please make sure that you have set either " + 
                     "the system property %s or the option %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "--jaas.file")) 
-     error(errorMsg)
-     System.err.println("ERROR: %s".format(errorMsg))
+     System.out.println("ERROR: %s".format(errorMsg))
      throw new IllegalArgumentException("Incorrect configuration")
     }
 
@@ -100,17 +98,16 @@ object ZkSecurityMigrator extends Logging {
 
     if (!JaasUtils.isZkSecurityEnabled(jaasFile)) {
       val errorMsg = "Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile)
-      error(errorMsg)
-      System.err.println("ERROR: %s".format(errorMsg))
+      System.out.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration") 
     }
 
-    val goSecure: Boolean = options.valueOf(goOpt) match {
+    val zkAcl: Boolean = options.valueOf(zkAclOpt) match {
       case "secure" =>
-        info("Making it secure")
+        info("zookeeper.acl option is secure")
         true
       case "unsecure" =>
-        info("Making it unsecure")
+        info("zookeeper.acl option is unsecure")
         false
       case _ =>
         CommandLineUtils.printUsageAndDie(parser, usageMessage)
@@ -118,7 +115,7 @@ object ZkSecurityMigrator extends Logging {
     val zkUrl = options.valueOf(zkUrlOpt)
     val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt).intValue
-    val zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, goSecure)
+    val zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, zkAcl)
     val migrator = new ZkSecurityMigrator(zkUtils)
     migrator.run()
   }
@@ -170,10 +167,10 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
         case Code.SESSIONEXPIRED =>
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
-          error("ZooKeeper session expired while changing ACLs")
+          System.out.println("ZooKeeper session expired while changing ACLs")
           promise failure ZkException.create(KeeperException.create(Code.get(rc)))
         case _ =>
-          error("Unexpected return code: %d".format(rc))
+          System.out.println("Unexpected return code: %d".format(rc))
           promise failure ZkException.create(KeeperException.create(Code.get(rc)))
       }
     }
@@ -194,15 +191,15 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
         case Code.CONNECTIONLOSS =>
             zkHandle.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, ctx)
         case Code.NONODE =>
-          warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
+          warn("Znode is gone, it could be have been legitimately deleted: %s".format(path))
           promise success "done"
         case Code.SESSIONEXPIRED =>
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
-          error("ZooKeeper session expired while changing ACLs")
+          System.out.println("ZooKeeper session expired while changing ACLs")
           promise failure ZkException.create(KeeperException.create(Code.get(rc)))
         case _ =>
-          error("Unexpected return code: %d".format(rc))
+          System.out.println("Unexpected return code: %d".format(rc))
           promise failure ZkException.create(KeeperException.create(Code.get(rc)))
       }
     }
@@ -211,7 +208,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
   private def run(): Unit = {
     try {
       for (path <- zkUtils.securePersistentZkPaths) {
-        info("Securing " + path)
+        debug("Going to set ACL for %s".format(path))
         zkUtils.makeSurePersistentPathExists(path)
         setAclsRecursively(path)
       }
@@ -219,7 +216,6 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       @tailrec
       def recurse(): Unit = {
         val future = futures.synchronized { 
-          info("Size of future list is %d".format(futures.size))
           futures.headOption
         }
         future match {
@@ -236,5 +232,4 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       zkUtils.close
     }
   }
-
 }

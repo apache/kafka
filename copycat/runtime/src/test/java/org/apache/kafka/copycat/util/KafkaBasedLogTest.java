@@ -165,32 +165,39 @@ public class KafkaBasedLogTest {
         endOffsets.put(TP0, 1L);
         endOffsets.put(TP1, 1L);
         consumer.updateEndOffsets(endOffsets);
-        Thread startConsumerOpsThread = new Thread("start-consumer-ops-thread") {
+        final CountDownLatch finishedLatch = new CountDownLatch(1);
+        consumer.schedulePollTask(new Runnable() { // Use first poll task to setup sequence of remaining responses to polls
             @Override
             public void run() {
-                // Needs to seek to end to find end offsets
-                consumer.waitForPoll(10000);
-
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.waitForPollThen(new Runnable() {
+                // Should keep polling until it reaches current log end offset for all partitions. Should handle
+                // as many empty polls as needed
+                consumer.scheduleNopPollTask();
+                consumer.scheduleNopPollTask();
+                consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
                         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY, TP0_VALUE));
                     }
-                }, 10000);
-
-                consumer.waitForPollThen(new Runnable() {
+                });
+                consumer.scheduleNopPollTask();
+                consumer.scheduleNopPollTask();
+                consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
                         consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, TP1_KEY, TP1_VALUE));
                     }
-                }, 10000);
+                });
+                consumer.schedulePollTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        finishedLatch.countDown();
+                    }
+                });
             }
-        };
-        startConsumerOpsThread.start();
+        });
         store.start();
-        startConsumerOpsThread.join(10000);
-        assertFalse(startConsumerOpsThread.isAlive());
+        assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
+
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(2, consumedRecords.size());
         assertEquals(TP0_VALUE, consumedRecords.get(0).value());
@@ -227,24 +234,10 @@ public class KafkaBasedLogTest {
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
         consumer.updateEndOffsets(endOffsets);
-        Thread startConsumerOpsThread = new Thread("start-consumer-ops-thread") {
-            @Override
-            public void run() {
-                // Should keep polling until it has partition info
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.seek(TP0, 0);
-                        consumer.seek(TP1, 0);
-                    }
-                }, 10000);
-            }
-        };
-        startConsumerOpsThread.start();
         store.start();
-        startConsumerOpsThread.join(10000);
-        assertFalse(startConsumerOpsThread.isAlive());
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
+        assertEquals(0L, consumer.position(TP0));
+        assertEquals(0L, consumer.position(TP1));
 
         // Set some keys
         final AtomicInteger invoked = new AtomicInteger(0);
@@ -265,60 +258,8 @@ public class KafkaBasedLogTest {
         assertEquals(2, invoked.get());
 
         // Now we should have to wait for the records to be read back when we call readToEnd()
-        final CountDownLatch startOffsetUpdateLatch = new CountDownLatch(1);
-        Thread readNewDataThread = new Thread("read-new-data-thread") {
-            @Override
-            public void run() {
-                // Needs to be woken up after calling readToEnd()
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            startOffsetUpdateLatch.await();
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException("Interrupted");
-                        }
-                    }
-                }, 10000);
-
-                // Needs to seek to end to find end offsets
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            startOffsetUpdateLatch.await();
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException("Interrupted");
-                        }
-
-                        Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
-                        newEndOffsets.put(TP0, 2L);
-                        newEndOffsets.put(TP1, 2L);
-                        consumer.updateEndOffsets(newEndOffsets);
-                    }
-                }, 10000);
-
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY, TP0_VALUE));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, TP0_KEY, TP0_VALUE_NEW));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, TP1_KEY, TP1_VALUE));
-                    }
-                }, 10000);
-
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, TP1_KEY, TP1_VALUE_NEW));
-                    }
-                }, 10000);
-            }
-        };
-        readNewDataThread.start();
         final AtomicBoolean getInvokedAndPassed = new AtomicBoolean(false);
-        FutureCallback<Void> readEndFutureCallback = new FutureCallback<>(new Callback<Void>() {
+        final FutureCallback<Void> readEndFutureCallback = new FutureCallback<>(new Callback<Void>() {
             @Override
             public void onCompletion(Throwable error, Void result) {
                 assertEquals(4, consumedRecords.size());
@@ -327,10 +268,48 @@ public class KafkaBasedLogTest {
                 getInvokedAndPassed.set(true);
             }
         });
-        store.readToEnd(readEndFutureCallback);
-        startOffsetUpdateLatch.countDown();
-        readNewDataThread.join(10000);
-        assertFalse(readNewDataThread.isAlive());
+        consumer.schedulePollTask(new Runnable() {
+            @Override
+            public void run() {
+                // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
+                // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
+                // returning any data.
+                store.readToEnd(readEndFutureCallback);
+
+                // Needs to seek to end to find end offsets
+                consumer.schedulePollTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
+                        newEndOffsets.put(TP0, 2L);
+                        newEndOffsets.put(TP1, 2L);
+                        consumer.updateEndOffsets(newEndOffsets);
+                    }
+                });
+
+                // Should keep polling until it reaches current log end offset for all partitions
+                consumer.scheduleNopPollTask();
+                consumer.scheduleNopPollTask();
+                consumer.scheduleNopPollTask();
+                consumer.schedulePollTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY, TP0_VALUE));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, TP0_KEY, TP0_VALUE_NEW));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, TP1_KEY, TP1_VALUE));
+                    }
+                });
+
+                consumer.schedulePollTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, TP1_KEY, TP1_VALUE_NEW));
+                    }
+                });
+
+                // Already have FutureCallback that should be invoked/awaited, so no need for follow up finishedLatch
+            }
+        });
         readEndFutureCallback.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(getInvokedAndPassed.get());
 
@@ -349,36 +328,45 @@ public class KafkaBasedLogTest {
 
         PowerMock.replayAll();
 
+        final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 1L);
         endOffsets.put(TP1, 1L);
         consumer.updateEndOffsets(endOffsets);
-        Thread startConsumerOpsThread = new Thread("start-consumer-ops-thread") {
+        consumer.schedulePollTask(new Runnable() {
             @Override
             public void run() {
                 // Trigger exception
-                consumer.waitForPollThen(new Runnable() {
+                consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.setException(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.exception());
+                        consumer.setException(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception());
                     }
-                }, 10000);
+                });
 
                 // Should keep polling until it reaches current log end offset for all partitions
-                consumer.waitForPollThen(new Runnable() {
+                consumer.scheduleNopPollTask();
+                consumer.scheduleNopPollTask();
+                consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
                         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, TP0_KEY, TP0_VALUE_NEW));
                         consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, TP0_KEY, TP0_VALUE_NEW));
                     }
-                }, 10000);
+                });
+
+                consumer.schedulePollTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        finishedLatch.countDown();
+                    }
+                });
             }
-        };
-        startConsumerOpsThread.start();
+        });
         store.start();
-        startConsumerOpsThread.join(10000);
-        assertFalse(startConsumerOpsThread.isAlive());
+        assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
+        assertEquals(1L, consumer.position(TP0));
 
         store.stop();
 
@@ -403,24 +391,10 @@ public class KafkaBasedLogTest {
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
         consumer.updateEndOffsets(endOffsets);
-        Thread startConsumerOpsThread = new Thread("start-consumer-ops-thread") {
-            @Override
-            public void run() {
-                // Should keep polling until it has partition info
-                consumer.waitForPollThen(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.seek(TP0, 0);
-                        consumer.seek(TP1, 0);
-                    }
-                }, 10000);
-            }
-        };
-        startConsumerOpsThread.start();
         store.start();
-        startConsumerOpsThread.join(10000);
-        assertFalse(startConsumerOpsThread.isAlive());
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
+        assertEquals(0L, consumer.position(TP0));
+        assertEquals(0L, consumer.position(TP1));
 
         final AtomicReference<Throwable> setException = new AtomicReference<>();
         store.send(TP0_KEY, TP0_VALUE, new org.apache.kafka.clients.producer.Callback() {

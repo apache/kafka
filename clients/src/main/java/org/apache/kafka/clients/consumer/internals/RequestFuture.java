@@ -175,6 +175,20 @@ public class RequestFuture<T> {
         return adapted;
     }
 
+    public void chain(final RequestFuture<T> future) {
+        addListener(new RequestFutureListener<T>() {
+            @Override
+            public void onSuccess(T value) {
+                future.complete(value);
+            }
+
+            @Override
+            public void onFailure(RuntimeException e) {
+                future.raise(e);
+            }
+        });
+    }
+
     public static <T> RequestFuture<T> failure(RuntimeException e) {
         RequestFuture<T> future = new RequestFuture<T>();
         future.raise(e);
@@ -188,7 +202,7 @@ public class RequestFuture<T> {
     }
 
     public static <T> RequestFuture<T> coordinatorNotAvailable() {
-        return failure(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.exception());
+        return failure(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception());
     }
 
     public static <T> RequestFuture<T> leaderNotAvailable() {

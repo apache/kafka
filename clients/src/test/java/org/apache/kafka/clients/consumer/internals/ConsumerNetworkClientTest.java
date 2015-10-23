@@ -106,7 +106,7 @@ public class ConsumerNetworkClientTest {
 
 
     private HeartbeatRequest heartbeatRequest() {
-        return new HeartbeatRequest("group", 1, "consumerId");
+        return new HeartbeatRequest("group", 1, "memberId");
     }
 
     private Struct heartbeatResponse(short error) {

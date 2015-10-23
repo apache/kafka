@@ -73,7 +73,7 @@ public class SSLTransportLayerTest {
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
-        this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
+        this.channelBuilder = new SSLChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
@@ -270,7 +270,7 @@ public class SSLTransportLayerTest {
      */
     @Test
     public void testInvalidTruststorePassword() throws Exception {
-        SSLChannelBuilder channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
+        SSLChannelBuilder channelBuilder = new SSLChannelBuilder(Mode.CLIENT);
         try {
             sslClientConfigs.put(SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
@@ -285,7 +285,7 @@ public class SSLTransportLayerTest {
      */
     @Test
     public void testInvalidKeystorePassword() throws Exception {
-        SSLChannelBuilder channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
+        SSLChannelBuilder channelBuilder = new SSLChannelBuilder(Mode.CLIENT);
         try {
             sslClientConfigs.put(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
@@ -437,7 +437,7 @@ public class SSLTransportLayerTest {
 
     private void createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize, final Integer netWriteBufSize, final Integer appBufSize) {
         
-        this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT) {
+        this.channelBuilder = new SSLChannelBuilder(Mode.CLIENT) {
 
             @Override
             protected SSLTransportLayer buildTransportLayer(SSLFactory sslFactory, String id, SelectionKey key) throws IOException {
@@ -461,7 +461,7 @@ public class SSLTransportLayerTest {
         
         CertStores(boolean server) throws Exception {
             String name = server ? "server" : "client";
-            SSLFactory.Mode mode = server ? SSLFactory.Mode.SERVER : SSLFactory.Mode.CLIENT;
+            Mode mode = server ? Mode.SERVER : Mode.CLIENT;
             File truststoreFile = File.createTempFile(name + "TS", ".jks");
             sslConfig = TestSSLUtils.createSSLConfig(!server, true, mode, truststoreFile, name);
             sslConfig.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
@@ -493,7 +493,7 @@ public class SSLTransportLayerTest {
 
         public TestSSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, 
                 Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) throws IOException {
-            super(channelId, key, sslEngine);
+            super(channelId, key, sslEngine, false);
             this.netReadBufSize = new ResizeableBufferSize(netReadBufSize);
             this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSize);
             this.appBufSize = new ResizeableBufferSize(appBufSize);
@@ -549,7 +549,7 @@ public class SSLTransportLayerTest {
         private final ConcurrentLinkedQueue<NetworkSend> inflightSends = new ConcurrentLinkedQueue<NetworkSend>();
 
         public SSLEchoServer(Map<String, ?> configs, String serverHost) throws Exception {
-            this.sslFactory = new SSLFactory(SSLFactory.Mode.SERVER);
+            this.sslFactory = new SSLFactory(Mode.SERVER);
             this.sslFactory.configure(configs);
             serverSocketChannel = ServerSocketChannel.open();
             serverSocketChannel.configureBlocking(false);
@@ -557,7 +557,7 @@ public class SSLTransportLayerTest {
             this.port = serverSocketChannel.socket().getLocalPort();
             this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
             this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-            SSLChannelBuilder channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.SERVER);
+            SSLChannelBuilder channelBuilder = new SSLChannelBuilder(Mode.SERVER);
             channelBuilder.configure(sslServerConfigs);
             this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
             setName("echoserver");

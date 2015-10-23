@@ -26,8 +26,11 @@ public class SSLConfigs {
     public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS = "org.apache.kafka.common.security.auth.DefaultPrincipalBuilder";
 
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
-    public static final String SSL_PROTOCOL_DOC = "The ssl protocol used to generate SSLContext."
-            + "Default setting is TLS. Allowed values are SSL, SSLv2, SSLv3, TLS, TLSv1.1, TLSv1.2";
+    public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
+            + "Default setting is TLS, which is fine for most cases. "
+            + "Allowed values in recent JVMs are TLS, TLSv1.1 and TLSv1.2. SSL, SSLv2 and SSLv3 "
+            + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities.";
+
     public static final String DEFAULT_SSL_PROTOCOL = "TLS";
 
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
@@ -39,7 +42,7 @@ public class SSLConfigs {
 
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections. "
-            + "All versions of TLS is enabled by default.";
+            + "TLSv1.2, TLSv1.1 and TLSv1 are enabled by default.";
     public static final String DEFAULT_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.1,TLSv1";
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
@@ -49,11 +52,11 @@ public class SSLConfigs {
 
     public static final String SSL_KEYSTORE_LOCATION_CONFIG = "ssl.keystore.location";
     public static final String SSL_KEYSTORE_LOCATION_DOC = "The location of the key store file. "
-        + "This is optional for Client and can be used for two-way authentication for client.";
+        + "This is optional for client and can be used for two-way authentication for client.";
 
     public static final String SSL_KEYSTORE_PASSWORD_CONFIG = "ssl.keystore.password";
     public static final String SSL_KEYSTORE_PASSWORD_DOC = "The store password for the key store file."
-        + "This is optional for client and only needed if the ssl.keystore.location configured. ";
+        + "This is optional for client and only needed if ssl.keystore.location is configured. ";
 
     public static final String SSL_KEY_PASSWORD_CONFIG = "ssl.key.password";
     public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file. "
@@ -66,11 +69,9 @@ public class SSLConfigs {
 
     public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
     public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file. ";
-    public static final String DEFAULT_TRUSTSTORE_LOCATION = "/tmp/ssl.truststore.jks";
 
     public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
     public static final String SSL_TRUSTSTORE_PASSWORD_DOC = "The password for the trust store file. ";
-    public static final String DEFAULT_TRUSTSTORE_PASSWORD = "truststore_password";
 
     public static final String SSL_KEYMANAGER_ALGORITHM_CONFIG = "ssl.keymanager.algorithm";
     public static final String SSL_KEYMANAGER_ALGORITHM_DOC = "The algorithm used by key manager factory for SSL connections. "
@@ -94,9 +95,5 @@ public class SSLConfigs {
                                            + " <li><code>ssl.client.auth=requested</code> This means client authentication is optional."
                                            + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
                                            + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
-
-    public static final String SSL_NEED_CLIENT_AUTH_DOC = "It can be REQUESTED . "
-        + "Default value is false";
-    public static final Boolean DEFAULT_SSL_NEED_CLIENT_AUTH = false;
 
 }

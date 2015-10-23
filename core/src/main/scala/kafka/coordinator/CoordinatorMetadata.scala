@@ -17,11 +17,8 @@
 
 package kafka.coordinator
 
-import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.{threadsafe, ZkUtils, Logging}
-import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.{ZkClient, IZkDataListener}
+import kafka.utils.threadsafe
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
@@ -32,9 +29,7 @@ import scala.collection.mutable
  * It delegates all group logic to the callers.
  */
 @threadsafe
-private[coordinator] class CoordinatorMetadata(brokerId: Int,
-                                               zkUtils: ZkUtils,
-                                               maybePrepareRebalance: ConsumerGroupMetadata => Unit) {
+private[coordinator] class CoordinatorMetadata(brokerId: Int) {
 
   /**
    * NOTE: If a group lock and metadataLock are simultaneously needed,
@@ -45,24 +40,11 @@ private[coordinator] class CoordinatorMetadata(brokerId: Int,
   /**
    * These should be guarded by metadataLock
    */
-  private val groups = new mutable.HashMap[String, ConsumerGroupMetadata]
-  private val groupsPerTopic = new mutable.HashMap[String, Set[String]]
-  private val topicPartitionCounts = new mutable.HashMap[String, Int]
-  private val topicPartitionChangeListeners = new mutable.HashMap[String, TopicPartitionChangeListener]
+  private val groups = new mutable.HashMap[String, GroupMetadata]
 
   def shutdown() {
     inWriteLock(metadataLock) {
-      topicPartitionChangeListeners.keys.foreach(deregisterTopicPartitionChangeListener)
-      topicPartitionChangeListeners.clear()
       groups.clear()
-      groupsPerTopic.clear()
-      topicPartitionCounts.clear()
-    }
-  }
-
-  def partitionsPerTopic = {
-    inReadLock(metadataLock) {
-      topicPartitionCounts.toMap
     }
   }
 
@@ -78,148 +60,22 @@ private[coordinator] class CoordinatorMetadata(brokerId: Int,
   /**
    * Add a group or get the group associated with the given groupId if it already exists
    */
-  def addGroup(groupId: String, partitionAssignmentStrategy: String) = {
+  def addGroup(groupId: String, protocolType: String) = {
     inWriteLock(metadataLock) {
-      groups.getOrElseUpdate(groupId, new ConsumerGroupMetadata(groupId, partitionAssignmentStrategy))
+      groups.getOrElseUpdate(groupId, new GroupMetadata(groupId, protocolType))
     }
   }
 
   /**
    * Remove all metadata associated with the group, including its topics
    * @param groupId the groupId of the group we are removing
-   * @param topicsForGroup topics that consumers in the group were subscribed to
    */
-  def removeGroup(groupId: String, topicsForGroup: Set[String]) {
+  def removeGroup(groupId: String) {
     inWriteLock(metadataLock) {
-      topicsForGroup.foreach(topic => unbindGroupFromTopics(groupId, topicsForGroup))
+      if (!groups.contains(groupId))
+        throw new IllegalArgumentException("Cannot remove non-existing group")
       groups.remove(groupId)
     }
   }
 
-  /**
-   * Add the given group to the set of groups interested in
-   * topic partition changes for the given topics
-   */
-  def bindGroupToTopics(groupId: String, topics: Set[String]) {
-    inWriteLock(metadataLock) {
-      require(groups.contains(groupId), "CoordinatorMetadata can only bind existing groups")
-      topics.foreach(topic => bindGroupToTopic(groupId, topic))
-    }
-  }
-
-  /**
-   * Remove the given group from the set of groups interested in
-   * topic partition changes for the given topics
-   */
-  def unbindGroupFromTopics(groupId: String, topics: Set[String]) {
-    inWriteLock(metadataLock) {
-      require(groups.contains(groupId), "CoordinatorMetadata can only unbind existing groups")
-      topics.foreach(topic => unbindGroupFromTopic(groupId, topic))
-    }
-  }
-
-  /**
-   * Add the given group to the set of groups interested in the topicsToBind and
-   * remove the given group from the set of groups interested in the topicsToUnbind
-   */
-  def bindAndUnbindGroupFromTopics(groupId: String, topicsToBind: Set[String], topicsToUnbind: Set[String]) {
-    inWriteLock(metadataLock) {
-      require(groups.contains(groupId), "CoordinatorMetadata can only update topic bindings for existing groups")
-      topicsToBind.foreach(topic => bindGroupToTopic(groupId, topic))
-      topicsToUnbind.foreach(topic => unbindGroupFromTopic(groupId, topic))
-    }
-  }
-
-  private def isListeningToTopic(topic: String) = topicPartitionChangeListeners.contains(topic)
-
-  private def bindGroupToTopic(groupId: String, topic: String) {
-    if (isListeningToTopic(topic)) {
-      val currentGroupsForTopic = groupsPerTopic(topic)
-      groupsPerTopic.put(topic, currentGroupsForTopic + groupId)
-    }
-    else {
-      groupsPerTopic.put(topic, Set(groupId))
-      topicPartitionCounts.put(topic, getTopicPartitionCountFromZK(topic))
-      registerTopicPartitionChangeListener(topic)
-    }
-  }
-
-  private def unbindGroupFromTopic(groupId: String, topic: String) {
-    if (isListeningToTopic(topic)) {
-      val remainingGroupsForTopic = groupsPerTopic(topic) - groupId
-      if (remainingGroupsForTopic.isEmpty) {
-        // no other group cares about the topic, so erase all metadata associated with the topic
-        groupsPerTopic.remove(topic)
-        topicPartitionCounts.remove(topic)
-        deregisterTopicPartitionChangeListener(topic)
-      } else {
-        groupsPerTopic.put(topic, remainingGroupsForTopic)
-      }
-    }
-  }
-
-  private def getTopicPartitionCountFromZK(topic: String) = {
-    val topicData = zkUtils.getPartitionAssignmentForTopics(Seq(topic))
-    topicData(topic).size
-  }
-
-  private def registerTopicPartitionChangeListener(topic: String) {
-    val listener = new TopicPartitionChangeListener
-    topicPartitionChangeListeners.put(topic, listener)
-    zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), listener)
-  }
-
-  private def deregisterTopicPartitionChangeListener(topic: String) {
-    val listener = topicPartitionChangeListeners(topic)
-    zkUtils.zkClient.unsubscribeDataChanges(getTopicPath(topic), listener)
-    topicPartitionChangeListeners.remove(topic)
-  }
-
-  /**
-   * Zookeeper listener to handle topic partition changes
-   */
-  class TopicPartitionChangeListener extends IZkDataListener with Logging {
-    this.logIdent = "[TopicPartitionChangeListener on Coordinator " + brokerId + "]: "
-
-    override def handleDataChange(dataPath: String, data: Object) {
-      info("Handling data change for path: %s data: %s".format(dataPath, data))
-      val topic = topicFromDataPath(dataPath)
-      val numPartitions = getTopicPartitionCountFromZK(topic)
-
-      val groupsToRebalance = inWriteLock(metadataLock) {
-        /*
-         * This condition exists because a consumer can leave and modify CoordinatorMetadata state
-         * while ZkClient begins handling the data change but before we acquire the metadataLock.
-         */
-        if (isListeningToTopic(topic)) {
-          topicPartitionCounts.put(topic, numPartitions)
-          groupsPerTopic(topic).map(groupId => groups(groupId))
-        }
-        else Set.empty[ConsumerGroupMetadata]
-      }
-      groupsToRebalance.foreach(maybePrepareRebalance)
-    }
-
-    override def handleDataDeleted(dataPath: String) {
-      info("Handling data delete for path: %s".format(dataPath))
-      val topic = topicFromDataPath(dataPath)
-      val groupsToRebalance = inWriteLock(metadataLock) {
-        /*
-         * This condition exists because a consumer can leave and modify CoordinatorMetadata state
-         * while ZkClient begins handling the data delete but before we acquire the metadataLock.
-         */
-        if (isListeningToTopic(topic)) {
-          topicPartitionCounts.put(topic, 0)
-          groupsPerTopic(topic).map(groupId => groups(groupId))
-        }
-        else Set.empty[ConsumerGroupMetadata]
-      }
-      groupsToRebalance.foreach(maybePrepareRebalance)
-    }
-
-    private def topicFromDataPath(dataPath: String) = {
-      val nodes = dataPath.split("/")
-      nodes.last
-    }
-  }
 }

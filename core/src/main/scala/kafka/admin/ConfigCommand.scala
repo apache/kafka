@@ -19,7 +19,9 @@ package kafka.admin
 
 import joptsimple._
 import java.util.Properties
-import kafka.log.LogConfig
+import kafka.admin.TopicCommand._
+import kafka.consumer.ConsumerConfig
+import kafka.log.{Defaults, LogConfig}
 import kafka.server.ConfigType
 import kafka.utils.{ZkUtils, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
@@ -67,6 +69,7 @@ object ConfigCommand {
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entityType = opts.options.valueOf(opts.entityType)
     val entityName = opts.options.valueOf(opts.entityName)
+    warnOnMaxMessagesChange(configsToBeAdded)
 
     // compile the final set of configs
     val configs = AdminUtils.fetchEntityConfig(zkUtils, entityType, entityName)
@@ -79,6 +82,17 @@ object ConfigCommand {
     } else {
       AdminUtils.changeClientIdConfig(zkUtils, entityName, configs)
       println("Updated config for clientId: \"%s\".".format(entityName))
+    }
+  }
+
+  def warnOnMaxMessagesChange(configs: Properties): Unit = {
+    val maxMessageBytes = configs.get(LogConfig.MaxMessageBytesProp) match {
+      case n: String => n.toInt
+      case _ => -1
+    }
+    if (maxMessageBytes > Defaults.MaxMessageSize){
+      error(TopicCommand.longMessageSizeWarning(maxMessageBytes))
+      TopicCommand.askToProceed
     }
   }
 

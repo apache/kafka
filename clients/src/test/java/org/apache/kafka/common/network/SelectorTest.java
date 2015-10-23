@@ -42,7 +42,7 @@ public class SelectorTest {
 
     protected EchoServer server;
     protected Time time;
-    protected Selectable selector;
+    protected Selector selector;
     protected ChannelBuilder channelBuilder;
     private Metrics metrics;
 

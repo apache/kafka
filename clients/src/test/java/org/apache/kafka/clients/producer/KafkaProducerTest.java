@@ -31,7 +31,6 @@ import java.util.HashMap;
 
 public class KafkaProducerTest {
 
-
     @Test
     public void testConstructorFailureCloseResource() {
         Properties props = new Properties();

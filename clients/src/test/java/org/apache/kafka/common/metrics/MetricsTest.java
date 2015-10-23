@@ -320,8 +320,8 @@ public class MetricsTest {
     @Test
     public void testQuotas() {
         Sensor sensor = metrics.sensor("test");
-        sensor.add(new MetricName("test1.total", "grp1"), new Total(), new MetricConfig().quota(Quota.lessThan(5.0)));
-        sensor.add(new MetricName("test2.total", "grp1"), new Total(), new MetricConfig().quota(Quota.moreThan(0.0)));
+        sensor.add(new MetricName("test1.total", "grp1"), new Total(), new MetricConfig().quota(Quota.upperBound(5.0)));
+        sensor.add(new MetricName("test2.total", "grp1"), new Total(), new MetricConfig().quota(Quota.lowerBound(0.0)));
         sensor.record(5.0);
         try {
             sensor.record(1.0);
@@ -341,12 +341,12 @@ public class MetricsTest {
 
     @Test
     public void testQuotasEquality() {
-        final Quota quota1 = Quota.lessThan(10.5);
-        final Quota quota2 = Quota.moreThan(10.5);
+        final Quota quota1 = Quota.upperBound(10.5);
+        final Quota quota2 = Quota.lowerBound(10.5);
 
         assertFalse("Quota with different upper values shouldn't be equal", quota1.equals(quota2));
 
-        final Quota quota3 = Quota.moreThan(10.5);
+        final Quota quota3 = Quota.lowerBound(10.5);
 
         assertTrue("Quota with same upper and bound values should be equal", quota2.equals(quota3));
     }
