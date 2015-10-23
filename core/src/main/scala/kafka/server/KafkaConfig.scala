@@ -142,8 +142,6 @@ object Defaults {
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefault = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
   val ConsumerQuotaBytesPerSecondDefault = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
-  val ProducerQuotaBytesPerSecondOverrides = ClientQuotaManagerConfig.QuotaBytesPerSecondOverrides
-  val ConsumerQuotaBytesPerSecondOverrides = ClientQuotaManagerConfig.QuotaBytesPerSecondOverrides
   val NumQuotaSamples: Int = ClientQuotaManagerConfig.DefaultNumQuotaSamples
   val QuotaWindowSizeSeconds: Int = ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
 
@@ -168,7 +166,6 @@ object Defaults {
   val SSLClientAuthRequested = "requested"
   val SSLClientAuthNone = "none"
   val SSLClientAuth = SSLClientAuthNone
-  val SSLCipherSuites = ""
 
   /** ********* Sasl configuration ***********/
   val SaslKerberosKinitCmd = SaslConfigs.DEFAULT_KERBEROS_KINIT_CMD
@@ -294,8 +291,6 @@ object KafkaConfig {
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultProp = "quota.producer.default"
   val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"
-  val ProducerQuotaBytesPerSecondOverridesProp = "quota.producer.bytes.per.second.overrides"
-  val ConsumerQuotaBytesPerSecondOverridesProp = "quota.consumer.bytes.per.second.overrides"
   val NumQuotaSamplesProp = "quota.window.num"
   val QuotaWindowSizeSecondsProp = "quota.window.size.seconds"
 
@@ -468,10 +463,6 @@ object KafkaConfig {
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultDoc = "Any producer distinguished by clientId will get throttled if it produces more bytes than this value per-second"
   val ConsumerQuotaBytesPerSecondDefaultDoc = "Any consumer distinguished by clientId/consumer group will get throttled if it fetches more bytes than this value per-second"
-  val ProducerQuotaBytesPerSecondOverridesDoc = "Comma separated list of clientId:quotaBytesPerSecond to override the default producer quota. " +
-          "Example: clientIdX=10485760,clientIdY=10485760"
-  val ConsumerQuotaBytesPerSecondOverridesDoc = "Comma separated list of clientId:quotaBytesPerSecond to override the default consumer quota. " +
-          "Example: clientIdX=10485760,clientIdY=10485760"
   val NumQuotaSamplesDoc = "The number of samples to retain in memory"
   val QuotaWindowSizeSecondsDoc = "The time span of each sample"
 
@@ -644,14 +635,12 @@ object KafkaConfig {
       /** ********* Quota configuration ***********/
       .define(ProducerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ProducerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ProducerQuotaBytesPerSecondDefaultDoc)
       .define(ConsumerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ConsumerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ConsumerQuotaBytesPerSecondDefaultDoc)
-      .define(ProducerQuotaBytesPerSecondOverridesProp, STRING, Defaults.ProducerQuotaBytesPerSecondOverrides, HIGH, ProducerQuotaBytesPerSecondOverridesDoc)
-      .define(ConsumerQuotaBytesPerSecondOverridesProp, STRING, Defaults.ConsumerQuotaBytesPerSecondOverrides, HIGH, ConsumerQuotaBytesPerSecondOverridesDoc)
       .define(NumQuotaSamplesProp, INT, Defaults.NumQuotaSamples, atLeast(1), LOW, NumQuotaSamplesDoc)
       .define(QuotaWindowSizeSecondsProp, INT, Defaults.QuotaWindowSizeSeconds, atLeast(1), LOW, QuotaWindowSizeSecondsDoc)
 
 
       /** ********* SSL Configuration ****************/
-      .define(PrincipalBuilderClassProp, STRING, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
+      .define(PrincipalBuilderClassProp, CLASS, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
       .define(SSLProtocolProp, STRING, Defaults.SSLProtocol, MEDIUM, SSLProtocolDoc)
       .define(SSLProviderProp, STRING, MEDIUM, SSLProviderDoc, false)
       .define(SSLEnabledProtocolsProp, LIST, Defaults.SSLEnabledProtocols, MEDIUM, SSLEnabledProtocolsDoc)
@@ -664,8 +653,9 @@ object KafkaConfig {
       .define(SSLTruststorePasswordProp, STRING, MEDIUM, SSLTruststorePasswordDoc, false)
       .define(SSLKeyManagerAlgorithmProp, STRING, Defaults.SSLKeyManagerAlgorithm, MEDIUM, SSLKeyManagerAlgorithmDoc)
       .define(SSLTrustManagerAlgorithmProp, STRING, Defaults.SSLTrustManagerAlgorithm, MEDIUM, SSLTrustManagerAlgorithmDoc)
+      .define(SSLEndpointIdentificationAlgorithmProp, STRING, LOW, SSLEndpointIdentificationAlgorithmDoc, false)
       .define(SSLClientAuthProp, STRING, Defaults.SSLClientAuth, in(Defaults.SSLClientAuthRequired, Defaults.SSLClientAuthRequested, Defaults.SSLClientAuthNone), MEDIUM, SSLClientAuthDoc)
-      .define(SSLCipherSuitesProp, LIST, Defaults.SSLCipherSuites, MEDIUM, SSLCipherSuitesDoc)
+      .define(SSLCipherSuitesProp, LIST, MEDIUM, SSLCipherSuitesDoc, false)
 
       /** ********* Sasl Configuration ****************/
       .define(SaslKerberosServiceNameProp, STRING, MEDIUM, SaslKerberosServiceNameDoc, false)
@@ -709,8 +699,8 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)
   val zkSessionTimeoutMs: Int = getInt(KafkaConfig.ZkSessionTimeoutMsProp)
-  val zkConnectionTimeoutMs: java.lang.Integer =
-    Option(getInt(KafkaConfig.ZkConnectionTimeoutMsProp)).getOrElse(getInt(KafkaConfig.ZkSessionTimeoutMsProp))
+  val zkConnectionTimeoutMs: Int =
+    Option(getInt(KafkaConfig.ZkConnectionTimeoutMsProp)).map(_.toInt).getOrElse(getInt(KafkaConfig.ZkSessionTimeoutMsProp))
   val zkSyncTimeMs: Int = getInt(KafkaConfig.ZkSyncTimeMsProp)
 
   /** ********* General Configuration ***********/
@@ -819,7 +809,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val metricReporterClasses: java.util.List[MetricsReporter] = getConfiguredInstances(KafkaConfig.MetricReporterClassesProp, classOf[MetricsReporter])
 
   /** ********* SSL Configuration **************/
-  val principalBuilderClass = getString(KafkaConfig.PrincipalBuilderClassProp)
+  val principalBuilderClass = getClass(KafkaConfig.PrincipalBuilderClassProp)
   val sslProtocol = getString(KafkaConfig.SSLProtocolProp)
   val sslProvider = getString(KafkaConfig.SSLProviderProp)
   val sslEnabledProtocols = getList(KafkaConfig.SSLEnabledProtocolsProp)
@@ -846,8 +836,6 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   /** ********* Quota Configuration **************/
   val producerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp)
   val consumerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp)
-  val producerQuotaBytesPerSecondOverrides = getString(KafkaConfig.ProducerQuotaBytesPerSecondOverridesProp)
-  val consumerQuotaBytesPerSecondOverrides = getString(KafkaConfig.ConsumerQuotaBytesPerSecondOverridesProp)
   val numQuotaSamples = getInt(KafkaConfig.NumQuotaSamplesProp)
   val quotaWindowSizeSeconds = getInt(KafkaConfig.QuotaWindowSizeSecondsProp)
 
@@ -924,7 +912,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
 
   private def getMetricClasses(metricClasses: java.util.List[String]): java.util.List[MetricsReporter] = {
 
-    val reporterList = new util.ArrayList[MetricsReporter]();
+    val reporterList = new util.ArrayList[MetricsReporter]()
     val iterator = metricClasses.iterator()
 
     while (iterator.hasNext) {
@@ -963,36 +951,6 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
       "offsets.commit.required.acks must be greater or equal -1 and less or equal to offsets.topic.replication.factor")
     require(BrokerCompressionCodec.isValid(compressionType), "compression.type : " + compressionType + " is not valid." +
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
-  }
-
-  def channelConfigs: java.util.Map[String, Object] = {
-    val channelConfigs = new java.util.HashMap[String, Object]()
-    import kafka.server.KafkaConfig._
-    Seq(
-      (PrincipalBuilderClassProp, Class.forName(principalBuilderClass)),
-      (SSLProtocolProp, sslProtocol),
-      (SSLEnabledProtocolsProp, sslEnabledProtocols),
-      (SSLKeystoreTypeProp, sslKeystoreType),
-      (SSLKeystoreLocationProp, sslKeystoreLocation),
-      (SSLKeystorePasswordProp, sslKeystorePassword),
-      (SSLKeyPasswordProp, sslKeyPassword),
-      (SSLTruststoreTypeProp, sslTruststoreType),
-      (SSLTruststoreLocationProp, sslTruststoreLocation),
-      (SSLTruststorePasswordProp, sslTruststorePassword),
-      (SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm),
-      (SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm),
-      (SSLClientAuthProp, sslClientAuth),
-      (SSLCipherSuitesProp, sslCipher),
-      (SaslKerberosServiceNameProp, saslKerberosServiceName),
-      (SaslKerberosKinitCmdProp, saslKerberosKinitCmd),
-      (SaslKerberosTicketRenewWindowFactorProp, saslKerberosTicketRenewWindowFactor),
-      (SaslKerberosTicketRenewJitterProp, saslKerberosTicketRenewJitter),
-      (SaslKerberosMinTimeBeforeReloginProp, saslKerberosMinTimeBeforeRelogin),
-      (AuthToLocalProp, authToLocal)
-    ).foreach { case (key, value) =>
-      if (value != null) channelConfigs.put(key, value)
-    }
-    channelConfigs
   }
 
 }

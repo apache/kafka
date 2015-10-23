@@ -18,7 +18,9 @@ package kafka.server
 
 import java.util.Properties
 
-import junit.framework.Assert._
+import org.junit.Assert._
+import kafka.api.RequestKeys
+import org.apache.kafka.common.metrics.Quota
 import org.easymock.{Capture, EasyMock}
 import org.junit.Test
 import kafka.integration.KafkaServerTestHarness
@@ -26,6 +28,8 @@ import kafka.utils._
 import kafka.common._
 import kafka.log.LogConfig
 import kafka.admin.{AdminOperationException, AdminUtils}
+
+import scala.collection.Map
 
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
@@ -52,22 +56,26 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  // For now client config changes do not do anything. Simply verify that the call was made
   @Test
-  def testClientConfigChange() {
+  def testClientQuotaConfigChange() {
     assertTrue("Should contain a ConfigHandler for topics",
                this.servers(0).dynamicConfigHandlers.contains(ConfigType.Client))
     val clientId = "testClient"
     val props = new Properties()
-    props.put("a.b", "c")
-    props.put("x.y", "z")
+    props.put(ClientConfigOverride.ProducerOverride, "1000")
+    props.put(ClientConfigOverride.ConsumerOverride, "2000")
     AdminUtils.changeClientIdConfig(zkUtils, clientId, props)
+
     TestUtils.retry(10000) {
       val configHandler = this.servers(0).dynamicConfigHandlers(ConfigType.Client).asInstanceOf[ClientIdConfigHandler]
-      assertTrue("ClientId testClient must exist", configHandler.configPool.contains(clientId))
-      assertEquals("ClientId testClient must be the only override", 1, configHandler.configPool.size)
-      assertEquals("c", configHandler.configPool.get(clientId).getProperty("a.b"))
-      assertEquals("z", configHandler.configPool.get(clientId).getProperty("x.y"))
+      val quotaManagers: Map[Short, ClientQuotaManager] = servers(0).apis.quotaManagers
+      val overrideProducerQuota = quotaManagers.get(RequestKeys.ProduceKey).get.quota(clientId)
+      val overrideConsumerQuota = quotaManagers.get(RequestKeys.FetchKey).get.quota(clientId)
+
+      assertEquals(s"ClientId $clientId must have overridden producer quota of 1000",
+        Quota.upperBound(1000), overrideProducerQuota)
+        assertEquals(s"ClientId $clientId must have overridden consumer quota of 2000",
+        Quota.upperBound(2000), overrideConsumerQuota)
     }
   }
 

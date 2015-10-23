@@ -19,12 +19,12 @@ package kafka
 
 import java.util.Properties
 
-import scala.collection.JavaConversions._
 import joptsimple.OptionParser
-import metrics.KafkaMetricsReporter
-import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
-import kafka.utils.{VerifiableProperties, CommandLineUtils, Logging}
+import kafka.server.{KafkaServer, KafkaServerStartable}
+import kafka.utils.{CommandLineUtils, Logging}
 import org.apache.kafka.common.utils.Utils
+
+import scala.collection.JavaConversions._
 
 object Kafka extends Logging {
 
@@ -55,9 +55,7 @@ object Kafka extends Logging {
   def main(args: Array[String]): Unit = {
     try {
       val serverProps = getPropsFromArgs(args)
-      val serverConfig = KafkaConfig.fromProps(serverProps)
-      KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
-      val kafkaServerStartable = new KafkaServerStartable(serverConfig)
+      val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
 
       // attach shutdown handler to catch control-c
       Runtime.getRuntime().addShutdownHook(new Thread() {

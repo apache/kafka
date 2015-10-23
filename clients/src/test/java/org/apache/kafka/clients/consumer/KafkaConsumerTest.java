@@ -17,14 +17,19 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.Properties;
 
 public class KafkaConsumerTest {
+
+    private final String topic = "test";
+    private final TopicPartition tp0 = new TopicPartition("test", 0);
 
     @Test
     public void testConstructorClose() throws Exception {
@@ -45,5 +50,32 @@ public class KafkaConsumerTest {
             return;
         }
         Assert.fail("should have caught an exception and returned");
+    }
+
+    @Test
+    public void testSubscription() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testSubscription");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<byte[], byte[]>(
+            props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+
+        consumer.subscribe(Collections.singletonList(topic));
+        Assert.assertEquals(Collections.singleton(topic), consumer.subscription());
+        Assert.assertTrue(consumer.assignment().isEmpty());
+
+        consumer.subscribe(Collections.<String>emptyList());
+        Assert.assertTrue(consumer.subscription().isEmpty());
+        Assert.assertTrue(consumer.assignment().isEmpty());
+
+        consumer.assign(Collections.singletonList(tp0));
+        Assert.assertTrue(consumer.subscription().isEmpty());
+        Assert.assertEquals(Collections.singleton(tp0), consumer.assignment());
+
+        consumer.unsubscribe();
+        Assert.assertTrue(consumer.subscription().isEmpty());
+        Assert.assertTrue(consumer.assignment().isEmpty());
     }
 }

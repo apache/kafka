@@ -28,8 +28,8 @@ import java.util.regex.Pattern;
 
 /**
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition
- * is "assigned" either directly with {@link #assign(List)} (manual assignment)
- * or with {@link #changePartitionAssignment(Collection)} (automatic assignment).
+ * is "assigned" either directly with {@link #assignFromUser(Collection)} (manual assignment)
+ * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
  *
  * Once assigned, the partition is not considered "fetchable" until its initial position has
  * been set with {@link #seek(TopicPartition, long)}. Fetchable partitions track a fetch
@@ -129,12 +129,16 @@ public class SubscriptionState {
     }
 
     public void needReassignment() {
-        //
         this.groupSubscription.retainAll(subscription);
         this.needsPartitionAssignment = true;
     }
 
-    public void assign(List<TopicPartition> partitions) {
+    /**
+     * Change the assignment to the specified partitions provided by the user,
+     * note this is different from {@link #assignFromSubscribed(Collection)}
+     * whose input partitions are provided from the subscribed topics.
+     */
+    public void assignFromUser(Collection<TopicPartition> partitions) {
         if (!this.subscription.isEmpty() || this.subscribedPattern != null)
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
 
@@ -146,6 +150,22 @@ public class SubscriptionState {
                 addAssignedPartition(partition);
 
         this.assignment.keySet().retainAll(this.userAssignment);
+
+        this.needsPartitionAssignment = false;
+    }
+
+    /**
+     * Change the assignment to the specified partitions returned from the coordinator,
+     * note this is different from {@link #assignFromUser(Collection)} which directly set the assignment from user inputs
+     */
+    public void assignFromSubscribed(Collection<TopicPartition> assignments) {
+        for (TopicPartition tp : assignments)
+            if (!this.subscription.contains(tp.topic()))
+                throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
+        this.assignment.clear();
+        for (TopicPartition tp: assignments)
+            addAssignedPartition(tp);
+        this.needsPartitionAssignment = false;
     }
 
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -304,16 +324,6 @@ public class SubscriptionState {
 
     public boolean partitionAssignmentNeeded() {
         return this.needsPartitionAssignment;
-    }
-
-    public void changePartitionAssignment(Collection<TopicPartition> assignments) {
-        for (TopicPartition tp : assignments)
-            if (!this.subscription.contains(tp.topic()))
-                throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
-        this.assignment.clear();
-        for (TopicPartition tp: assignments)
-            addAssignedPartition(tp);
-        this.needsPartitionAssignment = false;
     }
 
     public boolean isAssigned(TopicPartition tp) {
