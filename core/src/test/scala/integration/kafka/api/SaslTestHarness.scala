@@ -12,7 +12,7 @@
   */
 package kafka.api
 
-import java.io.{BufferedReader, FileWriter, BufferedWriter, File}
+import java.io.{FileWriter, BufferedWriter, File}
 import javax.security.auth.login.Configuration
 
 import kafka.utils.TestUtils
@@ -34,16 +34,17 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
     val jaasFile = TestUtils.tempFile()
 
     val writer = new BufferedWriter(new FileWriter(jaasFile))
-    val source = io.Source.fromInputStream(
-      Thread.currentThread().getContextClassLoader.getResourceAsStream("kafka_jaas.conf"), "UTF-8")
-    if (source == null)
-      throw new IllegalStateException("Could not load `kaas_jaas.conf`, make sure it is in the classpath")
+    val inputStream = Thread.currentThread().getContextClassLoader.getResourceAsStream("kafka_jaas.conf")
+    if (inputStream == null)
+      throw new IllegalStateException("Could not find `kaas_jaas.conf`, make sure it is in the classpath")
+    val source = io.Source.fromInputStream(inputStream, "UTF-8")
 
     for (line <- source.getLines) {
       val replaced = line.replaceAll("\\$keytab-location", keytabFile.getAbsolutePath)
       writer.write(replaced)
       writer.newLine()
     }
+
     writer.close()
     source.close()
 
