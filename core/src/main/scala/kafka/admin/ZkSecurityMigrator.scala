@@ -32,7 +32,7 @@ import org.apache.zookeeper.KeeperException.Code
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection._
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._
 
@@ -135,14 +135,14 @@ object ZkSecurityMigrator extends Logging {
 
 class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
   private val workQueue = new LinkedBlockingQueue[Runnable]
-  private implicit val threadExecutionContext =
-    ExecutionContext.fromExecutor(new ThreadPoolExecutor(1,
-      Runtime.getRuntime().availableProcessors(),
-      5000,
-      TimeUnit.MILLISECONDS,
-      workQueue))
+  //private implicit val threadExecutionContext =
+  //  ExecutionContext.fromExecutor(new ThreadPoolExecutor(1,
+  //    Runtime.getRuntime().availableProcessors(),
+  //    5000,
+  //    TimeUnit.MILLISECONDS,
+  //    workQueue))
 
-  private val futures = new ArrayBuffer[Future[String]]
+  private var futures = new Queue[Future[String]]
 
   private def setAclsRecursively(path: String) = {
     info("Setting ACL for path %s".format(path))
@@ -166,15 +166,11 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       Code.get(rc) match {
         case Code.OK =>
           // Set ACL for each child
-          Future {
-            for (child <- children.asScala)
-              setAclsRecursively(s"$path/$child")
-            promise success "done"
-          }
+          for (child <- children.asScala)
+            setAclsRecursively(s"$path/$child")
+          promise success "done"
         case Code.CONNECTIONLOSS =>
-          Future {
-            zkHandle.getChildren(path, false, GetChildrenCallback, ctx)
-          }
+          zkHandle.getChildren(path, false, GetChildrenCallback, ctx)
         case Code.NONODE =>
           warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
           promise success "done"
@@ -203,9 +199,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
           info("Successfully set ACLs for %s".format(path))
           promise success "done"
         case Code.CONNECTIONLOSS =>
-          Future {
             zkHandle.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, ctx)
-          }(threadExecutionContext)
         case Code.NONODE =>
           warn("Node is gone, it could be have been legitimately deleted: %s".format(path))
           promise success "done"
@@ -231,16 +225,24 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
 
       @tailrec
       def recurse(): Unit = {
-        val future = futures.synchronized { futures.headOption }
+        val future = synchronized { 
+          info("Size of future list is %d".format(futures.size))
+          futures.headOption match {
+            case Some(future) =>
+              futures.dequeue
+              Some(future)
+          case None =>
+              None
+          }
+        }
         future match {
           case Some(a) =>
-            Await.result(a, Duration.Inf)
+            Await.result(a, 6000 millis)
             recurse
           case None =>
         }
       }
       recurse()
-      info("Size of future list is %d".format(futures.size))
 
     } finally {
       zkUtils.close
