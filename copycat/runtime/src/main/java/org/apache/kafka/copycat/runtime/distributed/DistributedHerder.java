@@ -601,7 +601,7 @@ public class DistributedHerder implements Herder, Runnable {
         };
     }
 
-    // Rebalances are triggered internally from the group member, so these are always
+    // Rebalances are triggered internally from the group member, so these are always executed in the work thread.
     private WorkerRebalanceListener rebalanceListener() {
         return new WorkerRebalanceListener() {
             @Override
