@@ -50,12 +50,12 @@ import scala.concurrent.duration._
  * 3- Finally run this tool. There is a script under ./bin. Run 
  *   ./bin/zookeeper-security-migration --help
  * to see the configuration parameters. An example of running it is the following:
- *  ./bin/zookeeper-security-migration --kafka.go=secure --zookeeper.connection=localhost:2181
+ *  ./bin/zookeeper-security-migration --zookeeper.acl=secure --zookeeper.connection=localhost:2181
  * 
  * To convert a cluster from secure to unsecure, we need to perform the following
  * steps:
  * 1- Perform a rolling upgrade setting zookeeper.set.acl to false for each server
- * 2- Run this migration tool, setting kafka.go to unsecure
+ * 2- Run this migration tool, setting zookeeper.acl to unsecure
  * 3- Perform another rolling upgrade to remove the system property setting the
  * login file (java.security.auth.login.config).
  */
@@ -76,9 +76,9 @@ object ZkSecurityMigrator extends Logging {
       "takes a comma-separated list of host:port pairs.").withRequiredArg().defaultsTo("localhost:2181").
       ofType(classOf[String])
     val zkSessionTimeoutOpt = parser.accepts("zookeeper.session.timeout", "Sets the ZooKeeper session timeout.").
-      withRequiredArg().defaultsTo("30000").ofType(classOf[java.lang.Integer])
+      withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
     val zkConnectionTimeoutOpt = parser.accepts("zookeeper.connection.timeout", "Sets the ZooKeeper connection timeout.").
-      withRequiredArg().defaultsTo("30000").ofType(classOf[java.lang.Integer])
+      withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
     val helpOpt = parser.accepts("help", "Print usage information.")
 
     val options = parser.parse(args : _*)
@@ -88,8 +88,7 @@ object ZkSecurityMigrator extends Logging {
     if ((jaasFile == null) && !options.has(jaasFileOpt)) {
      val errorMsg = ("No JAAS configuration file has been specified. Please make sure that you have set either " + 
                     "the system property %s or the option %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "--jaas.file")) 
-     if(logger.isEnabledFor(Level.ERROR))
-       error(errorMsg)
+     error(errorMsg)
      System.err.println("ERROR: %s".format(errorMsg))
      throw new IllegalArgumentException("Incorrect configuration")
     }
@@ -101,8 +100,7 @@ object ZkSecurityMigrator extends Logging {
 
     if (!JaasUtils.isZkSecurityEnabled(jaasFile)) {
       val errorMsg = "Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile)
-      if(logger.isEnabledFor(Level.ERROR))
-        error(errorMsg)
+      error(errorMsg)
       System.err.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration") 
     }
@@ -118,8 +116,8 @@ object ZkSecurityMigrator extends Logging {
         CommandLineUtils.printUsageAndDie(parser, usageMessage)
     }
     val zkUrl = options.valueOf(zkUrlOpt)
-    val zkSessionTimeout = 6000 //options.valueOf(zkSessionTimeoutOpt).intValue
-    val zkConnectionTimeout = 6000 //options.valueOf(zkConnectionTimeoutOpt).intValue
+    val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt).intValue
+    val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt).intValue
     val zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, goSecure)
     val migrator = new ZkSecurityMigrator(zkUtils)
     migrator.run()
@@ -163,7 +161,6 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
                       path: String,
                       ctx: Object,
                       children: java.util.List[String]) {
-      //val list = Option(children).map(_.asScala)
       val zkHandle = zkUtils.zkConnection.getZookeeper
       val promise = ctx.asInstanceOf[Promise[String]]
       Code.get(rc) match {
