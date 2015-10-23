@@ -69,7 +69,7 @@ object ZkSecurityMigrator extends Logging {
     var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser()
 
-    val goOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
+    val zkAclOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
         + " The options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])
     val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").withOptionalArg().ofType(classOf[String])
     val zkUrlOpt = parser.accepts("zookeeper.connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
@@ -105,12 +105,12 @@ object ZkSecurityMigrator extends Logging {
       throw new IllegalArgumentException("Incorrect configuration") 
     }
 
-    val goSecure: Boolean = options.valueOf(goOpt) match {
+    val zkAcl: Boolean = options.valueOf(zkAclOpt) match {
       case "secure" =>
-        info("Making it secure")
+        info("zookeeper.acl option is secure")
         true
       case "unsecure" =>
-        info("Making it unsecure")
+        info("zookeeper.acl option is unsecure")
         false
       case _ =>
         CommandLineUtils.printUsageAndDie(parser, usageMessage)
@@ -118,7 +118,7 @@ object ZkSecurityMigrator extends Logging {
     val zkUrl = options.valueOf(zkUrlOpt)
     val zkSessionTimeout = options.valueOf(zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = options.valueOf(zkConnectionTimeoutOpt).intValue
-    val zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, goSecure)
+    val zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, zkAcl)
     val migrator = new ZkSecurityMigrator(zkUtils)
     migrator.run()
   }
@@ -211,7 +211,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
   private def run(): Unit = {
     try {
       for (path <- zkUtils.securePersistentZkPaths) {
-        info("Securing " + path)
+        debug("Going to set ACL for %s".format(path))
         zkUtils.makeSurePersistentPathExists(path)
         setAclsRecursively(path)
       }
@@ -219,7 +219,6 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       @tailrec
       def recurse(): Unit = {
         val future = futures.synchronized { 
-          info("Size of future list is %d".format(futures.size))
           futures.headOption
         }
         future match {
