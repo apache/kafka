@@ -44,10 +44,10 @@ public class KerberosNameParser {
     /**
      * The list of translation rules.
      */
-    private final List<KerberosRule> authToLocalRules;
+    private final List<KerberosRule> principalToLocalRules;
 
-    public KerberosNameParser(String defaultRealm, List<String> authToLocalRules) {
-        this.authToLocalRules = parseRules(defaultRealm, authToLocalRules);
+    public KerberosNameParser(String defaultRealm, List<String> principalToLocalRules) {
+        this.principalToLocalRules = parseRules(defaultRealm, principalToLocalRules);
     }
 
     /**
@@ -59,10 +59,10 @@ public class KerberosNameParser {
             if (principalName.contains("@")) {
                 throw new IllegalArgumentException("Malformed Kerberos name: " + principalName);
             } else {
-                return new KerberosName(principalName, null, null, authToLocalRules);
+                return new KerberosName(principalName, null, null, principalToLocalRules);
             }
         } else {
-            return new KerberosName(match.group(1), match.group(3), match.group(4), authToLocalRules);
+            return new KerberosName(match.group(1), match.group(3), match.group(4), principalToLocalRules);
         }
     }
 
