@@ -28,7 +28,9 @@ import charset.Charset
 
 import kafka.security.auth.{Resource, Authorizer, Acl}
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.ssl.SslFactory
 import org.apache.kafka.common.utils.Utils._
+import org.apache.kafka.test.TestSslUtils
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
@@ -52,8 +54,6 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.{RangeAssignor, KafkaConsumer}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
-import org.apache.kafka.common.security.ssl.SSLFactory
-import org.apache.kafka.test.TestSSLUtils
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
@@ -964,9 +964,9 @@ object TestUtils extends Logging {
 
     val sslConfigs = {
       if (mode == Mode.SERVER)
-        TestSSLUtils.createSSLConfig(true, true, mode, trustStore, certAlias)
+        TestSslUtils.createSslConfig(true, true, mode, trustStore, certAlias)
       else
-        TestSSLUtils.createSSLConfig(clientCert, false, mode, trustStore, certAlias)
+        TestSslUtils.createSslConfig(clientCert, false, mode, trustStore, certAlias)
     }
 
     val sslProps = new Properties()

@@ -43,9 +43,8 @@ import org.slf4j.LoggerFactory;
 /*
  * Transport layer for SSL communication
  */
-
-public class SSLTransportLayer implements TransportLayer {
-    private static final Logger log = LoggerFactory.getLogger(SSLTransportLayer.class);
+public class SslTransportLayer implements TransportLayer {
+    private static final Logger log = LoggerFactory.getLogger(SslTransportLayer.class);
     private final String channelId;
     private final SSLEngine sslEngine;
     private final SelectionKey key;
@@ -61,15 +60,15 @@ public class SSLTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
-    public static SSLTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
+    public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
         // Disable renegotiation by default until we have fixed the known issues with the existing implementation
-        SSLTransportLayer transportLayer = new SSLTransportLayer(channelId, key, sslEngine, false);
+        SslTransportLayer transportLayer = new SslTransportLayer(channelId, key, sslEngine, false);
         transportLayer.startHandshake();
         return transportLayer;
     }
 
     // Prefer `create`, only use this in tests
-    SSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, boolean enableRenegotiation) throws IOException {
+    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, boolean enableRenegotiation) throws IOException {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
