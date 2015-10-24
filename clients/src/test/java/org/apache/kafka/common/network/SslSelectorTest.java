@@ -26,10 +26,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.config.SSLConfigs;
-import org.apache.kafka.common.security.ssl.SSLFactory;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.test.TestSSLUtils;
+import org.apache.kafka.test.TestSslUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -37,7 +37,7 @@ import org.junit.Test;
 /**
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
-public class SSLSelectorTest extends SelectorTest {
+public class SslSelectorTest extends SelectorTest {
 
     private Metrics metrics;
     private Map<String, Object> sslClientConfigs;
@@ -46,15 +46,15 @@ public class SSLSelectorTest extends SelectorTest {
     public void setup() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
 
-        Map<String, Object> sslServerConfigs = TestSSLUtils.createSSLConfig(false, true, Mode.SERVER, trustStoreFile, "server");
-        sslServerConfigs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+        Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        sslServerConfigs.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         this.server = new EchoServer(sslServerConfigs);
         this.server.start();
         this.time = new MockTime();
-        sslClientConfigs = TestSSLUtils.createSSLConfig(false, false, Mode.SERVER, trustStoreFile, "client");
-        sslClientConfigs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+        sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.SERVER, trustStoreFile, "client");
+        sslClientConfigs.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
 
-        this.channelBuilder = new SSLChannelBuilder(Mode.CLIENT);
+        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
@@ -73,12 +73,12 @@ public class SSLSelectorTest extends SelectorTest {
      */
     @Test
     public void testRenegotiation() throws Exception {
-        ChannelBuilder channelBuilder = new SSLChannelBuilder(Mode.CLIENT) {
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT) {
             @Override
-            protected SSLTransportLayer buildTransportLayer(SSLFactory sslFactory, String id, SelectionKey key) throws IOException {
+            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key) throws IOException {
                 SocketChannel socketChannel = (SocketChannel) key.channel();
-                SSLTransportLayer transportLayer = new SSLTransportLayer(id, key,
-                    sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()),
+                SslTransportLayer transportLayer = new SslTransportLayer(id, key,
+                    sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()),
                     true);
                 transportLayer.startHandshake();
                 return transportLayer;

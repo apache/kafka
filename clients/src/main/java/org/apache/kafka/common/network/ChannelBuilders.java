@@ -36,7 +36,7 @@ public class ChannelBuilders {
         switch (securityProtocol) {
             case SSL:
                 requireNonNullMode(mode, securityProtocol);
-                channelBuilder = new SSLChannelBuilder(mode);
+                channelBuilder = new SslChannelBuilder(mode);
                 break;
             case SASL_SSL:
             case SASL_PLAINTEXT:
