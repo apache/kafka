@@ -73,7 +73,7 @@ public class JaasUtils {
         Class<?> classRef;
         Method getInstanceMethod;
         Method getDefaultRealmMethod;
-        if (System.getProperty("java.vendor").contains("IBM")) {
+        if (isIBMJdk()) {
             classRef = Class.forName("com.ibm.security.krb5.internal.Config");
         } else {
             classRef = Class.forName("sun.security.krb5.Config");
@@ -98,7 +98,12 @@ public class JaasUtils {
                 
             try {
                 URI configUri = configFile.toURI();
-                Configuration loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configUri));
+                Configuration loginConf;
+                if (isIBMJdk()) {
+                    loginConf = (Configuration) Class.forName("com.ibm.security.auth.login.ConfigFile").getConstructor(URI.class).newInstance(configUri);
+                } else {
+                    loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configUri));
+                }
                 isSecurityEnabled = loginConf.getAppConfigurationEntry(zkLoginContextName) != null;
             } catch (Exception e) {
                 throw new KafkaException(e);
@@ -117,6 +122,10 @@ public class JaasUtils {
         Configuration.setConfiguration(null);
 
         return isSecurityEnabled;
+    }
+    
+    private static boolean isIBMJdk() {
+        return System.getProperty("java.vendor").contains("IBM");
     }
 }
 
