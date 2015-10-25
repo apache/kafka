@@ -324,7 +324,7 @@ project(':core') {
   }
 
   jar {
-    dependsOn 'copyDependantLibs'
+    dependsOn('copyDependantLibs', 'copyDependantTestLibs')
   }
 
   jar.manifest {
@@ -347,6 +347,13 @@ project(':core') {
 
   artifacts {
     archives testJar
+  }
+
+  tasks.create(name: "copyDependantTestLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('*.jar')
+    }
+    into "$buildDir/dependant-testlibs"
   }
 }
 
