@@ -125,6 +125,61 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       unsecureZkUtils.close()
     }
   }
+  
+  @Test
+  def testDelete() {
+    info("zkConnect string: %s".format(zkConnect))
+    for (path <- zkUtils.securePersistentZkPaths) {
+      info("Creating " + path)
+      zkUtils.makeSurePersistentPathExists(path)
+    }
+    System.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
+    val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
+    var failed = false
+    for (path <- unsecureZkUtils.securePersistentZkPaths) {
+      info("Deleting " + path)
+      try {
+        unsecureZkUtils.deletePath(path)
+        info("Failed for path %s".format(path))
+        failed = true
+      } catch {
+        case e: Exception => // Expected
+      }
+    }
+    unsecureZkUtils.close()
+    System.clearProperty(JaasUtils.ZK_SASL_CLIENT)
+    if (failed)
+      fail("Was able to delete at least one znode")
+  }
+
+  @Test
+  def testDeleteRecursive() {
+    info("zkConnect string: %s".format(zkConnect))
+    for (path <- zkUtils.securePersistentZkPaths) {
+      info("Creating " + path)
+      zkUtils.makeSurePersistentPathExists(path)
+      zkUtils.createPersistentPath(path + "/fpjwashere", "")
+    }
+    System.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
+    val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
+    for (path <- unsecureZkUtils.securePersistentZkPaths) {
+      info("Deleting " + path)
+      try {
+        unsecureZkUtils.deletePath(path)
+        fail("Should have thrown an exception: %s".format(path))
+      } catch {
+        case e: Exception => // Expected
+      }
+      try {
+        unsecureZkUtils.deletePath(path + "/fpjwashere")
+        fail("Should have thrown an exception: %s".format(path))
+      } catch {
+        case e: Exception => // Expected
+      }
+    }
+    unsecureZkUtils.close()
+    System.clearProperty(JaasUtils.ZK_SASL_CLIENT)
+  }
 
   private def testMigration(firstZk: ZkUtils, secondZk: ZkUtils) {
     info("zkConnect string: %s".format(zkConnect))
