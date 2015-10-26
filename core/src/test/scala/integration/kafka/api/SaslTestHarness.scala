@@ -12,7 +12,7 @@
   */
 package kafka.api
 
-import java.io.{BufferedReader, FileWriter, BufferedWriter, File}
+import java.io.{File, FileWriter, BufferedWriter}
 import javax.security.auth.login.Configuration
 
 import kafka.utils.TestUtils
@@ -22,14 +22,26 @@ import org.apache.kafka.common.security.JaasUtils
 import org.junit.{After, Before}
 
 trait SaslTestHarness extends ZooKeeperTestHarness {
-  val workDir = new File(System.getProperty("test.dir", "target"))
-  val kdcConf = MiniKdc.createConf()
-  val kdc = new MiniKdc(kdcConf, workDir)
+
+  var kdc: MiniKdc = null
 
   @Before
   override def setUp() {
-    // Clean-up global configuration set by other tests
+    val (keytabFile, jaasFile) = createKeytabAndJaasFiles()
+
+    // Clean-up global configuration in case it was set by other tests
     Configuration.setConfiguration(null)
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
+
+    val workDir = new File(System.getProperty("test.dir", "target"))
+    val kdcConf = MiniKdc.createConf()
+    kdc = new MiniKdc(kdcConf, workDir)
+    kdc.start()
+    kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
+    super.setUp
+  }
+
+  private def createKeytabAndJaasFiles(): (File, File) = {
     val keytabFile = TestUtils.tempFile()
     val jaasFile = TestUtils.tempFile()
 
@@ -47,10 +59,7 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
     writer.close()
     source.close()
 
-    kdc.start()
-    kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
-    super.setUp
+    (keytabFile, jaasFile)
   }
 
   @After
@@ -60,4 +69,5 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
   }
+
 }
