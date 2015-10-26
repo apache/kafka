@@ -265,7 +265,7 @@ public class TopologyBuilder {
 
         if (nodeGroups == null) {
             nodeGroups = nodeGroups();
-        } else if (nodeGroups.equals(nodeGroups())) {
+        } else if (!nodeGroups.equals(nodeGroups())) {
             throw new TopologyException("topology has mutated");
         }
 
