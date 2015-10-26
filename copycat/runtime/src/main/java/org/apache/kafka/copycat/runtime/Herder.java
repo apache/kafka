@@ -17,8 +17,12 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.copycat.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.copycat.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.copycat.util.Callback;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -66,6 +70,38 @@ public interface Herder {
     void deleteConnector(String name, Callback<Void> callback);
 
     /**
+     * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
+     * from the current configuration. However, note
+     *
+     * @returns A list of connector names
+     * @throws org.apache.kafka.copycat.runtime.distributed.NotLeaderException if this node can not resolve the request
+     *         (e.g., because it has not joined the cluster or does not have configs in sync with the group) and it is
+     *         also not the leader
+     * @throws org.apache.kafka.copycat.errors.CopycatException if this node is the leader, but still cannot resolve the
+     *         request (e.g., it is not in sync with other worker's config state)
+     */
+    void connectors(Callback<Collection<String>> callback);
+
+    /**
+     * Get the definition and status of a connector.
+     */
+    void connectorInfo(String connName, Callback<ConnectorInfo> callback);
+
+    /**
+     * Get the configuration for a connector.
+     * @param connName name of the connector
+     * @param callback callback to invoke with the configuration
+     */
+    void connectorConfig(String connName, Callback<Map<String, String>> callback);
+
+    /**
+     * Set the configuration for a connector.
+     * @param connName name of the connector
+     * @param callback callback to invoke with the configuration
+     */
+    void putConnectorConfig(String connName, Map<String, String> config, Callback<Void> callback);
+
+    /**
      * Requests reconfiguration of the task. This should only be triggered by
      * {@link HerderConnectorContext}.
      *
@@ -73,4 +109,20 @@ public interface Herder {
      */
     void requestTaskReconfiguration(String connName);
 
+    /**
+     * Get the configurations for the current set of tasks of a connector.
+     * @param connName connector to update
+     * @param callback callback to invoke upon completion
+     */
+    void taskConfigs(String connName, Callback<List<TaskInfo>> callback);
+
+    /**
+     * Set the configurations for the tasks of a connector. This should always include all tasks in the connector; if
+     * there are existing configurations and fewer are provided, this will reduce the number of tasks, and if more are
+     * provided it will increase the number of tasks.
+     * @param connName connector to update
+     * @param configs list of configurations
+     * @param callback callback to invoke upon completion
+     */
+    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback);
 }

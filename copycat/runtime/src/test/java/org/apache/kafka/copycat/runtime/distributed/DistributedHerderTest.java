@@ -19,9 +19,11 @@ package org.apache.kafka.copycat.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.copycat.connector.ConnectorContext;
+import org.apache.kafka.copycat.errors.AlreadyExistsException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.TaskConfig;
 import org.apache.kafka.copycat.runtime.Worker;
+import org.apache.kafka.copycat.runtime.WorkerConfig;
 import org.apache.kafka.copycat.source.SourceConnector;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.storage.KafkaConfigStorage;
@@ -40,50 +42,71 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(DistributedHerder.class)
 @PowerMockIgnore("javax.management.*")
 public class DistributedHerderTest {
-    private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
+    private static final Properties HERDER_CONFIG = new Properties();
     static {
         HERDER_CONFIG.put(KafkaConfigStorage.CONFIG_TOPIC_CONFIG, "config-topic");
         HERDER_CONFIG.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        HERDER_CONFIG.put(DistributedHerderConfig.GROUP_ID_CONFIG, "test-copycat-group");
+        HERDER_CONFIG.put(DistributedConfig.GROUP_ID_CONFIG, "test-copycat-group");
+        // The WorkerConfig base class has some required settings without defaults
+        HERDER_CONFIG.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.copycat.json.JsonConverter");
+        HERDER_CONFIG.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.copycat.json.JsonConverter");
+        HERDER_CONFIG.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.copycat.json.JsonConverter");
+        HERDER_CONFIG.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.copycat.json.JsonConverter");
     }
+    private static final String MEMBER_URL = "memberUrl";
 
     private static final String CONN1 = "sourceA";
-    private static final String CONN2 = "sourceA";
+    private static final String CONN2 = "sourceB";
     private static final ConnectorTaskId TASK0 = new ConnectorTaskId(CONN1, 0);
     private static final ConnectorTaskId TASK1 = new ConnectorTaskId(CONN1, 1);
     private static final ConnectorTaskId TASK2 = new ConnectorTaskId(CONN1, 2);
     private static final Integer MAX_TASKS = 3;
-    private static final Map<String, String> CONNECTOR_CONFIG = new HashMap<>();
+    private static final Map<String, String> CONN1_CONFIG = new HashMap<>();
     static {
-        CONNECTOR_CONFIG.put(ConnectorConfig.NAME_CONFIG, "sourceA");
-        CONNECTOR_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
-        CONNECTOR_CONFIG.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
-        CONNECTOR_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
+        CONN1_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN1);
+        CONN1_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
+        CONN1_CONFIG.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
+        CONN1_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
+    }
+    private static final Map<String, String> CONN2_CONFIG = new HashMap<>();
+    static {
+        CONN2_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN2);
+        CONN2_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
+        CONN2_CONFIG.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
+        CONN2_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
     }
     private static final Map<String, String> TASK_CONFIG = new HashMap<>();
     static {
         TASK_CONFIG.put(TaskConfig.TASK_CLASS_CONFIG, BogusSourceTask.class.getName());
     }
-    private static final HashMap<ConnectorTaskId, Map<String, String>> TASK_CONFIGS = new HashMap<>();
+    private static final List<Map<String, String>> TASK_CONFIGS = new ArrayList<>();
     static {
-        TASK_CONFIGS.put(TASK0, TASK_CONFIG);
-        TASK_CONFIGS.put(TASK1, TASK_CONFIG);
-        TASK_CONFIGS.put(TASK2, TASK_CONFIG);
+        TASK_CONFIGS.add(TASK_CONFIG);
+        TASK_CONFIGS.add(TASK_CONFIG);
+        TASK_CONFIGS.add(TASK_CONFIG);
+    }
+    private static final HashMap<ConnectorTaskId, Map<String, String>> TASK_CONFIGS_MAP = new HashMap<>();
+    static {
+        TASK_CONFIGS_MAP.put(TASK0, TASK_CONFIG);
+        TASK_CONFIGS_MAP.put(TASK1, TASK_CONFIG);
+        TASK_CONFIGS_MAP.put(TASK2, TASK_CONFIG);
     }
     private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
-            Collections.singletonMap(CONN1, CONNECTOR_CONFIG), TASK_CONFIGS, Collections.<String>emptySet());
+            Collections.singletonMap(CONN1, CONN1_CONFIG), TASK_CONFIGS_MAP, Collections.<String>emptySet());
 
     @Mock private KafkaConfigStorage configStorage;
     @Mock private WorkerGroupMember member;
@@ -101,7 +124,7 @@ public class DistributedHerderTest {
         worker = PowerMock.createMock(Worker.class);
 
         herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff"},
-                worker, HERDER_CONFIG, configStorage, member);
+                new DistributedConfig(HERDER_CONFIG), worker, configStorage, member, MEMBER_URL);
         connectorConfigCallback = Whitebox.invokeMethod(herder, "connectorConfigCallback");
         taskConfigCallback = Whitebox.invokeMethod(herder, "taskConfigCallback");
         rebalanceListener = Whitebox.invokeMethod(herder, "rebalanceListener");
@@ -156,9 +179,10 @@ public class DistributedHerderTest {
 
         member.wakeup();
         PowerMock.expectLastCall();
-        configStorage.putConnectorConfig(CONN1, CONNECTOR_CONFIG);
+        // CONN2 is new, should succeed
+        configStorage.putConnectorConfig(CONN2, CONN2_CONFIG);
         PowerMock.expectLastCall();
-        createCallback.onCompletion(null, CONN1);
+        createCallback.onCompletion(null, CONN2);
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
@@ -166,7 +190,30 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        herder.addConnector(CONNECTOR_CONFIG, createCallback);
+        herder.addConnector(CONN2_CONFIG, createCallback);
+        herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCreateConnectorAlreadyExists() throws Exception {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+
+        member.wakeup();
+        PowerMock.expectLastCall();
+        // CONN1 already exists
+        createCallback.onCompletion(EasyMock.<AlreadyExistsException>anyObject(), EasyMock.<String>isNull());
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+        // No immediate action besides this -- change will be picked up via the config log
+
+        PowerMock.replayAll();
+
+        herder.addConnector(CONN1_CONFIG, createCallback);
         herder.tick();
 
         PowerMock.verifyAll();
@@ -322,7 +369,7 @@ public class DistributedHerderTest {
         TestFuture<Void> readToEndFuture = new TestFuture<>();
         readToEndFuture.resolveOnGet(new TimeoutException());
         EasyMock.expect(configStorage.readToEnd()).andReturn(readToEndFuture);
-        PowerMock.expectPrivate(herder, "backoff", DistributedHerderConfig.WORKER_UNSYNC_BACKOFF_MS_DEFAULT);
+        PowerMock.expectPrivate(herder, "backoff", DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_DEFAULT);
         member.requestRejoin();
 
         // After backoff, restart the process and this time succeed
@@ -366,7 +413,7 @@ public class DistributedHerderTest {
                 if (revokedConnectors != null)
                     rebalanceListener.onRevoked("leader", revokedConnectors, revokedTasks);
                 CopycatProtocol.Assignment assignment = new CopycatProtocol.Assignment(
-                        error, "leader", offset, assignedConnectors, assignedTasks);
+                        error, "leader", "leaderUrl", offset, assignedConnectors, assignedTasks);
                 rebalanceListener.onAssigned(assignment);
                 return null;
             }

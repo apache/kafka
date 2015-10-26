@@ -54,9 +54,14 @@ class CopycatDistributedFileTest(KafkaTest):
         self.value_converter = converter
         self.schemas = schemas
 
-        self.cc.set_configs(self.render("copycat-distributed.properties"), [self.render("copycat-file-source.properties"), self.render("copycat-file-sink.properties")])
+        self.cc.set_configs(lambda node: self.render("copycat-distributed.properties", node=node))
 
         self.cc.start()
+
+        self.logger.info("Creating connectors")
+        for connector_props in [self.render("copycat-file-source.properties"), self.render("copycat-file-sink.properties")]:
+            connector_config = dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
+            self.cc.create_connector(connector_config)
 
         # Generating data on the source node should generate new records and create new output on the sink node. Timeouts
         # here need to be more generous than they are for standalone mode because a) it takes longer to write configs,
@@ -80,7 +85,6 @@ class CopycatDistributedFileTest(KafkaTest):
         output_set = set(itertools.chain(*[
             [line.strip() for line in self.file_contents(node, self.OUTPUT_FILE)] for node in self.cc.nodes
         ]))
-        #print input_set, output_set
         return input_set == output_set
 
 

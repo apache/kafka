@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,20 +15,22 @@
  * limitations under the License.
  **/
 
-package org.apache.kafka.copycat.util;
+package org.apache.kafka.copycat.runtime.rest.resources;
 
-public class FutureCallback<T> extends ConvertingFutureCallback<T, T> {
+import org.apache.kafka.copycat.runtime.rest.entities.ServerInfo;
 
-    public FutureCallback(Callback<T> underlying) {
-        super(underlying);
-    }
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
 
-    public FutureCallback() {
-        super(null);
-    }
+@Path("/")
+@Produces(MediaType.APPLICATION_JSON)
+public class RootResource {
 
-    @Override
-    public T convert(T result) {
-        return result;
+    @GET
+    @Path("/")
+    public ServerInfo serverInfo() {
+        return new ServerInfo();
     }
 }

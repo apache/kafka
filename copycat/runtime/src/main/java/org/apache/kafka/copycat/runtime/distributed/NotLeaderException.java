@@ -24,15 +24,24 @@ import org.apache.kafka.copycat.errors.CopycatException;
  * the leader.
  */
 public class NotLeaderException extends CopycatException {
-    public NotLeaderException(String s) {
-        super(s);
+    private final String leaderUrl;
+
+    public NotLeaderException(String msg, String leaderUrl) {
+        super(msg);
+        this.leaderUrl = leaderUrl;
     }
 
-    public NotLeaderException(String s, Throwable throwable) {
-        super(s, throwable);
+    public NotLeaderException(String msg, String leaderUrl, Throwable throwable) {
+        super(msg, throwable);
+        this.leaderUrl = leaderUrl;
     }
 
-    public NotLeaderException(Throwable throwable) {
+    public NotLeaderException(String leaderUrl, Throwable throwable) {
         super(throwable);
+        this.leaderUrl = leaderUrl;
+    }
+
+    public String leaderUrl() {
+        return leaderUrl;
     }
 }

@@ -18,7 +18,6 @@
 package org.apache.kafka.copycat.runtime;
 
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

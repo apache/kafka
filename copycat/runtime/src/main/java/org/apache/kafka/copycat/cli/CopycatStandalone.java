@@ -22,6 +22,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.runtime.Copycat;
 import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.Worker;
+import org.apache.kafka.copycat.runtime.rest.RestServer;
+import org.apache.kafka.copycat.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.copycat.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.copycat.storage.FileOffsetBackingStore;
 import org.apache.kafka.copycat.util.Callback;
@@ -59,10 +61,11 @@ public class CopycatStandalone {
         String workerPropsFile = args[0];
         workerProps = !workerPropsFile.isEmpty() ? Utils.loadProps(workerPropsFile) : new Properties();
 
-        WorkerConfig workerConfig = new WorkerConfig(workerProps);
-        Worker worker = new Worker(workerConfig, new FileOffsetBackingStore());
+        StandaloneConfig config = new StandaloneConfig(workerProps);
+        Worker worker = new Worker(config, new FileOffsetBackingStore());
+        RestServer rest = new RestServer(config);
         Herder herder = new StandaloneHerder(worker);
-        final Copycat copycat = new Copycat(worker, herder);
+        final Copycat copycat = new Copycat(worker, herder, rest);
         copycat.start();
 
         try {

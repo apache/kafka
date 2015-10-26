@@ -48,6 +48,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     // Currently Copycat doesn't support multiple task assignment strategies, so we currently just fill in a default value
     public static final String DEFAULT_SUBPROTOCOL = "default";
 
+    private final String restUrl;
     private final KafkaConfigStorage configStorage;
     private CopycatProtocol.Assignment assignmentSnapshot;
     private final CopycatWorkerCoordinatorMetrics sensors;
@@ -69,6 +70,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              Time time,
                              long requestTimeoutMs,
                              long retryBackoffMs,
+                             String restUrl,
                              KafkaConfigStorage configStorage,
                              WorkerRebalanceListener listener) {
         super(client,
@@ -81,6 +83,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 time,
                 requestTimeoutMs,
                 retryBackoffMs);
+        this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
         this.sensors = new CopycatWorkerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
@@ -101,8 +104,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     public LinkedHashMap<String, ByteBuffer> metadata() {
         LinkedHashMap<String, ByteBuffer> metadata = new LinkedHashMap<>();
         configSnapshot = configStorage.snapshot();
-        CopycatProtocol.ConfigState configState = new CopycatProtocol.ConfigState(configSnapshot.offset());
-        metadata.put(DEFAULT_SUBPROTOCOL, CopycatProtocol.serializeMetadata(configState));
+        CopycatProtocol.WorkerState workerState = new CopycatProtocol.WorkerState(restUrl, configSnapshot.offset());
+        metadata.put(DEFAULT_SUBPROTOCOL, CopycatProtocol.serializeMetadata(workerState));
         return metadata;
     }
 
@@ -121,7 +124,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, Map<String, ByteBuffer> allMemberMetadata) {
         log.debug("Performing task assignment");
 
-        Map<String, CopycatProtocol.ConfigState> allConfigs = new HashMap<>();
+        Map<String, CopycatProtocol.WorkerState> allConfigs = new HashMap<>();
         for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet())
             allConfigs.put(entry.getKey(), CopycatProtocol.deserializeMetadata(entry.getValue()));
 
@@ -129,16 +132,17 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         Long leaderOffset = ensureLeaderConfig(maxOffset);
         if (leaderOffset == null)
             return fillAssignmentsAndSerialize(allConfigs.keySet(), CopycatProtocol.Assignment.CONFIG_MISMATCH,
-                    leaderId, maxOffset, new HashMap<String, List<String>>(), new HashMap<String, List<ConnectorTaskId>>());
+                    leaderId, allConfigs.get(leaderId).url(), maxOffset,
+                    new HashMap<String, List<String>>(), new HashMap<String, List<ConnectorTaskId>>());
         return performTaskAssignment(leaderId, leaderOffset, allConfigs);
     }
 
-    private long findMaxMemberConfigOffset(Map<String, CopycatProtocol.ConfigState> allConfigs) {
+    private long findMaxMemberConfigOffset(Map<String, CopycatProtocol.WorkerState> allConfigs) {
         // The new config offset is the maximum seen by any member. We always perform assignment using this offset,
         // even if some members have fallen behind. The config offset used to generate the assignment is included in
         // the response so members that have fallen behind will not use the assignment until they have caught up.
         Long maxOffset = null;
-        for (Map.Entry<String, CopycatProtocol.ConfigState> stateEntry : allConfigs.entrySet()) {
+        for (Map.Entry<String, CopycatProtocol.WorkerState> stateEntry : allConfigs.entrySet()) {
             long memberRootOffset = stateEntry.getValue().offset();
             if (maxOffset == null)
                 maxOffset = memberRootOffset;
@@ -171,7 +175,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         return maxOffset;
     }
 
-    private Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset, Map<String, CopycatProtocol.ConfigState> allConfigs) {
+    private Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset, Map<String, CopycatProtocol.WorkerState> allConfigs) {
         Map<String, List<String>> connectorAssignments = new HashMap<>();
         Map<String, List<ConnectorTaskId>> taskAssignments = new HashMap<>();
 
@@ -200,12 +204,13 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         }
 
         return fillAssignmentsAndSerialize(allConfigs.keySet(), CopycatProtocol.Assignment.NO_ERROR,
-                leaderId, maxOffset, connectorAssignments, taskAssignments);
+                leaderId, allConfigs.get(leaderId).url(), maxOffset, connectorAssignments, taskAssignments);
     }
 
     private Map<String, ByteBuffer> fillAssignmentsAndSerialize(Collection<String> members,
                                                                 short error,
                                                                 String leaderId,
+                                                                String leaderUrl,
                                                                 long maxOffset,
                                                                 Map<String, List<String>> connectorAssignments,
                                                                 Map<String, List<ConnectorTaskId>> taskAssignments) {
@@ -218,7 +223,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             List<ConnectorTaskId> tasks = taskAssignments.get(member);
             if (tasks == null)
                 tasks = Collections.emptyList();
-            CopycatProtocol.Assignment assignment = new CopycatProtocol.Assignment(error, leaderId, maxOffset, connectors, tasks);
+            CopycatProtocol.Assignment assignment = new CopycatProtocol.Assignment(error, leaderId, leaderUrl, maxOffset, connectors, tasks);
             log.debug("Assignment: {} -> {}", member, assignment);
             groupAssignment.put(member, CopycatProtocol.serializeAssignment(assignment));
         }

@@ -21,14 +21,13 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.runtime.Copycat;
 import org.apache.kafka.copycat.runtime.Worker;
+import org.apache.kafka.copycat.runtime.distributed.DistributedConfig;
 import org.apache.kafka.copycat.runtime.distributed.DistributedHerder;
+import org.apache.kafka.copycat.runtime.rest.RestServer;
 import org.apache.kafka.copycat.storage.KafkaOffsetBackingStore;
-import org.apache.kafka.copycat.util.Callback;
-import org.apache.kafka.copycat.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.Properties;
 
 /**
@@ -46,39 +45,21 @@ public class CopycatDistributed {
 
     public static void main(String[] args) throws Exception {
         Properties workerProps;
-        Properties connectorProps;
 
         if (args.length < 1) {
-            log.info("Usage: CopycatDistributed worker.properties [connector1.properties connector2.properties ...]");
+            log.info("Usage: CopycatDistributed worker.properties");
             System.exit(1);
         }
 
         String workerPropsFile = args[0];
         workerProps = !workerPropsFile.isEmpty() ? Utils.loadProps(workerPropsFile) : new Properties();
 
-        WorkerConfig workerConfig = new WorkerConfig(workerProps);
-        Worker worker = new Worker(workerConfig, new KafkaOffsetBackingStore());
-        DistributedHerder herder = new DistributedHerder(worker, workerConfig.originals());
-        final Copycat copycat = new Copycat(worker, herder);
+        DistributedConfig config = new DistributedConfig(workerProps);
+        Worker worker = new Worker(config, new KafkaOffsetBackingStore());
+        RestServer rest = new RestServer(config);
+        DistributedHerder herder = new DistributedHerder(config, worker, rest.advertisedUrl());
+        final Copycat copycat = new Copycat(worker, herder, rest);
         copycat.start();
-
-        try {
-            for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
-                connectorProps = Utils.loadProps(connectorPropsFile);
-                FutureCallback<String> cb = new FutureCallback<>(new Callback<String>() {
-                    @Override
-                    public void onCompletion(Throwable error, String id) {
-                        if (error != null)
-                            log.error("Failed to create job for {}", connectorPropsFile);
-                    }
-                });
-                herder.addConnector(Utils.propsToStringMap(connectorProps), cb);
-                cb.get();
-            }
-        } catch (Throwable t) {
-            log.error("Stopping after connector error", t);
-            copycat.stop();
-        }
 
         // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
         copycat.awaitStop();

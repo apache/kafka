@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.ConnectorContext;
 import org.apache.kafka.copycat.connector.Task;
@@ -35,6 +34,7 @@ import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -150,6 +150,10 @@ public class Worker {
         log.info("Worker stopped");
     }
 
+    public WorkerConfig config() {
+        return config;
+    }
+
     /**
      * Add a new connector.
      * @param connConfig connector configuration
@@ -196,24 +200,21 @@ public class Worker {
         }
     }
 
-    public Map<ConnectorTaskId, Map<String, String>> reconfigureConnectorTasks(String connName, int maxTasks, List<String> sinkTopics) {
+    public List<Map<String, String>> reconfigureConnectorTasks(String connName, int maxTasks, List<String> sinkTopics) {
         log.trace("Reconfiguring connector tasks for {}", connName);
 
         Connector connector = connectors.get(connName);
         if (connector == null)
             throw new CopycatException("Connector " + connName + " not found in this worker.");
 
-        Map<ConnectorTaskId, Map<String, String>> result = new HashMap<>();
+        List<Map<String, String>> result = new ArrayList<>();
         String taskClassName = connector.taskClass().getName();
-        int index = 0;
         for (Properties taskProps : connector.taskConfigs(maxTasks)) {
-            ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
-            index++;
             Map<String, String> taskConfig = Utils.propsToStringMap(taskProps);
             taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
             if (sinkTopics != null)
                 taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
-            result.put(taskId, taskConfig);
+            result.add(taskConfig);
         }
         return result;
     }

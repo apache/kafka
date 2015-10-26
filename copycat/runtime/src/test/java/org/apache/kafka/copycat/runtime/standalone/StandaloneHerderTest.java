@@ -19,6 +19,7 @@ package org.apache.kafka.copycat.runtime.standalone;
 
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.Task;
+import org.apache.kafka.copycat.errors.AlreadyExistsException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.HerderConnectorContext;
 import org.apache.kafka.copycat.runtime.TaskConfig;
@@ -80,6 +81,24 @@ public class StandaloneHerderTest {
         expectAdd(BogusSourceConnector.class, BogusSourceTask.class, false);
         PowerMock.replayAll();
 
+        herder.addConnector(connectorProps, createCallback);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCreateConnectorAlreadyExists() throws Exception {
+        connector = PowerMock.createMock(BogusSourceConnector.class);
+        // First addition should succeed
+        expectAdd(BogusSourceConnector.class, BogusSourceTask.class, false);
+
+        // Second should fail
+        createCallback.onCompletion(EasyMock.<AlreadyExistsException>anyObject(), EasyMock.<String>isNull());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.addConnector(connectorProps, createCallback);
         herder.addConnector(connectorProps, createCallback);
 
         PowerMock.verifyAll();
@@ -150,7 +169,7 @@ public class StandaloneHerderTest {
         if (sink)
             generatedTaskProps.put(SinkTask.TOPICS_CONFIG, TOPICS_LIST_STR);
         EasyMock.expect(worker.reconfigureConnectorTasks(CONNECTOR_NAME, DEFAULT_MAX_TASKS, TOPICS_LIST))
-                .andReturn(Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), generatedTaskProps));
+                .andReturn(Collections.singletonList(generatedTaskProps));
 
         worker.addTask(new ConnectorTaskId(CONNECTOR_NAME, 0), new TaskConfig(generatedTaskProps));
         PowerMock.expectLastCall();

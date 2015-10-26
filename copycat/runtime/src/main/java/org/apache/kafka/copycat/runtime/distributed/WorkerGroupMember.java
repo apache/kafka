@@ -68,7 +68,7 @@ public class WorkerGroupMember {
 
     private boolean stopped = false;
 
-    public WorkerGroupMember(DistributedHerderConfig config, KafkaConfigStorage configStorage, WorkerRebalanceListener listener) {
+    public WorkerGroupMember(DistributedConfig config, String restUrl, KafkaConfigStorage configStorage, WorkerRebalanceListener listener) {
         try {
             this.time = new SystemTime();
 
@@ -98,15 +98,16 @@ public class WorkerGroupMember {
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG), time);
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs);
             this.coordinator = new WorkerCoordinator(this.client,
-                    config.getString(DistributedHerderConfig.GROUP_ID_CONFIG),
-                    config.getInt(DistributedHerderConfig.SESSION_TIMEOUT_MS_CONFIG),
-                    config.getInt(DistributedHerderConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
+                    config.getString(DistributedConfig.GROUP_ID_CONFIG),
+                    config.getInt(DistributedConfig.SESSION_TIMEOUT_MS_CONFIG),
+                    config.getInt(DistributedConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
                     metrics,
                     metricGrpPrefix,
                     metricsTags,
                     this.time,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     retryBackoffMs,
+                    restUrl,
                     configStorage,
                     listener);
 
