@@ -30,7 +30,7 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
        
         $ git checkout $BRANCH
         $ gradle  # (only if necessary)
-        $ ./gradlew jar
+        $ ./gradlew systemTestLibs
      
 * Run the system tests using ducktape:
 

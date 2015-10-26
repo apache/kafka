@@ -150,6 +150,8 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
+  task systemTestLibs(dependsOn: jar)
+
   artifacts {
     archives srcJar
     archives javadocJar
