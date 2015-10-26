@@ -51,7 +51,7 @@ public class LoginManager {
         switch (mechanism) {
             case GSSAPI:
                 login = new KerberosLogin(loginContext, configs);
-                this.serviceName = getServiceName(loginContext, configs);
+                this.serviceName = findServiceName(loginContext, configs);
                 login.startThreadIfNeeded();
                 break;
             case PLAIN:
@@ -65,7 +65,7 @@ public class LoginManager {
         }
     }
 
-    private static String getServiceName(String loginContext, Map<String, ?> configs) throws IOException {
+    private static String findServiceName(String loginContext, Map<String, ?> configs) throws IOException {
         String jaasServiceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
         String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
         if (jaasServiceName != null && configServiceName != null && jaasServiceName != configServiceName) {
