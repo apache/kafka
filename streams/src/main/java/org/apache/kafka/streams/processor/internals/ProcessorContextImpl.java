@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +36,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
 
-    private final int id;
+    private final TaskId id;
     private final StreamTask task;
     private final StreamingMetrics metrics;
     private final RecordCollector collector;
@@ -49,7 +50,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     private boolean initialized;
 
     @SuppressWarnings("unchecked")
-    public ProcessorContextImpl(int id,
+    public ProcessorContextImpl(TaskId id,
                                 StreamTask task,
                                 StreamingConfig config,
                                 RecordCollector collector,
@@ -78,8 +79,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.initialized = true;
     }
 
-    @Override
-    public int id() {
+    public TaskId id() {
         return id;
     }
 

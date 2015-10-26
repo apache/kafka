@@ -22,47 +22,40 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 
 public class DefaultPartitionGrouper extends PartitionGrouper {
 
-    public Map<Integer, List<TopicPartition>> partitionGroups(Cluster metadata) {
-        Map<Integer, List<TopicPartition>> groups = new HashMap<>();
-        List<List<String>> sortedTopicGroups = sort(topicGroups);
+    public Map<TaskId, Set<TopicPartition>> partitionGroups(Cluster metadata) {
+        Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
 
-        int taskId = 0;
-        for (List<String> topicGroup : sortedTopicGroups) {
+        for (Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
+            Integer taskGroupId = entry.getKey();
+            Set<String> topicGroup = entry.getValue();
+
             int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
 
             for (int partitionId = 0; partitionId < maxNumPartitions; partitionId++) {
-                List<TopicPartition> group = new ArrayList<>(topicGroup.size());
+                Set<TopicPartition> group = new HashSet<>(topicGroup.size());
 
                 for (String topic : topicGroup) {
                     if (partitionId < metadata.partitionsForTopic(topic).size()) {
                         group.add(new TopicPartition(topic, partitionId));
                     }
                 }
-                groups.put(taskId++, group);
+                groups.put(new TaskId(taskGroupId, partitionId), Collections.unmodifiableSet(group));
             }
         }
 
-        // make the data unmodifiable, then return
-        Map<Integer, List<TopicPartition>> unmodifiableGroups = new HashMap<>();
-        for (Map.Entry<Integer, List<TopicPartition>> entry : groups.entrySet()) {
-            unmodifiableGroups.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
-        }
-        return Collections.unmodifiableMap(unmodifiableGroups);
+        return Collections.unmodifiableMap(groups);
     }
 
-    protected int maxNumPartitions(Cluster metadata, List<String> topics) {
+    protected int maxNumPartitions(Cluster metadata, Set<String> topics) {
         int maxNumPartitions = 0;
         for (String topic : topics) {
             List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
@@ -75,23 +68,6 @@ public class DefaultPartitionGrouper extends PartitionGrouper {
                 maxNumPartitions = numPartitions;
         }
         return maxNumPartitions;
-    }
-
-    protected List<List<String>> sort(Collection<Set<String>> topicGroups) {
-        TreeMap<String, String[]> sortedMap = new TreeMap<>();
-
-        for (Set<String> group : topicGroups) {
-            String[] arr = group.toArray(new String[group.size()]);
-            Arrays.sort(arr);
-            sortedMap.put(arr[0], arr);
-        }
-
-        ArrayList<List<String>> list = new ArrayList(sortedMap.size());
-        for (String[] arr : sortedMap.values()) {
-            list.add(Arrays.asList(arr));
-        }
-
-        return list;
     }
 
 }

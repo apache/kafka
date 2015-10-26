@@ -21,14 +21,12 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public abstract class PartitionGrouper {
 
-    protected Collection<Set<String>> topicGroups;
+    protected Map<Integer, Set<String>> topicGroups;
 
     private KafkaStreamingPartitionAssignor partitionAssignor = null;
 
@@ -38,9 +36,9 @@ public abstract class PartitionGrouper {
      * @param metadata
      * @return a map of task ids to groups of partitions
      */
-    public abstract Map<Integer, List<TopicPartition>> partitionGroups(Cluster metadata);
+    public abstract Map<TaskId, Set<TopicPartition>> partitionGroups(Cluster metadata);
 
-    public void topicGroups(Collection<Set<String>> topicGroups) {
+    public void topicGroups(Map<Integer, Set<String>> topicGroups) {
         this.topicGroups = topicGroups;
     }
 
@@ -48,7 +46,7 @@ public abstract class PartitionGrouper {
         this.partitionAssignor = partitionAssignor;
     }
 
-    public Set<Integer> taskIds(TopicPartition partition) {
+    public Set<TaskId> taskIds(TopicPartition partition) {
         return partitionAssignor.taskIds(partition);
     }
 

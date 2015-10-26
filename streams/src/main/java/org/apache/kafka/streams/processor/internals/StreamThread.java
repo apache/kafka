@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.PartitionGrouper;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +76,7 @@ public class StreamThread extends Thread {
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
 
-    private final Map<Integer, StreamTask> tasks;
+    private final Map<TaskId, StreamTask> tasks;
     private final String clientId;
     private final Time time;
     private final File stateDir;
@@ -199,7 +200,7 @@ public class StreamThread extends Thread {
         running.set(false);
     }
 
-    public Map<Integer, StreamTask> tasks() {
+    public Map<TaskId, StreamTask> tasks() {
         return Collections.unmodifiableMap(tasks);
     }
 
@@ -375,7 +376,7 @@ public class StreamThread extends Thread {
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
-                        int id = Integer.parseInt(dir.getName());
+                        TaskId id = TaskId.parse(dir.getName());
 
                         // try to acquire the exclusive lock on the state directory
                         FileLock directoryLock = null;
@@ -396,7 +397,7 @@ public class StreamThread extends Thread {
                                 }
                             }
                         }
-                    } catch (NumberFormatException e) {
+                    } catch (TaskId.TaskIdFormatException e) {
                         // there may be some unknown files that sits in the same directory,
                         // we should ignore these files instead trying to delete them as well
                     }
@@ -407,7 +408,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+    protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
         sensors.taskCreationSensor.record();
 
         return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, builder.build(), config, sensors);
@@ -415,11 +416,11 @@ public class StreamThread extends Thread {
 
     private void addPartitions(Collection<TopicPartition> assignment) {
 
-        HashMap<Integer, Set<TopicPartition>> partitionsForTask = new HashMap<>();
+        HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
         for (TopicPartition partition : assignment) {
-            Set<Integer> taskIds = partitionGrouper.taskIds(partition);
-            for (Integer taskId : taskIds) {
+            Set<TaskId> taskIds = partitionGrouper.taskIds(partition);
+            for (TaskId taskId : taskIds) {
                 Set<TopicPartition> partitions = partitionsForTask.get(taskId);
                 if (partitions == null) {
                     partitions = new HashSet<>();
@@ -430,7 +431,7 @@ public class StreamThread extends Thread {
         }
 
         // create the tasks
-        for (Integer taskId : partitionsForTask.keySet()) {
+        for (TaskId taskId : partitionsForTask.keySet()) {
             try {
                 tasks.put(taskId, createStreamTask(taskId, partitionsForTask.get(taskId)));
             } catch (Exception e) {

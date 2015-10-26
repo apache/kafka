@@ -25,8 +25,10 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class TopologyBuilderTest {
@@ -121,14 +123,27 @@ public class TopologyBuilderTest {
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
-        Collection<Set<String>> topicGroups = builder.topicGroups();
+        Map<Integer, Set<String>> topicGroups = builder.topicGroups();
+
+        Map<Integer, Set<String>> expectedTopicGroups = new HashMap<>();
+        expectedTopicGroups.put(0, set("topic-1", "topic-1x", "topic-2"));
+        expectedTopicGroups.put(1, set("topic-3", "topic-4"));
+        expectedTopicGroups.put(2, set("topic-5"));
 
         assertEquals(3, topicGroups.size());
-        assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2"), mkSet("topic-3", "topic-4"), mkSet("topic-5")), new HashSet<>(topicGroups));
+        assertEquals(expectedTopicGroups, topicGroups);
 
         Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
         assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
+    }
+
+    private <T> Set<T> set(T... items) {
+        Set<T> set = new HashSet<>();
+        for (T item : items) {
+            set.add(item);
+        }
+        return set;
     }
 
     private <T> List<T> list(T... elems) {

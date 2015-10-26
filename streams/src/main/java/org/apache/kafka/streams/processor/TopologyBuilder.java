@@ -20,6 +20,7 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
@@ -53,9 +54,10 @@ public class TopologyBuilder {
     private final Set<String> nodeNames = new HashSet<>();
     private final Set<String> sourceTopicNames = new HashSet<>();
 
-    private final QuickUnion<String> nodeGroups = new QuickUnion<>();
+    private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
     private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
+    private Map<Integer, Set<String>> nodeGroups = null;
 
     private interface NodeFactory {
         ProcessorNode build();
@@ -166,7 +168,7 @@ public class TopologyBuilder {
         nodeNames.add(name);
         nodeFactories.add(new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
         nodeToTopics.put(name, topics.clone());
-        nodeGroups.add(name);
+        nodeGrouper.add(name);
 
         return this;
     }
@@ -247,47 +249,72 @@ public class TopologyBuilder {
 
         nodeNames.add(name);
         nodeFactories.add(new ProcessorNodeFactory(name, parentNames, supplier));
-        nodeGroups.add(name);
-        nodeGroups.unite(name, parentNames);
+        nodeGrouper.add(name);
+        nodeGrouper.unite(name, parentNames);
         return this;
     }
 
     /**
-     * Returns the topic groups.
+     * Returns the map of topic groups keyed by the group id.
      * A topic group is a group of topics in the same task.
      *
      * @return groups of topic names
      */
-    public Collection<Set<String>> topicGroups() {
-        List<Set<String>> topicGroups = new ArrayList<>();
+    public Map<Integer, Set<String>> topicGroups() {
+        Map<Integer, Set<String>> topicGroups = new HashMap<>();
 
-        for (Set<String> nodeGroup : generateNodeGroups(nodeGroups)) {
+        if (nodeGroups == null) {
+            nodeGroups = nodeGroups();
+        } else if (nodeGroups.equals(nodeGroups())) {
+            throw new TopologyException("topology has mutated");
+        }
+
+        for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> topicGroup = new HashSet<>();
-            for (String node : nodeGroup) {
+            for (String node : entry.getValue()) {
                 String[] topics = nodeToTopics.get(node);
                 if (topics != null)
                     topicGroup.addAll(Arrays.asList(topics));
             }
-            topicGroups.add(Collections.unmodifiableSet(topicGroup));
+            topicGroups.put(entry.getKey(), Collections.unmodifiableSet(topicGroup));
         }
 
-        return Collections.unmodifiableList(topicGroups);
+        return Collections.unmodifiableMap(topicGroups);
     }
 
-    private Collection<Set<String>> generateNodeGroups(QuickUnion<String> grouping) {
-        HashMap<String, Set<String>> nodeGroupMap = new HashMap<>();
+    private Map<Integer, Set<String>> nodeGroups() {
+        HashMap<Integer, Set<String>> nodeGroups = new HashMap<>();
+        HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
-        for (String nodeName : nodeNames) {
-            String root = grouping.root(nodeName);
-            Set<String> nodeGroup = nodeGroupMap.get(root);
+        int nodeGroupId = 0;
+
+        // Go through source nodes first. This makes the group id assignment easy to predict in tests
+        for (String nodeName : Utils.sorted(nodeToTopics.keySet())) {
+            String root = nodeGrouper.root(nodeName);
+            Set<String> nodeGroup = rootToNodeGroup.get(root);
             if (nodeGroup == null) {
                 nodeGroup = new HashSet<>();
-                nodeGroupMap.put(root, nodeGroup);
+                rootToNodeGroup.put(root, nodeGroup);
+                nodeGroups.put(nodeGroupId++, nodeGroup);
             }
             nodeGroup.add(nodeName);
         }
 
-        return nodeGroupMap.values();
+        // Go through non-source nodes
+        for (String nodeName : Utils.sorted(nodeNames)) {
+            if (!nodeToTopics.containsKey(nodeName)) {
+                String root = nodeGrouper.root(nodeName);
+                Set<String> nodeGroup = rootToNodeGroup.get(root);
+                if (nodeGroup == null) {
+                    nodeGroup = new HashSet<>();
+                    rootToNodeGroup.put(root, nodeGroup);
+                    nodeGroups.put(nodeGroupId++, nodeGroup);
+                }
+                nodeGroup.add(nodeName);
+            }
+        }
+
+        return nodeGroups;
     }
 
     /**

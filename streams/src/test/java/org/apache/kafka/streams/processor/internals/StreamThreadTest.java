@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.PartitionGrouper;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
@@ -81,11 +82,11 @@ public class StreamThreadTest {
     PartitionAssignor.Subscription subscription = new PartitionAssignor.Subscription(Arrays.asList("topic1", "topic2", "topic3"));
 
     // task0 is unused
-    private final int task1 = 1;
-    private final int task2 = 2;
-    // task3 is unused
-    private final int task4 = 4;
-    private final int task5 = 5;
+    private final TaskId task1 = new TaskId(0, 1);
+    private final TaskId task2 = new TaskId(0, 2);
+    private final TaskId task3 = new TaskId(0, 3);
+    private final TaskId task4 = new TaskId(1, 1);
+    private final TaskId task5 = new TaskId(1, 2);
 
     private Properties configProps() {
         return new Properties() {
@@ -104,7 +105,7 @@ public class StreamThreadTest {
     private static class TestStreamTask extends StreamTask {
         public boolean committed = false;
 
-        public TestStreamTask(int id,
+        public TestStreamTask(TaskId id,
                               Consumer<byte[], byte[]> consumer,
                               Producer<byte[], byte[]> producer,
                               Consumer<byte[], byte[]> restoreConsumer,
@@ -140,7 +141,7 @@ public class StreamThreadTest {
 
         StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", new Metrics(), new SystemTime()) {
             @Override
-            protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+            protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                 return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
             }
         };
@@ -240,9 +241,9 @@ public class StreamThreadTest {
 
             StreamingConfig config = new StreamingConfig(props);
 
-            File stateDir1 = new File(baseDir, "1");
-            File stateDir2 = new File(baseDir, "2");
-            File stateDir3 = new File(baseDir, "3");
+            File stateDir1 = new File(baseDir, task1.toString());
+            File stateDir2 = new File(baseDir, task2.toString());
+            File stateDir3 = new File(baseDir, task3.toString());
             File extraDir = new File(baseDir, "X");
             stateDir1.mkdir();
             stateDir2.mkdir();
@@ -264,7 +265,7 @@ public class StreamThreadTest {
                 }
 
                 @Override
-                protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+                protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                     return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
                 }
             };
@@ -385,7 +386,7 @@ public class StreamThreadTest {
                 }
 
                 @Override
-                protected StreamTask createStreamTask(int id, Collection<TopicPartition> partitionsForTask) {
+                protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                     return new TestStreamTask(id, consumer, producer, mockRestoreConsumer, partitionsForTask, builder.build(), config);
                 }
             };
