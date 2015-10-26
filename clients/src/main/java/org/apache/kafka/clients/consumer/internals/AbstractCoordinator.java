@@ -89,7 +89,7 @@ public abstract class AbstractCoordinator {
     protected final long retryBackoffMs;
     protected final long requestTimeoutMs;
 
-    private boolean needsOnLeave = true;
+    private boolean needsJoinPrepare = true;
     private boolean rejoinNeeded = true;
     protected Node coordinator;
     protected String memberId;
@@ -208,10 +208,9 @@ public abstract class AbstractCoordinator {
         if (!needRejoin())
             return;
 
-        // onLeave only invoked if we have a valid current generation
-        if (needsOnLeave) {
+        if (needsJoinPrepare) {
             onJoinPrepare(generation, memberId);
-            needsOnLeave = false;
+            needsJoinPrepare = false;
         }
 
         while (needRejoin()) {
@@ -229,7 +228,7 @@ public abstract class AbstractCoordinator {
 
             if (future.succeeded()) {
                 onJoinComplete(generation, memberId, protocol, future.value());
-                needsOnLeave = true;
+                needsJoinPrepare = true;
                 heartbeatTask.reset();
             } else {
                 if (future.exception() instanceof UnknownMemberIdException)
@@ -291,10 +290,10 @@ public abstract class AbstractCoordinator {
     }
 
     /**
-     * Send a request to get a new partition assignment. This is a non-blocking call which sends
-     * a JoinGroup request to the coordinator (if it is available). The returned future must
-     * be polled to see if the request completed successfully.
-     * @return A request future whose completion indicates the result of the JoinGroup request.
+     * Join the group and return the assignment for the next generation. This function handles both
+     * JoinGroup and SyncGroup, delegating to {@link #performAssignment(String, String, Map)} if
+     * elected leader by the coordinator.
+     * @return A request future which wraps the assignment returned from the group leader
      */
     private RequestFuture<ByteBuffer> performGroupJoin() {
         if (coordinatorUnknown())
