@@ -32,6 +32,8 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 
 import java.lang.reflect.Array;
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class KStreamImpl<K, V> implements KStream<K, V> {
@@ -72,10 +74,12 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     protected final TopologyBuilder topology;
     protected final String name;
+    protected final Set<String> sourceNodes;
 
-    public KStreamImpl(TopologyBuilder topology, String name) {
+    public KStreamImpl(TopologyBuilder topology, String name, Set<String> sourceNodes) {
         this.topology = topology;
         this.name = name;
+        this.sourceNodes = sourceNodes;
     }
 
     @Override
@@ -84,7 +88,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, false), this.name);
 
-        return new KStreamImpl<>(topology, name);
+        return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
     @Override
@@ -93,7 +97,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
 
-        return new KStreamImpl<>(topology, name);
+        return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
     @Override
@@ -102,7 +106,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamMap<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name);
+        return new KStreamImpl<>(topology, name, null);
     }
 
     @Override
@@ -111,7 +115,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name);
+        return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
     @Override
@@ -120,7 +124,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamFlatMap<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name);
+        return new KStreamImpl<>(topology, name, null);
     }
 
     @Override
@@ -129,7 +133,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
 
-        return new KStreamImpl<>(topology, name);
+        return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
     @Override
@@ -138,7 +142,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamWindow<>(windowSupplier), this.name);
 
-        return new KStreamWindowedImpl<>(topology, name, windowSupplier);
+        return new KStreamWindowedImpl<>(topology, name, sourceNodes, windowSupplier);
     }
 
     @Override
@@ -154,7 +158,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
             topology.addProcessor(childName, new KStreamPassThrough<K, V>(), branchName);
 
-            branchChildren[i] = new KStreamImpl<>(topology, childName);
+            branchChildren[i] = new KStreamImpl<>(topology, childName, sourceNodes);
         }
 
         return branchChildren;
@@ -174,7 +178,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addSource(sourceName, keyDeserializer, valDeserializer, topic);
 
-        return new KStreamImpl<>(topology, sourceName);
+        return new KStreamImpl<>(topology, sourceName, Collections.<String>emptySet());
     }
 
     @Override
@@ -202,7 +206,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
 
-        return new KStreamImpl<>(topology, name);
+        return new KStreamImpl<>(topology, name, null);
     }
 
     @Override
@@ -211,7 +215,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
 
-        return new KStreamImpl<>(topology, name);
+        return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
     @Override

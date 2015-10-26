@@ -83,12 +83,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public int id() {
-        return -1;
-    }
-
-    @Override
-    public boolean joinable() {
-        return true;
+        return 0;
     }
 
     @Override

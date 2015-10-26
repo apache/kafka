@@ -112,7 +112,7 @@ public class StreamTask implements Punctuator {
         // create the record recordCollector that maintains the produced offsets
         this.recordCollector = new RecordCollector(producer);
 
-        log.info("Creating restoration consumer client for stream task [" + id + "]");
+        log.info("Creating restoration consumer client for stream task #" + id());
 
         // create the processor state manager
         try {

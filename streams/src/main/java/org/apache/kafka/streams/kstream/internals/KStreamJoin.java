@@ -59,10 +59,6 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorSupplier<K, V1> {
         public void init(ProcessorContext context) {
             super.init(context);
 
-            // check if these two streams are joinable
-            if (!context.joinable())
-                throw new IllegalStateException("Streams are not joinable.");
-
             final Window<K, V2> window = (Window<K, V2>) context.getStateStore(windowName);
 
             this.finder = new Finder<K, V2>() {

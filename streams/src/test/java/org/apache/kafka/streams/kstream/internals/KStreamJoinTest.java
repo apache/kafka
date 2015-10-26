@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Utils;
@@ -32,12 +33,18 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.UnlimitedWindowDef;
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+
 import static org.junit.Assert.assertEquals;
 
 public class KStreamJoinTest {
 
     private String topic1 = "topic1";
     private String topic2 = "topic2";
+    private String dummyTopic = "dummyTopic";
 
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
@@ -88,6 +95,7 @@ public class KStreamJoinTest {
 
         KStream<Integer, String> stream1;
         KStream<Integer, String> stream2;
+        KStream<Integer, String> dummyStream;
         KStreamWindowed<Integer, String> windowed1;
         KStreamWindowed<Integer, String> windowed2;
         MockProcessorSupplier<Integer, String> processor;
@@ -96,10 +104,16 @@ public class KStreamJoinTest {
         processor = new MockProcessorSupplier<>();
         stream1 = builder.from(keyDeserializer, valDeserializer, topic1);
         stream2 = builder.from(keyDeserializer, valDeserializer, topic2);
+        dummyStream = builder.from(keyDeserializer, valDeserializer, dummyTopic);
         windowed1 = stream1.with(new UnlimitedWindowDef<Integer, String>("window1"));
         windowed2 = stream2.with(new UnlimitedWindowDef<Integer, String>("window2"));
 
         windowed1.join(windowed2, joiner).process(processor);
+
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+
+        assertEquals(1, copartitionGroups.size());
+        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
         driver.setTime(0L);
@@ -160,5 +174,22 @@ public class KStreamJoinTest {
         }
     }
 
-    // TODO: test for joinability
+    @Test(expected = KafkaException.class)
+    public void testNotJoinable() {
+        KStreamBuilder builder = new KStreamBuilder();
+
+        KStream<Integer, String> stream1;
+        KStream<Integer, String> stream2;
+        KStreamWindowed<Integer, String> windowed1;
+        KStreamWindowed<Integer, String> windowed2;
+        MockProcessorSupplier<Integer, String> processor;
+
+        processor = new MockProcessorSupplier<>();
+        stream1 = builder.from(keyDeserializer, valDeserializer, topic1).map(keyValueMapper);
+        stream2 = builder.from(keyDeserializer, valDeserializer, topic2);
+        windowed1 = stream1.with(new UnlimitedWindowDef<Integer, String>("window1"));
+        windowed2 = stream2.with(new UnlimitedWindowDef<Integer, String>("window2"));
+
+        windowed1.join(windowed2, joiner).process(processor);
+    }
 }

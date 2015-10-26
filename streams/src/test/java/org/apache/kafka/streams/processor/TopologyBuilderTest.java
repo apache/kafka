@@ -19,8 +19,15 @@ package org.apache.kafka.streams.processor;
 
 import static org.junit.Assert.assertEquals;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class TopologyBuilderTest {
 
@@ -94,6 +101,38 @@ public class TopologyBuilderTest {
         builder.addSource("source-2", "topic-2");
         builder.addSource("source-3", "topic-3");
 
-        assertEquals(builder.sourceTopics().size(), 3);
+        assertEquals(3, builder.sourceTopics().size());
     }
+
+    @Test
+    public void testTopicGroups() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addSource("source-1", "topic-1", "topic-1x");
+        builder.addSource("source-2", "topic-2");
+        builder.addSource("source-3", "topic-3");
+        builder.addSource("source-4", "topic-4");
+        builder.addSource("source-5", "topic-5");
+
+        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+
+        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2", "processor-1");
+        builder.copartitionSources(list("source-1", "source-2"));
+
+        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
+
+        Collection<Set<String>> topicGroups = builder.topicGroups();
+
+        assertEquals(3, topicGroups.size());
+        assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2"), mkSet("topic-3", "topic-4"), mkSet("topic-5")), new HashSet<>(topicGroups));
+
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+
+        assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
+    }
+
+    private <T> List<T> list(T... elems) {
+        return Arrays.asList(elems);
+    }
+
 }

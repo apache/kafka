@@ -41,7 +41,7 @@ import java.util.NoSuchElementException;
  *
  * @param <K> the type of keys
  * @param <V> the type of values
- * 
+ *
  * @see Stores#create(String, ProcessorContext)
  */
 public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
@@ -166,7 +166,7 @@ public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
             for (Entry<K, V> entry : entries)
                 put(entry.key(), entry.value());
         }
-        
+
         @Override
         public V delete(K key) {
             V value = get(key);

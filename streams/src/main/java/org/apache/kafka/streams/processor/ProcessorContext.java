@@ -26,9 +26,9 @@ import java.io.File;
 public interface ProcessorContext {
 
     /**
-     * Returns the partition group id
+     * Returns the task id
      *
-     * @return partition group id
+     * @return the task id
      */
     int id();
 
@@ -73,11 +73,6 @@ public interface ProcessorContext {
      * @return StreamingMetrics
      */
     StreamingMetrics metrics();
-
-    /**
-     * Check if this process's incoming streams are joinable
-     */
-    boolean joinable();
 
     /**
      * Registers and possibly restores the specified storage engine.

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.StreamingMetrics;
+import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,12 +49,15 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -65,6 +70,7 @@ public class StreamThread extends Thread {
 
     protected final StreamingConfig config;
     protected final TopologyBuilder builder;
+    protected final PartitionGrouper partitionGrouper;
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
@@ -119,6 +125,8 @@ public class StreamThread extends Thread {
         this.config = config;
         this.builder = builder;
         this.clientId = clientId;
+        this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
+        this.partitionGrouper.topicGroups(builder.topicGroups());
 
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
@@ -155,7 +163,7 @@ public class StreamThread extends Thread {
 
     private Consumer<byte[], byte[]> createConsumer() {
         log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(),
+        return new KafkaConsumer<>(config.getConsumerConfigs(partitionGrouper),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
@@ -232,6 +240,8 @@ public class StreamThread extends Thread {
         try {
             int totalNumBuffered = 0;
             boolean requiresPoll = true;
+
+            ensureCopartitioning(builder.copartitionGroups());
 
             consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceListener);
 
@@ -365,7 +375,7 @@ public class StreamThread extends Thread {
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
                     try {
-                        Integer id = Integer.parseInt(dir.getName());
+                        int id = Integer.parseInt(dir.getName());
 
                         // try to acquire the exclusive lock on the state directory
                         FileLock directoryLock = null;
@@ -404,27 +414,28 @@ public class StreamThread extends Thread {
     }
 
     private void addPartitions(Collection<TopicPartition> assignment) {
-        HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
-        // TODO: change this hard-coded co-partitioning behavior
-        for (TopicPartition partition : partitions) {
-            final Integer id = partition.partition();
-            StreamTask task = tasks.get(id);
-            if (task == null) {
-                // get the partitions for the task
-                HashSet<TopicPartition> partitionsForTask = new HashSet<>();
-                for (TopicPartition part : partitions)
-                    if (part.partition() == id)
-                        partitionsForTask.add(part);
+        HashMap<Integer, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
-                // create the task
-                try {
-                    task = createStreamTask(id, partitionsForTask);
-                } catch (Exception e) {
-                    log.error("Failed to create a task #" + id + " in thread [" + this.getName() + "]: ", e);
-                    throw e;
+        for (TopicPartition partition : assignment) {
+            Set<Integer> taskIds = partitionGrouper.taskIds(partition);
+            for (Integer taskId : taskIds) {
+                Set<TopicPartition> partitions = partitionsForTask.get(taskId);
+                if (partitions == null) {
+                    partitions = new HashSet<>();
+                    partitionsForTask.put(taskId, partitions);
                 }
-                tasks.put(id, task);
+                partitions.add(partition);
+            }
+        }
+
+        // create the tasks
+        for (Integer taskId : partitionsForTask.keySet()) {
+            try {
+                tasks.put(taskId, createStreamTask(taskId, partitionsForTask.get(taskId)));
+            } catch (Exception e) {
+                log.error("Failed to create a task #" + taskId + " in thread [" + this.getName() + "]: ", e);
+                throw e;
             }
         }
 
@@ -445,6 +456,35 @@ public class StreamThread extends Thread {
             sensors.taskDestructionSensor.record();
         }
         tasks.clear();
+    }
+
+    public PartitionGrouper partitionGrouper() {
+        return partitionGrouper;
+    }
+
+    private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
+        for (Set<String> copartitionGroup : copartitionGroups) {
+            ensureCopartitioning(copartitionGroup);
+        }
+    }
+
+    private void ensureCopartitioning(Set<String> copartitionGroup) {
+        int numPartitions = -1;
+
+        for (String topic : copartitionGroup) {
+            List<PartitionInfo> infos = consumer.partitionsFor(topic);
+
+            if (infos == null)
+                throw new KafkaException("topic not found: " + topic);
+
+            if (numPartitions == -1) {
+                numPartitions = infos.size();
+            } else if (numPartitions != infos.size()) {
+                String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
+                Arrays.sort(topics);
+                throw new KafkaException("topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
+            }
+        }
     }
 
     private class StreamingMetricsImpl implements StreamingMetrics {
