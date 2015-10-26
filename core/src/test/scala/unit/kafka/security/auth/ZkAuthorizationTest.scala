@@ -133,6 +133,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       info("Creating " + path)
       zkUtils.makeSurePersistentPathExists(path)
     }
+    zkUtils.zkConnection.setAcl("/", zkUtils.DefaultAcls, -1)
     System.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
     var failed = false
@@ -160,6 +161,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       zkUtils.makeSurePersistentPathExists(path)
       zkUtils.createPersistentPath(path + "/fpjwashere", "")
     }
+    zkUtils.zkConnection.setAcl("/", zkUtils.DefaultAcls, -1)
     System.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
     for (path <- unsecureZkUtils.securePersistentZkPaths) {

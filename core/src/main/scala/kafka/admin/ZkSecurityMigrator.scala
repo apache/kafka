@@ -156,8 +156,12 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       Code.get(rc) match {
         case Code.OK =>
           // Set ACL for each child
-          for (child <- children.asScala)
-            setAclsRecursively(s"$path/$child")
+          children.asScala.map { child =>
+            path match {
+              case "/" => s"/$child"
+              case path => s"$path/$child"
+            }
+          }.foreach(setAclsRecursively)
           promise success "done"
         case Code.CONNECTIONLOSS =>
           zkHandle.getChildren(path, false, GetChildrenCallback, ctx)
@@ -210,9 +214,9 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       for (path <- zkUtils.securePersistentZkPaths) {
         debug("Going to set ACL for %s".format(path))
         zkUtils.makeSurePersistentPathExists(path)
-        setAclsRecursively(path)
       }
-
+      setAclsRecursively("/")
+      
       @tailrec
       def recurse(): Unit = {
         val future = futures.synchronized { 
