@@ -23,11 +23,10 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeMap;
 
 public class TopologyBuilderTest {
 
@@ -121,35 +120,26 @@ public class TopologyBuilderTest {
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
-        List<List<String>> topicGroups = sort(builder.topicGroups());
+        Collection<Set<String>> topicGroups = builder.topicGroups();
 
         assertEquals(3, topicGroups.size());
-        assertEquals(list(list("topic-1", "topic-1x", "topic-2"), list("topic-3", "topic-4"), list("topic-5")), topicGroups);
+        assertEquals(set(set("topic-1", "topic-1x", "topic-2"), set("topic-3", "topic-4"), set("topic-5")), new HashSet<>(topicGroups));
 
-        List<List<String>> copartitionGroups = sort(builder.copartitionGroups());
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
-        assertEquals(list(list("topic-1", "topic-1x", "topic-2")), copartitionGroups);
-    }
-
-    private List<List<String>> sort(Collection<Set<String>> topicGroups) {
-        TreeMap<String, String[]> sortedMap = new TreeMap<>();
-
-        for (Set<String> group : topicGroups) {
-            String[] arr = group.toArray(new String[group.size()]);
-            Arrays.sort(arr);
-            sortedMap.put(arr[0], arr);
-        }
-
-        ArrayList<List<String>> list = new ArrayList(sortedMap.size());
-        for (String[] arr : sortedMap.values()) {
-            list.add(Arrays.asList(arr));
-        }
-
-        return list;
+        assertEquals(set(set("topic-1", "topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
     }
 
     private <T> List<T> list(T... elems) {
         List<T> s = new ArrayList<T>();
+        for (T elem : elems) {
+            s.add(elem);
+        }
+        return s;
+    }
+
+    private <T> Set<T> set(T... elems) {
+        Set<T> s = new HashSet<T>();
         for (T elem : elems) {
             s.add(elem);
         }
