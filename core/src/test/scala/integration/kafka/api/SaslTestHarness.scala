@@ -22,21 +22,35 @@ import org.apache.kafka.common.security.JaasUtils
 import org.junit.{After, Before}
 
 trait SaslTestHarness extends ZooKeeperTestHarness {
-  val workDir = new File(System.getProperty("test.dir", "target"))
-  val kdcConf = MiniKdc.createConf()
-  val kdc = new MiniKdc(kdcConf, workDir)
+
+  private val workDir = new File(System.getProperty("test.dir", "target"))
+  private val kdcConf = MiniKdc.createConf()
+  private val kdc = new MiniKdc(kdcConf, workDir)
 
   @Before
   override def setUp() {
-    // Clean-up global configuration set by other tests
+    val keytabFile = createKeytabAndSetConfiguration("kafka_jaas.conf")
+    kdc.start()
+    kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
+    super.setUp
+  }
+
+  protected def createKeytabAndSetConfiguration(jaasResourceName: String): File = {
+    val (keytabFile, jaasFile) = createKeytabAndJaasFiles(jaasResourceName)
+    // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
+    keytabFile
+  }
+
+  private def createKeytabAndJaasFiles(jaasResourceName: String): (File, File) = {
     val keytabFile = TestUtils.tempFile()
     val jaasFile = TestUtils.tempFile()
 
     val writer = new BufferedWriter(new FileWriter(jaasFile))
-    val inputStream = Thread.currentThread().getContextClassLoader.getResourceAsStream("kafka_jaas.conf")
+    val inputStream = Thread.currentThread().getContextClassLoader.getResourceAsStream(jaasResourceName)
     if (inputStream == null)
-      throw new IllegalStateException("Could not find `kaas_jaas.conf`, make sure it is in the classpath")
+      throw new IllegalStateException(s"Could not find `$jaasResourceName`, make sure it is in the classpath")
     val source = io.Source.fromInputStream(inputStream, "UTF-8")
 
     for (line <- source.getLines) {
@@ -48,10 +62,7 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
     writer.close()
     source.close()
 
-    kdc.start()
-    kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
-    super.setUp
+    (keytabFile, jaasFile)
   }
 
   @After
@@ -61,4 +72,5 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
   }
+
 }
