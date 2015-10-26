@@ -21,15 +21,14 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import static org.apache.kafka.common.utils.Utils.mkList;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
@@ -51,43 +50,27 @@ public class DefaultPartitionGrouperTest {
         int taskId;
         Map<Integer, List<TopicPartition>> expected;
 
-        grouper.topicGroups(Arrays.asList(set("topic1"), set("topic2")));
+        grouper.topicGroups(mkList(mkSet("topic1"), mkSet("topic2")));
 
         expected = new HashMap<>();
         taskId = 0;
-        expected.put(taskId++, list(new TopicPartition("topic1", 0)));
-        expected.put(taskId++, list(new TopicPartition("topic1", 1)));
-        expected.put(taskId++, list(new TopicPartition("topic1", 2)));
-        expected.put(taskId++, list(new TopicPartition("topic2", 0)));
-        expected.put(taskId,   list(new TopicPartition("topic2", 1)));
+        expected.put(taskId++, mkList(new TopicPartition("topic1", 0)));
+        expected.put(taskId++, mkList(new TopicPartition("topic1", 1)));
+        expected.put(taskId++, mkList(new TopicPartition("topic1", 2)));
+        expected.put(taskId++, mkList(new TopicPartition("topic2", 0)));
+        expected.put(taskId,   mkList(new TopicPartition("topic2", 1)));
 
         assertEquals(expected, grouper.partitionGroups(metadata));
 
-        grouper.topicGroups(Arrays.asList(set("topic1", "topic2")));
+        grouper.topicGroups(mkList(mkSet("topic1", "topic2")));
 
         expected = new HashMap<>();
         taskId = 0;
-        expected.put(taskId++, list(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
-        expected.put(taskId++, list(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
-        expected.put(taskId,   list(new TopicPartition("topic1", 2)));
+        expected.put(taskId++, mkList(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
+        expected.put(taskId++, mkList(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
+        expected.put(taskId,   mkList(new TopicPartition("topic1", 2)));
 
         assertEquals(expected, grouper.partitionGroups(metadata));
-    }
-
-    private <T> Set<T> set(T... items) {
-        Set<T> set = new HashSet<>();
-        for (T item : items) {
-            set.add(item);
-        }
-        return set;
-    }
-
-    private <T> List<T> list(T... items) {
-        List<T> set = new ArrayList<>();
-        for (T item : items) {
-            set.add(item);
-        }
-        return set;
     }
 
 }

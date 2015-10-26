@@ -19,10 +19,11 @@ package org.apache.kafka.streams.processor;
 
 import static org.junit.Assert.assertEquals;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -123,27 +124,15 @@ public class TopologyBuilderTest {
         Collection<Set<String>> topicGroups = builder.topicGroups();
 
         assertEquals(3, topicGroups.size());
-        assertEquals(set(set("topic-1", "topic-1x", "topic-2"), set("topic-3", "topic-4"), set("topic-5")), new HashSet<>(topicGroups));
+        assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2"), mkSet("topic-3", "topic-4"), mkSet("topic-5")), new HashSet<>(topicGroups));
 
         Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
-        assertEquals(set(set("topic-1", "topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
+        assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
     }
 
     private <T> List<T> list(T... elems) {
-        List<T> s = new ArrayList<T>();
-        for (T elem : elems) {
-            s.add(elem);
-        }
-        return s;
-    }
-
-    private <T> Set<T> set(T... elems) {
-        Set<T> s = new HashSet<T>();
-        for (T elem : elems) {
-            s.add(elem);
-        }
-        return s;
+        return Arrays.asList(elems);
     }
 
 }

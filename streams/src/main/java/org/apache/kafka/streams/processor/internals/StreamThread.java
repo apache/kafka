@@ -54,7 +54,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -483,23 +482,9 @@ public class StreamThread extends Thread {
             } else if (numPartitions != infos.size()) {
                 String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                 Arrays.sort(topics);
-                throw new KafkaException("topics not copartitioned: [" + toString(Arrays.asList(topics), ",") + "]");
+                throw new KafkaException("topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
             }
         }
-    }
-
-    protected <T> CharSequence toString(Collection<T> coll, String separator) {
-        StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = coll.iterator();
-        if (iter.hasNext()) {
-            sb.append(iter.next().toString());
-
-            while (iter.hasNext()) {
-                sb.append(separator);
-                sb.append(iter.next().toString());
-            }
-        }
-        return sb;
     }
 
     private class StreamingMetricsImpl implements StreamingMetrics {
