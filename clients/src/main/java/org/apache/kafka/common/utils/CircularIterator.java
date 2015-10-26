@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -13,32 +13,42 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ **/
 
-package kafka
+package org.apache.kafka.common.utils;
 
-import consumer.ConsumerConfig
-import utils.ZkUtils
-import org.I0Itec.zkclient.ZkClient
-import org.apache.kafka.common.utils.Utils
+import java.util.Iterator;
+import java.util.List;
 
-object DeleteZKPath {
-  def main(args: Array[String]) {
-    if(args.length < 2) {
-      println("USAGE: " + DeleteZKPath.getClass.getName + " consumer.properties zk_path")
-      System.exit(1)
+public class CircularIterator<T> implements Iterator<T> {
+    int i = 0;
+    private List<T> list;
+
+    public CircularIterator(List<T> list) {
+        if (list.isEmpty()) {
+            throw new IllegalArgumentException("CircularIterator can only be used on non-empty lists");
+        }
+        this.list = list;
     }
 
-    val config = new ConsumerConfig(Utils.loadProps(args(0)))
-    val zkPath = args(1)
-    val zkUtils = ZkUtils(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
-
-    try {
-      zkUtils.deletePathRecursive(zkPath);
-      System.out.println(zkPath + " is deleted")
-    } catch {
-      case e: Exception => System.err.println("Path not deleted " + e.printStackTrace())
+    @Override
+    public boolean hasNext() {
+        return true;
     }
-    
-  }
+
+    @Override
+    public T next() {
+        T next = list.get(i);
+        i = (i + 1) % list.size();
+        return next;
+    }
+
+    public T peek() {
+        return list.get(i);
+    }
+
+    @Override
+    public void remove() {
+        throw new UnsupportedOperationException();
+    }
 }

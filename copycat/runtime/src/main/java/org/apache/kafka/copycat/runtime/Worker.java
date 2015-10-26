@@ -17,12 +17,15 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.cli.WorkerConfig;
+import org.apache.kafka.copycat.connector.Connector;
+import org.apache.kafka.copycat.connector.ConnectorContext;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.sink.SinkTask;
@@ -33,8 +36,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * <p>
@@ -55,6 +60,7 @@ public class Worker {
     private Converter internalKeyConverter;
     private Converter internalValueConverter;
     private OffsetBackingStore offsetBackingStore;
+    private HashMap<String, Connector> connectors = new HashMap<>();
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
     private KafkaProducer<byte[], byte[]> producer;
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
@@ -106,6 +112,17 @@ public class Worker {
         long started = time.milliseconds();
         long limit = started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
 
+        for (Map.Entry<String, Connector> entry : connectors.entrySet()) {
+            Connector conn = entry.getValue();
+            log.warn("Shutting down connector {} uncleanly; herder should have shut down connectors before the" +
+                    "Worker is stopped.", conn);
+            try {
+                conn.stop();
+            } catch (CopycatException e) {
+                log.error("Error while shutting down connector " + conn, e);
+            }
+        }
+
         for (Map.Entry<ConnectorTaskId, WorkerTask> entry : tasks.entrySet()) {
             WorkerTask task = entry.getValue();
             log.warn("Shutting down task {} uncleanly; herder should have shut down "
@@ -134,15 +151,106 @@ public class Worker {
     }
 
     /**
+     * Add a new connector.
+     * @param connConfig connector configuration
+     * @param ctx context for the connector
+     */
+    public void addConnector(ConnectorConfig connConfig, ConnectorContext ctx) {
+        String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
+        Class<?> maybeConnClass = connConfig.getClass(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        log.info("Creating connector {} of type {}", connName, maybeConnClass.getName());
+
+        Class<? extends Connector> connClass;
+        try {
+            connClass = maybeConnClass.asSubclass(Connector.class);
+        } catch (ClassCastException e) {
+            throw new CopycatException("Specified class is not a subclass of Connector: " + maybeConnClass.getName());
+        }
+
+        if (connectors.containsKey(connName))
+            throw new CopycatException("Connector with name " + connName + " already exists");
+
+        final Connector connector = instantiateConnector(connClass);
+        connector.initialize(ctx);
+        try {
+            Map<String, Object> originals = connConfig.originals();
+            Properties props = new Properties();
+            props.putAll(originals);
+            connector.start(props);
+        } catch (CopycatException e) {
+            throw new CopycatException("Connector threw an exception while starting", e);
+        }
+
+        connectors.put(connName, connector);
+
+        log.info("Finished creating connector {}", connName);
+    }
+
+    private static Connector instantiateConnector(Class<? extends Connector> connClass) {
+        try {
+            return Utils.newInstance(connClass);
+        } catch (Throwable t) {
+            // Catches normal exceptions due to instantiation errors as well as any runtime errors that
+            // may be caused by user code
+            throw new CopycatException("Failed to create connector instance", t);
+        }
+    }
+
+    public Map<ConnectorTaskId, Map<String, String>> reconfigureConnectorTasks(String connName, int maxTasks, List<String> sinkTopics) {
+        log.trace("Reconfiguring connector tasks for {}", connName);
+
+        Connector connector = connectors.get(connName);
+        if (connector == null)
+            throw new CopycatException("Connector " + connName + " not found in this worker.");
+
+        Map<ConnectorTaskId, Map<String, String>> result = new HashMap<>();
+        String taskClassName = connector.taskClass().getName();
+        int index = 0;
+        for (Properties taskProps : connector.taskConfigs(maxTasks)) {
+            ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
+            index++;
+            Map<String, String> taskConfig = Utils.propsToStringMap(taskProps);
+            taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
+            if (sinkTopics != null)
+                taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
+            result.put(taskId, taskConfig);
+        }
+        return result;
+    }
+
+    public void stopConnector(String connName) {
+        log.info("Stopping connector {}", connName);
+
+        Connector connector = connectors.get(connName);
+        if (connector == null)
+            throw new CopycatException("Connector " + connName + " not found in this worker.");
+
+        try {
+            connector.stop();
+        } catch (CopycatException e) {
+            log.error("Error shutting down connector {}: ", connector, e);
+        }
+
+        connectors.remove(connName);
+
+        log.info("Stopped connector {}", connName);
+    }
+
+    /**
+     * Get the IDs of the connectors currently running in this worker.
+     */
+    public Set<String> connectorNames() {
+        return connectors.keySet();
+    }
+
+    /**
      * Add a new task.
      * @param id Globally unique ID for this task.
-     * @param taskClassName name of the {@link org.apache.kafka.copycat.connector.Task}
-     *                      class to instantiate. Must be a subclass of either
-     *                      {@link org.apache.kafka.copycat.source.SourceTask} or
-     *                      {@link org.apache.kafka.copycat.sink.SinkTask}.
-     * @param props configuration options for the task
+     * @param taskConfig the parsed task configuration
      */
-    public void addTask(ConnectorTaskId id, String taskClassName, Properties props) {
+    public void addTask(ConnectorTaskId id, TaskConfig taskConfig) {
+        log.info("Creating task {}", id);
+
         if (tasks.containsKey(id)) {
             String msg = "Task already exists in this worker; the herder should not have requested "
                     + "that this : " + id;
@@ -150,7 +258,7 @@ public class Worker {
             throw new CopycatException(msg);
         }
 
-        final Task task = instantiateTask(taskClassName);
+        final Task task = instantiateTask(taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class));
 
         // Decide which type of worker task we need based on the type of task.
         final WorkerTask workerTask;
@@ -171,25 +279,42 @@ public class Worker {
 
         // Start the task before adding modifying any state, any exceptions are caught higher up the
         // call chain and there's no cleanup to do here
+        Properties props = new Properties();
+        props.putAll(taskConfig.originals());
         workerTask.start(props);
+        if (task instanceof SourceTask) {
+            WorkerSourceTask workerSourceTask = (WorkerSourceTask) workerTask;
+            sourceTaskOffsetCommitter.schedule(id, workerSourceTask);
+        }
         tasks.put(id, workerTask);
     }
 
-    private static Task instantiateTask(String taskClassName) {
+    private static Task instantiateTask(Class<? extends Task> taskClass) {
         try {
-            return Utils.newInstance(Class.forName(taskClassName).asSubclass(Task.class));
-        } catch (ClassNotFoundException e) {
+            return Utils.newInstance(taskClass);
+        } catch (KafkaException e) {
             throw new CopycatException("Task class not found", e);
         }
     }
 
     public void stopTask(ConnectorTaskId id) {
+        log.info("Stopping task {}", id);
+
         WorkerTask task = getTask(id);
+        if (task instanceof WorkerSourceTask)
+            sourceTaskOffsetCommitter.remove(id);
         task.stop();
         if (!task.awaitStop(config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG)))
             log.error("Graceful stop of task {} failed.", task);
         task.close();
         tasks.remove(id);
+    }
+
+    /**
+     * Get the IDs of the tasks currently running in this worker.
+     */
+    public Set<ConnectorTaskId> taskIds() {
+        return tasks.keySet();
     }
 
     private WorkerTask getTask(ConnectorTaskId id) {

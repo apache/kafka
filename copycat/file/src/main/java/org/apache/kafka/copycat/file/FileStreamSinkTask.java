@@ -38,6 +38,7 @@ import java.util.Properties;
 public class FileStreamSinkTask extends SinkTask {
     private static final Logger log = LoggerFactory.getLogger(FileStreamSinkTask.class);
 
+    private String filename;
     private PrintStream outputStream;
 
     public FileStreamSinkTask() {
@@ -45,12 +46,13 @@ public class FileStreamSinkTask extends SinkTask {
 
     // for testing
     public FileStreamSinkTask(PrintStream outputStream) {
+        filename = null;
         this.outputStream = outputStream;
     }
 
     @Override
     public void start(Properties props) {
-        String filename = props.getProperty(FileStreamSinkConnector.FILE_CONFIG);
+        filename = props.getProperty(FileStreamSinkConnector.FILE_CONFIG);
         if (filename == null) {
             outputStream = System.out;
         } else {
@@ -65,16 +67,24 @@ public class FileStreamSinkTask extends SinkTask {
     @Override
     public void put(Collection<SinkRecord> sinkRecords) {
         for (SinkRecord record : sinkRecords) {
+            log.trace("Writing line to {}: {}", logFilename(), record.value());
             outputStream.println(record.value());
         }
     }
 
     @Override
     public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        log.trace("Flushing output stream for {}", logFilename());
         outputStream.flush();
     }
 
     @Override
     public void stop() {
+        if (outputStream != System.out)
+            outputStream.close();
+    }
+
+    private String logFilename() {
+        return filename == null ? "stdout" : filename;
     }
 }

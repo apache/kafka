@@ -48,8 +48,8 @@ public class CopycatDistributed {
         Properties workerProps;
         Properties connectorProps;
 
-        if (args.length < 2) {
-            log.info("Usage: CopycatDistributed worker.properties connector1.properties [connector2.properties ...]");
+        if (args.length < 1) {
+            log.info("Usage: CopycatDistributed worker.properties [connector1.properties connector2.properties ...]");
             System.exit(1);
         }
 
@@ -58,8 +58,7 @@ public class CopycatDistributed {
 
         WorkerConfig workerConfig = new WorkerConfig(workerProps);
         Worker worker = new Worker(workerConfig, new KafkaOffsetBackingStore());
-        DistributedHerder herder = new DistributedHerder(worker);
-        herder.configure(workerConfig.originals());
+        DistributedHerder herder = new DistributedHerder(worker, workerConfig.originals());
         final Copycat copycat = new Copycat(worker, herder);
         copycat.start();
 

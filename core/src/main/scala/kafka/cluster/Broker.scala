@@ -17,9 +17,6 @@
 
 package kafka.cluster
 
-import kafka.utils.CoreUtils._
-import kafka.utils.Json
-import kafka.api.ApiUtils._
 import java.nio.ByteBuffer
 
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
@@ -29,8 +26,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 /**
  * A Kafka broker.
  * A broker has an id and a collection of end-points.
- * Each end-point is (host, port,protocolType).
- * Currently the only protocol type is PlainText but we will add SSL and Kerberos in the future.
+ * Each end-point is (host, port, protocolType).
  */
 object Broker {
 

@@ -24,7 +24,7 @@ import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.network.{SSLTransportLayer, TransportLayer, Send, MultiSend}
+import org.apache.kafka.common.network.{Send, MultiSend}
 
 import scala.collection._
 

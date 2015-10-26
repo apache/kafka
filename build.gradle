@@ -754,6 +754,7 @@ project(':copycat:runtime') {
     testCompile "$easymock"
     testCompile "$powermock"
     testCompile "$powermock_easymock"
+    testCompile project(':clients').sourceSets.test.output
     testRuntime "$slf4jlog4j"
     testRuntime project(":copycat:json")
   }

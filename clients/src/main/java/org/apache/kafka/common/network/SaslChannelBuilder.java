@@ -25,9 +25,9 @@ import org.apache.kafka.common.security.kerberos.KerberosNameParser;
 import org.apache.kafka.common.security.kerberos.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
-import org.apache.kafka.common.security.ssl.SSLFactory;
+import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.config.SSLConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
 
@@ -43,7 +43,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
 
     private LoginManager loginManager;
     private PrincipalBuilder principalBuilder;
-    private SSLFactory sslFactory;
+    private SslFactory sslFactory;
     private Map<String, ?> configs;
     private KerberosNameParser kerberosNameParser;
 
@@ -57,7 +57,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         try {
             this.configs = configs;
             this.loginManager = LoginManager.acquireLoginManager(loginType, configs);
-            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
+            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
 
             String defaultRealm;
@@ -69,7 +69,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             kerberosNameParser = new KerberosNameParser(defaultRealm, (List<String>) configs.get(SaslConfigs.AUTH_TO_LOCAL));
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
-                this.sslFactory = new SSLFactory(mode);
+                this.sslFactory = new SslFactory(mode);
                 this.sslFactory.configure(this.configs);
             }
         } catch (Exception e) {
@@ -102,8 +102,8 @@ public class SaslChannelBuilder implements ChannelBuilder {
 
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
-            return SSLTransportLayer.create(id, key,
-                sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
+            return SslTransportLayer.create(id, key,
+                sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(),
                 socketChannel.socket().getPort()));
         } else {
             return new PlaintextTransportLayer(key);

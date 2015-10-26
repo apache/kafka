@@ -17,7 +17,7 @@ import javax.net.ssl.*;
 import java.io.File;
 import java.util.Map;
 
-import org.apache.kafka.test.TestSSLUtils;
+import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
 
 import org.junit.Test;
@@ -31,16 +31,16 @@ import static org.junit.Assert.assertTrue;
  * A set of tests for the selector over ssl. These use a test harness that runs a simple socket server that echos back responses.
  */
 
-public class SSLFactoryTest {
+public class SslFactoryTest {
 
     @Test
-    public void testSSLFactoryConfiguration() throws Exception {
+    public void testSslFactoryConfiguration() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
-        Map<String, Object> serverSSLConfig = TestSSLUtils.createSSLConfig(false, true, Mode.SERVER, trustStoreFile, "server");
-        SSLFactory sslFactory = new SSLFactory(Mode.SERVER);
-        sslFactory.configure(serverSSLConfig);
+        Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(serverSslConfig);
         //host and port are hints
-        SSLEngine engine = sslFactory.createSSLEngine("localhost", 0);
+        SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
         assertNotNull(engine);
         String[] expectedProtocols = {"TLSv1.2"};
         assertArrayEquals(expectedProtocols, engine.getEnabledProtocols());
@@ -50,11 +50,11 @@ public class SSLFactoryTest {
     @Test
     public void testClientMode() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
-        Map<String, Object> clientSSLConfig = TestSSLUtils.createSSLConfig(false, true, Mode.CLIENT, trustStoreFile, "client");
-        SSLFactory sslFactory = new SSLFactory(Mode.CLIENT);
-        sslFactory.configure(clientSSLConfig);
+        Map<String, Object> clientSslConfig = TestSslUtils.createSslConfig(false, true, Mode.CLIENT, trustStoreFile, "client");
+        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        sslFactory.configure(clientSslConfig);
         //host and port are hints
-        SSLEngine engine = sslFactory.createSSLEngine("localhost", 0);
+        SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
         assertTrue(engine.getUseClientMode());
     }
 

@@ -199,7 +199,7 @@ public abstract class AbstractCoordinator {
         this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
         rejoinNeeded = true;
     }
-
+    private boolean needsOnLeave = true;
     /**
      * Ensure that the group is active (i.e. joined and synced)
      */
@@ -208,7 +208,10 @@ public abstract class AbstractCoordinator {
             return;
 
         // onLeave only invoked if we have a valid current generation
-        onLeave(generation, memberId);
+        if (needsOnLeave) {
+            onLeave(generation, memberId);
+            needsOnLeave = false;
+        }
 
         while (needRejoin()) {
             ensureCoordinatorKnown();
@@ -225,6 +228,7 @@ public abstract class AbstractCoordinator {
 
             if (future.succeeded()) {
                 onJoin(generation, memberId, protocol, future.value());
+                needsOnLeave = true;
                 heartbeatTask.reset();
             } else {
                 if (future.exception() instanceof UnknownMemberIdException)
