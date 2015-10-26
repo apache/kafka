@@ -19,16 +19,16 @@ package org.apache.kafka.streams.processor;
 
 public class TaskId {
 
-    public final int taskGroupId;
+    public final int topicGroupId;
     public final int partition;
 
-    public TaskId(int taskGroupId, int partition) {
-        this.taskGroupId = taskGroupId;
+    public TaskId(int topicGroupId, int partition) {
+        this.topicGroupId = topicGroupId;
         this.partition = partition;
     }
 
     public String toString() {
-        return taskGroupId + "_" + partition;
+        return topicGroupId + "_" + partition;
     }
 
     public static TaskId parse(String string) {
@@ -36,10 +36,10 @@ public class TaskId {
         if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException();
 
         try {
-            int taskGroupId = Integer.parseInt(string.substring(0, index));
+            int topicGroupId = Integer.parseInt(string.substring(0, index));
             int partition = Integer.parseInt(string.substring(index + 1));
 
-            return new TaskId(taskGroupId, partition);
+            return new TaskId(topicGroupId, partition);
         } catch (Exception e) {
             throw new TaskIdFormatException();
         }
@@ -49,7 +49,7 @@ public class TaskId {
     public boolean equals(Object o) {
         if (o instanceof TaskId) {
             TaskId other = (TaskId) o;
-            return other.taskGroupId == this.taskGroupId && other.partition == this.partition;
+            return other.topicGroupId == this.topicGroupId && other.partition == this.partition;
         } else {
             return false;
         }
@@ -57,7 +57,7 @@ public class TaskId {
 
     @Override
     public int hashCode() {
-        long n = ((long) taskGroupId << 32) | (long) partition;
+        long n = ((long) topicGroupId << 32) | (long) partition;
         return (int) (n % 0xFFFFFFFFL);
     }
 

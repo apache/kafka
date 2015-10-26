@@ -90,7 +90,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
             buf.putInt(1);
             // encode task ids
             for (TaskId id : ids) {
-                buf.putInt(id.taskGroupId);
+                buf.putInt(id.topicGroupId);
                 buf.putInt(id.partition);
             }
             buf.rewind();

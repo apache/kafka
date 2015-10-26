@@ -35,7 +35,7 @@ public class DefaultPartitionGrouper extends PartitionGrouper {
         Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
 
         for (Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
-            Integer taskGroupId = entry.getKey();
+            Integer topicGroupId = entry.getKey();
             Set<String> topicGroup = entry.getValue();
 
             int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
@@ -48,7 +48,7 @@ public class DefaultPartitionGrouper extends PartitionGrouper {
                         group.add(new TopicPartition(topic, partitionId));
                     }
                 }
-                groups.put(new TaskId(taskGroupId, partitionId), Collections.unmodifiableSet(group));
+                groups.put(new TaskId(topicGroupId, partitionId), Collections.unmodifiableSet(group));
             }
         }
 

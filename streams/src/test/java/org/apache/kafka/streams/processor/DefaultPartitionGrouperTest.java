@@ -47,7 +47,7 @@ public class DefaultPartitionGrouperTest {
     @Test
     public void testGrouping() {
         PartitionGrouper grouper = new DefaultPartitionGrouper();
-        int taskGroupId;
+        int topicGroupId;
         Map<TaskId, Set<TopicPartition>> expected;
         Map<Integer, Set<String>> topicGroups;
 
@@ -57,13 +57,13 @@ public class DefaultPartitionGrouperTest {
         grouper.topicGroups(topicGroups);
 
         expected = new HashMap<>();
-        taskGroupId = 0;
-        expected.put(new TaskId(taskGroupId, 0), mkSet(new TopicPartition("topic1", 0)));
-        expected.put(new TaskId(taskGroupId, 1), mkSet(new TopicPartition("topic1", 1)));
-        expected.put(new TaskId(taskGroupId, 2), mkSet(new TopicPartition("topic1", 2)));
-        taskGroupId++;
-        expected.put(new TaskId(taskGroupId, 0), mkSet(new TopicPartition("topic2", 0)));
-        expected.put(new TaskId(taskGroupId, 1), mkSet(new TopicPartition("topic2", 1)));
+        topicGroupId = 0;
+        expected.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic1", 0)));
+        expected.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic1", 1)));
+        expected.put(new TaskId(topicGroupId, 2), mkSet(new TopicPartition("topic1", 2)));
+        topicGroupId++;
+        expected.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic2", 0)));
+        expected.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic2", 1)));
 
         assertEquals(expected, grouper.partitionGroups(metadata));
 
@@ -72,10 +72,10 @@ public class DefaultPartitionGrouperTest {
         grouper.topicGroups(topicGroups);
 
         expected = new HashMap<>();
-        taskGroupId = 0;
-        expected.put(new TaskId(taskGroupId, 0), mkSet(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
-        expected.put(new TaskId(taskGroupId, 1), mkSet(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
-        expected.put(new TaskId(taskGroupId, 2), mkSet(new TopicPartition("topic1", 2)));
+        topicGroupId = 0;
+        expected.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
+        expected.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
+        expected.put(new TaskId(topicGroupId, 2), mkSet(new TopicPartition("topic1", 2)));
 
         assertEquals(expected, grouper.partitionGroups(metadata));
     }
