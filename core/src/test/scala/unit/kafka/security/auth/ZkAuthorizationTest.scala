@@ -182,6 +182,19 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
     unsecureZkUtils.close()
     System.clearProperty(JaasUtils.ZK_SASL_CLIENT)
   }
+  
+  @Test
+  def testChroot {
+    zkUtils.createPersistentPath("/kafka")
+    val unsecureZkUtils = ZkUtils(zkConnect + "/kafka", 6000, 6000, false)
+    val secureZkUtils = ZkUtils(zkConnect + "/kafka", 6000, 6000, false)
+    try {
+      testMigration(unsecureZkUtils, secureZkUtils)
+    } finally {
+      unsecureZkUtils.close()
+      secureZkUtils.close()
+    }
+  }
 
   private def testMigration(firstZk: ZkUtils, secondZk: ZkUtils) {
     info("zkConnect string: %s".format(zkConnect))
