@@ -21,10 +21,6 @@ public class SaslConfigs {
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
 
-    public static final String SASL_KAFKA_SERVER_REALM = "sasl.kafka.server.realm";
-    public static final String SASL_KAFKA_SERVER_DOC = "The SASL Kafka server realm. "
-        + "The default is retrieved from Kafka's JAAS config";
-
     public static final String SASL_KERBEROS_SERVICE_NAME = "sasl.kerberos.service.name";
     public static final String SASL_KERBEROS_SERVICE_NAME_DOC = "The Kerberos principal name that Kafka runs as. "
         + "This can be defined either in Kafka's JAAS config or in Kafka's config.";
