@@ -122,7 +122,7 @@ class ReplicaManager(val config: KafkaConfig,
   val delayedFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
     purgatoryName = "Fetch", config.brokerId, config.fetchPurgatoryPurgeIntervalRequests)
 
-  newGauge(
+  val leaderCount = newGauge(
     "LeaderCount",
     new Gauge[Int] {
       def value = {
@@ -130,13 +130,13 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
   )
-  newGauge(
+  val partitionCount = newGauge(
     "PartitionCount",
     new Gauge[Int] {
       def value = allPartitions.size
     }
   )
-  newGauge(
+  val underReplicatedPartitions = newGauge(
     "UnderReplicatedPartitions",
     new Gauge[Int] {
       def value = underReplicatedPartitionCount()
