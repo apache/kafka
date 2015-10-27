@@ -126,9 +126,15 @@ public class MemoryRecords implements Records {
      */
     public void close() {
         if (writable) {
+            // close the compressor to fill-in wrapper message metadata if necessary
             compressor.close();
-            writable = false;
+
+            // flip the underlying buffer to be ready for reads
             buffer = compressor.buffer();
+            buffer.flip();
+
+            // reset the writable flag
+            writable = false;
         }
     }
 
@@ -136,7 +142,11 @@ public class MemoryRecords implements Records {
      * The size of this record set
      */
     public int sizeInBytes() {
-        return compressor.buffer().position();
+        if (writable) {
+            return compressor.buffer().position();
+        } else {
+            return compressor.buffer().limit();
+        }
     }
 
     /**
@@ -167,25 +177,15 @@ public class MemoryRecords implements Records {
         return buffer.duplicate();
     }
 
-    /**
-     * Return a flipped duplicate of the closed buffer to reading records
-     *
-     * NOTE: only used for tests
-     */
-    public ByteBuffer flip() {
-        if (writable)
-            throw new IllegalStateException("The memory records must not be writable any more before rewinding for read");
-
-        return (ByteBuffer) buffer.flip();
-    }
-
     @Override
     public Iterator<LogEntry> iterator() {
-        if (writable)
-            throw new IllegalStateException("The memory records must not be writable any more before iterating");
-
-        ByteBuffer copy = this.buffer.duplicate();
-        return new RecordsIterator(copy, CompressionType.NONE, false);
+        if (writable) {
+            // flip on a duplicate buffer for reading
+            return new RecordsIterator((ByteBuffer) this.buffer.duplicate().flip(), CompressionType.NONE, false);
+        } else {
+            // do not need to flip for non-writable buffer
+            return new RecordsIterator(this.buffer.duplicate(), CompressionType.NONE, false);
+        }
     }
     
     @Override
