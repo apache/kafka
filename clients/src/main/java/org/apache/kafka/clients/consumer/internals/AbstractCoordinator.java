@@ -71,8 +71,8 @@ import java.util.concurrent.TimeUnit;
  *
  * To leverage this protocol, an implementation must define the format of metadata provided by each
  * member for group registration in {@link #metadata()} and the format of the state assignment provided
- * by the leader in {@link #doSync(String, String, Map)} and becomes available to members in
- * {@link #onJoin(int, String, String, ByteBuffer)}.
+ * by the leader in {@link #performAssignment(String, String, Map)} and becomes available to members in
+ * {@link #onJoinComplete(int, String, String, ByteBuffer)}.
  *
  */
 public abstract class AbstractCoordinator {
@@ -89,6 +89,7 @@ public abstract class AbstractCoordinator {
     protected final long retryBackoffMs;
     protected final long requestTimeoutMs;
 
+    private boolean needsJoinPrepare = true;
     private boolean rejoinNeeded = true;
     protected Node coordinator;
     protected String memberId;
@@ -124,7 +125,7 @@ public abstract class AbstractCoordinator {
 
     /**
      * Unique identifier for the class of protocols implements (e.g. "consumer" or "copycat").
-     * @return Non-null protocol type namej
+     * @return Non-null protocol type name
      */
     protected abstract String protocolType();
 
@@ -140,35 +141,35 @@ public abstract class AbstractCoordinator {
     protected abstract LinkedHashMap<String, ByteBuffer> metadata();
 
     /**
+     * Invoked prior to each group join or rejoin. This is typically used to perform any
+     * cleanup from the previous generation (such as committing offsets for the consumer)
+     * @param generation The previous generation or -1 if there was none
+     * @param memberId The identifier of this member in the previous group or "" if there was none
+     */
+    protected abstract void onJoinPrepare(int generation, String memberId);
+
+    /**
+     * Perform assignment for the group. This is used by the leader to push state to all the members
+     * of the group (e.g. to push partition assignments in the case of the new consumer)
+     * @param leaderId The id of the leader (which is this member)
+     * @param allMemberMetadata Metadata from all members of the group
+     * @return A map from each member to their state assignment
+     */
+    protected abstract Map<String, ByteBuffer> performAssignment(String leaderId,
+                                                                 String protocol,
+                                                                 Map<String, ByteBuffer> allMemberMetadata);
+
+    /**
      * Invoked when a group member has successfully joined a group.
      * @param generation The generation that was joined
      * @param memberId The identifier for the local member in the group
      * @param protocol The protocol selected by the coordinator
      * @param memberAssignment The assignment propagated from the group leader
      */
-    protected abstract void onJoin(int generation,
-                                   String memberId,
-                                   String protocol,
-                                   ByteBuffer memberAssignment);
-
-    /**
-     * Perform synchronization for the group. This is used by the leader to push state to all the members
-     * of the group (e.g. to push partition assignments in the case of the new consumer)
-     * @param leaderId The id of the leader (which is this member)
-     * @param allMemberMetadata Metadata from all members of the group
-     * @return A map from each member to their state assignment
-     */
-    protected abstract Map<String, ByteBuffer> doSync(String leaderId,
-                                                      String protocol,
-                                                      Map<String, ByteBuffer> allMemberMetadata);
-
-    /**
-     * Invoked when the group is left (whether because of shutdown, metadata change, stale generation, etc.)
-     * @param generation The generation that was left
-     * @param memberId The identifier of the local member in the group
-     */
-    protected abstract void onLeave(int generation, String memberId);
-
+    protected abstract void onJoinComplete(int generation,
+                                           String memberId,
+                                           String protocol,
+                                           ByteBuffer memberAssignment);
 
     /**
      * Block until the coordinator for this group is known.
@@ -199,7 +200,7 @@ public abstract class AbstractCoordinator {
         this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
         rejoinNeeded = true;
     }
-    private boolean needsOnLeave = true;
+
     /**
      * Ensure that the group is active (i.e. joined and synced)
      */
@@ -207,10 +208,9 @@ public abstract class AbstractCoordinator {
         if (!needRejoin())
             return;
 
-        // onLeave only invoked if we have a valid current generation
-        if (needsOnLeave) {
-            onLeave(generation, memberId);
-            needsOnLeave = false;
+        if (needsJoinPrepare) {
+            onJoinPrepare(generation, memberId);
+            needsJoinPrepare = false;
         }
 
         while (needRejoin()) {
@@ -223,12 +223,12 @@ public abstract class AbstractCoordinator {
                 continue;
             }
 
-            RequestFuture<ByteBuffer> future = sendJoinGroupRequest();
+            RequestFuture<ByteBuffer> future = performGroupJoin();
             client.poll(future);
 
             if (future.succeeded()) {
-                onJoin(generation, memberId, protocol, future.value());
-                needsOnLeave = true;
+                onJoinComplete(generation, memberId, protocol, future.value());
+                needsJoinPrepare = true;
                 heartbeatTask.reset();
             } else {
                 if (future.exception() instanceof UnknownMemberIdException)
@@ -290,12 +290,12 @@ public abstract class AbstractCoordinator {
     }
 
     /**
-     * Send a request to get a new partition assignment. This is a non-blocking call which sends
-     * a JoinGroup request to the coordinator (if it is available). The returned future must
-     * be polled to see if the request completed successfully.
-     * @return A request future whose completion indicates the result of the JoinGroup request.
+     * Join the group and return the assignment for the next generation. This function handles both
+     * JoinGroup and SyncGroup, delegating to {@link #performAssignment(String, String, Map)} if
+     * elected leader by the coordinator.
+     * @return A request future which wraps the assignment returned from the group leader
      */
-    private RequestFuture<ByteBuffer> sendJoinGroupRequest() {
+    private RequestFuture<ByteBuffer> performGroupJoin() {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
@@ -338,7 +338,11 @@ public abstract class AbstractCoordinator {
                 AbstractCoordinator.this.rejoinNeeded = false;
                 AbstractCoordinator.this.protocol = joinResponse.groupProtocol();
                 sensors.joinLatency.record(response.requestLatencyMs());
-                performSync(joinResponse).chain(future);
+                if (joinResponse.isLeader()) {
+                    onJoinLeader(joinResponse).chain(future);
+                } else {
+                    onJoinFollower().chain(future);
+                }
             } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
                 // reset the member id and retry immediately
                 AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -367,25 +371,25 @@ public abstract class AbstractCoordinator {
         }
     }
 
-    private RequestFuture<ByteBuffer> performSync(JoinGroupResponse joinResponse) {
-        if (joinResponse.isLeader()) {
-            try {
-                // perform the leader synchronization and send back the assignment for the group
-                Map<String, ByteBuffer> groupAssignment = doSync(joinResponse.leaderId(), joinResponse.groupProtocol(),
-                        joinResponse.members());
+    private RequestFuture<ByteBuffer> onJoinFollower() {
+        // send follower's sync group with an empty assignment
+        SyncGroupRequest request = new SyncGroupRequest(groupId, generation,
+                memberId, Collections.<String, ByteBuffer>emptyMap());
+        log.debug("Issuing follower SyncGroup ({}: {}) to coordinator {}", ApiKeys.SYNC_GROUP, request, this.coordinator.id());
+        return sendSyncGroupRequest(request);
+    }
 
-                SyncGroupRequest request = new SyncGroupRequest(groupId, generation, memberId, groupAssignment);
-                log.debug("Issuing leader SyncGroup ({}: {}) to coordinator {}", ApiKeys.SYNC_GROUP, request, this.coordinator.id());
-                return sendSyncGroupRequest(request);
-            } catch (RuntimeException e) {
-                return RequestFuture.failure(e);
-            }
-        } else {
-            // send follower's sync group with an empty assignment
-            SyncGroupRequest request = new SyncGroupRequest(groupId, generation,
-                    memberId, Collections.<String, ByteBuffer>emptyMap());
-            log.debug("Issuing follower SyncGroup ({}: {}) to coordinator {}", ApiKeys.SYNC_GROUP, request, this.coordinator.id());
+    private RequestFuture<ByteBuffer> onJoinLeader(JoinGroupResponse joinResponse) {
+        try {
+            // perform the leader synchronization and send back the assignment for the group
+            Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.leaderId(), joinResponse.groupProtocol(),
+                    joinResponse.members());
+
+            SyncGroupRequest request = new SyncGroupRequest(groupId, generation, memberId, groupAssignment);
+            log.debug("Issuing leader SyncGroup ({}: {}) to coordinator {}", ApiKeys.SYNC_GROUP, request, this.coordinator.id());
             return sendSyncGroupRequest(request);
+        } catch (RuntimeException e) {
+            return RequestFuture.failure(e);
         }
     }
 

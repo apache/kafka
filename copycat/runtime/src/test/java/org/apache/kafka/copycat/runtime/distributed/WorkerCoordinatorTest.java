@@ -309,7 +309,7 @@ public class WorkerCoordinatorTest {
     }
 
     @Test
-    public void testLeaderDoSync1() throws Exception {
+    public void testLeaderPerformAssignment1() throws Exception {
         // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
         // output. So we test it directly here.
 
@@ -324,7 +324,7 @@ public class WorkerCoordinatorTest {
         // Mark everyone as in sync with configState1
         configs.put("leader", CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(1L)));
         configs.put("member", CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(1L)));
-        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "doSync", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
 
         // configState1 has 1 connector, 1 task
         CopycatProtocol.Assignment leaderAssignment = CopycatProtocol.deserializeAssignment(result.get("leader"));
@@ -345,7 +345,7 @@ public class WorkerCoordinatorTest {
     }
 
     @Test
-    public void testLeaderDoSync2() throws Exception {
+    public void testLeaderPerformAssignment2() throws Exception {
         // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
         // output. So we test it directly here.
 
@@ -360,7 +360,7 @@ public class WorkerCoordinatorTest {
         // Mark everyone as in sync with configState1
         configs.put("leader", CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(1L)));
         configs.put("member", CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(1L)));
-        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "doSync", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
         CopycatProtocol.Assignment leaderAssignment = CopycatProtocol.deserializeAssignment(result.get("leader"));
