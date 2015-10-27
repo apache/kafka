@@ -79,19 +79,21 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             }
         last = None
         producer_output = node.account.ssh_capture(cmd)
-        first_line = producer_output.next()
-        self.start_jmx_tool(idx, node)
-        for line in itertools.chain([first_line], producer_output):
-            if self.intermediate_stats:
-                try:
-                    self.stats[idx-1].append(parse_stats(line))
-                except:
-                    # Sometimes there are extraneous log messages
-                    pass
+        first_line = next(producer_output, None)
 
-            last = line
-        try:
-            self.results[idx-1] = parse_stats(last)
-        except:
-            raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
-        self.read_jmx_output(idx, node)
+        if first_line is not None:
+            self.start_jmx_tool(idx, node)
+            for line in itertools.chain([first_line], producer_output):
+                if self.intermediate_stats:
+                    try:
+                        self.stats[idx-1].append(parse_stats(line))
+                    except:
+                        # Sometimes there are extraneous log messages
+                        pass
+
+                last = line
+            try:
+                self.results[idx-1] = parse_stats(last)
+            except:
+                raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
+            self.read_jmx_output(idx, node)

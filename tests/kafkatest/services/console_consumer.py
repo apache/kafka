@@ -227,18 +227,19 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
 
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
-        first_line = consumer_output.next()
+        first_line = next(consumer_output, None)
 
-        self.start_jmx_tool(idx, node)
+        if first_line is not None:
+            self.start_jmx_tool(idx, node)
 
-        for line in itertools.chain([first_line], consumer_output):
-            msg = line.strip()
-            if self.message_validator is not None:
-                msg = self.message_validator(msg)
-            if msg is not None:
-                self.messages_consumed[idx].append(msg)
+            for line in itertools.chain([first_line], consumer_output):
+                msg = line.strip()
+                if self.message_validator is not None:
+                    msg = self.message_validator(msg)
+                if msg is not None:
+                    self.messages_consumed[idx].append(msg)
 
-        self.read_jmx_output(idx, node)
+            self.read_jmx_output(idx, node)
 
     def start_node(self, node):
         BackgroundThreadService.start_node(self, node)

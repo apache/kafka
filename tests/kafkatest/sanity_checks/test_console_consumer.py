@@ -90,5 +90,4 @@ class ConsoleConsumerTest(Test):
 
         num_consumed = len(self.consumer.messages_consumed[1])
         num_produced = self.producer.num_acked
-        assert num_produced == num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
         assert num_produced == num_consumed, "num_produced: %d, num_consumed: %d" % (num_produced, num_consumed)
