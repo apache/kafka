@@ -24,7 +24,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SSLConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LoggingEvent;
@@ -46,11 +46,11 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
     private static final String VALUE_SERIALIZER_CLASS_CONFIG = ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
     private static final String SECURITY_PROTOCOL = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
-    private static final String SSL_TRUSTSTORE_LOCATION = SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
-    private static final String SSL_TRUSTSTORE_PASSWORD = SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
-    private static final String SSL_KEYSTORE_TYPE = SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG;
-    private static final String SSL_KEYSTORE_LOCATION = SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
-    private static final String SSL_KEYSTORE_PASSWORD = SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
+    private static final String SSL_TRUSTSTORE_LOCATION = SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
+    private static final String SSL_TRUSTSTORE_PASSWORD = SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
+    private static final String SSL_KEYSTORE_TYPE = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
+    private static final String SSL_KEYSTORE_LOCATION = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
+    private static final String SSL_KEYSTORE_PASSWORD = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
 
     private String brokerList = null;
     private String topic = null;
