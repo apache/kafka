@@ -313,9 +313,9 @@ import java.util.regex.Pattern;
  *
  * <p>
  * The only exception to this rule is {@link #wakeup()}, which can safely be used from an external thread to
- * interrupt an active operation. In this case, a {@link WakeupException} will be thrown from the thread
- * blocking on the operation. This can be used to shutdown the consumer from another thread. The following
- * snippet shows the typical pattern:
+ * interrupt an active operation. In this case, a {@link org.apache.kafka.common.errors.WakeupException} will be
+ * thrown from the thread blocking on the operation. This can be used to shutdown the consumer from another thread.
+ * The following snippet shows the typical pattern:
  *
  * <pre>
  * public class KafkaConsumerRunner implements Runnable {
@@ -778,7 +778,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             offset reset policy has been configured.
      * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
-     * @throws WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
@@ -818,7 +818,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
-     * @throws WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
@@ -858,7 +858,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller).
      *
-     * @throws WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public void commitSync() {
@@ -881,7 +881,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller).
      *
      * @param offsets A map of offsets by partition with associated metadata
-     * @throws WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -1006,7 +1006,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The offset
      * @throws NoOffsetForPartitionException If a position hasn't been set for a given partition, and no reset policy is
      *             available.
-     * @throws WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     public long position(TopicPartition partition) {
         acquire();
@@ -1033,7 +1033,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partition The partition to check
      * @return The last committed offset and metadata or null if there was no prior commit
-     * @throws WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
@@ -1071,7 +1071,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param topic The topic to get partition metadata for
      * @return The list of partitions
-     * @throws WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1094,7 +1094,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * server.
      *
      * @return The map of topics and its partitions
-     * @throws WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {

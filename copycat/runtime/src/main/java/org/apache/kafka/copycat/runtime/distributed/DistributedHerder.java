@@ -17,7 +17,7 @@
 
 package org.apache.kafka.copycat.runtime.distributed;
 
-import org.apache.kafka.clients.consumer.WakeupException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.connector.ConnectorContext;
