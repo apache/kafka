@@ -128,18 +128,7 @@ class KafkaService(JmxMixin, Service):
         try:
             cmd = "ps ax | grep -i %s | grep java | grep -v grep | awk '{print $1}'" % kafka_dir(node)
 
-            pid_arr = []
-            def update_pid_arr():
-                del pid_arr[:]  # clear items, preserving reference to original array
-                pid_arr.extend([pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)])
-                return pid_arr
-
-            # Enforce the assumption that pids should return at most 1 broker process id
-            # This error came up once when another process queried zookeeper, causing pids() to transiently return
-            # multiple values
-            wait_until(lambda: len(update_pid_arr()) <= 1, timeout_sec=.5, backoff_sec=.1,
-                       err_msg="Expected 0 or 1 pid, instead got %d" % len(pid_arr))
-
+            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (subprocess.CalledProcessError, ValueError) as e:
             return []
@@ -285,7 +274,7 @@ class KafkaService(JmxMixin, Service):
         cmd += "get /brokers/topics/%s/partitions/%d/state" % (topic, partition)
         self.logger.debug(cmd)
 
-        node = self.nodes[0]
+        node = self.zk.nodes[0]
         self.logger.debug("Querying zookeeper to find leader replica for topic %s: \n%s" % (cmd, topic))
         partition_state = None
         for line in node.account.ssh_capture(cmd):
