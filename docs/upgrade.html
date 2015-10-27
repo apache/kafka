@@ -34,6 +34,7 @@ Note: Bumping the protocol version and restarting can be done any time after the
 <h5>Potential breaking changes in 0.9.0.0</h5>
 
 <ul>
+    <li> Java 1.6 is no longer supported. </li>
     <li> Tools packaged under <em>org.apache.kafka.clients.tools.*</em> have been moved to <em>org.apache.kafka.tools.*</em>. All included scripts will still function as usual, only custom code directly importing these classes will be affected. </li>
     <li> The default Kafka JVM performance options (KAFKA_JVM_PERFORMANCE_OPTS) have been changed in kafka-run-class.sh. </li>
     <li> The kafka-topics.sh script (kafka.admin.TopicCommand) now exits with non-zero exit code on failure. </li>
