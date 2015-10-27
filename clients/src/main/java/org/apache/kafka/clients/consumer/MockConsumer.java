@@ -135,7 +135,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         if (wakeup.get()) {
             wakeup.set(false);
-            throw new ConsumerWakeupException();
+            throw new WakeupException();
         }
 
         if (exception != null) {

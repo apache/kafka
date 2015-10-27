@@ -17,7 +17,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.clients.consumer.ConsumerWakeupException;
+import org.apache.kafka.clients.consumer.WakeupException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -147,7 +147,7 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Block indefinitely until the given request future has finished.
      * @param future The request future to await.
-     * @throws ConsumerWakeupException if {@link #wakeup()} is called from another thread
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
@@ -159,7 +159,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param future The request future to wait for
      * @param timeout The maximum duration (in ms) to wait for the request
      * @return true if the future is done, false otherwise
-     * @throws ConsumerWakeupException if {@link #wakeup()} is called from another thread
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public boolean poll(RequestFuture<?> future, long timeout) {
         long now = time.milliseconds();
@@ -175,7 +175,7 @@ public class ConsumerNetworkClient implements Closeable {
      * Poll for any network IO. All send requests will either be transmitted on the network
      * or failed when this call completes.
      * @param timeout The maximum time to wait for an IO event.
-     * @throws ConsumerWakeupException if {@link #wakeup()} is called from another thread
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public void poll(long timeout) {
         poll(timeout, time.milliseconds());
@@ -287,7 +287,7 @@ public class ConsumerNetworkClient implements Closeable {
         if (wakeup.get()) {
             clearUnsentRequests();
             wakeup.set(false);
-            throw new ConsumerWakeupException();
+            throw new WakeupException();
         }
     }
 

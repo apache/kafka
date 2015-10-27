@@ -14,7 +14,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
 
-public class ConsumerWakeupException extends KafkaException {
+public class WakeupException extends KafkaException {
     private static final long serialVersionUID = 1L;
 
 }

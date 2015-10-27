@@ -15,7 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.ConsumerWakeupException;
+import org.apache.kafka.clients.consumer.WakeupException;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -96,7 +96,7 @@ public class ConsumerNetworkClientTest {
         try {
             consumerClient.poll(0);
             fail();
-        } catch (ConsumerWakeupException e) {
+        } catch (WakeupException e) {
         }
 
         client.respond(heartbeatResponse(Errors.NONE.code()));

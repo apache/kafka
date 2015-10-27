@@ -147,7 +147,7 @@ public class WorkerGroupMember {
     }
 
     /**
-     * Interrupt any running poll() calls, causing a ConsumerWakeupException to be thrown in the thread invoking that method.
+     * Interrupt any running poll() calls, causing a WakeupException to be thrown in the thread invoking that method.
      */
     public void wakeup() {
         this.client.wakeup();

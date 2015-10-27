@@ -112,7 +112,7 @@ class WorkerSinkTask implements WorkerTask {
             ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
             log.trace("{} polling returned {} messages", id, msgs.count());
             deliverMessages(msgs);
-        } catch (ConsumerWakeupException we) {
+        } catch (WakeupException we) {
             log.trace("{} consumer woken up", id);
         }
     }
