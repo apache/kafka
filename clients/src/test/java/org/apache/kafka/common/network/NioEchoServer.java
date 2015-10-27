@@ -35,7 +35,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 
-// Non-blocking EchoServer implementation that uses SslTransportLayer
+// Non-blocking EchoServer implementation that uses ChannelBuilder to create channels
+// with the configured security protocol.
 public class NioEchoServer extends Thread {
     public final int port;
     private final ServerSocketChannel serverSocketChannel;

@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.plain.PlainLogin;
 
 public class LoginManager {
 
-    private static final EnumMap<LoginType, LoginManager> CACHED_INSTANCES = new EnumMap(LoginType.class);
+    private static final EnumMap<LoginType, EnumMap<SaslMechanism, LoginManager>> CACHED_INSTANCES = new EnumMap<>(LoginType.class);
 
     private final Login login;
     private final String serviceName;
@@ -100,13 +100,16 @@ public class LoginManager {
      */
     public static final LoginManager acquireLoginManager(LoginType loginType, SaslMechanism mechanism, Map<String, ?> configs) throws IOException, LoginException {
         synchronized (LoginManager.class) {
-            LoginManager loginManager = CACHED_INSTANCES.get(loginType);
+            EnumMap<SaslMechanism, LoginManager> loginManagers = CACHED_INSTANCES.get(loginType);
+            if (loginManagers == null) {
+                loginManagers = new EnumMap<>(SaslMechanism.class);
+                CACHED_INSTANCES.put(loginType, loginManagers);
+            }
+            LoginManager loginManager = loginManagers.get(mechanism);
             if (loginManager == null) {
                 loginManager = new LoginManager(loginType, mechanism, configs);
-                CACHED_INSTANCES.put(loginType, loginManager);
+                loginManagers.put(mechanism, loginManager);
             }
-            if (!loginManager.mechanism.equals(mechanism))
-                throw new LoginException("Multiple SASL mechanisms cannot be used for the same login type");
             return loginManager.acquire();
         }
     }
@@ -132,7 +135,10 @@ public class LoginManager {
             if (refCount == 0)
                 throw new IllegalStateException("release called on LoginManager with refCount == 0");
             else if (refCount == 1) {
-                CACHED_INSTANCES.remove(loginType);
+                EnumMap<SaslMechanism, LoginManager> loginManagers = CACHED_INSTANCES.get(loginType);
+                loginManagers.remove(mechanism);
+                if (loginManagers.size() == 0)
+                    CACHED_INSTANCES.remove(loginType);
                 login.shutdown();
             }
             --refCount;
@@ -143,8 +149,11 @@ public class LoginManager {
     public static void closeAll() {
         synchronized (LoginManager.class) {
             for (LoginType loginType : new ArrayList<>(CACHED_INSTANCES.keySet())) {
-                LoginManager loginManager = CACHED_INSTANCES.remove(loginType);
-                loginManager.login.shutdown();
+                EnumMap<SaslMechanism, LoginManager> loginManagers = CACHED_INSTANCES.get(loginType);
+                for (SaslMechanism saslMechanism : new ArrayList<>(loginManagers.keySet())) {
+                    LoginManager loginManager = loginManagers.remove(saslMechanism);
+                    loginManager.login.shutdown();
+                }
             }
         }
     }

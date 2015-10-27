@@ -58,7 +58,9 @@ public class SaslChannelBuilder implements ChannelBuilder {
         try {
             this.configs = configs;
             String mechanismName = (String) this.configs.get(SaslConfigs.SASL_MECHANISM);
-            mechanism = mechanismName == null ? SaslMechanism.GSSAPI : SaslMechanism.fromMechanismName(mechanismName);
+            if (mechanismName == null)
+                throw new IllegalArgumentException("SASL mechanism not specified.");
+            mechanism = SaslMechanism.fromMechanismName(mechanismName);
             this.loginManager = LoginManager.acquireLoginManager(loginType, mechanism, configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);

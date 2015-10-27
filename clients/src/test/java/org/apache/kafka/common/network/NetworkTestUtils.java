@@ -35,8 +35,8 @@ import org.apache.kafka.test.TestUtils;
 public class NetworkTestUtils {
     
     
-    public static NioEchoServer createEchoServer(SecurityProtocol securityProtocol, Map<String, Object> saslServerConfigs) throws Exception {
-        NioEchoServer server = new NioEchoServer(securityProtocol, saslServerConfigs, "localhost");
+    public static NioEchoServer createEchoServer(SecurityProtocol securityProtocol, Map<String, Object> serverConfigs) throws Exception {
+        NioEchoServer server = new NioEchoServer(securityProtocol, serverConfigs, "localhost");
         server.start();
         return server;
     }  

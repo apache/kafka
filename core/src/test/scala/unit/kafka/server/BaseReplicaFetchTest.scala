@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.io.File
-
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{Test, After, Before}
 import kafka.zk.ZooKeeperTestHarness
@@ -27,6 +26,7 @@ import kafka.producer.KeyedMessage
 import kafka.serializer.StringEncoder
 import kafka.utils.{TestUtils}
 import kafka.common._
+import org.apache.kafka.common.security.authenticator.SaslMechanism
 
 abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
   var brokers: Seq[KafkaServer] = null
@@ -36,12 +36,13 @@ abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
   // This should be defined if `securityProtocol` uses SSL (eg SSL, SASL_SSL)
   protected def trustStoreFile: Option[File]
   protected def securityProtocol: SecurityProtocol
+  protected def saslMechanism: Option[SaslMechanism]
 
   @Before
   override def setUp() {
     super.setUp()
     val props = createBrokerConfigs(2, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile)
+      trustStoreFile = trustStoreFile, saslMechanism = saslMechanism)
     brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
   }
 

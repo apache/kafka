@@ -20,11 +20,12 @@ import org.junit.Before
 import javax.security.auth.login.Configuration
 import org.apache.kafka.common.config.SaslConfigs
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.security.authenticator.SaslMechanism
 
 class SaslPlainSslConsumerTest extends BaseConsumerTest with ZooKeeperTestHarness {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))    
-  this.serverConfig.setProperty(SaslConfigs.SASL_MECHANISM, "PLAIN") 
+  override protected def saslMechanism = Some(SaslMechanism.PLAIN)
   
   @Before
   override def setUp() {
@@ -35,8 +36,6 @@ class SaslPlainSslConsumerTest extends BaseConsumerTest with ZooKeeperTestHarnes
       throw new IllegalStateException("Could not load `kafka_saslplain_jaas.conf`, make sure it is in the classpath")
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFileUrl.getPath)
     super.setUp
-    this.producerConfig.setProperty(SaslConfigs.SASL_MECHANISM, "PLAIN")
-    this.consumerConfig.setProperty(SaslConfigs.SASL_MECHANISM, "PLAIN")
   }
 
   @After

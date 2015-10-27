@@ -13,7 +13,9 @@
 package kafka.api
 
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.authenticator.SaslMechanism
 
 class SaslPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarness {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
+  override protected def saslMechanism = Some(SaslMechanism.GSSAPI)
 }

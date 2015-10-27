@@ -89,10 +89,15 @@ public class SaslClientAuthenticator implements Authenticator {
 
             switch (mechanism) {
                 case GSSAPI:
-                    this.saslClient = createSaslKerberosClient();
+                    // determine client principal from subject.
+                    Principal clientPrincipal = subject.getPrincipals().iterator().next();
+                    this.clientPrincipalName = clientPrincipal.getName();
+                    this.saslClient = createSaslClient(clientPrincipalName);
                     break;
                 case PLAIN:
-                    this.saslClient = createSaslPlainClient();
+                    Iterator<?> iterator = subject.getPublicCredentials().iterator();
+                    clientPrincipalName = iterator.hasNext() ? (String) iterator.next() : null;
+                    this.saslClient = createSaslClient(clientPrincipalName);
                     break;
                 default:
                     throw new KafkaException("Unsupported SASL mechanism " + mechanism);
@@ -102,11 +107,8 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
-    private SaslClient createSaslKerberosClient() {
+    private SaslClient createSaslClient(final String clientPrincipalName) {
         try {
-            // determine client principal from subject.
-            Principal clientPrincipal = subject.getPrincipals().iterator().next();
-            this.clientPrincipalName = clientPrincipal.getName();
             return Subject.doAs(subject, new PrivilegedExceptionAction<SaslClient>() {
                 public SaslClient run() throws SaslException {
                     String[] mechs = {mechanism.mechanismName()};
@@ -117,21 +119,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
             });
         } catch (PrivilegedActionException e) {
-            throw new KafkaException("Failed to create SaslClient", e.getCause());
-        }
-    }
-    
-    private SaslClient createSaslPlainClient() {
-        try {
-            String[] mechs = {mechanism.mechanismName()};
-            Iterator<?> iterator = subject.getPublicCredentials().iterator();
-            clientPrincipalName = iterator.hasNext() ? (String) iterator.next() : null;
-            LOG.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
-                        clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
-            return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, null,
-                            new ClientCallbackHandler(subject, mechanism));
-        } catch (Exception e) {
-            throw new KafkaException("Failed to create SASL/PLAIN client", e);
+            throw new KafkaException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
         }
     }
 
@@ -269,7 +257,7 @@ public class SaslClientAuthenticator implements Authenticator {
                         if (iterator.hasNext())
                             ((PasswordCallback) callback).setPassword(((String) iterator.next()).toCharArray());
                     } else {
-                     // Call `setPassword` once we support obtaining a password from the user and update message below
+                        // Call `setPassword` once we support obtaining a password from the user and update message below
                         throw new UnsupportedCallbackException(callback, "Could not login: the client is being asked for a password, but the Kafka" +
                              " client code does not currently support obtaining a password from the user." +
                              " Make sure -Djava.security.auth.login.config property passed to JVM and" +

@@ -13,10 +13,11 @@
 package kafka.api
 
 import java.io.File
-
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.authenticator.SaslMechanism
 
 class SaslSslConsumerTest extends BaseConsumerTest with SaslTestHarness {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected def saslMechanism = Some(SaslMechanism.GSSAPI)
 }

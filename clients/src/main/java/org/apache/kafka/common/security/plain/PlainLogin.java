@@ -40,11 +40,11 @@ import java.util.Map;
 public class PlainLogin implements Login, CallbackHandler {
     private static final Logger log = LoggerFactory.getLogger(PlainLogin.class);
     
-    private LoginContext loginContext;
-    private Subject subject;
+    private final LoginContext loginContext;
     
     public PlainLogin(final String loginContextName, Map<String, ?> configs) throws LoginException {
-        this.loginContext = login(loginContextName);
+        loginContext = new LoginContext(loginContextName, this);
+        loginContext.login();
     }
     
     @Override
@@ -54,7 +54,7 @@ public class PlainLogin implements Login, CallbackHandler {
 
     @Override
     public Subject subject() {
-        return loginContext != null ? loginContext.getSubject() : subject;
+        return loginContext.getSubject();
     }
     
     @Override
@@ -64,16 +64,6 @@ public class PlainLogin implements Login, CallbackHandler {
     @Override
     public void shutdown() {
     }
-
-    private synchronized LoginContext login(final String loginContextName) throws LoginException {
-        if (subject == null) {
-            loginContext = new LoginContext(loginContextName, this);
-            loginContext.login();
-        }
-        log.info("Successfully logged in.");
-        return loginContext;
-    }
-
     
     @Override
     public void handle(Callback[] callbacks) throws UnsupportedCallbackException {

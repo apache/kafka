@@ -24,4 +24,5 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 class SslTopicMetadataTest extends BaseTopicMetadataTest {
   protected def securityProtocol = SecurityProtocol.SSL
   protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  protected def saslMechanism = None
 }

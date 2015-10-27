@@ -73,8 +73,8 @@ public class SaslAuthenticatorTest {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         TestJaasConfig.createPlainConfig("myuser", "mypassword", "user_myuser", "mypassword");
-        createConfig(saslClientConfigs, false, SaslMechanism.PLAIN);
-        createConfig(saslServerConfigs, true, SaslMechanism.PLAIN);
+        createConfig(saslClientConfigs, SaslMechanism.PLAIN);
+        createConfig(saslServerConfigs, SaslMechanism.PLAIN);
         
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
         createSelector(securityProtocol, saslClientConfigs);
@@ -89,8 +89,8 @@ public class SaslAuthenticatorTest {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         TestJaasConfig.createPlainConfig("myuser", "mypassword", "user_myuser", "mypassword");
-        createConfig(saslClientConfigs, false, SaslMechanism.PLAIN);
-        createConfig(saslServerConfigs, true, SaslMechanism.PLAIN);
+        createConfig(saslClientConfigs, SaslMechanism.PLAIN);
+        createConfig(saslServerConfigs, SaslMechanism.PLAIN);
         
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
         createSelector(securityProtocol, saslClientConfigs);
@@ -105,8 +105,8 @@ public class SaslAuthenticatorTest {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         TestJaasConfig.createPlainConfig("myuser", "invalidpassword", "user_myuser", "mypassword");
-        createConfig(saslClientConfigs, false, SaslMechanism.PLAIN);
-        createConfig(saslServerConfigs, true, SaslMechanism.PLAIN);
+        createConfig(saslClientConfigs, SaslMechanism.PLAIN);
+        createConfig(saslServerConfigs, SaslMechanism.PLAIN);
         
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
         createSelector(securityProtocol, saslClientConfigs);
@@ -120,8 +120,8 @@ public class SaslAuthenticatorTest {
     public void testMissingUsernameSaslPlain() throws Exception {
         String node = "0";
         TestJaasConfig.createPlainConfig(null, "mypassword", "user_myuser", "mypassword");
-        createConfig(saslClientConfigs, false, SaslMechanism.PLAIN);
-        createConfig(saslServerConfigs, true, SaslMechanism.PLAIN);
+        createConfig(saslClientConfigs, SaslMechanism.PLAIN);
+        createConfig(saslServerConfigs, SaslMechanism.PLAIN);
 
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
@@ -139,8 +139,8 @@ public class SaslAuthenticatorTest {
     public void testMissingPasswordSaslPlain() throws Exception {
         String node = "0";
         TestJaasConfig.createPlainConfig("myuser", null, "user_myuser", "mypassword");
-        createConfig(saslClientConfigs, false, SaslMechanism.PLAIN);
-        createConfig(saslServerConfigs, true, SaslMechanism.PLAIN);
+        createConfig(saslClientConfigs, SaslMechanism.PLAIN);
+        createConfig(saslServerConfigs, SaslMechanism.PLAIN);
 
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = NetworkTestUtils.createEchoServer(securityProtocol, saslServerConfigs);
@@ -162,7 +162,7 @@ public class SaslAuthenticatorTest {
     }
 
     
-    private void createConfig(Map<String, Object> config, boolean isServer, SaslMechanism mechanism) throws Exception {
+    private void createConfig(Map<String, Object> config, SaslMechanism mechanism) throws Exception {
         config.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         config.put(SaslConfigs.SASL_MECHANISM, mechanism.mechanismName());        
     }
