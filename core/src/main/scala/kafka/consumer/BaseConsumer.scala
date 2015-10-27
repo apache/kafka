@@ -28,13 +28,15 @@ trait BaseConsumer {
   def receive(): BaseConsumerRecord
   def stop()
   def cleanup()
+  def commit()
 }
 
 case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: Array[Byte], value: Array[Byte])
 
 class NewShinyConsumer(topic: String, consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
-  import scala.collection.JavaConversions._
+
+import scala.collection.JavaConversions._
 
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
   consumer.subscribe(List(topic))
@@ -58,6 +60,10 @@ class NewShinyConsumer(topic: String, consumerProps: Properties, val timeoutMs: 
   override def cleanup() {
     this.consumer.close()
   }
+
+  override def commit() {
+    this.consumer.commitSync()
+  }
 }
 
 class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends BaseConsumer {
@@ -80,6 +86,10 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
 
   override def cleanup() {
     this.consumerConnector.shutdown()
+  }
+
+  override def commit() {
+    this.consumerConnector.commitOffsets
   }
 }
 
