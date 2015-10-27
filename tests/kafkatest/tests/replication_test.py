@@ -109,7 +109,7 @@ class ReplicationTest(ProduceConsumeValidateTest):
 
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             interbroker_security_protocol=["PLAINTEXT", "SSL"])
-    def test_replication_with_broker_failure(self, failure_mode, interbroker_security_protocol):
+    def test_replication_with_broker_failure(self, failure_mode, interbroker_security_protocol="PLAINTEXT"):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
@@ -124,7 +124,7 @@ class ReplicationTest(ProduceConsumeValidateTest):
         """
         client_security_protocol = 'PLAINTEXT'
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, security_protocol=client_security_protocol, throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, security_protocol=client_security_protocol, consumer_timeout_ms=10000, message_validator=is_int)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, security_protocol=client_security_protocol, consumer_timeout_ms=60000, message_validator=is_int)
 
         self.kafka.interbroker_security_protocol = interbroker_security_protocol
         self.kafka.start()

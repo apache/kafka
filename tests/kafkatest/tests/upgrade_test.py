@@ -49,7 +49,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(
             self.test_context, self.num_consumers, self.kafka, self.topic,
-            consumer_timeout_ms=15000, message_validator=is_int, version=LATEST_0_8_2)
+            consumer_timeout_ms=30000, message_validator=is_int, version=LATEST_0_8_2)
 
     def perform_upgrade(self):
         self.logger.info("First pass bounce - rolling upgrade")
