@@ -53,6 +53,8 @@ object RequestChannel extends Logging {
     @volatile var apiLocalCompleteTimeMs = -1L
     @volatile var responseCompleteTimeMs = -1L
     @volatile var responseDequeueTimeMs = -1L
+    @volatile var apiRemoteCompleteTimeMs = -1L
+
     val requestId = buffer.getShort()
     // for server-side request / response format
     // TODO: this will be removed once we migrated to client-side format
@@ -92,9 +94,14 @@ object RequestChannel extends Logging {
       // processing time is really small. In this case, use responseCompleteTimeMs as apiLocalCompleteTimeMs.
       if (apiLocalCompleteTimeMs < 0)
         apiLocalCompleteTimeMs = responseCompleteTimeMs
+      // If the apiRemoteCompleteTimeMs is not set, then it is the same as responseCompleteTimeMs.
+      if (apiRemoteCompleteTimeMs < 0)
+        apiRemoteCompleteTimeMs = responseCompleteTimeMs
+
       val requestQueueTime = (requestDequeueTimeMs - startTimeMs).max(0L)
       val apiLocalTime = (apiLocalCompleteTimeMs - requestDequeueTimeMs).max(0L)
-      val apiRemoteTime = (responseCompleteTimeMs - apiLocalCompleteTimeMs).max(0L)
+      val apiRemoteTime = (apiRemoteCompleteTimeMs - apiLocalCompleteTimeMs).max(0L)
+      val apiThrottleTime = (responseCompleteTimeMs - apiRemoteCompleteTimeMs).max(0L)
       val responseQueueTime = (responseDequeueTimeMs - responseCompleteTimeMs).max(0L)
       val responseSendTime = (endTimeMs - responseDequeueTimeMs).max(0L)
       val totalTime = endTimeMs - startTimeMs
@@ -111,6 +118,7 @@ object RequestChannel extends Logging {
              m.requestQueueTimeHist.update(requestQueueTime)
              m.localTimeHist.update(apiLocalTime)
              m.remoteTimeHist.update(apiRemoteTime)
+             m.throttleTimeHist.update(apiThrottleTime)
              m.responseQueueTimeHist.update(responseQueueTime)
              m.responseSendTimeHist.update(responseSendTime)
              m.totalTimeHist.update(totalTime)
@@ -236,6 +244,8 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val localTimeHist = newHistogram("LocalTimeMs", biased = true, tags)
   // time a request takes to wait on remote brokers (only relevant to fetch and produce requests)
   val remoteTimeHist = newHistogram("RemoteTimeMs", biased = true, tags)
+  // time a request is throttled (only relevant to fetch and produce requests)
+  val throttleTimeHist = newHistogram("ThrottleTimeMs", biased = true, tags)
   // time a response spent in a response queue
   val responseQueueTimeHist = newHistogram("ResponseQueueTimeMs", biased = true, tags)
   // time to send the response to the requester

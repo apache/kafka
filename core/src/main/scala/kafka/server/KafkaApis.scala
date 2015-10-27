@@ -307,9 +307,13 @@ class KafkaApis(val requestChannel: RequestChannel,
             ErrorMapping.exceptionNameFor(status.error)))
           errorInResponse = true
         }
+
+        // When this callback is triggered, the remote API call has completed
+        request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
       }
 
       def produceResponseCallback(delayTimeMs: Int) {
+
         if (produceRequest.requiredAcks == 0) {
           // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
           // the request, since no response is expected by the producer, the server will close socket server so that
@@ -384,6 +388,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         // record the bytes out metrics only when the response is being sent
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesOutRate.mark(data.messages.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.messages.sizeInBytes)
+
+        // When this callback is triggered, the remote API call has completed
+        request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
       }
 
       def fetchResponseCallback(delayTimeMs: Int) {
