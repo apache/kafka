@@ -202,7 +202,6 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
     ZkSecurityMigrator.run(Array("--zookeeper.acl=%s".format(secureOpt), "--zookeeper.connect=%s".format(zkConnect)))
     info("Done with migration")
     for (path <- secondZk.securePersistentZkPaths) {
-      secondZk.makeSurePersistentPathExists(path)
       val listParent = (secondZk.zkConnection.getAcl(path)).getKey
       assertTrue(path, isAclCorrect(listParent, secondZk.isSecure))
 
