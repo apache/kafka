@@ -178,7 +178,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
         topology.addSource(sourceName, keyDeserializer, valDeserializer, topic);
 
-        return new KStreamImpl<>(topology, sourceName, Collections.<String>emptySet());
+        return new KStreamImpl<>(topology, sourceName, Collections.singleton(sourceName));
     }
 
     @Override
