@@ -241,6 +241,10 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     private void checkDisconnects(long now) {
+        // any disconnects affecting requests that have already been transmitted will be handled
+        // by NetworkClient, so we just need to check whether connections for any of the unsent
+        // requests have been disconnected; if they have, then we complete the corresponding future
+        // and set the disconnect flag in the ClientResponse
         Iterator<Map.Entry<Node, List<ClientRequest>>> iterator = unsent.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Node, List<ClientRequest>> requestEntry = iterator.next();
