@@ -44,7 +44,7 @@ def clean_bounce(test):
 
 
 def hard_bounce(test):
-    """Chase the leader and restart it cleanly."""
+    """Chase the leader and restart it with a hard kill."""
     for i in range(5):
         prev_leader_node = test.kafka.leader(topic=test.topic, partition=0)
         test.kafka.signal_node(prev_leader_node, sig=signal.SIGKILL)

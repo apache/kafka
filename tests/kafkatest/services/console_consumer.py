@@ -187,10 +187,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         if self.consumer_timeout_ms is not None:
             # version 0.8.X and below do not support --timeout-ms option
             # This will be added in the properties file instead
-            version_greater_than_0_8_X = (hasattr(node, "version") and node.version > LATEST_0_8_2) or \
-                                         not hasattr(node, "version")
-
-            if version_greater_than_0_8_X:
+            if node.version > LATEST_0_8_2:
                 cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args

@@ -126,7 +126,7 @@ class KafkaService(JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "ps ax | grep -i %s | grep java | grep -v grep | awk '{print $1}'" % kafka_dir(node)
+            cmd = "ps ax | grep -i kafka | grep java | grep -v grep | awk '{print $1}'"
 
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
@@ -278,10 +278,11 @@ class KafkaService(JmxMixin, Service):
         self.logger.debug("Querying zookeeper to find leader replica for topic %s: \n%s" % (cmd, topic))
         partition_state = None
         for line in node.account.ssh_capture(cmd):
-            match = re.match("^({.+})$", line)
-            if match is not None:
-                partition_state = match.groups()[0]
-                break
+            # loop through all lines in the output, but only hold on to the first match
+            if partition_state is None:
+                match = re.match("^({.+})$", line)
+                if match is not None:
+                    partition_state = match.groups()[0]
 
         if partition_state is None:
             raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))

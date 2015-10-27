@@ -44,15 +44,15 @@ class TestVerifiableProducer(Test):
         self.zk.start()
         self.kafka.start()
 
-    @parametrize(version=str(LATEST_0_8_2))
-    @parametrize(version=str(TRUNK))
-    def test_simple_run(self, version=TRUNK):
+    @parametrize(producer_version=str(LATEST_0_8_2))
+    @parametrize(producer_version=str(TRUNK))
+    def test_simple_run(self, producer_version=TRUNK):
         """
         Test that we can start VerifiableProducer on trunk or against the 0.8.2 jar, and
         verify that we can produce a small number of messages.
         """
         node = self.producer.nodes[0]
-        node.version = KafkaVersion(version)
+        node.version = KafkaVersion(producer_version)
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
              err_msg="Producer failed to start in a reasonable amount of time.")
@@ -61,7 +61,7 @@ class TestVerifiableProducer(Test):
         # that this check works with TRUNK
         # When running VerifiableProducer 0.8.X, both trunk version and 0.8.X should show up because of the way
         # verifiable producer pulls in some trunk directories into its classpath
-        assert is_version(node, [node.version.vstring, TRUNK.vstring], "VerifiableProducer")
+        assert is_version(node, [node.version.vstring, TRUNK.vstring])
 
         self.producer.wait()
         num_produced = self.producer.num_acked
