@@ -870,7 +870,12 @@ Essential configuration properties for the producer include:
 <h3><a id="newproducerconfigs">3.4 New Producer Configs</a></h3>
 
 We are working on a replacement for our existing producer. The code is available in trunk now and can be considered beta quality. Below is the configuration for the new producer.
-
+Essential configuration properties for the <code>KafkaProducer</code> include:
+<ul>
+	<li><code>bootstrap.servers</code></li>
+	<li><code>key.serializer</code></li>
+	<li><code>value.serializer</code></li>
+</ul>
 <table class="data-table">
 	<tr>
 	<th>Name</th>
@@ -881,6 +886,10 @@ We are working on a replacement for our existing producer. The code is available
 	</tr>
 	<tr>
 	<td>bootstrap.servers</td><td>list</td><td></td><td>high</td><td>A list of host/port pairs to use for establishing the initial connection to the Kafka cluster. Data will be load balanced over all servers irrespective of which servers are specified here for bootstrapping&mdash;this list only impacts the initial hosts used to discover the full set of servers. This list should be in the form <code>host1:port1,host2:port2,...</code>. Since these servers are just used for the initial connection to discover the full cluster membership (which may change dynamically), this list need not contain the full set of servers (you may want more than one, though, in case a server is down). If no server in this list is available sending data will fail until on becomes available.</td></tr>
+	<tr>
+	<td>key.serializer</td><td>org.apache.kafka.common.serialization.Serializer</td><td></td><td>high</td><td>The serializer class for keys. Use one of <code>ByteArraySerializer</code>, <code>IntegerSerializer</code>, <code>LongSerializer</code> or <code>StringSerializer</code>.</td></tr>
+	<tr>
+	<td>value.serializer</td><td>org.apache.kafka.common.serialization.Serializer</td><td></td><td>high</td><td>The serializer class for messages. Use one of <code>ByteArraySerializer</code>, <code>IntegerSerializer</code>, <code>LongSerializer</code> or <code>StringSerializer</code>.</td></tr></td></tr>
 	<tr>
 	<td>acks</td><td>string</td><td>1</td><td>high</td><td>The number of acknowledgments the producer requires the leader to have received before considering a request complete. This controls the  durability of records that are sent. The following settings are common:  <ul> <li><code>acks=0</code> If set to zero then the producer will not wait for any acknowledgment from the server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be made that the server has received the record in this case, and the <code>retries</code> configuration will not take effect (as the client won't generally know of any failures). The offset given back for each record will always be set to -1. <li><code>acks=1</code> This will mean the leader will write the record to its local log but will respond without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after acknowledging the record but before the followers have replicated it then the record will be lost. <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica remains alive. This is the strongest available guarantee. <li>Other settings such as <code>acks=2</code> are also possible, and will require the given number of acknowledgements but this is generally less useful.</td></tr>
 	<tr>
