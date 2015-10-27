@@ -52,7 +52,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             'client_id': self.client_id,
             'kafka_directory': kafka_dir(node)
             })
-        cmd = "JMX_PORT=%(jmx_port)d /opt/%(kafka_directory)s/bin/kafka-run-class.sh org.apache.kafka.clients.tools.ProducerPerformance " \
+        cmd = "JMX_PORT=%(jmx_port)d /opt/%(kafka_directory)s/bin/kafka-run-class.sh org.apache.kafka.tools.ProducerPerformance " \
               "%(topic)s %(num_records)d %(record_size)d %(throughput)d bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
 
         self.security_config.setup_node(node)
