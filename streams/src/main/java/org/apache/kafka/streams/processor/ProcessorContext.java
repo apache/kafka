@@ -30,7 +30,7 @@ public interface ProcessorContext {
      *
      * @return the task id
      */
-    int id();
+    TaskId id();
 
     /**
      * Returns the key serializer

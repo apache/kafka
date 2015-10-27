@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +46,7 @@ public class StreamTask implements Punctuator {
 
     private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
 
-    private final int id;
+    private final TaskId id;
     private final int maxBufferedSize;
 
     private final Consumer consumer;
@@ -78,7 +79,7 @@ public class StreamTask implements Punctuator {
      * @param config                the {@link StreamingConfig} specified by the user
      * @param metrics               the {@link StreamingMetrics} created by the thread
      */
-    public StreamTask(int id,
+    public StreamTask(TaskId id,
                       Consumer<byte[], byte[]> consumer,
                       Producer<byte[], byte[]> producer,
                       Consumer<byte[], byte[]> restoreConsumer,
@@ -116,8 +117,8 @@ public class StreamTask implements Punctuator {
 
         // create the processor state manager
         try {
-            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(id));
-            this.stateMgr = new ProcessorStateManager(id, stateFile, restoreConsumer);
+            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), id.toString());
+            this.stateMgr = new ProcessorStateManager(id.partition, stateFile, restoreConsumer);
         } catch (IOException e) {
             throw new KafkaException("Error while creating the state manager", e);
         }
@@ -138,7 +139,7 @@ public class StreamTask implements Punctuator {
         this.processorContext.initialized();
     }
 
-    public int id() {
+    public TaskId id() {
         return id;
     }
 

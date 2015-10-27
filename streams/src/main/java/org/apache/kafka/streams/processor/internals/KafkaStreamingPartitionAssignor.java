@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.PartitionGrouper;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +41,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     private static final Logger log = LoggerFactory.getLogger(KafkaStreamingPartitionAssignor.class);
 
     private PartitionGrouper partitionGrouper;
-    private Map<TopicPartition, Set<Integer>> partitionToTaskIds;
+    private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
 
     @Override
     public void configure(Map<String, ?> configs) {
@@ -67,29 +68,30 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
-        Map<Integer, List<TopicPartition>> partitionGroups = partitionGrouper.partitionGroups(metadata);
+        Map<TaskId, Set<TopicPartition>> partitionGroups = partitionGrouper.partitionGroups(metadata);
 
         String[] clientIds = subscriptions.keySet().toArray(new String[subscriptions.size()]);
-        Integer[] taskIds = partitionGroups.keySet().toArray(new Integer[partitionGroups.size()]);
+        TaskId[] taskIds = partitionGroups.keySet().toArray(new TaskId[partitionGroups.size()]);
 
         Map<String, Assignment> assignment = new HashMap<>();
 
         for (int i = 0; i < clientIds.length; i++) {
             List<TopicPartition> partitions = new ArrayList<>();
-            List<Integer> ids = new ArrayList<>();
+            List<TaskId> ids = new ArrayList<>();
             for (int j = i; j < taskIds.length; j += clientIds.length) {
-                Integer taskId = taskIds[j];
+                TaskId taskId = taskIds[j];
                 for (TopicPartition partition : partitionGroups.get(taskId)) {
                     partitions.add(partition);
                     ids.add(taskId);
                 }
             }
-            ByteBuffer buf = ByteBuffer.allocate(4 + ids.size() * 4);
+            ByteBuffer buf = ByteBuffer.allocate(4 + ids.size() * 8);
             //version
             buf.putInt(1);
             // encode task ids
-            for (Integer id : ids) {
-                buf.putInt(id);
+            for (TaskId id : ids) {
+                buf.putInt(id.topicGroupId);
+                buf.putInt(id.partition);
             }
             buf.rewind();
             assignment.put(clientIds[i], new Assignment(partitions, buf));
@@ -104,19 +106,19 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         ByteBuffer data = assignment.userData();
         data.rewind();
 
-        Map<TopicPartition, Set<Integer>> partitionToTaskIds = new HashMap<>();
+        Map<TopicPartition, Set<TaskId>> partitionToTaskIds = new HashMap<>();
 
         // check version
         int version = data.getInt();
         if (version == 1) {
             for (TopicPartition partition : partitions) {
-                Set<Integer> taskIds = partitionToTaskIds.get(partition);
+                Set<TaskId> taskIds = partitionToTaskIds.get(partition);
                 if (taskIds == null) {
                     taskIds = new HashSet<>();
                     partitionToTaskIds.put(partition, taskIds);
                 }
                 // decode a task id
-                taskIds.add(data.getInt());
+                taskIds.add(new TaskId(data.getInt(), data.getInt()));
             }
         } else {
             KafkaException ex = new KafkaException("unknown assignment data version: " + version);
@@ -126,7 +128,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         this.partitionToTaskIds = partitionToTaskIds;
     }
 
-    public Set<Integer> taskIds(TopicPartition partition) {
+    public Set<TaskId> taskIds(TopicPartition partition) {
         return partitionToTaskIds.get(partition);
     }
 
