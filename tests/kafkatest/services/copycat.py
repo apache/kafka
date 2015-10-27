@@ -15,8 +15,9 @@
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-import subprocess, signal
 
+from kafkatest.services.kafka.directory import kafka_dir
+import signal
 
 class CopycatServiceBase(Service):
     """Base class for Copycat services providing some common settings and functionality"""
@@ -99,14 +100,13 @@ class CopycatStandaloneService(CopycatServiceBase):
 
         self.logger.info("Starting Copycat standalone process")
         with node.account.monitor_log("/mnt/copycat.log") as monitor:
-            node.account.ssh("/opt/kafka/bin/copycat-standalone.sh /mnt/copycat.properties " +
+            node.account.ssh("/opt/%s/bin/copycat-standalone.sh /mnt/copycat.properties " % kafka_dir(node) +
                              " ".join(remote_connector_configs) +
                              " 1>> /mnt/copycat.log 2>> /mnt/copycat.log & echo $! > /mnt/copycat.pid")
             monitor.wait_until('Copycat started', timeout_sec=10, err_msg="Never saw message indicating Copycat finished startup")
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
-
 
 
 class CopycatDistributedService(CopycatServiceBase):
@@ -128,7 +128,7 @@ class CopycatDistributedService(CopycatServiceBase):
 
         self.logger.info("Starting Copycat distributed process")
         with node.account.monitor_log("/mnt/copycat.log") as monitor:
-            cmd = "/opt/kafka/bin/copycat-distributed.sh /mnt/copycat.properties "
+            cmd = "/opt/%s/bin/copycat-distributed.sh /mnt/copycat.properties " % kafka_dir(node)
             # Only submit connectors on the first node so they don't get submitted multiple times. Also only submit them
             # the first time the node is started so
             if self.first_start and node == self.nodes[0]:
@@ -140,4 +140,3 @@ class CopycatDistributedService(CopycatServiceBase):
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
 
-        self.first_start = False

@@ -17,6 +17,8 @@
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
+from kafkatest.services.kafka.directory import kafka_dir
+
 import os
 import subprocess
 
@@ -63,7 +65,6 @@ class MirrorMaker(Service):
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     PRODUCER_CONFIG = os.path.join(PERSISTENT_ROOT, "producer.properties")
     CONSUMER_CONFIG = os.path.join(PERSISTENT_ROOT, "consumer.properties")
-    KAFKA_HOME = "/opt/kafka/"
 
     logs = {
         "mirror_maker_log": {
@@ -101,7 +102,7 @@ class MirrorMaker(Service):
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % MirrorMaker.LOG4J_CONFIG
-        cmd += " %s/bin/kafka-run-class.sh kafka.tools.MirrorMaker" % MirrorMaker.KAFKA_HOME
+        cmd += " /opt/%s/bin/kafka-run-class.sh kafka.tools.MirrorMaker" % kafka_dir(node)
         cmd += " --consumer.config %s" % MirrorMaker.CONSUMER_CONFIG
         cmd += " --producer.config %s" % MirrorMaker.PRODUCER_CONFIG
         if isinstance(self.num_streams, int):

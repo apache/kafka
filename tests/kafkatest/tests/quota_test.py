@@ -14,18 +14,13 @@
 # limitations under the License.
 
 from ducktape.tests.test import Test
-from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.performance import ProducerPerformanceService
-from kafkatest.services.console_consumer import ConsoleConsumer, is_int
+from kafkatest.services.console_consumer import ConsoleConsumer
 
-import random
-import signal
-import time
 
 class QuotaTest(Test):
     """
@@ -73,7 +68,10 @@ class QuotaTest(Test):
         """Override this since we're adding services outside of the constructor"""
         return super(QuotaTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    def run_clients(self, producer_id, producer_num, consumer_id, consumer_num):
+    @parametrize(producer_id='default_id', producer_num=1, consumer_id='default_id', consumer_num=1)
+    @parametrize(producer_id='overridden_id', producer_num=1, consumer_id='overridden_id', consumer_num=1)
+    @parametrize(producer_id='overridden_id', producer_num=1, consumer_id='overridden_id', consumer_num=2)
+    def test_quota(self, producer_id='default_id', producer_num=1, consumer_id='default_id', consumer_num=1):
         # Produce all messages
         producer = ProducerPerformanceService(
             self.test_context, producer_num, self.kafka, security_protocol=self.security_protocol,
@@ -91,7 +89,7 @@ class QuotaTest(Test):
         consumer.run()
 
         for idx, messages in consumer.messages_consumed.iteritems():
-            assert len(messages)>0, "consumer %d didn't consume any message before timeout" % idx
+            assert len(messages) > 0, "consumer %d didn't consume any message before timeout" % idx
 
         success, msg = self.validate(self.kafka, producer, consumer)
         assert success, msg
@@ -172,9 +170,3 @@ class QuotaTest(Test):
         if client_id in overridden_quotas:
             return float(overridden_quotas[client_id])
         return self.quota_config['quota_consumer_default']
-
-    @parametrize(producer_id='default_id', producer_num=1, consumer_id='default_id', consumer_num=1)
-    @parametrize(producer_id='overridden_id', producer_num=1, consumer_id='overridden_id', consumer_num=1)
-    @parametrize(producer_id='overridden_id', producer_num=1, consumer_id='overridden_id', consumer_num=2)
-    def test_quota(self, producer_id='default_id', producer_num=1, consumer_id='default_id', consumer_num=1):
-        self.run_clients(producer_id, producer_num, consumer_id, consumer_num)
