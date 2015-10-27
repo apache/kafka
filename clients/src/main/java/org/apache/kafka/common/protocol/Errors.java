@@ -86,7 +86,7 @@ public enum Errors {
             new ApiException("The committing offset data size is not valid")),
     AUTHORIZATION_FAILED(29, new ApiException("Request is not authorized.")),
     REBALANCE_IN_PROGRESS(30,
-            new ApiException("The group is rebalancing, so a rejoin is needed."));
+            new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

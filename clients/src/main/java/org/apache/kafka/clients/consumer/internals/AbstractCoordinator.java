@@ -17,6 +17,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -231,10 +233,13 @@ public abstract class AbstractCoordinator {
                 needsJoinPrepare = true;
                 heartbeatTask.reset();
             } else {
-                if (future.exception() instanceof UnknownMemberIdException)
+                RuntimeException exception = future.exception();
+                if (exception instanceof UnknownMemberIdException ||
+                        exception instanceof RebalanceInProgressException ||
+                        exception instanceof IllegalGenerationException)
                     continue;
                 else if (!future.isRetriable())
-                    throw future.exception();
+                    throw exception;
                 Utils.sleep(retryBackoffMs);
             }
         }
