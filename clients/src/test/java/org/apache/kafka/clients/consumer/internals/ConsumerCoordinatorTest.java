@@ -255,6 +255,25 @@ public class ConsumerCoordinatorTest {
         assertTrue(coordinator.coordinatorUnknown());
     }
 
+    @Test(expected = ApiException.class)
+    public void testJoinGroupInvalidGroupId() {
+        final String consumerId = "leader";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        // ensure metadata is up-to-date for leader
+        metadata.setTopics(Arrays.asList(topicName));
+        metadata.update(cluster, time.milliseconds());
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupLeaderResponse(0, consumerId, Collections.<String, List<String>>emptyMap(),
+                Errors.INVALID_GROUP_ID.code()));
+        coordinator.ensurePartitionAssignment();
+    }
+
     @Test
     public void testNormalJoinGroupLeader() {
         final String consumerId = "leader";

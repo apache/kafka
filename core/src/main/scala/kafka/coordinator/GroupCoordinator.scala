@@ -115,6 +115,8 @@ class GroupCoordinator(val brokerId: Int,
                       responseCallback: JoinCallback) {
     if (!isActive.get) {
       responseCallback(joinError(memberId, Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code))
+    } else if (!validGroupId(groupId)) {
+      responseCallback(joinError(memberId, Errors.INVALID_GROUP_ID.code))
     } else if (!isCoordinatorForGroup(groupId)) {
       responseCallback(joinError(memberId,Errors.NOT_COORDINATOR_FOR_GROUP.code))
     } else if (sessionTimeoutMs < groupConfig.groupMinSessionTimeoutMs ||
@@ -407,6 +409,10 @@ class GroupCoordinator(val brokerId: Int,
   def handleGroupEmigration(offsetTopicPartitionId: Int) = {
     // TODO we may need to add more logic in KAFKA-2017
     offsetManager.removeOffsetsFromCacheForPartition(offsetTopicPartitionId)
+  }
+
+  private def validGroupId(groupId: String): Boolean = {
+    groupId != null && !groupId.isEmpty
   }
 
   private def joinError(memberId: String, errorCode: Short): JoinGroupResult = {

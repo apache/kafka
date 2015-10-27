@@ -126,6 +126,19 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   }
 
   @Test
+  def testInvalidGroupId() {
+    val groupId = ""
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val metadata = Array[Byte]()
+    val protocolType = "consumer"
+    val protocols = List(("range", metadata))
+
+    val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType,
+      protocols, isCoordinatorForGroup = true)
+    assertEquals(Errors.INVALID_GROUP_ID.code, joinGroupResult.errorCode)
+  }
+
+  @Test
   def testValidJoinGroup() {
     val groupId = "groupId"
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
