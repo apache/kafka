@@ -213,6 +213,7 @@ public class ConfigDef {
                     else
                         throw new ConfigException(name, value, "Expected value to be either true or false");
                 case STRING:
+                case PASSWORD_STRING:
                     if (value instanceof String)
                         return trimmed;
                     else
@@ -280,7 +281,13 @@ public class ConfigDef {
      * The config types
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS;
+        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS,
+        PASSWORD_STRING {
+            @Override
+            public String toString() {
+                return "[hidden]";
+            }
+        }
     }
 
     public enum Importance {
