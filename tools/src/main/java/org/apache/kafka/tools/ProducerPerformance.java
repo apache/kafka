@@ -31,8 +31,7 @@ public class ProducerPerformance {
         ArgumentParser parser = argParser();
 
         try {
-            Namespace res;
-            res = parser.parseArgs(args);
+            Namespace res = parser.parseArgs(args);
 
             /* parse args */
             String topicName = res.getString("topic");
