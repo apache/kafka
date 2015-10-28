@@ -153,9 +153,9 @@ class MirrorMaker(Service):
                    err_msg="Mirror maker took to long to start.")
         self.logger.debug("Mirror maker is alive")
 
-    def stop_node(self, node):
-        node.account.kill_process("java", allow_fail=True)
-        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.5,
+    def stop_node(self, node, clean_shutdown=True):
+        node.account.kill_process("java", allow_fail=True, clean_shutdown=clean_shutdown)
+        wait_until(lambda: not self.alive(node), timeout_sec=240, backoff_sec=.5,
                    err_msg="Mirror maker took to long to stop.")
 
     def clean_node(self, node):

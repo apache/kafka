@@ -13,17 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from ducktape.tests.test import Test
+from ducktape.utils.util import wait_until
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.mirror_maker import MirrorMaker
+from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
+
+import signal
+
+def clean_bounce(test):
+    """Chase the leader of one partition and restart it cleanly."""
+    for i in range(3):
+        test.mirror_maker.stop()
+        test.mirror_maker.start()
 
 
-class TestMirrorMakerService(Test):
+def hard_bounce(test):
+    """Chase the leader and restart it with a hard kill."""
+    for i in range(1):
+
+        for node in test.mirror_maker.nodes:
+            test.mirror_maker.stop_node(node, clean_shutdown=False)
+        test.mirror_maker.start()
+
+
+class TestMirrorMakerService(ProduceConsumeValidateTest):
     """Sanity checks on mirror maker service class."""
     def __init__(self, test_context):
         super(TestMirrorMakerService, self).__init__(test_context)
@@ -37,18 +54,17 @@ class TestMirrorMakerService(Test):
         self.target_kafka = KafkaService(test_context, num_nodes=1, zk=self.target_zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
 
-        self.num_messages = 1000
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.source_kafka, topic=self.topic,
-                                           max_messages=self.num_messages, throughput=1000)
+                                           throughput=1000)
 
         # Use a regex whitelist to check that the start command is well-formed in this case
         self.mirror_maker = MirrorMaker(test_context, num_nodes=1, source=self.source_kafka, target=self.target_kafka,
-                                        whitelist=".*", consumer_timeout_ms=2000)
+                                        whitelist=".*", consumer_timeout_ms=30000)
 
         # This will consume from target kafka cluster
         self.consumer = ConsoleConsumer(test_context, num_nodes=1, kafka=self.target_kafka, topic=self.topic,
-                                        consumer_timeout_ms=1000)
+                                        consumer_timeout_ms=180000)
 
     def setUp(self):
         # Source cluster
@@ -58,6 +74,11 @@ class TestMirrorMakerService(Test):
         # Target cluster
         self.target_zk.start()
         self.target_kafka.start()
+
+    def wait_for_n_messages(self, n_messages=100):
+        """Wait for a minimum number of messages to be successfully produced."""
+        wait_until(lambda: self.producer.num_acked > n_messages, timeout_sec=10,
+                     err_msg="Producer failed to produce %d messages in a reasonable amount of time." % n_messages)
 
     def test_end_to_end(self):
         """
@@ -72,19 +93,10 @@ class TestMirrorMakerService(Test):
         - Verify that number of consumed messages matches the number produced.
         """
         self.mirror_maker.start()
-        # Check that consumer_timeout_ms setting made it to config file
-        self.mirror_maker.nodes[0].account.ssh(
-            "grep \"consumer\.timeout\.ms\" %s" % MirrorMaker.CONSUMER_CONFIG, allow_fail=False)
-
-        self.producer.start()
-        self.producer.wait(10)
-        self.consumer.start()
-        self.consumer.wait(10)
-
-        num_consumed = len(self.consumer.messages_consumed[1])
-        num_produced = self.producer.num_acked
-        assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
-        assert num_produced == num_consumed, "num_produced: %d, num_consumed: %d" % (num_produced, num_consumed)
-
+        self.run_produce_consume_validate(core_test_action=self.wait_for_n_messages)
         self.mirror_maker.stop()
 
+    def test_with_mirrormaker_failure(self):
+        self.mirror_maker.start()
+        self.run_produce_consume_validate(core_test_action=lambda: hard_bounce(self))
+        self.mirror_maker.stop()
