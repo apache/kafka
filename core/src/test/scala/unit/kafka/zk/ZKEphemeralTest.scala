@@ -124,7 +124,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
     zwe.create()
     // Waits until the znode is created
     TestUtils.waitUntilTrue(() => zkUtils.pathExists(path),
-                            "Znode %s wasn't created".format(path))
+                            s"Znode $path wasn't created")
   }
 
   /**
