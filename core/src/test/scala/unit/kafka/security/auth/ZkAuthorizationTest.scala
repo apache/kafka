@@ -142,11 +142,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   @Test
   def testDelete() {
     info("zkConnect string: %s".format(zkConnect))
-    for (path <- zkUtils.securePersistentZkPaths) {
-      info("Creating " + path)
-      zkUtils.makeSurePersistentPathExists(path)
-    }    
-    zkUtils.zkConnection.setAcl("/", zkUtils.DefaultAcls, -1)
+    ZkSecurityMigrator.run(Array("--zookeeper.acl=secure", "--zookeeper.connect=%s".format(zkConnect)))
     deleteAllUnsecure()
   }
 
@@ -162,7 +158,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
       zkUtils.makeSurePersistentPathExists(path)
       zkUtils.createPersistentPath(path + "/fpjwashere", "")
     }
-    zkUtils.zkConnection.setAcl("/", zkUtils.DefaultAcls, -1)    
+    zkUtils.zkConnection.setAcl("/", zkUtils.DefaultAcls, -1)
     deleteAllUnsecure()
   }
   
@@ -290,12 +286,14 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
     val result: Try[Boolean] = {
       deleteRecursive(unsecureZkUtils, "/")
     }
+    // Clean up before leaving the test case
     unsecureZkUtils.close()
     System.clearProperty(JaasUtils.ZK_SASL_CLIENT)
     
+    // Fail the test if able to delete
     result match {
       case Success(v) => // All done
-      case Failure(e) => fail("Was able to delete at least one znode")
+      case Failure(e) => fail(e.getMessage)
     }
   }
   
@@ -305,25 +303,25 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
   private def deleteRecursive(zkUtils: ZkUtils, path: String): Try[Boolean] = {
     info("Deleting " + path)
     var result: Try[Boolean] = Success(true)
-      for (child <- zkUtils.getChildren(path))
-        result = (path match {
+    for (child <- zkUtils.getChildren(path))
+      result = (path match {
         case "/" => deleteRecursive(zkUtils, s"/$child")
         case path => deleteRecursive(zkUtils, s"$path/$child")
       }) match {
-          case Success(v) => result
-          case Failure(e) => Failure(e)
+        case Success(v) => result
+        case Failure(e) => Failure(e)
       }
-      path match {
-        // Do not try to delete the root
-        case "/" => result
-        // For all other paths, try to delete it
-        case path =>
-         try{
+    path match {
+      // Do not try to delete the root
+      case "/" => result
+      // For all other paths, try to delete it
+      case path =>
+        try{
           zkUtils.deletePath(path)
           Failure(new Exception(s"Have been able to delete $path"))
-         } catch {
+        } catch {
           case e: Exception => result
         }
-      }
+    }
   }
 }
