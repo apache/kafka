@@ -12,9 +12,7 @@
  */
 package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.KafkaException;
-
-public class AuthorizationException extends KafkaException {
+public class AuthorizationException extends ApiException {
     public AuthorizationException(String message) {
         super(message);
     }
