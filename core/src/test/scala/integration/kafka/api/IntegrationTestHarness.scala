@@ -54,15 +54,17 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.bootstrapUrl)
+    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.bootstrapUrl)
+    producerConfig.putAll(TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile))
+    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    for(i <- 0 until producerCount)
+    consumerConfig.putAll(TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile))
+    for (i <- 0 until producerCount)
       producers += new KafkaProducer(producerConfig)
-    for(i <- 0 until consumerCount) {
+    for (i <- 0 until consumerCount) {
       consumers += new KafkaConsumer(consumerConfig)
     }
 

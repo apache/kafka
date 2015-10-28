@@ -66,7 +66,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             } catch (Exception ke) {
                 defaultRealm = "";
             }
-            kerberosNameParser = new KerberosNameParser(defaultRealm, (List<String>) configs.get(SaslConfigs.AUTH_TO_LOCAL));
+            kerberosNameParser = new KerberosNameParser(defaultRealm, (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES));
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 this.sslFactory = new SslFactory(mode);

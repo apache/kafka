@@ -513,7 +513,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
-        case KafkaConfig.AuthToLocalProp => // ignore string
+        case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
 
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }

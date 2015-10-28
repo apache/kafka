@@ -31,18 +31,18 @@ public class KerberosName {
     private final String realm;
 
     /* Rules for the translation of the principal name into an operating system name */
-    private final List<KerberosRule> authToLocalRules;
+    private final List<KerberosRule> principalToLocalRules;
 
     /**
      * Creates an instance of `KerberosName` with the provided parameters.
      */
-    public KerberosName(String serviceName, String hostName, String realm, List<KerberosRule> authToLocalRules) {
+    public KerberosName(String serviceName, String hostName, String realm, List<KerberosRule> principalToLocalRules) {
         if (serviceName == null)
             throw new IllegalArgumentException("serviceName must not be null");
         this.serviceName = serviceName;
         this.hostName = hostName;
         this.realm = realm;
-        this.authToLocalRules = authToLocalRules;
+        this.principalToLocalRules = principalToLocalRules;
     }
 
     /**
@@ -103,7 +103,7 @@ public class KerberosName {
         } else {
             params = new String[]{realm, serviceName, hostName};
         }
-        for (KerberosRule r : authToLocalRules) {
+        for (KerberosRule r : principalToLocalRules) {
             String result = r.apply(params);
             if (result != null)
                 return result;

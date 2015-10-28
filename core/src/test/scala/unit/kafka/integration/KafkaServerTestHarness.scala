@@ -52,8 +52,6 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
 
-  def bootstrapUrl = servers.map(s => s.config.hostName + ":" + s.boundPort()).mkString(",")
-
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
   protected def trustStoreFile: Option[File] = None
 
