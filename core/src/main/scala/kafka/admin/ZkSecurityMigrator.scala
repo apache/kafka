@@ -68,7 +68,6 @@ object ZkSecurityMigrator extends Logging {
   def run(args: Array[String]) {
     var jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser()
-
     val zkAclOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
         + " The options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])
     val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").withOptionalArg().ofType(classOf[String])
@@ -157,8 +156,12 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       Code.get(rc) match {
         case Code.OK =>
           // Set ACL for each child
-          for (child <- children.asScala)
-            setAclsRecursively(s"$path/$child")
+          children.asScala.map { child =>
+            path match {
+              case "/" => s"/$child"
+              case path => s"$path/$child"
+            }
+          }.foreach(setAclsRecursively)
           promise success "done"
         case Code.CONNECTIONLOSS =>
           zkHandle.getChildren(path, false, GetChildrenCallback, ctx)
@@ -211,9 +214,9 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       for (path <- zkUtils.securePersistentZkPaths) {
         debug("Going to set ACL for %s".format(path))
         zkUtils.makeSurePersistentPathExists(path)
-        setAclsRecursively(path)
       }
-
+      setAclsRecursively("/")
+      
       @tailrec
       def recurse(): Unit = {
         val future = futures.synchronized { 
@@ -233,5 +236,4 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       zkUtils.close
     }
   }
-
 }

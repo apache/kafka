@@ -21,7 +21,9 @@ import org.apache.zookeeper.server.ZooKeeperServer
 import org.apache.zookeeper.server.NIOServerCnxnFactory
 import kafka.utils.TestUtils
 import java.net.InetSocketAddress
+import javax.security.auth.login.Configuration
 import kafka.utils.CoreUtils
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils.getPort
 
 class EmbeddedZookeeper() {
