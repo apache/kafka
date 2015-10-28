@@ -98,7 +98,6 @@ public class FetcherTest {
         records.append(2L, "key".getBytes(), "value-2".getBytes());
         records.append(3L, "key".getBytes(), "value-3".getBytes());
         records.close();
-        records.flip();
     }
 
     @After
@@ -142,7 +141,7 @@ public class FetcherTest {
 
         // resize the limit of the buffer to pretend it is only fetch-size large
         fetcher.initFetches(cluster);
-        client.prepareResponse(fetchResponse((ByteBuffer) records.flip().limit(this.fetchSize), Errors.NONE.code(), 100L, 0));
+        client.prepareResponse(fetchResponse((ByteBuffer) records.buffer().limit(this.fetchSize), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
         fetcher.fetchedRecords();
     }
