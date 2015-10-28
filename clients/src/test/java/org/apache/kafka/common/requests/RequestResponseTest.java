@@ -61,6 +61,12 @@ public class RequestResponseTest {
                 createLeaveGroupRequest(),
                 createLeaveGroupRequest().getErrorResponse(0, new UnknownServerException()),
                 createLeaveGroupResponse(),
+                createListGroupsRequest(),
+                createListGroupsRequest().getErrorResponse(0, new UnknownServerException()),
+                createListGroupsResponse(),
+                createDescribeGroupRequest(),
+                createDescribeGroupRequest().getErrorResponse(0, new UnknownServerException()),
+                createDescribeGroupResponse(),
                 createListOffsetRequest(),
                 createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
                 createListOffsetResponse(),
@@ -191,6 +197,28 @@ public class RequestResponseTest {
         members.put("consumer1", ByteBuffer.wrap(new byte[]{}));
         members.put("consumer2", ByteBuffer.wrap(new byte[]{}));
         return new JoinGroupResponse(Errors.NONE.code(), 1, "range", "consumer1", "leader", members);
+    }
+
+    private AbstractRequest createListGroupsRequest() {
+        return new ListGroupsRequest();
+    }
+
+    private AbstractRequestResponse createListGroupsResponse() {
+        List<ListGroupsResponse.Group> groups = Arrays.asList(new ListGroupsResponse.Group("test-group", "consumer"));
+        return new ListGroupsResponse(Errors.NONE.code(), groups);
+    }
+
+    private AbstractRequest createDescribeGroupRequest() {
+        return new DescribeGroupRequest("test-group");
+    }
+
+    private AbstractRequestResponse createDescribeGroupResponse() {
+        String clientId = "consumer-1";
+        String clientHost = "localhost";
+        ByteBuffer empty = ByteBuffer.wrap(new byte[0]);
+        DescribeGroupResponse.GroupMember member = new DescribeGroupResponse.GroupMember("memberId",
+                clientId, clientHost, empty, empty);
+        return new DescribeGroupResponse(Errors.NONE.code(), "STABLE", "consumer", "roundrobin", Arrays.asList(member));
     }
 
     private AbstractRequest createLeaveGroupRequest() {

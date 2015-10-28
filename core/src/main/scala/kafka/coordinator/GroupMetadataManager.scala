@@ -95,6 +95,8 @@ class GroupMetadataManager(val brokerId: Int,
     }
   )
 
+  def currentGroups(): Iterable[GroupMetadata] = groupsCache.values
+
   def partitionFor(groupId: String): Int = Utils.abs(groupId.hashCode) % groupMetadataTopicPartitionCount
 
   def isGroupLocal(groupId: String): Boolean = loadingPartitions synchronized ownedPartitions.contains(partitionFor(groupId))
@@ -657,10 +659,14 @@ object GroupMetadataManager {
   private val GROUP_KEY_GROUP_FIELD = GROUP_METADATA_KEY_SCHEMA.get("group")
 
   private val MEMBER_METADATA_V0 = new Schema(new Field("member_id", STRING),
+    new Field("client_id", STRING),
+    new Field("client_host", STRING),
     new Field("session_timeout", INT32),
     new Field("subscription", BYTES),
     new Field("assignment", BYTES))
   private val MEMBER_METADATA_MEMBER_ID_V0 = MEMBER_METADATA_V0.get("member_id")
+  private val MEMBER_METADATA_CLIENT_ID_V0 = MEMBER_METADATA_V0.get("client_id")
+  private val MEMBER_METADATA_CLIENT_HOST_V0 = MEMBER_METADATA_V0.get("client_host")
   private val MEMBER_METADATA_SESSION_TIMEOUT_V0 = MEMBER_METADATA_V0.get("session_timeout")
   private val MEMBER_METADATA_SUBSCRIPTION_V0 = MEMBER_METADATA_V0.get("subscription")
   private val MEMBER_METADATA_ASSIGNMENT_V0 = MEMBER_METADATA_V0.get("assignment")
@@ -791,6 +797,8 @@ object GroupMetadataManager {
       case memberMetadata =>
         val memberStruct = value.instance(GROUP_METADATA_MEMBERS_V0)
         memberStruct.set(MEMBER_METADATA_MEMBER_ID_V0, memberMetadata.memberId)
+        memberStruct.set(MEMBER_METADATA_CLIENT_ID_V0, memberMetadata.clientId)
+        memberStruct.set(MEMBER_METADATA_CLIENT_HOST_V0, memberMetadata.clientHost)
         memberStruct.set(MEMBER_METADATA_SESSION_TIMEOUT_V0, memberMetadata.sessionTimeoutMs)
 
         val metadata = memberMetadata.metadata(groupMetadata.protocol)
@@ -901,10 +909,13 @@ object GroupMetadataManager {
           case memberMetadataObj =>
             val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
             val memberId = memberMetadata.get(MEMBER_METADATA_MEMBER_ID_V0).asInstanceOf[String]
+            val clientId = memberMetadata.get(MEMBER_METADATA_CLIENT_ID_V0).asInstanceOf[String]
+            val clientHost = memberMetadata.get(MEMBER_METADATA_CLIENT_HOST_V0).asInstanceOf[String]
             val sessionTimeout = memberMetadata.get(MEMBER_METADATA_SESSION_TIMEOUT_V0).asInstanceOf[Int]
             val subscription = Utils.toArray(memberMetadata.get(MEMBER_METADATA_SUBSCRIPTION_V0).asInstanceOf[ByteBuffer])
 
-            val member = new MemberMetadata(memberId, groupId, sessionTimeout, List((group.protocol, subscription)))
+            val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeout,
+              List((group.protocol, subscription)))
 
             member.assignment = Utils.toArray(memberMetadata.get(MEMBER_METADATA_ASSIGNMENT_V0).asInstanceOf[ByteBuffer])
 

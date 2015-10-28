@@ -388,7 +388,36 @@ public class Protocol {
     public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1};
     public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1};
 
-    /* Consumer metadata api */
+    /* List groups api */
+    public static final Schema LIST_GROUPS_REQUEST_V0 = new Schema();
+
+    public static final Schema LIST_GROUPS_RESPONSE_GROUP_V0 = new Schema(new Field("group_id", STRING),
+                                                                          new Field("protocol_type", STRING));
+    public static final Schema LIST_GROUPS_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
+                                                                    new Field("groups", new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
+
+    public static final Schema[] LIST_GROUPS_REQUEST = new Schema[] {LIST_GROUPS_REQUEST_V0};
+    public static final Schema[] LIST_GROUPS_RESPONSE = new Schema[] {LIST_GROUPS_RESPONSE_V0};
+
+    /* Describe group api */
+    public static final Schema DESCRIBE_GROUP_REQUEST_V0 = new Schema(new Field("group_id", STRING));
+
+    public static final Schema DESCRIBE_GROUP_RESPONSE_MEMBER_V0 = new Schema(new Field("member_id", STRING),
+                                                                              new Field("client_id", STRING),
+                                                                              new Field("client_host", STRING),
+                                                                              new Field("member_metadata", BYTES),
+                                                                              new Field("member_assignment", BYTES));
+
+    public static final Schema DESCRIBE_GROUP_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
+                                                                       new Field("state", STRING),
+                                                                       new Field("protocol_type", STRING),
+                                                                       new Field("protocol", STRING),
+                                                                       new Field("members", new ArrayOf(DESCRIBE_GROUP_RESPONSE_MEMBER_V0)));
+
+    public static final Schema[] DESCRIBE_GROUP_REQUEST = new Schema[] {DESCRIBE_GROUP_REQUEST_V0};
+    public static final Schema[] DESCRIBE_GROUP_RESPONSE = new Schema[] {DESCRIBE_GROUP_RESPONSE_V0};
+
+    /* Group metadata api */
     public static final Schema GROUP_METADATA_REQUEST_V0 = new Schema(new Field("group_id",
                                                                                 STRING,
                                                                                 "The unique group id."));
@@ -621,7 +650,8 @@ public class Protocol {
         REQUESTS[ApiKeys.HEARTBEAT.id] = HEARTBEAT_REQUEST;
         REQUESTS[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_REQUEST;
         REQUESTS[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_REQUEST;
-
+        REQUESTS[ApiKeys.DESCRIBE_GROUP.id] = DESCRIBE_GROUP_REQUEST;
+        REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -638,6 +668,8 @@ public class Protocol {
         RESPONSES[ApiKeys.HEARTBEAT.id] = HEARTBEAT_RESPONSE;
         RESPONSES[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_RESPONSE;
         RESPONSES[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_RESPONSE;
+        RESPONSES[ApiKeys.DESCRIBE_GROUP.id] = DESCRIBE_GROUP_RESPONSE;
+        RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
 
         /* set the maximum version of each api */
         for (ApiKeys api : ApiKeys.values())

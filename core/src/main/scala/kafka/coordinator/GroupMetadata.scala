@@ -93,6 +93,20 @@ private object GroupMetadata {
 }
 
 /**
+ * Case class used to represent group metadata for the ListGroups API
+ */
+case class GroupOverview(groupId: String,
+                         protocolType: String)
+
+/**
+ * Case class used to represent group metadata for the DescribeGroup API
+ */
+case class GroupSummary(state: String,
+                        protocolType: String,
+                        protocol: String,
+                        members: List[MemberSummary])
+
+/**
  * Group contains the following metadata:
  *
  *  Membership metadata:
@@ -199,6 +213,27 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
     if (is(Dead) || is(PreparingRebalance))
       throw new IllegalStateException("Cannot obtain member metadata for group in state %s".format(state))
     members.map{ case (memberId, memberMetadata) => (memberId, memberMetadata.metadata(protocol))}.toMap
+  }
+
+  def summary: GroupSummary = {
+    if (is(Stable)) {
+      val members = this.members.values.map{ member => member.summary(protocol) }.toList
+      GroupSummary(userFriendlyState, protocolType, protocol, members)
+    } else {
+      GroupSummary(userFriendlyState, protocolType, GroupCoordinator.NoProtocol, GroupCoordinator.NoMembers)
+    }
+  }
+
+  def userFriendlyState = {
+    state match {
+      case Dead => "DEAD"
+      case PreparingRebalance|AwaitingSync => "REBALANCING"
+      case Stable => "STABLE"
+    }
+  }
+
+  def overview: GroupOverview = {
+    GroupOverview(groupId, protocolType)
   }
 
   private def assertValidTransition(targetState: GroupState) {

@@ -98,6 +98,14 @@ public class Struct {
         return (Struct) get(name);
     }
 
+    public Byte getByte(Field field) {
+        return (Byte) get(field);
+    }
+
+    public byte getByte(String name) {
+        return (Byte) get(name);
+    }
+
     public Short getShort(Field field) {
         return (Short) get(field);
     }

@@ -23,6 +23,13 @@ import kafka.utils.nonthreadsafe
 
 import scala.collection.Map
 
+
+case class MemberSummary(memberId: String,
+                         clientId: String,
+                         clientHost: String,
+                         metadata: Array[Byte],
+                         assignment: Array[Byte])
+
 /**
  * Member metadata contains the following metadata:
  *
@@ -46,6 +53,8 @@ import scala.collection.Map
 @nonthreadsafe
 private[coordinator] class MemberMetadata(val memberId: String,
                                           val groupId: String,
+                                          val clientId: String,
+                                          val clientHost: String,
                                           val sessionTimeoutMs: Int,
                                           var supportedProtocols: List[(String, Array[Byte])]) {
 
@@ -85,6 +94,10 @@ private[coordinator] class MemberMetadata(val memberId: String,
         return false
     }
     return true
+  }
+
+  def summary(protocol: String): MemberSummary = {
+    MemberSummary(memberId, clientId, clientHost, metadata(protocol), assignment)
   }
 
   /**
