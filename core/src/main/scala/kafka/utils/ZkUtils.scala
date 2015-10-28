@@ -1078,8 +1078,8 @@ class ZKCheckedEphemeral(path: String,
     }
     val prefix = path.substring(0, index)
     val suffix = path.substring(index, path.length)
-    debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
-    info(s"Creating $path in $isSecure mode")
+    debug(s"Path: $path, Prefix: $prefix, Suffix: $suffix")
+    info(s"Creating $path (is it secure? $isSecure)")
     createRecursive(prefix, suffix)
     val result = waitUntilResolved()
     info("Result of znode creation is: %s".format(result))
