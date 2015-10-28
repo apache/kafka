@@ -214,7 +214,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
     val list = (zkUtils.zkConnection.getAcl(path)).getKey
     var result: Boolean = true
     for (acl: ACL <- list.asScala) {
-           result = result && isAclSecure(acl)
+      result = result && isAclSecure(acl)
     }
     result
   }
