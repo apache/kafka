@@ -19,6 +19,7 @@ import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.hadoop.minikdc.MiniKdc
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.kerberos.LoginManager
 import org.junit.{After, Before}
 
 trait SaslTestHarness extends ZooKeeperTestHarness {
@@ -29,6 +30,8 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
 
   @Before
   override def setUp() {
+    // Important if tests leak consumers, producers or brokers
+    LoginManager.closeAll()
     val keytabFile = createKeytabAndSetConfiguration("kafka_jaas.conf")
     kdc.start()
     kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
@@ -69,6 +72,8 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
   override def tearDown() {
     super.tearDown
     kdc.stop()
+    // Important if tests leak consumers, producers or brokers
+    LoginManager.closeAll()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
   }
