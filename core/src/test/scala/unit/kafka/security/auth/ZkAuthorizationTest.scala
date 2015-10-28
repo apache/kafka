@@ -20,13 +20,14 @@ package kafka.security.auth
 import kafka.admin.ZkSecurityMigrator
 import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.junit.Assert._
 import org.junit.{After, Before, BeforeClass, Test}
 import scala.collection.JavaConverters._
 import scala.util.{Try, Success, Failure}
+import javax.security.auth.login.Configuration
 
 
 class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
@@ -52,10 +53,12 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
    */
   @Test
   def testIsZkSecurityEnabled() {
-    assertTrue(JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
-    assertFalse(JaasUtils.isZkSecurityEnabled(""))
-    try {
-      JaasUtils.isZkSecurityEnabled("no-such-file-exists.conf")
+    assertTrue(JaasUtils.isZkSecurityEnabled())
+    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+    assertFalse(JaasUtils.isZkSecurityEnabled())
+    try {     
+      System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
+      JaasUtils.isZkSecurityEnabled()
       fail("Should have thrown an exception")
     } catch {
       case e: KafkaException => {

@@ -70,7 +70,6 @@ object ZkSecurityMigrator extends Logging {
     val parser = new OptionParser()
     val zkAclOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
         + " The options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])
-    val jaasFileOpt = parser.accepts("jaas.file", "JAAS Config file.").withOptionalArg().ofType(classOf[String])
     val zkUrlOpt = parser.accepts("zookeeper.connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
       "takes a comma-separated list of host:port pairs.").withRequiredArg().defaultsTo("localhost:2181").
       ofType(classOf[String])
@@ -84,19 +83,14 @@ object ZkSecurityMigrator extends Logging {
     if (options.has(helpOpt))
       CommandLineUtils.printUsageAndDie(parser, usageMessage)
 
-    if ((jaasFile == null) && !options.has(jaasFileOpt)) {
-     val errorMsg = ("No JAAS configuration file has been specified. Please make sure that you have set either " + 
-                    "the system property %s or the option %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "--jaas.file")) 
+    if ((jaasFile == null)) {
+     val errorMsg = ("No JAAS configuration file has been specified. Please make sure that you have set " +
+                    "the system property %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM))
      System.out.println("ERROR: %s".format(errorMsg))
      throw new IllegalArgumentException("Incorrect configuration")
     }
 
-    if (jaasFile == null) {
-      jaasFile = options.valueOf(jaasFileOpt)
-      System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
-    }
-
-    if (!JaasUtils.isZkSecurityEnabled(jaasFile)) {
+    if (!JaasUtils.isZkSecurityEnabled()) {
       val errorMsg = "Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile)
       System.out.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration") 

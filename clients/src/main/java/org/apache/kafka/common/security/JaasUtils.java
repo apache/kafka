@@ -22,8 +22,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.io.IOException;
 import java.io.File;
-import java.net.URI;
-import java.security.URIParameter;
 
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
@@ -73,7 +71,7 @@ public class JaasUtils {
         Class<?> classRef;
         Method getInstanceMethod;
         Method getDefaultRealmMethod;
-        if (isIBMJdk()) {
+        if (System.getProperty("java.vendor").contains("IBM")) {
             classRef = Class.forName("com.ibm.security.krb5.internal.Config");
         } else {
             classRef = Class.forName("sun.security.krb5.Config");
@@ -85,11 +83,12 @@ public class JaasUtils {
         return (String) getDefaultRealmMethod.invoke(kerbConf, new Object[0]);
     }
 
-    public static boolean isZkSecurityEnabled(String loginConfigFile) {
+    public static boolean isZkSecurityEnabled() {
         boolean isSecurityEnabled = false;
         boolean zkSaslEnabled = Boolean.parseBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));
         String zkLoginContextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY, "Client");
 
+        String loginConfigFile = System.getProperty(JAVA_LOGIN_CONFIG_PARAM);
         if (loginConfigFile != null && loginConfigFile.length() > 0) {
             File configFile = new File(loginConfigFile);
             if (!configFile.canRead()) {
@@ -97,13 +96,7 @@ public class JaasUtils {
             }
                 
             try {
-                URI configUri = configFile.toURI();
-                Configuration loginConf;
-                if (isIBMJdk()) {
-                    loginConf = (Configuration) Class.forName("com.ibm.security.auth.login.ConfigFile").getConstructor(URI.class).newInstance(configUri);
-                } else {
-                    loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configUri));
-                }
+                Configuration loginConf = Configuration.getConfiguration();
                 isSecurityEnabled = loginConf.getAppConfigurationEntry(zkLoginContextName) != null;
             } catch (Exception e) {
                 throw new KafkaException(e);
@@ -122,10 +115,6 @@ public class JaasUtils {
         Configuration.setConfiguration(null);
 
         return isSecurityEnabled;
-    }
-    
-    private static boolean isIBMJdk() {
-        return System.getProperty("java.vendor").contains("IBM");
     }
 }
 
