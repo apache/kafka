@@ -371,6 +371,8 @@ public class DistributedHerderTest {
                 return null;
             }
         });
+        member.wakeup();
+        PowerMock.expectLastCall();
     }
 
     private void expectPostRebalanceCatchup(final ClusterConfigState readToEndSnapshot) {

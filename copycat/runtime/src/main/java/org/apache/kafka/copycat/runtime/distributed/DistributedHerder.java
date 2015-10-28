@@ -614,6 +614,10 @@ public class DistributedHerder implements Herder, Runnable {
                 log.info("Joined group and got assignment: {}", assignment);
                 DistributedHerder.this.assignment = assignment;
                 rebalanceResolved = false;
+                // We *must* interrupt any poll() call since this could occur when the poll starts, and we might then
+                // sleep in the poll() for a long time. Forcing a wakeup ensures we'll get to process this event in the
+                // main thread.
+                member.wakeup();
             }
 
             @Override
