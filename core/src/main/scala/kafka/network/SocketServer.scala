@@ -81,7 +81,6 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
       connectionQuotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
 
-      val channelConfigs = config.channelConfigs
       val sendBufferSize = config.socketSendBufferBytes
       val recvBufferSize = config.socketReceiveBufferBytes
       val maxRequestSize = config.socketRequestMaxBytes
@@ -101,7 +100,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
             connectionQuotas,
             connectionsMaxIdleMs,
             protocol,
-            channelConfigs,
+            config.values,
             metrics
           )
         }
@@ -357,7 +356,7 @@ private[kafka] class Processor(val id: Int,
                                connectionQuotas: ConnectionQuotas,
                                connectionsMaxIdleMs: Long,
                                protocol: SecurityProtocol,
-                               channelConfigs: java.util.Map[String, Object],
+                               channelConfigs: java.util.Map[String, _],
                                metrics: Metrics) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {

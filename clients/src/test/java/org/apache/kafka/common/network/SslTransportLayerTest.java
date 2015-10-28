@@ -38,12 +38,12 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.SSLConfigs;
-import org.apache.kafka.common.security.ssl.SSLFactory;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestSSLUtils;
+import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -52,12 +52,11 @@ import org.junit.Test;
 /**
  * Tests for the SSL transport layer. These use a test harness that runs a simple socket server that echos back responses.
  */
-
-public class SSLTransportLayerTest {
+public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
 
-    private SSLEchoServer server;
+    private SslEchoServer server;
     private Selector selector;
     private ChannelBuilder channelBuilder;
     private CertStores serverCertStores;
@@ -73,7 +72,7 @@ public class SSLTransportLayerTest {
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
-        this.channelBuilder = new SSLChannelBuilder(Mode.CLIENT);
+        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
@@ -94,7 +93,7 @@ public class SSLTransportLayerTest {
     public void testValidEndpointIdentification() throws Exception {
         String node = "0";
         createEchoServer(sslServerConfigs);
-        sslClientConfigs.put(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -111,9 +110,9 @@ public class SSLTransportLayerTest {
     public void testInvalidEndpointIdentification() throws Exception {
         String node = "0";
         String serverHost = InetAddress.getLocalHost().getHostAddress();
-        server = new SSLEchoServer(sslServerConfigs, serverHost);
+        server = new SslEchoServer(sslServerConfigs, serverHost);
         server.start();
-        sslClientConfigs.put(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress(serverHost, server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -129,9 +128,9 @@ public class SSLTransportLayerTest {
     public void testEndpointIdentificationDisabled() throws Exception {
         String node = "0";
         String serverHost = InetAddress.getLocalHost().getHostAddress();
-        server = new SSLEchoServer(sslServerConfigs, serverHost);
+        server = new SslEchoServer(sslServerConfigs, serverHost);
         server.start();
-        sslClientConfigs.remove(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress(serverHost, server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -146,7 +145,7 @@ public class SSLTransportLayerTest {
     @Test
     public void testClientAuthenticationRequiredValidProvided() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SSLConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         createEchoServer(sslServerConfigs);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
@@ -163,7 +162,7 @@ public class SSLTransportLayerTest {
     public void testClientAuthenticationRequiredUntrustedProvided() throws Exception {
         String node = "0";
         sslServerConfigs = serverCertStores.getUntrustingConfig();
-        sslServerConfigs.put(SSLConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         createEchoServer(sslServerConfigs);        
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
@@ -179,12 +178,12 @@ public class SSLTransportLayerTest {
     @Test
     public void testClientAuthenticationRequiredNotProvided() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SSLConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         createEchoServer(sslServerConfigs);
         
-        sslClientConfigs.remove(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
-        sslClientConfigs.remove(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
-        sslClientConfigs.remove(SSLConfigs.SSL_KEY_PASSWORD_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -200,7 +199,7 @@ public class SSLTransportLayerTest {
     public void testClientAuthenticationDisabledUntrustedProvided() throws Exception {
         String node = "0";
         sslServerConfigs = serverCertStores.getUntrustingConfig();
-        sslServerConfigs.put(SSLConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
+        sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
         createEchoServer(sslServerConfigs);      
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
@@ -216,12 +215,12 @@ public class SSLTransportLayerTest {
     @Test
     public void testClientAuthenticationDisabledNotProvided() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SSLConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
+        sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
         createEchoServer(sslServerConfigs);
         
-        sslClientConfigs.remove(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
-        sslClientConfigs.remove(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
-        sslClientConfigs.remove(SSLConfigs.SSL_KEY_PASSWORD_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -236,7 +235,7 @@ public class SSLTransportLayerTest {
     @Test
     public void testClientAuthenticationRequestedValidProvided() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SSLConfigs.SSL_CLIENT_AUTH_CONFIG, "requested");
+        sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "requested");
         createEchoServer(sslServerConfigs);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
@@ -252,12 +251,12 @@ public class SSLTransportLayerTest {
     @Test
     public void testClientAuthenticationRequestedNotProvided() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SSLConfigs.SSL_CLIENT_AUTH_CONFIG, "requested");
+        sslServerConfigs.put(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "requested");
         createEchoServer(sslServerConfigs);
         
-        sslClientConfigs.remove(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
-        sslClientConfigs.remove(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
-        sslClientConfigs.remove(SSLConfigs.SSL_KEY_PASSWORD_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+        sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -270,9 +269,9 @@ public class SSLTransportLayerTest {
      */
     @Test
     public void testInvalidTruststorePassword() throws Exception {
-        SSLChannelBuilder channelBuilder = new SSLChannelBuilder(Mode.CLIENT);
+        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         try {
-            sslClientConfigs.put(SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "invalid");
+            sslClientConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid truststore password");
         } catch (KafkaException e) {
@@ -285,9 +284,9 @@ public class SSLTransportLayerTest {
      */
     @Test
     public void testInvalidKeystorePassword() throws Exception {
-        SSLChannelBuilder channelBuilder = new SSLChannelBuilder(Mode.CLIENT);
+        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         try {
-            sslClientConfigs.put(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "invalid");
+            sslClientConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid keystore password");
         } catch (KafkaException e) {
@@ -302,7 +301,7 @@ public class SSLTransportLayerTest {
     @Test
     public void testInvalidKeyPassword() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SSLConfigs.SSL_KEY_PASSWORD_CONFIG, "invalid");
+        sslServerConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "invalid");
         createEchoServer(sslServerConfigs);        
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
@@ -317,10 +316,10 @@ public class SSLTransportLayerTest {
     @Test
     public void testUnsupportedTLSVersion() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
+        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
         createEchoServer(sslServerConfigs);
         
-        sslClientConfigs.put(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.1"));
+        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.1"));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -335,10 +334,10 @@ public class SSLTransportLayerTest {
     public void testUnsupportedCiphers() throws Exception {
         String node = "0";
         String[] cipherSuites = SSLContext.getDefault().getDefaultSSLParameters().getCipherSuites();
-        sslServerConfigs.put(SSLConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[0]));
+        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[0]));
         createEchoServer(sslServerConfigs);
         
-        sslClientConfigs.put(SSLConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
+        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -427,7 +426,7 @@ public class SSLTransportLayerTest {
     }
     
     private void createEchoServer(Map<String, Object> sslServerConfigs) throws Exception {
-        server = new SSLEchoServer(sslServerConfigs, "localhost");
+        server = new SslEchoServer(sslServerConfigs, "localhost");
         server.start();
     }
     
@@ -437,14 +436,14 @@ public class SSLTransportLayerTest {
 
     private void createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize, final Integer netWriteBufSize, final Integer appBufSize) {
         
-        this.channelBuilder = new SSLChannelBuilder(Mode.CLIENT) {
+        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT) {
 
             @Override
-            protected SSLTransportLayer buildTransportLayer(SSLFactory sslFactory, String id, SelectionKey key) throws IOException {
+            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key) throws IOException {
                 SocketChannel socketChannel = (SocketChannel) key.channel();
-                SSLEngine sslEngine = sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
+                SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(),
                                 socketChannel.socket().getPort());
-                TestSSLTransportLayer transportLayer = new TestSSLTransportLayer(id, key, sslEngine, netReadBufSize, netWriteBufSize, appBufSize);
+                TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, netReadBufSize, netWriteBufSize, appBufSize);
                 transportLayer.startHandshake();
                 return transportLayer;
             }
@@ -463,15 +462,15 @@ public class SSLTransportLayerTest {
             String name = server ? "server" : "client";
             Mode mode = server ? Mode.SERVER : Mode.CLIENT;
             File truststoreFile = File.createTempFile(name + "TS", ".jks");
-            sslConfig = TestSSLUtils.createSSLConfig(!server, true, mode, truststoreFile, name);
-            sslConfig.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+            sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name);
+            sslConfig.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         }
        
         private Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {
             Map<String, Object> config = new HashMap<String, Object>(sslConfig);
-            config.put(SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, truststoreConfig.sslConfig.get(SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-            config.put(SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststoreConfig.sslConfig.get(SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-            config.put(SSLConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, truststoreConfig.sslConfig.get(SSLConfigs.SSL_TRUSTSTORE_TYPE_CONFIG));
+            config.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            config.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            config.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG));
             return config;
         }
         
@@ -485,15 +484,15 @@ public class SSLTransportLayerTest {
      * code path. The overridden buffer size starts with a small value and increases in size when the buffer
      * size is retrieved to handle overflow/underflow, until the actual session buffer size is reached.
      */
-    private static class TestSSLTransportLayer extends SSLTransportLayer {
+    private static class TestSslTransportLayer extends SslTransportLayer {
 
         private final ResizeableBufferSize netReadBufSize;
         private final ResizeableBufferSize netWriteBufSize;
         private final ResizeableBufferSize appBufSize;
 
-        public TestSSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, 
-                Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) throws IOException {
-            super(channelId, key, sslEngine);
+        public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
+                                     Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) throws IOException {
+            super(channelId, key, sslEngine, false);
             this.netReadBufSize = new ResizeableBufferSize(netReadBufSize);
             this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSize);
             this.appBufSize = new ResizeableBufferSize(appBufSize);
@@ -538,18 +537,18 @@ public class SSLTransportLayerTest {
     }
     
     // Non-blocking EchoServer implementation that uses SSLTransportLayer
-    private class SSLEchoServer extends Thread {
+    private class SslEchoServer extends Thread {
         private final int port;
         private final ServerSocketChannel serverSocketChannel;
         private final List<SocketChannel> newChannels;
         private final List<SocketChannel> socketChannels;
         private final AcceptorThread acceptorThread;
-        private SSLFactory sslFactory;
+        private SslFactory sslFactory;
         private final Selector selector;
         private final ConcurrentLinkedQueue<NetworkSend> inflightSends = new ConcurrentLinkedQueue<NetworkSend>();
 
-        public SSLEchoServer(Map<String, ?> configs, String serverHost) throws Exception {
-            this.sslFactory = new SSLFactory(Mode.SERVER);
+        public SslEchoServer(Map<String, ?> configs, String serverHost) throws Exception {
+            this.sslFactory = new SslFactory(Mode.SERVER);
             this.sslFactory.configure(configs);
             serverSocketChannel = ServerSocketChannel.open();
             serverSocketChannel.configureBlocking(false);
@@ -557,7 +556,7 @@ public class SSLTransportLayerTest {
             this.port = serverSocketChannel.socket().getLocalPort();
             this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
             this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-            SSLChannelBuilder channelBuilder = new SSLChannelBuilder(Mode.SERVER);
+            SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.SERVER);
             channelBuilder.configure(sslServerConfigs);
             this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
             setName("echoserver");

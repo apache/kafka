@@ -60,9 +60,8 @@ class CopycatStandaloneFileTest(KafkaTest):
         self.value_converter = converter
         self.schemas = schemas
 
-        # These need to be set
-        self.source.set_configs(self.render("copycat-standalone.properties"), self.render("copycat-file-source.properties"))
-        self.sink.set_configs(self.render("copycat-standalone.properties"), self.render("copycat-file-sink.properties"))
+        self.source.set_configs(self.render("copycat-standalone.properties"), [self.render("copycat-file-source.properties")])
+        self.sink.set_configs(self.render("copycat-standalone.properties"), [self.render("copycat-file-sink.properties")])
 
         self.source.start()
         self.sink.start()

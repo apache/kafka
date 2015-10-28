@@ -98,7 +98,7 @@ object AdminUtils extends Logging {
  /**
   * Add partitions to existing topic with optional replica assignment
   *
-  * @param zkClient Zookeeper client
+  * @param zkUtils Zookeeper utilities
   * @param topic Topic for adding partitions to
   * @param numPartitions Number of partitions to be set
   * @param replicaAssignmentStr Manual replica assignment
@@ -177,7 +177,7 @@ object AdminUtils extends Logging {
   /**
    * Delete the whole directory of the given consumer group if the group is inactive.
    *
-   * @param zkClient Zookeeper client
+   * @param zkUtils Zookeeper utilities
    * @param group Consumer group
    * @return whether or not we deleted the consumer group information
    */
@@ -194,7 +194,7 @@ object AdminUtils extends Logging {
    * Delete the given consumer group's information for the given topic in Zookeeper if the group is inactive.
    * If the consumer group consumes no other topics, delete the whole consumer group directory.
    *
-   * @param zkClient Zookeeper client
+   * @param zkUtils Zookeeper utilities
    * @param group Consumer group
    * @param topic Topic of the consumer group information we wish to delete
    * @return whether or not we deleted the consumer group information for the given topic
@@ -216,7 +216,7 @@ object AdminUtils extends Logging {
   /**
    * Delete every inactive consumer group's information about the given topic in Zookeeper.
    *
-   * @param zkClient Zookeeper client
+   * @param zkUtils Zookeeper utilities
    * @param topic Topic of the consumer group information we wish to delete
    */
   def deleteAllConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, topic: String) {
@@ -226,7 +226,7 @@ object AdminUtils extends Logging {
 
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean = 
     zkUtils.zkClient.exists(getTopicPath(topic))
-    
+
   def createTopic(zkUtils: ZkUtils,
                   topic: String,
                   partitions: Int, 
@@ -294,7 +294,7 @@ object AdminUtils extends Logging {
 
   /**
    * Update the config for a client and create a change notification so the change will propagate to other brokers
-   * @param zkClient: The ZkClient handle used to write the new config to zookeeper
+   * @param zkUtils Zookeeper utilities used to write the config to ZK
    * @param clientId: The clientId for which configs are being changed
    * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
    *                 existing configs need to be deleted, it should be done prior to invoking this API
@@ -306,7 +306,7 @@ object AdminUtils extends Logging {
 
   /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
-   * @param zkClient: The ZkClient handle used to write the new config to zookeeper
+   * @param zkUtils Zookeeper utilities used to write the config to ZK
    * @param topic: The topic for which configs are being changed
    * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
    *                 existing configs need to be deleted, it should be done prior to invoking this API
@@ -379,6 +379,9 @@ object AdminUtils extends Logging {
   def fetchAllTopicConfigs(zkUtils: ZkUtils): Map[String, Properties] =
     zkUtils.getAllTopics().map(topic => (topic, fetchEntityConfig(zkUtils, ConfigType.Topic, topic))).toMap
 
+  def fetchAllEntityConfigs(zkUtils: ZkUtils, entityType: String): Map[String, Properties] =
+    zkUtils.getAllEntitiesWithConfig(entityType).map(entity => (entity, fetchEntityConfig(zkUtils, entityType, entity))).toMap
+
   def fetchTopicMetadataFromZk(topic: String, zkUtils: ZkUtils): TopicMetadata =
     fetchTopicMetadataFromZk(topic, zkUtils, new mutable.HashMap[Int, Broker])
 
@@ -386,8 +389,6 @@ object AdminUtils extends Logging {
     val cachedBrokerInfo = new mutable.HashMap[Int, Broker]()
     topics.map(topic => fetchTopicMetadataFromZk(topic, zkUtils, cachedBrokerInfo))
   }
-
-
 
   private def fetchTopicMetadataFromZk(topic: String, zkUtils: ZkUtils, cachedBrokerInfo: mutable.HashMap[Int, Broker], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): TopicMetadata = {
     if(zkUtils.pathExists(getTopicPath(topic))) {

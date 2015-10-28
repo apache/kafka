@@ -73,7 +73,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.restoreTime = this.metrics.addLatencySensor(metricGrp, name, "restore", "store-name", name);
 
         this.topic = name;
-        this.partition = context.id();
+        this.partition = context.id().partition;
 
         this.context = context;
 
@@ -171,7 +171,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     /**
      * Called when the underlying {@link #inner} {@link KeyValueStore} removes an entry in response to a call from this
      * store other than {@link #delete(Object)}.
-     * 
+     *
      * @param key the key for the entry that the inner store removed
      */
     protected void removed(K key) {

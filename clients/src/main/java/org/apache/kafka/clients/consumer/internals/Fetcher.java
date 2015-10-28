@@ -473,9 +473,8 @@ public class Fetcher<K, V> {
                 long fetched = this.subscriptions.fetched(partition);
                 long consumed = this.subscriptions.consumed(partition);
                 // Only fetch data for partitions whose previously fetched data has been consumed
-                if (consumed == fetched) {
+                if (consumed == fetched)
                     fetch.put(partition, new FetchRequest.PartitionData(fetched, this.fetchSize));
-                }
             }
         }
 

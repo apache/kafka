@@ -31,6 +31,7 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLPeerUnverifiedException;
 
@@ -42,13 +43,14 @@ import org.slf4j.LoggerFactory;
 /*
  * Transport layer for SSL communication
  */
-
-public class SSLTransportLayer implements TransportLayer {
-    private static final Logger log = LoggerFactory.getLogger(SSLTransportLayer.class);
+public class SslTransportLayer implements TransportLayer {
+    private static final Logger log = LoggerFactory.getLogger(SslTransportLayer.class);
     private final String channelId;
     private final SSLEngine sslEngine;
     private final SelectionKey key;
     private final SocketChannel socketChannel;
+    private final boolean enableRenegotiation;
+
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;
     private boolean handshakeComplete = false;
@@ -58,18 +60,20 @@ public class SSLTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
-    public static SSLTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-        SSLTransportLayer transportLayer = new SSLTransportLayer(channelId, key, sslEngine);
+    public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
+        // Disable renegotiation by default until we have fixed the known issues with the existing implementation
+        SslTransportLayer transportLayer = new SslTransportLayer(channelId, key, sslEngine, false);
         transportLayer.startHandshake();
         return transportLayer;
     }
 
     // Prefer `create`, only use this in tests
-    SSLTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
+    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, boolean enableRenegotiation) throws IOException {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
+        this.enableRenegotiation = enableRenegotiation;
     }
 
     /**
@@ -305,6 +309,12 @@ public class SSLTransportLayer implements TransportLayer {
         }
     }
 
+    private void renegotiate() throws IOException {
+        if (!enableRenegotiation)
+            throw new SSLHandshakeException("Renegotiation is not supported");
+        handshake();
+    }
+
 
     /**
      * Executes the SSLEngine tasks needed.
@@ -435,10 +445,10 @@ public class SSLTransportLayer implements TransportLayer {
                 SSLEngineResult unwrapResult = sslEngine.unwrap(netReadBuffer, appReadBuffer);
                 netReadBuffer.compact();
                 // handle ssl renegotiation.
-                if (unwrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
+                if (unwrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && unwrapResult.getStatus() == Status.OK) {
                     log.trace("SSLChannel Read begin renegotiation channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}",
                               channelId, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
-                    handshake();
+                    renegotiate();
                     break;
                 }
 
@@ -541,8 +551,8 @@ public class SSLTransportLayer implements TransportLayer {
         netWriteBuffer.flip();
 
         //handle ssl renegotiation
-        if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
-            handshake();
+        if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK) {
+            renegotiate();
             return written;
         }
 

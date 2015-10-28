@@ -17,6 +17,8 @@
 package kafka.admin
 
 import junit.framework.Assert._
+import kafka.api.RequestKeys
+import org.apache.kafka.common.metrics.Quota
 import org.junit.Test
 import java.util.Properties
 import kafka.utils._
@@ -28,6 +30,7 @@ import kafka.server.{ConfigType, KafkaServer, KafkaConfig}
 import java.io.File
 import TestUtils._
 
+import scala.collection.{Map, immutable}
 
 class AdminTest extends ZooKeeperTestHarness with Logging {
 
@@ -102,7 +105,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
       10 -> List(1, 2, 3),
       11 -> List(1, 3, 4)
     )
-    val leaderForPartitionMap = Map(
+    val leaderForPartitionMap = immutable.Map(
       0 -> 0,
       1 -> 1,
       2 -> 2,
@@ -412,6 +415,37 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
       // Verify that the same config can be read from ZK
       val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Topic, topic)
       assertEquals(newConfig, configInZk)
+    } finally {
+      server.shutdown()
+      server.config.logDirs.foreach(CoreUtils.rm(_))
+    }
+  }
+
+  /**
+   * This test simulates a client config change in ZK whose notification has been purged.
+   * Basically, it asserts that notifications are bootstrapped from ZK
+   */
+  @Test
+  def testBootstrapClientIdConfig() {
+    val clientId = "my-client"
+    val props = new Properties()
+    props.setProperty("producer_byte_rate", "1000")
+    props.setProperty("consumer_byte_rate", "2000")
+
+    // Write config without notification to ZK.
+    val configMap = Map[String, String] ("producer_byte_rate" -> "1000", "consumer_byte_rate" -> "2000")
+    val map = Map("version" -> 1, "config" -> configMap)
+    zkUtils.updatePersistentPath(ZkUtils.getEntityConfigPath(ConfigType.Client, clientId), Json.encode(map))
+
+    val configInZk: Map[String, Properties] = AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client)
+    assertEquals("Must have 1 overriden client config", 1, configInZk.size)
+    assertEquals(props, configInZk(clientId))
+
+    // Test that the existing clientId overrides are read
+    val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+    try {
+      assertEquals(new Quota(1000, true), server.apis.quotaManagers(RequestKeys.ProduceKey).quota(clientId));
+      assertEquals(new Quota(2000, true), server.apis.quotaManagers(RequestKeys.FetchKey).quota(clientId));
     } finally {
       server.shutdown()
       server.config.logDirs.foreach(CoreUtils.rm(_))

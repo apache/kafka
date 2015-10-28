@@ -15,7 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.ConsumerWakeupException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
@@ -155,10 +155,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
     }
 
     @Override
-    protected void onJoin(int generation,
-                          String memberId,
-                          String assignmentStrategy,
-                          ByteBuffer assignmentBuffer) {
+    protected void onJoinComplete(int generation,
+                                  String memberId,
+                                  String assignmentStrategy,
+                                  ByteBuffer assignmentBuffer) {
         PartitionAssignor assignor = protocolMap.get(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -169,7 +169,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         subscriptions.needRefreshCommits();
 
         // update partition assignment
-        subscriptions.changePartitionAssignment(assignment.partitions());
+        subscriptions.assignFromSubscribed(assignment.partitions());
 
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
@@ -180,6 +180,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         try {
             Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsAssigned(assigned);
+        } catch (WakeupException e) {
+            throw e;
         } catch (Exception e) {
             log.error("User provided listener " + listener.getClass().getName()
                     + " failed on partition assignment: ", e);
@@ -187,9 +189,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
     }
 
     @Override
-    protected Map<String, ByteBuffer> doSync(String leaderId,
-                                             String assignmentStrategy,
-                                             Map<String, ByteBuffer> allSubscriptions) {
+    protected Map<String, ByteBuffer> performAssignment(String leaderId,
+                                                        String assignmentStrategy,
+                                                        Map<String, ByteBuffer> allSubscriptions) {
         PartitionAssignor assignor = protocolMap.get(protocol);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -224,7 +226,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
     }
 
     @Override
-    protected void onLeave(int generation, String memberId) {
+    protected void onJoinPrepare(int generation, String memberId) {
         // commit offsets prior to rebalance if auto-commit enabled
         maybeAutoCommitOffsetsSync();
 
@@ -234,6 +236,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         try {
             Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsRevoked(revoked);
+        } catch (WakeupException e) {
+            throw e;
         } catch (Exception e) {
             log.error("User provided listener " + listener.getClass().getName()
                     + " failed on partition revocation: ", e);
@@ -302,7 +306,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
             try {
                 maybeAutoCommitOffsetsSync();
                 return;
-            } catch (ConsumerWakeupException e) {
+            } catch (WakeupException e) {
                 // ignore wakeups while closing to ensure we have a chance to commit
                 continue;
             }
@@ -368,7 +372,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         if (autoCommitEnabled) {
             try {
                 commitOffsetsSync(subscriptions.allConsumed());
-            } catch (ConsumerWakeupException e) {
+            } catch (WakeupException e) {
                 // rethrow wakeups since they are triggered by the user
                 throw e;
             } catch (Exception e) {

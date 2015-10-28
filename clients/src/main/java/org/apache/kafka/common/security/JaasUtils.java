@@ -87,7 +87,7 @@ public class JaasUtils {
 
     public static boolean isZkSecurityEnabled(String loginConfigFile) {
         boolean isSecurityEnabled = false;
-        boolean zkSaslEnabled = Boolean.getBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));
+        boolean zkSaslEnabled = Boolean.parseBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));
         String zkLoginContextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY, "Client");
 
         if (loginConfigFile != null && loginConfigFile.length() > 0) {
@@ -95,6 +95,7 @@ public class JaasUtils {
             if (!configFile.canRead()) {
                 throw new KafkaException("File " + loginConfigFile + "cannot be read.");
             }
+                
             try {
                 URI configUri = configFile.toURI();
                 Configuration loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configUri));
@@ -109,6 +110,11 @@ public class JaasUtils {
                 throw new KafkaException("Exception while determining if ZooKeeper is secure");
             }
         }
+        /*
+         * Tests fail if we don't reset the login configuration. It is unclear
+         * what is actually triggering this bug.
+         */
+        Configuration.setConfiguration(null);
 
         return isSecurityEnabled;
     }

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.tools;
+package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -23,12 +23,14 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -46,29 +48,29 @@ import net.sourceforge.argparse4j.inf.Namespace;
  * with end-to-end correctness tests by making externally visible which messages have been
  * acked and which have not.
  *
- * When used as a command-line tool, it produces increasing integers. It will produce a 
+ * When used as a command-line tool, it produces increasing integers. It will produce a
  * fixed number of messages unless the default max-messages -1 is used, in which case
  * it produces indefinitely.
- *  
+ *
  * If logging is left enabled, log output on stdout can be easily ignored by checking
  * whether a given line is valid JSON.
  */
 public class VerifiableProducer {
-    
+
     String topic;
     private Producer<String, String> producer;
     // If maxMessages < 0, produce until the process is killed externally
     private long maxMessages = -1;
-    
+
     // Number of messages for which acks were received
     private long numAcked = 0;
-    
+
     // Number of send attempts
     private long numSent = 0;
-    
+
     // Throttle message throughput if this is set >= 0
     private long throughput;
-    
+
     // Hook to trigger producing thread to stop sending messages
     private boolean stopProducing = false;
 
@@ -102,7 +104,7 @@ public class VerifiableProducer {
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("brokerList")
                 .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
-        
+
         parser.addArgument("--max-messages")
                 .action(store())
                 .required(false)
@@ -138,12 +140,34 @@ public class VerifiableProducer {
 
         return parser;
     }
-  
+    
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     *                 
+     * Note: this duplication of org.apache.kafka.common.utils.Utils.loadProps is unfortunate 
+     * but *intentional*. In order to use VerifiableProducer in compatibility and upgrade tests, 
+     * we use VerifiableProducer from trunk tools package, and run it against 0.8.X.X kafka jars.
+     * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
+     */
+    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+        Properties props = new Properties();
+        InputStream propStream = null;
+        try {
+            propStream = new FileInputStream(filename);
+            props.load(propStream);
+        } finally {
+            if (propStream != null)
+                propStream.close();
+        }
+        return props;
+    }
+    
     /** Construct a VerifiableProducer object from command-line arguments. */
     public static VerifiableProducer createFromArgs(String[] args) {
         ArgumentParser parser = argParser();
         VerifiableProducer producer = null;
-        
+
         try {
             Namespace res;
             res = parser.parseArgs(args);
@@ -164,7 +188,7 @@ public class VerifiableProducer {
             producerProps.put("retries", "0");
             if (configFile != null) {
                 try {
-                    producerProps.putAll(Utils.loadProps(configFile));
+                    producerProps.putAll(loadProps(configFile));
                 } catch (IOException e) {
                     throw new ArgumentParserException(e.getMessage(), parser);
                 }
@@ -180,10 +204,10 @@ public class VerifiableProducer {
                 System.exit(1);
             }
         }
-        
+
         return producer;
     }
-  
+
     /** Produce a message with given key and value. */
     public void send(String key, String value) {
         ProducerRecord<String, String> record = new ProducerRecord<String, String>(topic, key, value);
@@ -197,12 +221,12 @@ public class VerifiableProducer {
             }
         }
     }
-  
+
     /** Close the producer to flush any remaining messages. */
     public void close() {
         producer.close();
     }
-  
+
     /**
      * Return JSON string encapsulating basic information about the exception, as well
      * as the key and value which triggered the exception.
@@ -220,10 +244,10 @@ public class VerifiableProducer {
         errorData.put("topic", this.topic);
         errorData.put("key", key);
         errorData.put("value", value);
-        
+
         return toJsonString(errorData);
     }
-  
+
     String successString(RecordMetadata recordMetadata, String key, String value, Long nowMs) {
         assert recordMetadata != null : "Expected non-null recordMetadata object.";
 
@@ -237,10 +261,10 @@ public class VerifiableProducer {
         successData.put("offset", recordMetadata.offset());
         successData.put("key", key);
         successData.put("value", value);
-        
+
         return toJsonString(successData);
     }
-    
+
     private String toJsonString(Map<String, Object> data) {
         String json;
         try {
@@ -251,18 +275,18 @@ public class VerifiableProducer {
         }
         return json;
     }
-  
+
     /** Callback which prints errors to stdout when the producer fails to send. */
     private class PrintInfoCallback implements Callback {
-        
+
         private String key;
         private String value;
-    
+
         PrintInfoCallback(String key, String value) {
             this.key = key;
             this.value = value;
         }
-    
+
         public void onCompletion(RecordMetadata recordMetadata, Exception e) {
             synchronized (System.out) {
                 if (e == null) {
@@ -274,9 +298,9 @@ public class VerifiableProducer {
             }
         }
     }
-  
+
     public static void main(String[] args) throws IOException {
-        
+
         final VerifiableProducer producer = createFromArgs(args);
         final long startMs = System.currentTimeMillis();
         boolean infinite = producer.maxMessages < 0;
@@ -286,14 +310,14 @@ public class VerifiableProducer {
             public void run() {
                 // Trigger main thread to stop producing messages
                 producer.stopProducing = true;
-                
+
                 // Flush any remaining messages
                 producer.close();
 
                 // Print a summary
                 long stopMs = System.currentTimeMillis();
                 double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
-                
+
                 Map<String, Object> data = new HashMap<>();
                 data.put("class", producer.getClass().toString());
                 data.put("name", "tool_data");
@@ -301,7 +325,7 @@ public class VerifiableProducer {
                 data.put("acked", producer.numAcked);
                 data.put("target_throughput", producer.throughput);
                 data.put("avg_throughput", avgThroughput);
-                
+
                 System.out.println(producer.toJsonString(data));
             }
         });
@@ -314,11 +338,11 @@ public class VerifiableProducer {
             }
             long sendStartMs = System.currentTimeMillis();
             producer.send(null, String.format("%d", i));
-            
+
             if (throttler.shouldThrottle(i, sendStartMs)) {
                 throttler.throttle();
             }
         }
     }
-        
+
 }

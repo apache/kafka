@@ -109,8 +109,8 @@ public class SaslClientAuthenticator implements Authenticator {
                             new ClientCallbackHandler());
                 }
             });
-        } catch (Exception e) {
-            throw new KafkaException("Failed to create SASL client", e);
+        } catch (PrivilegedActionException e) {
+            throw new KafkaException("Failed to create SaslClient", e.getCause());
         }
     }
 
@@ -160,9 +160,9 @@ public class SaslClientAuthenticator implements Authenticator {
                     netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(saslToken));
                     flushNetOutBufferAndUpdateInterestOps();
                 }
-            } catch (SaslException se) {
+            } catch (IOException e) {
                 saslState = SaslState.FAILED;
-                throw new IOException("Failed to authenticate using SASL " + se);
+                throw e;
             }
         }
     }
@@ -189,9 +189,8 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private byte[] createSaslToken(final byte[] saslToken) throws SaslException {
-        if (saslToken == null) {
-            throw new SaslException("Error in authenticating with a Kafka Broker: the kafka broker saslToken is null.");
-        }
+        if (saslToken == null)
+            throw new SaslException("Error authenticating with the Kafka Broker: received a `null` saslToken.");
 
         try {
             return Subject.doAs(subject, new PrivilegedExceptionAction<byte[]>() {
@@ -200,8 +199,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
             });
         } catch (PrivilegedActionException e) {
-            String error = "An error: (" + e + ") occurred when evaluating Kafka Brokers " +
-                      " received SASL token.";
+            String error = "An error: (" + e + ") occurred when evaluating SASL token received from the Kafka Broker.";
             // Try to provide hints to use about what went wrong so they can fix their configuration.
             // TODO: introspect about e: look for GSS information.
             final String unknownServerErrorText =
@@ -214,7 +212,8 @@ public class SaslClientAuthenticator implements Authenticator {
                     " `socketChannel.socket().getInetAddress().getHostName()` must match the hostname in `principal/hostname@realm`";
             }
             error += " Kafka Client will go to AUTH_FAILED state.";
-            throw new SaslException(error);
+            //Unwrap the SaslException inside `PrivilegedActionException`
+            throw new SaslException(error, e.getCause());
         }
     }
 
@@ -234,7 +233,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     nc.setName(nc.getDefaultName());
                 } else if (callback instanceof PasswordCallback) {
                     // Call `setPassword` once we support obtaining a password from the user and update message below
-                    LOG.warn("Could not login: the client is being asked for a password, but the Kafka" +
+                    throw new UnsupportedCallbackException(callback, "Could not login: the client is being asked for a password, but the Kafka" +
                              " client code does not currently support obtaining a password from the user." +
                              " Make sure -Djava.security.auth.login.config property passed to JVM and" +
                              " the client is configured to use a ticket cache (using" +

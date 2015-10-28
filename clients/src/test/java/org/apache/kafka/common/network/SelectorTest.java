@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.config.SSLConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -42,14 +42,14 @@ public class SelectorTest {
 
     protected EchoServer server;
     protected Time time;
-    protected Selectable selector;
+    protected Selector selector;
     protected ChannelBuilder channelBuilder;
     private Metrics metrics;
 
     @Before
     public void setup() throws Exception {
         Map<String, Object> configs = new HashMap<String, Object>();
-        configs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+        configs.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         this.server = new EchoServer(configs);
         this.server.start();
         this.time = new MockTime();

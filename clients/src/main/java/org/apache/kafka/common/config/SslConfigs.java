@@ -16,7 +16,7 @@ package org.apache.kafka.common.config;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 
-public class SSLConfigs {
+public class SslConfigs {
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
@@ -26,8 +26,11 @@ public class SSLConfigs {
     public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS = "org.apache.kafka.common.security.auth.DefaultPrincipalBuilder";
 
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
-    public static final String SSL_PROTOCOL_DOC = "The ssl protocol used to generate SSLContext."
-            + "Default setting is TLS. Allowed values are SSL, SSLv2, SSLv3, TLS, TLSv1.1, TLSv1.2";
+    public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
+            + "Default setting is TLS, which is fine for most cases. "
+            + "Allowed values in recent JVMs are TLS, TLSv1.1 and TLSv1.2. SSL, SSLv2 and SSLv3 "
+            + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities.";
+
     public static final String DEFAULT_SSL_PROTOCOL = "TLS";
 
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
@@ -39,8 +42,8 @@ public class SSLConfigs {
 
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections. "
-            + "All versions of TLS is enabled by default.";
-    public static final String DEFAULT_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.1,TLSv1";
+            + "TLSv1.2, TLSv1.1 and TLSv1 are enabled by default.";
+    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.1,TLSv1";
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "
@@ -49,11 +52,11 @@ public class SSLConfigs {
 
     public static final String SSL_KEYSTORE_LOCATION_CONFIG = "ssl.keystore.location";
     public static final String SSL_KEYSTORE_LOCATION_DOC = "The location of the key store file. "
-        + "This is optional for Client and can be used for two-way authentication for client.";
+        + "This is optional for client and can be used for two-way authentication for client.";
 
     public static final String SSL_KEYSTORE_PASSWORD_CONFIG = "ssl.keystore.password";
     public static final String SSL_KEYSTORE_PASSWORD_DOC = "The store password for the key store file."
-        + "This is optional for client and only needed if the ssl.keystore.location configured. ";
+        + "This is optional for client and only needed if ssl.keystore.location is configured. ";
 
     public static final String SSL_KEY_PASSWORD_CONFIG = "ssl.key.password";
     public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file. "

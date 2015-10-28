@@ -75,6 +75,7 @@ public class SlidingWindowSupplier<K, V> implements WindowSupplier<K, V> {
     public class SlidingWindow extends WindowSupport implements Window<K, V> {
         private final Object lock = new Object();
         private ProcessorContext context;
+        private int partition;
         private int slotNum; // used as a key for Kafka log compaction
         private LinkedList<K> list = new LinkedList<K>();
         private HashMap<K, ValueList<V>> map = new HashMap<>();
@@ -82,6 +83,7 @@ public class SlidingWindowSupplier<K, V> implements WindowSupplier<K, V> {
         @Override
         public void init(ProcessorContext context) {
             this.context = context;
+            this.partition = context.id().partition;
             SlidingWindowRegistryCallback restoreFunc = new SlidingWindowRegistryCallback();
             context.register(this, restoreFunc);
 
@@ -210,7 +212,7 @@ public class SlidingWindowSupplier<K, V> implements WindowSupplier<K, V> {
                         if (offset != combined.length)
                             throw new IllegalStateException("serialized length does not match");
 
-                        collector.send(new ProducerRecord<>(name, context.id(), slot, combined), byteArraySerializer, byteArraySerializer);
+                        collector.send(new ProducerRecord<>(name, partition, slot, combined), byteArraySerializer, byteArraySerializer);
                     }
                     values.clearDirtyValues();
                 }

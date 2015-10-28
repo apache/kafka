@@ -20,12 +20,16 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,10 +49,15 @@ import java.util.Set;
 public class TopologyBuilder {
 
     // list of node factories in a topological order
-    private ArrayList<NodeFactory> nodeFactories = new ArrayList<>();
+    private final ArrayList<NodeFactory> nodeFactories = new ArrayList<>();
 
-    private Set<String> nodeNames = new HashSet<>();
-    private Set<String> sourceTopicNames = new HashSet<>();
+    private final Set<String> nodeNames = new HashSet<>();
+    private final Set<String> sourceTopicNames = new HashSet<>();
+
+    private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
+    private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
+    private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
+    private Map<Integer, Set<String>> nodeGroups = null;
 
     private interface NodeFactory {
         ProcessorNode build();
@@ -158,6 +167,9 @@ public class TopologyBuilder {
 
         nodeNames.add(name);
         nodeFactories.add(new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
+        nodeToTopics.put(name, topics.clone());
+        nodeGrouper.add(name);
+
         return this;
     }
 
@@ -237,7 +249,101 @@ public class TopologyBuilder {
 
         nodeNames.add(name);
         nodeFactories.add(new ProcessorNodeFactory(name, parentNames, supplier));
+        nodeGrouper.add(name);
+        nodeGrouper.unite(name, parentNames);
         return this;
+    }
+
+    /**
+     * Returns the map of topic groups keyed by the group id.
+     * A topic group is a group of topics in the same task.
+     *
+     * @return groups of topic names
+     */
+    public Map<Integer, Set<String>> topicGroups() {
+        Map<Integer, Set<String>> topicGroups = new HashMap<>();
+
+        if (nodeGroups == null) {
+            nodeGroups = nodeGroups();
+        } else if (!nodeGroups.equals(nodeGroups())) {
+            throw new TopologyException("topology has mutated");
+        }
+
+        for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
+            Set<String> topicGroup = new HashSet<>();
+            for (String node : entry.getValue()) {
+                String[] topics = nodeToTopics.get(node);
+                if (topics != null)
+                    topicGroup.addAll(Arrays.asList(topics));
+            }
+            topicGroups.put(entry.getKey(), Collections.unmodifiableSet(topicGroup));
+        }
+
+        return Collections.unmodifiableMap(topicGroups);
+    }
+
+    private Map<Integer, Set<String>> nodeGroups() {
+        HashMap<Integer, Set<String>> nodeGroups = new HashMap<>();
+        HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
+
+        int nodeGroupId = 0;
+
+        // Go through source nodes first. This makes the group id assignment easy to predict in tests
+        for (String nodeName : Utils.sorted(nodeToTopics.keySet())) {
+            String root = nodeGrouper.root(nodeName);
+            Set<String> nodeGroup = rootToNodeGroup.get(root);
+            if (nodeGroup == null) {
+                nodeGroup = new HashSet<>();
+                rootToNodeGroup.put(root, nodeGroup);
+                nodeGroups.put(nodeGroupId++, nodeGroup);
+            }
+            nodeGroup.add(nodeName);
+        }
+
+        // Go through non-source nodes
+        for (String nodeName : Utils.sorted(nodeNames)) {
+            if (!nodeToTopics.containsKey(nodeName)) {
+                String root = nodeGrouper.root(nodeName);
+                Set<String> nodeGroup = rootToNodeGroup.get(root);
+                if (nodeGroup == null) {
+                    nodeGroup = new HashSet<>();
+                    rootToNodeGroup.put(root, nodeGroup);
+                    nodeGroups.put(nodeGroupId++, nodeGroup);
+                }
+                nodeGroup.add(nodeName);
+            }
+        }
+
+        return nodeGroups;
+    }
+
+    /**
+     * Asserts that the streams of the specified source nodes must be copartitioned.
+     *
+     * @param sourceNodes a set of source node names
+     */
+    public void copartitionSources(Collection<String> sourceNodes) {
+        copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
+    }
+
+    /**
+     * Returns the copartition groups.
+     * A copartition group is a group of topics that are required to be copartitioned.
+     *
+     * @return groups of topic names
+     */
+    public Collection<Set<String>> copartitionGroups() {
+        List<Set<String>> list = new ArrayList<>(copartitionSourceGroups.size());
+        for (Set<String> nodeNames : copartitionSourceGroups) {
+            Set<String> copartitionGroup = new HashSet<>();
+            for (String node : nodeNames) {
+                String[] topics = nodeToTopics.get(node);
+                if (topics != null)
+                    copartitionGroup.addAll(Arrays.asList(topics));
+            }
+            list.add(Collections.unmodifiableSet(copartitionGroup));
+        }
+        return Collections.unmodifiableList(list);
     }
 
     /**

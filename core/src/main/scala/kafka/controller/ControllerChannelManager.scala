@@ -96,7 +96,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         "controller-channel",
         Map("broker-id" -> broker.id.toString).asJava,
         false,
-        ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.channelConfigs)
+        ChannelBuilders.create(config.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, config.values)
       )
       new NetworkClient(
         selector,
@@ -112,12 +112,13 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     }
     val threadName = threadNamePrefix match {
       case None => "Controller-%d-to-broker-%d-send-thread".format(config.brokerId, broker.id)
-      case Some(name) => "%s:Controller-%d-to-broker-%d-send-thread".format(name,config.brokerId, broker.id)
+      case Some(name) => "%s:Controller-%d-to-broker-%d-send-thread".format(name, config.brokerId, broker.id)
     }
 
-    val requestThread = new RequestSendThread(config.brokerId, controllerContext, broker, messageQueue, networkClient, brokerNode, config, time, threadName)
+    val requestThread = new RequestSendThread(config.brokerId, controllerContext, messageQueue, networkClient,
+      brokerNode, config, time, threadName)
     requestThread.setDaemon(false)
-    brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(networkClient, brokerNode, broker, messageQueue, requestThread))
+    brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue, requestThread))
   }
 
   private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
@@ -125,7 +126,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
       brokerState.requestSendThread.shutdown()
-      brokerStateInfo.remove(brokerState.broker.id)
+      brokerStateInfo.remove(brokerState.brokerNode.id)
     } catch {
       case e: Throwable => error("Error while removing broker by the controller", e)
     }
@@ -142,7 +143,6 @@ case class QueueItem(apiKey: ApiKeys, apiVersion: Option[Short], request: Abstra
 
 class RequestSendThread(val controllerId: Int,
                         val controllerContext: ControllerContext,
-                        val toBroker: Broker,
                         val queue: BlockingQueue[QueueItem],
                         val networkClient: NetworkClient,
                         val brokerNode: Node,
@@ -186,7 +186,7 @@ class RequestSendThread(val controllerId: Int,
             case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
               warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
-                  request.toString, toBroker.toString()), e)
+                  request.toString, brokerNode.toString()), e)
               networkClient.close(brokerNode.idString)
               isSendSuccessful = false
               backoff()
@@ -200,7 +200,7 @@ class RequestSendThread(val controllerId: Int,
             case apiKey => throw new KafkaException(s"Unexpected apiKey received: $apiKey")
           }
           stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
-            .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))
+            .format(controllerId, controllerContext.epoch, response.toString, brokerNode.toString))
 
           if (callback != null) {
             callback(response)
@@ -209,7 +209,7 @@ class RequestSendThread(val controllerId: Int,
       }
     } catch {
       case e: Throwable =>
-        error("Controller %d fails to send a request to broker %s".format(controllerId, toBroker.toString()), e)
+        error("Controller %d fails to send a request to broker %s".format(controllerId, brokerNode.toString()), e)
         // If there is any socket error (eg, socket timeout), the connection is no longer usable and needs to be recreated.
         networkClient.close(brokerNode.idString)
     }
@@ -227,12 +227,12 @@ class RequestSendThread(val controllerId: Int,
         if (!ready)
           throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
-        info("Controller %d connected to %s for sending state change requests".format(controllerId, toBroker.toString()))
+        info("Controller %d connected to %s for sending state change requests".format(controllerId, brokerNode.toString()))
         true
       }
     } catch {
       case e: Throwable =>
-        warn("Controller %d's connection to broker %s was unsuccessful".format(controllerId, toBroker.toString()), e)
+        warn("Controller %d's connection to broker %s was unsuccessful".format(controllerId, brokerNode.toString()), e)
         networkClient.close(brokerNode.idString)
         false
     }
@@ -439,7 +439,6 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
 case class ControllerBrokerStateInfo(networkClient: NetworkClient,
                                      brokerNode: Node,
-                                     broker: Broker,
                                      messageQueue: BlockingQueue[QueueItem],
                                      requestSendThread: RequestSendThread)
 

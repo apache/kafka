@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.io.File;
@@ -82,13 +83,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public int id() {
-        return -1;
-    }
-
-    @Override
-    public boolean joinable() {
-        return true;
+    public TaskId id() {
+        return new TaskId(0, 0);
     }
 
     @Override

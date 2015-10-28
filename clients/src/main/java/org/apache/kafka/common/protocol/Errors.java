@@ -78,6 +78,8 @@ public enum Errors {
             new IllegalGenerationException("Specified group generation id is not valid.")),
     INCONSISTENT_GROUP_PROTOCOL(23,
             new ApiException("The group member's supported protocols are incompatible with those of existing members.")),
+    INVALID_GROUP_ID(24,
+            new ApiException("The configured groupId is invalid")),
     UNKNOWN_MEMBER_ID(25,
             new UnknownMemberIdException("The coordinator is not aware of this member.")),
     INVALID_SESSION_TIMEOUT(26,
@@ -86,7 +88,7 @@ public enum Errors {
             new ApiException("The committing offset data size is not valid")),
     AUTHORIZATION_FAILED(29, new ApiException("Request is not authorized.")),
     REBALANCE_IN_PROGRESS(30,
-            new ApiException("The group is rebalancing, so a rejoin is needed."));
+            new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

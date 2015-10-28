@@ -124,16 +124,12 @@ public class SaslServerAuthenticator implements Authenticator {
 
         try {
             return Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
-                public SaslServer run() {
-                    try {
-                        return Sasl.createSaslServer(mech, servicePrincipalName, serviceHostname, null, saslServerCallbackHandler);
-                    } catch (SaslException e) {
-                        throw new KafkaException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e);
-                    }
+                public SaslServer run() throws SaslException {
+                    return Sasl.createSaslServer(mech, servicePrincipalName, serviceHostname, null, saslServerCallbackHandler);
                 }
             });
         } catch (PrivilegedActionException e) {
-            throw new KafkaException("Kafka Broker experienced a PrivilegedActionException exception while creating a SaslServer using a JAAS principal context", e);
+            throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
         }
     }
 

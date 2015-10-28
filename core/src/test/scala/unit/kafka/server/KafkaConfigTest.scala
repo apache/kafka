@@ -398,6 +398,7 @@ class KafkaConfigTest {
         case KafkaConfig.ZkSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ZkConnectionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ZkSyncTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.ZkEnableSecureAclsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
 
         case KafkaConfig.BrokerIdProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.NumNetworkThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
@@ -479,8 +480,6 @@ class KafkaConfigTest {
         case KafkaConfig.OffsetCommitRequiredAcksProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-2")
         case KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
-        case KafkaConfig.ProducerQuotaBytesPerSecondOverridesProp => // ignore string
-        case KafkaConfig.ConsumerQuotaBytesPerSecondOverridesProp => // ignore string
         case KafkaConfig.NumQuotaSamplesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.QuotaWindowSizeSecondsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
 
@@ -492,20 +491,21 @@ class KafkaConfigTest {
 
         //SSL Configs
         case KafkaConfig.PrincipalBuilderClassProp =>
-        case KafkaConfig.SSLProtocolProp => // ignore string
-        case KafkaConfig.SSLProviderProp => // ignore string
-        case KafkaConfig.SSLEnabledProtocolsProp =>
-        case KafkaConfig.SSLKeystoreTypeProp => // ignore string
-        case KafkaConfig.SSLKeystoreLocationProp => // ignore string
-        case KafkaConfig.SSLKeystorePasswordProp => // ignore string
-        case KafkaConfig.SSLKeyPasswordProp => // ignore string
-        case KafkaConfig.SSLTruststoreTypeProp => // ignore string
-        case KafkaConfig.SSLTruststorePasswordProp => // ignore string
-        case KafkaConfig.SSLTruststoreLocationProp => // ignore string
-        case KafkaConfig.SSLKeyManagerAlgorithmProp =>
-        case KafkaConfig.SSLTrustManagerAlgorithmProp =>
-        case KafkaConfig.SSLClientAuthProp => // ignore string
-        case KafkaConfig.SSLCipherSuitesProp => // ignore string
+        case KafkaConfig.SslProtocolProp => // ignore string
+        case KafkaConfig.SslProviderProp => // ignore string
+        case KafkaConfig.SslEnabledProtocolsProp =>
+        case KafkaConfig.SslKeystoreTypeProp => // ignore string
+        case KafkaConfig.SslKeystoreLocationProp => // ignore string
+        case KafkaConfig.SslKeystorePasswordProp => // ignore string
+        case KafkaConfig.SslKeyPasswordProp => // ignore string
+        case KafkaConfig.SslTruststoreTypeProp => // ignore string
+        case KafkaConfig.SslTruststorePasswordProp => // ignore string
+        case KafkaConfig.SslTruststoreLocationProp => // ignore string
+        case KafkaConfig.SslKeyManagerAlgorithmProp =>
+        case KafkaConfig.SslTrustManagerAlgorithmProp =>
+        case KafkaConfig.SslClientAuthProp => // ignore string
+        case KafkaConfig.SslEndpointIdentificationAlgorithmProp => // ignore string
+        case KafkaConfig.SslCipherSuitesProp => // ignore string
 
         //Sasl Configs
         case KafkaConfig.SaslKerberosServiceNameProp => // ignore string
@@ -513,7 +513,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
-        case KafkaConfig.AuthToLocalProp => // ignore string
+        case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
 
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }

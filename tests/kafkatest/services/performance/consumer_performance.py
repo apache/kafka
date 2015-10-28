@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from kafkatest.services.performance import PerformanceService
+from kafkatest.services.kafka.directory import kafka_dir
 from kafkatest.utils.security_config import SecurityConfig
 
 import os
@@ -120,11 +121,10 @@ class ConsumerPerformanceService(PerformanceService):
 
         return args
 
-    @property
-    def start_cmd(self):
+    def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % ConsumerPerformanceService.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsumerPerformanceService.LOG4J_CONFIG
-        cmd += " /opt/kafka/bin/kafka-consumer-perf-test.sh"
+        cmd += " /opt/%s/bin/kafka-consumer-perf-test.sh" % kafka_dir(node)
         for key, value in self.args.items():
             cmd += " --%s %s" % (key, value)
         cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
@@ -144,7 +144,7 @@ class ConsumerPerformanceService(PerformanceService):
         node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, str(self.security_config))
         self.security_config.setup_node(node)
 
-        cmd = self.start_cmd
+        cmd = self.start_cmd(node)
         self.logger.debug("Consumer performance %d command: %s", idx, cmd)
         last = None
         for line in node.account.ssh_capture(cmd):

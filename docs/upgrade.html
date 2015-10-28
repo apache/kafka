@@ -5,9 +5,9 @@
  The ASF licenses this file to You under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
- 
+
     http://www.apache.org/licenses/LICENSE-2.0
- 
+
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,19 +17,37 @@
 
 <h3><a id="upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
-<h4>Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.8.3.0</h4>
+<h4>Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</h4>
 
-0.8.3.0 has an inter-broker protocol change from previous versions. For a rolling upgrade:
+0.9.0.0 has an inter-broker protocol change from previous versions. For a rolling upgrade:
 <ol>
 	<li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=0.8.2.X </li>
 	<li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
-	<li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.8.3.0.</li>
+	<li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.9.0.0.</li>
 	<li> Restart the brokers one by one for the new protocol version to take effect </li>
 </ol>
 
 Note: If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
 
 Note: Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
+
+<h5>Potential breaking changes in 0.9.0.0</h5>
+
+<ul>
+    <li> Java 1.6 is no longer supported. </li>
+    <li> Tools packaged under <em>org.apache.kafka.clients.tools.*</em> have been moved to <em>org.apache.kafka.tools.*</em>. All included scripts will still function as usual, only custom code directly importing these classes will be affected. </li>
+    <li> The default Kafka JVM performance options (KAFKA_JVM_PERFORMANCE_OPTS) have been changed in kafka-run-class.sh. </li>
+    <li> The kafka-topics.sh script (kafka.admin.TopicCommand) now exits with non-zero exit code on failure. </li>
+    <li> The kafka-topics.sh script (kafka.admin.TopicCommand) will now print a warning when topic names risk metric collisions due to the use of a '.' or '_' in the topic name, and error in the case of an actual collision. </li>
+    <li> By default all command line tools will print all logging messages to stderr instead of stout. </li>
+</ul>
+
+<h5>Deprecations in 0.9.0.0</h5>
+
+<ul>
+    <li> Altering topic configuration from the kafka-topics.sh script (kafka.admin.TopicCommand) has been deprecated. Going forward, please use the kafka-configs.sh script (kafka.admin.ConfigCommand) for this functionality. </li>
+    <li> The kafka-consumer-offset-checker.sh (kafka.tools.ConsumerOffsetChecker) has been deprecated. Going forward, please use kafka-consumer-groups.sh (kafka.admin.ConsumerGroupCommand) for this functionality. </li>
+</ul>
 
 <h4>Upgrading from 0.8.1 to 0.8.2.0</h4>
 

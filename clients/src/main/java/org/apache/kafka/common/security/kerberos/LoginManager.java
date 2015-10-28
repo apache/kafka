@@ -21,6 +21,7 @@ package org.apache.kafka.common.security.kerberos;
 import javax.security.auth.Subject;
 import javax.security.auth.login.LoginException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -115,4 +116,15 @@ public class LoginManager {
             --refCount;
         }
     }
+
+    /* Should only be used in tests. */
+    public static void closeAll() {
+        synchronized (LoginManager.class) {
+            for (LoginType loginType : new ArrayList<>(CACHED_INSTANCES.keySet())) {
+                LoginManager loginManager = CACHED_INSTANCES.remove(loginType);
+                loginManager.login.shutdown();
+            }
+        }
+    }
+
 }

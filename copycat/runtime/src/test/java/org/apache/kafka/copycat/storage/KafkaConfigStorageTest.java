@@ -169,6 +169,12 @@ public class KafkaConfigStorageTest {
         connectorReconfiguredCallback.onCompletion(null, CONNECTOR_IDS.get(1));
         EasyMock.expectLastCall();
 
+        // Config deletion
+        expectConvertWriteAndRead(
+                CONNECTOR_CONFIG_KEYS.get(1), KafkaConfigStorage.CONNECTOR_CONFIGURATION_V0, null, null, null);
+        connectorReconfiguredCallback.onCompletion(null, CONNECTOR_IDS.get(1));
+        EasyMock.expectLastCall();
+
         expectStop();
 
         PowerMock.replayAll();
@@ -185,16 +191,23 @@ public class KafkaConfigStorageTest {
         // Writing should block until it is written and read back from Kafka
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
         configState = configStorage.snapshot();
-        assertEquals(0, configState.offset());
+        assertEquals(1, configState.offset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
         // Second should also block and all configs should still be available
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1));
         configState = configStorage.snapshot();
-        assertEquals(1, configState.offset());
+        assertEquals(2, configState.offset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(1), configState.connectorConfig(CONNECTOR_IDS.get(1)));
+
+        // Deletion should remove the second one we added
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), null);
+        configState = configStorage.snapshot();
+        assertEquals(3, configState.offset());
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
         configStorage.stop();
 
@@ -255,13 +268,13 @@ public class KafkaConfigStorageTest {
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
-        assertEquals(2, configState.offset());
+        assertEquals(3, configState.offset());
         String connectorName = CONNECTOR_IDS.get(0);
         assertEquals(Arrays.asList(connectorName), new ArrayList<>(configState.connectors()));
-        assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(connectorName));
+        assertEquals(new HashSet<>(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1))), configState.tasks(connectorName));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(1), configState.taskConfig(TASK_IDS.get(1)));
-        assertEquals(new HashSet<>(Collections.EMPTY_LIST), configState.inconsistentConnectors());
+        assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 
         configStorage.stop();
 
@@ -306,16 +319,16 @@ public class KafkaConfigStorageTest {
 
         // Should see a single connector and its config should be the last one seen anywhere in the log
         ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(6, configState.offset()); // Should always be last read, even if uncommitted
+        assertEquals(7, configState.offset()); // Should always be next to be read, even if uncommitted
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // CONNECTOR_CONFIG_STRUCTS[2] -> SAMPLE_CONFIGS[2]
         assertEquals(SAMPLE_CONFIGS.get(2), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         // Should see 2 tasks for that connector. Only config updates before the root key update should be reflected
-        assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(new HashSet<>(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1))), configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(1)));
-        assertEquals(new HashSet<>(Collections.EMPTY_LIST), configState.inconsistentConnectors());
+        assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 
         configStorage.stop();
 
@@ -374,10 +387,10 @@ public class KafkaConfigStorageTest {
         configStorage.start();
         // After reading the log, it should have been in an inconsistent state
         ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(5, configState.offset()); // Should always be last read, not last committed
+        assertEquals(6, configState.offset()); // Should always be next to be read, not last committed
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // Inconsistent data should leave us with no tasks listed for the connector and an entry in the inconsistent list
-        assertEquals(Collections.EMPTY_LIST, configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(Collections.EMPTY_SET, configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertNull(configState.taskConfig(TASK_IDS.get(0)));
         assertNull(configState.taskConfig(TASK_IDS.get(1)));
@@ -398,11 +411,11 @@ public class KafkaConfigStorageTest {
         configState = configStorage.snapshot();
         // This is only two more ahead of the last one because multiple calls fail, and so their configs are not written
         // to the topic. Only the last call with 1 task config + 1 commit actually gets written.
-        assertEquals(7, configState.offset());
+        assertEquals(8, configState.offset());
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
-        assertEquals(Arrays.asList(TASK_IDS.get(0)), configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(new HashSet<>(Arrays.asList(TASK_IDS.get(0))), configState.tasks(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
-        assertEquals(new HashSet<>(Collections.EMPTY_LIST), configState.inconsistentConnectors());
+        assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 
         configStorage.stop();
 
@@ -446,17 +459,19 @@ public class KafkaConfigStorageTest {
     private void expectConvertWriteRead(final String configKey, final Schema valueSchema, final byte[] serialized,
                                         final String dataFieldName, final Object dataFieldValue) {
         final Capture<Struct> capturedRecord = EasyMock.newCapture();
-        EasyMock.expect(converter.fromCopycatData(EasyMock.eq(TOPIC), EasyMock.eq(valueSchema), EasyMock.capture(capturedRecord)))
-                .andReturn(serialized);
+        if (serialized != null)
+            EasyMock.expect(converter.fromCopycatData(EasyMock.eq(TOPIC), EasyMock.eq(valueSchema), EasyMock.capture(capturedRecord)))
+                    .andReturn(serialized);
         storeLog.send(EasyMock.eq(configKey), EasyMock.aryEq(serialized));
         PowerMock.expectLastCall();
         EasyMock.expect(converter.toCopycatData(EasyMock.eq(TOPIC), EasyMock.aryEq(serialized)))
                 .andAnswer(new IAnswer<SchemaAndValue>() {
                     @Override
                     public SchemaAndValue answer() throws Throwable {
-                        assertEquals(dataFieldValue, capturedRecord.getValue().get(dataFieldName));
+                        if (dataFieldName != null)
+                            assertEquals(dataFieldValue, capturedRecord.getValue().get(dataFieldName));
                         // Note null schema because default settings for internal serialization are schema-less
-                        return new SchemaAndValue(null, structToMap(capturedRecord.getValue()));
+                        return new SchemaAndValue(null, serialized == null ? null : structToMap(capturedRecord.getValue()));
                     }
                 });
     }

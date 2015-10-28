@@ -17,20 +17,23 @@
 
 package org.apache.kafka.copycat.runtime.standalone;
 
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.HerderConnectorContext;
+import org.apache.kafka.copycat.runtime.TaskConfig;
 import org.apache.kafka.copycat.runtime.Worker;
-import org.apache.kafka.copycat.sink.SinkConnector;
-import org.apache.kafka.copycat.sink.SinkTask;
-import org.apache.kafka.copycat.util.*;
+import org.apache.kafka.copycat.util.Callback;
+import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
 
 /**
  * Single process, in-memory "herder". Useful for a standalone copycat process.
@@ -56,11 +59,8 @@ public class StandaloneHerder implements Herder {
         // There's no coordination/hand-off to do here since this is all standalone. Instead, we
         // should just clean up the stuff we normally would, i.e. cleanly checkpoint and shutdown all
         // the tasks.
-        for (Map.Entry<String, ConnectorState> entry : connectors.entrySet()) {
-            ConnectorState state = entry.getValue();
-            stopConnector(state);
-        }
-        connectors.clear();
+        for (String connName : new HashSet<>(connectors.keySet()))
+            stopConnector(connName);
 
         log.info("Herder stopped");
     }
@@ -69,11 +69,14 @@ public class StandaloneHerder implements Herder {
     public synchronized void addConnector(Map<String, String> connectorProps,
                                           Callback<String> callback) {
         try {
-            ConnectorState connState = createConnector(connectorProps);
+            ConnectorConfig connConfig = new ConnectorConfig(connectorProps);
+            String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
+            worker.addConnector(connConfig, new HerderConnectorContext(this, connName));
+            connectors.put(connName, new ConnectorState(connConfig));
             if (callback != null)
-                callback.onCompletion(null, connState.name);
+                callback.onCompletion(null, connName);
             // This should always be a new job, create jobs from scratch
-            createConnectorTasks(connState);
+            createConnectorTasks(connName);
         } catch (CopycatException e) {
             if (callback != null)
                 callback.onCompletion(e, null);
@@ -81,9 +84,9 @@ public class StandaloneHerder implements Herder {
     }
 
     @Override
-    public synchronized void deleteConnector(String name, Callback<Void> callback) {
+    public synchronized void deleteConnector(String connName, Callback<Void> callback) {
         try {
-            destroyConnector(name);
+            stopConnector(connName);
             if (callback != null)
                 callback.onCompletion(null, null);
         } catch (CopycatException e) {
@@ -94,114 +97,35 @@ public class StandaloneHerder implements Herder {
 
     @Override
     public synchronized void requestTaskReconfiguration(String connName) {
-        ConnectorState state = connectors.get(connName);
-        if (state == null) {
+        if (!worker.connectorNames().contains(connName)) {
             log.error("Task that requested reconfiguration does not exist: {}", connName);
             return;
         }
-        updateConnectorTasks(state);
-    }
-
-    // Creates and configures the connector. Does not setup any tasks
-    private ConnectorState createConnector(Map<String, String> connectorProps) {
-        ConnectorConfig connConfig = new ConnectorConfig(connectorProps);
-        String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
-        String className = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-        log.info("Creating connector {} of type {}", connName, className);
-        int maxTasks = connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG);
-        List<String> topics = connConfig.getList(ConnectorConfig.TOPICS_CONFIG); // Sinks only
-        Properties configs = connConfig.unusedProperties();
-
-        if (connectors.containsKey(connName)) {
-            log.error("Ignoring request to create connector due to conflicting connector name");
-            throw new CopycatException("Connector with name " + connName + " already exists");
-        }
-
-        final Connector connector;
-        try {
-            connector = instantiateConnector(className);
-        } catch (Throwable t) {
-            // Catches normal exceptions due to instantiation errors as well as any runtime errors that
-            // may be caused by user code
-            throw new CopycatException("Failed to create connector instance", t);
-        }
-        connector.initialize(new HerderConnectorContext(this, connName));
-        try {
-            connector.start(configs);
-        } catch (CopycatException e) {
-            throw new CopycatException("Connector threw an exception while starting", e);
-        }
-        ConnectorState state = new ConnectorState(connName, connector, maxTasks, topics);
-        connectors.put(connName, state);
-
-        log.info("Finished creating connector {}", connName);
-
-        return state;
-    }
-
-    private static Connector instantiateConnector(String className) {
-        try {
-            return Utils.newInstance(className, Connector.class);
-        } catch (ClassNotFoundException e) {
-            throw new CopycatException("Couldn't instantiate connector class", e);
-        }
-    }
-
-    private void destroyConnector(String connName) {
-        log.info("Destroying connector {}", connName);
-        ConnectorState state = connectors.get(connName);
-        if (state == null) {
-            log.error("Failed to destroy connector {} because it does not exist", connName);
-            throw new CopycatException("Connector does not exist");
-        }
-
-        stopConnector(state);
-        connectors.remove(state.name);
-
-        log.info("Finished destroying connector {}", connName);
+        updateConnectorTasks(connName);
     }
 
     // Stops a connectors tasks, then the connector
-    private void stopConnector(ConnectorState state) {
-        removeConnectorTasks(state);
+    private void stopConnector(String connName) {
+        removeConnectorTasks(connName);
         try {
-            state.connector.stop();
+            worker.stopConnector(connName);
+            connectors.remove(connName);
         } catch (CopycatException e) {
-            log.error("Error shutting down connector {}: ", state.connector, e);
+            log.error("Error shutting down connector {}: ", connName, e);
         }
     }
 
-    private void createConnectorTasks(ConnectorState state) {
-        String taskClassName = state.connector.taskClass().getName();
+    private void createConnectorTasks(String connName) {
+        ConnectorState state = connectors.get(connName);
+        Map<ConnectorTaskId, Map<String, String>> taskConfigs = worker.reconfigureConnectorTasks(connName,
+                state.config.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
+                state.config.getList(ConnectorConfig.TOPICS_CONFIG));
 
-        log.info("Creating tasks for connector {} of type {}", state.name, taskClassName);
-
-        List<Properties> taskConfigs = state.connector.taskConfigs(state.maxTasks);
-
-        // Generate the final configs, including framework provided settings
-        Map<ConnectorTaskId, Properties> taskProps = new HashMap<>();
-        for (int i = 0; i < taskConfigs.size(); i++) {
-            ConnectorTaskId taskId = new ConnectorTaskId(state.name, i);
-            Properties config = taskConfigs.get(i);
-            // TODO: This probably shouldn't be in the Herder. It's nice to have Copycat ensure the list of topics
-            // is automatically provided to tasks since it is required by the framework, but this
-            String subscriptionTopics = Utils.join(state.inputTopics, ",");
-            if (state.connector instanceof SinkConnector) {
-                // Make sure we don't modify the original since the connector may reuse it internally
-                Properties configForSink = new Properties();
-                configForSink.putAll(config);
-                configForSink.setProperty(SinkTask.TOPICS_CONFIG, subscriptionTopics);
-                config = configForSink;
-            }
-            taskProps.put(taskId, config);
-        }
-
-        // And initiate the tasks
-        for (int i = 0; i < taskConfigs.size(); i++) {
-            ConnectorTaskId taskId = new ConnectorTaskId(state.name, i);
-            Properties config = taskProps.get(taskId);
+        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskEntry : taskConfigs.entrySet()) {
+            ConnectorTaskId taskId = taskEntry.getKey();
+            TaskConfig config = new TaskConfig(taskEntry.getValue());
             try {
-                worker.addTask(taskId, taskClassName, config);
+                worker.addTask(taskId, config);
                 // We only need to store the task IDs so we can clean up.
                 state.tasks.add(taskId);
             } catch (Throwable e) {
@@ -213,7 +137,8 @@ public class StandaloneHerder implements Herder {
         }
     }
 
-    private void removeConnectorTasks(ConnectorState state) {
+    private void removeConnectorTasks(String connName) {
+        ConnectorState state = connectors.get(connName);
         Iterator<ConnectorTaskId> taskIter = state.tasks.iterator();
         while (taskIter.hasNext()) {
             ConnectorTaskId taskId = taskIter.next();
@@ -228,25 +153,18 @@ public class StandaloneHerder implements Herder {
         }
     }
 
-    private void updateConnectorTasks(ConnectorState state) {
-        removeConnectorTasks(state);
-        createConnectorTasks(state);
+    private void updateConnectorTasks(String connName) {
+        removeConnectorTasks(connName);
+        createConnectorTasks(connName);
     }
 
 
     private static class ConnectorState {
-        public String name;
-        public Connector connector;
-        public int maxTasks;
-        public List<String> inputTopics;
+        public ConnectorConfig config;
         Set<ConnectorTaskId> tasks;
 
-        public ConnectorState(String name, Connector connector, int maxTasks,
-                              List<String> inputTopics) {
-            this.name = name;
-            this.connector = connector;
-            this.maxTasks = maxTasks;
-            this.inputTopics = inputTopics;
+        public ConnectorState(ConnectorConfig config) {
+            this.config = config;
             this.tasks = new HashSet<>();
         }
     }

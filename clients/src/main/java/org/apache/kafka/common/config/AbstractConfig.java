@@ -100,7 +100,7 @@ public class AbstractConfig {
     }
 
     public Set<String> unused() {
-        Set<String> keys = new HashSet<String>(originals.keySet());
+        Set<String> keys = new HashSet<>(originals.keySet());
         keys.removeAll(used);
         return keys;
     }
@@ -109,12 +109,12 @@ public class AbstractConfig {
         Set<String> unusedKeys = this.unused();
         Properties unusedProps = new Properties();
         for (String key : unusedKeys)
-            unusedProps.put(key, this.originals().get(key));
+            unusedProps.put(key, this.originals.get(key));
         return unusedProps;
     }
 
     public Map<String, Object> originals() {
-        Map<String, Object> copy = new HashMap<String, Object>();
+        Map<String, Object> copy = new RecordingMap<>();
         copy.putAll(originals);
         return copy;
     }
@@ -126,7 +126,7 @@ public class AbstractConfig {
      * @return a Map containing the settings with the prefix
      */
     public Map<String, Object> originalsWithPrefix(String prefix) {
-        Map<String, Object> result = new HashMap<String, Object>();
+        Map<String, Object> result = new RecordingMap<>();
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
                 result.put(entry.getKey().substring(prefix.length()), entry.getValue());
@@ -135,7 +135,7 @@ public class AbstractConfig {
     }
 
     public Map<String, ?> values() {
-        return new HashMap<String, Object>(values);
+        return new RecordingMap<>(values);
     }
 
     private void logAll() {
@@ -213,5 +213,25 @@ public class AbstractConfig {
     @Override
     public int hashCode() {
         return originals.hashCode();
+    }
+
+    /**
+     * Marks keys retrieved via `get` as used. This is needed because `Configurable.configure` takes a `Map` instead
+     * of an `AbstractConfig` and we can't change that without breaking public API like `Partitioner`.
+     */
+    private class RecordingMap<V> extends HashMap<String, V> {
+
+        RecordingMap() {}
+
+        RecordingMap(Map<String, ? extends V> m) {
+            super(m);
+        }
+
+        @Override
+        public V get(Object key) {
+            if (key instanceof String)
+                ignore((String) key);
+            return super.get(key);
+        }
     }
 }
