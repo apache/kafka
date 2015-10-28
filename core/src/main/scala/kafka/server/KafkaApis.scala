@@ -307,9 +307,6 @@ class KafkaApis(val requestChannel: RequestChannel,
             ErrorMapping.exceptionNameFor(status.error)))
           errorInResponse = true
         }
-
-        // When this callback is triggered, the remote API call has completed
-        request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
       }
 
       def produceResponseCallback(delayTimeMs: Int) {
@@ -337,6 +334,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                                                                                             response)))
         }
       }
+
+      // When this callback is triggered, the remote API call has completed
+      request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
       quotaManagers(RequestKeys.ProduceKey).recordAndMaybeThrottle(produceRequest.clientId,
                                                                    numBytesAppended,
@@ -388,15 +388,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         // record the bytes out metrics only when the response is being sent
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesOutRate.mark(data.messages.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.messages.sizeInBytes)
-
-        // When this callback is triggered, the remote API call has completed
-        request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
       }
 
       def fetchResponseCallback(delayTimeMs: Int) {
         val response = FetchResponse(fetchRequest.correlationId, responsePartitionData, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
+
+
+      // When this callback is triggered, the remote API call has completed
+      request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
       // Do not throttle replication traffic
       if (fetchRequest.isFromFollower) {
