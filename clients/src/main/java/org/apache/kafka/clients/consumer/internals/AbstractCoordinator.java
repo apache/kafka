@@ -365,7 +365,8 @@ public abstract class AbstractCoordinator {
                         groupId);
                 future.raise(Errors.forCode(errorCode));
             } else if (errorCode == Errors.INCONSISTENT_GROUP_PROTOCOL.code()
-                    || errorCode == Errors.INVALID_SESSION_TIMEOUT.code()) {
+                    || errorCode == Errors.INVALID_SESSION_TIMEOUT.code()
+                    || errorCode == Errors.INVALID_GROUP_ID.code()) {
                 // log the error and re-throw the exception
                 Errors error = Errors.forCode(errorCode);
                 log.error("Attempt to join group {} failed due to: {}",

@@ -78,6 +78,8 @@ public enum Errors {
             new IllegalGenerationException("Specified group generation id is not valid.")),
     INCONSISTENT_GROUP_PROTOCOL(23,
             new ApiException("The group member's supported protocols are incompatible with those of existing members.")),
+    INVALID_GROUP_ID(24,
+            new ApiException("The configured groupId is invalid")),
     UNKNOWN_MEMBER_ID(25,
             new UnknownMemberIdException("The coordinator is not aware of this member.")),
     INVALID_SESSION_TIMEOUT(26,
