@@ -30,7 +30,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.GroupMetadataRequest;
 import org.apache.kafka.common.requests.GroupMetadataResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
@@ -181,8 +180,12 @@ public abstract class AbstractCoordinator {
             RequestFuture<Void> future = sendGroupMetadataRequest();
             client.poll(future, requestTimeoutMs);
 
-            if (future.failed())
-                client.awaitMetadataUpdate();
+            if (future.failed()) {
+                if (future.isRetriable())
+                    client.awaitMetadataUpdate();
+                else
+                    throw future.exception();
+            }
         }
     }
 
@@ -417,12 +420,8 @@ public abstract class AbstractCoordinator {
                            RequestFuture<ByteBuffer> future) {
             short errorCode = syncResponse.errorCode();
             if (errorCode == Errors.NONE.code()) {
-                try {
-                    future.complete(syncResponse.memberAssignment());
-                    sensors.syncLatency.record(response.requestLatencyMs());
-                } catch (SchemaException e) {
-                    future.raise(e);
-                }
+                future.complete(syncResponse.memberAssignment());
+                sensors.syncLatency.record(response.requestLatencyMs());
             } else {
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.forCode(errorCode));
@@ -588,8 +587,13 @@ public abstract class AbstractCoordinator {
                 return;
             }
 
-            R response = parse(clientResponse);
-            handle(response, future);
+            try {
+                R response = parse(clientResponse);
+                handle(response, future);
+            } catch (RuntimeException e) {
+                if (!future.isDone())
+                    future.raise(e);
+            }
         }
 
     }

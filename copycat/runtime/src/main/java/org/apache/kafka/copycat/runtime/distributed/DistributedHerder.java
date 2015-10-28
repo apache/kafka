@@ -17,7 +17,7 @@
 
 package org.apache.kafka.copycat.runtime.distributed;
 
-import org.apache.kafka.clients.consumer.ConsumerWakeupException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.connector.ConnectorContext;
@@ -159,7 +159,7 @@ public class DistributedHerder implements Herder, Runnable {
             member.ensureActive();
             // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
             if (!handleRebalanceCompleted()) return;
-        } catch (ConsumerWakeupException e) {
+        } catch (WakeupException e) {
             // May be due to a request from another thread, or might be stopping. If the latter, we need to check the
             // flag immediately. If the former, we need to re-run the ensureActive call since we can't handle requests
             // unless we're in the group.
@@ -217,7 +217,7 @@ public class DistributedHerder implements Herder, Runnable {
             member.poll(Long.MAX_VALUE);
             // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
             if (!handleRebalanceCompleted()) return;
-        } catch (ConsumerWakeupException e) { // FIXME should not be ConsumerWakeupException
+        } catch (WakeupException e) { // FIXME should not be WakeupException
             // Ignore. Just indicates we need to check the exit flag, for requested actions, etc.
         }
     }

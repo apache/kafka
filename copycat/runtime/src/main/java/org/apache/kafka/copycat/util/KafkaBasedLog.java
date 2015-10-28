@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.ConsumerWakeupException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -232,7 +232,7 @@ public class KafkaBasedLog<K, V> {
             ConsumerRecords<K, V> records = consumer.poll(timeoutMs);
             for (ConsumerRecord<K, V> record : records)
                 consumedCallback.onCompletion(null, record);
-        } catch (ConsumerWakeupException e) {
+        } catch (WakeupException e) {
             // Expected on get() or stop(). The calling code should handle this
             throw e;
         } catch (KafkaException e) {
@@ -257,7 +257,7 @@ public class KafkaBasedLog<K, V> {
         try {
             poll(0);
         } finally {
-            // If there is an exception, even a possibly expected one like ConsumerWakeupException, we need to make sure
+            // If there is an exception, even a possibly expected one like WakeupException, we need to make sure
             // the consumers position is reset or it'll get into an inconsistent state.
             for (TopicPartition tp : assignment) {
                 long startOffset = offsets.get(tp);
@@ -300,7 +300,7 @@ public class KafkaBasedLog<K, V> {
                     if (numCallbacks > 0) {
                         try {
                             readToLogEnd();
-                        } catch (ConsumerWakeupException e) {
+                        } catch (WakeupException e) {
                             // Either received another get() call and need to retry reading to end of log or stop() was
                             // called. Both are handled by restarting this loop.
                             continue;
@@ -318,7 +318,7 @@ public class KafkaBasedLog<K, V> {
 
                     try {
                         poll(Integer.MAX_VALUE);
-                    } catch (ConsumerWakeupException e) {
+                    } catch (WakeupException e) {
                         // See previous comment, both possible causes of this wakeup are handled by starting this loop again
                         continue;
                     }

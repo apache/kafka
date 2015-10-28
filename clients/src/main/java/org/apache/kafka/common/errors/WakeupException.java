@@ -10,11 +10,17 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.KafkaException;
 
-public class ConsumerWakeupException extends KafkaException {
+/**
+ * Exception used to indicate preemption of a blocking operation by an external thread.
+ * For example, {@link org.apache.kafka.clients.consumer.KafkaConsumer#wakeup}
+ * can be used to break out of an active {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(long)},
+ * which would raise an instance of this exception.
+ */
+public class WakeupException extends KafkaException {
     private static final long serialVersionUID = 1L;
 
 }

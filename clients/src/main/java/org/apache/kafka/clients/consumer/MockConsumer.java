@@ -19,6 +19,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -135,7 +136,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         if (wakeup.get()) {
             wakeup.set(false);
-            throw new ConsumerWakeupException();
+            throw new WakeupException();
         }
 
         if (exception != null) {
