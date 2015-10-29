@@ -62,10 +62,10 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.collector = collector;
         this.stateMgr = stateMgr;
 
-        this.keySerializer = config.getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
-        this.valSerializer = config.getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
-        this.keyDeserializer = config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-        this.valDeserializer = config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        this.keySerializer = config.keySerializer();
+        this.valSerializer = config.valueSerializer();
+        this.keyDeserializer = config.keyDeserializer();
+        this.valDeserializer = config.valueDeserializer();
 
         this.initialized = false;
     }
@@ -123,8 +123,21 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
 
     @Override
     public StateStore getStateStore(String name) {
+        ProcessorNode node = task.node();
+
+        if (node == null)
+            throw new KafkaException("accessing from an unknown node");
+
+        if (!node.stateStores.contains(name))
+            throw new KafkaException("Processor " + node.name() + " has no access to StateStore " + name);
+
         return stateMgr.getStore(name);
     }
+
+    ProcessorStateManager getStateMgr() {
+        return stateMgr;
+    }
+
 
     @Override
     public String topic() {

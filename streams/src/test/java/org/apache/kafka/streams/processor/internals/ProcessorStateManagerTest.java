@@ -29,8 +29,10 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.OffsetCheckpoint;
 import org.junit.Test;
 
@@ -53,10 +55,30 @@ import static org.junit.Assert.assertFalse;
 
 public class ProcessorStateManagerTest {
 
+    private static class MockStateStoreSupplier implements StateStoreSupplier {
+        private final String name;
+        private final boolean persistent;
+
+        public MockStateStoreSupplier(String name, boolean persistent) {
+            this.name = name;
+            this.persistent = persistent;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+        @Override
+        public StateStore get() {
+            return new MockStateStore(name, persistent);
+        }
+    }
+
     private static class MockStateStore implements StateStore {
         private final String name;
         private final boolean persistent;
 
+        public boolean initialized = false;
         public boolean flushed = false;
         public boolean closed = false;
         public final ArrayList<Integer> keys = new ArrayList<>();
@@ -68,6 +90,10 @@ public class ProcessorStateManagerTest {
         @Override
         public String name() {
             return name;
+        }
+        @Override
+        public void init(ProcessorContext context) {
+            initialized = true;
         }
         @Override
         public void flush() {

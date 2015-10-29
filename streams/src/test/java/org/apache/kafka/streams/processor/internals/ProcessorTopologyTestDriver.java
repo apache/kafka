@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -32,8 +32,6 @@ import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
-import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.ArrayList;
@@ -266,7 +264,7 @@ public class ProcessorTopologyTestDriver {
      * @see #getKeyValueStore(String)
      */
     public StateStore getStateStore(String name) {
-        return task.context().getStateStore(name);
+        return ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
     }
 
     /**

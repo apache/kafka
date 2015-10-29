@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.MockSourceNode;
 import org.junit.Test;
@@ -37,6 +38,7 @@ import org.junit.Before;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Properties;
@@ -57,13 +59,15 @@ public class StreamTaskTest {
     private final MockSourceNode source1 = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final MockSourceNode source2 = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final ProcessorTopology topology = new ProcessorTopology(
-        Arrays.asList((ProcessorNode) source1, (ProcessorNode) source2),
-        new HashMap<String, SourceNode>() {
-            {
-                put("topic1", source1);
-                put("topic2", source2);
-            }
-        });
+            Arrays.asList((ProcessorNode) source1, (ProcessorNode) source2),
+            new HashMap<String, SourceNode>() {
+                {
+                    put("topic1", source1);
+                    put("topic2", source2);
+                }
+            },
+            Collections.<StateStoreSupplier>emptyList()
+    );
 
     private StreamingConfig createConfig(final File baseDir) throws Exception {
         return new StreamingConfig(new Properties() {
