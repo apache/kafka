@@ -72,3 +72,8 @@ if [ ! -e /mnt ]; then
     mkdir /mnt
 fi
 chmod a+rwx /mnt
+
+# Run ntpdate once to sync to ntp servers
+ntpdate pool.ntp.org
+# Install ntp daemon - it will automatically start on boot
+apt-get -y install ntp
