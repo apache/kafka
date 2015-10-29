@@ -49,6 +49,8 @@ object RequestChannel extends Logging {
   case class Session(principal: KafkaPrincipal, host: String)
 
   case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
+    // These need to be volatile because the readers are in the network thread and the writers are in the request
+    // handler threads or the purgatory threads
     @volatile var requestDequeueTimeMs = -1L
     @volatile var apiLocalCompleteTimeMs = -1L
     @volatile var responseCompleteTimeMs = -1L
@@ -96,7 +98,8 @@ object RequestChannel extends Logging {
       // see a negative value here. In that case, use responseCompleteTimeMs as apiLocalCompleteTimeMs.
       if (apiLocalCompleteTimeMs < 0)
         apiLocalCompleteTimeMs = responseCompleteTimeMs
-      // If the apiRemoteCompleteTimeMs is not set, then it is the same as responseCompleteTimeMs.
+      // If the apiRemoteCompleteTimeMs is not set (i.e., for requests that do not go through a purgatory), then it is
+      // the same as responseCompleteTimeMs.
       if (apiRemoteCompleteTimeMs < 0)
         apiRemoteCompleteTimeMs = responseCompleteTimeMs
 
@@ -244,7 +247,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val requestQueueTimeHist = newHistogram("RequestQueueTimeMs", biased = true, tags)
   // time a request takes to be processed at the local broker
   val localTimeHist = newHistogram("LocalTimeMs", biased = true, tags)
-  // time a request takes to wait on remote brokers (only relevant to fetch and produce requests)
+  // time a request takes to wait on remote brokers (currently only relevant to fetch and produce requests)
   val remoteTimeHist = newHistogram("RemoteTimeMs", biased = true, tags)
   // time a request is throttled (only relevant to fetch and produce requests)
   val throttleTimeHist = newHistogram("ThrottleTimeMs", biased = true, tags)
