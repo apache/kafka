@@ -54,7 +54,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             'kafka_directory': kafka_dir(node)
             })
         cmd = "JMX_PORT=%(jmx_port)d /opt/%(kafka_directory)s/bin/kafka-run-class.sh org.apache.kafka.tools.ProducerPerformance " \
-              "--topic %(topic)s --num_records %(num_records)d --record_size %(record_size)d --throughput %(throughput)d --producer_props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
+              "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
 
         self.security_config.setup_node(node)
         if self.security_protocol == SecurityConfig.SSL:

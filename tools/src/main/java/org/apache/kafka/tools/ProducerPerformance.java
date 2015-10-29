@@ -35,10 +35,10 @@ public class ProducerPerformance {
 
             /* parse args */
             String topicName = res.getString("topic");
-            long numRecords = res.getLong("num_records");
-            int recordSize = res.getInt("record_size");
+            long numRecords = res.getLong("numRecords");
+            int recordSize = res.getInt("recordSize");
             int throughput = res.getInt("throughput");
-            List<String> producerProps = res.getList("producer_props");
+            List<String> producerProps = res.getList("producerConfig");
 
             Properties props = new Properties();
             if (producerProps != null)
@@ -97,22 +97,24 @@ public class ProducerPerformance {
                 .action(store())
                 .required(true)
                 .type(String.class)
-                .metavar("TOPIC_NAME")
+                .metavar("TOPIC")
                 .help("produce messages to this topic");
 
-        parser.addArgument("--num_records")
+        parser.addArgument("--num-records")
                 .action(store())
                 .required(true)
                 .type(Long.class)
-                .metavar("NUM_RECORDS")
-                .help("number messages to produce");
+                .metavar("NUM-RECORDS")
+                .dest("numRecords")
+                .help("number of messages to produce");
 
-        parser.addArgument("--record_size")
+        parser.addArgument("--record-size")
                 .action(store())
                 .required(true)
                 .type(Integer.class)
-                .metavar("RECORD_SIZE")
-                .help("message size is bytes");
+                .metavar("RECORD-SIZE")
+                .dest("recordSize")
+                .help("message size in bytes");
 
         parser.addArgument("--throughput")
                 .action(store())
@@ -121,12 +123,13 @@ public class ProducerPerformance {
                 .metavar("THROUGHPUT")
                 .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec");
 
-        parser.addArgument("--producer_props")
+        parser.addArgument("--producer-props")
                  .nargs("+")
                  .required(true)
-                 .metavar("PROP_NAME=PROP_VALUE")
+                 .metavar("PROP-NAME=PROP-VALUE")
                  .type(String.class)
-                 .help("kafka producer related configuaration properties like bootstrap.servers etc..");
+                 .dest("producerConfig")
+                 .help("kafka producer related configuaration properties like bootstrap.servers,client.id etc..");
 
         return parser;
     }
