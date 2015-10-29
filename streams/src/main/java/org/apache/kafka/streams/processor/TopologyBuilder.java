@@ -59,35 +59,38 @@ public class TopologyBuilder {
     private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    private interface NodeFactory {
-        ProcessorNode build();
+    private static abstract class NodeFactory {
+        public final String name;
+
+        NodeFactory(String name) {
+            this.name = name;
+        }
+
+        public abstract ProcessorNode build();
     }
 
-    private class ProcessorNodeFactory implements NodeFactory {
+    private static class ProcessorNodeFactory extends NodeFactory {
         public final String[] parents;
-        private final String name;
         private final ProcessorSupplier supplier;
 
         public ProcessorNodeFactory(String name, String[] parents, ProcessorSupplier supplier) {
-            this.name = name;
+            super(name);
             this.parents = parents.clone();
             this.supplier = supplier;
         }
-
         @Override
         public ProcessorNode build() {
             return new ProcessorNode(name, supplier.get());
         }
     }
 
-    private class SourceNodeFactory implements NodeFactory {
+    private static class SourceNodeFactory extends NodeFactory {
         public final String[] topics;
-        private final String name;
         private Deserializer keyDeserializer;
         private Deserializer valDeserializer;
 
         private SourceNodeFactory(String name, String[] topics, Deserializer keyDeserializer, Deserializer valDeserializer) {
-            this.name = name;
+            super(name);
             this.topics = topics.clone();
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
@@ -99,15 +102,14 @@ public class TopologyBuilder {
         }
     }
 
-    private class SinkNodeFactory implements NodeFactory {
+    private static class SinkNodeFactory extends NodeFactory {
         public final String[] parents;
         public final String topic;
-        private final String name;
         private Serializer keySerializer;
         private Serializer valSerializer;
 
         private SinkNodeFactory(String name, String[] parents, String topic, Serializer keySerializer, Serializer valSerializer) {
-            this.name = name;
+            super(name);
             this.parents = parents.clone();
             this.topic = topic;
             this.keySerializer = keySerializer;
@@ -255,7 +257,29 @@ public class TopologyBuilder {
     }
 
     /**
-     * Returns the map of topic groups keyed by the group id.
+     * Asserts that the streams of the specified source nodes must be copartitioned.
+     *
+     * @param sourceNodes source node names
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder copartitionSources(String... sourceNodes) {
+        copartitionSourceGroups.add(Collections.unmodifiableSet(Utils.mkSet(sourceNodes)));
+        return this;
+    }
+
+    /**
+     * Asserts that the streams of the specified source nodes must be copartitioned.
+     *
+     * @param sourceNodes a set of source node names
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder copartitionSources(Collection<String> sourceNodes) {
+        copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
+        return this;
+    }
+
+    /**
+     * Returns the map of topic groups keyed by the topic group id.
      * A topic group is a group of topics in the same task.
      *
      * @return groups of topic names
@@ -263,11 +287,8 @@ public class TopologyBuilder {
     public Map<Integer, Set<String>> topicGroups() {
         Map<Integer, Set<String>> topicGroups = new HashMap<>();
 
-        if (nodeGroups == null) {
-            nodeGroups = nodeGroups();
-        } else if (!nodeGroups.equals(nodeGroups())) {
-            throw new TopologyException("topology has mutated");
-        }
+        if (nodeGroups == null)
+            nodeGroups = makeNodeGroups();
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> topicGroup = new HashSet<>();
@@ -282,7 +303,19 @@ public class TopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
-    private Map<Integer, Set<String>> nodeGroups() {
+    /**
+     * Returns the map of node groups keyed by the topic group id.
+     *
+     * @return groups of node names
+     */
+    public Map<Integer, Set<String>> nodeGroups() {
+        if (nodeGroups == null)
+            nodeGroups = makeNodeGroups();
+
+        return nodeGroups;
+    }
+
+    private Map<Integer, Set<String>> makeNodeGroups() {
         HashMap<Integer, Set<String>> nodeGroups = new HashMap<>();
         HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
@@ -318,15 +351,6 @@ public class TopologyBuilder {
     }
 
     /**
-     * Asserts that the streams of the specified source nodes must be copartitioned.
-     *
-     * @param sourceNodes a set of source node names
-     */
-    public void copartitionSources(Collection<String> sourceNodes) {
-        copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
-    }
-
-    /**
      * Returns the copartition groups.
      * A copartition group is a group of topics that are required to be copartitioned.
      *
@@ -347,13 +371,24 @@ public class TopologyBuilder {
     }
 
     /**
-     * Build the topology. This is typically called automatically when passing this builder into the
+     * Build the topology for the specified topic group. This is called automatically when passing this builder into the
      * {@link KafkaStreaming#KafkaStreaming(TopologyBuilder, StreamingConfig)} constructor.
      *
      * @see KafkaStreaming#KafkaStreaming(TopologyBuilder, StreamingConfig)
      */
+    public ProcessorTopology build(Integer topicGroupId) {
+        Set<String> nodeGroup;
+        if (topicGroupId != null) {
+            nodeGroup = nodeGroups().get(topicGroupId);
+        } else {
+            // when nodeGroup is null, we build the full topology. this is used in some tests.
+            nodeGroup = null;
+        }
+        return build(nodeGroup);
+    }
+
     @SuppressWarnings("unchecked")
-    public ProcessorTopology build() {
+    private ProcessorTopology build(Set<String> nodeGroup) {
         List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
@@ -361,24 +396,26 @@ public class TopologyBuilder {
         try {
             // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
             for (NodeFactory factory : nodeFactories) {
-                ProcessorNode node = factory.build();
-                processorNodes.add(node);
-                processorMap.put(node.name(), node);
+                if (nodeGroup == null || nodeGroup.contains(factory.name)) {
+                    ProcessorNode node = factory.build();
+                    processorNodes.add(node);
+                    processorMap.put(node.name(), node);
 
-                if (factory instanceof ProcessorNodeFactory) {
-                    for (String parent : ((ProcessorNodeFactory) factory).parents) {
-                        processorMap.get(parent).addChild(node);
+                    if (factory instanceof ProcessorNodeFactory) {
+                        for (String parent : ((ProcessorNodeFactory) factory).parents) {
+                            processorMap.get(parent).addChild(node);
+                        }
+                    } else if (factory instanceof SourceNodeFactory) {
+                        for (String topic : ((SourceNodeFactory) factory).topics) {
+                            topicSourceMap.put(topic, (SourceNode) node);
+                        }
+                    } else if (factory instanceof SinkNodeFactory) {
+                        for (String parent : ((SinkNodeFactory) factory).parents) {
+                            processorMap.get(parent).addChild(node);
+                        }
+                    } else {
+                        throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                     }
-                } else if (factory instanceof SourceNodeFactory) {
-                    for (String topic : ((SourceNodeFactory) factory).topics) {
-                        topicSourceMap.put(topic, (SourceNode) node);
-                    }
-                } else if (factory instanceof SinkNodeFactory) {
-                    for (String parent : ((SinkNodeFactory) factory).parents) {
-                        processorMap.get(parent).addChild(node);
-                    }
-                } else {
-                    throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                 }
             }
         } catch (Exception e) {
