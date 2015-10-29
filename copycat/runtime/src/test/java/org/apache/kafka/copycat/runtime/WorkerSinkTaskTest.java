@@ -17,13 +17,18 @@
 
 package org.apache.kafka.copycat.runtime;
 
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
+import org.apache.kafka.copycat.errors.TransientException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -31,7 +36,11 @@ import org.apache.kafka.copycat.storage.Converter;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.apache.kafka.copycat.util.MockTime;
 import org.apache.kafka.copycat.util.ThreadedTest;
-import org.easymock.*;
+import org.easymock.Capture;
+import org.easymock.CaptureType;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
+import org.easymock.IExpectationSetters;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -349,6 +358,52 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testTransientExceptionHandling() throws Exception {
+        Properties taskProps = new Properties();
+        expectInitializeTask(taskProps);
+
+        sinkTask.put(EasyMock.anyObject(Collection.class));
+        EasyMock.expectLastCall().andThrow(new TransientException("Transient exception from SinkTask"));
+
+        EasyMock.expect(consumer.assignment()).andReturn(
+            new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
+
+        consumer.pause(TOPIC_PARTITION);
+        EasyMock.expectLastCall();
+
+        consumer.pause(TOPIC_PARTITION2);
+        EasyMock.expectLastCall();
+
+        consumer.poll(0);
+        EasyMock.expectLastCall().andReturn(null);
+
+        expectOnePoll().andVoid();
+
+        consumer.poll(0);
+        EasyMock.expectLastCall().andReturn(null);
+
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2)));
+
+        consumer.resume(TOPIC_PARTITION);
+        EasyMock.expectLastCall();
+
+        consumer.resume(TOPIC_PARTITION2);
+        EasyMock.expectLastCall();
+
+        expectStopTask(0);
+
+        PowerMock.replayAll();
+
+        workerTask.start(taskProps);
+        workerThread.iteration();
+
+        workerTask.stop();
+        workerTask.close();
+
+        PowerMock.verifyAll();
+    }
+
 
     private void expectInitializeTask(Properties taskProps) throws Exception {
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));
@@ -415,21 +470,21 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         // returning empty data, we return one record. The expectation is that the data will be ignored by the
         // response behavior specified using the return value of this method.
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
-                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-                    @Override
-                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                        // "Sleep" so time will progress
-                        time.sleep(1L);
-                        ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
-                                Collections.singletonMap(
-                                        new TopicPartition(TOPIC, PARTITION),
-                                        Arrays.asList(
-                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
-                                        )));
-                        recordsReturned++;
-                        return records;
-                    }
-                });
+            new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                @Override
+                public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                    // "Sleep" so time will progress
+                    time.sleep(1L);
+                    ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
+                        Collections.singletonMap(
+                            new TopicPartition(TOPIC, PARTITION),
+                            Arrays.asList(
+                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, RAW_KEY, RAW_VALUE)
+                            )));
+                    recordsReturned++;
+                    return records;
+                }
+            });
         EasyMock.expect(keyConverter.toCopycatData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
         EasyMock.expect(valueConverter.toCopycatData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
         sinkTask.put(EasyMock.anyObject(Collection.class));
