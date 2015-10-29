@@ -623,7 +623,7 @@ We pay particular we do graphing and alerting on the following metrics:
     <tr>
       <td>Quota metrics per client-id</td>
       <td>kafka.server:type={Produce|Fetch},client-id==([-.\w]+)</td>
-      <td>Two attributes. throttle-time indicates the amount of time the client-id was throttled. Ideally = 0.
+      <td>Two attributes. throttle-time indicates the amount of time in ms the client-id was throttled. Ideally = 0.
           byte-rate indicates the data produce/consume rate of the client.</td>
     </tr>
 </tbody></table>

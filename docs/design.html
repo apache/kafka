@@ -367,14 +367,7 @@ It is possible for producers and consumers to produce/consume very high volumes 
     This quota is defined on a per-broker basis. Each client can publish/fetch a maximum of X bytes/sec per broker before it gets throttled. We decided that defining these quotas per broker is much better than having a fixed cluster wide bandwidth per client because that would require a mechanism to share client quota usage among all the brokers. This can be harder to get right than the quota implementation itself!
 </p>
 <p>
-    How does the Kafka Server react when it detects a quota violation? We have a few options:
-    <ol>
-      <li>Return an error immediately</li>
-      <li>Delay the response to slow down the guilty clients</li>
-    </ol>
-
-    We chose option 2 in our solution. The broker does not return an error rather it attempts to slow down a client exceeding it's quota. It computes the amount of delay
-needed to bring the guilty client under it's quota and delays sending the response for that time. This approach is better than option 1 primarily because this keeps the quota violation transparent to clients (outside of client side metrics). Clients don't need to implement any special backoff and retry behavior. In addition, bad client behavior (retry without backoff) can exacerbate the very problem quotas are trying to solve.
+    How does a broker react when it detects a quota violation? In our solution, the broker does not return an error rather it attempts to slow down a client exceeding its quota. It computes the amount of delay needed to bring a guilty client under it's quota and delays the response for that time. This approach keeps the quota violation transparent to clients (outside of client side metrics). This also keeps them from having to implement any special backoff and retry behavior which can get tricky. In fact, bad client behavior (retry without backoff) can exacerbate the very problem quotas are trying to solve.
 </p>
 <p>
 Client byte rate is measured over multiple small windows (for e.g. 30 windows of 1 second each) in order to detect and correct quota violations quickly. Typically, having large measurement windows (for e.g. 10 windows of 30 seconds each) leads to large bursts of traffic followed by long delays which is not great in terms of user experience.
