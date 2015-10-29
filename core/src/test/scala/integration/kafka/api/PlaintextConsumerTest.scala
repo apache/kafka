@@ -16,8 +16,10 @@ import java.util.regex.Pattern
 
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{NoOffsetForPartitionException, OffsetAndMetadata, KafkaConsumer, ConsumerConfig}
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordTooLargeException}
 import org.junit.Assert._
 import org.junit.Test
 import scala.collection.JavaConverters
@@ -312,4 +314,47 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(this.consumers(0), 5, 5)
   }
 
+  @Test
+  def testFetchInvalidOffset() {
+    this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    // produce one record
+    val totalRecords = 2
+    sendRecords(totalRecords, tp)
+    consumer0.assign(List(tp).asJava)
+
+    // poll should fail because there is no offset reset strategy set
+    intercept[NoOffsetForPartitionException] {
+      consumer0.poll(50)
+    }
+
+    // seek to out of range position
+    val outOfRangePos = totalRecords + 1
+    consumer0.seek(tp, outOfRangePos)
+    intercept[OffsetOutOfRangeException] {
+      consumer0.poll(20000)
+    }
+
+    consumer0.close()
+  }
+
+  @Test
+  def testFetchRecordTooLarge() {
+    val maxFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes.toString)
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    // produce a record that is larger than the configured fetch size
+    val record = new ProducerRecord[Array[Byte],Array[Byte]](tp.topic(), tp.partition(), "key".getBytes, new Array[Byte](maxFetchBytes + 1))
+    this.producers(0).send(record)
+
+    // consuming a too-large record should fail
+    consumer0.assign(List(tp).asJava)
+    intercept[RecordTooLargeException] {
+      consumer0.poll(20000)
+    }
+
+    consumer0.close()
+  }
 }
