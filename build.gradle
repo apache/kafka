@@ -504,7 +504,7 @@ project(':tools') {
     dependencies {
         compile project(':clients')
         compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
-        compile 'com.fasterxml.jackson.core:jackson-databind:' + jackson_version
+        compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
         compile "$slf4jlog4j"
 
         testCompile "$junit"
@@ -710,7 +710,7 @@ project(':copycat:json') {
   dependencies {
     compile project(':copycat:api')
     compile "$slf4japi"
-    compile 'com.fasterxml.jackson.core:jackson-databind:' + jackson_version
+    compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
 
     testCompile "$junit"
     testCompile "$easymock"
@@ -773,10 +773,10 @@ project(':copycat:runtime') {
     compile project(':clients')
     compile "$slf4japi"
 
-    compile 'org.eclipse.jetty:jetty-server:' + jetty_version
-    compile 'org.eclipse.jetty:jetty-servlet:' + jetty_version
-    compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:" + jackson_version
-    compile "org.glassfish.jersey.containers:jersey-container-servlet:" + jersey_version
+    compile "org.eclipse.jetty:jetty-server:$jetty_version"
+    compile "org.eclipse.jetty:jetty-servlet:$jetty_version"
+    compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$jackson_version"
+    compile "org.glassfish.jersey.containers:jersey-container-servlet:$jersey_version"
 
     testCompile "$junit"
     testCompile "$easymock"
