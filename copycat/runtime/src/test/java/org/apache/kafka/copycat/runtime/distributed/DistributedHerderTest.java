@@ -24,12 +24,16 @@ import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.TaskConfig;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.runtime.WorkerConfig;
+import org.apache.kafka.copycat.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.copycat.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.copycat.source.SourceConnector;
 import org.apache.kafka.copycat.source.SourceTask;
 import org.apache.kafka.copycat.storage.KafkaConfigStorage;
 import org.apache.kafka.copycat.util.Callback;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
+import org.apache.kafka.copycat.util.FutureCallback;
 import org.apache.kafka.copycat.util.TestFuture;
+import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.junit.Before;
@@ -51,6 +55,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(DistributedHerder.class)
@@ -82,6 +89,10 @@ public class DistributedHerderTest {
         CONN1_CONFIG.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
         CONN1_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
     }
+    private static final Map<String, String> CONN1_CONFIG_UPDATED = new HashMap<>(CONN1_CONFIG);
+    static {
+        CONN1_CONFIG_UPDATED.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar,baz");
+    }
     private static final Map<String, String> CONN2_CONFIG = new HashMap<>();
     static {
         CONN2_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN2);
@@ -107,6 +118,8 @@ public class DistributedHerderTest {
     }
     private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), TASK_CONFIGS_MAP, Collections.<String>emptySet());
+    private static final ClusterConfigState SNAPSHOT_UPDATED_CONN1_CONFIG = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
+            Collections.singletonMap(CONN1, CONN1_CONFIG_UPDATED), TASK_CONFIGS_MAP, Collections.<String>emptySet());
 
     @Mock private KafkaConfigStorage configStorage;
     @Mock private WorkerGroupMember member;
@@ -138,7 +151,7 @@ public class DistributedHerderTest {
         expectPostRebalanceCatchup(SNAPSHOT);
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
         worker.addTask(EasyMock.eq(TASK1), EasyMock.<TaskConfig>anyObject());
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
@@ -227,7 +240,7 @@ public class DistributedHerderTest {
         expectPostRebalanceCatchup(SNAPSHOT);
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
 
         // And delete the connector
         member.wakeup();
@@ -271,7 +284,7 @@ public class DistributedHerderTest {
                 CopycatProtocol.Assignment.NO_ERROR, 1, Arrays.asList(CONN1), Collections.<ConnectorTaskId>emptyList());
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -297,7 +310,7 @@ public class DistributedHerderTest {
         expectPostRebalanceCatchup(SNAPSHOT);
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -310,7 +323,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -378,7 +391,7 @@ public class DistributedHerderTest {
 
         worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.reconfigureConnectorTasks(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
         worker.addTask(EasyMock.eq(TASK1), EasyMock.<TaskConfig>anyObject());
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
@@ -389,6 +402,122 @@ public class DistributedHerderTest {
         herder.tick();
         herder.tick();
 
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testAccessors() throws Exception {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+
+
+        member.wakeup();
+        PowerMock.expectLastCall().anyTimes();
+        // list connectors, get connector info, get connector config, get task configs
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+
+        PowerMock.replayAll();
+
+        FutureCallback<Collection<String>> listConnectorsCb = new FutureCallback<>();
+        herder.connectors(listConnectorsCb);
+        FutureCallback<ConnectorInfo> connectorInfoCb = new FutureCallback<>();
+        herder.connectorInfo(CONN1, connectorInfoCb);
+        FutureCallback<Map<String, String>> connectorConfigCb = new FutureCallback<>();
+        herder.connectorConfig(CONN1, connectorConfigCb);
+        FutureCallback<List<TaskInfo>> taskConfigsCb = new FutureCallback<>();
+        herder.taskConfigs(CONN1, taskConfigsCb);
+
+        herder.tick();
+        assertTrue(listConnectorsCb.isDone());
+        assertEquals(Collections.singleton(CONN1), listConnectorsCb.get());
+        assertTrue(connectorInfoCb.isDone());
+        ConnectorInfo info = new ConnectorInfo(CONN1, CONN1_CONFIG, Arrays.asList(TASK0, TASK1, TASK2));
+        assertEquals(info, connectorInfoCb.get());
+        assertTrue(connectorConfigCb.isDone());
+        assertEquals(CONN1_CONFIG, connectorConfigCb.get());
+        assertTrue(taskConfigsCb.isDone());
+        assertEquals(Arrays.asList(
+                        new TaskInfo(new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(TASK0), TASK_CONFIG),
+                        new TaskInfo(new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(TASK1), TASK_CONFIG),
+                        new TaskInfo(new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(TASK2), TASK_CONFIG)),
+                taskConfigsCb.get());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPutConnectorConfig() throws Exception {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Arrays.asList(CONN1), Collections.<ConnectorTaskId>emptyList());
+        expectPostRebalanceCatchup(SNAPSHOT);
+        worker.addConnector(EasyMock.<ConnectorConfig>anyObject(), EasyMock.<ConnectorContext>anyObject());
+        PowerMock.expectLastCall();
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+
+        // list connectors, get connector info, get connector config, get task configs
+        member.wakeup();
+        PowerMock.expectLastCall().anyTimes();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // Poll loop for second round of calls
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        configStorage.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED);
+        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                // Simulate response to writing config + waiting until end of log to be read
+                connectorConfigCallback.onCompletion(null, CONN1);
+                return null;
+            }
+        });
+        // As a result of reconfig, should need to update snapshot. With only connector updates, we'll just restart
+        // connector without rebalance
+        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT_UPDATED_CONN1_CONFIG);
+        worker.stopConnector(CONN1);
+        PowerMock.expectLastCall();
+        Capture<ConnectorConfig> capturedUpdatedConfig = EasyMock.newCapture();
+        worker.addConnector(EasyMock.capture(capturedUpdatedConfig), EasyMock.<ConnectorContext>anyObject());
+        PowerMock.expectLastCall();
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // Third tick just to read the config
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        // Should pick up original config
+        FutureCallback<Map<String, String>> connectorConfigCb = new FutureCallback<>();
+        herder.connectorConfig(CONN1, connectorConfigCb);
+        herder.tick();
+        assertTrue(connectorConfigCb.isDone());
+        assertEquals(CONN1_CONFIG, connectorConfigCb.get());
+
+        // Apply new config. The update doesn't occur until after  which should be picked up immediately since the write is synchronous
+        FutureCallback<Void> putConfigCb = new FutureCallback<>();
+        herder.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED, putConfigCb);
+        herder.tick();
+        assertTrue(putConfigCb.isDone());
+        assertEquals(null, putConfigCb.get());
+
+        // Check config again to validate change
+        connectorConfigCb = new FutureCallback<>();
+        herder.connectorConfig(CONN1, connectorConfigCb);
+        herder.tick();
+        assertTrue(connectorConfigCb.isDone());
+        assertEquals(CONN1_CONFIG_UPDATED, connectorConfigCb.get());
+        // The config passed to Worker should
+        assertEquals(Arrays.asList("foo", "bar", "baz"),
+                capturedUpdatedConfig.getValue().getList(ConnectorConfig.TOPICS_CONFIG));
         PowerMock.verifyAll();
     }
 

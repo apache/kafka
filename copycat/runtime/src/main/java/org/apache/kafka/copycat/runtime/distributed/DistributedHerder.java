@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -206,7 +207,7 @@ public class DistributedHerder implements Herder, Runnable {
                 } else if (!connectorConfigUpdates.isEmpty()) {
                     // If we only have connector config updates, we can just bounce the updated connectors that are
                     // currently assigned to this worker.
-                    Set<String> localConnectors = worker.connectorNames();
+                    Set<String> localConnectors = assignment == null ? Collections.<String>emptySet() : new HashSet<>(assignment.connectors());
                     for (String connectorName : connectorConfigUpdates) {
                         if (!localConnectors.contains(connectorName))
                             continue;
@@ -665,7 +666,7 @@ public class DistributedHerder implements Herder, Runnable {
             sinkTopics = connConfig.getList(ConnectorConfig.TOPICS_CONFIG);
 
         List<Map<String, String>> taskProps
-                = worker.reconfigureConnectorTasks(connName, connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG), sinkTopics);
+                = worker.connectorTaskConfigs(connName, connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG), sinkTopics);
         boolean changed = false;
         int currentNumTasks = configState.taskCount(connName);
         if (taskProps.size() != currentNumTasks) {

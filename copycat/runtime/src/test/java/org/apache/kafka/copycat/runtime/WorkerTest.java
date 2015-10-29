@@ -203,7 +203,7 @@ public class WorkerTest extends ThreadedTest {
         } catch (CopycatException e) {
             // expected
         }
-        List<Map<String, String>> taskConfigs = worker.reconfigureConnectorTasks(CONNECTOR_ID, 2, Arrays.asList("foo", "bar"));
+        List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, 2, Arrays.asList("foo", "bar"));
         Properties expectedTaskProps = new Properties();
         expectedTaskProps.setProperty("foo", "bar");
         expectedTaskProps.setProperty(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());

@@ -19,8 +19,9 @@ package org.apache.kafka.copycat.runtime.distributed;
 
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -99,15 +100,15 @@ public class ClusterConfigState {
      * @param connectorName the name of the connector to look up task configs for
      * @return the current set of connector task IDs
      */
-    public Set<ConnectorTaskId> tasks(String connectorName) {
+    public List<ConnectorTaskId> tasks(String connectorName) {
         if (inconsistentConnectors.contains(connectorName))
-            return Collections.emptySet();
+            return Collections.emptyList();
 
         Integer numTasks = connectorTaskCounts.get(connectorName);
         if (numTasks == null)
-            return Collections.emptySet();
+            return Collections.emptyList();
 
-        Set<ConnectorTaskId> taskIds = new HashSet<>();
+        List<ConnectorTaskId> taskIds = new ArrayList<>();
         for (int taskIndex = 0; taskIndex < numTasks; taskIndex++) {
             ConnectorTaskId taskId = new ConnectorTaskId(connectorName, taskIndex);
             taskIds.add(taskId);

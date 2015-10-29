@@ -200,7 +200,7 @@ public class Worker {
         }
     }
 
-    public List<Map<String, String>> reconfigureConnectorTasks(String connName, int maxTasks, List<String> sinkTopics) {
+    public List<Map<String, String>> connectorTaskConfigs(String connName, int maxTasks, List<String> sinkTopics) {
         log.trace("Reconfiguring connector tasks for {}", connName);
 
         Connector connector = connectors.get(connName);
