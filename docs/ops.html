@@ -297,7 +297,7 @@ Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7
 </pre>
 
-<h4><a id="setting_quotas">Setting quotas</a></h4>
+<h4><a id="quotas">Setting quotas</a></h4>
 It is possible to set default quotas that apply to all client-ids by setting these configs on the brokers. By default, each client-id receives an unlimited quota. The following sets the default quota per producer and consumer client-id to 10MB/sec.
 <pre>
   quota.producer.default=10485760
