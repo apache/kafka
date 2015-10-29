@@ -90,8 +90,10 @@ object RequestChannel extends Logging {
 
     def updateRequestMetrics() {
       val endTimeMs = SystemTime.milliseconds
-      // In some corner cases, apiLocalCompleteTimeMs may not be set when the request completes since the remote
-      // processing time is really small. In this case, use responseCompleteTimeMs as apiLocalCompleteTimeMs.
+      // In some corner cases, apiLocalCompleteTimeMs may not be set when the request completes if the remote
+      // processing time is really small. This value is set in KafkaApis from a request handling thread.
+      // This may be read in a network thread before the actual update happens in KafkaApis which will cause us to
+      // see a negative value here. In that case, use responseCompleteTimeMs as apiLocalCompleteTimeMs.
       if (apiLocalCompleteTimeMs < 0)
         apiLocalCompleteTimeMs = responseCompleteTimeMs
       // If the apiRemoteCompleteTimeMs is not set, then it is the same as responseCompleteTimeMs.
