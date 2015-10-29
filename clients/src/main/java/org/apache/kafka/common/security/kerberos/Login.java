@@ -341,8 +341,7 @@ public class Login {
      * Re-login a principal. This method assumes that {@link #login(String)} has happened already.
      * @throws javax.security.auth.login.LoginException on a failure
      */
-    private synchronized void reLogin()
-            throws LoginException {
+    private synchronized void reLogin() throws LoginException {
         if (!isKrbTicket) {
             return;
         }

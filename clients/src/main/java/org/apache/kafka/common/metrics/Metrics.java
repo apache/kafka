@@ -17,13 +17,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -109,9 +109,9 @@ public class Metrics implements Closeable {
      */
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration) {
         this.config = defaultConfig;
-        this.sensors = new CopyOnWriteMap<>();
-        this.metrics = new CopyOnWriteMap<>();
-        this.childrenSensors = new CopyOnWriteMap<>();
+        this.sensors = new ConcurrentHashMap<>();
+        this.metrics = new ConcurrentHashMap<>();
+        this.childrenSensors = new ConcurrentHashMap<>();
         this.reporters = Utils.notNull(reporters);
         this.time = time;
         for (MetricsReporter reporter : reporters)

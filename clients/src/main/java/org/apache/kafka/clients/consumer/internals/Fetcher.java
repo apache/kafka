@@ -23,10 +23,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.InvalidMetadataException;
-import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -57,7 +54,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
+import java.util.HashSet;
 
 /**
  * This class manage the fetching process with the brokers.
@@ -81,6 +78,7 @@ public class Fetcher<K, V> {
     private final Deserializer<V> valueDeserializer;
 
     private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
+    private final Set<TopicPartition> unauthorizedTopicPartitions;
     private final Map<TopicPartition, Long> recordTooLargePartitions;
 
     public Fetcher(ConsumerNetworkClient client,
@@ -112,6 +110,7 @@ public class Fetcher<K, V> {
 
         this.records = new LinkedList<PartitionRecords<K, V>>();
         this.offsetOutOfRangePartitions = new HashMap<>();
+        this.unauthorizedTopicPartitions = new HashSet<>();
         this.recordTooLargePartitions = new HashMap<>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
@@ -303,6 +302,19 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * If any topic from previous fetchResponse contatains Authorization error, throw ApiException.
+     * @throws ApiException
+     */
+    private void throwIfUnauthorized() throws ApiException {
+        if (!unauthorizedTopicPartitions.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (TopicPartition topicPartition : unauthorizedTopicPartitions)
+                sb.append(topicPartition + ",");
+            unauthorizedTopicPartitions.clear();
+            throw new AuthorizationException(String.format("Not authorized to read from %s", sb.substring(0, sb.length() - 1).toString()));
+        }
+    }
+     /**
      * If any partition from previous fetchResponse gets a RecordTooLarge error, throw RecordTooLargeException
      *
      * @throws RecordTooLargeException If there is a message larger than fetch size and hence cannot be ever returned
@@ -334,6 +346,7 @@ public class Fetcher<K, V> {
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
             throwIfOffsetOutOfRange();
+            throwIfUnauthorized();
             throwIfRecordTooLarge();
 
             for (PartitionRecords<K, V> part : this.records) {
@@ -544,6 +557,9 @@ public class Fetcher<K, V> {
                     else
                         this.offsetOutOfRangePartitions.put(tp, fetchOffset);
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
+                } else if (partition.errorCode == Errors.AUTHORIZATION_FAILED.code()) {
+                    log.warn("Not authorized to read from topic {}.", tp.topic());
+                    unauthorizedTopicPartitions.add(tp);
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else {

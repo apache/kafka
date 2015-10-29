@@ -30,13 +30,11 @@ import scala.util.{Try, Success, Failure}
 
 
 class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging{
-  val jaasFile: String = "zk-digest-jaas.conf"
+  val jaasFile: String = kafka.utils.JaasTestUtils.genZkFile
   val authProvider: String = "zookeeper.authProvider.1"
   @Before
   override def setUp() {
-    val classLoader = getClass.getClassLoader
-    val filePath = classLoader.getResource(jaasFile).getPath
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, filePath)
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
     System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
     super.setUp()
   }
