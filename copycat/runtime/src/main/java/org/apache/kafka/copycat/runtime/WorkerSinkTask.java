@@ -109,7 +109,7 @@ class WorkerSinkTask implements WorkerTask {
     public void poll(long timeoutMs) {
         try {
             rewind();
-            long backOffMs = context.backoffMs();
+            long backOffMs = context.backoff();
             timeoutMs = Math.max(timeoutMs, backOffMs);
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
             ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
@@ -192,7 +192,7 @@ class WorkerSinkTask implements WorkerTask {
         }
 
         log.debug("Task {} subscribing to topics {}", id, topics);
-        newConsumer.subscribe(Arrays.asList(topics));
+        newConsumer.subscribe(Arrays.asList(topics), new HandleRebalance());
 
         // Seek to any user-provided offsets. This is useful if offsets are tracked in the downstream system (e.g., to
         // enable exactly once delivery to that system).
@@ -240,19 +240,18 @@ class WorkerSinkTask implements WorkerTask {
     }
 
     private void rewind() {
-        Set<TopicPartition> rewinds = context.rewinds();
-        if (rewinds.isEmpty()) {
+        Map<TopicPartition, Long> offsets = context.offsets();
+        if (offsets.isEmpty()) {
             return;
         }
-        Map<TopicPartition, Long> offsets = context.offsets();
-        for (TopicPartition tp: rewinds) {
+        for (TopicPartition tp: offsets.keySet()) {
             Long offset = offsets.get(tp);
             if (offset != null) {
                 log.trace("Rewind {} to offset {}.", tp, offset);
                 consumer.seek(tp, offset);
             }
         }
-        rewinds.clear();
+        offsets.clear();
     }
 
     private class WorkerSinkTaskContext extends SinkTaskContext {
@@ -283,6 +282,18 @@ class WorkerSinkTask implements WorkerTask {
             } catch (IllegalStateException e) {
                 throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);
             }
+        }
+    }
+
+    private class HandleRebalance implements ConsumerRebalanceListener {
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            task.onPartitionsAssigned(partitions);
+        }
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            task.onPartitionsRevoked(partitions);
         }
     }
 }

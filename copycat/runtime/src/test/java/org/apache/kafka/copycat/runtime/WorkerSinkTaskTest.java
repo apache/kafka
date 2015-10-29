@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
@@ -53,10 +52,10 @@ import org.powermock.reflect.Whitebox;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -364,35 +363,25 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         Properties taskProps = new Properties();
         expectInitializeTask(taskProps);
         final long startOffset = 40L;
+        final Map<TopicPartition, Long> offsets = new HashMap<>();
 
         expectOnePoll().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
-                sinkTaskContext.getValue().rewinds(new HashSet<>(Arrays.asList(TOPIC_PARTITION)));
-                sinkTaskContext.getValue().offset(
-                    Collections.singletonMap(TOPIC_PARTITION, startOffset));
+                offsets.put(TOPIC_PARTITION, startOffset);
+                sinkTaskContext.getValue().offset(offsets);
                 return null;
             }
         });
 
-        expectOnePoll().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                Set<TopicPartition> rewinds = sinkTaskContext.getValue().rewinds();
-                assertEquals(1, rewinds.size());
-                assertEquals(new HashSet<>(Arrays.asList(TOPIC_PARTITION)), rewinds);
-                return null;
-            }
-        });
         consumer.seek(TOPIC_PARTITION, startOffset);
         EasyMock.expectLastCall();
 
-
         expectOnePoll().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
-                Set<TopicPartition> rewinds = sinkTaskContext.getValue().rewinds();
-                assertEquals(0, rewinds.size());
+                Map<TopicPartition, Long> offsets = sinkTaskContext.getValue().offsets();
+                assertEquals(0, offsets.size());
                 return null;
             }
         });
@@ -402,7 +391,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(taskProps);
-        workerThread.iteration();
         workerThread.iteration();
         workerThread.iteration();
         workerTask.stop();

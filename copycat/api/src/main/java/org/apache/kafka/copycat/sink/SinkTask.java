@@ -62,4 +62,11 @@ public abstract class SinkTask implements Task {
      * @param offsets mapping of TopicPartition to committed offset
      */
     public abstract void flush(Map<TopicPartition, OffsetAndMetadata> offsets);
+
+
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+    }
+
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+    }
 }
