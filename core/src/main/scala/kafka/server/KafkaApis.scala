@@ -212,7 +212,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
     }
 
-    if (offsetCommitRequest.versionId == 0) {
+    if (authorizedRequestInfo.isEmpty)
+      sendResponseCallback(Map.empty)
+    else if (offsetCommitRequest.versionId == 0) {
       // for version 0 always store offsets to ZK
       val responseInfo = authorizedRequestInfo.map {
         case (topicAndPartition, metaAndError) => {
@@ -339,22 +341,26 @@ class KafkaApis(val requestChannel: RequestChannel,
                                                                    produceResponseCallback)
     }
 
-    // only allow appending to internal topic partitions
-    // if the client is not from admin
-    val internalTopicsAllowed = produceRequest.clientId == AdminUtils.AdminClientId
+    if (authorizedRequestInfo.isEmpty)
+      sendResponseCallback(Map.empty)
+    else {
+      // only allow appending to internal topic partitions
+      // if the client is not from admin
+      val internalTopicsAllowed = produceRequest.clientId == AdminUtils.AdminClientId
 
-    // call the replica manager to append messages to the replicas
-    replicaManager.appendMessages(
-      produceRequest.ackTimeoutMs.toLong,
-      produceRequest.requiredAcks,
-      internalTopicsAllowed,
-      authorizedRequestInfo,
-      sendResponseCallback)
+      // call the replica manager to append messages to the replicas
+      replicaManager.appendMessages(
+        produceRequest.ackTimeoutMs.toLong,
+        produceRequest.requiredAcks,
+        internalTopicsAllowed,
+        authorizedRequestInfo,
+        sendResponseCallback)
 
-    // if the request is put into the purgatory, it will have a held reference
-    // and hence cannot be garbage collected; hence we clear its data here in
-    // order to let GC re-claim its memory since it is already appended to log
-    produceRequest.emptyData()
+      // if the request is put into the purgatory, it will have a held reference
+      // and hence cannot be garbage collected; hence we clear its data here in
+      // order to let GC re-claim its memory since it is already appended to log
+      produceRequest.emptyData()
+    }
   }
 
   /**
@@ -403,13 +409,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    // call the replica manager to fetch messages from the local replica
-    replicaManager.fetchMessages(
-      fetchRequest.maxWait.toLong,
-      fetchRequest.replicaId,
-      fetchRequest.minBytes,
-      authorizedRequestInfo,
-      sendResponseCallback)
+    if (authorizedRequestInfo.isEmpty)
+      sendResponseCallback(Map.empty)
+    else {
+      // call the replica manager to fetch messages from the local replica
+      replicaManager.fetchMessages(
+        fetchRequest.maxWait.toLong,
+        fetchRequest.replicaId,
+        fetchRequest.minBytes,
+        authorizedRequestInfo,
+        sendResponseCallback)
+    }
   }
 
   /**

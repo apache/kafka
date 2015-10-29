@@ -779,6 +779,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException if there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
+     *
+     * @throws org.apache.kafka.common.errors.AuthorizationException if caller does not have Read permission on topic.
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {

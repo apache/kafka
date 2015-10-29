@@ -69,7 +69,6 @@ public class SslChannelBuilder implements ChannelBuilder {
     protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
         return SslTransportLayer.create(id, key,
-            sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(),
-            socketChannel.socket().getPort()));
+            sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()));
     }
 }

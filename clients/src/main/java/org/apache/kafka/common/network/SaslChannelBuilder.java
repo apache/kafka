@@ -103,8 +103,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
             return SslTransportLayer.create(id, key,
-                sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(),
-                socketChannel.socket().getPort()));
+                sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()));
         } else {
             return new PlaintextTransportLayer(key);
         }
