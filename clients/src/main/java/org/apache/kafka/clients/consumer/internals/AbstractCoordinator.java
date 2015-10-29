@@ -542,9 +542,6 @@ public abstract class AbstractCoordinator {
             if (error == Errors.NONE.code()) {
                 log.debug("Received successful heartbeat response.");
                 future.complete(null);
-            } else if (error == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
-                log.debug("Attempt to heart beat rejected since coordinator is loading the group, just treat it as successful.");
-                future.complete(null);
             } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
                     || error == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
                 log.info("Attempt to heart beat failed since coordinator is either not started or not valid, marking it as dead.");
