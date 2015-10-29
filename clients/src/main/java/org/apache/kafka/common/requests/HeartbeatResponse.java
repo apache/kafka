@@ -27,6 +27,7 @@ public class HeartbeatResponse extends AbstractRequestResponse {
     /**
      * Possible error code:
      *
+     * GROUP_LOAD_IN_PROGRESS (14)
      * GROUP_COORDINATOR_NOT_AVAILABLE (15)
      * NOT_COORDINATOR_FOR_GROUP (16)
      * ILLEGAL_GENERATION (22)

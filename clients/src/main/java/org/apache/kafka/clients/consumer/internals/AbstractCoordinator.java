@@ -351,6 +351,10 @@ public abstract class AbstractCoordinator {
                 } else {
                     onJoinFollower().chain(future);
                 }
+            } else if (errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
+                log.debug("Attempt to join group {} rejected since coordinator is loading the group.", groupId);
+                // backoff and retry
+                future.raise(Errors.forCode(errorCode));
             } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
                 // reset the member id and retry immediately
                 AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -362,7 +366,7 @@ public abstract class AbstractCoordinator {
                 // re-discover the coordinator and retry with backoff
                 coordinatorDead();
                 log.info("Attempt to join group {} failed due to obsolete coordinator information, retrying.",
-                        groupId);
+                    groupId);
                 future.raise(Errors.forCode(errorCode));
             } else if (errorCode == Errors.INCONSISTENT_GROUP_PROTOCOL.code()
                     || errorCode == Errors.INVALID_SESSION_TIMEOUT.code()
@@ -537,6 +541,9 @@ public abstract class AbstractCoordinator {
             short error = heartbeatResponse.errorCode();
             if (error == Errors.NONE.code()) {
                 log.debug("Received successful heartbeat response.");
+                future.complete(null);
+            } else if (error == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
+                log.debug("Attempt to heart beat rejected since coordinator is loading the group, just treat it as successful.");
                 future.complete(null);
             } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
                     || error == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
