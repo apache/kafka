@@ -150,8 +150,8 @@ object ConfigCommand {
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs configs to add 'k1=v1,k2=v2'. The following is a list of valid configurations: " +
             "For entity_type '" + ConfigType.Topic + "': " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
-            "For entity_type '" + ConfigType.Client + "': " + nl + ClientConfigOverride.ProducerOverride
-                                                            + nl + ClientConfigOverride.ConsumerOverride)
+            "For entity_type '" + ConfigType.Client + "': " + nl + "\t" + ClientConfigOverride.ProducerOverride
+                                                            + nl + "\t" + ClientConfigOverride.ConsumerOverride)
             .withRequiredArg
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
