@@ -26,6 +26,7 @@ public class LeaveGroupResponse extends AbstractRequestResponse {
     /**
      * Possible error code:
      *
+     * GROUP_LOAD_IN_PROGRESS (14)
      * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
      * NOT_COORDINATOR_FOR_CONSUMER (16)
      * UNKNOWN_CONSUMER_ID (25)

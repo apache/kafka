@@ -451,7 +451,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                         // update the local cache only if the partition is still assigned
                         subscriptions.committed(tp, offsetAndMetadata);
                 } else {
-                    if (errorCode == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
+                    if (errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
+                        // just retry
+                        future.raise(Errors.GROUP_LOAD_IN_PROGRESS);
+                    } else if (errorCode == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
                             || errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
                         coordinatorDead();
                     } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()
@@ -511,9 +514,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                     log.debug("Error fetching offset for topic-partition {}: {}", tp, Errors.forCode(data.errorCode)
                             .exception()
                             .getMessage());
-                    if (data.errorCode == Errors.OFFSET_LOAD_IN_PROGRESS.code()) {
+                    if (data.errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
                         // just retry
-                        future.raise(Errors.OFFSET_LOAD_IN_PROGRESS);
+                        future.raise(Errors.GROUP_LOAD_IN_PROGRESS);
                     } else if (data.errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
                         // re-discover the coordinator and retry
                         coordinatorDead();
