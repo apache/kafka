@@ -47,8 +47,8 @@ case class JoinGroupResult(members: Map[String, Array[Byte]],
  */
 class GroupCoordinator(val brokerId: Int,
                        val groupConfig: GroupManagerConfig,
-                       val offsetConfig: OffsetManagerConfig,
-                       private val offsetManager: OffsetManager) extends Logging {
+                       val offsetConfig: OffsetConfig,
+                       private val groupManager: GroupMetadataManager) extends Logging {
   type JoinCallback = JoinGroupResult => Unit
   type SyncCallback = (Array[Byte], Short) => Unit
 
@@ -62,11 +62,11 @@ class GroupCoordinator(val brokerId: Int,
 
   def this(brokerId: Int,
            groupConfig: GroupManagerConfig,
-           offsetConfig: OffsetManagerConfig,
+           offsetConfig: OffsetConfig,
            replicaManager: ReplicaManager,
            zkUtils: ZkUtils,
            scheduler: KafkaScheduler) = this(brokerId, groupConfig, offsetConfig,
-    new OffsetManager(offsetConfig, replicaManager, zkUtils, scheduler))
+    new GroupMetadataManager(offsetConfig, replicaManager, zkUtils, scheduler))
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -100,7 +100,7 @@ class GroupCoordinator(val brokerId: Int,
   def shutdown() {
     info("Shutting down.")
     isActive.set(false)
-    offsetManager.shutdown()
+    groupManager.shutdown()
     coordinatorMetadata.shutdown()
     heartbeatPurgatory.shutdown()
     joinPurgatory.shutdown()
@@ -365,7 +365,7 @@ class GroupCoordinator(val brokerId: Int,
       if (group == null) {
         if (generationId < 0)
           // the group is not relying on Kafka for partition management, so allow the commit
-          offsetManager.storeOffsets(groupId, memberId, generationId, offsetMetadata, responseCallback)
+          groupManager.storeOffsets(groupId, memberId, generationId, offsetMetadata, responseCallback)
         else
           // the group has failed over to this coordinator (which will be handled in KAFKA-2017),
           // or this is a request coming from an older generation. either way, reject the commit
@@ -381,7 +381,7 @@ class GroupCoordinator(val brokerId: Int,
           } else if (generationId != group.generationId) {
             responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION.code))
           } else {
-            offsetManager.storeOffsets(groupId, memberId, generationId, offsetMetadata, responseCallback)
+            groupManager.storeOffsets(groupId, memberId, generationId, offsetMetadata, responseCallback)
           }
         }
       }
@@ -397,18 +397,18 @@ class GroupCoordinator(val brokerId: Int,
     } else {
       // return offsets blindly regardless the current group state since the group may be using
       // Kafka commit storage without automatic group management
-      offsetManager.getOffsets(groupId, partitions)
+      groupManager.getOffsets(groupId, partitions)
     }
   }
 
   def handleGroupImmigration(offsetTopicPartitionId: Int) = {
     // TODO we may need to add more logic in KAFKA-2017
-    offsetManager.loadOffsetsFromLog(offsetTopicPartitionId)
+    groupManager.loadGroupsForPartition(offsetTopicPartitionId)
   }
 
   def handleGroupEmigration(offsetTopicPartitionId: Int) = {
     // TODO we may need to add more logic in KAFKA-2017
-    offsetManager.removeOffsetsFromCacheForPartition(offsetTopicPartitionId)
+    groupManager.removeGroupsForPartition(offsetTopicPartitionId)
   }
 
   private def validGroupId(groupId: String): Boolean = {
@@ -585,27 +585,29 @@ class GroupCoordinator(val brokerId: Int,
     // TODO: add metrics for complete heartbeats
   }
 
-  def partitionFor(group: String): Int = offsetManager.partitionFor(group)
+  def partitionFor(group: String): Int = groupManager.partitionFor(group)
 
   private def shouldKeepMemberAlive(member: MemberMetadata, heartbeatDeadline: Long) =
     member.awaitingJoinCallback != null ||
       member.awaitingSyncCallback != null ||
       member.latestHeartbeat + member.sessionTimeoutMs > heartbeatDeadline
 
-  private def isCoordinatorForGroup(groupId: String) = offsetManager.leaderIsLocal(offsetManager.partitionFor(groupId))
+  private def isCoordinatorForGroup(groupId: String) = groupManager.leaderIsLocal(groupManager.partitionFor(groupId))
 }
 
 object GroupCoordinator {
 
   val NoProtocol = ""
   val NoLeader = ""
-  val OffsetsTopicName = "__consumer_offsets"
+
+  // TODO: we store both group metadata and offset data here despite the topic name being offsets only
+  val GroupMetadataTopicName = "__consumer_offsets"
 
   def create(config: KafkaConfig,
              zkUtils: ZkUtils,
              replicaManager: ReplicaManager,
              kafkaScheduler: KafkaScheduler): GroupCoordinator = {
-    val offsetConfig = OffsetManagerConfig(maxMetadataSize = config.offsetMetadataMaxSize,
+    val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
       offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
@@ -621,8 +623,8 @@ object GroupCoordinator {
 
   def create(config: KafkaConfig,
              zkUtils: ZkUtils,
-             offsetManager: OffsetManager): GroupCoordinator = {
-    val offsetConfig = OffsetManagerConfig(maxMetadataSize = config.offsetMetadataMaxSize,
+             groupManager: GroupMetadataManager): GroupCoordinator = {
+    val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
       offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
@@ -633,6 +635,6 @@ object GroupCoordinator {
     val groupConfig = GroupManagerConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, offsetManager)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupManager)
   }
 }
