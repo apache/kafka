@@ -353,3 +353,13 @@ Further cleaner configurations are described <a href="/documentation.html#broker
   <li>You cannot configure yet how much log is retained without compaction (the "head" of the log).  Currently all segments are eligible except for the last segment, i.e. the one currently being written to.</li>
   <li>Log compaction is not yet compatible with compressed topics.</li>
 </ol>
+<h3><a id="semantics">4.9 Quotas</a></h3>
+<p>
+    The Kafka cluster has the ability to apply and enforce byte-rate quotas on produce and fetch requests. For producers, this limits the amount of data they can produce per second. For consumers, this limits the amount of data they can consume per second.
+
+<h4>Why are quotas necessary?</h4>
+It is possible for producers and consumers to produce/consume very high volumes of data and thus monopolize broker resources, cause network saturation and generally DOS other clients and the brokers themselves. Having quotas protects against these issues and is extremely important in large multi-tenant clusters. In fact, when running Kafka as a service this makes it possible to enforce API limits according to an agreed upon contract.
+
+<h4>Quotas are per client-id</h4>
+<p>
+</p>

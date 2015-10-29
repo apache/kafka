@@ -297,6 +297,25 @@ Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7
 </pre>
 
+<h4><a id="setting_quotas">Setting quotas</a></h4>
+It is possible to set default quotas that apply to all client-ids by setting these configs on the brokers. By default, each client-id receives an unlimited quota. The following sets the default quota per producer and consumer client-id to 10MB/sec.
+<pre>
+  quota.producer.default=10485760
+  quota.consumer.default=10485760
+</pre>
+
+It is also possible to set custom quotas for each client.
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-name clientA --entity-type clients
+Updated config for clientId: "clientA".
+</pre>
+
+Here's how to describe the quota for a given client.
+<pre>
+> ./kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-name clientA --entity-type clients
+Configs for clients:clientA are producer_byte_rate=1024,consumer_byte_rate=2048
+</pre>
+
 <h3><a id="datacenters">6.2 Datacenters</a></h3>
 
 Some deployments will need to manage a data pipeline that spans multiple datacenters. Our recommended approach to this is to deploy a local Kafka cluster in each datacenter with application instances in each datacenter interacting only with their local cluster and mirroring between clusters (see the documentation on the <a href="#basic_ops_mirror_maker">mirror maker tool</a> for how to do this).
@@ -601,6 +620,12 @@ We pay particular we do graphing and alerting on the following metrics:
       <td>kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent</td>
       <td>between 0 and 1, ideally &gt 0.3</td>
     </tr>
+    <tr>
+      <td>Quota metrics per client-id</td>
+      <td>kafka.server:type={Produce|Fetch},client-id==([-.\w]+)</td>
+      <td>Two attributes. throttle-time indicates the amount of time the client-id was throttled. Ideally = 0.
+          byte-rate indicates the data produce/consume rate of the client.</td>
+    </tr>
 </tbody></table>
 
 <h4><a id="new_producer_monitoring">New producer monitoring</a></h4>
@@ -847,6 +872,16 @@ The following metrics are available on new producer instances.
       <td>record-error-rate</td>
       <td>The average per-second number of record sends that resulted in errors for a topic.</td>
       <td>kafka.producer:type=producer-topic-metrics,client-id=([-.\w]+),topic=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>produce-throttle-time-max</td>
+      <td>The maximum time in ms a request was throttled by a broker.</td>
+      <td>kafka.producer:type=producer-topic-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>produce-throttle-time-avg</td>
+      <td>The average time in ms a request was throttled by a broker.</td>
+      <td>kafka.producer:type=producer-topic-metrics,client-id=([-.\w]+)</td>
     </tr>
 </tbody></table>
 
