@@ -327,7 +327,8 @@ class GroupCoordinator(val brokerId: Int,
     } else if (!isCoordinatorForGroup(groupId)) {
       responseCallback(Errors.NOT_COORDINATOR_FOR_GROUP.code)
     } else if (isCoordinatorLoadingInProgress(groupId)) {
-      responseCallback(Errors.GROUP_LOAD_IN_PROGRESS.code)
+      // the group is still loading, so respond just blindly
+      responseCallback(Errors.NONE.code)
     } else {
       val group = groupManager.getGroup(groupId)
       if (group == null) {
