@@ -70,17 +70,21 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.initialized = false;
     }
 
-    @Override
-    public RecordCollector recordCollector() {
-        return this.collector;
-    }
-
     public void initialized() {
         this.initialized = true;
     }
 
     public TaskId id() {
         return id;
+    }
+
+    public ProcessorStateManager getStateMgr() {
+        return stateMgr;
+    }
+
+    @Override
+    public RecordCollector recordCollector() {
+        return this.collector;
     }
 
     @Override
@@ -133,11 +137,6 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
 
         return stateMgr.getStore(name);
     }
-
-    public ProcessorStateManager getStateMgr() {
-        return stateMgr;
-    }
-
 
     @Override
     public String topic() {
