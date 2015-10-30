@@ -633,7 +633,6 @@ object GroupCoordinator {
   }
 
   def create(config: KafkaConfig,
-             zkUtils: ZkUtils,
              groupManager: GroupMetadataManager): GroupCoordinator = {
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
