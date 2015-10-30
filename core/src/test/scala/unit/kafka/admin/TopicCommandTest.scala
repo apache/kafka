@@ -88,7 +88,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging {
       "--topic", GroupCoordinator.GroupMetadataTopicName))
     TopicCommand.createTopic(zkUtils, createOffsetTopicOpts)
 
-    // try to delete the OffsetManager.OffsetsTopicName and make sure it doesn't
+    // try to delete the GroupCoordinator.GroupMetadataTopicName and make sure it doesn't
     val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", GroupCoordinator.GroupMetadataTopicName))
     val deleteOffsetTopicPath = getDeleteTopicPath(GroupCoordinator.GroupMetadataTopicName)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkUtils.zkClient.exists(deleteOffsetTopicPath))
