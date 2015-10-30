@@ -329,6 +329,10 @@ class LogTest extends JUnitSuite {
 
       // cleanup the log
       log.delete()
+
+      // Run the timer to ensure the async delete tasks triggered by
+      // deleteOldSegments have run prior to the next loop.
+      time.sleep(log.config.fileDeleteDelayMs + 1)
     }
   }
 
@@ -787,6 +791,8 @@ class LogTest extends JUnitSuite {
       log = new Log(logDir, config, recoveryPoint, time.scheduler, time)
       assertEquals(numMessages, log.logEndOffset)
       assertEquals("Messages in the log after recovery should be the same.", messages, log.logSegments.flatMap(_.log.iterator.toList))
+
+      log.close()
       CoreUtils.rm(logDir)
     }
   }
