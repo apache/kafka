@@ -20,6 +20,8 @@ import java.io.{FileOutputStream, File}
 import java.security.Permission
 
 import kafka.server.KafkaConfig
+import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.utils.Password
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -97,6 +99,21 @@ class KafkaTest {
   def testGetKafkaConfigFromArgsNonArgsAtTheBegging(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2")))
+  }
+
+  @Test
+  def testKafkaSslPasswords(): Unit = {
+    val propertiesFile = prepareDefaultConfig()
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=password",
+                                                                                    "--override", "ssl.key.password=password",
+                                                                                    "--override", "ssl.truststore.password=password")))
+    assertEquals(Password.HIDDEN, config.sslKeyPassword.toString)
+    assertEquals(Password.HIDDEN, config.sslKeystorePassword.toString)
+    assertEquals(Password.HIDDEN, config.sslTruststorePassword.toString)
+
+    assertEquals("password", config.sslKeyPassword.value)
+    assertEquals("password", config.sslKeystorePassword.value)
+    assertEquals("password", config.sslTruststorePassword.value)
   }
 
   def prepareDefaultConfig(): String = {

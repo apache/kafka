@@ -20,6 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.utils.Password;
 
 import javax.net.ssl.*;
 import java.io.FileInputStream;
@@ -80,14 +81,33 @@ public class SslFactory implements Configurable {
         this.kmfAlgorithm = (String) configs.get(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
         this.tmfAlgorithm = (String) configs.get(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
 
+        String sslKeystorePassword;
+        if (configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) instanceof Password)
+            sslKeystorePassword = ((Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)).value;
+        else
+            sslKeystorePassword = (String) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+
+        String sslKeyPassword;
+        if (configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG) instanceof Password)
+            sslKeyPassword = ((Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)).value;
+        else
+            sslKeyPassword = (String) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
+
+        String sslTruststorePassword;
+        if (configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG) instanceof Password)
+            sslTruststorePassword = ((Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value;
+        else
+            sslTruststorePassword = (String) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+
+
         createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
                        (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-                       (String) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
-                       (String) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
+                       sslKeystorePassword,
+                       sslKeyPassword);
 
         createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
                          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-                         (String) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+                         sslTruststorePassword);
         try {
             this.sslContext = createSSLContext();
         } catch (Exception e) {

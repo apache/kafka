@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.kafka.common.utils.Password;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -212,8 +213,14 @@ public class ConfigDef {
                         return value;
                     else
                         throw new ConfigException(name, value, "Expected value to be either true or false");
+                case PASSWORD:
+                    if (value instanceof Password)
+                        return value;
+                    else if (value instanceof String)
+                        return new Password(trimmed);
+                    else
+                        throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
                 case STRING:
-                case PASSWORD_STRING:
                     if (value instanceof String)
                         return trimmed;
                     else
@@ -281,13 +288,7 @@ public class ConfigDef {
      * The config types
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS,
-        PASSWORD_STRING {
-            @Override
-            public String toString() {
-                return "[hidden]";
-            }
-        }
+        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
     }
 
     public enum Importance {
