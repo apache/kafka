@@ -46,7 +46,6 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
 
     def _worker(self, idx, node):
         args = self.args.copy()
-<<<<<<< HEAD
         args.update({
             'bootstrap_servers': self.kafka.bootstrap_servers(),
             'jmx_port': self.jmx_port,
