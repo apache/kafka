@@ -190,9 +190,8 @@ public class StandaloneHerderTest {
         EasyMock.expectLastCall();
         connectorConfigCb.onCompletion(null, connConfig);
         EasyMock.expectLastCall();
-        org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId restTaskId
-                = new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(CONNECTOR_NAME, 0);
-        TaskInfo taskInfo = new TaskInfo(restTaskId, taskConfig(BogusSourceTask.class, false));
+
+        TaskInfo taskInfo = new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(BogusSourceTask.class, false));
         taskConfigsCb.onCompletion(null, Arrays.asList(taskInfo));
         EasyMock.expectLastCall();
 

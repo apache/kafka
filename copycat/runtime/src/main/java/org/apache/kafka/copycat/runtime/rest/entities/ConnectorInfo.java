@@ -17,7 +17,9 @@
 
 package org.apache.kafka.copycat.runtime.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.kafka.copycat.util.ConnectorTaskId;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,14 +33,12 @@ public class ConnectorInfo {
     private final Map<String, String> config;
     private final List<ConnectorTaskId> tasks;
 
-    public ConnectorInfo(String name, Map<String, String> config, List<ConnectorTaskId> tasks) {
+    @JsonCreator
+    public ConnectorInfo(@JsonProperty("name") String name, @JsonProperty("config") Map<String, String> config,
+                         @JsonProperty("tasks") List<ConnectorTaskId> tasks) {
         this.name = name;
         this.config = config;
         this.tasks = tasks;
-    }
-
-    public ConnectorInfo(String name, Map<String, String> config, Collection<org.apache.kafka.copycat.util.ConnectorTaskId> tasks) {
-        this(name, config, jsonTasks(tasks));
     }
 
     @JsonProperty
@@ -74,8 +74,8 @@ public class ConnectorInfo {
 
     private static List<ConnectorTaskId> jsonTasks(Collection<org.apache.kafka.copycat.util.ConnectorTaskId> tasks) {
         List<ConnectorTaskId> jsonTasks = new ArrayList<>();
-        for (org.apache.kafka.copycat.util.ConnectorTaskId task : tasks)
-            jsonTasks.add(new ConnectorTaskId(task));
+        for (ConnectorTaskId task : tasks)
+            jsonTasks.add(task);
         return jsonTasks;
     }
 }

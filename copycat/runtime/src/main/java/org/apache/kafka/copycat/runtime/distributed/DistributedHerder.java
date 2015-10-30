@@ -328,6 +328,7 @@ public class DistributedHerder implements Herder, Runnable {
     @Override
     public void connectorConfig(String connName, final Callback<Map<String, String>> callback) {
         // Subset of connectorInfo, so piggy back on that implementation
+        log.trace("Submitting connector config read request {}", connName);
         connectorInfo(connName, new Callback<ConnectorInfo>() {
             @Override
             public void onCompletion(Throwable error, ConnectorInfo result) {
@@ -352,7 +353,7 @@ public class DistributedHerder implements Herder, Runnable {
             connConfig = config;
         }
 
-        log.trace("Submitting connector config request {}", connName);
+        log.trace("Submitting connector config write request {}", connName);
 
         requests.add(new HerderRequest(
                 new Callable<Void>() {
@@ -393,6 +394,8 @@ public class DistributedHerder implements Herder, Runnable {
 
     @Override
     public synchronized void requestTaskReconfiguration(final String connName) {
+        log.trace("Submitting connector task reconfiguration request {}", connName);
+
         requests.add(new HerderRequest(
                 new Callable<Void>() {
                     @Override
@@ -422,9 +425,7 @@ public class DistributedHerder implements Herder, Runnable {
                             List<TaskInfo> result = new ArrayList<>();
                             for (int i = 0; i < configState.taskCount(connName); i++) {
                                 ConnectorTaskId id = new ConnectorTaskId(connName, i);
-                                org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId restId =
-                                        new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(id);
-                                result.add(new TaskInfo(restId, configState.taskConfig(id)));
+                                result.add(new TaskInfo(id, configState.taskConfig(id)));
                             }
                             callback.onCompletion(null, result);
                         }

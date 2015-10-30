@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.runtime.rest.entities;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
@@ -30,7 +31,8 @@ public class ErrorMessage {
     private final int errorCode;
     private final String message;
 
-    public ErrorMessage(int errorCode, String message) {
+    @JsonCreator
+    public ErrorMessage(@JsonProperty("error_code") int errorCode, @JsonProperty("message") String message) {
         this.errorCode = errorCode;
         this.message = message;
     }

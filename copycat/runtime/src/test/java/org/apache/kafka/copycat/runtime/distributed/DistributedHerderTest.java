@@ -441,9 +441,9 @@ public class DistributedHerderTest {
         assertEquals(CONN1_CONFIG, connectorConfigCb.get());
         assertTrue(taskConfigsCb.isDone());
         assertEquals(Arrays.asList(
-                        new TaskInfo(new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(TASK0), TASK_CONFIG),
-                        new TaskInfo(new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(TASK1), TASK_CONFIG),
-                        new TaskInfo(new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(TASK2), TASK_CONFIG)),
+                        new TaskInfo(TASK0, TASK_CONFIG),
+                        new TaskInfo(TASK1, TASK_CONFIG),
+                        new TaskInfo(TASK2, TASK_CONFIG)),
                 taskConfigsCb.get());
 
         PowerMock.verifyAll();

@@ -26,10 +26,10 @@ import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.distributed.NotLeaderException;
 import org.apache.kafka.copycat.runtime.rest.RestServer;
 import org.apache.kafka.copycat.runtime.rest.entities.ConnectorInfo;
-import org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId;
 import org.apache.kafka.copycat.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.copycat.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.copycat.util.Callback;
+import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -117,7 +117,7 @@ public class ConnectorsResourceTest {
         // Should forward request
         EasyMock.expect(RestServer.httpRequest(EasyMock.eq("http://leader:8083/connectors"), EasyMock.eq("GET"),
                 EasyMock.isNull(), EasyMock.anyObject(TypeReference.class)))
-                .andReturn(new RestServer.HttpResponse(200, new HashMap<>(), Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME)));
+                .andReturn(new RestServer.HttpResponse<>(200, new HashMap<String, List<String>>(), Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME)));
 
         PowerMock.replayAll();
 
@@ -164,7 +164,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb);
         // Should forward request
         EasyMock.expect(RestServer.httpRequest(EasyMock.eq("http://leader:8083/connectors"), EasyMock.eq("POST"), EasyMock.eq(body), EasyMock.<TypeReference>anyObject()))
-                .andReturn(new RestServer.HttpResponse(201, new HashMap<>(), new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES)));
+                .andReturn(new RestServer.HttpResponse<>(201, new HashMap<String, List<String>>(), new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES)));
 
         PowerMock.replayAll();
 
@@ -208,7 +208,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb);
         // Should forward request
         EasyMock.expect(RestServer.httpRequest("http://leader:8083/connectors/" + CONNECTOR_NAME, "DELETE", null, null))
-                .andReturn(new RestServer.HttpResponse(204, new HashMap<>(), null));
+                .andReturn(new RestServer.HttpResponse<>(204, new HashMap<String, List<String>>(), null));
 
         PowerMock.replayAll();
 

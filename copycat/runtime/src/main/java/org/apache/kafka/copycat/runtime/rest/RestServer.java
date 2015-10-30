@@ -30,8 +30,8 @@ import org.apache.kafka.copycat.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.copycat.runtime.rest.resources.RootResource;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Handler;
-import org.eclipse.jetty.server.NetworkTrafficServerConnector;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.Slf4jRequestLog;
 import org.eclipse.jetty.server.handler.DefaultHandler;
 import org.eclipse.jetty.server.handler.HandlerCollection;
@@ -80,8 +80,7 @@ public class RestServer {
 
         jettyServer = new Server();
 
-        NetworkTrafficServerConnector connector = new NetworkTrafficServerConnector(jettyServer);
-        // TODO: Add NetworkTrafficListener to log stats
+        ServerConnector connector = new ServerConnector(jettyServer);
         if (hostname != null && !hostname.isEmpty())
             connector.setHost(hostname);
         connector.setPort(port);
@@ -218,6 +217,7 @@ public class RestServer {
                         "Unexpected status code when handling forwarded request: " + responseCode);
             }
         } catch (IOException e) {
+            log.error("IO error forwarding REST request: ", e);
             throw new CopycatRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
         } finally {
             if (connection != null)

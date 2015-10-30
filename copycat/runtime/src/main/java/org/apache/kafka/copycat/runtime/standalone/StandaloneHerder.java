@@ -174,8 +174,7 @@ public class StandaloneHerder implements Herder {
 
         List<TaskInfo> result = new ArrayList<>();
         for (int i = 0; i < state.taskConfigs.size(); i++) {
-            TaskInfo info = new TaskInfo(new org.apache.kafka.copycat.runtime.rest.entities.ConnectorTaskId(connName, i),
-                    state.taskConfigs.get(i));
+            TaskInfo info = new TaskInfo(new ConnectorTaskId(connName, i), state.taskConfigs.get(i));
             result.add(info);
         }
         callback.onCompletion(null, result);

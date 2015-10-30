@@ -185,6 +185,8 @@
 
     <subpackage name="util">
       <allow pkg="org.apache.kafka.copycat" />
+      <!-- for annotations to avoid code duplication -->
+      <allow pkg="com.fasterxml.jackson.annotation" />
     </subpackage>
 
     <subpackage name="json">
