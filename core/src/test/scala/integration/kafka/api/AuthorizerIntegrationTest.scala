@@ -16,7 +16,7 @@ import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.concurrent.ExecutionException
-import java.util.{ArrayList, Properties}
+import java.util.{Collections, ArrayList, Properties}
 
 import kafka.api.RequestKeys
 import kafka.cluster.EndPoint
@@ -29,7 +29,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ApiException, AuthorizationException, TimeoutException}
+import org.apache.kafka.common.errors.{TopicAuthorizationException, ApiException, AuthorizationException, TimeoutException}
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.UpdateMetadataRequest.PartitionState
@@ -262,7 +262,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
         consumeRecords(this.consumers.head)
         Assert.fail("should have thrown exception")
       } catch {
-        case e: AuthorizationException => Assert.assertEquals("Not authorized to read from topic-0", e.getMessage)
+        case e: TopicAuthorizationException => Assert.assertEquals(Collections.singleton(topic), e.unauthorizedTopics());
       }
     }
 
@@ -276,30 +276,28 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       consumeRecords(this.consumers.head)
     }
 
-//    TODO: The following test goes into an infinite loop as consumer waits for consumer metadata to be propogated for ever.
-//    @Test
-//    def testCreatePermissionNeededToReadFromNonExistentTopic() {
-//      val newTopic = "newTopic"
-//      val topicPartition = new TopicPartition(newTopic, 0)
-//      val newTopicResource = new Resource(Topic, newTopic)
-//      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), newTopicResource)
-//      addAndVerifyAcls(GroupReadAcl(groupResource), groupResource)
-//      addAndVerifyAcls(ClusterAcl(Resource.ClusterResource), Resource.ClusterResource)
-//      try {
-//        this.consumers(0).assign(List(topicPartition).asJava)
-//        consumeRecords(this.consumers(0))
-//        Assert.fail("should have thrown exception")
-//      } catch {
-//        //checking for the message and type to ensure whenever these things are fixed on client side the test starts failing.
-//        case e: ApiException => Assert.assertEquals(e.getMessage, "Request is not authorized.")
-//      }
-//
-//      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), newTopicResource)
-//      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
-//
-//      sendRecords(numRecords, topicPartition)
-//      consumeRecords(this.consumers(0))
-//    }
+    @Test
+    def testCreatePermissionNeededToReadFromNonExistentTopic() {
+      val newTopic = "newTopic"
+      val topicPartition = new TopicPartition(newTopic, 0)
+      val newTopicResource = new Resource(Topic, newTopic)
+      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), newTopicResource)
+      addAndVerifyAcls(GroupReadAcl(groupResource), groupResource)
+      addAndVerifyAcls(ClusterAcl(Resource.ClusterResource), Resource.ClusterResource)
+      try {
+        this.consumers(0).assign(List(topicPartition).asJava)
+        consumeRecords(this.consumers(0))
+        Assert.fail("should have thrown exception")
+      } catch {
+        case e: TopicAuthorizationException => Assert.assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics());
+      }
+
+      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), newTopicResource)
+      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
+
+      sendRecords(numRecords, topicPartition)
+      consumeRecords(this.consumers(0), topic = newTopic, part = 0)
+    }
 
   def removeAllAcls() = {
     servers.head.apis.authorizer.get.getAcls().keys.foreach { resource =>
@@ -364,8 +362,11 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   }
 
 
-  private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]], numRecords: Int = 1, startingOffset: Int =
-  0) {
+  private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
+                             numRecords: Int = 1,
+                             startingOffset: Int = 0,
+                             topic: String = topic,
+                             part: Int = part) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 50
     var iters = 0

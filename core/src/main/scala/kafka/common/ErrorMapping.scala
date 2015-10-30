@@ -59,8 +59,9 @@ object ErrorMapping {
   // 26: INVALID_SESSION_TIMEOUT
   // 27: COMMITTING_PARTITIONS_NOT_ASSIGNED
   // 28: INVALID_COMMIT_OFFSET_SIZE
-  val AuthorizationCode: Short = 29
-  // 30: REBALANCE_IN_PROGRESS
+  // 29: REBALANCE_IN_PROGRESS
+  val AuthorizationCode: Short = 30
+
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](

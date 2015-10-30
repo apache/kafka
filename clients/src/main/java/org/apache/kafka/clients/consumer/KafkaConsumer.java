@@ -544,7 +544,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metricGrpPrefix,
                     metricsTags,
                     this.time,
-                    requestTimeoutMs,
                     retryBackoffMs,
                     new ConsumerCoordinator.DefaultOffsetCommitCallback(),
                     config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
@@ -777,10 +776,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws NoOffsetForPartitionException if there is no stored offset for a subscribed partition and no automatic
      *             offset reset policy has been configured.
      * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException if there is OffsetOutOfRange error in fetchResponse and
-     *         the defaultResetPolicy is NONE
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
-     *
-     * @throws org.apache.kafka.common.errors.AuthorizationException if caller does not have Read permission on topic.
+     *             the defaultResetPolicy is NONE
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.TopicAuthorizationException if caller does not have Read permission on topic
+     * @throws org.apache.kafka.common.errors.GroupAuthorizationException if caller does not have Read permission to
+     *             the configured groupId
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {

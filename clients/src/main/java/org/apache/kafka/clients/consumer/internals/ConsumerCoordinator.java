@@ -15,6 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -82,7 +83,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                                String metricGrpPrefix,
                                Map<String, String> metricTags,
                                Time time,
-                               long requestTimeoutMs,
                                long retryBackoffMs,
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
@@ -95,7 +95,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                 metricGrpPrefix,
                 metricTags,
                 time,
-                requestTimeoutMs,
                 retryBackoffMs);
         this.metadata = metadata;
 
@@ -136,6 +135,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         this.metadata.addListener(new Metadata.Listener() {
             @Override
             public void onMetadataUpdate(Cluster cluster) {
+                // if we encounter any unauthorized topics, raise an exception to the user
+                if (!cluster.unauthorizedTopics().isEmpty())
+                    throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+
                 if (subscriptions.hasPatternSubscription()) {
                     final List<String> topicsToSubscribe = new ArrayList<>();
 

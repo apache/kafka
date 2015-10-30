@@ -114,7 +114,6 @@ public class ConsumerCoordinatorTest {
                 "consumer" + groupId,
                 metricTags,
                 time,
-                requestTimeoutMs,
                 retryBackoffMs,
                 defaultOffsetCommitCallback,
                 autoCommitEnabled,
