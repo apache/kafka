@@ -150,6 +150,9 @@ public class DistributedHerder implements Herder, Runnable {
             halt();
 
             log.info("Herder stopped");
+        } catch (Throwable t) {
+            log.error("Uncaught exception in herder work thread, exiting: ", t);
+            System.exit(1);
         } finally {
             stopLatch.countDown();
         }
@@ -492,8 +495,6 @@ public class DistributedHerder implements Herder, Runnable {
         if (this.rebalanceResolved)
             return true;
 
-        rebalanceResolved = true;
-
         // We need to handle a variety of cases after a rebalance:
         // 1. Assignment failed
         //  1a. We are the leader for the round. We will be leader again if we rejoin now, so we need to catch up before
@@ -552,6 +553,10 @@ public class DistributedHerder implements Herder, Runnable {
 
         startWork();
 
+        // We only mark this as resolved once we've actually started work, which allows us to correctly track whether
+        // what work is currently active and running. If we bail early, the main tick loop + having requested rejoin
+        // guarantees we'll attempt to rejoin before executing this method again.
+        rebalanceResolved = true;
         return true;
     }
 
@@ -774,22 +779,27 @@ public class DistributedHerder implements Herder, Runnable {
                 // Note that since we don't reset the assignment, we we don't revoke leadership here. During a rebalance,
                 // it is still important to have a leader that can write configs, offsets, etc.
 
-                // TODO: Parallelize this. We should be able to request all connectors and tasks to stop, then wait on all of
-                // them to finish
-                // TODO: Technically we don't have to stop connectors at all until we know they've really been removed from
-                // this worker. Instead, we can let them continue to run but buffer any update requests (which should be
-                // rare anyway). This would avoid a steady stream of start/stop, which probably also includes lots of
-                // unnecessary repeated connections to the source/sink system.
-                for (String connectorName : connectors)
-                    worker.stopConnector(connectorName);
-                // TODO: We need to at least commit task offsets, but if we could commit offsets & pause them instead of
-                // stopping them then state could continue to be reused when the task remains on this worker. For example,
-                // this would avoid having to close a connection and then reopen it when the task is assigned back to this
-                // worker again.
-                for (ConnectorTaskId taskId : tasks)
-                    worker.stopTask(taskId);
+                if (rebalanceResolved) {
+                    // TODO: Parallelize this. We should be able to request all connectors and tasks to stop, then wait on all of
+                    // them to finish
+                    // TODO: Technically we don't have to stop connectors at all until we know they've really been removed from
+                    // this worker. Instead, we can let them continue to run but buffer any update requests (which should be
+                    // rare anyway). This would avoid a steady stream of start/stop, which probably also includes lots of
+                    // unnecessary repeated connections to the source/sink system.
+                    for (String connectorName : connectors)
+                        worker.stopConnector(connectorName);
+                    // TODO: We need to at least commit task offsets, but if we could commit offsets & pause them instead of
+                    // stopping them then state could continue to be reused when the task remains on this worker. For example,
+                    // this would avoid having to close a connection and then reopen it when the task is assigned back to this
+                    // worker again.
+                    for (ConnectorTaskId taskId : tasks)
+                        worker.stopTask(taskId);
 
-                log.info("Finished stopping tasks in preparation for rebalance");
+                    log.info("Finished stopping tasks in preparation for rebalance");
+                } else {
+                    log.info("Wasn't unable to resume work after last rebalance, can skip stopping connectors and tasks");
+                }
+
             }
         };
     }
