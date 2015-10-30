@@ -21,6 +21,8 @@ import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.processor.TopologyException;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
+
 public class KStreamBuilderTest {
 
     @Test(expected = TopologyException.class)
@@ -29,6 +31,21 @@ public class KStreamBuilderTest {
 
         builder.from("topic-1", "topic-2");
 
-        builder.addSource(KStreamImpl.SOURCE_NAME + KStreamImpl.INDEX.decrementAndGet(), "topic-3");
+        builder.addSource(KStreamImpl.SOURCE_NAME + "0000000000", "topic-3");
+    }
+
+    @Test
+    public void testNewName() {
+        KStreamBuilder builder = new KStreamBuilder();
+
+        assertEquals("X-0000000000", builder.newName("X-"));
+        assertEquals("Y-0000000001", builder.newName("Y-"));
+        assertEquals("Z-0000000002", builder.newName("Z-"));
+
+        builder = new KStreamBuilder();
+
+        assertEquals("X-0000000000", builder.newName("X-"));
+        assertEquals("Y-0000000001", builder.newName("Y-"));
+        assertEquals("Z-0000000002", builder.newName("Z-"));
     }
 }
