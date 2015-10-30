@@ -46,7 +46,8 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.core.Gauge
 
-class GroupMetadataManager(val config: OffsetConfig,
+class GroupMetadataManager(val brokerId: Int,
+                           val config: OffsetConfig,
                            replicaManager: ReplicaManager,
                            zkUtils: ZkUtils,
                            scheduler: Scheduler) extends Logging with KafkaMetricsGroup {
@@ -75,7 +76,7 @@ class GroupMetadataManager(val config: OffsetConfig,
   /* number of partitions for the consumer metadata topic */
   private val groupMetadataTopicPartitionCount = getOffsetsTopicPartitionCount
 
-  this.logIdent = "[Offset Manager on Broker " + replicaManager.config.brokerId + "]: "
+  this.logIdent = "[Group Metadata Manager on Broker " + brokerId + "]: "
 
   scheduler.schedule(name = "delete-expired-consumer-offsets",
     fun = deleteExpiredOffsets,

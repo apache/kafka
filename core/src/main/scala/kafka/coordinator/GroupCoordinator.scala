@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest
 
 import scala.collection.{Map, Seq, immutable}
 
-case class GroupManagerConfig(groupMinSessionTimeoutMs: Int,
+case class GroupConfig(groupMinSessionTimeoutMs: Int,
                               groupMaxSessionTimeoutMs: Int)
 
 case class JoinGroupResult(members: Map[String, Array[Byte]],
@@ -46,7 +46,7 @@ case class JoinGroupResult(members: Map[String, Array[Byte]],
  * groups. Groups are assigned to coordinators based on their group names.
  */
 class GroupCoordinator(val brokerId: Int,
-                       val groupConfig: GroupManagerConfig,
+                       val groupConfig: GroupConfig,
                        val offsetConfig: OffsetConfig,
                        private val groupManager: GroupMetadataManager) extends Logging {
   type JoinCallback = JoinGroupResult => Unit
@@ -60,12 +60,12 @@ class GroupCoordinator(val brokerId: Int,
   private var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = null
 
   def this(brokerId: Int,
-           groupConfig: GroupManagerConfig,
+           groupConfig: GroupConfig,
            offsetConfig: OffsetConfig,
            replicaManager: ReplicaManager,
            zkUtils: ZkUtils,
            scheduler: KafkaScheduler) = this(brokerId, groupConfig, offsetConfig,
-    new GroupMetadataManager(offsetConfig, replicaManager, zkUtils, scheduler))
+    new GroupMetadataManager(brokerId, offsetConfig, replicaManager, zkUtils, scheduler))
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -609,7 +609,7 @@ object GroupCoordinator {
       offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
       offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
-    val groupConfig = GroupManagerConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
+    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils, kafkaScheduler)
@@ -625,7 +625,7 @@ object GroupCoordinator {
       offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
       offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
-    val groupConfig = GroupManagerConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
+    val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupManager)
