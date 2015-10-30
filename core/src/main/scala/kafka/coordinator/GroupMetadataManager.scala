@@ -42,7 +42,7 @@ import scala.collection._
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.core.Gauge
 
@@ -127,8 +127,7 @@ class GroupMetadataManager(val config: OffsetConfig,
   }
 
   def storeGroup(group: GroupMetadata,
-                 groupAssignment: Map[String, Array[Byte]],
-                 responseCallback: (GroupMetadata, Map[String, Array[Byte]], Short) => Unit) {
+                 groupAssignment: Map[String, Array[Byte]]): Short = {
     // construct the message to append
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
@@ -139,6 +138,9 @@ class GroupMetadataManager(val config: OffsetConfig,
 
     val groupMetadataMessageSet = Map(groupMetadataPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, message))
+
+    val responseCode = Errors.NONE.code
+    val responseLatch = new CountDownLatch(1)
 
     // set the callback function to insert offsets into cache after log append completed
     def putCacheCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
@@ -151,28 +153,25 @@ class GroupMetadataManager(val config: OffsetConfig,
       // the offset and metadata to cache if the append status has no error
       val status = responseStatus(groupMetadataPartition)
 
-      val responseCode =
-        if (status.error != ErrorMapping.NoError) {
-          debug("Metadata from group %s with generation %d failed when appending to log due to %s"
-            .format(group.groupId, group.generationId, ErrorMapping.exceptionNameFor(status.error)))
+      if (status.error != ErrorMapping.NoError) {
+        debug("Metadata from group %s with generation %d failed when appending to log due to %s"
+          .format(group.groupId, group.generationId, ErrorMapping.exceptionNameFor(status.error)))
 
-          // transform the log append error code to the corresponding the commit status error code
-          if (status.error == ErrorMapping.UnknownTopicOrPartitionCode)
-            ErrorMapping.ConsumerCoordinatorNotAvailableCode
-          else if (status.error == ErrorMapping.NotLeaderForPartitionCode)
-            ErrorMapping.NotCoordinatorForConsumerCode
-          else if (status.error == ErrorMapping.MessageSizeTooLargeCode
-            || status.error == ErrorMapping.MessageSetSizeTooLargeCode
-            || status.error == ErrorMapping.InvalidFetchSizeCode)
-            Errors.INVALID_COMMIT_OFFSET_SIZE.code
-          else
-            status.error
-        } else {
-          Errors.NONE.code
-        }
+        // transform the log append error code to the corresponding the commit status error code
+        if (status.error == ErrorMapping.UnknownTopicOrPartitionCode)
+          ErrorMapping.ConsumerCoordinatorNotAvailableCode
+        else if (status.error == ErrorMapping.NotLeaderForPartitionCode)
+          ErrorMapping.NotCoordinatorForConsumerCode
+        else if (status.error == ErrorMapping.MessageSizeTooLargeCode
+          || status.error == ErrorMapping.MessageSetSizeTooLargeCode
+          || status.error == ErrorMapping.InvalidFetchSizeCode)
+          Errors.INVALID_COMMIT_OFFSET_SIZE.code
+        else
+          status.error
+      }
 
-      // finally trigger the callback logic passed from the API layer
-      responseCallback(group, groupAssignment, responseCode)
+      // notify the storing thread to return
+      responseLatch.countDown()
     }
 
     // call replica manager to append the offset messages
@@ -182,6 +181,10 @@ class GroupMetadataManager(val config: OffsetConfig,
       true, // allow appending to internal offset topic
       groupMetadataMessageSet,
       putCacheCallback)
+
+    responseLatch.await()
+
+    responseCode
   }
 
   /**

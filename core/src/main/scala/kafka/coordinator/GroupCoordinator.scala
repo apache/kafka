@@ -273,7 +273,10 @@ class GroupCoordinator(val brokerId: Int,
               group.transitionTo(Stable)
 
               // persist the group metadata and upon finish propagate the assignment
-              groupManager.storeGroup(group, groupAssignment, propagateAssignment)
+              val responseCode = groupManager.storeGroup(group, groupAssignment)
+
+              // send the assignment back to members
+              propagateAssignment(group, groupAssignment, responseCode)
             }
 
           case Stable =>
@@ -433,9 +436,9 @@ class GroupCoordinator(val brokerId: Int,
       errorCode=errorCode)
   }
 
-  private def propagateAssignment(group: GroupMetadata,
-                                  assignment: Map[String, Array[Byte]],
-                                  errorCode: Short) {
+  def propagateAssignment(group: GroupMetadata,
+                          assignment: Map[String, Array[Byte]],
+                          errorCode: Short) {
     for (member <- group.allMembers) {
       member.assignment = assignment.getOrElse(member.memberId, Array.empty[Byte])
       if (member.awaitingSyncCallback != null) {
