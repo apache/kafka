@@ -100,7 +100,7 @@ public class DistributedHerder implements Herder, Runnable {
     private final Queue<HerderRequest> requests = new LinkedBlockingDeque<>();
     // Config updates can be collected and applied together when possible. Also, we need to take care to rebalance when
     // needed (e.g. task reconfiguration, which requires everyone to coordinate offset commits).
-    private final Set<String> connectorConfigUpdates = new HashSet<>();
+    private Set<String> connectorConfigUpdates = new HashSet<>();
     private boolean needsReconfigRebalance;
 
     public DistributedHerder(DistributedConfig config, Worker worker, String restUrl) {
@@ -186,6 +186,7 @@ public class DistributedHerder implements Herder, Runnable {
         }
 
         // Process any configuration updates
+        Set<String> connectorConfigUpdatesCopy = null;
         synchronized (this) {
             if (needsReconfigRebalance || !connectorConfigUpdates.isEmpty()) {
                 // Connector reconfigs only need local updates since there is no coordination between workers required.
@@ -205,22 +206,29 @@ public class DistributedHerder implements Herder, Runnable {
                     needsReconfigRebalance = false;
                     return;
                 } else if (!connectorConfigUpdates.isEmpty()) {
-                    // If we only have connector config updates, we can just bounce the updated connectors that are
-                    // currently assigned to this worker.
-                    Set<String> localConnectors = assignment == null ? Collections.<String>emptySet() : new HashSet<>(assignment.connectors());
-                    for (String connectorName : connectorConfigUpdates) {
-                        if (!localConnectors.contains(connectorName))
-                            continue;
-                        boolean remains = configState.connectors().contains(connectorName);
-                        log.info("Handling connector-only config update by {} connector {}",
-                                remains ? "restarting" : "stopping", connectorName);
-                        worker.stopConnector(connectorName);
-                        // The update may be a deletion, so verify we actually need to restart the connector
-                        if (remains)
-                            startConnector(connectorName);
-                    }
-                    connectorConfigUpdates.clear();
+                    // We can't start/stop while locked since starting connectors can cause task updates that will
+                    // require writing configs, which in turn make callbacks into this class from another thread that
+                    // require acquiring a lock. This leads to deadlock. Instead, just copy the info we need and process
+                    // the updates after unlocking.
+                    connectorConfigUpdatesCopy = connectorConfigUpdates;
+                    connectorConfigUpdates = new HashSet<>();
                 }
+            }
+        }
+        if (connectorConfigUpdatesCopy != null) {
+            // If we only have connector config updates, we can just bounce the updated connectors that are
+            // currently assigned to this worker.
+            Set<String> localConnectors = assignment == null ? Collections.<String>emptySet() : new HashSet<>(assignment.connectors());
+            for (String connectorName : connectorConfigUpdatesCopy) {
+                if (!localConnectors.contains(connectorName))
+                    continue;
+                boolean remains = configState.connectors().contains(connectorName);
+                log.info("Handling connector-only config update by {} connector {}",
+                        remains ? "restarting" : "stopping", connectorName);
+                worker.stopConnector(connectorName);
+                // The update may be a deletion, so verify we actually need to restart the connector
+                if (remains)
+                    startConnector(connectorName);
             }
         }
 
