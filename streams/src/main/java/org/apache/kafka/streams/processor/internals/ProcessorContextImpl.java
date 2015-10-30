@@ -134,7 +134,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return stateMgr.getStore(name);
     }
 
-    ProcessorStateManager getStateMgr() {
+    public ProcessorStateManager getStateMgr() {
         return stateMgr;
     }
 

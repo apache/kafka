@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateUtils;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
