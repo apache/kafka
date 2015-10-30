@@ -24,6 +24,7 @@ import org.apache.kafka.copycat.util.Callback;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * <p>
@@ -53,23 +54,6 @@ public interface Herder {
     void stop();
 
     /**
-     * Submit a connector job to the cluster. This works from any node by forwarding the request to
-     * the leader herder if necessary.
-     *
-     * @param connectorProps user-specified properties for this job
-     * @param callback       callback to invoke when the request completes
-     */
-    void addConnector(Map<String, String> connectorProps, Callback<String> callback);
-
-    /**
-     * Delete a connector job by name.
-     *
-     * @param name     name of the connector job to shutdown and delete
-     * @param callback callback to invoke when the request completes
-     */
-    void deleteConnector(String name, Callback<Void> callback);
-
-    /**
      * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
      * from the current configuration. However, note
      *
@@ -95,11 +79,14 @@ public interface Herder {
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
 
     /**
-     * Set the configuration for a connector.
+     * Set the configuration for a connector. This supports creation, update, and deletion.
      * @param connName name of the connector
-     * @param callback callback to invoke with the configuration
+     * @param config the connectors configuration, or null if deleting the connector
+     * @param allowReplace if true, allow overwriting previous configs; if false, throw AlreadyExistsException if a connector
+     *                     with the same name already exists
+     * @param callback callback to invoke when the configuration has been written
      */
-    void putConnectorConfig(String connName, Map<String, String> config, Callback<Void> callback);
+    void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
 
     /**
      * Requests reconfiguration of the task. This should only be triggered by
@@ -125,4 +112,37 @@ public interface Herder {
      * @param callback callback to invoke upon completion
      */
     void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback);
+
+
+    class Created<T> {
+        private final boolean created;
+        private final T result;
+
+        public Created(boolean created, T result) {
+            this.created = created;
+            this.result = result;
+        }
+
+        public boolean created() {
+            return created;
+        }
+
+        public T result() {
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Created<?> created1 = (Created<?>) o;
+            return Objects.equals(created, created1.created) &&
+                    Objects.equals(result, created1.result);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(created, result);
+        }
+    }
 }

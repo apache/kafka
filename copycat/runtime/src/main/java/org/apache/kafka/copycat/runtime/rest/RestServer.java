@@ -51,6 +51,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Embedded server for the REST API that provides the control plane for Copycat workers.
@@ -168,7 +170,7 @@ public class RestServer {
      * @param <T>               The type of the deserialized response to the HTTP request.
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> T httpRequest(String url, String method, Object requestBodyData,
+    public static <T> HttpResponse<T> httpRequest(String url, String method, Object requestBodyData,
                                     TypeReference<T> responseFormat) {
         HttpURLConnection connection = null;
         try {
@@ -198,24 +200,52 @@ public class RestServer {
             }
 
             int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                InputStream is = connection.getInputStream();
-                T result = JSON_SERDE.readValue(is, responseFormat);
-                is.close();
-                return result;
-            } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
-                return null;
-            } else {
+            if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
+                return new HttpResponse<>(responseCode, connection.getHeaderFields(), null);
+            } else if (responseCode >= 400) {
                 InputStream es = connection.getErrorStream();
                 ErrorMessage errorMessage = JSON_SERDE.readValue(es, ErrorMessage.class);
                 es.close();
                 throw new CopycatRestException(responseCode, errorMessage.errorCode(), errorMessage.message());
+            } else if (responseCode >= 200 && responseCode < 300) {
+                InputStream is = connection.getInputStream();
+                T result = JSON_SERDE.readValue(is, responseFormat);
+                is.close();
+                return new HttpResponse<>(responseCode, connection.getHeaderFields(), result);
+            } else {
+                throw new CopycatRestException(Response.Status.INTERNAL_SERVER_ERROR,
+                        Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                        "Unexpected status code when handling forwarded request: " + responseCode);
             }
         } catch (IOException e) {
             throw new CopycatRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
         } finally {
             if (connection != null)
                 connection.disconnect();
+        }
+    }
+
+    public static class HttpResponse<T> {
+        private int status;
+        private Map<String, List<String>> headers;
+        private T body;
+
+        public HttpResponse(int status, Map<String, List<String>> headers, T body) {
+            this.status = status;
+            this.headers = headers;
+            this.body = body;
+        }
+
+        public int status() {
+            return status;
+        }
+
+        public Map<String, List<String>> headers() {
+            return headers;
+        }
+
+        public T body() {
+            return body;
         }
     }
 

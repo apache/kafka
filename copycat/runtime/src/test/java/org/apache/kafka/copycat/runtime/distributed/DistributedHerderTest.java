@@ -21,6 +21,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.copycat.connector.ConnectorContext;
 import org.apache.kafka.copycat.errors.AlreadyExistsException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
+import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.TaskConfig;
 import org.apache.kafka.copycat.runtime.Worker;
 import org.apache.kafka.copycat.runtime.WorkerConfig;
@@ -125,8 +126,7 @@ public class DistributedHerderTest {
     @Mock private WorkerGroupMember member;
     private DistributedHerder herder;
     @Mock private Worker worker;
-    @Mock private Callback<String> createCallback;
-    @Mock private Callback<Void> destroyCallback;
+    @Mock private Callback<Herder.Created<ConnectorInfo>> putConnectorCallback;
 
     private Callback<String> connectorConfigCallback;
     private Callback<List<ConnectorTaskId>> taskConfigCallback;
@@ -195,7 +195,8 @@ public class DistributedHerderTest {
         // CONN2 is new, should succeed
         configStorage.putConnectorConfig(CONN2, CONN2_CONFIG);
         PowerMock.expectLastCall();
-        createCallback.onCompletion(null, CONN2);
+        ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.<ConnectorTaskId>emptyList());
+        putConnectorCallback.onCompletion(null, new Herder.Created<>(true, info));
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
@@ -203,7 +204,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        herder.addConnector(CONN2_CONFIG, createCallback);
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
         herder.tick();
 
         PowerMock.verifyAll();
@@ -218,7 +219,7 @@ public class DistributedHerderTest {
         member.wakeup();
         PowerMock.expectLastCall();
         // CONN1 already exists
-        createCallback.onCompletion(EasyMock.<AlreadyExistsException>anyObject(), EasyMock.<String>isNull());
+        putConnectorCallback.onCompletion(EasyMock.<AlreadyExistsException>anyObject(), EasyMock.<Herder.Created<ConnectorInfo>>isNull());
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
@@ -226,7 +227,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        herder.addConnector(CONN1_CONFIG, createCallback);
+        herder.putConnectorConfig(CONN1, CONN1_CONFIG, false, putConnectorCallback);
         herder.tick();
 
         PowerMock.verifyAll();
@@ -247,7 +248,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         configStorage.putConnectorConfig(CONN1, null);
         PowerMock.expectLastCall();
-        destroyCallback.onCompletion(null, null);
+        putConnectorCallback.onCompletion(null, new Herder.Created<ConnectorInfo>(false, null));
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
@@ -255,7 +256,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        herder.deleteConnector(CONN1, destroyCallback);
+        herder.putConnectorConfig(CONN1, null, true, putConnectorCallback);
         herder.tick();
 
         PowerMock.verifyAll();
@@ -502,12 +503,13 @@ public class DistributedHerderTest {
         assertTrue(connectorConfigCb.isDone());
         assertEquals(CONN1_CONFIG, connectorConfigCb.get());
 
-        // Apply new config. The update doesn't occur until after  which should be picked up immediately since the write is synchronous
-        FutureCallback<Void> putConfigCb = new FutureCallback<>();
-        herder.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED, putConfigCb);
+        // Apply new config.
+        FutureCallback<Herder.Created<ConnectorInfo>> putConfigCb = new FutureCallback<>();
+        herder.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED, true, putConfigCb);
         herder.tick();
         assertTrue(putConfigCb.isDone());
-        assertEquals(null, putConfigCb.get());
+        ConnectorInfo updatedInfo = new ConnectorInfo(CONN1, CONN1_CONFIG_UPDATED, Arrays.asList(TASK0, TASK1, TASK2));
+        assertEquals(new Herder.Created<>(false, updatedInfo), putConfigCb.get());
 
         // Check config again to validate change
         connectorConfigCb = new FutureCallback<>();

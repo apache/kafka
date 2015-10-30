@@ -284,44 +284,6 @@ public class DistributedHerder implements Herder, Runnable {
     }
 
     @Override
-    public synchronized void addConnector(final Map<String, String> connectorProps,
-                                          final Callback<String> callback) {
-        addOrPutConnector(connectorProps, false, new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                callback.onCompletion(error, error == null ? connectorProps.get(ConnectorConfig.NAME_CONFIG) : null);
-            }
-        });
-    }
-
-    @Override
-    public synchronized void deleteConnector(final String connName, final Callback<Void> callback) {
-        log.trace("Submitting connector config deletion {}", connName);
-
-        requests.add(new HerderRequest(
-                new Callable<Void>() {
-                    @Override
-                    public Void call() throws Exception {
-                        if (!isLeader())
-                            throw new NotLeaderException("Only the leader can delete connectors.", leaderUrl());
-
-                        log.debug("Submitting null connector config {}", connName);
-                        configStorage.putConnectorConfig(connName, null);
-                        return null;
-                    }
-                },
-                new Callback<Void>() {
-                    @Override
-                    public void onCompletion(Throwable error, Void result) {
-                        if (callback != null)
-                            callback.onCompletion(error, null);
-                    }
-                }
-        ));
-        member.wakeup();
-    }
-
-    @Override
     public synchronized void connectors(final Callback<Collection<String>> callback) {
         log.trace("Submitting connector listing request");
 
@@ -378,13 +340,55 @@ public class DistributedHerder implements Herder, Runnable {
     }
 
     @Override
-    public void putConnectorConfig(String connName, Map<String, String> config, Callback<Void> callback) {
-        Map<String, String> connConfig = config;
-        if (!config.containsKey(ConnectorConfig.NAME_CONFIG)) {
+    public void putConnectorConfig(final String connName, Map<String, String> config, final boolean allowReplace,
+                                   final Callback<Created<ConnectorInfo>> callback) {
+        final Map<String, String> connConfig;
+        if (config == null) {
+            connConfig = null;
+        } else if (!config.containsKey(ConnectorConfig.NAME_CONFIG)) {
             connConfig = new HashMap<>(config);
             connConfig.put(ConnectorConfig.NAME_CONFIG, connName);
+        } else {
+            connConfig = config;
         }
-        addOrPutConnector(connConfig, true, callback);
+
+        log.trace("Submitting connector config request {}", connName);
+
+        requests.add(new HerderRequest(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        log.trace("Handling connector config request {}", connName);
+                        if (!isLeader()) {
+                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                            return null;
+                        }
+
+                        boolean exists = configState.connectors().contains(connName);
+                        if (!allowReplace && exists) {
+                            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+                            return null;
+                        }
+
+                        if (connConfig == null && !exists) {
+                            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                            return null;
+                        }
+
+                        log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
+                        configStorage.putConnectorConfig(connName, connConfig);
+
+                        boolean created = !exists && connConfig != null;
+                        // Note that we use the updated connector config despite the fact that we don't have an updated
+                        // snapshot yet. The existing task info should still be accurate.
+                        ConnectorInfo info = connConfig == null ? null :
+                                new ConnectorInfo(connName, connConfig, configState.tasks(connName));
+                        callback.onCompletion(null, new Created<>(created, info));
+
+                        return null;
+                    }
+                }));
+        member.wakeup();
     }
 
     @Override
@@ -467,50 +471,6 @@ public class DistributedHerder implements Herder, Runnable {
         if (assignment == null)
             return null;
         return assignment.leaderUrl();
-    }
-
-    private synchronized void addOrPutConnector(final Map<String, String> connectorProps, final boolean canReplace,
-                                                final Callback<Void> callback) {
-        final ConnectorConfig connConfig;
-        final String connName;
-        try {
-            connConfig = new ConnectorConfig(connectorProps);
-            connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
-        } catch (Throwable t) {
-            if (callback != null)
-                callback.onCompletion(t, null);
-            return;
-        }
-
-        log.trace("Submitting connector config request {}", connName);
-
-        requests.add(new HerderRequest(
-                new Callable<Void>() {
-                    @Override
-                    public Void call() throws Exception {
-                        log.trace("Handling connector config request {}", connName);
-                        if (!isLeader())
-                            throw new NotLeaderException("Only the leader can add connectors.", leaderUrl());
-
-                        if (!canReplace && configState.connectors().contains(connName))
-                            throw new AlreadyExistsException("Connector " + connName + " already exists");
-
-                        log.trace("Submitting connector config {} {} {}", connName, canReplace, configState.connectors());
-                        configStorage.putConnectorConfig(connName, connectorProps);
-
-                        return null;
-                    }
-                },
-                new Callback<Void>() {
-                    @Override
-                    public void onCompletion(Throwable error, Void result) {
-                        if (error != null)
-                            callback.onCompletion(error, null);
-                        else
-                            callback.onCompletion(null, null);
-                    }
-                }));
-        member.wakeup();
     }
 
     /**
@@ -691,7 +651,7 @@ public class DistributedHerder implements Herder, Runnable {
                     String reconfigUrl = RestServer.urlJoin(leaderUrl(), "/connectors/" + connName + "/tasks");
                     RestServer.httpRequest(reconfigUrl, "POST", taskProps, null);
                 } catch (CopycatException e) {
-                    log.error("Failed to ", e);
+                    log.error("Request to leader to reconfigure connector tasks failed", e);
                 }
             }
         }

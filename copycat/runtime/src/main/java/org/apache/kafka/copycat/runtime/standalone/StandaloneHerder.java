@@ -78,39 +78,6 @@ public class StandaloneHerder implements Herder {
     }
 
     @Override
-    public synchronized void addConnector(Map<String, String> connectorProps,
-                                          Callback<String> callback) {
-        try {
-            String connName = startConnector(connectorProps, false);
-            updateConnectorTasks(connName);
-            if (callback != null)
-                callback.onCompletion(null, connName);
-        } catch (CopycatException e) {
-            if (callback != null)
-                callback.onCompletion(e, null);
-        }
-    }
-
-    @Override
-    public synchronized void deleteConnector(String connName, Callback<Void> callback) {
-        if (!connectors.containsKey(connName)) {
-            callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
-            return;
-        }
-
-        try {
-            removeConnectorTasks(connName);
-            worker.stopConnector(connName);
-            connectors.remove(connName);
-            if (callback != null)
-                callback.onCompletion(null, null);
-        } catch (CopycatException e) {
-            if (callback != null)
-                callback.onCompletion(e, null);
-        }
-    }
-
-    @Override
     public synchronized void connectors(Callback<Collection<String>> callback) {
         callback.onCompletion(null, new ArrayList<>(connectors.keySet()));
     }
@@ -122,11 +89,17 @@ public class StandaloneHerder implements Herder {
             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
             return;
         }
+        callback.onCompletion(null, createConnectorInfo(state));
+    }
+
+    private ConnectorInfo createConnectorInfo(ConnectorState state) {
+        if (state == null)
+            return null;
 
         List<ConnectorTaskId> taskIds = new ArrayList<>();
         for (int i = 0; i < state.taskConfigs.size(); i++)
-            taskIds.add(new ConnectorTaskId(connName, i));
-        callback.onCompletion(null, new ConnectorInfo(connName, state.configOriginals, taskIds));
+            taskIds.add(new ConnectorTaskId(state.name, i));
+        return new ConnectorInfo(state.name, state.configOriginals, taskIds);
     }
 
     @Override
@@ -145,21 +118,39 @@ public class StandaloneHerder implements Herder {
     }
 
     @Override
-    public synchronized void putConnectorConfig(String connName, final Map<String, String> config, final Callback<Void> callback) {
-        if (!connectors.containsKey(connName)) {
-            callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
-            return;
-        }
-
+    public synchronized void putConnectorConfig(String connName, final Map<String, String> config,
+                                                boolean allowReplace,
+                                                final Callback<Created<ConnectorInfo>> callback) {
         try {
-            worker.stopConnector(connName);
-            startConnector(config, true);
-            updateConnectorTasks(connName);
-            if (callback != null)
-                callback.onCompletion(null, null);
+            boolean created = false;
+            if (connectors.containsKey(connName)) {
+                if (!allowReplace) {
+                    callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+                    return;
+                }
+                if (config == null) // Deletion, kill tasks as well
+                    removeConnectorTasks(connName);
+                worker.stopConnector(connName);
+                if (config == null)
+                    connectors.remove(connName);
+            } else {
+                if (config == null) {
+                    // Deletion, must already exist
+                    callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+                    return;
+                }
+                created = true;
+            }
+            if (config != null) {
+                startConnector(config);
+                updateConnectorTasks(connName);
+            }
+            if (config != null)
+                callback.onCompletion(null, new Created<>(created, createConnectorInfo(connectors.get(connName))));
+            else
+                callback.onCompletion(null, new Created<ConnectorInfo>(false, null));
         } catch (CopycatException e) {
-            if (callback != null)
-                callback.onCompletion(e, null);
+            callback.onCompletion(e, null);
         }
 
     }
@@ -198,16 +189,12 @@ public class StandaloneHerder implements Herder {
     /**
      * Start a connector in the worker and record its state.
      * @param connectorProps new connector configuration
-     * @param replace if true, allow an existing connector configuration to be replaced (but this does not handle stopping
-     *                the previous instance); if false, throws AlreadyExistsException if the connector already has state
      * @return the connector name
      */
-    private String startConnector(Map<String, String> connectorProps, boolean replace) {
+    private String startConnector(Map<String, String> connectorProps) {
         ConnectorConfig connConfig = new ConnectorConfig(connectorProps);
         String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
         ConnectorState state = connectors.get(connName);
-        if (!replace && state != null)
-            throw new AlreadyExistsException("Connector " + connName + " already exists");
         worker.addConnector(connConfig, new HerderConnectorContext(this, connName));
         if (state == null) {
             connectors.put(connName, new ConnectorState(connectorProps, connConfig));
@@ -271,11 +258,13 @@ public class StandaloneHerder implements Herder {
 
 
     private static class ConnectorState {
+        public String name;
         public Map<String, String> configOriginals;
         public ConnectorConfig config;
         List<Map<String, String>> taskConfigs;
 
         public ConnectorState(Map<String, String> configOriginals, ConnectorConfig config) {
+            this.name = config.getString(ConnectorConfig.NAME_CONFIG);
             this.configOriginals = configOriginals;
             this.config = config;
             this.taskConfigs = new ArrayList<>();
