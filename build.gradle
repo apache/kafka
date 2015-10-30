@@ -227,7 +227,7 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
 }
 
 def copycatPkgs = ['copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
-def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools', 'streams'] + copycatPkgs
+def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'logback-appender', 'tools', 'streams'] + copycatPkgs
 
 tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
 tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) { }
@@ -253,6 +253,7 @@ project(':core') {
   dependencies {
     compile project(':clients')
     compile project(':log4j-appender')
+    compile project(':logback-appender')
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
     compile 'com.101tec:zkclient:0.6'
@@ -635,6 +636,42 @@ project(':log4j-appender') {
 
   javadoc {
     include "**/org/apache/kafka/log4jappender/*"
+  }
+
+  checkstyle {
+     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':logback-appender') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "kafka-logback-appender"
+
+  dependencies {
+    compile project(':clients')
+    compile "$slf4jlog4j"
+    compile "ch.qos.logback:logback-core:1.1.2"
+    compile "ch.qos.logback:logback-classic:1.1.2"
+
+    testCompile "$junit"
+    testCompile project(path: ':clients', configuration: 'archives')
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/logbackappender/*"
   }
 
   checkstyle {
