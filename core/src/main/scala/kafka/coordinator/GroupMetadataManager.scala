@@ -674,12 +674,12 @@ object GroupMetadataManager {
         val selectedProtocol = memberMetadata.supportedProtocols.filter(_._1.equals(groupMetadata.protocol))
         assert(selectedProtocol.length == 1)
 
-        memberStruct.set(MEMBER_METADATA_SUBSCRIPTION_V0, selectedProtocol.head._2)
+        memberStruct.set(MEMBER_METADATA_SUBSCRIPTION_V0, ByteBuffer.wrap(selectedProtocol.head._2))
 
         val memberAssignment = assignment(memberMetadata.memberId)
         assert(memberAssignment != null)
 
-        memberStruct.set(MEMBER_METADATA_ASSIGNMENT_V0, memberAssignment)
+        memberStruct.set(MEMBER_METADATA_ASSIGNMENT_V0, ByteBuffer.wrap(memberAssignment))
 
         memberStruct
     }
@@ -778,11 +778,11 @@ object GroupMetadataManager {
             val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
             val memberId = memberMetadata.get(MEMBER_METADATA_MEMBER_ID_V0).asInstanceOf[String]
             val sessionTimeout = memberMetadata.get(MEMBER_METADATA_SESSION_TIMEOUT_V0).asInstanceOf[Int]
-            val subscription = memberMetadata.get(MEMBER_METADATA_SUBSCRIPTION_V0).asInstanceOf[Array[Byte]]
+            val subscription = Utils.toArray(memberMetadata.get(MEMBER_METADATA_SUBSCRIPTION_V0).asInstanceOf[ByteBuffer])
 
             val member = new MemberMetadata(memberId, groupId, sessionTimeout, List((group.protocol, subscription)))
 
-            member.assignment = memberMetadata.get(MEMBER_METADATA_ASSIGNMENT_V0).asInstanceOf[Array[Byte]]
+            member.assignment = Utils.toArray(memberMetadata.get(MEMBER_METADATA_ASSIGNMENT_V0).asInstanceOf[ByteBuffer])
 
             group.add(memberId, member)
         }
