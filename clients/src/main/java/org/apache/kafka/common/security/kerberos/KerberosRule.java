@@ -108,10 +108,10 @@ class KerberosRule {
      * @param format the string to replace parameters again
      * @param params the list of parameters
      * @return the generated string with the parameter references replaced.
-     * @throws KerberosNameParser.BadFormatString
+     * @throws BadFormatString
      */
     static String replaceParameters(String format,
-                                    String[] params) throws KerberosNameParser.BadFormatString {
+                                    String[] params) throws BadFormatString {
         Matcher match = PARAMETER_PATTERN.matcher(format);
         int start = 0;
         StringBuilder result = new StringBuilder();
@@ -122,13 +122,13 @@ class KerberosRule {
                 try {
                     int num = Integer.parseInt(paramNum);
                     if (num < 0 || num > params.length) {
-                        throw new KerberosNameParser.BadFormatString("index " + num + " from " + format +
+                        throw new BadFormatString("index " + num + " from " + format +
                                 " is outside of the valid range 0 to " +
                                 (params.length - 1));
                     }
                     result.append(params[num]);
                 } catch (NumberFormatException nfe) {
-                    throw new KerberosNameParser.BadFormatString("bad format in username mapping in " +
+                    throw new BadFormatString("bad format in username mapping in " +
                             paramNum, nfe);
                 }
 

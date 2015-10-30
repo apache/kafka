@@ -30,42 +30,23 @@ import java.util.regex.Pattern;
  * particular, it splits them apart and translates them down into local
  * operating system names.
  */
-public class KerberosNameParser {
-
-    /**
-     * A pattern that matches a Kerberos name with at most 3 components.
-     */
-    private static final Pattern NAME_PARSER = Pattern.compile("([^/@]*)(/([^/@]*))?@([^/@]*)");
+public class KerberosShortNamer {
 
     /**
      * A pattern for parsing a auth_to_local rule.
      */
     private static final Pattern RULE_PARSER = Pattern.compile("((DEFAULT)|(RULE:\\[(\\d*):([^\\]]*)](\\(([^)]*)\\))?(s/([^/]*)/([^/]*)/(g)?)?))");
 
-    /**
-     * The list of translation rules.
-     */
+    /* Rules for the translation of the principal name into an operating system name */
     private final List<KerberosRule> principalToLocalRules;
 
-    public KerberosNameParser(String defaultRealm, List<String> principalToLocalRules) {
-        List<String> rules = principalToLocalRules == null ? Collections.singletonList("DEFAULT") : principalToLocalRules;
-        this.principalToLocalRules = parseRules(defaultRealm, rules);
+    public KerberosShortNamer(List<KerberosRule> principalToLocalRules) {
+        this.principalToLocalRules = principalToLocalRules;
     }
 
-    /**
-     * Create a name from the full Kerberos principal name.
-     */
-    public KerberosName parse(String principalName) {
-        Matcher match = NAME_PARSER.matcher(principalName);
-        if (!match.matches()) {
-            if (principalName.contains("@")) {
-                throw new IllegalArgumentException("Malformed Kerberos name: " + principalName);
-            } else {
-                return new KerberosName(principalName, null, null, principalToLocalRules);
-            }
-        } else {
-            return new KerberosName(match.group(1), match.group(3), match.group(4), principalToLocalRules);
-        }
+    public static KerberosShortNamer fromUnparsedRules(String defaultRealm, List<String> principalToLocalRules) {
+        List<String> rules = principalToLocalRules == null ? Collections.singletonList("DEFAULT") : principalToLocalRules;
+        return new KerberosShortNamer(parseRules(defaultRealm, rules));
     }
 
     private static List<KerberosRule> parseRules(String defaultRealm, List<String> rules) {
@@ -93,13 +74,28 @@ public class KerberosNameParser {
         return result;
     }
 
-    public static class BadFormatString extends IOException {
-        BadFormatString(String msg) {
-            super(msg);
+    /**
+     * Get the translation of the principal name into an operating system
+     * user name.
+     * @return the short name
+     * @throws IOException
+     */
+    public String shortName(KerberosName kerberosName) throws IOException {
+        String[] params;
+        if (kerberosName.hostName() == null) {
+            // if it is already simple, just return it
+            if (kerberosName.realm() == null)
+                return kerberosName.serviceName();
+            params = new String[]{kerberosName.realm(), kerberosName.serviceName()};
+        } else {
+            params = new String[]{kerberosName.realm(), kerberosName.serviceName(), kerberosName.hostName()};
         }
-        BadFormatString(String msg, Throwable err) {
-            super(msg, err);
+        for (KerberosRule r : principalToLocalRules) {
+            String result = r.apply(params);
+            if (result != null)
+                return result;
         }
+        throw new NoMatchingRule("No rules applied to " + toString());
     }
 
 }
