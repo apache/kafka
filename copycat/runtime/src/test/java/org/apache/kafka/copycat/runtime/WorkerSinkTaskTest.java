@@ -20,10 +20,10 @@ package org.apache.kafka.copycat.runtime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
+import org.apache.kafka.copycat.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
@@ -101,7 +101,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         workerProps.setProperty("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("internal.key.converter.schemas.enable", "false");
         workerProps.setProperty("internal.value.converter.schemas.enable", "false");
-        workerConfig = new WorkerConfig(workerProps);
+        workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer", "createWorkerThread"},
                 taskId, sinkTask, workerConfig, keyConverter, valueConverter, time);

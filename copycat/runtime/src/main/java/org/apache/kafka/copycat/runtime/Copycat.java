@@ -18,6 +18,7 @@
 package org.apache.kafka.copycat.runtime;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.copycat.runtime.rest.RestServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,15 +35,17 @@ public class Copycat {
 
     private final Worker worker;
     private final Herder herder;
+    private final RestServer rest;
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
     private final ShutdownHook shutdownHook;
 
-    public Copycat(Worker worker, Herder herder) {
+    public Copycat(Worker worker, Herder herder, RestServer rest) {
         log.debug("Copycat created");
         this.worker = worker;
         this.herder = herder;
+        this.rest = rest;
         shutdownHook = new ShutdownHook();
     }
 
@@ -52,6 +55,7 @@ public class Copycat {
 
         worker.start();
         herder.start();
+        rest.start(herder);
 
         log.info("Copycat started");
 
@@ -63,6 +67,7 @@ public class Copycat {
         if (!wasShuttingDown) {
             log.info("Copycat stopping");
 
+            rest.stop();
             herder.stop();
             worker.stop();
 

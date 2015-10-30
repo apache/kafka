@@ -55,6 +55,9 @@ import static org.junit.Assert.assertFalse;
 
 public class WorkerCoordinatorTest {
 
+    private static final String LEADER_URL = "leaderUrl:8083";
+    private static final String MEMBER_URL = "memberUrl:8083";
+
     private String connectorId = "connector";
     private String connectorId2 = "connector2";
     private ConnectorTaskId taskId0 = new ConnectorTaskId(connectorId, 0);
@@ -104,6 +107,7 @@ public class WorkerCoordinatorTest {
                 time,
                 requestTimeoutMs,
                 retryBackoffMs,
+                LEADER_URL,
                 configStorage,
                 rebalanceListener);
 
@@ -147,7 +151,7 @@ public class WorkerCoordinatorTest {
 
         LinkedHashMap<String, ByteBuffer> serialized = coordinator.metadata();
         assertEquals(1, serialized.size());
-        CopycatProtocol.ConfigState state = CopycatProtocol.deserializeMetadata(serialized.get(WorkerCoordinator.DEFAULT_SUBPROTOCOL));
+        CopycatProtocol.WorkerState state = CopycatProtocol.deserializeMetadata(serialized.get(WorkerCoordinator.DEFAULT_SUBPROTOCOL));
         assertEquals(1, state.offset());
 
         PowerMock.verifyAll();
@@ -322,8 +326,8 @@ public class WorkerCoordinatorTest {
 
         Map<String, ByteBuffer> configs = new HashMap<>();
         // Mark everyone as in sync with configState1
-        configs.put("leader", CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(1L)));
-        configs.put("member", CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(1L)));
+        configs.put("leader", CopycatProtocol.serializeMetadata(new CopycatProtocol.WorkerState(LEADER_URL, 1L)));
+        configs.put("member", CopycatProtocol.serializeMetadata(new CopycatProtocol.WorkerState(MEMBER_URL, 1L)));
         Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
 
         // configState1 has 1 connector, 1 task
@@ -358,8 +362,8 @@ public class WorkerCoordinatorTest {
 
         Map<String, ByteBuffer> configs = new HashMap<>();
         // Mark everyone as in sync with configState1
-        configs.put("leader", CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(1L)));
-        configs.put("member", CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(1L)));
+        configs.put("leader", CopycatProtocol.serializeMetadata(new CopycatProtocol.WorkerState(LEADER_URL, 1L)));
+        configs.put("member", CopycatProtocol.serializeMetadata(new CopycatProtocol.WorkerState(MEMBER_URL, 1L)));
         Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
@@ -390,7 +394,10 @@ public class WorkerCoordinatorTest {
                                            Map<String, Long> configOffsets, short error) {
         Map<String, ByteBuffer> metadata = new HashMap<>();
         for (Map.Entry<String, Long> configStateEntry : configOffsets.entrySet()) {
-            ByteBuffer buf = CopycatProtocol.serializeMetadata(new CopycatProtocol.ConfigState(configStateEntry.getValue()));
+            // We need a member URL, but it doesn't matter for the purposes of this test. Just set it to the member ID
+            String memberUrl = configStateEntry.getKey();
+            long configOffset = configStateEntry.getValue();
+            ByteBuffer buf = CopycatProtocol.serializeMetadata(new CopycatProtocol.WorkerState(memberUrl, configOffset));
             metadata.put(configStateEntry.getKey(), buf);
         }
         return new JoinGroupResponse(error, generationId, WorkerCoordinator.DEFAULT_SUBPROTOCOL, memberId, memberId, metadata).toStruct();
@@ -403,7 +410,7 @@ public class WorkerCoordinatorTest {
 
     private Struct syncGroupResponse(short assignmentError, String leader, long configOffset, List<String> connectorIds,
                                      List<ConnectorTaskId> taskIds, short error) {
-        CopycatProtocol.Assignment assignment = new CopycatProtocol.Assignment(assignmentError, leader, configOffset, connectorIds, taskIds);
+        CopycatProtocol.Assignment assignment = new CopycatProtocol.Assignment(assignmentError, leader, LEADER_URL, configOffset, connectorIds, taskIds);
         ByteBuffer buf = CopycatProtocol.serializeAssignment(assignment);
         return new SyncGroupResponse(error, buf).toStruct();
     }

@@ -18,16 +18,16 @@
 package org.apache.kafka.copycat.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.copycat.runtime.WorkerConfig;
 
-import java.util.Map;
+import java.util.Properties;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
-public class DistributedHerderConfig extends AbstractConfig {
+public class DistributedConfig extends WorkerConfig {
     private static final ConfigDef CONFIG;
 
     /*
@@ -70,11 +70,7 @@ public class DistributedHerderConfig extends AbstractConfig {
     public static final int WORKER_UNSYNC_BACKOFF_MS_DEFAULT = 5 * 60 * 1000;
 
     static {
-        CONFIG = new ConfigDef()
-                .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                        ConfigDef.Type.LIST,
-                        ConfigDef.Importance.HIGH,
-                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
+        CONFIG = baseConfigDef()
                 .define(GROUP_ID_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, GROUP_ID_DOC)
                 .define(SESSION_TIMEOUT_MS_CONFIG,
                         ConfigDef.Type.INT,
@@ -184,7 +180,7 @@ public class DistributedHerderConfig extends AbstractConfig {
                         WORKER_UNSYNC_BACKOFF_MS_DOC);
     }
 
-    DistributedHerderConfig(Map<?, ?> props) {
+    public DistributedConfig(Properties props) {
         super(CONFIG, props);
     }
 

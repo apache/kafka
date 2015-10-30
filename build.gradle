@@ -33,6 +33,9 @@ def junit='junit:junit:4.11'
 def easymock='org.easymock:easymock:3.3.1'
 def powermock='org.powermock:powermock-module-junit4:1.6.2'
 def powermock_easymock='org.powermock:powermock-api-easymock:1.6.2'
+def jackson_version = '2.5.4'
+def jetty_version = '9.2.12.v20150709'
+def jersey_version = '2.22.1'
 
 allprojects {
   apply plugin: 'idea'
@@ -501,7 +504,7 @@ project(':tools') {
     dependencies {
         compile project(':clients')
         compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
-        compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
+        compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
         compile "$slf4jlog4j"
 
         testCompile "$junit"
@@ -671,6 +674,21 @@ project(':copycat:api') {
     include "**/org/apache/kafka/copycat/*"
   }
 
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('copycat-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+
   artifacts {
     archives testJar
   }
@@ -692,7 +710,7 @@ project(':copycat:json') {
   dependencies {
     compile project(':copycat:api')
     compile "$slf4japi"
-    compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
+    compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
 
     testCompile "$junit"
     testCompile "$easymock"
@@ -717,6 +735,21 @@ project(':copycat:json') {
     include "**/org/apache/kafka/copycat/*"
   }
 
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('copycat-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+
   artifacts {
     archives testJar
   }
@@ -729,18 +762,6 @@ project(':copycat:json') {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
-
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.runtime) {
-      exclude('kafka-clients*')
-      exclude('copycat-*')
-    }
-    into "$buildDir/dependant-libs"
-  }
-
-  jar {
-    dependsOn copyDependantLibs
-  }
 }
 
 project(':copycat:runtime') {
@@ -751,6 +772,11 @@ project(':copycat:runtime') {
     compile project(':copycat:api')
     compile project(':clients')
     compile "$slf4japi"
+
+    compile "org.eclipse.jetty:jetty-server:$jetty_version"
+    compile "org.eclipse.jetty:jetty-servlet:$jetty_version"
+    compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$jackson_version"
+    compile "org.glassfish.jersey.containers:jersey-container-servlet:$jersey_version"
 
     testCompile "$junit"
     testCompile "$easymock"
@@ -775,6 +801,21 @@ project(':copycat:runtime') {
 
   javadoc {
     include "**/org/apache/kafka/copycat/*"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('copycat-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
   }
 
   artifacts {
@@ -820,6 +861,21 @@ project(':copycat:file') {
 
   javadoc {
     include "**/org/apache/kafka/copycat/*"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('copycat-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
   }
 
   artifacts {
