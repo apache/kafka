@@ -310,9 +310,8 @@ public class TopologyBuilder {
         if (iter.hasNext()) {
             String user = iter.next();
             nodeGrouper.unite(user, processorName);
-        } else {
-            users.add(processorName);
         }
+        users.add(processorName);
 
         NodeFactory factory = nodeFactories.get(processorName);
         if (factory instanceof ProcessorNodeFactory) {
