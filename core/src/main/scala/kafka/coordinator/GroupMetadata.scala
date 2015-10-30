@@ -188,7 +188,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
     isEmpty || (memberProtocols & candidateProtocols).nonEmpty
   }
 
-  def initNextGeneration = {
+  def initNextGeneration() = {
     assert(notYetRejoinedMembers == List.empty[MemberMetadata])
     generationId += 1
     protocol = selectProtocol

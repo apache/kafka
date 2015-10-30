@@ -112,7 +112,8 @@ class GroupMetadataManager(val config: OffsetConfig,
   }
 
   private def addGroup(groupId: String, group: GroupMetadata): GroupMetadata = {
-    groupsCache.putIfNotExists(groupId, group)
+    groupsCache.put(groupId, group)
+    group
   }
 
   /**

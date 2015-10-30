@@ -553,7 +553,7 @@ class GroupCoordinator(val brokerId: Int,
         }
       }
       if (!group.is(Dead)) {
-        group.initNextGeneration
+        group.initNextGeneration()
         info("Stabilized group %s generation %s".format(group.groupId, group.generationId))
 
         // trigger the awaiting join group response callback for all the members after rebalancing
