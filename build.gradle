@@ -254,7 +254,7 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
-    compile project(':log4j-appender')
+    compile "$slf4jlog4j"
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
     compile 'com.101tec:zkclient:0.6'
@@ -318,6 +318,9 @@ project(':core') {
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
+    from(project(':log4j-appender').jar) { into("libs/") }
+    from(project(':tools').jar) { into("libs/") }
+    from(project(':tools').configurations.runtime) { into("libs/") }
   }
 
   jar {
