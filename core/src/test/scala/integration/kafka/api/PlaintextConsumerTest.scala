@@ -332,9 +332,13 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // seek to out of range position
     val outOfRangePos = totalRecords + 1
     consumer0.seek(tp, outOfRangePos)
-    intercept[OffsetOutOfRangeException] {
+    val e = intercept[OffsetOutOfRangeException] {
       consumer0.poll(20000)
     }
+    val outOfRangePartitions = e.offsetOutOfRangePartitions()
+    assertNotNull(outOfRangePartitions)
+    assertEquals(1, outOfRangePartitions.size)
+    assertEquals(outOfRangePos.toLong, outOfRangePartitions.get(tp))
 
     consumer0.close()
   }
@@ -351,9 +355,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consuming a too-large record should fail
     consumer0.assign(List(tp).asJava)
-    intercept[RecordTooLargeException] {
+    val e = intercept[RecordTooLargeException] {
       consumer0.poll(20000)
     }
+    val oversizedPartitions = e.recordTooLargePartitions()
+    assertNotNull(oversizedPartitions)
+    assertEquals(1, oversizedPartitions.size)
+    // the oversized message is at offset 0
+    assertEquals(0L, oversizedPartitions.get(tp))
 
     consumer0.close()
   }
