@@ -273,10 +273,7 @@ class GroupCoordinator(val brokerId: Int,
               group.transitionTo(Stable)
 
               // persist the group metadata and upon finish propagate the assignment
-              val responseCode = groupManager.storeGroup(group, groupAssignment)
-
-              // send the assignment back to members
-              propagateAssignment(group, groupAssignment, responseCode)
+              groupManager.storeGroup(group, groupAssignment)
             }
 
           case Stable =>
@@ -436,18 +433,6 @@ class GroupCoordinator(val brokerId: Int,
       errorCode=errorCode)
   }
 
-  def propagateAssignment(group: GroupMetadata,
-                          assignment: Map[String, Array[Byte]],
-                          errorCode: Short) {
-    for (member <- group.allMembers) {
-      member.assignment = assignment.getOrElse(member.memberId, Array.empty[Byte])
-      if (member.awaitingSyncCallback != null) {
-        member.awaitingSyncCallback(member.assignment, errorCode)
-        member.awaitingSyncCallback = null
-      }
-    }
-  }
-
   /**
    * Complete existing DelayedHeartbeats for the given member and schedule the next one
    */
@@ -500,12 +485,7 @@ class GroupCoordinator(val brokerId: Int,
   private def prepareRebalance(group: GroupMetadata) {
     // if any members are awaiting sync, cancel their request and have them rejoin
     if (group.is(AwaitingSync)) {
-      for (member <- group.allMembers) {
-        if (member.awaitingSyncCallback != null) {
-          member.awaitingSyncCallback(Array.empty, Errors.REBALANCE_IN_PROGRESS.code)
-          member.awaitingSyncCallback = null
-        }
-      }
+      groupManager.propagateAssignment(group, Errors.REBALANCE_IN_PROGRESS.code)
     }
 
     group.allMembers.foreach(_.assignment = null)

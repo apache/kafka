@@ -53,13 +53,26 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   var consumerCoordinator: GroupCoordinator = null
   var groupManager : GroupMetadataManager = null
 
-  final val groupId = "groupId"
-  final val protocolType = "consumer"
-  final val memberId = "memberId"
-  final val metadata = Array[Byte]()
-  final val protocols = List(("range", metadata))
+  private val groupId = "groupId"
+  private val protocolType = "consumer"
+  private val memberId = "memberId"
+  private val metadata = Array[Byte]()
+  private val protocols = List(("range", metadata))
 
   private val groupsCache = new Pool[String, GroupMetadata]
+
+  private val propagateRebalanceAnswer = new IAnswer[Unit] {
+    override def answer = {
+      for (member <- groupsCache.get(groupId).allMembers) {
+        if (member.awaitingSyncCallback != null) {
+          member.awaitingSyncCallback.apply(Array.empty[Byte], Errors.REBALANCE_IN_PROGRESS.code)
+          member.awaitingSyncCallback = null
+        }
+      }
+    }
+  }
+
+  private var memberIndex : Int = 1
 
   @Before
   def setUp() {
@@ -205,11 +218,12 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     val joinGroupResult = joinGroup(groupId, memberId, DefaultSessionTimeout, protocolType, protocols,
       isCoordinatorForGroup = true)
+    val assignedMemberId = joinGroupResult.memberId
     val joinGroupErrorCode = joinGroupResult.errorCode
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(groupManager)
-    val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.memberId, Map.empty, true)
+    val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()), true)
     val syncGroupErrorCode = syncGroupResult._2
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
@@ -244,7 +258,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(groupManager)
-    val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map.empty, true)
+    val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()), true)
     val syncGroupErrorCode = syncGroupResult._2
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
@@ -265,7 +279,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, joinGroupErrorCode)
 
     EasyMock.reset(groupManager)
-    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map.empty, true)
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()), true)
     val syncGroupErrorCode = syncGroupResult._2
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
@@ -301,7 +315,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, joinGroupResult.errorCode)
 
     EasyMock.reset(groupManager)
-    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map.empty, true)
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()), true)
     val syncGroupErrorCode = syncGroupResult._2
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
@@ -323,7 +337,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     EasyMock.reset(groupManager)
     // send the sync group with an invalid generation
-    val syncGroupResult = syncGroupLeader(groupId, generationId+1, assignedConsumerId, Map.empty, true)
+    val syncGroupResult = syncGroupLeader(groupId, generationId+1, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()), true)
     assertEquals(Errors.ILLEGAL_GENERATION.code, syncGroupResult._2)
   }
 
@@ -341,7 +355,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, firstJoinResult.errorCode)
 
     EasyMock.reset(groupManager)
-    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map.empty, true)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()), true)
     assertEquals(Errors.NONE.code, firstSyncResult._2)
 
     EasyMock.reset(groupManager)
@@ -382,7 +396,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, firstJoinResult.errorCode)
 
     EasyMock.reset(groupManager)
-    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map.empty, true)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()), true)
     assertEquals(Errors.NONE.code, firstSyncResult._2)
 
     // join groups from the leader should force the group to rebalance, which allows the
@@ -410,7 +424,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, firstJoinResult.errorCode)
 
     EasyMock.reset(groupManager)
-    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map.empty, true)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()), true)
     assertEquals(Errors.NONE.code, firstSyncResult._2)
 
     EasyMock.reset(groupManager)
@@ -455,7 +469,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, firstJoinResult.errorCode)
 
     EasyMock.reset(groupManager)
-    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map.empty, true)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()), true)
     assertEquals(Errors.NONE.code, firstSyncResult._2)
 
     EasyMock.reset(groupManager)
@@ -508,7 +522,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, joinGroupResult.errorCode)
 
     EasyMock.reset(groupManager)
-    val syncGroupResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map.empty, true)
+    val syncGroupResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()), true)
     val syncGroupErrorCode = syncGroupResult._2
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
@@ -718,11 +732,16 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.expect(groupManager.getGroup(groupId)).andReturn(groupsCache.get(groupId))
     if (!groupsCache.contains(groupId)) {
       val groupMetadata = new GroupMetadata(groupId, protocolType)
+
+
+
       groupMetadata.add(memberId, new MemberMetadata(memberId, groupId, sessionTimeout, protocols))
       groupsCache.putIfNotExists(groupId, groupMetadata)
 
       EasyMock.expect(groupManager.addGroup(groupId, protocolType)).andReturn(groupMetadata)
     }
+    EasyMock.expect(groupManager.propagateAssignment(groupsCache.get(groupId), Errors.REBALANCE_IN_PROGRESS.code))
+      .andAnswer(propagateRebalanceAnswer)
 
     EasyMock.replay(groupManager)
 
@@ -738,12 +757,31 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
                                   isCoordinatorForGroup: Boolean): Future[SyncGroupCallbackParams] = {
     val (responseFuture, responseCallback) = setupSyncGroupCallback
 
+    val storeGroupAnswer = new IAnswer[Unit] {
+      override def answer = {
+        for (member <- groupsCache.get(groupId).allMembers) {
+          member.assignment = assignment.getOrElse(member.memberId, Array.empty[Byte])
+          if (member.awaitingSyncCallback != null) {
+            member.awaitingSyncCallback.apply(member.assignment, Errors.NONE.code)
+            member.awaitingSyncCallback = null
+          }
+        }
+      }
+    }
+
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
     EasyMock.expect(groupManager.partitionLeaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.expect(groupManager.getGroup(groupId)).andReturn(groupsCache.get(groupId))
     if (groupsCache.contains(groupId)) {
-      EasyMock.expect(groupManager.storeGroup(groupsCache.get(groupId), assignment)).andReturn(Errors.NONE.code)
+      val members = groupsCache.get(groupId).allMembers.filter(_.memberId.equals(leaderId))
+      if (members.length != 1) {
+        responseCallback.apply(null, Errors.UNKNOWN_MEMBER_ID.code)
+      } else {
+        members.head.awaitingSyncCallback = responseCallback
+      }
     }
+
+    EasyMock.expect(groupManager.storeGroup(groupsCache.get(groupId), assignment)).andAnswer(storeGroupAnswer)
     EasyMock.replay(groupManager)
 
     consumerCoordinator.handleSyncGroup(groupId, generation, leaderId, assignment, responseCallback)
@@ -759,6 +797,23 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
     EasyMock.expect(groupManager.partitionLeaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.expect(groupManager.getGroup(groupId)).andReturn(groupsCache.get(groupId))
+    if (groupsCache.contains(groupId)) {
+      val members = groupsCache.get(groupId).allMembers.filter(_.memberId.equals(memberId))
+      if (members.length != 1) {
+        responseCallback.apply(null, Errors.UNKNOWN_MEMBER_ID.code)
+      } else {
+        val member = members.head
+        if (member.assignment != null) {
+          responseCallback.apply(member.assignment, Errors.NONE.code)
+        } else {
+          member.awaitingSyncCallback = responseCallback
+        }
+      }
+    } else {
+      responseCallback.apply(null, Errors.UNKNOWN_MEMBER_ID.code)
+    }
+    EasyMock.expect(groupManager.propagateAssignment(groupsCache.get(groupId), Errors.REBALANCE_IN_PROGRESS.code))
+      .andAnswer(propagateRebalanceAnswer)
     EasyMock.replay(groupManager)
 
     consumerCoordinator.handleSyncGroup(groupId, generation, memberId, Map.empty[String, Array[Byte]], responseCallback)
@@ -847,6 +902,8 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
     EasyMock.expect(groupManager.partitionLoadingInProgress(1)).andReturn(false)
     EasyMock.expect(groupManager.getGroup(groupId)).andReturn(groupsCache.get(groupId))
+    EasyMock.expect(groupManager.propagateAssignment(groupsCache.get(groupId), Errors.REBALANCE_IN_PROGRESS.code))
+      .andAnswer(propagateRebalanceAnswer)
     EasyMock.expect(groupManager.removeGroup(groupId))
     EasyMock.replay(groupManager)
 
