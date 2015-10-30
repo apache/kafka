@@ -23,7 +23,6 @@ import java.util.concurrent.TimeUnit
 import org.junit.Assert._
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.server.KafkaConfig
-import kafka.coordinator.GroupMetadataManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{OffsetCommitRequest, JoinGroupRequest}
@@ -815,7 +814,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
                             isCoordinatorForGroup: Boolean): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
-    EasyMock.expect(groupManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
+    EasyMock.expect(groupManager.partitionLeaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.replay(groupManager)
     consumerCoordinator.handleJoinGroup(groupId, memberId, sessionTimeout, protocolType, protocols, responseCallback)
     responseFuture
@@ -829,7 +828,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
                                   isCoordinatorForGroup: Boolean): Future[SyncGroupCallbackParams] = {
     val (responseFuture, responseCallback) = setupSyncGroupCallback
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
-    EasyMock.expect(groupManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
+    EasyMock.expect(groupManager.partitionLeaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.replay(groupManager)
     consumerCoordinator.handleSyncGroup(groupId, generation, leaderId, assignment, responseCallback)
     responseFuture
@@ -841,7 +840,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
                                     isCoordinatorForGroup: Boolean): Future[SyncGroupCallbackParams] = {
     val (responseFuture, responseCallback) = setupSyncGroupCallback
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
-    EasyMock.expect(groupManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
+    EasyMock.expect(groupManager.partitionLeaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.replay(groupManager)
     consumerCoordinator.handleSyncGroup(groupId, generation, memberId, Map.empty[String, Array[Byte]], responseCallback)
     responseFuture
@@ -882,7 +881,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
                         isCoordinatorForGroup: Boolean): HeartbeatCallbackParams = {
     val (responseFuture, responseCallback) = setupHeartbeatCallback
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
-    EasyMock.expect(groupManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
+    EasyMock.expect(groupManager.partitionLeaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.replay(groupManager)
     consumerCoordinator.handleHeartbeat(groupId, consumerId, generationId, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
@@ -899,7 +898,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
                             isCoordinatorForGroup: Boolean): CommitOffsetCallbackParams = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
-    EasyMock.expect(groupManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
+    EasyMock.expect(groupManager.partitionLeaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     val storeOffsetAnswer = new IAnswer[Unit] {
       override def answer = responseCallback.apply(offsets.mapValues(_ => Errors.NONE.code))
     }
@@ -913,7 +912,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   private def leaveGroup(groupId: String, consumerId: String, isCoordinatorForGroup: Boolean): LeaveGroupCallbackParams = {
     val (responseFuture, responseCallback) = setupHeartbeatCallback
     EasyMock.expect(groupManager.partitionFor(groupId)).andReturn(1)
-    EasyMock.expect(groupManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
+    EasyMock.expect(groupManager.partitionLeaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.replay(groupManager)
     consumerCoordinator.handleLeaveGroup(groupId, consumerId, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
