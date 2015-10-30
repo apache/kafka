@@ -37,3 +37,4 @@ results
 tests/results
 .ducktape
 tests/.ducktape
+.gitignore
