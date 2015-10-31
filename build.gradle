@@ -254,7 +254,7 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
-    compile "$slf4jlog4j"
+    compile project(':log4j-appender')
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
     compile 'com.101tec:zkclient:0.6'
