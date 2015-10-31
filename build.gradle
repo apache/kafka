@@ -650,7 +650,6 @@ project(':logback-appender') {
 
   dependencies {
     compile project(':clients')
-    compile "$slf4jlog4j"
     compile "ch.qos.logback:logback-core:1.1.2"
     compile "ch.qos.logback:logback-classic:1.1.2"
 

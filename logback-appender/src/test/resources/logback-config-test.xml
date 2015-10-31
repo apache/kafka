@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration>
+
+<configuration>
+
+    <appender name="KAFKA"
+        class="org.apache.kafka.logbakappender.KafkaLogbakAppender">
+        <brokerList>127.0.0.1:9093</brokerList>
+        <syncSend>true</syncSend>
+        <retries>3</retries>
+        <!-- Topic must be specified. Here, we make it missing. -->
+        <!-- <topic>test-topic</topic> -->
+        
+        <!-- Use Layout to format logs. eg: -->
+        <!-- 
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <param name="Pattern" value="%d [%t] %c [%p] : %m%n" />
+        </layout>
+         -->
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="KAFKA" />
+    </root>
+
+</configuration>
