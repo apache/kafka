@@ -300,9 +300,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
         sendRecords(numRecords, topicPartition)
         Assert.fail("should have thrown exception")
       } catch {
-        case e: TimeoutException =>
-        //TODO Need to update the producer so it actually throws the server side of exception.
-        case e: Exception => Assert.fail(s"Only timeout exception should be thrown but $e thrown")
+        case e: TopicAuthorizationException => assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics())
       }
 
       addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create),
