@@ -55,6 +55,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     if(secure) {
+      Configuration.setConfiguration(null)
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
       System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
       if(!JaasUtils.isZkSecurityEnabled()) {
