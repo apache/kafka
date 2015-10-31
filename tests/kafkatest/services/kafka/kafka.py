@@ -61,7 +61,6 @@ class KafkaService(JmxMixin, Service):
         self.security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
         self.sasl_mechanism = sasl_mechanism
-        self.port = 9092
         self.topics = topics
 
         for node in self.nodes:
@@ -100,7 +99,7 @@ class KafkaService(JmxMixin, Service):
         prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                   security_config=self.security_config, 
                                   interbroker_security_protocol=self.interbroker_security_protocol,
-                                  sasl_mechanism=self.sasl_mechanism, port=self.port)
+                                  sasl_mechanism=self.sasl_mechanism)
         return prop_file
 
     def start_cmd(self, node):
@@ -301,8 +300,7 @@ class KafkaService(JmxMixin, Service):
 
     def bootstrap_servers(self):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
-        using the port for the configured security protocol.
 
         This is the format expected by many config files.
         """
-        return ','.join([node.account.hostname + ":" + str(self.port) for node in self.nodes])
+        return ','.join([node.account.hostname + ":9092" for node in self.nodes])

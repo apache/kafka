@@ -17,7 +17,6 @@ from ducktape.services.service import Service
 from kafkatest.services.kafka.directory import kafka_dir
 
 import os
-import threading
 
 
 class MiniKdc(Service):
@@ -39,7 +38,6 @@ class MiniKdc(Service):
     def __init__(self, context, kafka_nodes):
         super(MiniKdc, self).__init__(context, 1)
         self.kafka_nodes = kafka_nodes
-        self.lock = threading.RLock()
 
 
     def start_node(self, node):
@@ -78,10 +76,4 @@ class MiniKdc(Service):
         if os.path.exists(MiniKdc.LOCAL_KRB5CONF_FILE):
             os.remove(MiniKdc.LOCAL_KRB5CONF_FILE)
 
-    def start_if_required(self, kafka_nodes):
-        with self.lock:
-            if self.kafka_nodes is None:
-                self.logger.info("Starting MiniKdc")
-                self.kafka_nodes = kafka_nodes
-                self.start()
 
