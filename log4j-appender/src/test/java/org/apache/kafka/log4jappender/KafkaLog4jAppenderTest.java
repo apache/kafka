@@ -74,7 +74,7 @@ public class KafkaLog4jAppenderTest {
         }
 
         Assert.assertEquals(
-                5, ((MockKafkaLog4jAppender) (logger.getRootLogger().getAppender("KAFKA"))).getHistory().size());
+                5, ((MockKafkaLog4jAppender) (Logger.getRootLogger().getAppender("KAFKA"))).getHistory().size());
     }
 
     private byte[] getMessage(int i) throws UnsupportedEncodingException {
