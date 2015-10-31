@@ -24,7 +24,10 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -88,7 +91,62 @@ public class VerifiableLog4jAppender {
             .metavar("ACKS")
             .help("Acks required on each produced message. See Kafka docs on request.required.acks for details.");
 
+        parser.addArgument("--security-protocol")
+            .action(store())
+            .required(false)
+            .setDefault("PLAINTEXT")
+            .type(String.class)
+            .choices("PLAINTEXT", "SSL")
+            .metavar("SECURITY-PROTOCOL")
+            .dest("securityProtocol")
+            .help("Security protocol to be used while communicating with Kafka brokers.");
+
+        parser.addArgument("--ssl-truststore-location")
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("SSL-TRUSTSTORE-LOCATION")
+            .dest("sslTruststoreLocation")
+            .help("Location of SSL truststore to use.");
+
+        parser.addArgument("--ssl-truststore-password")
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("SSL-TRUSTSTORE-PASSWORD")
+            .dest("sslTruststorePassword")
+            .help("Password for SSL truststore to use.");
+
+        parser.addArgument("--appender.config")
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("CONFIG_FILE")
+            .help("Log4jAppender config properties file.");
+
         return parser;
+    }
+
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     *
+     * Note: this duplication of org.apache.kafka.common.utils.Utils.loadProps is unfortunate
+     * but *intentional*. In order to use VerifiableProducer in compatibility and upgrade tests,
+     * we use VerifiableProducer from trunk tools package, and run it against 0.8.X.X kafka jars.
+     * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
+     */
+    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+        Properties props = new Properties();
+        InputStream propStream = null;
+        try {
+            propStream = new FileInputStream(filename);
+            props.load(propStream);
+        } finally {
+            if (propStream != null)
+                propStream.close();
+        }
+        return props;
     }
 
     /** Construct a VerifiableLog4jAppender object from command-line arguments. */
@@ -101,7 +159,7 @@ public class VerifiableLog4jAppender {
 
             int maxMessages = res.getInt("maxMessages");
             String topic = res.getString("topic");
-
+            String configFile = res.getString("appender.config");
 
             Properties props = new Properties();
             props.setProperty("log4j.rootLogger", "INFO, KAFKA");
@@ -112,7 +170,21 @@ public class VerifiableLog4jAppender {
             props.setProperty("log4j.appender.KAFKA.Topic", topic);
             props.setProperty("log4j.appender.KAFKA.RequiredNumAcks", res.getString("acks"));
             props.setProperty("log4j.appender.KAFKA.SyncSend", "true");
+            final String securityProtocol = res.getString("securityProtocol");
+            if (securityProtocol != null && securityProtocol.equals("SSL")) {
+                props.setProperty("log4j.appender.KAFKA.SecurityProtocol", securityProtocol);
+                props.setProperty("log4j.appender.KAFKA.SslTruststoreLocation", res.getString("sslTruststoreLocation"));
+                props.setProperty("log4j.appender.KAFKA.SslTruststorePassword", res.getString("sslTruststorePassword"));
+            }
             props.setProperty("log4j.logger.kafka.log4j", "INFO, KAFKA");
+
+            if (configFile != null) {
+                try {
+                    props.putAll(loadProps(configFile));
+                } catch (IOException e) {
+                    throw new ArgumentParserException(e.getMessage(), parser);
+                }
+            }
 
             producer = new VerifiableLog4jAppender(props, maxMessages);
         } catch (ArgumentParserException e) {
