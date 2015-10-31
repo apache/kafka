@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration>
+
+<configuration>
+
+    <appender name="KAFKA"
+        class="org.apache.kafka.logbakappender.MockKafkaLogbakAppender">
+        <brokerList>127.0.0.1:9093</brokerList>
+        <topic>test-topic</topic>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="KAFKA" />
+    </root>
+
+</configuration>

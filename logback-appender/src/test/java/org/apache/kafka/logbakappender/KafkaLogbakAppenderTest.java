@@ -16,83 +16,59 @@
  */
 package org.apache.kafka.logbakappender;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.log4j.Logger;
-import org.apache.log4j.PropertyConfigurator;
+import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.UnsupportedEncodingException;
-import java.util.Properties;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
+import ch.qos.logback.core.joran.spi.JoranException;
+import ch.qos.logback.core.status.Status;
 
 public class KafkaLogbakAppenderTest {
 
-    Logger logger = Logger.getLogger(KafkaLogbakAppenderTest.class);
+    LoggerContext loggerContext = new LoggerContext();
+    Logger logger = loggerContext.getLogger(KafkaLogbakAppenderTest.class);
+    Logger root = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
+    
+    void configure(String file) throws JoranException {
+        JoranConfigurator jc = new JoranConfigurator();
+        jc.setContext(loggerContext);
+        jc.doConfigure(KafkaLogbakAppenderTest.class.getResourceAsStream(file));
+      }
 
     @Test
-    public void testKafkaLogbackConfigs() {
-        // host missing
-        Properties props = new Properties();
-        props.put("log4j.rootLogger", "INFO");
-        props.put("log4j.appender.KAFKA", "org.apache.kafka.log4jappender.KafkaLog4jAppender");
-        props.put("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout");
-        props.put("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n");
-        props.put("log4j.appender.KAFKA.Topic", "test-topic");
-        props.put("log4j.logger.kafka.log4j", "INFO, KAFKA");
-
-        try {
-            PropertyConfigurator.configure(props);
-            Assert.fail("Missing properties exception was expected !");
-        } catch (ConfigException ex) {
-            // It's OK!
-        }
-
+    public void testKafkaLogbackConfigs() throws JoranException {
         // topic missing
-        props = new Properties();
-        props.put("log4j.rootLogger", "INFO");
-        props.put("log4j.appender.KAFKA", "org.apache.kafka.log4jappender.KafkaLog4jAppender");
-        props.put("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout");
-        props.put("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n");
-        props.put("log4j.appender.KAFKA.brokerList", "127.0.0.1:9093");
-        props.put("log4j.logger.kafka.log4j", "INFO, KAFKA");
-
-        try {
-            PropertyConfigurator.configure(props);
-            Assert.fail("Missing properties exception was expected !");
-        } catch (ConfigException ex) {
-            // It's OK!
+        configure("/logback-config-test.xml");
+        List<Status> list = loggerContext.getStatusManager().getCopyOfStatusList();
+        Status errorStatus = null;
+        for(Status status : list){
+            if(status.getLevel() == Status.ERROR){
+                errorStatus = status;
+                break;
+            }
         }
+        Assert.assertNotNull(errorStatus);
+        Assert.assertEquals("Topic must be specified by the Kafka logbak appender", errorStatus.getMessage());
     }
 
-
     @Test
-    public void testLogbackAppends() throws UnsupportedEncodingException {
-        PropertyConfigurator.configure(getLogbackConfig());
+    public void testLogbackAppends() throws JoranException {
+        configure("/logback-append-test.xml");
 
         for (int i = 1; i <= 5; ++i) {
             logger.error(getMessage(i));
         }
 
         Assert.assertEquals(
-                5, ((MockKafkaLogbakAppender) (logger.getRootLogger().getAppender("KAFKA"))).getHistory().size());
+                5, ((MockKafkaLogbakAppender) (root.getAppender("KAFKA"))).getHistory().size());
     }
 
-    private byte[] getMessage(int i) throws UnsupportedEncodingException {
-        return ("test_" + i).getBytes("UTF-8");
-    }
-
-    private Properties getLogbackConfig() {
-        Properties props = new Properties();
-        props.put("log4j.rootLogger", "INFO, KAFKA");
-        props.put("log4j.appender.KAFKA", "org.apache.kafka.log4jappender.MockKafkaLog4jAppender");
-        props.put("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout");
-        props.put("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n");
-        props.put("log4j.appender.KAFKA.BrokerList", "127.0.0.1:9093");
-        props.put("log4j.appender.KAFKA.Topic", "test-topic");
-        props.put("log4j.appender.KAFKA.RequiredNumAcks", "1");
-        props.put("log4j.appender.KAFKA.SyncSend", "false");
-        props.put("log4j.logger.kafka.log4j", "INFO, KAFKA");
-        return props;
+    private String getMessage(int i) {
+        return "test_" + i;
     }
 }
 

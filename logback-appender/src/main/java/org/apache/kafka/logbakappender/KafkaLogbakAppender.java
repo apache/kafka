@@ -23,13 +23,12 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
+import ch.qos.logback.core.Layout;
 
-import java.util.Date;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -67,7 +66,7 @@ public class KafkaLogbakAppender extends AppenderBase<ILoggingEvent> {
     private boolean syncSend = false;
     private Producer<byte[], byte[]> producer = null;
     
-    private Formatter formatter;
+    private Layout<ILoggingEvent> layout = null;
 
     public Producer<byte[], byte[]> getProducer() {
         return producer;
@@ -169,12 +168,12 @@ public class KafkaLogbakAppender extends AppenderBase<ILoggingEvent> {
         return sslKeystorePassword;
     }
     
-    public Formatter getFormatter() {
-        return formatter;
+    public Layout<ILoggingEvent> getLayout() {
+        return layout;
     }
 
-    public void setFormatter(Formatter formatter) {
-        this.formatter = formatter;
+    public void setLayout(Layout<ILoggingEvent> layout) {
+        this.layout = layout;
     }
 
     @Override
@@ -183,10 +182,14 @@ public class KafkaLogbakAppender extends AppenderBase<ILoggingEvent> {
         Properties props = new Properties();
         if (brokerList != null)
             props.put(BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        if (props.isEmpty())
-            throw new ConfigException("The bootstrap servers property should be specified");
-        if (topic == null)
-            throw new ConfigException("Topic must be specified by the Kafka log4j appender");
+        if (props.isEmpty()){
+            addError("The bootstrap servers property should be specified");
+            return;
+        }
+        if (topic == null){
+            addError("Topic must be specified by the Kafka logbak appender");
+            return;   
+        }
         if (compressionType != null)
             props.put(COMPRESSION_TYPE_CONFIG, compressionType);
         if (requiredNumAcks != Integer.MAX_VALUE)
@@ -210,8 +213,7 @@ public class KafkaLogbakAppender extends AppenderBase<ILoggingEvent> {
         props.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         this.producer = getKafkaProducer(props);
-//        LogLog.debug("Kafka producer connected to " + brokerList);
-//        LogLog.debug("Logging for topic: " + topic);
+        super.start();
     }
 
     protected Producer<byte[], byte[]> getKafkaProducer(Properties props) {
@@ -221,7 +223,6 @@ public class KafkaLogbakAppender extends AppenderBase<ILoggingEvent> {
     @Override
     protected void append(ILoggingEvent event) {
         String message = subAppend(event);
-//        LogLog.debug("[" + new Date(event.getTimeStamp()) + "]" + message);
         Future<RecordMetadata> response = producer.send(new ProducerRecord<byte[], byte[]>(topic, message.getBytes()));
         if (syncSend) {
             try {
@@ -235,18 +236,12 @@ public class KafkaLogbakAppender extends AppenderBase<ILoggingEvent> {
     }
 
     private String subAppend(ILoggingEvent event) {
-        return (this.formatter == null) ? event.getFormattedMessage() : this.formatter.format(event);
+        return (this.layout == null) ? event.getFormattedMessage() : this.layout.doLayout(event);
     }
 
     @Override
     public void stop() {
-//        if (!this.closed) {
-//            this.closed = true;
-            this.producer.close();
-//        }
+        super.stop();
+        this.producer.close();
     }
-
-//    public boolean requiresLayout() {
-//        return true;
-//    }
 }
