@@ -99,7 +99,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, new_consumer=False, message_validator=None,
+    def __init__(self, context, num_nodes, kafka, topic, new_consumer=None, message_validator=None,
                  from_beginning=True, consumer_timeout_ms=None, version=TRUNK, client_id="console-consumer", jmx_object_names=None, jmx_attributes=[]):
         """
         Args:
@@ -107,7 +107,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
             num_nodes:                  number of nodes to use (this should be 1)
             kafka:                      kafka service
             topic:                      consume from this topic
-            new_consumer:               use new Kafka consumer if True
+            new_consumer:               use new Kafka consumer if True. If not set, value is determined based on security_protocol
             message_validator:          function which returns message or None
             from_beginning:             consume from beginning if True, else from the end
             consumer_timeout_ms:        corresponds to consumer.timeout.ms. consumer process ends if time between
