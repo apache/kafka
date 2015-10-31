@@ -30,6 +30,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -144,6 +145,23 @@ public class FetcherTest {
         client.prepareResponse(fetchResponse((ByteBuffer) records.buffer().limit(this.fetchSize), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
         fetcher.fetchedRecords();
+    }
+
+    @Test
+    public void testUnauthorizedTopic() {
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.seek(tp, 0);
+
+        // resize the limit of the buffer to pretend it is only fetch-size large
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.AUTHORIZATION_FAILED.code(), 100L, 0));
+        consumerClient.poll(0);
+        try {
+            fetcher.fetchedRecords();
+            fail("fetchedRecords should have thrown");
+        } catch (TopicAuthorizationException e) {
+            assertEquals(Collections.singleton(topicName), e.unauthorizedTopics());
+        }
     }
 
     @Test

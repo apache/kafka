@@ -10,15 +10,14 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package integration.kafka.api
+package kafka.api
 
 import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.concurrent.ExecutionException
-import java.util.{Collections, ArrayList, Properties}
+import java.util.{ArrayList, Collections, Properties}
 
-import kafka.api.RequestKeys
 import kafka.cluster.EndPoint
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.coordinator.GroupCoordinator
@@ -28,13 +27,11 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{TopicAuthorizationException, ApiException, AuthorizationException, TimeoutException}
+import org.apache.kafka.common.errors.{GroupAuthorizationException, ApiException, TimeoutException, TopicAuthorizationException}
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.UpdateMetadataRequest.PartitionState
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.{TopicPartition, requests}
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 
@@ -79,39 +76,39 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   var RequestKeyToRequest: mutable.LinkedHashMap[Short, AbstractRequest] = null
 
   val RequestKeyToResponseDeserializer: Map[Short, Class[_ <: Any]] =
-    Map(RequestKeys.MetadataKey -> classOf[MetadataResponse],
-      RequestKeys.ProduceKey -> classOf[ProduceResponse],
-      RequestKeys.FetchKey -> classOf[FetchResponse],
-      RequestKeys.OffsetsKey -> classOf[ListOffsetResponse],
-      RequestKeys.OffsetCommitKey -> classOf[OffsetCommitResponse],
-      RequestKeys.OffsetFetchKey -> classOf[OffsetFetchResponse],
-      RequestKeys.GroupCoordinatorKey -> classOf[GroupCoordinatorResponse],
-      RequestKeys.UpdateMetadataKey -> classOf[UpdateMetadataResponse],
+    Map(RequestKeys.MetadataKey -> classOf[requests.MetadataResponse],
+      RequestKeys.ProduceKey -> classOf[requests.ProduceResponse],
+      RequestKeys.FetchKey -> classOf[requests.FetchResponse],
+      RequestKeys.OffsetsKey -> classOf[requests.ListOffsetResponse],
+      RequestKeys.OffsetCommitKey -> classOf[requests.OffsetCommitResponse],
+      RequestKeys.OffsetFetchKey -> classOf[requests.OffsetFetchResponse],
+      RequestKeys.GroupCoordinatorKey -> classOf[requests.GroupCoordinatorResponse],
+      RequestKeys.UpdateMetadataKey -> classOf[requests.UpdateMetadataResponse],
       RequestKeys.JoinGroupKey -> classOf[JoinGroupResponse],
       RequestKeys.SyncGroupKey -> classOf[SyncGroupResponse],
       RequestKeys.HeartbeatKey -> classOf[HeartbeatResponse],
       RequestKeys.LeaveGroupKey -> classOf[LeaveGroupResponse],
-      RequestKeys.LeaderAndIsrKey -> classOf[LeaderAndIsrResponse],
-      RequestKeys.StopReplicaKey -> classOf[StopReplicaResponse],
-      RequestKeys.ControlledShutdownKey -> classOf[ControlledShutdownResponse]
+      RequestKeys.LeaderAndIsrKey -> classOf[requests.LeaderAndIsrResponse],
+      RequestKeys.StopReplicaKey -> classOf[requests.StopReplicaResponse],
+      RequestKeys.ControlledShutdownKey -> classOf[requests.ControlledShutdownResponse]
     )
 
   val RequestKeyToErrorCode = Map[Short, (Nothing) => Short](
-    RequestKeys.MetadataKey -> ((resp: MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code()),
-    RequestKeys.ProduceKey -> ((resp: ProduceResponse) => resp.responses().asScala.find(_._1 == tp).get._2.errorCode),
-    RequestKeys.FetchKey -> ((resp: FetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
-    RequestKeys.OffsetsKey -> ((resp: ListOffsetResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
-    RequestKeys.OffsetCommitKey -> ((resp: OffsetCommitResponse) => resp.responseData().asScala.find(_._1 == tp).get._2),
-    RequestKeys.OffsetFetchKey -> ((resp: OffsetFetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
-    RequestKeys.GroupCoordinatorKey -> ((resp: GroupCoordinatorResponse) => resp.errorCode()),
-    RequestKeys.UpdateMetadataKey -> ((resp: UpdateMetadataResponse) => resp.errorCode()),
+    RequestKeys.MetadataKey -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code()),
+    RequestKeys.ProduceKey -> ((resp: requests.ProduceResponse) => resp.responses().asScala.find(_._1 == tp).get._2.errorCode),
+    RequestKeys.FetchKey -> ((resp: requests.FetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    RequestKeys.OffsetsKey -> ((resp: requests.ListOffsetResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    RequestKeys.OffsetCommitKey -> ((resp: requests.OffsetCommitResponse) => resp.responseData().asScala.find(_._1 == tp).get._2),
+    RequestKeys.OffsetFetchKey -> ((resp: requests.OffsetFetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    RequestKeys.GroupCoordinatorKey -> ((resp: requests.GroupCoordinatorResponse) => resp.errorCode()),
+    RequestKeys.UpdateMetadataKey -> ((resp: requests.UpdateMetadataResponse) => resp.errorCode()),
     RequestKeys.JoinGroupKey -> ((resp: JoinGroupResponse) => resp.errorCode()),
     RequestKeys.SyncGroupKey -> ((resp: SyncGroupResponse) => resp.errorCode()),
     RequestKeys.HeartbeatKey -> ((resp: HeartbeatResponse) => resp.errorCode()),
     RequestKeys.LeaveGroupKey -> ((resp: LeaveGroupResponse) => resp.errorCode()),
-    RequestKeys.LeaderAndIsrKey -> ((resp: LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
-    RequestKeys.StopReplicaKey -> ((resp: StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
-    RequestKeys.ControlledShutdownKey -> ((resp: ControlledShutdownResponse) => resp.errorCode())
+    RequestKeys.LeaderAndIsrKey -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
+    RequestKeys.StopReplicaKey -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
+    RequestKeys.ControlledShutdownKey -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode())
   )
 
   val RequestKeysToAcls = Map[Short, Map[Resource, Set[Acl]]](
@@ -156,39 +153,35 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)
 
-    val joinReq = new JoinGroupRequest(group, 30000, JoinGroupRequest.UNKNOWN_MEMBER_ID, "consumer",
-      List( new JoinGroupRequest.GroupProtocol("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
+    val joinReq = new requests.JoinGroupRequest(group, 30000, requests.JoinGroupRequest.UNKNOWN_MEMBER_ID, "consumer",
+      List( new requests.JoinGroupRequest.GroupProtocol("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
 
     //we have to get a join call so the group is created and we get back a memberId
     addAndVerifyAcls(GroupReadAcl(groupResource), groupResource)
     val socket = new Socket("localhost", servers.head.boundPort())
-    val joinResponse = sendRequestAndVerifyResponseErrorCode(socket, RequestKeys.JoinGroupKey, joinReq, ErrorMapping.NoError).asInstanceOf[JoinGroupResponse]
+    val joinResponse = sendRequestAndVerifyResponseErrorCode(socket, RequestKeys.JoinGroupKey, joinReq, ErrorMapping.NoError)
+      .asInstanceOf[requests.JoinGroupResponse]
     val memberId = joinResponse.memberId()
 
     //remove group acls
     removeAndVerifyAcls(GroupReadAcl(groupResource), groupResource)
 
     RequestKeyToRequest = mutable.LinkedHashMap[Short, AbstractRequest](
-      RequestKeys.MetadataKey -> new MetadataRequest(List(topic).asJava),
-      RequestKeys.ProduceKey -> new ProduceRequest(1, 5000, collection.mutable.Map(tp -> ByteBuffer.wrap("test".getBytes)).asJava),
-      RequestKeys.FetchKey -> new FetchRequest(5000, 100, Map(tp -> new PartitionData(0, 100)).asJava),
-      RequestKeys.OffsetsKey -> new ListOffsetRequest(Map(tp -> new ListOffsetRequest.PartitionData(0, 100)).asJava),
-      RequestKeys.OffsetFetchKey -> new OffsetFetchRequest(group, List(tp).asJava),
-      RequestKeys.GroupCoordinatorKey -> new GroupCoordinatorRequest(group),
-      RequestKeys.UpdateMetadataKey -> new UpdateMetadataRequest(brokerId, Int.MaxValue,
-        Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava,
-        Set(new UpdateMetadataRequest.Broker(brokerId, Map(SecurityProtocol.PLAINTEXT -> new UpdateMetadataRequest.EndPoint("localhost", 0)).asJava)).asJava),
-      RequestKeys.JoinGroupKey -> new JoinGroupRequest(group, 30000, memberId, "consumer",
-        List( new JoinGroupRequest.GroupProtocol("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava),
-      RequestKeys.SyncGroupKey -> new SyncGroupRequest(group, 1, memberId, Map(memberId -> ByteBuffer.wrap("test".getBytes())).asJava),
-      RequestKeys.OffsetCommitKey -> new OffsetCommitRequest(group, 1, memberId, 1000, Map(tp -> new OffsetCommitRequest.PartitionData(0, "metadata")).asJava),
-      RequestKeys.HeartbeatKey -> new HeartbeatRequest(group, 1, memberId),
-      RequestKeys.LeaveGroupKey -> new LeaveGroupRequest(group, memberId),
-      RequestKeys.LeaderAndIsrKey -> new LeaderAndIsrRequest(brokerId, Int.MaxValue,
-        Map(tp -> new LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava,
-        Set(new LeaderAndIsrRequest.EndPoint(brokerId,"localhost", 0)).asJava),
-      RequestKeys.StopReplicaKey -> new StopReplicaRequest(brokerId, Int.MaxValue, true, Set(tp).asJava),
-      RequestKeys.ControlledShutdownKey -> new ControlledShutdownRequest(brokerId)
+      RequestKeys.MetadataKey -> createMetadataRequest,
+      RequestKeys.ProduceKey -> createProduceRequest,
+      RequestKeys.FetchKey -> createFetchRequest,
+      RequestKeys.OffsetsKey -> createListOffsetsRequest,
+      RequestKeys.OffsetFetchKey -> createOffsetFetchRequest,
+      RequestKeys.GroupCoordinatorKey -> createGroupCoordinatorRequest,
+      RequestKeys.UpdateMetadataKey -> createUpdateMetadataRequest,
+      RequestKeys.JoinGroupKey -> createJoinGroupRequest(memberId),
+      RequestKeys.SyncGroupKey -> createSyncGroupRequest(memberId),
+      RequestKeys.OffsetCommitKey -> createOffsetCommitRequest(memberId),
+      RequestKeys.HeartbeatKey -> createHeartbeatRequest(memberId),
+      RequestKeys.LeaveGroupKey -> createLeaveGroupRequest(memberId),
+      RequestKeys.LeaderAndIsrKey -> createLeaderAndIsrRequest,
+      RequestKeys.StopReplicaKey -> createStopReplicaRequest,
+      RequestKeys.ControlledShutdownKey -> createControlledShutdownRequest
     )
   }
 
@@ -197,6 +190,73 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     removeAllAcls
     super.tearDown()
   }
+
+  private def createMetadataRequest = {
+    new requests.MetadataRequest(List(topic).asJava)
+  }
+
+  private def createProduceRequest = {
+    new requests.ProduceRequest(1, 5000, collection.mutable.Map(tp -> ByteBuffer.wrap("test".getBytes)).asJava)
+  }
+
+  private def createFetchRequest = {
+    new requests.FetchRequest(5000, 100, Map(tp -> new requests.FetchRequest.PartitionData(0, 100)).asJava)
+  }
+
+  private def createListOffsetsRequest = {
+    new requests.ListOffsetRequest(Map(tp -> new ListOffsetRequest.PartitionData(0, 100)).asJava)
+  }
+
+  private def createOffsetFetchRequest = {
+    new requests.OffsetFetchRequest(group, List(tp).asJava)
+  }
+
+  private def createGroupCoordinatorRequest = {
+    new requests.GroupCoordinatorRequest(group)
+  }
+
+  private def createUpdateMetadataRequest = {
+    val partitionState = Map(tp -> new requests.UpdateMetadataRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava
+    val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
+      Map(SecurityProtocol.PLAINTEXT -> new requests.UpdateMetadataRequest.EndPoint("localhost", 0)).asJava)).asJava
+    new requests.UpdateMetadataRequest(brokerId, Int.MaxValue, partitionState, brokers)
+  }
+
+  private def createJoinGroupRequest(memberId: String) = {
+    new JoinGroupRequest(group, 30000, memberId, "consumer",
+      List( new JoinGroupRequest.GroupProtocol("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
+  }
+
+  private def createSyncGroupRequest(memberId: String) = {
+    new SyncGroupRequest(group, 1, memberId, Map(memberId -> ByteBuffer.wrap("test".getBytes())).asJava)
+  }
+
+  private def createOffsetCommitRequest(memberId: String) = {
+    new requests.OffsetCommitRequest(group, 1, memberId, 1000, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0, "metadata")).asJava)
+  }
+
+  private def createHeartbeatRequest(memberId: String) = {
+    new HeartbeatRequest(group, 1, memberId)
+  }
+
+  private def createLeaveGroupRequest(memberId: String) = {
+    new LeaveGroupRequest(group, memberId)
+  }
+
+  private def createLeaderAndIsrRequest = {
+    new requests.LeaderAndIsrRequest(brokerId, Int.MaxValue,
+      Map(tp -> new requests.LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava,
+      Set(new requests.LeaderAndIsrRequest.EndPoint(brokerId,"localhost", 0)).asJava)
+  }
+
+  private def createStopReplicaRequest = {
+    new requests.StopReplicaRequest(brokerId, Int.MaxValue, true, Set(tp).asJava)
+  }
+
+  private def createControlledShutdownRequest = {
+    new requests.ControlledShutdownRequest(brokerId)
+  }
+
 
   @Test
   def testAuthorization() {
@@ -251,10 +311,21 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     }
 
     @Test
-    def testConsumerNeedsAuthorization() {
+    def testConsumerGroupAuthorization(): Unit = {
       addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
-      //TODO: Ideally we would want to test that when consumerGroup permission is not present we still get an AuthorizationException
-      //but the consumer fetcher currently waits forever for the consumer metadata to become available.
+      sendRecords(1, tp)
+      try {
+        this.consumers.head.assign(List(tp).asJava)
+        consumeRecords(this.consumers.head)
+        Assert.fail("should have thrown exception")
+      } catch {
+        case e: GroupAuthorizationException => assertEquals(group, e.groupId())
+      }
+    }
+
+    @Test
+    def testConsumerTopicAuthorization() {
+      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
       addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
       sendRecords(1, tp)
       try {
@@ -262,7 +333,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
         consumeRecords(this.consumers.head)
         Assert.fail("should have thrown exception")
       } catch {
-        case e: TopicAuthorizationException => Assert.assertEquals(Collections.singleton(topic), e.unauthorizedTopics());
+        case e: TopicAuthorizationException => assertEquals(Collections.singleton(topic), e.unauthorizedTopics());
       }
     }
 

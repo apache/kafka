@@ -28,6 +28,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -141,6 +142,24 @@ public class ConsumerCoordinatorTest {
 
         assertTrue(future.isDone());
         assertTrue(future.succeeded());
+    }
+
+    @Test(expected = GroupAuthorizationException.class)
+    public void testGroupDescribeUnauthorized() {
+        client.prepareResponse(consumerMetadataResponse(node, Errors.AUTHORIZATION_FAILED.code()));
+        coordinator.ensureCoordinatorKnown();
+    }
+
+    @Test(expected = GroupAuthorizationException.class)
+    public void testGroupReadUnauthorized() {
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupLeaderResponse(0, "memberId", Collections.<String, List<String>>emptyMap(),
+                Errors.AUTHORIZATION_FAILED.code()));
+        coordinator.ensurePartitionAssignment();
     }
 
     @Test
