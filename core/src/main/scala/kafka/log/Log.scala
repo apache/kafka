@@ -353,7 +353,6 @@ class Log(val dir: File,
             .format(validMessages.sizeInBytes, config.segmentSize))
         }
 
-
         // maybe roll the log if this segment is full
         val segment = maybeRoll(validMessages.sizeInBytes)
 
