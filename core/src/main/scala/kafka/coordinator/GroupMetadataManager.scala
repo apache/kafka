@@ -224,7 +224,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   def propagateAssignment(group: GroupMetadata,
                           errorCode: Short) {
-    val hasError = errorCode == Errors.NONE.code
+    val hasError = errorCode != Errors.NONE.code
     for (member <- group.allMembers) {
       if (member.awaitingSyncCallback != null) {
         member.awaitingSyncCallback(if (hasError) Array.empty else member.assignment, errorCode)
