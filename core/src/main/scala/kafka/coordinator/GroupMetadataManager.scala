@@ -121,13 +121,37 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   /**
-   * Remove all metadata associated with the group, including its topics
+   * Remove all metadata associated with the group, note this function needs to be
+   * called inside the group lock
    * @param groupId the groupId of the group we are removing
    */
   def removeGroup(groupId: String) {
-    if (!groupsCache.contains(groupId))
+    if (groupsCache.remove(groupId) == null)
       throw new IllegalArgumentException("Cannot remove non-existing group")
-    groupsCache.remove(groupId)
+
+    // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
+    // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
+    // retry removing this group.
+    val groupPartition = partitionFor(groupId)
+    val tomstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(groupId))
+
+    val partitionOpt = replicaManager.getPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
+    partitionOpt.foreach { partition =>
+      val appendPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
+
+      trace("Marking group %s as deleted.".format(groupId))
+
+      try {
+        // do not need to require acks since even if the tombsone is lost,
+        // it will be appended again by the new leader
+        // TODO: have periodic purging instead of immediate removal of groups
+        partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, tomstone))
+      } catch {
+        case t: Throwable =>
+          error("Failed to mark group %s as deleted in %s.".format(groupId, appendPartition), t)
+          // ignore and continue
+      }
+    }
   }
 
   def storeGroup(group: GroupMetadata,
@@ -552,6 +576,17 @@ class GroupMetadataManager(val brokerId: Int,
       topicData(topic).size
     else
       config.offsetsTopicNumPartitions
+  }
+
+  /**
+   * Add the partition into the owned list
+   *
+   * NOTE: this is for test only
+   */
+  def addPartitionOwnership(partition: Int) {
+    loadingPartitions synchronized {
+      ownedPartitions.add(partition)
+    }
   }
 }
 

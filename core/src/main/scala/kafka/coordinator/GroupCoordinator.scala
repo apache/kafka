@@ -48,7 +48,7 @@ case class JoinGroupResult(members: Map[String, Array[Byte]],
 class GroupCoordinator(val brokerId: Int,
                        val groupConfig: GroupConfig,
                        val offsetConfig: OffsetConfig,
-                       private val groupManager: GroupMetadataManager) extends Logging {
+                       val groupManager: GroupMetadataManager) extends Logging {
   type JoinCallback = JoinGroupResult => Unit
   type SyncCallback = (Array[Byte], Short) => Unit
 
@@ -64,7 +64,7 @@ class GroupCoordinator(val brokerId: Int,
            offsetConfig: OffsetConfig,
            replicaManager: ReplicaManager,
            zkUtils: ZkUtils,
-           scheduler: KafkaScheduler) = this(brokerId, groupConfig, offsetConfig,
+           scheduler: Scheduler) = this(brokerId, groupConfig, offsetConfig,
     new GroupMetadataManager(brokerId, offsetConfig, replicaManager, zkUtils, scheduler))
 
   def offsetsTopicConfigs: Properties = {
@@ -600,7 +600,7 @@ object GroupCoordinator {
   def create(config: KafkaConfig,
              zkUtils: ZkUtils,
              replicaManager: ReplicaManager,
-             kafkaScheduler: KafkaScheduler): GroupCoordinator = {
+             scheduler: Scheduler): GroupCoordinator = {
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
@@ -612,7 +612,7 @@ object GroupCoordinator {
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils, kafkaScheduler)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils, scheduler)
   }
 
   def create(config: KafkaConfig,
