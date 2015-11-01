@@ -85,8 +85,20 @@ object TestUtils extends Logging {
    * Create a temporary directory
    */
   def tempDir(): File = {
-    val f = new File(IoTmpDir, "kafka-" + random.nextInt(1000000))
-    f.mkdirs()
+    tempRelativeDir(IoTmpDir)
+  }
+
+  def tempTopic(): String = "testTopic" + random.nextInt(1000000)
+
+  /**
+   * Create a temporary relative directory
+   */
+  def tempRelativeDir(parent: String): File = {
+    new File(parent).mkdirs()
+    var f: File = null
+    do {
+      f = new File(parent, "kafka-" + random.nextInt(1000000))
+    } while (!f.mkdir())
     f.deleteOnExit()
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -98,17 +110,6 @@ object TestUtils extends Logging {
     f
   }
 
-  def tempTopic(): String = "testTopic" + random.nextInt(1000000)
-
-  /**
-   * Create a temporary relative directory
-   */
-  def tempRelativeDir(parent: String): File = {
-    val f = new File(parent, "kafka-" + random.nextInt(1000000))
-    f.mkdirs()
-    f.deleteOnExit()
-    f
-  }
 
   /**
    * Create a temporary file
