@@ -67,8 +67,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return UpdateMetadataRequest.parse(buffer, versionId);
             case LEADER_AND_ISR:
                 return LeaderAndIsrRequest.parse(buffer, versionId);
-            case DESCRIBE_GROUP:
-                return DescribeGroupRequest.parse(buffer, versionId);
+            case DESCRIBE_GROUPS:
+                return DescribeGroupsRequest.parse(buffer, versionId);
             case LIST_GROUPS:
                 return ListGroupsRequest.parse(buffer, versionId);
             default:

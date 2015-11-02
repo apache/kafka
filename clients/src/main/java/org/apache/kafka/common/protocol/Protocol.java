@@ -400,22 +400,46 @@ public class Protocol {
     public static final Schema[] LIST_GROUPS_RESPONSE = new Schema[] {LIST_GROUPS_RESPONSE_V0};
 
     /* Describe group api */
-    public static final Schema DESCRIBE_GROUP_REQUEST_V0 = new Schema(new Field("group_id", STRING));
+    public static final Schema DESCRIBE_GROUPS_REQUEST_V0 = new Schema(new Field("group_ids",
+                                                                                 new ArrayOf(STRING),
+                                                                                 "List of groupIds to request metadata for (an empty groupId array will return empty group metadata)."));
 
-    public static final Schema DESCRIBE_GROUP_RESPONSE_MEMBER_V0 = new Schema(new Field("member_id", STRING),
-                                                                              new Field("client_id", STRING),
-                                                                              new Field("client_host", STRING),
-                                                                              new Field("member_metadata", BYTES),
-                                                                              new Field("member_assignment", BYTES));
+    public static final Schema DESCRIBE_GROUPS_RESPONSE_MEMBER_V0 = new Schema(new Field("member_id",
+                                                                                         STRING,
+                                                                                         "The memberId assigned by the coordinator"),
+                                                                               new Field("client_id",
+                                                                                         STRING,
+                                                                                         "The client id used in the member's latest join group request"),
+                                                                               new Field("client_host",
+                                                                                         STRING,
+                                                                                         "The client host used in the request session corresponding to the member's join group."),
+                                                                               new Field("member_metadata",
+                                                                                         BYTES,
+                                                                                         "The metadata corresponding to the current group protocol in use (will only be present if the group is stable)."),
+                                                                               new Field("member_assignment",
+                                                                                         BYTES,
+                                                                                         "The current assignment provided by the group leader (will only be present if the group is stable)."));
 
-    public static final Schema DESCRIBE_GROUP_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
-                                                                       new Field("state", STRING),
-                                                                       new Field("protocol_type", STRING),
-                                                                       new Field("protocol", STRING),
-                                                                       new Field("members", new ArrayOf(DESCRIBE_GROUP_RESPONSE_MEMBER_V0)));
+    public static final Schema DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0 = new Schema(new Field("error_code", INT16),
+                                                                                       new Field("group_id",
+                                                                                                 STRING),
+                                                                                       new Field("state",
+                                                                                                 STRING,
+                                                                                                 "The current state of the group (one of: Dead, Stable, AwaitingSync, or PreparingRebalance, or empty if there is no active group)"),
+                                                                                       new Field("protocol_type",
+                                                                                                 STRING,
+                                                                                                 "The current group protocol type (will be empty if the there is no active group)"),
+                                                                                       new Field("protocol",
+                                                                                                 STRING,
+                                                                                                 "The current group protocol (only provided if the group is Stable)"),
+                                                                                       new Field("members",
+                                                                                                 new ArrayOf(DESCRIBE_GROUPS_RESPONSE_MEMBER_V0),
+                                                                                                 "Current group members (only provided if the group is stable)"));
 
-    public static final Schema[] DESCRIBE_GROUP_REQUEST = new Schema[] {DESCRIBE_GROUP_REQUEST_V0};
-    public static final Schema[] DESCRIBE_GROUP_RESPONSE = new Schema[] {DESCRIBE_GROUP_RESPONSE_V0};
+    public static final Schema DESCRIBE_GROUPS_RESPONSE_V0 = new Schema(new Field("groups", new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
+
+    public static final Schema[] DESCRIBE_GROUPS_REQUEST = new Schema[] {DESCRIBE_GROUPS_REQUEST_V0};
+    public static final Schema[] DESCRIBE_GROUPS_RESPONSE = new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0};
 
     /* Group coordinator api */
     public static final Schema GROUP_COORDINATOR_REQUEST_V0 = new Schema(new Field("group_id",
@@ -650,7 +674,7 @@ public class Protocol {
         REQUESTS[ApiKeys.HEARTBEAT.id] = HEARTBEAT_REQUEST;
         REQUESTS[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_REQUEST;
         REQUESTS[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_REQUEST;
-        REQUESTS[ApiKeys.DESCRIBE_GROUP.id] = DESCRIBE_GROUP_REQUEST;
+        REQUESTS[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_REQUEST;
         REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
@@ -668,7 +692,7 @@ public class Protocol {
         RESPONSES[ApiKeys.HEARTBEAT.id] = HEARTBEAT_RESPONSE;
         RESPONSES[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_RESPONSE;
         RESPONSES[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_RESPONSE;
-        RESPONSES[ApiKeys.DESCRIBE_GROUP.id] = DESCRIBE_GROUP_RESPONSE;
+        RESPONSES[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
 
         /* set the maximum version of each api */

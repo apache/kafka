@@ -15,6 +15,7 @@ package kafka.admin
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
 
+import kafka.common.KafkaException
 import kafka.coordinator.{GroupOverview, GroupSummary, MemberSummary}
 import kafka.utils.Logging
 import org.apache.kafka.clients._
@@ -130,16 +131,20 @@ class AdminClient(val time: Time,
 
   def describeGroup(groupId: String): GroupSummary = {
     val coordinator = findCoordinator(groupId)
-    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUP, new DescribeGroupRequest(groupId))
-    val response = new DescribeGroupResponse(responseBody)
-    Errors.forCode(response.errorCode()).maybeThrow()
-    val members = response.members().map {
+    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
+    val response = new DescribeGroupsResponse(responseBody)
+    val metadata = response.groups().get(groupId)
+    if (metadata == null)
+      throw new KafkaException(s"Response from broker contained no metadata for group ${groupId}")
+
+    Errors.forCode(metadata.errorCode()).maybeThrow()
+    val members = metadata.members().map {
       case member =>
         val metadata = Utils.readBytes(member.memberMetadata())
         val assignment = Utils.readBytes(member.memberAssignment())
         MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
     }.toList
-    GroupSummary(response.state(), response.protocolType(), response.protocol(), members)
+    GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
   }
 
   def describeConsumerGroup(groupId: String): Map[String, List[TopicPartition]] = {

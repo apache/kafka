@@ -35,7 +35,7 @@ public enum ApiKeys {
     HEARTBEAT(12, "Heartbeat"),
     LEAVE_GROUP(13, "LeaveGroup"),
     SYNC_GROUP(14, "SyncGroup"),
-    DESCRIBE_GROUP(15, "DescribeGroup"),
+    DESCRIBE_GROUPS(15, "DescribeGroups"),
     LIST_GROUPS(16, "ListGroups");
 
     private static ApiKeys[] codeToType;

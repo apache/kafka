@@ -19,49 +19,50 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
-public class DescribeGroupRequest extends AbstractRequest {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.DESCRIBE_GROUP.id);
-    private static final String GROUP_ID_KEY_NAME = "group_id";
+public class DescribeGroupsRequest extends AbstractRequest {
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.DESCRIBE_GROUPS.id);
+    private static final String GROUP_IDS_KEY_NAME = "group_ids";
 
-    private final String groupId;
+    private final List<String> groupIds;
 
-    public DescribeGroupRequest(String groupId) {
+    public DescribeGroupsRequest(List<String> groupIds) {
         super(new Struct(CURRENT_SCHEMA));
-        struct.set(GROUP_ID_KEY_NAME, groupId);
-        this.groupId = groupId;
+        struct.set(GROUP_IDS_KEY_NAME, groupIds.toArray());
+        this.groupIds = groupIds;
     }
 
-    public DescribeGroupRequest(Struct struct) {
+    public DescribeGroupsRequest(Struct struct) {
         super(struct);
-        this.groupId = struct.getString(GROUP_ID_KEY_NAME);
+        this.groupIds = new ArrayList<>();
+        for (Object groupId : struct.getArray(GROUP_IDS_KEY_NAME))
+            this.groupIds.add((String) groupId);
     }
 
-    public String groupId() {
-        return groupId;
+    public List<String> groupIds() {
+        return groupIds;
     }
 
     @Override
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         switch (versionId) {
             case 0:
-                short error = Errors.forException(e).code();
-                return new DescribeGroupResponse(error, DescribeGroupResponse.UNKNOWN_STATE,
-                        DescribeGroupResponse.UNKNOWN_PROTOCOL_TYPE, DescribeGroupResponse.UNKNOWN_PROTOCOL,
-                        Collections.<DescribeGroupResponse.GroupMember>emptyList());
+                return DescribeGroupsResponse.fromError(Errors.forException(e), groupIds);
+
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.DESCRIBE_GROUP.id)));
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.DESCRIBE_GROUPS.id)));
         }
     }
 
-    public static DescribeGroupRequest parse(ByteBuffer buffer, int versionId) {
-        return new DescribeGroupRequest(ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUP.id, versionId, buffer));
+    public static DescribeGroupsRequest parse(ByteBuffer buffer, int versionId) {
+        return new DescribeGroupsRequest(ProtoUtils.parseRequest(ApiKeys.DESCRIBE_GROUPS.id, versionId, buffer));
     }
 
-    public static DescribeGroupRequest parse(ByteBuffer buffer) {
-        return new DescribeGroupRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    public static DescribeGroupsRequest parse(ByteBuffer buffer) {
+        return new DescribeGroupsRequest((Struct) CURRENT_SCHEMA.read(buffer));
     }
 
 }

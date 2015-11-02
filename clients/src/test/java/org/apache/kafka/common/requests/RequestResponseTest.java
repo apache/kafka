@@ -28,6 +28,7 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -209,16 +210,18 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createDescribeGroupRequest() {
-        return new DescribeGroupRequest("test-group");
+        return new DescribeGroupsRequest(Collections.singletonList("test-group"));
     }
 
     private AbstractRequestResponse createDescribeGroupResponse() {
         String clientId = "consumer-1";
         String clientHost = "localhost";
         ByteBuffer empty = ByteBuffer.wrap(new byte[0]);
-        DescribeGroupResponse.GroupMember member = new DescribeGroupResponse.GroupMember("memberId",
+        DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
                 clientId, clientHost, empty, empty);
-        return new DescribeGroupResponse(Errors.NONE.code(), "STABLE", "consumer", "roundrobin", Arrays.asList(member));
+        DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE.code(),
+                "STABLE", "consumer", "roundrobin", Arrays.asList(member));
+        return new DescribeGroupsResponse(Collections.singletonMap("test-group", metadata));
     }
 
     private AbstractRequest createLeaveGroupRequest() {

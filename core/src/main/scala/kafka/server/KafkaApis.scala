@@ -33,7 +33,7 @@ import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, 
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse, DescribeGroupRequest, DescribeGroupResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.Node
 
@@ -79,7 +79,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
         case RequestKeys.LeaveGroupKey => handleLeaveGroupRequest(request)
         case RequestKeys.SyncGroupKey => handleSyncGroupRequest(request)
-        case RequestKeys.DescribeGroupKey => handleDescribeGroupRequest(request)
+        case RequestKeys.DescribeGroupsKey => handleDescribeGroupRequest(request)
         case RequestKeys.ListGroupsKey => handleListGroupsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
@@ -708,25 +708,29 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeGroupRequest(request: RequestChannel.Request) {
+    import JavaConversions._
     import JavaConverters._
 
-    val describeRequest = request.body.asInstanceOf[DescribeGroupRequest]
+    val describeRequest = request.body.asInstanceOf[DescribeGroupsRequest]
     val responseHeader = new ResponseHeader(request.header.correlationId)
 
-    val responseBody = if (!authorize(request.session, Describe, new Resource(Group, describeRequest.groupId()))) {
-      DescribeGroupResponse.fromError(Errors.AUTHORIZATION_FAILED)
-    } else {
-      val (error, summary) = coordinator.handleDescribeGroup(describeRequest.groupId())
+    val groups = describeRequest.groupIds().map {
+      case groupId =>
+        if (!authorize(request.session, Describe, new Resource(Group, groupId))) {
+          groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.AUTHORIZATION_FAILED)
+        } else {
+          val (error, summary) = coordinator.handleDescribeGroup(groupId)
+          val members = summary.members.map { member =>
+            val metadata = ByteBuffer.wrap(member.metadata)
+            val assignment = ByteBuffer.wrap(member.assignment)
+            new DescribeGroupsResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
+          }
+          groupId -> new DescribeGroupsResponse.GroupMetadata(error.code, summary.state, summary.protocolType,
+            summary.protocol, members.asJava)
+        }
+    }.toMap
 
-      val members = summary.members.map { member =>
-        val metadata = ByteBuffer.wrap(member.metadata)
-        val assignment = ByteBuffer.wrap(member.assignment)
-        new DescribeGroupResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
-      }
-
-      new DescribeGroupResponse(error.code, summary.state, summary.protocolType,
-        summary.protocol, members.asJava)
-    }
+    val responseBody = new DescribeGroupsResponse(groups.asJava)
     requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
 
