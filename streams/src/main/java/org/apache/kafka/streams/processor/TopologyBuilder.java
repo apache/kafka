@@ -264,28 +264,6 @@ public class TopologyBuilder {
     }
 
     /**
-     * Asserts that the streams of the specified source nodes must be copartitioned.
-     *
-     * @param sourceNodes source node names
-     * @return this builder instance so methods can be chained together; never null
-     */
-    public final TopologyBuilder copartitionSources(String... sourceNodes) {
-        copartitionSourceGroups.add(Collections.unmodifiableSet(Utils.mkSet(sourceNodes)));
-        return this;
-    }
-
-    /**
-     * Asserts that the streams of the specified source nodes must be copartitioned.
-     *
-     * @param sourceNodes a set of source node names
-     * @return this builder instance so methods can be chained together; never null
-     */
-    public final TopologyBuilder copartitionSources(Collection<String> sourceNodes) {
-        copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
-        return this;
-    }
-
-    /**
      * Adds a state store
      *
      * @param supplier the supplier used to obtain this state store {@link StateStore} instance
@@ -419,6 +397,28 @@ public class TopologyBuilder {
     }
 
     /**
+     * Asserts that the streams of the specified source nodes must be copartitioned.
+     *
+     * @param sourceNodes source node names
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder copartitionSources(String... sourceNodes) {
+        copartitionSourceGroups.add(Collections.unmodifiableSet(Utils.mkSet(sourceNodes)));
+        return this;
+    }
+
+    /**
+     * Asserts that the streams of the specified source nodes must be copartitioned.
+     *
+     * @param sourceNodes a set of source node names
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder copartitionSources(Collection<String> sourceNodes) {
+        copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
+        return this;
+    }
+
+    /**
      * Returns the copartition groups.
      * A copartition group is a group of topics that are required to be copartitioned.
      *
@@ -487,6 +487,8 @@ public class TopologyBuilder {
                         for (String parent : ((SinkNodeFactory) factory).parents) {
                             processorMap.get(parent).addChild(node);
                         }
+                    } else {
+                        throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                     }
                 }
             }
