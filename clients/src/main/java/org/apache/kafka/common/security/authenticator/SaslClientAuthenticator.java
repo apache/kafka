@@ -48,7 +48,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.KafkaException;
 
-import org.apache.kafka.common.security.kerberos.KerberosNameParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,7 +63,6 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String servicePrincipal;
     private final String host;
     private final String node;
-    private final KerberosNameParser kerberosNameParser;
 
     // assigned in `configure`
     private SaslClient saslClient;
@@ -77,12 +75,11 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private SaslState saslState = SaslState.INITIAL;
 
-    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host, KerberosNameParser kerberosNameParser) throws IOException {
+    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host) throws IOException {
         this.node = node;
         this.subject = subject;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
-        this.kerberosNameParser = kerberosNameParser;
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) throws KafkaException {
@@ -91,7 +88,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
             // determine client principal from subject.
             Principal clientPrincipal = subject.getPrincipals().iterator().next();
-            this.clientPrincipalName = kerberosNameParser.parse(clientPrincipal.getName()).toString();
+            this.clientPrincipalName = clientPrincipal.getName();
             this.saslClient = createSaslClient();
         } catch (Exception e) {
             throw new KafkaException("Failed to configure SaslClientAuthenticator", e);

@@ -154,24 +154,27 @@ public interface KStream<K, V> {
      * Applies a stateful transformation to all elements in this stream.
      *
      * @param transformerSupplier the class of TransformerDef
+     * @param stateStoreNames the names of the state store used by the processor
      * @return KStream
      */
-    <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier);
+    <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier, String... stateStoreNames);
 
     /**
      * Applies a stateful transformation to all values in this stream.
      *
      * @param valueTransformerSupplier the class of TransformerDef
+     * @param stateStoreNames the names of the state store used by the processor
      * @return KStream
      */
-    <R> KStream<K, R> transformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier);
+    <R> KStream<K, R> transformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier, String... stateStoreNames);
 
     /**
      * Processes all elements in this stream by applying a processor.
      *
      * @param processorSupplier the supplier of the Processor to use
+     * @param stateStoreNames the names of the state store used by the processor
      * @return the new stream containing the processed output
      */
-    void process(ProcessorSupplier<K, V> processorSupplier);
+    void process(ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames);
 
 }

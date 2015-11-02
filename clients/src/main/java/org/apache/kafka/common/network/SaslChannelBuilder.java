@@ -21,7 +21,7 @@ import java.util.Map;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.security.kerberos.KerberosNameParser;
+import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.kerberos.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
@@ -45,7 +45,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private PrincipalBuilder principalBuilder;
     private SslFactory sslFactory;
     private Map<String, ?> configs;
-    private KerberosNameParser kerberosNameParser;
+    private KerberosShortNamer kerberosShortNamer;
 
     public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol) {
         this.mode = mode;
@@ -66,7 +66,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
             } catch (Exception ke) {
                 defaultRealm = "";
             }
-            kerberosNameParser = new KerberosNameParser(defaultRealm, (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES));
+
+            List<String> principalToLocalRules = (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES);
+            if (principalToLocalRules != null)
+                kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 this.sslFactory = new SslFactory(mode);
@@ -83,10 +86,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
-                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosNameParser);
+                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosShortNamer);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
-                        socketChannel.socket().getInetAddress().getHostName(), kerberosNameParser);
+                        socketChannel.socket().getInetAddress().getHostName());
             authenticator.configure(transportLayer, this.principalBuilder, this.configs);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
         } catch (Exception e) {

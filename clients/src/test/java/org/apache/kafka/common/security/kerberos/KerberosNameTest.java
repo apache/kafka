@@ -36,24 +36,24 @@ public class KerberosNameTest {
             "RULE:[2:$1](App\\..*)s/App\\.(.*)/$1/g",
             "DEFAULT"
         ));
-        KerberosNameParser parser = new KerberosNameParser("REALM.COM", rules);
+        KerberosShortNamer shortNamer = KerberosShortNamer.fromUnparsedRules("REALM.COM", rules);
 
-        KerberosName name = parser.parse("App.service-name/example.com@REALM.COM");
+        KerberosName name = KerberosName.parse("App.service-name/example.com@REALM.COM");
         assertEquals("App.service-name", name.serviceName());
         assertEquals("example.com", name.hostName());
         assertEquals("REALM.COM", name.realm());
-        assertEquals("service-name", name.shortName());
+        assertEquals("service-name", shortNamer.shortName(name));
 
-        name = parser.parse("App.service-name@REALM.COM");
+        name = KerberosName.parse("App.service-name@REALM.COM");
         assertEquals("App.service-name", name.serviceName());
         assertNull(name.hostName());
         assertEquals("REALM.COM", name.realm());
-        assertEquals("service-name", name.shortName());
+        assertEquals("service-name", shortNamer.shortName(name));
 
-        name = parser.parse("user/host@REALM.COM");
+        name = KerberosName.parse("user/host@REALM.COM");
         assertEquals("user", name.serviceName());
         assertEquals("host", name.hostName());
         assertEquals("REALM.COM", name.realm());
-        assertEquals("user", name.shortName());
+        assertEquals("user", shortNamer.shortName(name));
     }
 }

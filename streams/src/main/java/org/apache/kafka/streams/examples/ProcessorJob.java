@@ -45,10 +45,11 @@ public class ProcessorJob {
                 private KeyValueStore<String, Integer> kvStore;
 
                 @Override
+                @SuppressWarnings("unchecked")
                 public void init(ProcessorContext context) {
                     this.context = context;
                     this.context.schedule(1000);
-                    this.kvStore = Stores.create("local-state", context).withStringKeys().withIntegerValues().inMemory().build();
+                    this.kvStore = (KeyValueStore<String, Integer>) context.getStateStore("local-state");
                 }
 
                 @Override
@@ -103,6 +104,8 @@ public class ProcessorJob {
         builder.addSource("SOURCE", new StringDeserializer(), new StringDeserializer(), "topic-source");
 
         builder.addProcessor("PROCESS", new MyProcessorSupplier(), "SOURCE");
+        builder.addStateStore(Stores.create("local-state", config).withStringKeys().withIntegerValues().inMemory().build());
+        builder.connectProcessorAndStateStores("local-state", "PROCESS");
 
         builder.addSink("SINK", "topic-sink", new StringSerializer(), new IntegerSerializer(), "PROCESS");
 

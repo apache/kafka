@@ -16,6 +16,7 @@
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.utils.security_config import SecurityConfig
 
 
 class KafkaLog4jAppender(BackgroundThreadService):
@@ -26,16 +27,19 @@ class KafkaLog4jAppender(BackgroundThreadService):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1):
+    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, security_protocol="PLAINTEXT"):
         super(KafkaLog4jAppender, self).__init__(context, num_nodes)
 
         self.kafka = kafka
         self.topic = topic
         self.max_messages = max_messages
+        self.security_protocol = security_protocol
+        self.security_config = SecurityConfig(security_protocol)
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
-        self.logger.debug("VerifiableKafkaLog4jAppender %d command: %s" % (idx, cmd))
+        self.logger.debug("VerifiableLog4jAppender %d command: %s" % (idx, cmd))
+        self.security_config.setup_node(node)
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
@@ -45,12 +49,16 @@ class KafkaLog4jAppender(BackgroundThreadService):
 
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
+        if self.security_protocol == SecurityConfig.SSL:
+            cmd += " --security-protocol SSL"
+            cmd += " --ssl-truststore-location %s" % str(SecurityConfig.TRUSTSTORE_PATH)
+            cmd += " --ssl-truststore-password %s" % str(SecurityConfig.ssl_stores['ssl.truststore.password'])
 
         cmd += " 2>> /mnt/kafka_log4j_appender.log | tee -a /mnt/kafka_log4j_appender.log &"
         return cmd
 
     def stop_node(self, node):
-        node.account.kill_process("VerifiableKafkaLog4jAppender", allow_fail=False)
+        node.account.kill_process("VerifiableLog4jAppender", allow_fail=False)
         if self.worker_threads is None:
             return
 
@@ -60,5 +68,5 @@ class KafkaLog4jAppender(BackgroundThreadService):
             self.worker_threads[self.idx(node) - 1].join()
 
     def clean_node(self, node):
-        node.account.kill_process("VerifiableKafkaLog4jAppender", clean_shutdown=False, allow_fail=False)
+        node.account.kill_process("VerifiableLog4jAppender", clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf /mnt/kafka_log4j_appender.log", allow_fail=False)

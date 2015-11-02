@@ -20,11 +20,11 @@ package org.apache.kafka.copycat.runtime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.copycat.cli.WorkerConfig;
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.ConnectorContext;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.errors.CopycatException;
+import org.apache.kafka.copycat.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
@@ -77,7 +77,7 @@ public class WorkerTest extends ThreadedTest {
         workerProps.setProperty("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
         workerProps.setProperty("internal.key.converter.schemas.enable", "false");
         workerProps.setProperty("internal.value.converter.schemas.enable", "false");
-        config = new WorkerConfig(workerProps);
+        config = new StandaloneConfig(workerProps);
     }
 
     @Test
@@ -203,14 +203,14 @@ public class WorkerTest extends ThreadedTest {
         } catch (CopycatException e) {
             // expected
         }
-        Map<ConnectorTaskId, Map<String, String>> taskConfigs = worker.reconfigureConnectorTasks(CONNECTOR_ID, 2, Arrays.asList("foo", "bar"));
+        List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, 2, Arrays.asList("foo", "bar"));
         Properties expectedTaskProps = new Properties();
         expectedTaskProps.setProperty("foo", "bar");
         expectedTaskProps.setProperty(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
         expectedTaskProps.setProperty(SinkTask.TOPICS_CONFIG, "foo,bar");
         assertEquals(2, taskConfigs.size());
-        assertEquals(expectedTaskProps, taskConfigs.get(new ConnectorTaskId(CONNECTOR_ID, 0)));
-        assertEquals(expectedTaskProps, taskConfigs.get(new ConnectorTaskId(CONNECTOR_ID, 1)));
+        assertEquals(expectedTaskProps, taskConfigs.get(0));
+        assertEquals(expectedTaskProps, taskConfigs.get(1));
         worker.stopConnector(CONNECTOR_ID);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         // Nothing should be left, so this should effectively be a nop

@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.admin.TopicCommand._
 import kafka.consumer.ConsumerConfig
 import kafka.log.{Defaults, LogConfig}
-import kafka.server.ConfigType
+import kafka.server.{ClientConfigOverride, ConfigType}
 import kafka.utils.{ZkUtils, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
 import scala.collection._
@@ -48,7 +48,7 @@ object ConfigCommand {
     val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt),
                           30000,
                           30000,
-                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                          JaasUtils.isZkSecurityEnabled())
 
     try {
       if (opts.options.has(opts.alterOpt))
@@ -150,7 +150,8 @@ object ConfigCommand {
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs configs to add 'k1=v1,k2=v2'. The following is a list of valid configurations: " +
             "For entity_type '" + ConfigType.Topic + "': " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
-            "For entity_type '" + ConfigType.Client + "' currently no configs are processed by the brokers")
+            "For entity_type '" + ConfigType.Client + "': " + nl + "\t" + ClientConfigOverride.ProducerOverride
+                                                            + nl + "\t" + ClientConfigOverride.ConsumerOverride)
             .withRequiredArg
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')

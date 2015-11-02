@@ -17,6 +17,9 @@
 
 package org.apache.kafka.copycat.util;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.io.Serializable;
 
 /**
@@ -27,15 +30,18 @@ public class ConnectorTaskId implements Serializable, Comparable<ConnectorTaskId
     private final String connector;
     private final int task;
 
-    public ConnectorTaskId(String job, int task) {
-        this.connector = job;
+    @JsonCreator
+    public ConnectorTaskId(@JsonProperty("connector") String connector, @JsonProperty("task") int task) {
+        this.connector = connector;
         this.task = task;
     }
 
+    @JsonProperty
     public String connector() {
         return connector;
     }
 
+    @JsonProperty
     public int task() {
         return task;
     }

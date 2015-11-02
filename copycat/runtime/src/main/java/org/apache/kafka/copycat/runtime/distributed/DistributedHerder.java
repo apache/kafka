@@ -21,12 +21,17 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.connector.ConnectorContext;
+import org.apache.kafka.copycat.errors.AlreadyExistsException;
 import org.apache.kafka.copycat.errors.CopycatException;
+import org.apache.kafka.copycat.errors.NotFoundException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
 import org.apache.kafka.copycat.runtime.Herder;
 import org.apache.kafka.copycat.runtime.HerderConnectorContext;
 import org.apache.kafka.copycat.runtime.TaskConfig;
 import org.apache.kafka.copycat.runtime.Worker;
+import org.apache.kafka.copycat.runtime.rest.RestServer;
+import org.apache.kafka.copycat.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.copycat.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.copycat.sink.SinkConnector;
 import org.apache.kafka.copycat.storage.KafkaConfigStorage;
 import org.apache.kafka.copycat.util.Callback;
@@ -34,7 +39,10 @@ import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -92,30 +100,29 @@ public class DistributedHerder implements Herder, Runnable {
     private final Queue<HerderRequest> requests = new LinkedBlockingDeque<>();
     // Config updates can be collected and applied together when possible. Also, we need to take care to rebalance when
     // needed (e.g. task reconfiguration, which requires everyone to coordinate offset commits).
-    private final Set<String> connectorConfigUpdates = new HashSet<>();
+    private Set<String> connectorConfigUpdates = new HashSet<>();
     private boolean needsReconfigRebalance;
 
-    public DistributedHerder(Worker worker, Map<String, ?> configs) {
-        this(worker, configs, null, null);
+    public DistributedHerder(DistributedConfig config, Worker worker, String restUrl) {
+        this(config, worker, null, null, restUrl);
     }
 
     // public for testing
-    public DistributedHerder(Worker worker, Map<String, ?> configs, KafkaConfigStorage configStorage, WorkerGroupMember member) {
+    public DistributedHerder(DistributedConfig config, Worker worker, KafkaConfigStorage configStorage, WorkerGroupMember member, String restUrl) {
         this.worker = worker;
         if (configStorage != null) {
             // For testing. Assume configuration has already been performed
             this.configStorage = configStorage;
         } else {
             this.configStorage = new KafkaConfigStorage(worker.getInternalValueConverter(), connectorConfigCallback(), taskConfigCallback());
-            this.configStorage.configure(configs);
+            this.configStorage.configure(config.originals());
         }
         configState = ClusterConfigState.EMPTY;
 
-        DistributedHerderConfig config = new DistributedHerderConfig(configs);
-        this.workerSyncTimeoutMs = config.getInt(DistributedHerderConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
-        this.workerUnsyncBackoffMs = config.getInt(DistributedHerderConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
+        this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
+        this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
 
-        this.member = member != null ? member : new WorkerGroupMember(config, this.configStorage, rebalanceListener());
+        this.member = member != null ? member : new WorkerGroupMember(config, restUrl, this.configStorage, rebalanceListener());
         stopping = new AtomicBoolean(false);
 
         rebalanceResolved = true; // If we still need to follow up after a rebalance occurred, starting up tasks
@@ -143,6 +150,9 @@ public class DistributedHerder implements Herder, Runnable {
             halt();
 
             log.info("Herder stopped");
+        } catch (Throwable t) {
+            log.error("Uncaught exception in herder work thread, exiting: ", t);
+            System.exit(1);
         } finally {
             stopLatch.countDown();
         }
@@ -169,14 +179,17 @@ public class DistributedHerder implements Herder, Runnable {
         // Process any external requests
         while (!requests.isEmpty()) {
             HerderRequest request = requests.poll();
+            Callback<Void> cb = request.callback();
             try {
-                request.callback().onCompletion(null, request.action().call());
+                request.action().call();
+                cb.onCompletion(null, null);
             } catch (Throwable t) {
-                request.callback().onCompletion(t, null);
+                cb.onCompletion(t, null);
             }
         }
 
         // Process any configuration updates
+        Set<String> connectorConfigUpdatesCopy = null;
         synchronized (this) {
             if (needsReconfigRebalance || !connectorConfigUpdates.isEmpty()) {
                 // Connector reconfigs only need local updates since there is no coordination between workers required.
@@ -196,19 +209,29 @@ public class DistributedHerder implements Herder, Runnable {
                     needsReconfigRebalance = false;
                     return;
                 } else if (!connectorConfigUpdates.isEmpty()) {
-                    // If we only have connector config updates, we can just bounce the updated connectors that are
-                    // currently assigned to this worker.
-                    Set<String> localConnectors = worker.connectorNames();
-                    for (String connectorName : connectorConfigUpdates) {
-                        if (!localConnectors.contains(connectorName))
-                            continue;
-                        worker.stopConnector(connectorName);
-                        // The update may be a deletion, so verify we actually need to restart the connector
-                        if (configState.connectors().contains(connectorName))
-                            startConnector(connectorName);
-                    }
-                    connectorConfigUpdates.clear();
+                    // We can't start/stop while locked since starting connectors can cause task updates that will
+                    // require writing configs, which in turn make callbacks into this class from another thread that
+                    // require acquiring a lock. This leads to deadlock. Instead, just copy the info we need and process
+                    // the updates after unlocking.
+                    connectorConfigUpdatesCopy = connectorConfigUpdates;
+                    connectorConfigUpdates = new HashSet<>();
                 }
+            }
+        }
+        if (connectorConfigUpdatesCopy != null) {
+            // If we only have connector config updates, we can just bounce the updated connectors that are
+            // currently assigned to this worker.
+            Set<String> localConnectors = assignment == null ? Collections.<String>emptySet() : new HashSet<>(assignment.connectors());
+            for (String connectorName : connectorConfigUpdatesCopy) {
+                if (!localConnectors.contains(connectorName))
+                    continue;
+                boolean remains = configState.connectors().contains(connectorName);
+                log.info("Handling connector-only config update by {} connector {}",
+                        remains ? "restarting" : "stopping", connectorName);
+                worker.stopConnector(connectorName);
+                // The update may be a deletion, so verify we actually need to restart the connector
+                if (remains)
+                    startConnector(connectorName);
             }
         }
 
@@ -272,69 +295,18 @@ public class DistributedHerder implements Herder, Runnable {
     }
 
     @Override
-    public synchronized void addConnector(final Map<String, String> connectorProps,
-                                          final Callback<String> callback) {
-        final ConnectorConfig connConfig;
-        final String connName;
-        try {
-            connConfig = new ConnectorConfig(connectorProps);
-            connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
-        } catch (Throwable t) {
-            if (callback != null)
-                callback.onCompletion(t, null);
-            return;
-        }
-
-        log.debug("Submitting connector config {}", connName);
+    public synchronized void connectors(final Callback<Collection<String>> callback) {
+        log.trace("Submitting connector listing request");
 
         requests.add(new HerderRequest(
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        if (!isLeader())
-                            throw new NotLeaderException("Only the leader can add connectors.");
+                        if (!checkConfigSynced(callback))
+                            return null;
 
-                        log.debug("Submitting connector config {}", connName);
-                        configStorage.putConnectorConfig(connName, connectorProps);
-
+                        callback.onCompletion(null, configState.connectors());
                         return null;
-                    }
-                },
-                new Callback<Void>() {
-                    @Override
-                    public void onCompletion(Throwable error, Void result) {
-                        if (callback == null) return;
-
-                        if (error != null)
-                            callback.onCompletion(error, null);
-                        else
-                            callback.onCompletion(null, connName);
-                    }
-                }));
-        member.wakeup();
-    }
-
-    @Override
-    public synchronized void deleteConnector(final String connName, final Callback<Void> callback) {
-        log.debug("Submitting connector config deletion {}", connName);
-
-        requests.add(new HerderRequest(
-                new Callable<Void>() {
-                    @Override
-                    public Void call() throws Exception {
-                        if (!isLeader())
-                            throw new NotLeaderException("Only the leader can delete connectors.");
-
-                        log.debug("Submitting null connector config {}", connName);
-                        configStorage.putConnectorConfig(connName, null);
-                        return null;
-                    }
-                },
-                new Callback<Void>() {
-                    @Override
-                    public void onCompletion(Throwable error, Void result) {
-                        if (callback != null)
-                            callback.onCompletion(error, null);
                     }
                 }
         ));
@@ -342,7 +314,99 @@ public class DistributedHerder implements Herder, Runnable {
     }
 
     @Override
+    public synchronized void connectorInfo(final String connName, final Callback<ConnectorInfo> callback) {
+        log.trace("Submitting connector info request {}", connName);
+
+        requests.add(new HerderRequest(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        if (!checkConfigSynced(callback))
+                            return null;
+
+                        if (!configState.connectors().contains(connName)) {
+                            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                        } else {
+                            callback.onCompletion(null, new ConnectorInfo(connName, configState.connectorConfig(connName), configState.tasks(connName)));
+                        }
+                        return null;
+                    }
+                }
+        ));
+        member.wakeup();
+    }
+
+    @Override
+    public void connectorConfig(String connName, final Callback<Map<String, String>> callback) {
+        // Subset of connectorInfo, so piggy back on that implementation
+        log.trace("Submitting connector config read request {}", connName);
+        connectorInfo(connName, new Callback<ConnectorInfo>() {
+            @Override
+            public void onCompletion(Throwable error, ConnectorInfo result) {
+                if (error != null)
+                    callback.onCompletion(error, null);
+                else
+                    callback.onCompletion(null, result.config());
+            }
+        });
+    }
+
+    @Override
+    public void putConnectorConfig(final String connName, Map<String, String> config, final boolean allowReplace,
+                                   final Callback<Created<ConnectorInfo>> callback) {
+        final Map<String, String> connConfig;
+        if (config == null) {
+            connConfig = null;
+        } else if (!config.containsKey(ConnectorConfig.NAME_CONFIG)) {
+            connConfig = new HashMap<>(config);
+            connConfig.put(ConnectorConfig.NAME_CONFIG, connName);
+        } else {
+            connConfig = config;
+        }
+
+        log.trace("Submitting connector config write request {}", connName);
+
+        requests.add(new HerderRequest(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        log.trace("Handling connector config request {}", connName);
+                        if (!isLeader()) {
+                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                            return null;
+                        }
+
+                        boolean exists = configState.connectors().contains(connName);
+                        if (!allowReplace && exists) {
+                            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+                            return null;
+                        }
+
+                        if (connConfig == null && !exists) {
+                            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                            return null;
+                        }
+
+                        log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
+                        configStorage.putConnectorConfig(connName, connConfig);
+
+                        boolean created = !exists && connConfig != null;
+                        // Note that we use the updated connector config despite the fact that we don't have an updated
+                        // snapshot yet. The existing task info should still be accurate.
+                        ConnectorInfo info = connConfig == null ? null :
+                                new ConnectorInfo(connName, connConfig, configState.tasks(connName));
+                        callback.onCompletion(null, new Created<>(created, info));
+
+                        return null;
+                    }
+                }));
+        member.wakeup();
+    }
+
+    @Override
     public synchronized void requestTaskReconfiguration(final String connName) {
+        log.trace("Submitting connector task reconfiguration request {}", connName);
+
         requests.add(new HerderRequest(
                 new Callable<Void>() {
                     @Override
@@ -355,9 +419,70 @@ public class DistributedHerder implements Herder, Runnable {
         member.wakeup();
     }
 
+    @Override
+    public synchronized void taskConfigs(final String connName, final Callback<List<TaskInfo>> callback) {
+        log.trace("Submitting get task configuration request {}", connName);
 
+        requests.add(new HerderRequest(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        if (!checkConfigSynced(callback))
+                            return null;
+
+                        if (!configState.connectors().contains(connName)) {
+                            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                        } else {
+                            List<TaskInfo> result = new ArrayList<>();
+                            for (int i = 0; i < configState.taskCount(connName); i++) {
+                                ConnectorTaskId id = new ConnectorTaskId(connName, i);
+                                result.add(new TaskInfo(id, configState.taskConfig(id)));
+                            }
+                            callback.onCompletion(null, result);
+                        }
+                        return null;
+                    }
+                }
+        ));
+        member.wakeup();
+    }
+
+    @Override
+    public synchronized void putTaskConfigs(final String connName, final List<Map<String, String>> configs, final Callback<Void> callback) {
+        log.trace("Submitting put task configuration request {}", connName);
+
+        requests.add(new HerderRequest(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        if (!isLeader())
+                            callback.onCompletion(new NotLeaderException("Only the leader may write task configurations.", leaderUrl()), null);
+                        else if (!configState.connectors().contains(connName))
+                            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                        else {
+                            configStorage.putTaskConfigs(taskConfigListAsMap(connName, configs));
+                            callback.onCompletion(null, null);
+                        }
+                        return null;
+                    }
+                }
+        ));
+        member.wakeup();
+    }
+
+
+    // Should only be called from work thread, so synchronization should not be needed
     private boolean isLeader() {
         return assignment != null && member.memberId().equals(assignment.leader());
+    }
+
+    /**
+     * Get the URL for the leader's REST interface, or null if we do not have the leader's URL yet.
+     */
+    private String leaderUrl() {
+        if (assignment == null)
+            return null;
+        return assignment.leaderUrl();
     }
 
     /**
@@ -369,8 +494,6 @@ public class DistributedHerder implements Herder, Runnable {
     private boolean handleRebalanceCompleted() {
         if (this.rebalanceResolved)
             return true;
-
-        rebalanceResolved = true;
 
         // We need to handle a variety of cases after a rebalance:
         // 1. Assignment failed
@@ -430,6 +553,10 @@ public class DistributedHerder implements Herder, Runnable {
 
         startWork();
 
+        // We only mark this as resolved once we've actually started work, which allows us to correctly track whether
+        // what work is currently active and running. If we bail early, the main tick loop + having requested rejoin
+        // guarantees we'll attempt to rejoin before executing this method again.
+        rebalanceResolved = true;
         return true;
     }
 
@@ -483,6 +610,7 @@ public class DistributedHerder implements Herder, Runnable {
                         "configuration. This task will not execute until reconfigured.", e);
             }
         }
+        log.info("Finished starting connectors and tasks");
     }
 
     // Helper for starting a connector with the given name, which will extract & parse the config, generate connector
@@ -511,27 +639,49 @@ public class DistributedHerder implements Herder, Runnable {
         if (SinkConnector.class.isAssignableFrom(connConfig.getClass(ConnectorConfig.CONNECTOR_CLASS_CONFIG)))
             sinkTopics = connConfig.getList(ConnectorConfig.TOPICS_CONFIG);
 
-        Map<ConnectorTaskId, Map<String, String>> taskProps
-                = worker.reconfigureConnectorTasks(connName, connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG), sinkTopics);
+        List<Map<String, String>> taskProps
+                = worker.connectorTaskConfigs(connName, connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG), sinkTopics);
         boolean changed = false;
         int currentNumTasks = configState.taskCount(connName);
         if (taskProps.size() != currentNumTasks) {
             log.debug("Change in connector task count from {} to {}, writing updated task configurations", currentNumTasks, taskProps.size());
             changed = true;
         } else {
-            for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfig : taskProps.entrySet()) {
-                if (!taskConfig.getValue().equals(configState.taskConfig(taskConfig.getKey()))) {
+            int index = 0;
+            for (Map<String, String> taskConfig : taskProps) {
+                if (!taskConfig.equals(configState.taskConfig(new ConnectorTaskId(connName, index)))) {
                     log.debug("Change in task configurations, writing updated task configurations");
                     changed = true;
                     break;
                 }
+                index++;
             }
         }
         if (changed) {
-            // FIXME: Configs should only be written by the leader to avoid conflicts due to zombies. However, until the
-            // REST API is available to forward this request, we need to do this on the worker that generates the config
-            configStorage.putTaskConfigs(taskProps);
+            if (isLeader()) {
+                configStorage.putTaskConfigs(taskConfigListAsMap(connName, taskProps));
+            } else {
+                try {
+                    String reconfigUrl = RestServer.urlJoin(leaderUrl(), "/connectors/" + connName + "/tasks");
+                    RestServer.httpRequest(reconfigUrl, "POST", taskProps, null);
+                } catch (CopycatException e) {
+                    log.error("Request to leader to reconfigure connector tasks failed", e);
+                }
+            }
         }
+    }
+
+    // Common handling for requests that get config data. Checks if we are in sync with the current config, which allows
+    // us to answer requests directly. If we are not, handles invoking the callback with the appropriate error.
+    private boolean checkConfigSynced(Callback<?> callback) {
+        if (assignment == null || configState.offset() != assignment.offset()) {
+            if (!isLeader())
+                callback.onCompletion(new NotLeaderException("Cannot get config data because config is not in sync and this is not the leader", leaderUrl()), null);
+            else
+                callback.onCompletion(new CopycatException("Cannot get config data because this is the leader node, but it does not have the most up to date configs"), null);
+            return false;
+        }
+        return true;
     }
 
 
@@ -572,7 +722,7 @@ public class DistributedHerder implements Herder, Runnable {
         return new Callback<String>() {
             @Override
             public void onCompletion(Throwable error, String connector) {
-                log.debug("Connector {} config updated", connector);
+                log.info("Connector {} config updated", connector);
                 // Stage the update and wake up the work thread. Connector config *changes* only need the one connector
                 // to be bounced. However, this callback may also indicate a connector *addition*, which does require
                 // a rebalance, so we need to be careful about what operation we request.
@@ -588,7 +738,7 @@ public class DistributedHerder implements Herder, Runnable {
         return new Callback<List<ConnectorTaskId>>() {
             @Override
             public void onCompletion(Throwable error, List<ConnectorTaskId> tasks) {
-                log.debug("Tasks {} configs updated", tasks);
+                log.info("Tasks {} configs updated", tasks);
                 // Stage the update and wake up the work thread. No need to record the set of tasks here because task reconfigs
                 // always need a rebalance to ensure offsets get committed.
                 // TODO: As an optimization, some task config updates could avoid a rebalance. In particular, single-task
@@ -612,8 +762,10 @@ public class DistributedHerder implements Herder, Runnable {
                 // group membership actions (e.g., we may need to explicitly leave the group if we cannot handle the
                 // assigned tasks).
                 log.info("Joined group and got assignment: {}", assignment);
-                DistributedHerder.this.assignment = assignment;
-                rebalanceResolved = false;
+                synchronized (DistributedHerder.this) {
+                    DistributedHerder.this.assignment = assignment;
+                    rebalanceResolved = false;
+                }
                 // We *must* interrupt any poll() call since this could occur when the poll starts, and we might then
                 // sleep in the poll() for a long time. Forcing a wakeup ensures we'll get to process this event in the
                 // main thread.
@@ -627,21 +779,40 @@ public class DistributedHerder implements Herder, Runnable {
                 // Note that since we don't reset the assignment, we we don't revoke leadership here. During a rebalance,
                 // it is still important to have a leader that can write configs, offsets, etc.
 
-                // TODO: Parallelize this. We should be able to request all connectors and tasks to stop, then wait on all of
-                // them to finish
-                // TODO: Technically we don't have to stop connectors at all until we know they've really been removed from
-                // this worker. Instead, we can let them continue to run but buffer any update requests (which should be
-                // rare anyway). This would avoid a steady stream of start/stop, which probably also includes lots of
-                // unnecessary repeated connections to the source/sink system.
-                for (String connectorName : connectors)
-                    worker.stopConnector(connectorName);
-                // TODO: We need to at least commit task offsets, but if we could commit offsets & pause them instead of
-                // stopping them then state could continue to be reused when the task remains on this worker. For example,
-                // this would avoid having to close a connection and then reopen it when the task is assigned back to this
-                // worker again.
-                for (ConnectorTaskId taskId : tasks)
-                    worker.stopTask(taskId);
+                if (rebalanceResolved) {
+                    // TODO: Parallelize this. We should be able to request all connectors and tasks to stop, then wait on all of
+                    // them to finish
+                    // TODO: Technically we don't have to stop connectors at all until we know they've really been removed from
+                    // this worker. Instead, we can let them continue to run but buffer any update requests (which should be
+                    // rare anyway). This would avoid a steady stream of start/stop, which probably also includes lots of
+                    // unnecessary repeated connections to the source/sink system.
+                    for (String connectorName : connectors)
+                        worker.stopConnector(connectorName);
+                    // TODO: We need to at least commit task offsets, but if we could commit offsets & pause them instead of
+                    // stopping them then state could continue to be reused when the task remains on this worker. For example,
+                    // this would avoid having to close a connection and then reopen it when the task is assigned back to this
+                    // worker again.
+                    for (ConnectorTaskId taskId : tasks)
+                        worker.stopTask(taskId);
+
+                    log.info("Finished stopping tasks in preparation for rebalance");
+                } else {
+                    log.info("Wasn't unable to resume work after last rebalance, can skip stopping connectors and tasks");
+                }
+
             }
         };
+    }
+
+
+    private static Map<ConnectorTaskId, Map<String, String>> taskConfigListAsMap(String connName, List<Map<String, String>> configs) {
+        int index = 0;
+        Map<ConnectorTaskId, Map<String, String>> result = new HashMap<>();
+        for (Map<String, String> taskConfigMap : configs) {
+            ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
+            result.put(taskId, taskConfigMap);
+            index++;
+        }
+        return result;
     }
 }

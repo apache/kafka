@@ -21,3 +21,7 @@ num_zookeepers = 0
 num_brokers = 0
 num_workers = 9
 base_box = "kafkatest-worker"
+
+
+# System tests use hostnames for each worker that need to be defined in /etc/hosts on the host running ducktape
+enable_dns = true

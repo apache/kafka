@@ -38,9 +38,11 @@ import java.util.Map;
  */
 public class CopycatProtocol {
     public static final String VERSION_KEY_NAME = "version";
+    public static final String URL_KEY_NAME = "url";
     public static final String CONFIG_OFFSET_KEY_NAME = "config-offset";
     public static final String CONNECTOR_KEY_NAME = "connector";
     public static final String LEADER_KEY_NAME = "leader";
+    public static final String LEADER_URL_KEY_NAME = "leader-url";
     public static final String ERROR_KEY_NAME = "error";
     public static final String TASKS_KEY_NAME = "tasks";
     public static final String ASSIGNMENT_KEY_NAME = "assignment";
@@ -53,7 +55,9 @@ public class CopycatProtocol {
             .set(VERSION_KEY_NAME, COPYCAT_PROTOCOL_V0);
 
     public static final Schema CONFIG_STATE_V0 = new Schema(
+            new Field(URL_KEY_NAME, Type.STRING),
             new Field(CONFIG_OFFSET_KEY_NAME, Type.INT64));
+
     // Assignments for each worker are a set of connectors and tasks. These are categorized by connector ID. A sentinel
     // task ID (CONNECTOR_TASK) is used to indicate the connector itself (i.e. that the assignment includes
     // responsibility for running the Connector instance in addition to any tasks it generates).
@@ -63,12 +67,14 @@ public class CopycatProtocol {
     public static final Schema ASSIGNMENT_V0 = new Schema(
             new Field(ERROR_KEY_NAME, Type.INT16),
             new Field(LEADER_KEY_NAME, Type.STRING),
+            new Field(LEADER_URL_KEY_NAME, Type.STRING),
             new Field(CONFIG_OFFSET_KEY_NAME, Type.INT64),
             new Field(ASSIGNMENT_KEY_NAME, new ArrayOf(CONNECTOR_ASSIGNMENT_V0)));
 
-    public static ByteBuffer serializeMetadata(ConfigState configState) {
+    public static ByteBuffer serializeMetadata(WorkerState workerState) {
         Struct struct = new Struct(CONFIG_STATE_V0);
-        struct.set(CONFIG_OFFSET_KEY_NAME, configState.offset());
+        struct.set(URL_KEY_NAME, workerState.url());
+        struct.set(CONFIG_OFFSET_KEY_NAME, workerState.offset());
         ByteBuffer buffer = ByteBuffer.allocate(COPYCAT_PROTOCOL_HEADER_V0.sizeOf() + CONFIG_STATE_V0.sizeOf(struct));
         COPYCAT_PROTOCOL_HEADER_V0.writeTo(buffer);
         CONFIG_STATE_V0.write(buffer, struct);
@@ -76,19 +82,21 @@ public class CopycatProtocol {
         return buffer;
     }
 
-    public static ConfigState deserializeMetadata(ByteBuffer buffer) {
+    public static WorkerState deserializeMetadata(ByteBuffer buffer) {
         Struct header = (Struct) COPYCAT_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
         checkVersionCompatibility(version);
         Struct struct = (Struct) CONFIG_STATE_V0.read(buffer);
         long configOffset = struct.getLong(CONFIG_OFFSET_KEY_NAME);
-        return new ConfigState(configOffset);
+        String url = struct.getString(URL_KEY_NAME);
+        return new WorkerState(url, configOffset);
     }
 
     public static ByteBuffer serializeAssignment(Assignment assignment) {
         Struct struct = new Struct(ASSIGNMENT_V0);
         struct.set(ERROR_KEY_NAME, assignment.error());
         struct.set(LEADER_KEY_NAME, assignment.leader());
+        struct.set(LEADER_URL_KEY_NAME, assignment.leaderUrl());
         struct.set(CONFIG_OFFSET_KEY_NAME, assignment.offset());
         List<Struct> taskAssignments = new ArrayList<>();
         for (Map.Entry<String, List<Integer>> connectorEntry : assignment.asMap().entrySet()) {
@@ -114,6 +122,7 @@ public class CopycatProtocol {
         Struct struct = (Struct) ASSIGNMENT_V0.read(buffer);
         short error = struct.getShort(ERROR_KEY_NAME);
         String leader = struct.getString(LEADER_KEY_NAME);
+        String leaderUrl = struct.getString(LEADER_URL_KEY_NAME);
         long offset = struct.getLong(CONFIG_OFFSET_KEY_NAME);
         List<String> connectorIds = new ArrayList<>();
         List<ConnectorTaskId> taskIds = new ArrayList<>();
@@ -128,14 +137,20 @@ public class CopycatProtocol {
                     taskIds.add(new ConnectorTaskId(connector, taskId));
             }
         }
-        return new Assignment(error, leader, offset, connectorIds, taskIds);
+        return new Assignment(error, leader, leaderUrl, offset, connectorIds, taskIds);
     }
 
-    public static class ConfigState {
+    public static class WorkerState {
+        private final String url;
         private final long offset;
 
-        public ConfigState(long offset) {
+        public WorkerState(String url, long offset) {
+            this.url = url;
             this.offset = offset;
+        }
+
+        public String url() {
+            return url;
         }
 
         public long offset() {
@@ -144,8 +159,9 @@ public class CopycatProtocol {
 
         @Override
         public String toString() {
-            return "ConfigState{" +
-                    "offset=" + offset +
+            return "WorkerState{" +
+                    "url='" + url + '\'' +
+                    ", offset=" + offset +
                     '}';
         }
     }
@@ -158,6 +174,7 @@ public class CopycatProtocol {
 
         private final short error;
         private final String leader;
+        private final String leaderUrl;
         private final long offset;
         private final List<String> connectorIds;
         private final List<ConnectorTaskId> taskIds;
@@ -167,10 +184,11 @@ public class CopycatProtocol {
          * @param connectorIds list of connectors that the worker should instantiate and run
          * @param taskIds list of task IDs that the worker should instantiate and run
          */
-        public Assignment(short error, String leader, long configOffset,
+        public Assignment(short error, String leader, String leaderUrl, long configOffset,
                           List<String> connectorIds, List<ConnectorTaskId> taskIds) {
             this.error = error;
             this.leader = leader;
+            this.leaderUrl = leaderUrl;
             this.offset = configOffset;
             this.taskIds = taskIds;
             this.connectorIds = connectorIds;
@@ -182,6 +200,10 @@ public class CopycatProtocol {
 
         public String leader() {
             return leader;
+        }
+
+        public String leaderUrl() {
+            return leaderUrl;
         }
 
         public boolean failed() {
@@ -205,6 +227,7 @@ public class CopycatProtocol {
             return "Assignment{" +
                     "error=" + error +
                     ", leader='" + leader + '\'' +
+                    ", leaderUrl='" + leaderUrl + '\'' +
                     ", offset=" + offset +
                     ", connectorIds=" + connectorIds +
                     ", taskIds=" + taskIds +

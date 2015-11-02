@@ -38,7 +38,7 @@ object UpdateOffsetsInZK {
       usage
     val config = new ConsumerConfig(Utils.loadProps(args(1)))
     val zkUtils = ZkUtils(config.zkConnect, config.zkSessionTimeoutMs,
-        config.zkConnectionTimeoutMs, JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+        config.zkConnectionTimeoutMs, JaasUtils.isZkSecurityEnabled())
     args(0) match {
       case Earliest => getAndSetOffsets(zkUtils, OffsetRequest.EarliestTime, config, args(2))
       case Latest => getAndSetOffsets(zkUtils, OffsetRequest.LatestTime, config, args(2))

@@ -26,7 +26,8 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.StreamingConfig;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 /**
  * Factory for creating key-value stores.
@@ -34,13 +35,12 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 public class Stores {
 
     /**
-     * Begin to create a new {@link org.apache.kafka.streams.processor.StateStore} instance.
-     * 
+     * Begin to create a new {@link org.apache.kafka.streams.processor.StateStoreSupplier} instance.
+     *
      * @param name the name of the store
-     * @param context the processor context
      * @return the factory that can be used to specify other options or configurations for the store; never null
      */
-    public static StoreFactory create(final String name, final ProcessorContext context) {
+    public static StoreFactory create(final String name, final StreamingConfig config) {
         return new StoreFactory() {
             @Override
             public <K> ValueFactory<K> withKeys(final Serializer<K> keySerializer, final Deserializer<K> keyDeserializer) {
@@ -48,8 +48,8 @@ public class Stores {
                     @Override
                     public <V> KeyValueFactory<K, V> withValues(final Serializer<V> valueSerializer,
                                                                 final Deserializer<V> valueDeserializer) {
-                        final Serdes<K, V> serdes = new Serdes<>(name, keySerializer, keyDeserializer, valueSerializer, valueDeserializer,
-                                context);
+                        final Serdes<K, V> serdes =
+                                new Serdes<>(name, keySerializer, keyDeserializer, valueSerializer, valueDeserializer, config);
                         return new KeyValueFactory<K, V>() {
                             @Override
                             public InMemoryKeyValueFactory<K, V> inMemory() {
@@ -64,11 +64,11 @@ public class Stores {
                                     }
 
                                     @Override
-                                    public KeyValueStore<K, V> build() {
+                                    public StateStoreSupplier build() {
                                         if (capacity < Integer.MAX_VALUE) {
-                                            return InMemoryLRUCacheStore.create(name, capacity, context, serdes, null);
+                                            return new InMemoryLRUCacheStoreSupplier<>(name, capacity, serdes, null);
                                         }
-                                        return new InMemoryKeyValueStore<>(name, context, serdes, null);
+                                        return new InMemoryKeyValueStoreSupplier<>(name, serdes, null);
                                     }
                                 };
                             }
@@ -77,8 +77,8 @@ public class Stores {
                             public LocalDatabaseKeyValueFactory<K, V> localDatabase() {
                                 return new LocalDatabaseKeyValueFactory<K, V>() {
                                     @Override
-                                    public KeyValueStore<K, V> build() {
-                                        return new RocksDBKeyValueStore<>(name, context, serdes, null);
+                                    public StateStoreSupplier build() {
+                                        return new RocksDBKeyValueStoreSupplier<>(name, serdes, null);
                                     }
                                 };
                             }
@@ -92,7 +92,7 @@ public class Stores {
     public static abstract class StoreFactory {
         /**
          * Begin to create a {@link KeyValueStore} by specifying the keys will be {@link String}s.
-         * 
+         *
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<String> withStringKeys() {
@@ -101,7 +101,7 @@ public class Stores {
 
         /**
          * Begin to create a {@link KeyValueStore} by specifying the keys will be {@link Integer}s.
-         * 
+         *
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<Integer> withIntegerKeys() {
@@ -110,7 +110,7 @@ public class Stores {
 
         /**
          * Begin to create a {@link KeyValueStore} by specifying the keys will be {@link Long}s.
-         * 
+         *
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<Long> withLongKeys() {
@@ -119,7 +119,7 @@ public class Stores {
 
         /**
          * Begin to create a {@link KeyValueStore} by specifying the keys will be byte arrays.
-         * 
+         *
          * @return the interface used to specify the type of values; never null
          */
         public ValueFactory<byte[]> withByteArrayKeys() {
@@ -129,7 +129,7 @@ public class Stores {
         /**
          * Begin to create a {@link KeyValueStore} by specifying the keys will be either {@link String}, {@link Integer},
          * {@link Long}, or {@code byte[]}.
-         * 
+         *
          * @param keyClass the class for the keys, which must be one of the types for which Kafka has built-in serializers and
          *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
          *            {@code byte[].class})
@@ -141,7 +141,7 @@ public class Stores {
 
         /**
          * Begin to create a {@link KeyValueStore} by specifying the serializer and deserializer for the keys.
-         * 
+         *
          * @param keySerializer the serializer for keys; may not be null
          * @param keyDeserializer the deserializer for keys; may not be null
          * @return the interface used to specify the type of values; never null
@@ -151,13 +151,13 @@ public class Stores {
 
     /**
      * The factory for creating off-heap key-value stores.
-     * 
+     *
      * @param <K> the type of keys
      */
     public static abstract class ValueFactory<K> {
         /**
          * Use {@link String} values.
-         * 
+         *
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, String> withStringValues() {
@@ -166,7 +166,7 @@ public class Stores {
 
         /**
          * Use {@link Integer} values.
-         * 
+         *
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, Integer> withIntegerValues() {
@@ -175,7 +175,7 @@ public class Stores {
 
         /**
          * Use {@link Long} values.
-         * 
+         *
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, Long> withLongValues() {
@@ -184,7 +184,7 @@ public class Stores {
 
         /**
          * Use byte arrays for values.
-         * 
+         *
          * @return the interface used to specify the remaining key-value store options; never null
          */
         public KeyValueFactory<K, byte[]> withByteArrayValues() {
@@ -194,7 +194,7 @@ public class Stores {
         /**
          * Use values of the specified type, which must be either {@link String}, {@link Integer}, {@link Long}, or {@code byte[]}
          * .
-         * 
+         *
          * @param valueClass the class for the values, which must be one of the types for which Kafka has built-in serializers and
          *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
          *            {@code byte[].class})
@@ -206,7 +206,7 @@ public class Stores {
 
         /**
          * Use the specified serializer and deserializer for the values.
-         * 
+         *
          * @param valueSerializer the serializer for value; may not be null
          * @param valueDeserializer the deserializer for values; may not be null
          * @return the interface used to specify the remaining key-value store options; never null
@@ -224,7 +224,7 @@ public class Stores {
         /**
          * Keep all key-value entries in-memory, although for durability all entries are recorded in a Kafka topic that can be
          * read to restore the entries if they are lost.
-         * 
+         *
          * @return the factory to create in-memory key-value stores; never null
          */
         InMemoryKeyValueFactory<K, V> inMemory();
@@ -232,7 +232,7 @@ public class Stores {
         /**
          * Keep all key-value entries off-heap in a local database, although for durability all entries are recorded in a Kafka
          * topic that can be read to restore the entries if they are lost.
-         * 
+         *
          * @return the factory to create in-memory key-value stores; never null
          */
         LocalDatabaseKeyValueFactory<K, V> localDatabase();
@@ -248,7 +248,7 @@ public class Stores {
         /**
          * Limits the in-memory key-value store to hold a maximum number of entries. The default is {@link Integer#MAX_VALUE}, which is
          * equivalent to not placing a limit on the number of entries.
-         * 
+         *
          * @param capacity the maximum capacity of the in-memory cache; should be one less than a power of 2
          * @return this factory
          * @throws IllegalArgumentException if the capacity is not positive
@@ -256,10 +256,10 @@ public class Stores {
         InMemoryKeyValueFactory<K, V> maxEntries(int capacity);
 
         /**
-         * Return the new key-value store.
-         * @return the key-value store; never null
+         * Return the instance of StateStoreSupplier of new key-value store.
+         * @return the state store supplier; never null
          */
-        KeyValueStore<K, V> build();
+        StateStoreSupplier build();
     }
 
     /**
@@ -270,9 +270,9 @@ public class Stores {
      */
     public static interface LocalDatabaseKeyValueFactory<K, V> {
         /**
-         * Return the new key-value store.
+         * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
          */
-        KeyValueStore<K, V> build();
+        StateStoreSupplier build();
     }
 }
