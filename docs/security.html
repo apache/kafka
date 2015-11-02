@@ -43,7 +43,7 @@ The guides below explain how to configure and use the security features in both 
                 sudo /usr/sbin/kadmin.local -q "ktadd -k /etc/security/keytabs/kafka.keytab kafka/hostname@domainname"</code></li>
         <li><b>Make sure all hosts can be reachable using hostnames</b> - It is important in case of kerberos all your hosts can be resolved with their FQDNs.</li>
         <li><b><a name="jaas_config_file">Creating JAAS Config File</a></b><br>
-            Each node in the cluster should've following JAAS file . Add this file to kafka/config dir:
+            Each node in the cluster should have a JAAS file similar to the example below. Add this file to kafka/config dir:
         <pre>
             KafkaServer {
                 com.sun.security.auth.module.Krb5LoginModule required
@@ -72,7 +72,7 @@ The guides below explain how to configure and use the security features in both 
             <u>Important notes:</u>
             <ol>
                 <li>KafkaServer is a section name in JAAS file used by KafkaServer/Broker. This section tells Kafka Server which principal to use and which keytab this principal is stored. It allows Kafka Server to login using the keytab specified in this section.</li>
-                <li>Client section is used to authenticate a SASL connection with zookeeper. It also allows a broker to set SASL ACL on zookeeper nodes which locks these nodes down so that only kafka broker can modify. It is important to have same principal name across all the brokers.</li>
+                <li>Client section is used to authenticate a SASL connection with zookeeper. It also allows a broker to set SASL ACL on zookeeper nodes which locks these nodes down so that only kafka broker can modify. It is important to have the same principal name across all the brokers.</li>
                 <li>KafkaClient section here describes how the clients like producer and consumer can connect to the Kafka Broker. Here we specified "useTicketCache=true" not a keytab this allows user to do kinit and run a kafka-console-consumer or kafka-console-producer to connect to broker. For a long running process one should create KafkaClient section similar to KafkaServer.</li>
                 <li>In KafkaServer and KafkaClient sections we've "serviceName" this should match principal name with which kafka broker is running. In the above example principal="kafka/kafka1.hostname.com@DOMAIN.com" so we've "kafka" which is matching the principalName.</li>
             </ol>
@@ -81,10 +81,10 @@ The guides below explain how to configure and use the security features in both 
         Clients (producers, consumers, copycat workers, etc) will authenticate to the cluster with their own principal (usually with the same name as the user used for running the client), so obtain or create these principals as needed. Then create a JAAS file as follows:
             <pre>
                 KafkaClient {
-                   com.sun.security.auth.module.Krb5LoginModule required
-                   useKeyTab=true
-                   storeKey=true
-                   serviceName="kafka"
+                    com.sun.security.auth.module.Krb5LoginModule required
+                    useKeyTab=true
+                    storeKey=true
+                    serviceName="kafka"
                     keyTab="/etc/security/keytabs/kafka1.keytab"
                     principal="kafkaproducer/hostname@DOMAIN.COM";
                 };
