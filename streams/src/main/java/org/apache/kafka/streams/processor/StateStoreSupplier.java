@@ -17,41 +17,9 @@
 
 package org.apache.kafka.streams.processor;
 
-/**
- * A storage engine for managing state maintained by a stream processor.
- *
- * <p>
- * This interface does not specify any query capabilities, which, of course,
- * would be query engine specific. Instead it just specifies the minimum
- * functionality required to reload a storage engine from its changelog as well
- * as basic lifecycle management.
- * </p>
- */
-public interface StateStore {
+public interface StateStoreSupplier {
 
-    /**
-     * The name of this store.
-     * @return the storage name
-     */
     String name();
 
-    /**
-     * Initializes this state store
-     */
-    void init(ProcessorContext context);
-
-    /**
-     * Flush any cached data
-     */
-    void flush();
-
-    /**
-     * Close the storage engine
-     */
-    void close();
-
-    /**
-     * If the storage is persistent
-     */
-    boolean persistent();
+    StateStore get();
 }

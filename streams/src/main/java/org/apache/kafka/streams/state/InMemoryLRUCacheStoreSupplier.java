@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -34,13 +35,27 @@ import java.util.TreeSet;
  * @param <V> The value type
  *
  */
-public class InMemoryLRUCacheStore<K, V> extends MeteredKeyValueStore<K, V> {
+public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
 
-    protected static <K, V> InMemoryLRUCacheStore<K, V> create(String name, int capacity, ProcessorContext context,
-                                                               Serdes<K, V> serdes, Time time) {
-        if (time == null) time = new SystemTime();
+    private final String name;
+    private final int capacity;
+    private final Serdes serdes;
+    private final Time time;
+
+    protected InMemoryLRUCacheStoreSupplier(String name, int capacity, Serdes<K, V> serdes, Time time) {
+        this.name = name;
+        this.capacity = capacity;
+        this.serdes = serdes;
+        this.time = time;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public StateStore get() {
         MemoryLRUCache<K, V> cache = new MemoryLRUCache<K, V>(name, capacity);
-        final InMemoryLRUCacheStore<K, V> store = new InMemoryLRUCacheStore<>(name, context, cache, serdes, time);
+        final MeteredKeyValueStore<K, V> store = new MeteredKeyValueStore<>(cache, serdes, "in-memory-lru-state", time);
         cache.whenEldestRemoved(new EldestEntryRemovalListener<K, V>() {
             @Override
             public void apply(K key, V value) {
@@ -48,11 +63,6 @@ public class InMemoryLRUCacheStore<K, V> extends MeteredKeyValueStore<K, V> {
             }
         });
         return store;
-
-    }
-
-    private InMemoryLRUCacheStore(String name, ProcessorContext context, MemoryLRUCache<K, V> cache, Serdes<K, V> serdes, Time time) {
-        super(name, cache, context, serdes, "kafka-streams", time);
     }
 
     private static interface EldestEntryRemovalListener<K, V> {
@@ -93,6 +103,11 @@ public class InMemoryLRUCacheStore<K, V> extends MeteredKeyValueStore<K, V> {
         @Override
         public String name() {
             return this.name;
+        }
+
+        @Override
+        public void init(ProcessorContext context) {
+            // do-nothing since it is in-memory
         }
 
         @Override

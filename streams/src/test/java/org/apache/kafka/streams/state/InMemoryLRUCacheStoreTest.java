@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNull;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.junit.Test;
 
 public class InMemoryLRUCacheStoreTest {
@@ -29,10 +30,12 @@ public class InMemoryLRUCacheStoreTest {
     public void testPutGetRange() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create();
-        KeyValueStore<Integer, String> store = Stores.create("my-store", driver.context())
+        StateStoreSupplier supplier = Stores.create("my-store", driver.config())
                                                      .withIntegerKeys().withStringValues()
                                                      .inMemory().maxEntries(3)
                                                      .build();
+        KeyValueStore<Integer, String> store = (KeyValueStore<Integer, String>) supplier.get();
+        store.init(driver.context());
 
         // Verify that the store reads and writes correctly, keeping only the last 2 entries ...
         store.put(0, "zero");
@@ -79,11 +82,13 @@ public class InMemoryLRUCacheStoreTest {
         Deserializer<Integer> keyDeser = (Deserializer<Integer>) driver.context().keyDeserializer();
         Serializer<String> valSer = (Serializer<String>) driver.context().valueSerializer();
         Deserializer<String> valDeser = (Deserializer<String>) driver.context().valueDeserializer();
-        KeyValueStore<Integer, String> store = Stores.create("my-store", driver.context())
+        StateStoreSupplier supplier = Stores.create("my-store", driver.config())
                                                      .withKeys(keySer, keyDeser)
                                                      .withValues(valSer, valDeser)
                                                      .inMemory().maxEntries(3)
                                                      .build();
+        KeyValueStore<Integer, String> store = (KeyValueStore<Integer, String>) supplier.get();
+        store.init(driver.context());
 
         // Verify that the store reads and writes correctly, keeping only the last 2 entries ...
         store.put(0, "zero");
@@ -133,10 +138,12 @@ public class InMemoryLRUCacheStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        KeyValueStore<Integer, String> store = Stores.create("my-store", driver.context())
+        StateStoreSupplier supplier = Stores.create("my-store", driver.config())
                                                      .withIntegerKeys().withStringValues()
                                                      .inMemory().maxEntries(3)
                                                      .build();
+        KeyValueStore<Integer, String> store = (KeyValueStore<Integer, String>) supplier.get();
+        store.init(driver.context());
 
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));

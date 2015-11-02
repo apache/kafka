@@ -17,9 +17,10 @@
 
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 import java.util.Iterator;
 import java.util.List;
@@ -32,13 +33,27 @@ import java.util.TreeMap;
  *
  * @param <K> The key type
  * @param <V> The value type
- * 
- * @see Stores#create(String, ProcessorContext)
+ *
+ * @see Stores#create(String, org.apache.kafka.streams.StreamingConfig)
  */
-public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
+public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
-    protected InMemoryKeyValueStore(String name, ProcessorContext context, Serdes<K, V> serdes, Time time) {
-        super(name, new MemoryStore<K, V>(name), context, serdes, "in-memory-state", time != null ? time : new SystemTime());
+    private final String name;
+    private final Serdes serdes;
+    private final Time time;
+
+    protected InMemoryKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
+        this.name = name;
+        this.serdes = serdes;
+        this.time = time;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public StateStore get() {
+        return new MeteredKeyValueStore<K, V>(new MemoryStore<K, V>(name), serdes, "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
@@ -55,6 +70,11 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         @Override
         public String name() {
             return this.name;
+        }
+
+        @Override
+        public void init(ProcessorContext context) {
+            // do-nothing since it is in-memory
         }
 
         @Override

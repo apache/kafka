@@ -201,27 +201,30 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier) {
+    public <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier, String... stateStoreNames) {
         String name = TRANSFORM_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
+        topology.connectProcessorAndStateStores(name, stateStoreNames);
 
         return new KStreamImpl<>(topology, name, null);
     }
 
     @Override
-    public <V1> KStream<K, V1> transformValues(ValueTransformerSupplier<V, V1> valueTransformerSupplier) {
+    public <V1> KStream<K, V1> transformValues(ValueTransformerSupplier<V, V1> valueTransformerSupplier, String... stateStoreNames) {
         String name = TRANSFORMVALUES_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
+        topology.connectProcessorAndStateStores(name, stateStoreNames);
 
         return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
     @Override
-    public void process(final ProcessorSupplier<K, V> processorSupplier) {
+    public void process(final ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames) {
         String name = PROCESSOR_NAME + INDEX.getAndIncrement();
 
         topology.addProcessor(name, processorSupplier, this.name);
+        topology.connectProcessorAndStateStores(name, stateStoreNames);
     }
 }

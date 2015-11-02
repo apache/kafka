@@ -18,9 +18,10 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -42,12 +43,26 @@ import java.util.NoSuchElementException;
  * @param <K> the type of keys
  * @param <V> the type of values
  *
- * @see Stores#create(String, ProcessorContext)
+ * @see Stores#create(String, org.apache.kafka.streams.StreamingConfig)
  */
-public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
+public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
-    protected RocksDBKeyValueStore(String name, ProcessorContext context, Serdes<K, V> serdes, Time time) {
-        super(name, new RocksDBStore<K, V>(name, context, serdes), context, serdes, "rocksdb-state", time != null ? time : new SystemTime());
+    private final String name;
+    private final Serdes serdes;
+    private final Time time;
+
+    protected RocksDBKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
+        this.name = name;
+        this.serdes = serdes;
+        this.time = time;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public StateStore get() {
+        return new MeteredKeyValueStore<K, V>(new RocksDBStore<K, V>(name, serdes), serdes, "rocksdb-state", time);
     }
 
     private static class RocksDBStore<K, V> implements KeyValueStore<K, V> {
@@ -65,24 +80,20 @@ public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
         private static final String DB_FILE_DIR = "rocksdb";
 
         private final Serdes<K, V> serdes;
-
         private final String topic;
-        private final int partition;
-        private final ProcessorContext context;
 
         private final Options options;
         private final WriteOptions wOptions;
         private final FlushOptions fOptions;
 
-        private final String dbName;
-        private final String dirName;
-
+        private ProcessorContext context;
+        private int partition;
+        private String dbName;
+        private String dirName;
         private RocksDB db;
 
-        public RocksDBStore(String name, ProcessorContext context, Serdes<K, V> serdes) {
+        public RocksDBStore(String name, Serdes<K, V> serdes) {
             this.topic = name;
-            this.partition = context.id().partition;
-            this.context = context;
             this.serdes = serdes;
 
             // initialize the rocksdb options
@@ -104,11 +115,14 @@ public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
             fOptions = new FlushOptions();
             fOptions.setWaitForFlush(true);
+        }
 
-            dbName = this.topic + "." + this.partition;
-            dirName = this.context.stateDir() + File.separator + DB_FILE_DIR;
-
-            db = openDB(new File(dirName, dbName), this.options, TTL_SECONDS);
+        public void init(ProcessorContext context) {
+            this.context = context;
+            this.partition = context.id().partition;
+            this.dbName = this.topic + "." + this.partition;
+            this.dirName = this.context.stateDir() + File.separator + DB_FILE_DIR;
+            this.db = openDB(new File(dirName, dbName), this.options, TTL_SECONDS);
         }
 
         private RocksDB openDB(File dir, Options options, int ttl) {
