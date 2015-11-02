@@ -20,7 +20,7 @@ package kafka.javaapi
 import java.nio.ByteBuffer
 import kafka.cluster.BrokerEndPoint
 
-class GroupMetadataResponse(private val underlying: kafka.api.GroupMetadataResponse) {
+class GroupMetadataResponse(private val underlying: kafka.api.GroupCoordinatorResponse) {
 
   def errorCode = underlying.errorCode
 
@@ -43,5 +43,5 @@ class GroupMetadataResponse(private val underlying: kafka.api.GroupMetadataRespo
 }
 
 object GroupMetadataResponse {
-  def readFrom(buffer: ByteBuffer) = new GroupMetadataResponse(kafka.api.GroupMetadataResponse.readFrom(buffer))
+  def readFrom(buffer: ByteBuffer) = new GroupMetadataResponse(kafka.api.GroupCoordinatorResponse.readFrom(buffer))
 }

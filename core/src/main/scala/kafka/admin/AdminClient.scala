@@ -76,9 +76,9 @@ class AdminClient(val time: Time,
   }
 
   private def findCoordinator(groupId: String): Node = {
-    val request = new GroupMetadataRequest(groupId)
-    val responseBody = sendAnyNode(ApiKeys.GROUP_METADATA, request)
-    val response = new GroupMetadataResponse(responseBody)
+    val request = new GroupCoordinatorRequest(groupId)
+    val responseBody = sendAnyNode(ApiKeys.GROUP_COORDINATOR, request)
+    val response = new GroupCoordinatorResponse(responseBody)
     Errors.forCode(response.errorCode()).maybeThrow()
     response.node()
   }

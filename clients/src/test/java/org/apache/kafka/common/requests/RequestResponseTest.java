@@ -43,9 +43,9 @@ public class RequestResponseTest {
         List<AbstractRequestResponse> requestResponseList = Arrays.asList(
                 createRequestHeader(),
                 createResponseHeader(),
-                createConsumerMetadataRequest(),
-                createConsumerMetadataRequest().getErrorResponse(0, new UnknownServerException()),
-                createConsumerMetadataResponse(),
+                createGroupCoordinatorRequest(),
+                createGroupCoordinatorRequest().getErrorResponse(0, new UnknownServerException()),
+                createGroupCoordinatorResponse(),
                 createControlledShutdownRequest(),
                 createControlledShutdownResponse(),
                 createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
@@ -156,12 +156,12 @@ public class RequestResponseTest {
         return new ResponseHeader(10);
     }
 
-    private AbstractRequest createConsumerMetadataRequest() {
-        return new GroupMetadataRequest("test-group");
+    private AbstractRequest createGroupCoordinatorRequest() {
+        return new GroupCoordinatorRequest("test-group");
     }
 
-    private AbstractRequestResponse createConsumerMetadataResponse() {
-        return new GroupMetadataResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
+    private AbstractRequestResponse createGroupCoordinatorResponse() {
+        return new GroupCoordinatorResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
     }
 
     private AbstractRequest createFetchRequest() {

@@ -33,7 +33,7 @@ object RequestKeys {
   val ControlledShutdownKey: Short = 7
   val OffsetCommitKey: Short = 8
   val OffsetFetchKey: Short = 9
-  val GroupMetadataKey: Short = 10
+  val GroupCoordinatorKey: Short = 10
   val JoinGroupKey: Short = 11
   val HeartbeatKey: Short = 12
   val LeaveGroupKey: Short = 13

@@ -21,21 +21,21 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class GroupMetadataRequest extends AbstractRequest {
+public class GroupCoordinatorRequest extends AbstractRequest {
     
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.GROUP_METADATA.id);
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.GROUP_COORDINATOR.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
 
     private final String groupId;
 
-    public GroupMetadataRequest(String groupId) {
+    public GroupCoordinatorRequest(String groupId) {
         super(new Struct(CURRENT_SCHEMA));
 
         struct.set(GROUP_ID_KEY_NAME, groupId);
         this.groupId = groupId;
     }
 
-    public GroupMetadataRequest(Struct struct) {
+    public GroupCoordinatorRequest(Struct struct) {
         super(struct);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
     }
@@ -44,10 +44,10 @@ public class GroupMetadataRequest extends AbstractRequest {
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         switch (versionId) {
             case 0:
-                return new GroupMetadataResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
+                return new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.GROUP_METADATA.id)));
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.GROUP_COORDINATOR.id)));
         }
     }
 
@@ -55,11 +55,11 @@ public class GroupMetadataRequest extends AbstractRequest {
         return groupId;
     }
 
-    public static GroupMetadataRequest parse(ByteBuffer buffer, int versionId) {
-        return new GroupMetadataRequest(ProtoUtils.parseRequest(ApiKeys.GROUP_METADATA.id, versionId, buffer));
+    public static GroupCoordinatorRequest parse(ByteBuffer buffer, int versionId) {
+        return new GroupCoordinatorRequest(ProtoUtils.parseRequest(ApiKeys.GROUP_COORDINATOR.id, versionId, buffer));
     }
 
-    public static GroupMetadataRequest parse(ByteBuffer buffer) {
-        return new GroupMetadataRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    public static GroupCoordinatorRequest parse(ByteBuffer buffer) {
+        return new GroupCoordinatorRequest((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }
