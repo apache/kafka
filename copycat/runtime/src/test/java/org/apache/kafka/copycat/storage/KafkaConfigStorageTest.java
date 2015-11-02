@@ -48,7 +48,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -271,7 +270,7 @@ public class KafkaConfigStorageTest {
         assertEquals(3, configState.offset());
         String connectorName = CONNECTOR_IDS.get(0);
         assertEquals(Arrays.asList(connectorName), new ArrayList<>(configState.connectors()));
-        assertEquals(new HashSet<>(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1))), configState.tasks(connectorName));
+        assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(connectorName));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(1), configState.taskConfig(TASK_IDS.get(1)));
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
@@ -324,7 +323,7 @@ public class KafkaConfigStorageTest {
         // CONNECTOR_CONFIG_STRUCTS[2] -> SAMPLE_CONFIGS[2]
         assertEquals(SAMPLE_CONFIGS.get(2), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         // Should see 2 tasks for that connector. Only config updates before the root key update should be reflected
-        assertEquals(new HashSet<>(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1))), configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(1)));
@@ -390,11 +389,11 @@ public class KafkaConfigStorageTest {
         assertEquals(6, configState.offset()); // Should always be next to be read, not last committed
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // Inconsistent data should leave us with no tasks listed for the connector and an entry in the inconsistent list
-        assertEquals(Collections.EMPTY_SET, configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(Collections.EMPTY_LIST, configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertNull(configState.taskConfig(TASK_IDS.get(0)));
         assertNull(configState.taskConfig(TASK_IDS.get(1)));
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_IDS.get(0))), configState.inconsistentConnectors());
+        assertEquals(Collections.singleton(CONNECTOR_IDS.get(0)), configState.inconsistentConnectors());
 
         // First try sending an invalid set of configs (can't possibly represent a valid config set for the tasks)
         try {
@@ -413,7 +412,7 @@ public class KafkaConfigStorageTest {
         // to the topic. Only the last call with 1 task config + 1 commit actually gets written.
         assertEquals(8, configState.offset());
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
-        assertEquals(new HashSet<>(Arrays.asList(TASK_IDS.get(0))), configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(Arrays.asList(TASK_IDS.get(0)), configState.tasks(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 

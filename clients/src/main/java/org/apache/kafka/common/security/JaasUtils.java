@@ -22,8 +22,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.io.IOException;
 import java.io.File;
-import java.net.URI;
-import java.security.URIParameter;
 
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
@@ -85,11 +83,12 @@ public class JaasUtils {
         return (String) getDefaultRealmMethod.invoke(kerbConf, new Object[0]);
     }
 
-    public static boolean isZkSecurityEnabled(String loginConfigFile) {
+    public static boolean isZkSecurityEnabled() {
         boolean isSecurityEnabled = false;
         boolean zkSaslEnabled = Boolean.parseBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));
         String zkLoginContextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY, "Client");
 
+        String loginConfigFile = System.getProperty(JAVA_LOGIN_CONFIG_PARAM);
         if (loginConfigFile != null && loginConfigFile.length() > 0) {
             File configFile = new File(loginConfigFile);
             if (!configFile.canRead()) {
@@ -97,8 +96,7 @@ public class JaasUtils {
             }
                 
             try {
-                URI configUri = configFile.toURI();
-                Configuration loginConf = Configuration.getInstance("JavaLoginConfig", new URIParameter(configUri));
+                Configuration loginConf = Configuration.getConfiguration();
                 isSecurityEnabled = loginConf.getAppConfigurationEntry(zkLoginContextName) != null;
             } catch (Exception e) {
                 throw new KafkaException(e);
@@ -110,11 +108,6 @@ public class JaasUtils {
                 throw new KafkaException("Exception while determining if ZooKeeper is secure");
             }
         }
-        /*
-         * Tests fail if we don't reset the login configuration. It is unclear
-         * what is actually triggering this bug.
-         */
-        Configuration.setConfiguration(null);
 
         return isSecurityEnabled;
     }

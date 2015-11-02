@@ -17,9 +17,14 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.copycat.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.copycat.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.copycat.util.Callback;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * <p>
@@ -49,21 +54,39 @@ public interface Herder {
     void stop();
 
     /**
-     * Submit a connector job to the cluster. This works from any node by forwarding the request to
-     * the leader herder if necessary.
+     * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
+     * from the current configuration. However, note
      *
-     * @param connectorProps user-specified properties for this job
-     * @param callback       callback to invoke when the request completes
+     * @returns A list of connector names
+     * @throws org.apache.kafka.copycat.runtime.distributed.NotLeaderException if this node can not resolve the request
+     *         (e.g., because it has not joined the cluster or does not have configs in sync with the group) and it is
+     *         also not the leader
+     * @throws org.apache.kafka.copycat.errors.CopycatException if this node is the leader, but still cannot resolve the
+     *         request (e.g., it is not in sync with other worker's config state)
      */
-    void addConnector(Map<String, String> connectorProps, Callback<String> callback);
+    void connectors(Callback<Collection<String>> callback);
 
     /**
-     * Delete a connector job by name.
-     *
-     * @param name     name of the connector job to shutdown and delete
-     * @param callback callback to invoke when the request completes
+     * Get the definition and status of a connector.
      */
-    void deleteConnector(String name, Callback<Void> callback);
+    void connectorInfo(String connName, Callback<ConnectorInfo> callback);
+
+    /**
+     * Get the configuration for a connector.
+     * @param connName name of the connector
+     * @param callback callback to invoke with the configuration
+     */
+    void connectorConfig(String connName, Callback<Map<String, String>> callback);
+
+    /**
+     * Set the configuration for a connector. This supports creation, update, and deletion.
+     * @param connName name of the connector
+     * @param config the connectors configuration, or null if deleting the connector
+     * @param allowReplace if true, allow overwriting previous configs; if false, throw AlreadyExistsException if a connector
+     *                     with the same name already exists
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
 
     /**
      * Requests reconfiguration of the task. This should only be triggered by
@@ -73,4 +96,53 @@ public interface Herder {
      */
     void requestTaskReconfiguration(String connName);
 
+    /**
+     * Get the configurations for the current set of tasks of a connector.
+     * @param connName connector to update
+     * @param callback callback to invoke upon completion
+     */
+    void taskConfigs(String connName, Callback<List<TaskInfo>> callback);
+
+    /**
+     * Set the configurations for the tasks of a connector. This should always include all tasks in the connector; if
+     * there are existing configurations and fewer are provided, this will reduce the number of tasks, and if more are
+     * provided it will increase the number of tasks.
+     * @param connName connector to update
+     * @param configs list of configurations
+     * @param callback callback to invoke upon completion
+     */
+    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback);
+
+
+    class Created<T> {
+        private final boolean created;
+        private final T result;
+
+        public Created(boolean created, T result) {
+            this.created = created;
+            this.result = result;
+        }
+
+        public boolean created() {
+            return created;
+        }
+
+        public T result() {
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Created<?> created1 = (Created<?>) o;
+            return Objects.equals(created, created1.created) &&
+                    Objects.equals(result, created1.result);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(created, result);
+        }
+    }
 }

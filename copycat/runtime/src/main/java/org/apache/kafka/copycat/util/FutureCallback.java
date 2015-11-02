@@ -23,6 +23,10 @@ public class FutureCallback<T> extends ConvertingFutureCallback<T, T> {
         super(underlying);
     }
 
+    public FutureCallback() {
+        super(null);
+    }
+
     @Override
     public T convert(T result) {
         return result;

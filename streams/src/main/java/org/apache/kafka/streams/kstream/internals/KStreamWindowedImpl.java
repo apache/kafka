@@ -19,10 +19,10 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KStreamWindowed;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.WindowSupplier;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -31,7 +31,7 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
 
     private final WindowSupplier<K, V> windowSupplier;
 
-    public KStreamWindowedImpl(TopologyBuilder topology, String name, Set<String> sourceNodes, WindowSupplier<K, V> windowSupplier) {
+    public KStreamWindowedImpl(KStreamBuilder topology, String name, Set<String> sourceNodes, WindowSupplier<K, V> windowSupplier) {
         super(topology, name, sourceNodes);
         this.windowSupplier = windowSupplier;
     }
@@ -53,9 +53,9 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
         KStreamJoin<K, V2, V1, V> joinOther = new KStreamJoin<>(thisWindowName, KStreamJoin.reverseJoiner(valueJoiner));
         KStreamPassThrough<K, V2> joinMerge = new KStreamPassThrough<>();
 
-        String joinThisName = JOINTHIS_NAME + INDEX.getAndIncrement();
-        String joinOtherName = JOINOTHER_NAME + INDEX.getAndIncrement();
-        String joinMergeName = JOINMERGE_NAME + INDEX.getAndIncrement();
+        String joinThisName = topology.newName(JOINTHIS_NAME);
+        String joinOtherName = topology.newName(JOINOTHER_NAME);
+        String joinMergeName = topology.newName(JOINMERGE_NAME);
 
         topology.addProcessor(joinThisName, joinThis, this.name);
         topology.addProcessor(joinOtherName, joinOther, ((KStreamImpl) other).name);

@@ -13,4 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-recursive-include kafkatest/services/templates *.properties
+recursive-include kafkatest */templates/*

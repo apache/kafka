@@ -203,6 +203,10 @@ public class ProcessorTopologyTest {
     protected TopologyBuilder createStatefulTopology(String storeName) {
         return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC)
                                     .addProcessor("processor", define(new StatefulProcessor(storeName)), "source")
+                                    .addStateStore(
+                                            Stores.create(storeName, config).withStringKeys().withStringValues().inMemory().build(),
+                                            "processor"
+                                    )
                                     .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
@@ -262,9 +266,10 @@ public class ProcessorTopologyTest {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public void init(ProcessorContext context) {
             super.init(context);
-            store = Stores.create(storeName, context).withStringKeys().withStringValues().inMemory().build();
+            store = (KeyValueStore<String, String>) context.getStateStore(storeName);
         }
 
         @Override

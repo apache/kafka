@@ -70,7 +70,8 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
     @Override
     public T get(long l, TimeUnit timeUnit)
             throws InterruptedException, ExecutionException, TimeoutException {
-        finishedLatch.await(l, timeUnit);
+        if (!finishedLatch.await(l, timeUnit))
+            throw new TimeoutException("Timed out waiting for future");
         return result();
     }
 

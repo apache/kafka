@@ -35,7 +35,7 @@ import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.kerberos.KerberosName;
-import org.apache.kafka.common.security.kerberos.KerberosNameParser;
+import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -59,7 +59,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final SaslServer saslServer;
     private final Subject subject;
     private final String node;
-    private final KerberosNameParser kerberosNameParser;
+    private final KerberosShortNamer kerberosNamer;
 
     // assigned in `configure`
     private TransportLayer transportLayer;
@@ -68,14 +68,14 @@ public class SaslServerAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private NetworkSend netOutBuffer;
 
-    public SaslServerAuthenticator(String node, final Subject subject, KerberosNameParser kerberosNameParser) throws IOException {
+    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
         if (subject.getPrincipals().isEmpty())
             throw new IllegalArgumentException("subject must have at least one principal");
         this.node = node;
         this.subject = subject;
-        this.kerberosNameParser = kerberosNameParser;
+        this.kerberosNamer = kerberosNameParser;
         saslServer = createSaslServer();
     }
 
@@ -86,11 +86,11 @@ public class SaslServerAuthenticator implements Authenticator {
     private SaslServer createSaslServer() throws IOException {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
         final SaslServerCallbackHandler saslServerCallbackHandler = new SaslServerCallbackHandler(
-                Configuration.getConfiguration(), kerberosNameParser);
+                Configuration.getConfiguration(), kerberosNamer);
         final Principal servicePrincipal = subject.getPrincipals().iterator().next();
         KerberosName kerberosName;
         try {
-            kerberosName = kerberosNameParser.parse(servicePrincipal.getName());
+            kerberosName = KerberosName.parse(servicePrincipal.getName());
         } catch (IllegalArgumentException e) {
             throw new KafkaException("Principal has name with unexpected format " + servicePrincipal);
         }
