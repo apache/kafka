@@ -106,6 +106,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def handleJoinGroup(groupId: String,
                       memberId: String,
+                      clientId: String,
                       sessionTimeoutMs: Int,
                       protocolType: String,
                       protocols: List[(String, Array[Byte])],
@@ -131,16 +132,17 @@ class GroupCoordinator(val brokerId: Int,
           responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID.code))
         } else {
           group = groupManager.addGroup(groupId, protocolType)
-          doJoinGroup(group, memberId, sessionTimeoutMs, protocolType, protocols, responseCallback)
+          doJoinGroup(group, memberId, clientId, sessionTimeoutMs, protocolType, protocols, responseCallback)
         }
       } else {
-        doJoinGroup(group, memberId, sessionTimeoutMs, protocolType, protocols, responseCallback)
+        doJoinGroup(group, memberId, clientId, sessionTimeoutMs, protocolType, protocols, responseCallback)
       }
     }
   }
 
   private def doJoinGroup(group: GroupMetadata,
                           memberId: String,
+                          clientId: String,
                           sessionTimeoutMs: Int,
                           protocolType: String,
                           protocols: List[(String, Array[Byte])],
@@ -164,7 +166,7 @@ class GroupCoordinator(val brokerId: Int,
 
           case PreparingRebalance =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(sessionTimeoutMs, protocols, group, responseCallback)
+              addMemberAndRebalance(sessionTimeoutMs, clientId, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               updateMemberAndRebalance(group, member, protocols, responseCallback)
@@ -172,7 +174,7 @@ class GroupCoordinator(val brokerId: Int,
 
           case AwaitingSync =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(sessionTimeoutMs, protocols, group, responseCallback)
+              addMemberAndRebalance(sessionTimeoutMs, clientId, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               if (member.matches(protocols)) {
@@ -199,7 +201,7 @@ class GroupCoordinator(val brokerId: Int,
           case Stable =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               // if the member id is unknown, register the member to the group
-              addMemberAndRebalance(sessionTimeoutMs, protocols, group, responseCallback)
+              addMemberAndRebalance(sessionTimeoutMs, clientId, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               if (memberId == group.leaderId || !member.matches(protocols)) {
@@ -332,14 +334,14 @@ class GroupCoordinator(val brokerId: Int,
     } else {
       val group = groupManager.getGroup(groupId)
       if (group == null) {
-        // if the group is marked as dead, it means some other thread has just removed the group
-        // from the coordinator metadata; this is likely that the group has migrated to some other
-        // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without the specified member id,
         responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
       } else {
         group synchronized {
           if (group.is(Dead)) {
+            // if the group is marked as dead, it means some other thread has just removed the group
+            // from the coordinator metadata; this is likely that the group has migrated to some other
+            // coordinator OR the group is in a transient unstable phase. Let the member retry
+            // joining without the specified member id,
             responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
           } else if (!group.is(Stable)) {
             responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
@@ -455,10 +457,12 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def addMemberAndRebalance(sessionTimeoutMs: Int,
+                                    clientId: String,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
                                     callback: JoinCallback) = {
-    val memberId = group.generateNextMemberId
+    // use the client-id with a random id suffix as the member-id
+    val memberId = clientId + "-" + group.generateMemberIdSuffix
     val member = new MemberMetadata(memberId, group.groupId, sessionTimeoutMs, protocols)
     member.awaitingJoinCallback = callback
     group.add(member.memberId, member)
@@ -529,10 +533,10 @@ class GroupCoordinator(val brokerId: Int,
           // TODO: cut the socket connection to the client
         }
 
+        // TODO KAFKA-2720: only remove group in the background thread
         if (group.isEmpty) {
-          group.transitionTo(Dead)
+          groupManager.removeGroup(group)
           info("Group %s generation %s is dead and removed".format(group.groupId, group.generationId))
-          groupManager.removeGroup(group.groupId)
         }
       }
       if (!group.is(Dead)) {

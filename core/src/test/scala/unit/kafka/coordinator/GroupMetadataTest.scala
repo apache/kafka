@@ -97,11 +97,6 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testStableToDeadIllegalTransition() {
-    group.transitionTo(Dead)
-  }
-
-  @Test(expected = classOf[IllegalStateException])
   def testPreparingRebalanceToPreparingRebalanceIllegalTransition() {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(PreparingRebalance)
@@ -118,13 +113,6 @@ class GroupMetadataTest extends JUnitSuite {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(AwaitingSync)
     group.transitionTo(AwaitingSync)
-  }
-
-  @Test(expected = classOf[IllegalStateException])
-  def testAwaitingSyncToDeadIllegalTransition() {
-    group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
-    group.transitionTo(Dead)
   }
 
   @Test(expected = classOf[IllegalStateException])

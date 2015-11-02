@@ -58,16 +58,16 @@ class GroupMetadataManager(val brokerId: Int,
   /* group metadata cache */
   private val groupsCache = new Pool[String, GroupMetadata]
 
-  /* partitions of consumer groups that are being loaded */
+  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE the group lock if needed */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
   /* partitions of consumer groups that are assigned, using the same loading partition lock */
   private val ownedPartitions: mutable.Set[Int] = mutable.Set()
 
-  /* lock for expiring stale offsets */
+  /* lock for expiring stale offsets, it should be always called BEFORE the group lock if needed */
   private val offsetExpireLock = new ReentrantReadWriteLock()
 
-  /* lock for removing offsets of a range partition */
+  /* lock for removing offsets of a range partition, it should be always called BEFORE the group lock if needed */
   private val offsetRemoveLock = new ReentrantReadWriteLock()
 
   /* shutting down flag */
@@ -123,32 +123,35 @@ class GroupMetadataManager(val brokerId: Int,
   /**
    * Remove all metadata associated with the group, note this function needs to be
    * called inside the group lock
-   * @param groupId the groupId of the group we are removing
+   * @param group
    */
-  def removeGroup(groupId: String) {
-    if (groupsCache.remove(groupId) == null)
-      throw new IllegalArgumentException("Cannot remove non-existing group")
+  def removeGroup(group: GroupMetadata) {
+    // first mark the group as dead
+    group.transitionTo(Dead)
+
+    if (groupsCache.remove(group.groupId) != group)
+      throw new IllegalArgumentException("Cannot remove group " + group.groupId + " since it has been replaced.")
 
     // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
     // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
     // retry removing this group.
-    val groupPartition = partitionFor(groupId)
-    val tomstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(groupId))
+    val groupPartition = partitionFor(group.groupId)
+    val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId))
 
     val partitionOpt = replicaManager.getPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
     partitionOpt.foreach { partition =>
       val appendPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
 
-      trace("Marking group %s as deleted.".format(groupId))
+      trace("Marking group %s as deleted.".format(group.groupId))
 
       try {
-        // do not need to require acks since even if the tombsone is lost,
+        // do not need to require acks since even if the tombstone is lost,
         // it will be appended again by the new leader
-        // TODO: have periodic purging instead of immediate removal of groups
-        partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, tomstone))
+        // TODO KAFKA-2720: periodic purging instead of immediate removal of groups
+        partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, tombstone))
       } catch {
         case t: Throwable =>
-          error("Failed to mark group %s as deleted in %s.".format(groupId, appendPartition), t)
+          error("Failed to mark group %s as deleted in %s.".format(group.groupId, appendPartition), t)
           // ignore and continue
       }
     }
@@ -447,22 +450,41 @@ class GroupMetadataManager(val brokerId: Int,
    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
   def removeGroupsForPartition(offsetsPartition: Int) {
-    var numRemoved = 0
+    var numOffsetsRemoved = 0
     inWriteLock(offsetRemoveLock) {
       offsetsCache.keys.foreach { key =>
         if (partitionFor(key.group) == offsetsPartition) {
           offsetsCache.remove(key)
-          numRemoved += 1
+          numOffsetsRemoved += 1
         }
       }
-
-      // TODO: we may also remove the group metadata cache here
     }
 
-    if (numRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
-      .format(numRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
+    if (numOffsetsRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
+      .format(numOffsetsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
 
-    loadingPartitions synchronized ownedPartitions.remove(offsetsPartition)
+    var numGroupsRemoved = 0
+    loadingPartitions synchronized {
+      // we need to guard the group removal in cache in the loading partition lock
+      // to prevent coordinator's check-and-get-group race condition
+      ownedPartitions.remove(offsetsPartition)
+
+      // clear the groups for this partition in the cache
+      for (group <- groupsCache.values) {
+        group synchronized {
+          // mark the group as dead and then remove it from cache
+          group.transitionTo(Dead)
+
+          if (groupsCache.remove(group.groupId) != group)
+            throw new IllegalArgumentException("Cannot remove group " + group.groupId + " since it has been replaced.")
+
+          numGroupsRemoved += 1
+        }
+      }
+    }
+
+    if (numGroupsRemoved > 0) info("Removed %d cached groups for %s on follower transition."
+      .format(numGroupsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
   }
 
   /**

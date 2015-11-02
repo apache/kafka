@@ -86,7 +86,7 @@ private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
 
 private object GroupMetadata {
   private val validPreviousStates: Map[GroupState, Set[GroupState]] =
-    Map(Dead -> Set(PreparingRebalance),
+    Map(Dead -> Set(Stable, PreparingRebalance, AwaitingSync),
       AwaitingSync -> Set(PreparingRebalance),
       Stable -> Set(AwaitingSync),
       PreparingRebalance -> Set(Stable, AwaitingSync))
@@ -151,7 +151,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
   }
 
   // TODO: decide if ids should be predictable or random
-  def generateNextMemberId = UUID.randomUUID().toString
+  def generateMemberIdSuffix = UUID.randomUUID().toString
 
   def canRebalance = state == Stable || state == AwaitingSync
 

@@ -739,6 +739,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       coordinator.handleJoinGroup(
         joinGroupRequest.groupId(),
         joinGroupRequest.memberId(),
+        request.header.clientId(),
         joinGroupRequest.sessionTimeout(),
         joinGroupRequest.protocolType(),
         protocols,
