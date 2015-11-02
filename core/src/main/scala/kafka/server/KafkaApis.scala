@@ -183,6 +183,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetCommitRequest(request: RequestChannel.Request) {
     val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
 
+    // reject the request immediately if not authorized to the group
+    if (!authorize(request.session, Read, new Resource(Group, offsetCommitRequest.groupId))) {
+      val errors = offsetCommitRequest.requestInfo.mapValues(_ => ErrorMapping.AuthorizationCode)
+      val response = OffsetCommitResponse(errors, offsetCommitRequest.correlationId)
+      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
+      return
+    }
+
     // filter non-exist topics
     val invalidRequestsInfo = offsetCommitRequest.requestInfo.filter { case (topicAndPartition, offsetMetadata) =>
       !metadataCache.contains(topicAndPartition.topic)
@@ -191,8 +199,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) =  filteredRequestInfo.partition {
       case (topicAndPartition, offsetMetadata) =>
-        authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic)) &&
-          authorize(request.session, Read, new Resource(Group, offsetCommitRequest.groupId))
+        authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
     }
 
     // the callback for sending an offset commit response

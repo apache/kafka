@@ -488,7 +488,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             if (metadata.fetch().unauthorizedTopics().contains(topic))
-                throw new TopicAuthorizationException(Collections.singleton(topic));
+                throw new TopicAuthorizationException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
         }
     }

@@ -343,13 +343,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future);
 
-            if (future.succeeded()) {
+            if (future.succeeded())
                 return;
-            }
 
-            if (!future.isRetriable()) {
+            if (!future.isRetriable())
                 throw future.exception();
-            }
 
             Utils.sleep(retryBackoffMs);
         }
@@ -461,7 +459,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                             || errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
                         coordinatorDead();
                     } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()
-                            || errorCode == Errors.ILLEGAL_GENERATION.code()) {
+                            || errorCode == Errors.ILLEGAL_GENERATION.code()
+                            || errorCode == Errors.REBALANCE_IN_PROGRESS.code()) {
                         // need to re-join group
                         subscriptions.needReassignment();
                     }
