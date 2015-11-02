@@ -418,7 +418,9 @@ public class StreamThread extends Thread {
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
         sensors.taskCreationSensor.record();
 
-        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, builder.build(null), config, sensors);
+        ProcessorTopology topology = builder.build(id.topicGroupId);
+
+        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, topology, config, sensors);
     }
 
     private void addPartitions(Collection<TopicPartition> assignment) {
