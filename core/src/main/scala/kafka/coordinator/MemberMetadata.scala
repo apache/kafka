@@ -49,9 +49,12 @@ private[coordinator] class MemberMetadata(val memberId: String,
                                           val sessionTimeoutMs: Int,
                                           var supportedProtocols: List[(String, Array[Byte])]) {
 
-  var assignment: Array[Byte] = null
+  // NOTE: we need to add memory barrier to assignment and awaitingSyncCallback
+  // since they can be accessed in the append callback thread that does not
+  // hold on the group object lock
+  @volatile var assignment: Array[Byte] = null
   var awaitingJoinCallback: JoinGroupResult => Unit = null
-  var awaitingSyncCallback: (Array[Byte], Short) => Unit = null
+  @volatile var awaitingSyncCallback: (Array[Byte], Short) => Unit = null
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
 

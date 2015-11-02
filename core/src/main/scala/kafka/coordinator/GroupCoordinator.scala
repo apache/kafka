@@ -588,9 +588,9 @@ class GroupCoordinator(val brokerId: Int,
       member.awaitingSyncCallback != null ||
       member.latestHeartbeat + member.sessionTimeoutMs > heartbeatDeadline
 
-  private def isCoordinatorForGroup(groupId: String) = groupManager.partitionLeaderIsLocal(groupManager.partitionFor(groupId))
+  private def isCoordinatorForGroup(groupId: String) = groupManager.isGroupLocal(groupId)
 
-  private def isCoordinatorLoadingInProgress(groupId: String) = groupManager.partitionLoadingInProgress(groupManager.partitionFor(groupId))
+  private def isCoordinatorLoadingInProgress(groupId: String) = groupManager.isGroupLoading(groupId)
 }
 
 object GroupCoordinator {

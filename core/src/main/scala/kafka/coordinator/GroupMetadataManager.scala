@@ -91,15 +91,15 @@ class GroupMetadataManager(val brokerId: Int,
 
   newGauge("NumGroups",
     new Gauge[Int] {
-      def value = offsetsCache.keys.map(_.group).toSet.size
+      def value = groupsCache.size
     }
   )
 
-  def partitionFor(group: String): Int = Utils.abs(group.hashCode) % groupMetadataTopicPartitionCount
+  def partitionFor(groupId: String): Int = Utils.abs(groupId.hashCode) % groupMetadataTopicPartitionCount
 
-  def partitionLeaderIsLocal(partition: Int): Boolean = loadingPartitions synchronized ownedPartitions.contains(partition)
+  def isGroupLocal(groupId: String): Boolean = loadingPartitions synchronized ownedPartitions.contains(partitionFor(groupId))
 
-  def partitionLoadingInProgress(partition: Int): Boolean = loadingPartitions synchronized loadingPartitions.contains(partition)
+  def isGroupLoading(groupId: String): Boolean = loadingPartitions synchronized loadingPartitions.contains(partitionFor(groupId))
 
   /**
    * Get the group associated with the given groupId, or null if not found
@@ -170,15 +170,15 @@ class GroupMetadataManager(val brokerId: Int,
     val groupMetadataMessageSet = Map(groupMetadataPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, message))
 
-    // set the callback function to insert offsets into cache after log append completed
+    // set the callback function to insert the created group into cache after log append completed
     def putCacheCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
       // the append response should only contain the topics partition
       if (responseStatus.size != 1 || ! responseStatus.contains(groupMetadataPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
           .format(responseStatus, groupMetadataPartition))
 
-      // construct the commit response status and insert
-      // the offset and metadata to cache if the append status has no error
+      // construct the error status in the propagated assignment response
+      // in the cache
       val status = responseStatus(groupMetadataPartition)
 
       var responseCode = Errors.NONE.code
@@ -213,10 +213,10 @@ class GroupMetadataManager(val brokerId: Int,
       }
 
       // propagate the assignments
-      propagateAssignment(group, Errors.NONE.code)
+      propagateAssignment(group, responseCode)
     }
 
-    // call replica manager to append the offset messages
+    // call replica manager to append the group message
     replicaManager.appendMessages(
       config.offsetCommitTimeoutMs.toLong,
       config.offsetCommitRequiredAcks,
@@ -325,14 +325,12 @@ class GroupMetadataManager(val brokerId: Int,
   def getOffsets(group: String, topicPartitions: Seq[TopicAndPartition]): Map[TopicAndPartition, OffsetMetadataAndError] = {
     trace("Getting offsets %s for group %s.".format(topicPartitions, group))
 
-    val offsetsPartition = partitionFor(group)
-
     /**
      * we need to put the leader-is-local check inside the offsetLock to protects against fetching from an empty/cleared
      * offset cache (i.e., cleared due to a leader->follower transition right after the check and clear the cache).
      */
     inReadLock(offsetRemoveLock) {
-      if (partitionLeaderIsLocal(offsetsPartition)) {
+      if (isGroupLocal(group)) {
         if (topicPartitions.isEmpty) {
           // Return offsets for all partitions owned by this consumer group. (this only applies to consumers that commit offsets to Kafka.)
           offsetsCache.filter(_._1.group == group).map { case(groupTopicPartition, offsetAndMetadata) =>
