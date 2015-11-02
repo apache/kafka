@@ -154,7 +154,7 @@ public class FetcherTest {
 
         // resize the limit of the buffer to pretend it is only fetch-size large
         fetcher.initFetches(cluster);
-        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.AUTHORIZATION_FAILED.code(), 100L, 0));
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.TOPIC_AUTHORIZATION_FAILED.code(), 100L, 0));
         consumerClient.poll(0);
         try {
             fetcher.fetchedRecords();

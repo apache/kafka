@@ -173,7 +173,7 @@ public class MetadataResponse extends AbstractRequestResponse {
 
         Set<String> unauthorizedTopics = new HashSet<>();
         for (Map.Entry<String, Errors> topicErrorEntry : topicErrors.entrySet()) {
-            if (topicErrorEntry.getValue() == Errors.AUTHORIZATION_FAILED)
+            if (topicErrorEntry.getValue() == Errors.TOPIC_AUTHORIZATION_FAILED)
                 unauthorizedTopics.add(topicErrorEntry.getKey());
         }
         return unauthorizedTopics;

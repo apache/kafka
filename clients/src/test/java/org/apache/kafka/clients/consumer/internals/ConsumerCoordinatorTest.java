@@ -146,7 +146,7 @@ public class ConsumerCoordinatorTest {
 
     @Test(expected = GroupAuthorizationException.class)
     public void testGroupDescribeUnauthorized() {
-        client.prepareResponse(consumerMetadataResponse(node, Errors.AUTHORIZATION_FAILED.code()));
+        client.prepareResponse(consumerMetadataResponse(node, Errors.GROUP_AUTHORIZATION_FAILED.code()));
         coordinator.ensureCoordinatorKnown();
     }
 
@@ -158,7 +158,7 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorKnown();
 
         client.prepareResponse(joinGroupLeaderResponse(0, "memberId", Collections.<String, List<String>>emptyMap(),
-                Errors.AUTHORIZATION_FAILED.code()));
+                Errors.GROUP_AUTHORIZATION_FAILED.code()));
         coordinator.ensurePartitionAssignment();
     }
 

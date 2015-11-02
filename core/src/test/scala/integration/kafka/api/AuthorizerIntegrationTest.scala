@@ -28,7 +28,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, requests}
@@ -248,10 +248,11 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
 
     for ((key, request) <- requestKeyToRequest) {
       removeAllAcls
-      sendRequestAndVerifyResponseErrorCode(socket, key, request, isAuthorized = false)
+      val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
+      sendRequestAndVerifyResponseErrorCode(socket, key, request, resources, isAuthorized = false)
       for ((resource, acls) <- RequestKeysToAcls(key))
         addAndVerifyAcls(acls, resource)
-      sendRequestAndVerifyResponseErrorCode(socket, key, request, isAuthorized = true)
+      sendRequestAndVerifyResponseErrorCode(socket, key, request, resources, isAuthorized = true)
     }
   }
 
@@ -430,27 +431,27 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test(expected = classOf[AuthorizationException])
+  @Test(expected = classOf[TopicAuthorizationException])
   def testCommitWithNoTopicAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test(expected = classOf[AuthorizationException])
+  @Test(expected = classOf[TopicAuthorizationException])
   def testCommitWithTopicWrite() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test(expected = classOf[AuthorizationException])
+  @Test(expected = classOf[TopicAuthorizationException])
   def testCommitWithTopicDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test(expected = classOf[AuthorizationException])
+  @Test(expected = classOf[GroupAuthorizationException])
   def testCommitWithNoGroupAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
@@ -469,14 +470,14 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     this.consumers.head.position(tp)
   }
 
-  @Test(expected = classOf[AuthorizationException])
+  @Test(expected = classOf[GroupAuthorizationException])
   def testOffsetFetchWithNoGroupAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
     this.consumers.head.position(tp)
   }
 
-  @Test(expected = classOf[AuthorizationException])
+  @Test(expected = classOf[TopicAuthorizationException])
   def testOffsetFetchWithNoTopicAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     this.consumers.head.assign(List(tp).asJava)
@@ -506,7 +507,11 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     }
   }
 
-  def sendRequestAndVerifyResponseErrorCode(socket: Socket, key: Short, request: AbstractRequest, isAuthorized: Boolean): AbstractRequestResponse = {
+  def sendRequestAndVerifyResponseErrorCode(socket: Socket,
+                                            key: Short,
+                                            request: AbstractRequest,
+                                            resources: Set[ResourceType],
+                                            isAuthorized: Boolean): AbstractRequestResponse = {
     val header = new RequestHeader(key, "client", 1)
     val body = request.toStruct
 
@@ -523,10 +528,11 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     val response = RequestKeyToResponseDeserializer(key).getMethod("parse", classOf[ByteBuffer]).invoke(null, resp).asInstanceOf[AbstractRequestResponse]
     val errorCode = RequestKeyToErrorCode(key).asInstanceOf[(AbstractRequestResponse) => Short](response)
 
+    val possibleErrorCodes = resources.map(_.errorCode)
     if (isAuthorized)
-      assertNotEquals(s"$key should be allowed", Errors.AUTHORIZATION_FAILED.code, errorCode)
+      assertFalse(s"${ApiKeys.forId(key)} should be allowed", possibleErrorCodes.contains(errorCode))
     else
-      assertEquals(s"$key should be forbidden", Errors.AUTHORIZATION_FAILED.code, errorCode)
+      assertTrue(s"${ApiKeys.forId(key)} should be forbidden", possibleErrorCodes.contains(errorCode))
 
     response
   }

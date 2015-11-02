@@ -556,7 +556,7 @@ public class Fetcher<K, V> {
                     else
                         this.offsetOutOfRangePartitions.put(tp, fetchOffset);
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
-                } else if (partition.errorCode == Errors.AUTHORIZATION_FAILED.code()) {
+                } else if (partition.errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
                     log.warn("Not authorized to read from topic {}.", tp.topic());
                     unauthorizedTopics.add(tp.topic());
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {

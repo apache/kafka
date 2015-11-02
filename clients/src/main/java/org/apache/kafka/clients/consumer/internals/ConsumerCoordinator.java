@@ -15,6 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -440,6 +441,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         @Override
         public void handle(OffsetCommitResponse commitResponse, RequestFuture<Void> future) {
             sensors.commitLatency.record(response.requestLatencyMs());
+            Set<String> unauthorizedTopics = new HashSet<>();
+
             for (Map.Entry<TopicPartition, Short> entry : commitResponse.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetAndMetadata offsetAndMetadata = this.offsets.get(tp);
@@ -451,6 +454,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                     if (subscriptions.isAssigned(tp))
                         // update the local cache only if the partition is still assigned
                         subscriptions.committed(tp, offsetAndMetadata);
+                } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+                    future.raise(new GroupAuthorizationException(groupId));
+                    return;
+                } else if (errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
+                    unauthorizedTopics.add(tp.topic());
                 } else {
                     if (errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
                         // just retry
@@ -475,7 +483,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                 }
             }
 
-            future.complete(null);
+            if (!unauthorizedTopics.isEmpty())
+                future.raise(new TopicAuthorizationException(unauthorizedTopics));
+            else
+                future.complete(null);
         }
     }
 

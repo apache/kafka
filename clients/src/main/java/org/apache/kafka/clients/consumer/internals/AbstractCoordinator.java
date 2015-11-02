@@ -374,7 +374,7 @@ public abstract class AbstractCoordinator {
                 log.error("Attempt to join group {} failed due to: {}",
                         groupId, error.exception().getMessage());
                 future.raise(error);
-            } else if (errorCode == Errors.AUTHORIZATION_FAILED.code()) {
+            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
                 // unexpected error, throw the exception
@@ -427,7 +427,7 @@ public abstract class AbstractCoordinator {
             if (errorCode == Errors.NONE.code()) {
                 future.complete(syncResponse.memberAssignment());
                 sensors.syncLatency.record(response.requestLatencyMs());
-            } else if (errorCode == Errors.AUTHORIZATION_FAILED.code()) {
+            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
                 AbstractCoordinator.this.rejoinNeeded = true;
@@ -490,7 +490,7 @@ public abstract class AbstractCoordinator {
                 if (generation > 0)
                     heartbeatTask.reset();
                 future.complete(null);
-            } else if (errorCode == Errors.AUTHORIZATION_FAILED.code()) {
+            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
                 future.raise(Errors.forCode(errorCode));
@@ -565,7 +565,7 @@ public abstract class AbstractCoordinator {
                 memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
-            } else if (errorCode == Errors.AUTHORIZATION_FAILED.code()) {
+            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
                 future.raise(new KafkaException("Unexpected errorCode in heartbeat response: "
