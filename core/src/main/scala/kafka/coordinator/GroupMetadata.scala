@@ -218,17 +218,9 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
   def summary: GroupSummary = {
     if (is(Stable)) {
       val members = this.members.values.map{ member => member.summary(protocol) }.toList
-      GroupSummary(userFriendlyState, protocolType, protocol, members)
+      GroupSummary(state.toString, protocolType, protocol, members)
     } else {
-      GroupSummary(userFriendlyState, protocolType, GroupCoordinator.NoProtocol, GroupCoordinator.NoMembers)
-    }
-  }
-
-  def userFriendlyState = {
-    state match {
-      case Dead => "DEAD"
-      case PreparingRebalance|AwaitingSync => "REBALANCING"
-      case Stable => "STABLE"
+      GroupSummary(state.toString, protocolType, GroupCoordinator.NoProtocol, GroupCoordinator.NoMembers)
     }
   }
 

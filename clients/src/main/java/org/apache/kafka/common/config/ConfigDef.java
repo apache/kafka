@@ -151,6 +151,23 @@ public class ConfigDef {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, required);
     }
 
+    /**
+     * Add standard SSL client configuration options.
+     * @return this
+     */
+    public ConfigDef withClientSslSupport() {
+        SslConfigs.addClientSslSupport(this);
+        return this;
+    }
+
+    /**
+     * Add standard SASL client configuration options.
+     * @return this
+     */
+    public ConfigDef withClientSaslSupport() {
+        SaslConfigs.addClientSaslSupport(this);
+        return this;
+    }
 
     /**
      * Parse and validate configs against this configuration definition. The input is a map of configs. It is expected

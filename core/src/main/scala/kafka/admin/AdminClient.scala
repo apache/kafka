@@ -21,6 +21,7 @@ import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{SendFailedException, ConsumerProtocol, ConsumerNetworkClient, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SaslConfigs, SslConfigs}
+import org.apache.kafka.common.errors.DisconnectException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.types.Struct
@@ -34,11 +35,12 @@ import scala.collection.JavaConverters._
 
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
-                  val client: ConsumerNetworkClient) extends Logging {
+                  val client: ConsumerNetworkClient,
+                  val bootstrapBrokers: List[Node]) extends Logging {
 
   private def send(target: Node,
                    api: ApiKeys,
-                   request: AbstractRequest): Option[Struct]= {
+                   request: AbstractRequest): Struct = {
     var now = time.milliseconds()
     val deadline = now + requestTimeoutMs
     var future: RequestFuture[ClientResponse] = null
@@ -49,106 +51,107 @@ class AdminClient(val time: Time,
 
       if (future.succeeded())
         return if (future.value().wasDisconnected()) {
-          debug(s"Broker ${target} disconnected while handling request ${api}")
-          None
+          throw new DisconnectException()
         } else {
-          Some(future.value().responseBody())
+          future.value().responseBody()
         }
 
       now = time.milliseconds()
     } while (now < deadline && future.exception().isInstanceOf[SendFailedException])
 
-    debug(s"Request ${api} failed against broker ${target}", future.exception())
-    None
+    throw future.exception()
   }
 
-  private def sendAnyNode(api: ApiKeys, request: AbstractRequest): Option[Struct] = {
-    val node = client.leastLoadedNode()
-    if (node == null)
-      return None
-    send(node, api, request)
+  private def sendAnyNode(api: ApiKeys, request: AbstractRequest): Struct = {
+    bootstrapBrokers.foreach {
+      case broker =>
+        try {
+          return send(broker, api, request)
+        } catch {
+          case e: Exception =>
+            debug(s"Request ${api} failed against node ${broker}", e)
+        }
+    }
+    throw new RuntimeException(s"Request ${api} failed on brokers ${bootstrapBrokers}")
   }
 
-  private def findCoordinator(groupId: String): Option[Node] = {
+  private def findCoordinator(groupId: String): Node = {
     val request = new GroupMetadataRequest(groupId)
-    sendAnyNode(ApiKeys.GROUP_METADATA, request).flatMap{ responseBody =>
-      val response = new GroupMetadataResponse(responseBody)
-      if (response.errorCode() == Errors.NONE.code)
-        Some(response.node())
-      else
-        None
-    }
+    val responseBody = sendAnyNode(ApiKeys.GROUP_METADATA, request)
+    val response = new GroupMetadataResponse(responseBody)
+    Errors.forCode(response.errorCode()).maybeThrow()
+    response.node()
   }
 
-  def listGroups(node: Node): Option[List[GroupOverview]] = {
-    send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest()).flatMap{ responseBody =>
-      val response = new ListGroupsResponse(responseBody)
-      if (response.errorCode() == Errors.NONE.code)
-        Some(response.groups().map(group => GroupOverview(group.groupId(), group.protocolType())).toList)
-      else
-        None
-    }
+  def listGroups(node: Node): List[GroupOverview] = {
+    val responseBody = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest())
+    val response = new ListGroupsResponse(responseBody)
+    Errors.forCode(response.errorCode()).maybeThrow()
+    response.groups().map(group => GroupOverview(group.groupId(), group.protocolType())).toList
   }
 
-  private def findAllBrokers(): Option[List[Node]] = {
+  private def findAllBrokers(): List[Node] = {
     val request = new MetadataRequest(List[String]())
-    sendAnyNode(ApiKeys.METADATA, request).flatMap{ responseBody =>
-      val response = new MetadataResponse(responseBody)
-      Some(response.cluster().nodes().asScala.toList)
+    val responseBody = sendAnyNode(ApiKeys.METADATA, request)
+    val response = new MetadataResponse(responseBody)
+    if (!response.errors().isEmpty)
+      debug(s"Metadata request contained errors: ${response.errors()}")
+    response.cluster().nodes().asScala.toList
+  }
+
+  def listAllGroups(): Map[Node, List[GroupOverview]] = {
+    findAllBrokers.map {
+      case broker =>
+        broker -> {
+          try {
+            listGroups(broker)
+          } catch {
+            case e: Exception =>
+              debug(s"Failed to find groups from broker ${broker}", e)
+              List[GroupOverview]()
+          }
+        }
+    }.toMap
+  }
+
+  def listAllConsumerGroups(): Map[Node, List[GroupOverview]] = {
+    listAllGroups().mapValues { groups =>
+      groups.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
     }
   }
 
-  def listAllGroups(): Map[Node, Option[List[GroupOverview]]] = {
-    findAllBrokers match {
-      case None => Map.empty
-      case Some(brokers) => brokers.map{ broker =>
-        broker -> listGroups(broker)
-      }.toMap
-    }
+  def listAllGroupsFlattened(): List[GroupOverview] = {
+    listAllGroups.values.flatten.toList
   }
 
-  def listAllConsumerGroups(): Map[Node, Option[List[GroupOverview]]] = {
-    listAllGroups().mapValues { maybeGroups =>
-      maybeGroups.map(_.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE))
-    }
-  }
-
-  def listAllGroupsFlattened = {
-    listAllGroups.values.filter(_.isDefined).map(_.get).flatten.toList
-  }
-
-  def listAllConsumerGroupsFlattened = {
+  def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
     listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
-  def describeGroup(groupId: String): Option[GroupSummary] = {
-    findCoordinator(groupId).flatMap{ coordinator =>
-      send(coordinator, ApiKeys.DESCRIBE_GROUP, new DescribeGroupRequest(groupId)).flatMap{ struct =>
-        val response = new DescribeGroupResponse(struct)
-        if (response.errorCode() == Errors.NONE.code) {
-          val members = response.members().map { member =>
-            val metadata = Utils.readBytes(member.memberMetadata())
-            val assignment = Utils.readBytes(member.memberAssignment())
-            MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
-          }.toList
-          Some(GroupSummary(response.state(), response.protocolType(), response.protocol(), members))
-        } else {
-          None
-        }
-      }
-    }
+  def describeGroup(groupId: String): GroupSummary = {
+    val coordinator = findCoordinator(groupId)
+    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUP, new DescribeGroupRequest(groupId))
+    val response = new DescribeGroupResponse(responseBody)
+    Errors.forCode(response.errorCode()).maybeThrow()
+    val members = response.members().map {
+      case member =>
+        val metadata = Utils.readBytes(member.memberMetadata())
+        val assignment = Utils.readBytes(member.memberAssignment())
+        MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
+    }.toList
+    GroupSummary(response.state(), response.protocolType(), response.protocol(), members)
   }
 
-  def describeConsumerGroup(groupId: String): Option[Map[String, List[TopicPartition]]] = {
-    describeGroup(groupId).map { group =>
-      if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-        throw new IllegalArgumentException(s"Group ${groupId} is not a consumer group")
-      group.members.map { member =>
-        val assignment = ConsumerProtocol.deserializeAssignment(
-          ByteBuffer.wrap(member.assignment))
+  def describeConsumerGroup(groupId: String): Map[String, List[TopicPartition]] = {
+    val group = describeGroup(groupId)
+    if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
+      throw new IllegalArgumentException(s"Group ${groupId} is not a consumer group")
+
+    group.members.map {
+      case member =>
+        val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
         member.memberId -> assignment.partitions().asScala.toList
-      }.toMap
-    }
+    }.toMap
   }
 
 }
@@ -175,9 +178,8 @@ object AdminClient {
         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
         ConfigDef.Importance.MEDIUM,
         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-
-    SslConfigs.addSslSupport(config)
-    SaslConfigs.addSaslSupport(config)
+      .withClientSslSupport()
+      .withClientSaslSupport()
     config
   }
 
@@ -188,6 +190,8 @@ object AdminClient {
     create(new AdminConfig(config))
   }
 
+  def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
+
   def create(config: AdminConfig): AdminClient = {
     val time = new SystemTime
     val metrics = new Metrics(time)
@@ -196,7 +200,8 @@ object AdminClient {
 
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls)
-    metadata.update(Cluster.bootstrap(brokerAddresses), 0)
+    val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
+    metadata.update(bootstrapCluster, 0)
 
     val selector = new Selector(
       DefaultConnectionMaxIdleMs,
@@ -223,6 +228,10 @@ object AdminClient {
       time,
       DefaultRetryBackoffMs)
 
-    new AdminClient(time, DefaultRequestTimeoutMs, highLevelClient)
+    new AdminClient(
+      time,
+      DefaultRequestTimeoutMs,
+      highLevelClient,
+      bootstrapCluster.nodes().asScala.toList)
   }
 }
