@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -37,6 +38,8 @@ import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
@@ -199,6 +202,8 @@ public abstract class AbstractCoordinator {
      * Reset the generation/memberId tracked by this member
      */
     public void resetGeneration() {
+        // leave the group if it is needed, but don't block
+        maybeLeaveGroup(0);
         this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
         this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
         rejoinNeeded = true;
@@ -522,6 +527,54 @@ public abstract class AbstractCoordinator {
         if (this.coordinator != null) {
             log.info("Marking the coordinator {} dead.", this.coordinator.id());
             this.coordinator = null;
+        }
+    }
+
+    public void close(long timeoutMs) {
+        maybeLeaveGroup(timeoutMs);
+    }
+
+    private void maybeLeaveGroup(long timeoutMs) {
+        if (!coordinatorUnknown() && generation > 0) {
+            RequestFuture<Void> future = sendLeaveGroupRequest();
+            if (!client.poll(future, timeoutMs))
+                throw new TimeoutException("Timeout while awaiting leave group response");
+        }
+    }
+
+    private RequestFuture<Void> sendLeaveGroupRequest() {
+        LeaveGroupRequest request = new LeaveGroupRequest(groupId, memberId);
+        RequestFuture<Void> future = client.send(coordinator, ApiKeys.LEAVE_GROUP, request)
+                .compose(new LeaveGroupResponseHandler());
+        future.addListener(new RequestFutureListener<Void>() {
+            @Override
+            public void onSuccess(Void value) {
+            }
+
+            @Override
+            public void onFailure(RuntimeException e) {
+                log.debug("LeaveGroup request failed with error", e);
+            }
+        });
+
+        return future;
+    }
+
+
+    private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
+        @Override
+        public LeaveGroupResponse parse(ClientResponse response) {
+            return new LeaveGroupResponse(response.responseBody());
+        }
+
+        @Override
+        public void handle(LeaveGroupResponse leaveResponse, RequestFuture<Void> future) {
+            // process the response
+            short errorCode = leaveResponse.errorCode();
+            if (errorCode == Errors.NONE.code())
+                future.complete(null);
+            else
+                future.raise(Errors.forCode(errorCode));
         }
     }
 

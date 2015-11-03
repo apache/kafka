@@ -23,23 +23,23 @@ public class LeaveGroupRequest extends AbstractRequest {
 
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LEAVE_GROUP.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
-    private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
+    private static final String MEMBER_ID_KEY_NAME = "member_id";
 
     private final String groupId;
-    private final String consumerId;
+    private final String memberId;
 
-    public LeaveGroupRequest(String groupId, String consumerId) {
+    public LeaveGroupRequest(String groupId, String memberId) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(GROUP_ID_KEY_NAME, groupId);
-        struct.set(CONSUMER_ID_KEY_NAME, consumerId);
+        struct.set(MEMBER_ID_KEY_NAME, memberId);
         this.groupId = groupId;
-        this.consumerId = consumerId;
+        this.memberId = memberId;
     }
 
     public LeaveGroupRequest(Struct struct) {
         super(struct);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
-        consumerId = struct.getString(CONSUMER_ID_KEY_NAME);
+        memberId = struct.getString(MEMBER_ID_KEY_NAME);
     }
 
     @Override
@@ -58,7 +58,7 @@ public class LeaveGroupRequest extends AbstractRequest {
     }
 
     public String consumerId() {
-        return consumerId;
+        return memberId;
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer, int versionId) {

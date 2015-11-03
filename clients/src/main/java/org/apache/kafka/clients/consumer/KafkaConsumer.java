@@ -586,7 +586,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
             // this is to prevent resource leak. see KAFKA-2121
-            close(true);
+            close(0, true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
@@ -1159,10 +1159,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void close() {
+        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+    }
+
+    public void close(long timeout, TimeUnit unit) {
         acquire();
         try {
             if (closed) return;
-            close(false);
+            if (timeout < 0) throw new IllegalArgumentException("The timeout cannot be negative.");
+            close(unit.toMillis(timeout), false);
         } finally {
             release();
         }
@@ -1177,11 +1182,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.client.wakeup();
     }
 
-    private void close(boolean swallowException) {
+    private void close(long timeoutMs, boolean swallowException) {
         log.trace("Closing the Kafka consumer.");
-        AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
         this.closed = true;
-        ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
+
+        try {
+            coordinator.close(timeoutMs);
+        } catch (Exception e) {
+            log.error("Failed to close coordinator", e);
+        }
+
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);
         ClientUtils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);

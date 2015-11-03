@@ -528,10 +528,10 @@ public class Protocol {
     public static final Schema[] SYNC_GROUP_RESPONSE = new Schema[] {SYNC_GROUP_RESPONSE_V0};
 
     /* Heartbeat api */
-    public static final Schema HEARTBEAT_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The consumer group id."),
+    public static final Schema HEARTBEAT_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The group id."),
                                                                  new Field("group_generation_id",
                                                                            INT32,
-                                                                           "The generation of the consumer group."),
+                                                                           "The generation of the group."),
                                                                  new Field("member_id",
                                                                            STRING,
                                                                            "The member id assigned by the group coordinator."));
@@ -542,10 +542,10 @@ public class Protocol {
     public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0};
 
     /* Leave group api */
-    public static final Schema LEAVE_GROUP_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The consumer group id."),
-                                                                   new Field("consumer_id",
+    public static final Schema LEAVE_GROUP_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The group id."),
+                                                                   new Field("member_id",
                                                                              STRING,
-                                                                             "The consumer id assigned by the group coordinator."));
+                                                                             "The member id assigned by the group coordinator."));
 
     public static final Schema LEAVE_GROUP_RESPONSE_V0 = new Schema(new Field("error_code", INT16));
 

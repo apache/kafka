@@ -164,7 +164,8 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean poll(RequestFuture<?> future, long timeout) {
         long now = time.milliseconds();
         long deadline = now + timeout;
-        while (!future.isDone() && now < deadline) {
+        if (deadline < 0) deadline = Long.MAX_VALUE;
+        while (!future.isDone() && now <= deadline) {
             poll(deadline - now, now);
             now = time.milliseconds();
         }
