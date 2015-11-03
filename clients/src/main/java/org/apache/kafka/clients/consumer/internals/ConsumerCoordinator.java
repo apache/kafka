@@ -119,7 +119,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
 
     @Override
     public String protocolType() {
-        return "consumer";
+        return ConsumerProtocol.PROTOCOL_TYPE;
     }
 
     @Override

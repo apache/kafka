@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
+import java.util
 
 import kafka.admin.AdminUtils
 import kafka.api._
@@ -31,13 +32,12 @@ import kafka.network.RequestChannel.{Session, Response}
 import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.Node
 
 import scala.collection._
-
-
 /**
  * Logic to handle the various Kafka requests
  */
@@ -74,11 +74,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.ControlledShutdownKey => handleControlledShutdownRequest(request)
         case RequestKeys.OffsetCommitKey => handleOffsetCommitRequest(request)
         case RequestKeys.OffsetFetchKey => handleOffsetFetchRequest(request)
-        case RequestKeys.GroupMetadataKey => handleGroupMetadataRequest(request)
+        case RequestKeys.GroupCoordinatorKey => handleGroupCoordinatorRequest(request)
         case RequestKeys.JoinGroupKey => handleJoinGroupRequest(request)
         case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
         case RequestKeys.LeaveGroupKey => handleLeaveGroupRequest(request)
         case RequestKeys.SyncGroupKey => handleSyncGroupRequest(request)
+        case RequestKeys.DescribeGroupsKey => handleDescribeGroupRequest(request)
+        case RequestKeys.ListGroupsKey => handleListGroupsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -676,34 +678,73 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
   }
 
-  /*
-   * Handle a consumer metadata request
-   */
-  def handleGroupMetadataRequest(request: RequestChannel.Request) {
-    val groupMetadataRequest = request.requestObj.asInstanceOf[GroupMetadataRequest]
+  def handleGroupCoordinatorRequest(request: RequestChannel.Request) {
+    val groupCoordinatorRequest = request.body.asInstanceOf[GroupCoordinatorRequest]
+    val responseHeader = new ResponseHeader(request.header.correlationId)
 
-    if (!authorize(request.session, Read, new Resource(Group, groupMetadataRequest.group))) {
-      val response = GroupMetadataResponse(None, ErrorMapping.AuthorizationCode, groupMetadataRequest.correlationId)
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
+    if (!authorize(request.session, Describe, new Resource(Group, groupCoordinatorRequest.groupId))) {
+      val responseBody = new GroupCoordinatorResponse(Errors.AUTHORIZATION_FAILED.code, Node.noNode)
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
-      val partition = coordinator.partitionFor(groupMetadataRequest.group)
+      val partition = coordinator.partitionFor(groupCoordinatorRequest.groupId)
 
       // get metadata (and create the topic if necessary)
       val offsetsTopicMetadata = getTopicMetadata(Set(GroupCoordinator.GroupMetadataTopicName), request.securityProtocol).head
+      val coordinatorEndpoint = offsetsTopicMetadata.partitionsMetadata.find(_.partitionId == partition).flatMap {
+        partitionMetadata => partitionMetadata.leader
+      }
 
-      val errorResponse = GroupMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, groupMetadataRequest.correlationId)
-
-      val response =
-        offsetsTopicMetadata.partitionsMetadata.find(_.partitionId == partition).map { partitionMetadata =>
-          partitionMetadata.leader.map { leader =>
-            GroupMetadataResponse(Some(leader), ErrorMapping.NoError, groupMetadataRequest.correlationId)
-          }.getOrElse(errorResponse)
-        }.getOrElse(errorResponse)
+      val responseBody = coordinatorEndpoint match {
+        case None =>
+          new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code, Node.noNode())
+        case Some(endpoint) =>
+          new GroupCoordinatorResponse(Errors.NONE.code, new Node(endpoint.id, endpoint.host, endpoint.port))
+      }
 
       trace("Sending consumer metadata %s for correlation id %d to client %s."
-        .format(response, groupMetadataRequest.correlationId, groupMetadataRequest.clientId))
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
+        .format(responseBody, request.header.correlationId, request.header.clientId))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
+  }
+
+  def handleDescribeGroupRequest(request: RequestChannel.Request) {
+    import JavaConverters._
+
+    val describeRequest = request.body.asInstanceOf[DescribeGroupsRequest]
+    val responseHeader = new ResponseHeader(request.header.correlationId)
+
+    val groups = describeRequest.groupIds().asScala.map {
+      case groupId =>
+        if (!authorize(request.session, Describe, new Resource(Group, groupId))) {
+          groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.AUTHORIZATION_FAILED)
+        } else {
+          val (error, summary) = coordinator.handleDescribeGroup(groupId)
+          val members = summary.members.map { member =>
+            val metadata = ByteBuffer.wrap(member.metadata)
+            val assignment = ByteBuffer.wrap(member.assignment)
+            new DescribeGroupsResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
+          }
+          groupId -> new DescribeGroupsResponse.GroupMetadata(error.code, summary.state, summary.protocolType,
+            summary.protocol, members.asJava)
+        }
+    }.toMap
+
+    val responseBody = new DescribeGroupsResponse(groups.asJava)
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
+  }
+
+  def handleListGroupsRequest(request: RequestChannel.Request) {
+    import JavaConverters._
+
+    val responseHeader = new ResponseHeader(request.header.correlationId)
+    val responseBody = if (!authorize(request.session, Describe, Resource.ClusterResource)) {
+      ListGroupsResponse.fromError(Errors.AUTHORIZATION_FAILED)
+    } else {
+      val (error, groups) = coordinator.handleListGroups()
+      val allGroups = groups.map{ group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }
+      new ListGroupsResponse(error.code, allGroups.asJava)
+    }
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
 
   def handleJoinGroupRequest(request: RequestChannel.Request) {
@@ -740,6 +781,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         joinGroupRequest.groupId(),
         joinGroupRequest.memberId(),
         request.header.clientId(),
+        request.session.host,
         joinGroupRequest.sessionTimeout(),
         joinGroupRequest.protocolType(),
         protocols,

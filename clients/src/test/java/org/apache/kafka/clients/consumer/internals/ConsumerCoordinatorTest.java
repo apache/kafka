@@ -32,7 +32,7 @@ import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.requests.GroupMetadataResponse;
+import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -729,7 +729,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private Struct consumerMetadataResponse(Node node, short error) {
-        GroupMetadataResponse response = new GroupMetadataResponse(error, node);
+        GroupCoordinatorResponse response = new GroupCoordinatorResponse(error, node);
         return response.toStruct();
     }
 

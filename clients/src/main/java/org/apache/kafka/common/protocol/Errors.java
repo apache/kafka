@@ -86,7 +86,8 @@ public enum Errors {
             new ApiException("The session timeout is not within an acceptable range.")),
     INVALID_COMMIT_OFFSET_SIZE(28,
             new ApiException("The committing offset data size is not valid")),
-    AUTHORIZATION_FAILED(29, new ApiException("Request is not authorized.")),
+    AUTHORIZATION_FAILED(29,
+            new ApiException("Request is not authorized.")),
     REBALANCE_IN_PROGRESS(30,
             new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed."));
 

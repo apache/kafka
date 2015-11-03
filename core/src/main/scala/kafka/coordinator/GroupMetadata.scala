@@ -93,6 +93,20 @@ private object GroupMetadata {
 }
 
 /**
+ * Case class used to represent group metadata for the ListGroups API
+ */
+case class GroupOverview(groupId: String,
+                         protocolType: String)
+
+/**
+ * Case class used to represent group metadata for the DescribeGroup API
+ */
+case class GroupSummary(state: String,
+                        protocolType: String,
+                        protocol: String,
+                        members: List[MemberSummary])
+
+/**
  * Group contains the following metadata:
  *
  *  Membership metadata:
@@ -144,7 +158,9 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
 
   def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
 
-  def allMembers = members.values.toList
+  def allMembers = members.keySet
+
+  def allMemberMetadata = members.values.toList
 
   def rebalanceTimeout = members.values.foldLeft(0) {(timeout, member) =>
     timeout.max(member.sessionTimeoutMs)
@@ -168,7 +184,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
     val candidates = candidateProtocols
 
     // let each member vote for one of the protocols and choose the one with the most votes
-    val votes: List[(String, Int)] = allMembers
+    val votes: List[(String, Int)] = allMemberMetadata
       .map(_.vote(candidates))
       .groupBy(identity)
       .mapValues(_.size)
@@ -179,7 +195,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
 
   private def candidateProtocols = {
     // get the set of protocols that are commonly supported by all members
-    allMembers
+    allMemberMetadata
       .map(_.protocols)
       .reduceLeft((commonProtocols, protocols) => commonProtocols & protocols)
   }
@@ -199,6 +215,20 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
     if (is(Dead) || is(PreparingRebalance))
       throw new IllegalStateException("Cannot obtain member metadata for group in state %s".format(state))
     members.map{ case (memberId, memberMetadata) => (memberId, memberMetadata.metadata(protocol))}.toMap
+  }
+
+  def summary: GroupSummary = {
+    if (is(Stable)) {
+      val members = this.members.values.map{ member => member.summary(protocol) }.toList
+      GroupSummary(state.toString, protocolType, protocol, members)
+    } else {
+      val members = this.members.values.map{ member => member.summaryNoMetadata() }.toList
+      GroupSummary(state.toString, protocolType, GroupCoordinator.NoProtocol, members)
+    }
+  }
+
+  def overview: GroupOverview = {
+    GroupOverview(groupId, protocolType)
   }
 
   private def assertValidTransition(targetState: GroupState) {

@@ -30,8 +30,8 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.GroupMetadataRequest;
-import org.apache.kafka.common.requests.GroupMetadataResponse;
+import org.apache.kafka.common.requests.GroupCoordinatorRequest;
+import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -450,8 +450,8 @@ public abstract class AbstractCoordinator {
         } else {
             // create a group  metadata request
             log.debug("Issuing group metadata request to broker {}", node.id());
-            GroupMetadataRequest metadataRequest = new GroupMetadataRequest(this.groupId);
-            return client.send(node, ApiKeys.GROUP_METADATA, metadataRequest)
+            GroupCoordinatorRequest metadataRequest = new GroupCoordinatorRequest(this.groupId);
+            return client.send(node, ApiKeys.GROUP_COORDINATOR, metadataRequest)
                     .compose(new RequestFutureAdapter<ClientResponse, Void>() {
                         @Override
                         public void onSuccess(ClientResponse response, RequestFuture<Void> future) {
@@ -472,14 +472,14 @@ public abstract class AbstractCoordinator {
             // We already found the coordinator, so ignore the request
             future.complete(null);
         } else {
-            GroupMetadataResponse groupMetadataResponse = new GroupMetadataResponse(resp.responseBody());
+            GroupCoordinatorResponse groupCoordinatorResponse = new GroupCoordinatorResponse(resp.responseBody());
             // use MAX_VALUE - node.id as the coordinator id to mimic separate connections
             // for the coordinator in the underlying network client layer
             // TODO: this needs to be better handled in KAFKA-1935
-            if (groupMetadataResponse.errorCode() == Errors.NONE.code()) {
-                this.coordinator = new Node(Integer.MAX_VALUE - groupMetadataResponse.node().id(),
-                        groupMetadataResponse.node().host(),
-                        groupMetadataResponse.node().port());
+            if (groupCoordinatorResponse.errorCode() == Errors.NONE.code()) {
+                this.coordinator = new Node(Integer.MAX_VALUE - groupCoordinatorResponse.node().id(),
+                        groupCoordinatorResponse.node().host(),
+                        groupCoordinatorResponse.node().port());
 
                 client.tryConnect(coordinator);
 
@@ -488,7 +488,7 @@ public abstract class AbstractCoordinator {
                     heartbeatTask.reset();
                 future.complete(null);
             } else {
-                future.raise(Errors.forCode(groupMetadataResponse.errorCode()));
+                future.raise(Errors.forCode(groupCoordinatorResponse.errorCode()));
             }
         }
     }

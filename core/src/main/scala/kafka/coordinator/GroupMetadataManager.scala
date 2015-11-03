@@ -95,11 +95,15 @@ class GroupMetadataManager(val brokerId: Int,
     }
   )
 
+  def currentGroups(): Iterable[GroupMetadata] = groupsCache.values
+
   def partitionFor(groupId: String): Int = Utils.abs(groupId.hashCode) % groupMetadataTopicPartitionCount
 
   def isGroupLocal(groupId: String): Boolean = loadingPartitions synchronized ownedPartitions.contains(partitionFor(groupId))
 
   def isGroupLoading(groupId: String): Boolean = loadingPartitions synchronized loadingPartitions.contains(partitionFor(groupId))
+
+  def isLoading(): Boolean = loadingPartitions synchronized !loadingPartitions.isEmpty
 
   /**
    * Get the group associated with the given groupId, or null if not found
@@ -158,7 +162,8 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   def storeGroup(group: GroupMetadata,
-                 groupAssignment: Map[String, Array[Byte]]) {
+                 groupAssignment: Map[String, Array[Byte]],
+                 responseCallback: Short => Unit) {
     // construct the message to append
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
@@ -208,12 +213,7 @@ class GroupMetadataManager(val brokerId: Int,
         }
       }
 
-      for (member <- group.allMembers) {
-        member.assignment = groupAssignment.getOrElse(member.memberId, Array.empty[Byte])
-      }
-
-      // propagate the assignments
-      propagateAssignment(group, responseCode)
+      responseCallback(responseCode)
     }
 
     // call replica manager to append the group message
@@ -225,16 +225,7 @@ class GroupMetadataManager(val brokerId: Int,
       putCacheCallback)
   }
 
-  def propagateAssignment(group: GroupMetadata,
-                          errorCode: Short) {
-    val hasError = errorCode != Errors.NONE.code
-    for (member <- group.allMembers) {
-      if (member.awaitingSyncCallback != null) {
-        member.awaitingSyncCallback(if (hasError) Array.empty else member.assignment, errorCode)
-        member.awaitingSyncCallback = null
-      }
-    }
-  }
+
 
   /**
    * Store offsets by appending it to the replicated log and then inserting to cache
@@ -657,10 +648,14 @@ object GroupMetadataManager {
   private val GROUP_KEY_GROUP_FIELD = GROUP_METADATA_KEY_SCHEMA.get("group")
 
   private val MEMBER_METADATA_V0 = new Schema(new Field("member_id", STRING),
+    new Field("client_id", STRING),
+    new Field("client_host", STRING),
     new Field("session_timeout", INT32),
     new Field("subscription", BYTES),
     new Field("assignment", BYTES))
   private val MEMBER_METADATA_MEMBER_ID_V0 = MEMBER_METADATA_V0.get("member_id")
+  private val MEMBER_METADATA_CLIENT_ID_V0 = MEMBER_METADATA_V0.get("client_id")
+  private val MEMBER_METADATA_CLIENT_HOST_V0 = MEMBER_METADATA_V0.get("client_host")
   private val MEMBER_METADATA_SESSION_TIMEOUT_V0 = MEMBER_METADATA_V0.get("session_timeout")
   private val MEMBER_METADATA_SUBSCRIPTION_V0 = MEMBER_METADATA_V0.get("subscription")
   private val MEMBER_METADATA_ASSIGNMENT_V0 = MEMBER_METADATA_V0.get("assignment")
@@ -787,10 +782,12 @@ object GroupMetadataManager {
     value.set(GROUP_METADATA_PROTOCOL_V0, groupMetadata.protocol)
     value.set(GROUP_METADATA_LEADER_V0, groupMetadata.leaderId)
 
-    val memberArray = groupMetadata.allMembers.map {
+    val memberArray = groupMetadata.allMemberMetadata.map {
       case memberMetadata =>
         val memberStruct = value.instance(GROUP_METADATA_MEMBERS_V0)
         memberStruct.set(MEMBER_METADATA_MEMBER_ID_V0, memberMetadata.memberId)
+        memberStruct.set(MEMBER_METADATA_CLIENT_ID_V0, memberMetadata.clientId)
+        memberStruct.set(MEMBER_METADATA_CLIENT_HOST_V0, memberMetadata.clientHost)
         memberStruct.set(MEMBER_METADATA_SESSION_TIMEOUT_V0, memberMetadata.sessionTimeoutMs)
 
         val metadata = memberMetadata.metadata(groupMetadata.protocol)
@@ -901,10 +898,13 @@ object GroupMetadataManager {
           case memberMetadataObj =>
             val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
             val memberId = memberMetadata.get(MEMBER_METADATA_MEMBER_ID_V0).asInstanceOf[String]
+            val clientId = memberMetadata.get(MEMBER_METADATA_CLIENT_ID_V0).asInstanceOf[String]
+            val clientHost = memberMetadata.get(MEMBER_METADATA_CLIENT_HOST_V0).asInstanceOf[String]
             val sessionTimeout = memberMetadata.get(MEMBER_METADATA_SESSION_TIMEOUT_V0).asInstanceOf[Int]
             val subscription = Utils.toArray(memberMetadata.get(MEMBER_METADATA_SUBSCRIPTION_V0).asInstanceOf[ByteBuffer])
 
-            val member = new MemberMetadata(memberId, groupId, sessionTimeout, List((group.protocol, subscription)))
+            val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeout,
+              List((group.protocol, subscription)))
 
             member.assignment = Utils.toArray(memberMetadata.get(MEMBER_METADATA_ASSIGNMENT_V0).asInstanceOf[ByteBuffer])
 
