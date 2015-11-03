@@ -216,7 +216,7 @@ public class RequestResponseTest {
     private AbstractRequestResponse createDescribeGroupResponse() {
         String clientId = "consumer-1";
         String clientHost = "localhost";
-        ByteBuffer empty = ByteBuffer.wrap(new byte[0]);
+        ByteBuffer empty = ByteBuffer.allocate(0);
         DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
                 clientId, clientHost, empty, empty);
         DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE.code(),

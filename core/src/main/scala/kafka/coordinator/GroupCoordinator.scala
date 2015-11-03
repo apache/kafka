@@ -431,7 +431,7 @@ class GroupCoordinator(val brokerId: Int,
     } else {
       val group = groupManager.getGroup(groupId)
       if (group == null) {
-        (Errors.NONE, GroupCoordinator.EmptyGroup)
+        (Errors.NONE, GroupCoordinator.DeadGroup)
       } else {
         group synchronized {
           (Errors.NONE, group.summary)
@@ -624,6 +624,7 @@ class GroupCoordinator(val brokerId: Int,
 object GroupCoordinator {
 
   val EmptyGroup = GroupSummary(NoState, NoProtocolType, NoProtocol, NoMembers)
+  val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)
   val NoMembers = List[MemberSummary]()
   val NoState = ""
   val NoProtocolType = ""

@@ -100,6 +100,10 @@ private[coordinator] class MemberMetadata(val memberId: String,
     MemberSummary(memberId, clientId, clientHost, metadata(protocol), assignment)
   }
 
+  def summaryNoMetadata(): MemberSummary = {
+    MemberSummary(memberId, clientId, clientHost, Array.empty[Byte], Array.empty[Byte])
+  }
+
   /**
    * Vote for one of the potential group protocols. This takes into account the protocol preference as
    * indicated by the order of supported protocols and returns the first one also contained in the set

@@ -220,7 +220,8 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
       val members = this.members.values.map{ member => member.summary(protocol) }.toList
       GroupSummary(state.toString, protocolType, protocol, members)
     } else {
-      GroupSummary(state.toString, protocolType, GroupCoordinator.NoProtocol, GroupCoordinator.NoMembers)
+      val members = this.members.values.map{ member => member.summaryNoMetadata() }.toList
+      GroupSummary(state.toString, protocolType, GroupCoordinator.NoProtocol, members)
     }
   }
 

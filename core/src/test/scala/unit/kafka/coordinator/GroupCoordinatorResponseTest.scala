@@ -710,7 +710,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.reset(replicaManager)
     val (error, summary) = describeGroup(groupId)
     assertEquals(Errors.NONE, error)
-    assertEquals(GroupCoordinator.EmptyGroup, summary)
+    assertEquals(GroupCoordinator.DeadGroup, summary)
   }
 
   @Test
@@ -747,7 +747,10 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE, error)
     assertEquals(protocolType, summary.protocolType)
     assertEquals(GroupCoordinator.NoProtocol, summary.protocol)
-    assertTrue(summary.members.isEmpty)
+    assertEquals(AwaitingSync.toString, summary.state)
+    assertTrue(summary.members.map(_.memberId).contains(joinGroupResult.memberId))
+    assertTrue(summary.members.forall(_.metadata.isEmpty))
+    assertTrue(summary.members.forall(_.assignment.isEmpty))
   }
 
   private def setupJoinGroupCallback: (Future[JoinGroupResult], JoinGroupCallback) = {

@@ -41,6 +41,9 @@ object RequestKeys {
   val DescribeGroupsKey: Short = 15
   val ListGroupsKey: Short = 16
 
+  // NOTE: this map only includes the server-side request/response handlers. Newer
+  // request types should only use the client-side versions which are parsed with
+  // o.a.k.common.requests.AbstractRequest.getRequest()
   val keyToNameAndDeserializerMap: Map[Short, (String, (ByteBuffer) => RequestOrResponse)]=
     Map(ProduceKey -> ("Produce", ProducerRequest.readFrom),
         FetchKey -> ("Fetch", FetchRequest.readFrom),
