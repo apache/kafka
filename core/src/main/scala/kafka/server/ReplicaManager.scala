@@ -92,6 +92,7 @@ case class BecomeLeaderOrFollowerResult(responseMap: collection.Map[(String, Int
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
+  val IsrChangePropagationBlackOut = 5000L
   val IsrChangePropagationInterval = 60000L
 }
 
@@ -163,7 +164,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
   /**
-   * This function periodically runs to see if ISR is need to be propagated. It propagates ISR when:
+   * This function periodically runs to see if ISR needs to be propagated. It propagates ISR when:
    * 1. There is ISR change not propagated yet.
    * 2. There is no ISR Change in the last five seconds, or it has been more than 60 seconds since the last ISR propagation.
    * This allows an occasional ISR change to be propagated within a few seconds, and avoids overwhelming controller and
@@ -173,17 +174,13 @@ class ReplicaManager(val config: KafkaConfig,
     val now = System.currentTimeMillis()
     isrChangeSet synchronized {
       if (isrChangeSet.nonEmpty &&
-        (lastIsrChangeMs.get() + 5000 < now || lastIsrPropagationMs.get() + ReplicaManager.IsrChangePropagationInterval < now)) {
+        (lastIsrChangeMs.get() + ReplicaManager.IsrChangePropagationBlackOut < now ||
+          lastIsrPropagationMs.get() + ReplicaManager.IsrChangePropagationInterval < now)) {
         ReplicationUtils.propagateIsrChanges(zkUtils, isrChangeSet)
         isrChangeSet.clear()
         lastIsrPropagationMs.set(now)
       }
     }
-    // If there is no ISR change to propagate, schedule the next check after three seconds.
-    // If there is pending ISR change propagation, wake up 5 seconds after the last ISR change to check if ISR change
-    // propagation is needed. In any case the next check will be after at least one second.
-    val nextCheckDelayMs = if (isrChangeSet.isEmpty) 5000 else math.max(lastIsrChangeMs.get() + 5000 - now, 1000)
-    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, delay = nextCheckDelayMs, period = -1L, unit = TimeUnit.MILLISECONDS)
   }
 
   /**
@@ -213,7 +210,7 @@ class ReplicaManager(val config: KafkaConfig,
   def startup() {
     // start ISR expiration thread
     scheduler.schedule("isr-expiration", maybeShrinkIsr, period = config.replicaLagTimeMaxMs, unit = TimeUnit.MILLISECONDS)
-    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = -1L, unit = TimeUnit.MILLISECONDS)
+    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = 2500L, unit = TimeUnit.MILLISECONDS)
   }
 
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
