@@ -33,7 +33,6 @@ import kafka.coordinator.GroupCoordinator
  * Integration tests for the new consumer that cover basic usage as well as server failures
  */
 abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
-
   val producerCount = 1
   val consumerCount = 2
   val serverCount = 3

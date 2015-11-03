@@ -15,7 +15,7 @@ package kafka.api
 import java.io.{FileWriter, BufferedWriter, File}
 import javax.security.auth.login.Configuration
 
-import kafka.utils.TestUtils
+import kafka.utils.{JaasTestUtils,TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.hadoop.minikdc.MiniKdc
 import org.apache.kafka.common.security.JaasUtils
@@ -23,47 +23,54 @@ import org.apache.kafka.common.security.kerberos.LoginManager
 import org.junit.{After, Before}
 
 trait SaslTestHarness extends ZooKeeperTestHarness {
-
+  protected val zkSaslEnabled: Boolean
+  protected val zkAuthProvider: String
   private val workDir = new File(System.getProperty("test.dir", "target"))
   private val kdcConf = MiniKdc.createConf()
   private val kdc = new MiniKdc(kdcConf, workDir)
-
+  
   @Before
   override def setUp() {
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
-    val keytabFile = createKeytabAndSetConfiguration("kafka_jaas.conf")
+    val keytabFile = createKeytabAndSetConfiguration()
     kdc.start()
     kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
+    System.setProperty(zkAuthProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
     super.setUp
   }
 
-  protected def createKeytabAndSetConfiguration(jaasResourceName: String): File = {
-    val (keytabFile, jaasFile) = createKeytabAndJaasFiles(jaasResourceName)
+  protected def createKeytabAndSetConfiguration(): File = {
+    val (keytabFile, jaasFile) = createKeytabAndJaasFiles()
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
     keytabFile
   }
 
-  private def createKeytabAndJaasFiles(jaasResourceName: String): (File, File) = {
+  private def createKeytabAndJaasFiles(): (File, File) = {
     val keytabFile = TestUtils.tempFile()
-    val jaasFile = TestUtils.tempFile()
+    //val jaasFile = TestUtils.tempFile()
+    val jaasFileName = if(zkSaslEnabled)
+        JaasTestUtils.genUniqueFile(keytabFile.getAbsolutePath)
+      else
+        JaasTestUtils.genKafkaFile(keytabFile.getAbsolutePath)
+    val jaasFile = new java.io.File(jaasFileName)
 
-    val writer = new BufferedWriter(new FileWriter(jaasFile))
-    val inputStream = Thread.currentThread().getContextClassLoader.getResourceAsStream(jaasResourceName)
-    if (inputStream == null)
-      throw new IllegalStateException(s"Could not find `$jaasResourceName`, make sure it is in the classpath")
-    val source = io.Source.fromInputStream(inputStream, "UTF-8")
+    //val writer = new BufferedWriter(new FileWriter(jaasFile))
+    //val inputStream = Thread.currentThread().getContextClassLoader.getResourceAsStream(jaasResourceName)
+    //if (inputStream == null)
+    //  throw new IllegalStateException(s"Could not find `$jaasResourceName`, make sure it is in the classpath")
+    //val source = io.Source.fromInputStream(inputStream, "UTF-8")
 
-    for (line <- source.getLines) {
-      val replaced = line.replaceAll("\\$keytab-location", keytabFile.getAbsolutePath)
-      writer.write(replaced)
-      writer.newLine()
-    }
+    //for (line <- source.getLines) {
+    //  val replaced = line.replaceAll("\\$keytab-location", keytabFile.getAbsolutePath)
+    //  writer.write(replaced)
+    //  writer.newLine()
+    //}
 
-    writer.close()
-    source.close()
+    //writer.close()
+    //source.close()
 
     (keytabFile, jaasFile)
   }
