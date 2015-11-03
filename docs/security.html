@@ -1,13 +1,5 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
-<HTML>
-<HEAD>
-	<META HTTP-EQUIV="CONTENT-TYPE" CONTENT="text/html; charset=utf-8">
-	<TITLE></TITLE>
-	<META NAME="GENERATOR" CONTENT="OpenOffice 4.1.1  (Unix)">
-	<META NAME="CREATED" CONTENT="0;0">
-	<META NAME="CHANGEDBY" CONTENT="Flavio Paiva Junqueira">
-	<META NAME="CHANGED" CONTENT="20151102;22520400">
-	<!-- Licensed to the Apache Software Foundation (ASF) under one or more
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
  contributor license agreements.  See the NOTICE file distributed with
  this work for additional information regarding copyright ownership.
  The ASF licenses this file to You under the Apache License, Version 2.0
@@ -22,290 +14,143 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
-	<STYLE TYPE="text/css">
-	<!--
-		H3.ctl { font-family: "Arial Unicode MS" }
-	-->
-	</STYLE>
-</HEAD>
-<BODY LANG="en" DIR="LTR">
-<H3 CLASS="western"><A NAME="security_overview"></A>7.1 Security
-Overview</H3>
-<P>In release 0.9.0.0, the Kafka community added a number of features
-that, used either separately or together, increases security in a
-Kafka cluster. The following security measures are currently
-supported:</P>
-<OL>
-	<LI><P STYLE="margin-bottom: 0in">Authenticating clients (Producers
-	and consumers) connections to brokers, using either SSL or SASL
-	(Kerberos)</P>
-	<LI><P STYLE="margin-bottom: 0in">Authorizing read / write
-	operations by clients 
-	</P>
-	<LI><P STYLE="margin-bottom: 0in">Encryption of data sent between
-	brokers and clients, or between brokers, using SSL</P>
-	<LI><P STYLE="margin-bottom: 0in">Authenticate brokers connecting to
-	ZooKeeper</P>
-	<LI><P STYLE="margin-bottom: 0in">Security is optional - non-secured
-	clusters are supported, as well as a mix of authenticated,
-	unauthenticated, encrypted and non-encrypted clients</P>
-	<LI><P>Authorization is pluggable and supports integration with
-	external authorization services</P>
-</OL>
-<P>The guides below explain how to configure and use the security
-features in both clients and brokers. 
-</P>
-<H3 CLASS="western"><A NAME="security_ssl"></A>7.2 Encryption and
-Authentication using SSL</H3>
-<H3 CLASS="western"><A NAME="security_sasl"></A>7.3 Authentication
-using SASL</H3>
-<OL>
-	<LI><P><B>Prerequisites</B></P>
-	<LI><P><B>Kerberos</B><BR>If your organization is already using a
-	Kerberos server (for example, by using Active Directory), there is
-	no need to install a new server just for Kafka. Otherwise you will
-	need to install one, your Linux vendor likely has packages for
-	Kerberos and a short guide on how to install and configure it
-	(<A HREF="https://help.ubuntu.com/community/Kerberos">Ubuntu</A>,
-	<A HREF="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Managing_Smart_Cards/installing-kerberos.html">Redhat</A>).
-	Note that if you are using Oracle Java, you will need to download
-	JCE policy files for your Java version and copy them to
-	$JAVA_HOME/jre/lib/security. 
-	</P>
-	<LI><P><B>Create Kerberos Principals</B><BR>If you are using the
-	organization's Kerberos or Active Directory server, ask your
-	Kerberos administrator for a principal for each Kafka broker in your
-	cluster and for every Linux user that will access Kafka with
-	Kerberos authentication.<BR>If you installed your own Kerberos, you
-	will need to create these principals yourself:<BR><CODE>sudo
-	/usr/sbin/kadmin.local -q 'addprinc -randkey
-	kafka/hostname@domainname'<BR>sudo /usr/sbin/kadmin.local -q &quot;ktadd
-	-k /etc/security/keytabs/kafka.keytab kafka/hostname@domainname&quot;</CODE>
-		</P>
-	<LI><P><B>Make sure all hosts can be reachable using hostnames</B> -
-	It is important in case of kerberos all your hosts can be resolved
-	with their FQDNs.</P>
-	<LI><P><A NAME="jaas_config_file"></A><B>Creating JAAS Config
-	File</B><BR>Each node in the cluster should have a JAAS file similar
-	to the example below. Add this file to kafka/config dir:</P>
-</OL>
-<OL START=5>
-	<OL>
-		<PRE>KafkaServer {
-      com.sun.security.auth.module.Krb5LoginModule required
-      useKeyTab=true
-      storeKey=true
-      serviceName=&quot;kafka&quot;
-      keyTab=&quot;/etc/security/keytabs/kafka1.keytab&quot;
-      principal=&quot;kafka/kafka1.hostname.com@DOMAIN.COM&quot;;
-};
 
-Client {
-      com.sun.security.auth.module.Krb5LoginModule required
-      useKeyTab=true
-      storeKey=true
-      serviceName=&quot;zookeeper&quot;
-      keyTab=&quot;/etc/security/keytabs/kafka1.keytab&quot;
-      principal=&quot;kafka/kafka1.hostname.com@DOMAIN.COM&quot;;
-};
+<h3><a id="security_overview">7.1 Security Overview</a></h3>
+In release 0.9.0.0, the Kafka community added a number of features that, used either separately or together, increases security in a Kafka cluster. The following security measures are currently supported:
+<ol>
+    <li>Authenticating clients (Producers and consumers) connections to brokers, using either SSL or SASL (Kerberos)</li>
+    <li>Authorizing read / write operations by clients</li>
+    <li>Encryption of data sent between brokers and clients, or between brokers, using SSL</li>
+    <li>Authenticate brokers connecting to ZooKeeper</li>
+    <li>Security is optional - non-secured clusters are supported, as well as a mix of authenticated, unauthenticated, encrypted and non-encrypted clients.</li>
+    <li>Authorization is pluggable and supports integration with external authorization services</li>
+</ol>
 
-KafkaClient {
-      com.sun.security.auth.module.Krb5LoginModule required
-      useTicketCache=true
-      serviceName=&quot;kafka&quot;;
-};
-        </PRE><P STYLE="margin-bottom: 0in">
-		<U>Important notes:</U></P>
-		<OL>
-			<LI><P STYLE="margin-bottom: 0in">KafkaServer is a section name in
-			JAAS file used by KafkaServer/Broker. This section tells Kafka
-			Server which principal to use and which keytab this principal is
-			stored. It allows Kafka Server to login using the keytab specified
-			in this section. 
-			</P>
-			<LI><P STYLE="margin-bottom: 0in">Client section is used to
-			authenticate a SASL connection with zookeeper. It also allows a
-			broker to set SASL ACL on zookeeper nodes which locks these nodes
-			down so that only kafka broker can modify. It is necessary to have
-			the same principal name across all the brokers. If you want to use
-			a section name other than “<FONT FACE="Courier New, monospace">Client</FONT>”,
-			then you need to set the system property <FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=2 STYLE="font-size: 11pt"><SPAN STYLE="background: transparent">zookeeper.sasl.client</SPAN></FONT></FONT></FONT><FONT COLOR="#2a00ff"><FONT FACE="Courier New, monospace"><FONT SIZE=2 STYLE="font-size: 11pt"><SPAN STYLE="background: transparent">
-			</SPAN></FONT></FONT></FONT><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3><SPAN STYLE="background: transparent">to
-			the appropriate name (e.g., </SPAN></FONT></FONT></FONT><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=2 STYLE="font-size: 11pt"><SPAN STYLE="background: transparent">-Dzookeeper.sasl.client=ZkClient</SPAN></FONT></FONT></FONT><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3><SPAN STYLE="background: transparent">).</SPAN></FONT></FONT></FONT></P>
-			<LI><P STYLE="margin-bottom: 0in">KafkaClient section here
-			describes how the clients like producer and consumer can connect
-			to the Kafka Broker. Here we specified &quot;useTicketCache=true&quot;
-			not a keytab this allows user to do kinit and run a
-			kafka-console-consumer or kafka-console-producer to connect to
-			broker. For a long running process one should create KafkaClient
-			section similar to KafkaServer. 
-			</P>
-			<LI><P STYLE="margin-bottom: 0in">In KafkaServer and KafkaClient
-			sections we've &quot;serviceName&quot; this should match principal
-			name with which kafka broker is running. In the above example
-			principal=&quot;kafka/kafka1.hostname.com@DOMAIN.com&quot; so
-			we've &quot;kafka&quot; which is matching the principalName. 
-			</P>
-		</OL>
-	</OL>
-	<LI><P><A NAME="jaas_client"></A><B>Creating Client Side JAAS
-	Config</B><BR>Clients (producers, consumers, copycat workers, etc)
-	will authenticate to the cluster with their own principal (usually
-	with the same name as the user used for running the client), so
-	obtain or create these principals as needed. Then create a JAAS file
-	as follows:</P>
-	<OL>
-		<PRE>KafkaClient {
-      com.sun.security.auth.module.Krb5LoginModule required
-      useKeyTab=true
-      storeKey=true
-      serviceName=&quot;kafka&quot;
-      keyTab=&quot;/etc/security/keytabs/kafka1.keytab&quot;
-      principal=&quot;kafkaproducer/hostname@DOMAIN.COM&quot;;
-};            
-</PRE>
-	</OL>
-</OL>
-<PRE></PRE>
-<OL START=5>
-	<LI><P><B>Configuring Kafka Brokers</B></P>
-	<OL>
-		<PRE></PRE>
-		<LI><P>Pass the name of the jaas file you created in <A HREF="#jaas_config_file">Creating
-		JAAS Config File&quot;</A> as a JVM parameter to the kafka broker: 
-		</P>
-		<PRE STYLE="margin-bottom: 0.2in">-Djava.security.auth.login.config=/etc/kafka/kafka_jaas.conf</PRE>
-		<LI><P STYLE="margin-bottom: 0in">Make sure the keytabs configured
-		in the kafka_jaas.conf are readable by the linux user who is
-		starting kafka broker. 
-		</P>
-		<LI><P>Configure a SASL port in server.properties, by adding the
-		following to the <I>listeners</I> parameter, which contains one or
-		more comma-separated values: 
-		</P>
-		<PRE STYLE="margin-bottom: 0.2in">listeners=SASL_PLAINTEXT://host.name:port</PRE><P>
-		If you are only configuring SASL port (or if you are very paranoid
-		and want the Kafka brokers to authenticate each other using SASL)
-		then make sure you set same SASL protocol for inter-broker
-		communication: 
-		</P>
-		<PRE STYLE="margin-bottom: 0.2in">security.inter.broker.protocol=SASL_PLAINTEXT</PRE>
-	</OL>
-	<LI><P><B>Configuring Kafka Clients</B></P>
-	<P STYLE="margin-bottom: 0in">SASL authentication is only supported
-	for new kafka producer and consumer, the older API is not supported.
-	To configure SASL authentication on the clients: 
-	</P>
-	<OL>
-		<LI><P>Pass the name of the jaas file you created in <A HREF="#jaas_client">Creating
-		Client Side JAAS Config&quot;</A> as a JVM parameter to the client
-		JVM:</P>
-		<PRE STYLE="margin-bottom: 0.2in">-Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</PRE>
-		<LI><P STYLE="margin-bottom: 0in">Make sure the keytabs configured
-		in the kafka_client_jaas.conf are readable by the linux user who is
-		starting kafka client. 
-		</P>
-		<LI><P>Configure the following property in producer.properties or
-		consumer.properties: 
-		</P>
-		<PRE STYLE="margin-bottom: 0.2in">security.protocol=SASL_PLAINTEXT</PRE>
-	</OL>
-</OL>
-<H3 CLASS="western"><A NAME="security_authz"></A>7.4 Authorization
-and ACLs</H3>
-<H3 CLASS="western">7.5 ZooKeeper Authentication</H3>
-<OL>
-	<LI><P><B>New clusters</B></P>
-</OL>
-<P STYLE="margin-left: 0.27in; page-break-before: auto">To enable
-ZooKeeper authentication on brokers, there are two necessary steps:</P>
-<OL>
-	<OL>
-		<LI><P>Create a JAAS login file and set the appropriate system
-		property to point to it as described above.</P>
-		<LI><P>Set the configuration property <FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=2 STYLE="font-size: 11pt">zookeeper.set.acl</FONT></FONT></FONT><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3>
-		in each broker to true</FONT></FONT></FONT></P>
-	</OL>
-</OL>
-<P STYLE="margin-left: 0.29in; page-break-before: auto">The metadata
-stored in ZooKeeper is such that only brokers will be able to modify
-the corresponding znodes, but znodes are world readable. The
-rationale behind this decision is that the data stored in ZooKeeper
-is not sensitive, but inappropriate manipulation of znodes can cause
-cluster disruption.</P>
-<OL START=2>
-	<LI><P><B>Migrate existing clusters</B></P>
-</OL>
-<P STYLE="margin-left: 0.27in; page-break-before: auto">If you have a
-cluster running an older version of simply with security disabled,
-and you want to make the cluster secure, then for ZooKeeper
-authentication, you need to execute the following steps in this
-order:</P>
-<OL>
-	<OL>
-		<LI><P>Perform a rolling restart setting the JAAS login file, which
-		enables brokers to authenticate. At the end of the rolling restart,
-		brokers are able to manipulate znodes with strict ACLs, but they
-		will not create znodes with those ACLs.</P>
-		<LI><P>Perform a second rolling restart of brokers, this time
-		setting the configuration parameter <CODE>zookeeper.set.acl</CODE>
-		to true, which enables the use of secure ACLs when creating znodes.</P>
-		<LI><P>Execute the <CODE>ZkSecurityMigrator. To execute the tool,
-		there is this script: </CODE><CODE><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>./bin/</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>zookeeper-security-migration.sh
-		</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3>with
-		</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>zookeeper.acl
-		</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3>set
-		to</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>
-		secure.</FONT></FONT></FONT></CODE> This tool traverses the
-		corresponding sub-trees changing the ACLs of the znodes.</P>
-	</OL>
-</OL>
-<P STYLE="margin-left: 0.27in; page-break-before: auto">It is also
-possible to turn off authentication in a secure cluster. To do it,
-follow these steps:</P>
-<OL>
-	<OL>
-		<LI><P>Perform a rolling restart of brokers setting the JAAS login
-		file, which enables brokers to authenticate, but setting
-		<CODE>zookeeper.set.acl</CODE> to false. At the end of the rolling
-		restart, brokers stop creating znodes with secure ACLs, but are
-		still able to authenticate and manipulate all znodes.</P>
-		<LI><P>Execute the <CODE><FONT FACE="Courier New, monospace">ZkSecurityMigrator</FONT></CODE><CODE><FONT FACE="Times New Roman, serif">.
-		To execute the tool, run this script
-		</FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>./bin/</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>zookeeper-security-migration.sh
-		</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3>with
-		</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>zookeeper.acl
-		</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3>set
-		to </FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>unsecure.</FONT></FONT></FONT></CODE><CODE><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3>
-		</FONT></FONT></FONT></CODE>This tool traverses the corresponding
-		sub-trees changing the ACLs of the znodes.</P>
-		<LI><P>Perform a second rolling restart of brokers, this time
-		omitting the system property that sets the JAAS login file.</P>
-	</OL>
-</OL>
-<P STYLE="margin-left: 0.27in; page-break-before: auto">Here is an
-example of how to run the migration tool:</P>
-<P STYLE="margin-left: 0.27in"><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>./bin/<SPAN STYLE="text-decoration: none">zookeeper</SPAN>-security-migration
--–zookeeper.acl=secure -–zookeeper.connection=<SPAN STYLE="text-decoration: none">localhost</SPAN>:2181</FONT></FONT></FONT></P>
-<P STYLE="margin-left: 0.27in"><FONT COLOR="#000000"><FONT FACE="Times New Roman, serif"><FONT SIZE=3>Run
-this to see the full list of parameters:</FONT></FONT></FONT></P>
-<P STYLE="margin-left: 0.27in"><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>./bin/</FONT></FONT></FONT><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3><SPAN STYLE="text-decoration: none">zookeeper</SPAN></FONT></FONT></FONT><FONT COLOR="#000000"><FONT FACE="Courier New, monospace"><FONT SIZE=3>-security-migration
-–-help</FONT></FONT></FONT></P>
-<OL START=3>
-	<LI><P><B>ZooKeeper ensemble</B></P>
-</OL>
-<P STYLE="margin-left: 0.25in; page-break-before: auto">It is also
-necessary to enable authentication on the ZooKeeper ensemble. To do
-it, we need to perform a rolling restart of the server and set a few
-properties. Please refer to the ZooKeeper documentation for more
-detail:</P>
-<UL>
-	<LI><P><A HREF="http://zookeeper.apache.org/doc/r3.4.6/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache
-	ZooKeeper documentation</A></P>
-	<LI><P><A HREF="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache
-	ZooKeeper wiki</A></P>
-	<LI><P><A HREF="http://www.cloudera.com/content/www/en-us/documentation/cdh/5-1-x/CDH5-Security-Guide/cdh5sg_zookeeper_security.html">Cloudera
-	ZooKeeper security configuration</A></P>
-</UL>
-</BODY>
-</HTML>
+The guides below explain how to configure and use the security features in both clients and brokers.
+
+<h3><a id="security_ssl">7.2 Encryption and Authentication using SSL</a></h3>
+
+<h3><a id="security_sasl">7.3 Authentication using SASL</a></h3>
+
+<ol>
+    <li><h4>Prerequisites</h4><br>
+    <ol>
+        <li><b>Kerberos</b><br>
+        If your organization is already using a Kerberos server (for example, by using Active Directory), there is no need to install a new server just for Kafka. Otherwise you will need to install one, your Linux vendor likely has packages for Kerberos and a short guide on how to install and configure it (<a href="https://help.ubuntu.com/community/Kerberos">Ubuntu</a>, <a href="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Managing_Smart_Cards/installing-kerberos.html">Redhat</a>). Note that if you are using Oracle Java, you will need to download JCE policy files for your Java version and copy them to $JAVA_HOME/jre/lib/security.</li>
+        <li><b>Create Kerberos Principals</b><br>
+        If you are using the organization's Kerberos or Active Directory server, ask your Kerberos administrator for a principal for each Kafka broker in your cluster and for every Linux user that will access Kafka with Kerberos authentication.</br>
+        If you installed your own Kerberos, you will need to create these principals yourself:</br>
+            <code>sudo /usr/sbin/kadmin.local -q 'addprinc -randkey kafka/hostname@domainname'<br>
+                sudo /usr/sbin/kadmin.local -q "ktadd -k /etc/security/keytabs/kafka.keytab kafka/hostname@domainname"</code></li>
+        <li><b>Make sure all hosts can be reachable using hostnames</b> - It is important in case of kerberos all your hosts can be resolved with their FQDNs.</li>
+        <li><b><a name="jaas_config_file">Creating JAAS Config File</a></b><br>
+            Each node in the cluster should have a JAAS file similar to the example below. Add this file to kafka/config dir:
+        <pre>
+            KafkaServer {
+                com.sun.security.auth.module.Krb5LoginModule required
+                useKeyTab=true
+                storeKey=true
+                serviceName="kafka"
+                keyTab="/etc/security/keytabs/kafka1.keytab"
+                principal="kafka/kafka1.hostname.com@DOMAIN.COM";
+            };
+
+            Client {
+               com.sun.security.auth.module.Krb5LoginModule required
+               useKeyTab=true
+               storeKey=true
+               serviceName="zookeeper"
+               keyTab="/etc/security/keytabs/kafka1.keytab"
+               principal="kafka/kafka1.hostname.com@DOMAIN.COM";
+            };
+
+            KafkaClient {
+               com.sun.security.auth.module.Krb5LoginModule required
+               useTicketCache=true
+               serviceName="kafka";
+            };
+        </pre>
+            <u>Important notes:</u>
+            <ol>
+                <li>KafkaServer is a section name in JAAS file used by KafkaServer/Broker. This section tells Kafka Server which principal to use and which keytab this principal is stored. It allows Kafka Server to login using the keytab specified in this section.</li>
+                <li>Client section is used to authenticate a SASL connection with zookeeper. It also allows a broker to set SASL ACL on zookeeper nodes which locks these nodes down so that only kafka broker can modify. It is necessary to have the same principal name across all the brokers. If you want to use a section name other than Client, 2. then you need to set the system property zookeeper.sasl.client to the appropriate name (e.g., -Dzookeeper.sasl.client=ZkClient).</li>
+                <li>KafkaClient section here describes how the clients like producer and consumer can connect to the Kafka Broker. Here we specified "useTicketCache=true" not a keytab this allows user to do kinit and run a kafka-console-consumer or kafka-console-producer to connect to broker. For a long running process one should create KafkaClient section similar to KafkaServer.</li>
+                <li>In KafkaServer and KafkaClient sections we've "serviceName" this should match principal name with which kafka broker is running. In the above example principal="kafka/kafka1.hostname.com@DOMAIN.com" so we've "kafka" which is matching the principalName.</li>
+            </ol>
+        </li>
+        <li><b><a name="jaas_client">Creating Client Side JAAS Config</a></b><br>
+        Clients (producers, consumers, copycat workers, etc) will authenticate to the cluster with their own principal (usually with the same name as the user used for running the client), so obtain or create these principals as needed. Then create a JAAS file as follows:
+            <pre>
+                KafkaClient {
+                    com.sun.security.auth.module.Krb5LoginModule required
+                    useKeyTab=true
+                    storeKey=true
+                    serviceName="kafka"
+                    keyTab="/etc/security/keytabs/kafka1.keytab"
+                    principal="kafkaproducer/hostname@DOMAIN.COM";
+                };
+            </pre>
+        </li>
+    </ol></li>
+    <li><h4>Configuring Kafka Brokers</h4>
+    <ol>
+        <li>Pass the name of the jaas file you created in <a href="#jaas_config_file">Creating JAAS Config File"</a> as a JVM parameter to the kafka broker: <pre>-Djava.security.auth.login.config=/etc/kafka/kafka_jaas.conf</pre></li>
+        <li>Make sure the keytabs configured in the kafka_jaas.conf are readable by the linux user who is starting kafka broker.</li>
+        <li>Configure a SASL port in server.properties, by adding the following to the <i>listeners</i> parameter, which contains one or more comma-separated values:
+            <pre>listeners=SASL_PLAINTEXT://host.name:port</pre>
+        If you are only configuring SASL port (or if you are very paranoid and want the Kafka brokers to authenticate each other using SASL) then make sure you set same SASL protocol for inter-broker communication:
+        <pre>security.inter.broker.protocol=SASL_PLAINTEXT</pre></li>
+
+    </ol>
+    </li>
+    <li><h4>Configuring Kafka Clients</h4>
+        SASL authentication is only supported for new kafka producer and consumer, the older API is not supported.>br>
+        To configure SASL authentication on the clients:
+        <ol>
+            <li>pass the name of the jaas file you created in <a href="#jaas_client">Creating Client Side JAAS Config"</a> as a JVM parameter to the client JVM:
+        <pre>-Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
+            <li>Make sure the keytabs configured in the kafka_client_jaas.conf are readable by the linux user who is starting kafka client.</li>
+            <li>Configure the following property in producer.properties or consumer.properties:
+                <pre>security.protocol=SASL_PLAINTEXT</pre></li>
+        </ol></li>
+</ol>
+
+<h3><a id="security_authz">7.4 Authorization and ACLs</a></h3>
+<h3><a id="zk_authz">7.5 ZooKeeper Authentication</a></h3>
+<h4><a id="zk_authz_new">7.5.1 New clusters</a></h4>
+To enable ZooKeeper authentication on brokers, there are two necessary steps:
+<ol>
+	<li> Create a JAAS login file and set the appropriate system property to point to it as described above</li>
+	<li> Set the configuration property zookeeper.set.acl in each broker to true</li>
+</ol>
+
+The metadata stored in ZooKeeper is such that only brokers will be able to modify the corresponding znodes, but znodes are world readable. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of znodes can cause cluster disruption.
+
+<h4><a id="zk_authz_migration">7.5.2 Migrating clusters</a></h4>
+If you have a cluster running an older version of simply with security disabled, and you want to make the cluster secure, then for ZooKeeper authentication, you need to execute the following steps in this order:
+<ol>
+	<li>Perform a rolling restart setting the JAAS login file, which enables brokers to authenticate. At the end of the rolling restart, brokers are able to manipulate znodes with strict ACLs, but they will not create znodes with those ACLs</li>
+	<li>Perform a second rolling restart of brokers, this time setting the configuration parameter zookeeper.set.acl to true, which enables the use of secure ACLs when creating znodes</li>
+	<li>Execute the ZkSecurityMigrator. To execute the tool, there is this script: ./bin/zookeeper-security-migration.sh with zookeeper.acl set to secure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
+</ol>
+<p>It is also possible to turn off authentication in a secure cluster. To do it, follow these steps:</p>
+<ol>
+	<li>Perform a rolling restart of brokers setting the JAAS login file, which enables brokers to authenticate, but setting zookeeper.set.acl to false. At the end of the rolling restart, brokers stop creating znodes with secure ACLs, but are still able to authenticate and manipulate all znodes</li>
+	<li>Execute the ZkSecurityMigrator. To execute the tool, run this script ./bin/zookeeper-security-migration.sh with zookeeper.acl set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
+	<li>Perform a second rolling restart of brokers, this time omitting the system property that sets the JAAS login file</li>
+</ol>
+Here is an example of how to run the migration tool:
+<pre>
+./bin/zookeeper-security-migration --zookeeper.acl=secure --zookeeper.connection=localhost:2181
+</pre>
+<p>Run this to see the full list of parameters:</p>
+<pre>
+./bin/zookeeper-security-migration --help
+</pre>
+<h4><a id="zk_authz_new">7.5.3 Migrating the ZooKeeper ensemble</a></h4>
+It is also necessary to enable authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. Please refer to the ZooKeeper documentation for more detail:
+<ol>
+	<li><A HREF="http://zookeeper.apache.org/doc/r3.4.6/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</A></li>
+	<li><A HREF="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper wiki</A></li>
+	<li><A HREF="http://www.cloudera.com/content/www/en-us/documentation/cdh/5-1-x/CDH5-Security-Guide/cdh5sg_zookeeper_security.html">Cloudera ZooKeeper security configuration</A></li>
+</ol>
