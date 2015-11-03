@@ -18,14 +18,30 @@ from ducktape.utils.util import wait_until
 from ducktape.errors import DucktapeError
 
 from kafkatest.services.kafka.directory import kafka_dir
-import signal, random, requests
+import signal, random, requests, os.path, json
 
 class CopycatServiceBase(Service):
     """Base class for Copycat services providing some common settings and functionality"""
 
+    PERSISTENT_ROOT = "/mnt/copycat"
+    CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "copycat.properties")
+    # The log file contains normal log4j logs written using a file appender. stdout and stderr are handled separately
+    # so they can be used for other output, e.g. verifiable source & sink.
+    LOG_FILE = os.path.join(PERSISTENT_ROOT, "copycat.log")
+    STDOUT_FILE = os.path.join(PERSISTENT_ROOT, "copycat.stdout")
+    STDERR_FILE = os.path.join(PERSISTENT_ROOT, "copycat.stderr")
+    LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "copycat-log4j.properties")
+    PID_FILE = os.path.join(PERSISTENT_ROOT, "copycat.pid")
+
     logs = {
-        "kafka_log": {
-            "path": "/mnt/copycat.log",
+        "copycat_log": {
+            "path": LOG_FILE,
+            "collect_default": True},
+        "copycat_stdout": {
+            "path": STDOUT_FILE,
+            "collect_default": False},
+        "copycat_stderr": {
+            "path": STDERR_FILE,
             "collect_default": True},
     }
 
@@ -37,7 +53,7 @@ class CopycatServiceBase(Service):
     def pids(self, node):
         """Return process ids for Copycat processes."""
         try:
-            return [pid for pid in node.account.ssh_capture("cat /mnt/copycat.pid", callback=int)]
+            return [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=int)]
         except:
             return []
 
@@ -52,19 +68,22 @@ class CopycatServiceBase(Service):
         self.connector_config_templates = connector_config_templates
 
     def stop_node(self, node, clean_shutdown=True):
+        self.logger.info((clean_shutdown and "Cleanly" or "Forcibly") + " stopping Copycat on " + str(node.account))
         pids = self.pids(node)
         sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
 
         for pid in pids:
-            node.account.signal(pid, sig, allow_fail=False)
-        for pid in pids:
-            wait_until(lambda: not node.account.alive(pid), timeout_sec=10, err_msg="Copycat standalone process took too long to exit")
+            node.account.signal(pid, sig, allow_fail=True)
+        if clean_shutdown:
+            for pid in pids:
+                wait_until(lambda: not node.account.alive(pid), timeout_sec=60, err_msg="Copycat process on " + str(node.account) + " took too long to exit")
 
-        node.account.ssh("rm -f /mnt/copycat.pid", allow_fail=False)
+        node.account.ssh("rm -f " + self.PID_FILE, allow_fail=False)
 
     def restart(self):
         # We don't want to do any clean up here, just restart the process.
         for node in self.nodes:
+            self.logger.info("Restarting Copycat on " + str(node.account))
             self.stop_node(node)
             self.start_node(node)
 
@@ -72,13 +91,12 @@ class CopycatServiceBase(Service):
         if len(self.pids(node)) > 0:
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
-        for pid in self.pids(node):
-            node.account.signal(pid, signal.SIGKILL, allow_fail=False)
+        self.stop_node(node, clean_shutdown=False)
 
-        node.account.ssh("rm -rf /mnt/copycat.pid /mnt/copycat.log /mnt/copycat.properties  " + " ".join(self.config_filenames() + self.files), allow_fail=False)
+        node.account.ssh("rm -rf " + " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE] + self.config_filenames() + self.files), allow_fail=False)
 
     def config_filenames(self):
-        return ["/mnt/copycat-connector-" + str(idx) + ".properties" for idx, template in enumerate(self.connector_config_templates or [])]
+        return [os.path.join(self.PERSISTENT_ROOT, "copycat-connector-" + str(idx) + ".properties") for idx, template in enumerate(self.connector_config_templates or [])]
 
 
     def list_connectors(self, node=None):
@@ -112,6 +130,7 @@ class CopycatServiceBase(Service):
 
         meth = getattr(requests, method.lower())
         url = self._base_url(node) + path
+        self.logger.debug("Copycat REST request: %s %s %s %s", node.account.hostname, url, method, body)
         resp = meth(url, json=body)
         self.logger.debug("%s %s response: %d", url, method, resp.status_code)
         if resp.status_code > 400:
@@ -137,19 +156,23 @@ class CopycatStandaloneService(CopycatServiceBase):
         return self.nodes[0]
 
     def start_node(self, node):
-        node.account.create_file("/mnt/copycat.properties", self.config_template_func(node))
+        node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
+
+        node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
         remote_connector_configs = []
         for idx, template in enumerate(self.connector_config_templates):
-            target_file = "/mnt/copycat-connector-" + str(idx) + ".properties"
+            target_file = os.path.join(self.PERSISTENT_ROOT, "copycat-connector-" + str(idx) + ".properties")
             node.account.create_file(target_file, template)
             remote_connector_configs.append(target_file)
 
-        self.logger.info("Starting Copycat standalone process")
-        with node.account.monitor_log("/mnt/copycat.log") as monitor:
-            node.account.ssh("/opt/%s/bin/copycat-standalone.sh /mnt/copycat.properties " % kafka_dir(node) +
+        self.logger.info("Starting Copycat standalone process on " + str(node.account))
+        with node.account.monitor_log(self.LOG_FILE) as monitor:
+            node.account.ssh("( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE +
+                             "/opt/%s/bin/copycat-standalone.sh %s " % (kafka_dir(node), self.CONFIG_FILE) +
                              " ".join(remote_connector_configs) +
-                             " 1>> /mnt/copycat.log 2>> /mnt/copycat.log & echo $! > /mnt/copycat.pid")
-            monitor.wait_until('Copycat started', timeout_sec=10, err_msg="Never saw message indicating Copycat finished startup")
+                             (" & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)))
+            monitor.wait_until('Copycat started', timeout_sec=15, err_msg="Never saw message indicating Copycat finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -164,16 +187,20 @@ class CopycatDistributedService(CopycatServiceBase):
         self.configs_topic = configs_topic
 
     def start_node(self, node):
-        node.account.create_file("/mnt/copycat.properties", self.config_template_func(node))
+        node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
+
+        node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
         if self.connector_config_templates:
             raise DucktapeError("Config files are not valid in distributed mode, submit connectors via the REST API")
 
-        self.logger.info("Starting Copycat distributed process")
-        with node.account.monitor_log("/mnt/copycat.log") as monitor:
-            cmd = "/opt/%s/bin/copycat-distributed.sh /mnt/copycat.properties " % kafka_dir(node)
-            cmd += " 1>> /mnt/copycat.log 2>> /mnt/copycat.log & echo $! > /mnt/copycat.pid"
+        self.logger.info("Starting Copycat distributed process on " + str(node.account))
+        with node.account.monitor_log(self.LOG_FILE) as monitor:
+            cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
+            cmd += "/opt/%s/bin/copycat-distributed.sh %s " % (kafka_dir(node), self.CONFIG_FILE)
+            cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
             node.account.ssh(cmd)
-            monitor.wait_until('Copycat started', timeout_sec=10, err_msg="Never saw message indicating Copycat finished startup")
+            monitor.wait_until('Copycat started', timeout_sec=15, err_msg="Never saw message indicating Copycat finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -189,3 +216,73 @@ class CopycatRestError(RuntimeError):
 
     def __unicode__(self):
         return "Copycat REST call failed: returned " + self.status + " for " + self.url + ". Response: " + self.message
+
+
+
+class VerifiableConnector(object):
+    def messages(self):
+        """
+        Collect and parse the logs from Copycat nodes. Return a list containing all parsed JSON messages generated by
+        this source.
+        """
+        self.logger.info("Collecting messages from log of %s %s", type(self).__name__, self.name)
+        records = []
+        for node in self.cc.nodes:
+            for line in node.account.ssh_capture('cat ' + self.cc.STDOUT_FILE):
+                try:
+                    data = json.loads(line)
+                except ValueError:
+                    continue
+                # Filter to only ones matching our name to support multiple verifiable producers
+                if data['name'] != self.name: continue
+                data['node'] = node
+                records.append(data)
+        return records
+
+    def stop(self):
+        self.logger.info("Destroying connector %s %s", type(self).__name__, self.name)
+        self.cc.delete_connector(self.name)
+
+class VerifiableSource(VerifiableConnector):
+    """
+    Helper class for running a verifiable source connector on a Copycat cluster and analyzing the output.
+    """
+
+    def __init__(self, cc, name="verifiable-source", tasks=1, topic="verifiable", throughput=1000):
+        self.cc = cc
+        self.logger = self.cc.logger
+        self.name = name
+        self.tasks = tasks
+        self.topic = topic
+        self.throughput = throughput
+
+    def start(self):
+        self.logger.info("Creating connector VerifiableSourceConnector %s", self.name)
+        self.cc.create_connector({
+            'name': self.name,
+            'connector.class': 'org.apache.kafka.copycat.tools.VerifiableSourceConnector',
+            'tasks.max': self.tasks,
+            'topic': self.topic,
+            'throughput': self.throughput
+        })
+
+class VerifiableSink(VerifiableConnector):
+    """
+    Helper class for running a verifiable sink connector on a Copycat cluster and analyzing the output.
+    """
+
+    def __init__(self, cc, name="verifiable-sink", tasks=1, topics=["verifiable"]):
+        self.cc = cc
+        self.logger = self.cc.logger
+        self.name = name
+        self.tasks = tasks
+        self.topics = topics
+
+    def start(self):
+        self.logger.info("Creating connector VerifiableSinkConnector %s", self.name)
+        self.cc.create_connector({
+            'name': self.name,
+            'connector.class': 'org.apache.kafka.copycat.tools.VerifiableSinkConnector',
+            'tasks.max': self.tasks,
+            'topics': ",".join(self.topics)
+        })

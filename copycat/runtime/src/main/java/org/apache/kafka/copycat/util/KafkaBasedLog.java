@@ -189,6 +189,7 @@ public class KafkaBasedLog<K, V> {
      * @param callback the callback to invoke once the end of the log has been reached.
      */
     public void readToEnd(Callback<Void> callback) {
+        log.trace("Starting read to end log for topic {}", topic);
         producer.flush();
         synchronized (this) {
             readLogEndOffsetCallbacks.add(callback);
@@ -286,6 +287,10 @@ public class KafkaBasedLog<K, V> {
 
 
     private class WorkThread extends Thread {
+        public WorkThread() {
+            super("KafkaBasedLog Work Thread - " + topic);
+        }
+
         @Override
         public void run() {
             try {
@@ -300,6 +305,7 @@ public class KafkaBasedLog<K, V> {
                     if (numCallbacks > 0) {
                         try {
                             readToLogEnd();
+                            log.trace("Finished read to end log for topic {}", topic);
                         } catch (WakeupException e) {
                             // Either received another get() call and need to retry reading to end of log or stop() was
                             // called. Both are handled by restarting this loop.

@@ -72,7 +72,7 @@ do
   CLASSPATH=$CLASSPATH:$dir/*
 done
 
-for cc_pkg in "api" "runtime" "file" "json"
+for cc_pkg in "api" "runtime" "file" "json" "tools"
 do
   for file in $base_dir/copycat/${cc_pkg}/build/libs/copycat-${cc_pkg}*.jar;
   do
