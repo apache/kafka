@@ -119,10 +119,10 @@ class WorkerSinkTask implements WorkerTask {
     public void poll(long timeoutMs) {
         try {
             rewind();
-            long backoff = context.backoff();
-            if (backoff > 0) {
-                timeoutMs = Math.min(timeoutMs, backoff);
-                context.backoff(-1L);
+            long retryTimeout = context.timeout();
+            if (retryTimeout > 0) {
+                timeoutMs = Math.min(timeoutMs, retryTimeout);
+                context.timeout(-1L);
             }
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
             ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);

@@ -36,11 +36,11 @@ public class WorkerSinkTaskContext extends SinkTaskContext {
     }
 
     /**
-     * Get the backoff in milliseconds set by SinkTasks. Used by the Copycat framework.
+     * Get the timeout in milliseconds set by SinkTasks. Used by the Copycat framework.
      * @return the backoff timeout in milliseconds.
      */
-    public long backoff() {
-        return backoffMs;
+    public long timeout() {
+        return timeoutMs;
     }
 
     @Override

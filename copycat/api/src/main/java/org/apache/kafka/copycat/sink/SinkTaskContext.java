@@ -30,7 +30,7 @@ import java.util.Set;
 @InterfaceStability.Unstable
 public abstract class SinkTaskContext {
     protected Map<TopicPartition, Long> offsets;
-    protected long backoffMs = -1L;
+    protected long timeoutMs = -1L;
 
     public SinkTaskContext() {
         offsets = new HashMap<>();
@@ -66,14 +66,14 @@ public abstract class SinkTaskContext {
     }
 
     /**
-     * Set the backoff timeout in milliseconds. SinkTasks should use this to indicate that they need to retry certain
-     * operations after the backoff timeout. SinkTasks may have certain operations on external systems that may need
+     * Set the timeout in milliseconds. SinkTasks should use this to indicate that they need to retry certain
+     * operations after the timeout. SinkTasks may have certain operations on external systems that may need
      * to retry in case of failures. For example, append a record to an HDFS file may fail due to temporary network
      * issues. SinkTasks use this method to set how long to wait before retrying.
-     * @param backoffMs the backoff timeout in milliseconds.
+     * @param timeoutMs the backoff timeout in milliseconds.
      */
-    public void backoff(long backoffMs) {
-        this.backoffMs = backoffMs;
+    public void timeout(long timeoutMs) {
+        this.timeoutMs = timeoutMs;
     }
 
     /**
