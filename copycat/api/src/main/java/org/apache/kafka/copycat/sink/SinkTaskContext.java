@@ -29,18 +29,18 @@ import java.util.Set;
  */
 @InterfaceStability.Unstable
 public abstract class SinkTaskContext {
-    private Map<TopicPartition, Long> offsets;
+    protected Map<TopicPartition, Long> offsets;
+    protected long timeoutMs = -1L;
 
     public SinkTaskContext() {
         offsets = new HashMap<>();
     }
 
     /**
-     * Reset the consumer offsets for the given topic partitions. SinkTasks should use this when they are started
-     * if they manage offsets in the sink data store rather than using Kafka consumer offsets. For example, an HDFS
-     * connector might record offsets in HDFS to provide exactly once delivery. When the SinkTask is started or
-     * a rebalance occurs, the task would reload offsets from HDFS and use this method to reset the consumer to those
-     * offsets.
+     * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets
+     * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
+     * offsets in HDFS to provide exactly once delivery. When the SinkTask is started or a rebalance occurs, the task
+     * would reload offsets from HDFS and use this method to reset the consumer to those offsets.
      *
      * SinkTasks that do not manage their own offsets do not need to use this method.
      *
@@ -51,11 +51,29 @@ public abstract class SinkTaskContext {
     }
 
     /**
-     * Get offsets that the SinkTask has submitted to be reset. Used by the Copycat framework.
-     * @return the map of offsets
+     * Reset the consumer offsets for the given topic partition. SinkTasks should use if they manage offsets
+     * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
+     * offsets in HDFS to provide exactly once delivery. When the topic partition is recovered the task
+     * would reload offsets from HDFS and use this method to reset the consumer to the offset.
+     *
+     * SinkTasks that do not manage their own offsets do not need to use this method.
+     *
+     * @param tp the topic partition to reset offset.
+     * @param offset the offset to reset to.
      */
-    public Map<TopicPartition, Long> offsets() {
-        return offsets;
+    public void offset(TopicPartition tp, long offset) {
+        offsets.put(tp, offset);
+    }
+
+    /**
+     * Set the timeout in milliseconds. SinkTasks should use this to indicate that they need to retry certain
+     * operations after the timeout. SinkTasks may have certain operations on external systems that may need
+     * to retry in case of failures. For example, append a record to an HDFS file may fail due to temporary network
+     * issues. SinkTasks use this method to set how long to wait before retrying.
+     * @param timeoutMs the backoff timeout in milliseconds.
+     */
+    public void timeout(long timeoutMs) {
+        this.timeoutMs = timeoutMs;
     }
 
     /**

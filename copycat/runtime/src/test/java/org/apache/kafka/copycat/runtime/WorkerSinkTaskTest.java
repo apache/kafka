@@ -17,21 +17,28 @@
 
 package org.apache.kafka.copycat.runtime;
 
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
-import org.apache.kafka.copycat.sink.SinkTaskContext;
 import org.apache.kafka.copycat.storage.Converter;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.apache.kafka.copycat.util.MockTime;
 import org.apache.kafka.copycat.util.ThreadedTest;
-import org.easymock.*;
+import org.easymock.Capture;
+import org.easymock.CaptureType;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
+import org.easymock.IExpectationSetters;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -44,6 +51,7 @@ import org.powermock.reflect.Whitebox;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
@@ -78,7 +86,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private Time time;
     @Mock private SinkTask sinkTask;
-    private Capture<SinkTaskContext> sinkTaskContext = EasyMock.newCapture();
+    private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
     @Mock private Converter keyConverter;
     @Mock
@@ -349,6 +357,47 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testRewind() throws Exception {
+        Properties taskProps = new Properties();
+        expectInitializeTask(taskProps);
+        final long startOffset = 40L;
+        final Map<TopicPartition, Long> offsets = new HashMap<>();
+
+        expectOnePoll().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                offsets.put(TOPIC_PARTITION, startOffset);
+                sinkTaskContext.getValue().offset(offsets);
+                return null;
+            }
+        });
+
+        consumer.seek(TOPIC_PARTITION, startOffset);
+        EasyMock.expectLastCall();
+
+        expectOnePoll().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                Map<TopicPartition, Long> offsets = sinkTaskContext.getValue().offsets();
+                assertEquals(0, offsets.size());
+                return null;
+            }
+        });
+
+        expectStopTask(3);
+
+        PowerMock.replayAll();
+
+        workerTask.start(taskProps);
+        workerThread.iteration();
+        workerThread.iteration();
+        workerTask.stop();
+        // No need for awaitStop since the thread is mocked
+        workerTask.close();
+
+        PowerMock.verifyAll();
+    }
 
     private void expectInitializeTask(Properties taskProps) throws Exception {
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));
