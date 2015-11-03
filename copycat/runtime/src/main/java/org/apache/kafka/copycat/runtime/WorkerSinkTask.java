@@ -17,24 +17,34 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.IllegalWorkerStateException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
-import org.apache.kafka.copycat.sink.SinkTaskContext;
 import org.apache.kafka.copycat.storage.Converter;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -51,7 +61,7 @@ class WorkerSinkTask implements WorkerTask {
     private final Converter valueConverter;
     private WorkerSinkTaskThread workThread;
     private KafkaConsumer<byte[], byte[]> consumer;
-    private final SinkTaskContext context;
+    private WorkerSinkTaskContext context;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
                           Converter keyConverter, Converter valueConverter, Time time) {
@@ -61,14 +71,14 @@ class WorkerSinkTask implements WorkerTask {
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.time = time;
-        this.context = new WorkerSinkTaskContext();
     }
 
     @Override
     public void start(Properties props) {
+        consumer = createConsumer(props);
+        context = new WorkerSinkTaskContext(consumer);
         task.initialize(context);
         task.start(props);
-        consumer = createConsumer(props);
         workThread = createWorkerThread();
         workThread.start();
     }
@@ -255,37 +265,6 @@ class WorkerSinkTask implements WorkerTask {
             }
         }
         offsets.clear();
-    }
-
-    private class WorkerSinkTaskContext extends SinkTaskContext {
-        @Override
-        public Set<TopicPartition> assignment() {
-            if (consumer == null)
-                throw new IllegalWorkerStateException("SinkTaskContext may not be used to look up partition assignment until the task is initialized");
-            return consumer.assignment();
-        }
-
-        @Override
-        public void pause(TopicPartition... partitions) {
-            if (consumer == null)
-                throw new IllegalWorkerStateException("SinkTaskContext may not be used to pause consumption until the task is initialized");
-            try {
-                consumer.pause(partitions);
-            } catch (IllegalStateException e) {
-                throw new IllegalWorkerStateException("SinkTasks may not pause partitions that are not currently assigned to them.", e);
-            }
-        }
-
-        @Override
-        public void resume(TopicPartition... partitions) {
-            if (consumer == null)
-                throw new IllegalWorkerStateException("SinkTaskContext may not be used to resume consumption until the task is initialized");
-            try {
-                consumer.resume(partitions);
-            } catch (IllegalStateException e) {
-                throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);
-            }
-        }
     }
 
     private class HandleRebalance implements ConsumerRebalanceListener {

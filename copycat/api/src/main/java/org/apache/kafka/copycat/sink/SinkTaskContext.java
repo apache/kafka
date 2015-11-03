@@ -29,19 +29,18 @@ import java.util.Set;
  */
 @InterfaceStability.Unstable
 public abstract class SinkTaskContext {
-    private Map<TopicPartition, Long> offsets;
-    private long backoffMs = -1L;
+    protected Map<TopicPartition, Long> offsets;
+    protected long backoffMs = -1L;
 
     public SinkTaskContext() {
         offsets = new HashMap<>();
     }
 
     /**
-     * Reset the consumer offsets for the given topic partitions. SinkTasks should use this when they are started
-     * if they manage offsets in the sink data store rather than using Kafka consumer offsets. For example, an HDFS
-     * connector might record offsets in HDFS to provide exactly once delivery. When the SinkTask is started or
-     * a rebalance occurs, the task would reload offsets from HDFS and use this method to reset the consumer to those
-     * offsets.
+     * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets
+     * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
+     * offsets in HDFS to provide exactly once delivery. When the SinkTask is started or a rebalance occurs, the task
+     * would reload offsets from HDFS and use this method to reset the consumer to those offsets.
      *
      * SinkTasks that do not manage their own offsets do not need to use this method.
      *
@@ -52,11 +51,18 @@ public abstract class SinkTaskContext {
     }
 
     /**
-     * Get offsets that the SinkTask has submitted to be reset. Used by the Copycat framework.
-     * @return the map of offsets
+     * Reset the consumer offsets for the given topic partition. SinkTasks should use if they manage offsets
+     * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
+     * offsets in HDFS to provide exactly once delivery. When the topic partition is recovered the task
+     * would reload offsets from HDFS and use this method to reset the consumer to the offset.
+     *
+     * SinkTasks that do not manage their own offsets do not need to use this method.
+     *
+     * @param tp the topic partition to reset offset.
+     * @param offset the offset to reset to.
      */
-    public Map<TopicPartition, Long> offsets() {
-        return offsets;
+    public void offset(TopicPartition tp, long offset) {
+        offsets.put(tp, offset);
     }
 
     /**
@@ -68,14 +74,6 @@ public abstract class SinkTaskContext {
      */
     public void backoff(long backoffMs) {
         this.backoffMs = backoffMs;
-    }
-
-    /**
-     * Get the backoff in milliseconds set by SinkTasks. Used by the Copycat framework.
-     * @return the backoff timeout in milliseconds.
-     */
-    public long backoff() {
-        return backoffMs;
     }
 
     /**

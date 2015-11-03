@@ -30,7 +30,6 @@ import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
-import org.apache.kafka.copycat.sink.SinkTaskContext;
 import org.apache.kafka.copycat.storage.Converter;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.apache.kafka.copycat.util.MockTime;
@@ -87,7 +86,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private Time time;
     @Mock private SinkTask sinkTask;
-    private Capture<SinkTaskContext> sinkTaskContext = EasyMock.newCapture();
+    private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
     @Mock private Converter keyConverter;
     @Mock
