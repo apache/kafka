@@ -73,7 +73,7 @@ The guides below explain how to configure and use the security features in both 
             <u>Important notes:</u>
             <ol>
                 <li>KafkaServer is a section name in JAAS file used by KafkaServer/Broker. This section tells Kafka Server which principal to use and which keytab this principal is stored. It allows Kafka Server to login using the keytab specified in this section.</li>
-                <li>Client section is used to authenticate a SASL connection with zookeeper. It also allows a broker to set SASL ACL on zookeeper nodes which locks these nodes down so that only kafka broker can modify. It is necessary to have the same principal name across all the brokers. If you want to use a section name other than Client, 2. then you need to set the system property zookeeper.sasl.client to the appropriate name (e.g., -Dzookeeper.sasl.client=ZkClient).</li>
+                <li>Client section is used to authenticate a SASL connection with zookeeper. It also allows a broker to set SASL ACL on zookeeper nodes which locks these nodes down so that only kafka broker can modify. It is necessary to have the same principal name across all the brokers. If you want to use a section name other than Client, 2. then you need to set the system property <tt>zookeeper.sasl.client</tt> to the appropriate name (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client=ZkClient</tt>).</li>
                 <li>KafkaClient section here describes how the clients like producer and consumer can connect to the Kafka Broker. Here we specified "useTicketCache=true" not a keytab this allows user to do kinit and run a kafka-console-consumer or kafka-console-producer to connect to broker. For a long running process one should create KafkaClient section similar to KafkaServer.</li>
                 <li>In KafkaServer and KafkaClient sections we've "serviceName" this should match principal name with which kafka broker is running. In the above example principal="kafka/kafka1.hostname.com@DOMAIN.com" so we've "kafka" which is matching the principalName.</li>
             </ol>
@@ -121,7 +121,7 @@ The guides below explain how to configure and use the security features in both 
 To enable ZooKeeper authentication on brokers, there are two necessary steps:
 <ol>
 	<li> Create a JAAS login file and set the appropriate system property to point to it as described above</li>
-	<li> Set the configuration property zookeeper.set.acl in each broker to true</li>
+	<li> Set the configuration property <tt>zookeeper.set.acl</tt> in each broker to true</li>
 </ol>
 
 The metadata stored in ZooKeeper is such that only brokers will be able to modify the corresponding znodes, but znodes are world readable. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of znodes can cause cluster disruption.
@@ -130,13 +130,13 @@ The metadata stored in ZooKeeper is such that only brokers will be able to modif
 If you have a cluster running an older version of simply with security disabled, and you want to make the cluster secure, then for ZooKeeper authentication, you need to execute the following steps in this order:
 <ol>
 	<li>Perform a rolling restart setting the JAAS login file, which enables brokers to authenticate. At the end of the rolling restart, brokers are able to manipulate znodes with strict ACLs, but they will not create znodes with those ACLs</li>
-	<li>Perform a second rolling restart of brokers, this time setting the configuration parameter zookeeper.set.acl to true, which enables the use of secure ACLs when creating znodes</li>
-	<li>Execute the ZkSecurityMigrator. To execute the tool, there is this script: ./bin/zookeeper-security-migration.sh with zookeeper.acl set to secure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
+	<li>Perform a second rolling restart of brokers, this time setting the configuration parameter <tt>zookeeper.set.acl</tt> to true, which enables the use of secure ACLs when creating znodes</li>
+	<li>Execute the ZkSecurityMigrator tool. To execute the tool, there is this script: <tt>./bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to secure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
 </ol>
 <p>It is also possible to turn off authentication in a secure cluster. To do it, follow these steps:</p>
 <ol>
-	<li>Perform a rolling restart of brokers setting the JAAS login file, which enables brokers to authenticate, but setting zookeeper.set.acl to false. At the end of the rolling restart, brokers stop creating znodes with secure ACLs, but are still able to authenticate and manipulate all znodes</li>
-	<li>Execute the ZkSecurityMigrator. To execute the tool, run this script ./bin/zookeeper-security-migration.sh with zookeeper.acl set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
+	<li>Perform a rolling restart of brokers setting the JAAS login file, which enables brokers to authenticate, but setting <tt>zookeeper.set.acl</tt> to false. At the end of the rolling restart, brokers stop creating znodes with secure ACLs, but are still able to authenticate and manipulate all znodes</li>
+	<li>Execute the ZkSecurityMigrator tool. To execute the tool, run this script <tt>./bin/zookeeper-security-migration.sh</tt> with <tt>zookeeper.acl</tt> set to unsecure. This tool traverses the corresponding sub-trees changing the ACLs of the znodes</li>
 	<li>Perform a second rolling restart of brokers, this time omitting the system property that sets the JAAS login file</li>
 </ol>
 Here is an example of how to run the migration tool:
@@ -150,7 +150,7 @@ Here is an example of how to run the migration tool:
 <h4><a id="zk_authz_new">7.5.3 Migrating the ZooKeeper ensemble</a></h4>
 It is also necessary to enable authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. Please refer to the ZooKeeper documentation for more detail:
 <ol>
-	<li><A HREF="http://zookeeper.apache.org/doc/r3.4.6/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</A></li>
-	<li><A HREF="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper wiki</A></li>
-	<li><A HREF="http://www.cloudera.com/content/www/en-us/documentation/cdh/5-1-x/CDH5-Security-Guide/cdh5sg_zookeeper_security.html">Cloudera ZooKeeper security configuration</A></li>
+	<li><a href="http://zookeeper.apache.org/doc/r3.4.6/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
+	<li><a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper wiki</a></li>
+	<li><a href="http://www.cloudera.com/content/www/en-us/documentation/cdh/5-1-x/CDH5-Security-Guide/cdh5sg_zookeeper_security.html">Cloudera ZooKeeper security configuration</a></li>
 </ol>
