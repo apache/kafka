@@ -103,6 +103,8 @@ class GroupMetadataManager(val brokerId: Int,
 
   def isGroupLoading(groupId: String): Boolean = loadingPartitions synchronized loadingPartitions.contains(partitionFor(groupId))
 
+  def isLoading(): Boolean = loadingPartitions synchronized !loadingPartitions.isEmpty
+
   /**
    * Get the group associated with the given groupId, or null if not found
    */
@@ -160,7 +162,8 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   def storeGroup(group: GroupMetadata,
-                 groupAssignment: Map[String, Array[Byte]]) {
+                 groupAssignment: Map[String, Array[Byte]],
+                 responseCallback: Short => Unit) {
     // construct the message to append
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
@@ -210,12 +213,7 @@ class GroupMetadataManager(val brokerId: Int,
         }
       }
 
-      for (member <- group.allMembers) {
-        member.assignment = groupAssignment.getOrElse(member.memberId, Array.empty[Byte])
-      }
-
-      // propagate the assignments
-      propagateAssignment(group, responseCode)
+      responseCallback(responseCode)
     }
 
     // call replica manager to append the group message
@@ -227,16 +225,7 @@ class GroupMetadataManager(val brokerId: Int,
       putCacheCallback)
   }
 
-  def propagateAssignment(group: GroupMetadata,
-                          errorCode: Short) {
-    val hasError = errorCode != Errors.NONE.code
-    for (member <- group.allMembers) {
-      if (member.awaitingSyncCallback != null) {
-        member.awaitingSyncCallback(if (hasError) Array.empty else member.assignment, errorCode)
-        member.awaitingSyncCallback = null
-      }
-    }
-  }
+
 
   /**
    * Store offsets by appending it to the replicated log and then inserting to cache
@@ -793,7 +782,7 @@ object GroupMetadataManager {
     value.set(GROUP_METADATA_PROTOCOL_V0, groupMetadata.protocol)
     value.set(GROUP_METADATA_LEADER_V0, groupMetadata.leaderId)
 
-    val memberArray = groupMetadata.allMembers.map {
+    val memberArray = groupMetadata.allMemberMetadata.map {
       case memberMetadata =>
         val memberStruct = value.instance(GROUP_METADATA_MEMBERS_V0)
         memberStruct.set(MEMBER_METADATA_MEMBER_ID_V0, memberMetadata.memberId)

@@ -36,6 +36,7 @@ public class SyncGroupResponse extends AbstractRequestResponse {
      * NOT_COORDINATOR_FOR_GROUP (16)
      * ILLEGAL_GENERATION (22)
      * UNKNOWN_MEMBER_ID (25)
+     * INVALID_ASSIGNMENT (27)
      * REBALANCE_IN_PROGRESS (30)
      *
      */

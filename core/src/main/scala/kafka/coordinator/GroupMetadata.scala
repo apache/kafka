@@ -158,7 +158,9 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
 
   def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
 
-  def allMembers = members.values.toList
+  def allMembers = members.keySet
+
+  def allMemberMetadata = members.values.toList
 
   def rebalanceTimeout = members.values.foldLeft(0) {(timeout, member) =>
     timeout.max(member.sessionTimeoutMs)
@@ -182,7 +184,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
     val candidates = candidateProtocols
 
     // let each member vote for one of the protocols and choose the one with the most votes
-    val votes: List[(String, Int)] = allMembers
+    val votes: List[(String, Int)] = allMemberMetadata
       .map(_.vote(candidates))
       .groupBy(identity)
       .mapValues(_.size)
@@ -193,7 +195,7 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
 
   private def candidateProtocols = {
     // get the set of protocols that are commonly supported by all members
-    allMembers
+    allMemberMetadata
       .map(_.protocols)
       .reduceLeft((commonProtocols, protocols) => commonProtocols & protocols)
   }
