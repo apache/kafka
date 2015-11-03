@@ -148,7 +148,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, GroupCoordinator.OffsetsTopicName,
+    TestUtils.createTopic(zkUtils, GroupCoordinator.GroupMetadataTopicName,
       1,
       1,
       servers,

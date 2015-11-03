@@ -50,7 +50,7 @@ import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBroker
 import kafka.network.{BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import kafka.coordinator.{GroupManagerConfig, GroupCoordinator}
+import kafka.coordinator.{GroupConfig, GroupCoordinator}
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs

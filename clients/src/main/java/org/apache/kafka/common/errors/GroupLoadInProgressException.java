@@ -14,26 +14,26 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code for an offset fetch request if it is still loading offsets (after a leader change
- * for that offsets topic partition).
+ * The broker returns this error code for any coordiantor request if it is still loading the metadata (after a leader change
+ * for that offsets topic partition) for this group.
  */
-public class OffsetLoadInProgressException extends RetriableException {
+public class GroupLoadInProgressException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public OffsetLoadInProgressException() {
+    public GroupLoadInProgressException() {
         super();
     }
 
-    public OffsetLoadInProgressException(String message) {
+    public GroupLoadInProgressException(String message) {
         super(message);
     }
 
-    public OffsetLoadInProgressException(String message, Throwable cause) {
+    public GroupLoadInProgressException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public OffsetLoadInProgressException(Throwable cause) {
+    public GroupLoadInProgressException(Throwable cause) {
         super(cause);
     }
 

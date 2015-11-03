@@ -116,12 +116,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       // for each new leader or follower, call coordinator to handle
       // consumer group migration
       result.updatedLeaders.foreach { case partition =>
-        if (partition.topic == GroupCoordinator.OffsetsTopicName)
+        if (partition.topic == GroupCoordinator.GroupMetadataTopicName)
           coordinator.handleGroupImmigration(partition.partitionId)
       }
       result.updatedFollowers.foreach { case partition =>
         partition.leaderReplicaIdOpt.foreach { leaderReplica =>
-          if (partition.topic == GroupCoordinator.OffsetsTopicName &&
+          if (partition.topic == GroupCoordinator.GroupMetadataTopicName &&
               leaderReplica == brokerId)
             coordinator.handleGroupEmigration(partition.partitionId)
         }
@@ -546,9 +546,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (topics.size > 0 && topicResponses.size != topics.size) {
       val nonExistentTopics = topics -- topicResponses.map(_.topic).toSet
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
-        if (topic == GroupCoordinator.OffsetsTopicName || config.autoCreateTopicsEnable) {
+        if (topic == GroupCoordinator.GroupMetadataTopicName || config.autoCreateTopicsEnable) {
           try {
-            if (topic == GroupCoordinator.OffsetsTopicName) {
+            if (topic == GroupCoordinator.GroupMetadataTopicName) {
               val aliveBrokers = metadataCache.getAliveBrokers
               val offsetsTopicReplicationFactor =
                 if (aliveBrokers.length > 0)
@@ -689,7 +689,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partition = coordinator.partitionFor(groupMetadataRequest.group)
 
       // get metadata (and create the topic if necessary)
-      val offsetsTopicMetadata = getTopicMetadata(Set(GroupCoordinator.OffsetsTopicName), request.securityProtocol).head
+      val offsetsTopicMetadata = getTopicMetadata(Set(GroupCoordinator.GroupMetadataTopicName), request.securityProtocol).head
 
       val errorResponse = GroupMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, groupMetadataRequest.correlationId)
 
@@ -717,6 +717,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
       val responseBody = new JoinGroupResponse(joinResult.errorCode, joinResult.generationId, joinResult.subProtocol,
         joinResult.memberId, joinResult.leaderId, members)
+
       trace("Sending join group response %s for correlation id %d to client %s."
         .format(responseBody, request.header.correlationId, request.header.clientId))
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
@@ -738,6 +739,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       coordinator.handleJoinGroup(
         joinGroupRequest.groupId(),
         joinGroupRequest.memberId(),
+        request.header.clientId(),
         joinGroupRequest.sessionTimeout(),
         joinGroupRequest.protocolType(),
         protocols,

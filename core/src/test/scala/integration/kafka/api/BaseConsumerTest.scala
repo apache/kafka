@@ -193,7 +193,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
     while (parts == null)
-      parts = consumer0.partitionsFor(GroupCoordinator.OffsetsTopicName).asScala
+      parts = consumer0.partitionsFor(GroupCoordinator.GroupMetadataTopicName).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts(0).leader())
 

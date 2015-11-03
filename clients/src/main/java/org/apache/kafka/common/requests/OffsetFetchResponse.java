@@ -48,7 +48,7 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
      * Possible error code:
      *
      *  UNKNOWN_TOPIC_OR_PARTITION (3)  <- only for request v0
-     *  OFFSET_LOAD_IN_PROGRESS (14)
+     *  GROUP_LOAD_IN_PROGRESS (14)
      *  NOT_COORDINATOR_FOR_GROUP (16)
      *  ILLEGAL_GENERATION (22)
      *  UNKNOWN_MEMBER_ID (25)
