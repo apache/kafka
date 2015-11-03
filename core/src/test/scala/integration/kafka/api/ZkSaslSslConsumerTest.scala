@@ -22,6 +22,6 @@ import kafka.server.KafkaConfig
 
 class ZkSaslSslConsumerTest extends SaslSslConsumerTest {
   override protected val zkSaslEnabled = true
-  override protected val zkAuthProvider = "org.apache.zookeeper.server.auth.SASLAuthenticationProvider"
+  System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
 }

@@ -24,7 +24,6 @@ import org.junit.{After, Before}
 
 trait SaslTestHarness extends ZooKeeperTestHarness {
   protected val zkSaslEnabled: Boolean
-  protected val zkAuthProvider: String
   private val workDir = new File(System.getProperty("test.dir", "target"))
   private val kdcConf = MiniKdc.createConf()
   private val kdc = new MiniKdc(kdcConf, workDir)
@@ -36,7 +35,6 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
     val keytabFile = createKeytabAndSetConfiguration()
     kdc.start()
     kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
-    System.setProperty(zkAuthProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
     super.setUp
   }
 
@@ -51,11 +49,11 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
   private def createKeytabAndJaasFiles(): (File, File) = {
     val keytabFile = TestUtils.tempFile()
     //val jaasFile = TestUtils.tempFile()
-    val jaasFileName = if(zkSaslEnabled)
-        JaasTestUtils.genUniqueFile(keytabFile.getAbsolutePath)
+    val jaasFileName = if (zkSaslEnabled)
+        JaasTestUtils.genSingleFile(keytabFile.getAbsolutePath)
       else
         JaasTestUtils.genKafkaFile(keytabFile.getAbsolutePath)
-    val jaasFile = new java.io.File(jaasFileName)
+    val jaasFile = new File(jaasFileName)
 
     //val writer = new BufferedWriter(new FileWriter(jaasFile))
     //val inputStream = Thread.currentThread().getContextClassLoader.getResourceAsStream(jaasResourceName)

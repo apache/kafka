@@ -46,11 +46,11 @@ object JaasTestUtils {
     val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
     writeKafkaToOutputStream(jaasOutputStream, keytabLocation)
     jaasOutputStream.close()
-    jaasFile.deleteOnExit()
+    //jaasFile.deleteOnExit()
     jaasFile.getCanonicalPath
   }
   
-  def genUniqueFile(keytabLocation: String): String = {
+  def genSingleFile(keytabLocation: String): String = {
     val jaasFile = java.io.File.createTempFile("jaas", "conf")
     val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
     writeKafkaToOutputStream(jaasOutputStream, keytabLocation)
@@ -71,13 +71,13 @@ object JaasTestUtils {
   }
   
   private def writeKafkaToOutputStream(jaasOutputStream: java.io.FileOutputStream, keytabLocation: String) {
-    jaasOutputStream.write(s"$kafkaServerContextName {\n\t$kafkaModule required debug=true\n".getBytes)
+    jaasOutputStream.write(s"$kafkaClientContextName {\n\t$kafkaModule required debug=true\n".getBytes)
     jaasOutputStream.write(s"\tuseKeyTab=true\n".getBytes)
     jaasOutputStream.write(s"\tstoreKey=true\n".getBytes)
     jaasOutputStream.write(s"""\tserviceName="kafka"\n""".getBytes)
     jaasOutputStream.write(s"""\tkeyTab="$keytabLocation"\n""".getBytes)
     jaasOutputStream.write(s"""\tprincipal="$kafkaServerPrincipal";\n};\n\n""".getBytes)
-    jaasOutputStream.write(s"""$kafkaClientContextName {\n\t$kafkaModule required debug=true\n""".getBytes)
+    jaasOutputStream.write(s"""$kafkaServerContextName {\n\t$kafkaModule required debug=true\n""".getBytes)
     jaasOutputStream.write(s"\tuseKeyTab=true\n".getBytes)
     jaasOutputStream.write(s"\tstoreKey=true\n".getBytes)
     jaasOutputStream.write(s"""\tserviceName="kafka"\n""".getBytes)

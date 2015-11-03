@@ -19,7 +19,6 @@ import kafka.server.KafkaConfig
 
 class SaslSslConsumerTest extends BaseConsumerTest with SaslTestHarness {
   override protected val zkSaslEnabled = false
-  override protected val zkAuthProvider = ""
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   

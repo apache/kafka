@@ -16,6 +16,5 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 
 class SaslPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarness {
   override protected val zkSaslEnabled = false
-  override protected val zkAuthProvider = ""
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
 }
