@@ -28,7 +28,7 @@ In release 0.9.0.0, the Kafka community added a number of features that, used ei
 The guides below explain how to configure and use the security features in both clients and brokers.
 
 <h3><a id="security_ssl">7.2 Encryption and Authentication using SSL</a></h3>
-Apache kafka allows clients to conenct over SSL . By default SSL is disabled but can be turned on as needed.
+Apache kafka allows clients to connect over SSL. By default SSL is disabled but can be turned on as needed.
 
 <ol>
     <li><h4>Generate SSL key and certificate for each Kafka broker</h4>
@@ -53,7 +53,7 @@ Apache kafka allows clients to conenct over SSL . By default SSL is disabled but
         The next step is to add the generated CA to the **clients’ truststore** so that the clients can trust this CA:
         <pre>keytool -keystore server.truststore.jks -alias CARoot <b>-import</b> -file ca-cert</pre>
 
-        <b>Note:</b> If you enable client authentication required by setting ssl.client.auth to be requested or required on kafka broker config than you must provide a truststore for kafka broker as well and it should have all the CA certificates that clients keys signed by.
+        <b>Note:</b> If you configure Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" on <a href="#config_broker">kafka broker config</a> then you must provide a truststore for kafka broker as well and it should have all the CA certificates that clients keys signed by.
         <pre>keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert</pre>
 
         In contrast to the keystore in step 1 that stores each machine’s own identity, the truststore of a client stores all the certificates that the client should trust. Importing a certificate into one’s truststore also means that trusting all certificates that are signed by that certificate. As the analogy above, trusting the government (CA) also means that trusting all passports (certificates) that it has issued. This attribute is called the chains of trust, and it is particularly useful when deploying SSL on a large kafka cluster. You can sign all certificates in the cluster with a single CA, and have all machines share the same truststore that trusts the CA. That way all machines can authenticate all other machines.</li>
@@ -66,10 +66,10 @@ Apache kafka allows clients to conenct over SSL . By default SSL is disabled but
         <pre>openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days {validity} -CAcreateserial -passin pass:{ca-password}</pre>
 
         Finally, you need to import both the certificate of the CA and the signed certificate into the keystore:
-       <pre>
-           $ keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
-           $ keytool -keystore server.keystore.jks -alias localhost -import -file cert-signed
-       </pre>
+        <pre>
+            $ keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
+            $ keytool -keystore server.keystore.jks -alias localhost -import -file cert-signed
+        </pre>
 
         The definitions of the parameters are the following:
         <ol>
@@ -96,7 +96,7 @@ Apache kafka allows clients to conenct over SSL . By default SSL is disabled but
         keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
         keytool -keystore server.keystore.jks -alias localhost -import -file cert-signed
                 </pre></li>
-    <li><h4>Configuring Kafka Broker</h4>
+    <li><h4><a name="config_broker">Configuring Kafka Broker</a></h4>
         Kafka Broker comes with the feature of listening on multiple ports thanks to [KAFKA-1809](https://issues.apache.org/jira/browse/KAFKA-1809).
         We need to configure the following property in server.properties, which must have one or more comma-separated values:
         <pre>listeners</pre>
@@ -111,13 +111,14 @@ Apache kafka allows clients to conenct over SSL . By default SSL is disabled but
         ssl.key.password = test1234
         ssl.truststore.location = /var/private/ssl/kafka.server.truststore.jks
         ssl.truststore.password = test1234
-            </pre>
+        </pre>
+
         Optional settings that are worth considering:
         <ol>
             <li>ssl.client.auth = none ("required" => client authentication is required, "requested" => client authentication is requested and client without certs can still connect when this option chosen")</li>
-            <li>ssl.cipher.suites = "A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol."</li>
+            <li>ssl.cipher.suites = A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. (Default is an empty list)</li>
             <li>ssl.enabled.protocols = TLSv1.2,TLSv1.1,TLSv1 (list out the SSL protocols that you are going to accept from clients. Do note SSL is deprecated and using that in production is not recommended)</li>
-               <li> ssl.keystore.type = JKS</li>
+            <li> ssl.keystore.type = JKS</li>
             <li>ssl.truststore.type = JKS</li>
         </ol>
         If you want to enable SSL for inter-broker communication, add the following to the broker properties file (it defaults to PLAINTEXT)
@@ -131,37 +132,15 @@ Apache kafka allows clients to conenct over SSL . By default SSL is disabled but
 
         To check quickly if  the server keystore and truststore are setup properly you can run the following command
         <pre>openssl s_client -debug -connect localhost:9093 -tls1</pre> (Note: TLSv1 should be listed under ssl.enabled.protocols)<br>
-        In the output of this command you should see server's certificate
-        Server certificate
+        In the output of this command you should see server's certificate:
         <pre>
         -----BEGIN CERTIFICATE-----
-        MIID+DCCAuACCQCx2Rz1tXx3NTANBgkqhkiG9w0BAQsFADB6MQswCQYDVQQGEwJV
-        UzELMAkGA1UECAwCQ0ExFDASBgNVBAcMC1NhbnRhIENsYXJhMQwwCgYDVQQKDANv
-        cmcxDDAKBgNVBAsMA29yZzEOMAwGA1UEAwwFa2FmYWsxHDAaBgkqhkiG9w0BCQEW
-        DXRlc3RAdGVzdC5jb20wHhcNMTUwNzMwMDQyOTMwWhcNMTYwNzI5MDQyOTMwWjBt
-        MQswCQYDVQQGEwJVUzELMAkGA1UECBMCQ0ExFDASBgNVBAcTC1NhbnRhIENsYXJh
-        MQwwCgYDVQQKEwNvcmcxDDAKBgNVBAsTA29yZzEfMB0GA1UEAxMWU3JpaGFyc2hh
-        IENoaW50YWxhcGFuaTCCAbcwggEsBgcqhkjOOAQBMIIBHwKBgQD9f1OBHXUSKVLf
-        Spwu7OTn9hG3UjzvRADDHj+AtlEmaUVdQCJR+1k9jVj6v8X1ujD2y5tVbNeBO4Ad
-        NG/yZmC3a5lQpaSfn+gEexAiwk+7qdf+t8Yb+DtX58aophUPBPuD9tPFHsMCNVQT
-        WhaRMvZ1864rYdcq7/IiAxmd0UgBxwIVAJdgUI8VIwvMspK5gqLrhAvwWBz1AoGB
-        APfhoIXWmz3ey7yrXDa4V7l5lK+7+jrqgvlXTAs9B4JnUVlXjrrUWU/mcQcQgYC0
-        SRZxI+hMKBYTt88JMozIpuE8FnqLVHyNKOCjrh4rs6Z1kW6jfwv6ITVi8ftiegEk
-        O8yk8b6oUZCJqIPf4VrlnwaSi2ZegHtVJWQBTDv+z0kqA4GEAAKBgB+Pdz0306bq
-        TpUAdb2FERMPLFsx06H0x+TULivcp7HbS5yrkV9bXZmv/FD98x76QxXrOq1WpQhY
-        YDeGDjH+XQkJ6ZxBVBZNJDIpCnfQpfzXAvryQ+cm8oXUsKidtHf4pLMYViXX6BWX
-        Oc2hX4rG+lC8/NXW+1zVvCr9To9fngzjMA0GCSqGSIb3DQEBCwUAA4IBAQBfyVse
-        RJ+ugiNlWg5trZscqH0tlocbnek4UuV/xis2eAu9l4EFOM5kRt5GmkGZRcM/zHF8
-        BRJwXbf0fytMQKSPFk8R4/NGDOlzoK+F7uXeJ0S2u/T29xk0u2i4tjvleq6OCphE
-        i9vdjM0E0Whf9SHRhOXirOYFX3cL775XwKdzKKRkk+AszFR+mRu90rdoaepQtgGh
-        9Kfwr4+6AU/dPtdGuomtBQqMxCzlrLd8EYhVVQ97wHIZ3sPvlM5PIhOJ/YHSBJIC
-        75eo/4acDxZ+j3sR5kcFulzYwFLgDYBaKH/w3mYCgTALeB1zUkX53NVizIvhUd69
-        XJO4lDSDtGOlfort
+        {variable sized random bytes}
         -----END CERTIFICATE-----
         subject=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=Sriharsha Chintalapani
-        issuer=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=kafak/emailAddress=test@test.com
+        issuer=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=kafka/emailAddress=test@test.com
             </pre>
-        If the certificate not showed up or if there are any other error messages than your keystores not setup properly.</li>
+        If the certificate does not show up or if there are any other error messages than your keystore is not setup properly.</li>
 
         <li><h4>Configuring Kafka Clients</h4>h4>
         SSL is supported only for new Kafka Producer & Consumer, the older API is not supported. The configs for SSL will be same for both producer & consumer.<br>
@@ -178,13 +157,14 @@ Apache kafka allows clients to conenct over SSL . By default SSL is disabled but
         ssl.keystore.password = "test1234"
         ssl.key.password = "test1234"
                 </pre>
-        Other configuration settings that may also be needed depending on our requirements and the broker configuration:
+        Other configuration settings that may also be needed depending on our requirements and the broker configuration:\
             <ol>
-        <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.)</li>
-        <li>ssl.cipher.suites (Optional). "A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol."</li>
-        <li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 **Should list at least one of the protocols configured on the broker side**ssl.truststore.type = "JKS"</li>
-        <li>ssl.keystore.type = "JKS"</li>
-                </ol>
+                <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</li>
+                <li>ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.</li>
+                <li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 **Should list at least one of the protocols configured on the broker side</li>
+                <li>ssl.truststore.type = "JKS"</li>
+                <li>ssl.keystore.type = "JKS"</li>
+            </ol>
 <br>
         Examples using console-producer and console-consumer:
         <pre>
