@@ -21,7 +21,7 @@ import java.util.UUID
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
 import kafka.server.KafkaConfig
-import kafka.utils.{ZkUtils, TestUtils}
+import kafka.utils.{TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
@@ -115,6 +115,30 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     changeAclAndVerify(Set.empty[Acl], acls, Set.empty[Acl])
 
     assertFalse("deny should take precedence over allow.", simpleAclAuthorizer.authorize(session, Read, resource))
+  }
+
+
+  @Test
+  def testPrincipalToLocalPlugin() {
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.put(SimpleAclAuthorizer.PrincipalToLocalProp, classOf[KerberosPrincipalToLocal].getName)
+
+    val cfg = KafkaConfig.fromProps(props)
+    val testAuthoizer: SimpleAclAuthorizer = new SimpleAclAuthorizer
+    testAuthoizer.configure(cfg.originals)
+
+    val host = "random-host"
+    val kerberosPrincipal = s"$username/$host@EXAMPLE.COM"
+    val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, kerberosPrincipal)
+    val session = new Session(user, host)
+
+    val allowAll = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username), Allow, host, All)
+    val acls = Set[Acl](allowAll)
+
+    changeAclAndVerify(Set.empty[Acl], acls, Set.empty[Acl])
+
+    assertTrue(s"Principal to local should have transalted $kerberosPrincipal to $username which should have in turn allowed access.",
+      testAuthoizer.authorize(session, Read, resource))
   }
 
   @Test

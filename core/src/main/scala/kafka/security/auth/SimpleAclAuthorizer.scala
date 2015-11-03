@@ -26,7 +26,7 @@ import kafka.network.RequestChannel.Session
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
+import org.I0Itec.zkclient.{IZkStateListener}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
@@ -43,6 +43,8 @@ object SimpleAclAuthorizer {
   val SuperUsersProp = "super.users"
   //If set to true when no acls are found for a resource , authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
+  //FQCN of Plugin class that can convert kafka principal to local user name.
+  val PrincipalToLocalProp = "principal.to.local.class"
 
   /**
    * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, ConsumerGroup).
@@ -66,8 +68,11 @@ object SimpleAclAuthorizer {
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
   private val authorizerLogger = Logger.getLogger("kafka.authorizer.logger")
+
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
+  private var principalToLocalPlugin: Option[PrincipalToLocal] = None
+
   private var zkUtils: ZkUtils = null
   private var aclChangeListener: ZkNodeChangeNotificationListener = null
 
@@ -86,6 +91,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     superUsers = configs.get(SimpleAclAuthorizer.SuperUsersProp).collect {
       case str: String if str.nonEmpty => str.split(",").map(s => KafkaPrincipal.fromString(s.trim)).toSet
     }.getOrElse(Set.empty[KafkaPrincipal])
+
+    principalToLocalPlugin = configs.get(SimpleAclAuthorizer.PrincipalToLocalProp).collect {
+      case str: String if str.nonEmpty => CoreUtils.createObject(str)
+    }
 
     shouldAllowEveryoneIfNoAclIsFound = configs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).map(_.toString.toBoolean).getOrElse(false)
 
@@ -110,11 +119,14 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
     val principal: KafkaPrincipal = session.principal
+    val localPrincipal: KafkaPrincipal = principalToLocalPlugin map (ptol => new KafkaPrincipal(principal.getPrincipalType, ptol.toLocal(principal))) getOrElse(null)
     val host = session.host
     val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
 
+    val principals = if (localPrincipal != null) Set(principal, localPrincipal) else Set(principal)
+
     //check if there is any Deny acl match that would disallow this operation.
-    val denyMatch = aclMatch(session, operation, resource, principal, host, Deny, acls)
+    val denyMatch = principals.foldLeft(false)((result, principal) => result || aclMatch(session, operation, resource, principal, host, Deny, acls))
 
     //if principal is allowed to read or write we allow describe by default, the reverse does not apply to Deny.
     val ops = if (Describe == operation)
@@ -123,12 +135,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       Set[Operation](operation)
 
     //now check if there is any allow acl that will allow this operation.
-    val allowMatch = ops.exists(operation => aclMatch(session, operation, resource, principal, host, Allow, acls))
+    val allowMatch = ops.exists(operation =>
+      principals.foldLeft(false)((result, principal) => result || aclMatch(session, operation, resource, principal, host, Allow, acls)))
 
     //we allow an operation if a user is a super user or if no acls are found and user has configured to allow all users
     //when no acls are found or if no deny acls are found and at least one allow acls matches.
-    val authorized = isSuperUser(operation, resource, principal, host) ||
-      isEmptyAclAndAuthorized(operation, resource, principal, host, acls) ||
+    val authorized = principals.foldLeft(false)(
+      (result, principal) => isSuperUser(operation, resource, principal, host) || isEmptyAclAndAuthorized(operation, resource, principal, host, acls)) ||
       (!denyMatch && allowMatch)
 
     logAuditMessage(principal, authorized, operation, resource, host)
