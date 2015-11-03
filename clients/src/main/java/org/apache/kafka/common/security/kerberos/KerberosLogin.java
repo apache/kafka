@@ -27,13 +27,14 @@ import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.kerberos.KerberosTicket;
 import javax.security.auth.Subject;
 
+import org.apache.kafka.common.security.authenticator.Login;
+import org.apache.kafka.common.security.authenticator.SaslMechanism;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator.ClientCallbackHandler;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.SystemTime;
-
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,8 +48,8 @@ import java.util.Map;
  * This class is responsible for refreshing Kerberos credentials for
  * logins for both Kafka client and server.
  */
-public class Login {
-    private static final Logger log = LoggerFactory.getLogger(Login.class);
+public class KerberosLogin implements Login {
+    private static final Logger log = LoggerFactory.getLogger(KerberosLogin.class);
 
     private static final Random RNG = new Random();
 
@@ -59,7 +60,7 @@ public class Login {
     private final String loginContextName;
     private final String principal;
     private final Time time = new SystemTime();
-    private final CallbackHandler callbackHandler = new ClientCallbackHandler();
+    private final CallbackHandler callbackHandler = new ClientCallbackHandler(null, SaslMechanism.GSSAPI);
 
     // LoginThread will sleep until 80% of time from last refresh to
     // ticket's expiry has been reached, at which time it will wake
@@ -93,7 +94,7 @@ public class Login {
      * @throws javax.security.auth.login.LoginException
      *               Thrown if authentication fails.
      */
-    public Login(final String loginContextName, Map<String, ?> configs) throws LoginException {
+    public KerberosLogin(final String loginContextName, Map<String, ?> configs) throws LoginException {
         this.loginContextName = loginContextName;
         this.ticketRenewWindowFactor = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
         this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
@@ -268,6 +269,7 @@ public class Login {
         }
     }
 
+    @Override
     public void shutdown() {
         if ((t != null) && (t.isAlive())) {
             t.interrupt();
@@ -278,7 +280,13 @@ public class Login {
             }
         }
     }
-
+    
+    @Override
+    public SaslMechanism mechanism() {
+        return SaslMechanism.GSSAPI;
+    }
+    
+    @Override
     public Subject subject() {
         return subject;
     }
@@ -288,6 +296,7 @@ public class Login {
         if (jaasConfigFile == null) {
             throw new IllegalArgumentException("You must pass " + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + " in secure mode.");
         }
+        
         AppConfigurationEntry[] configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
         if (configEntries == null) {
             String errorMessage = "Could not find a '" + loginContextName + "' entry in `" + jaasConfigFile + "`.";
@@ -352,7 +361,7 @@ public class Login {
             return;
         }
         log.info("Initiating logout for {}", principal);
-        synchronized (Login.class) {
+        synchronized (KerberosLogin.class) {
             // register most recent relogin attempt
             lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per

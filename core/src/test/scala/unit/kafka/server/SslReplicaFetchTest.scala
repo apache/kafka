@@ -18,10 +18,11 @@
 package kafka.server
 
 import java.io.File
-
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.authenticator.SaslMechanism
 
 class SslReplicaFetchTest extends BaseReplicaFetchTest {
   protected def securityProtocol = SecurityProtocol.SSL
   protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  protected def saslMechanism = None
 }

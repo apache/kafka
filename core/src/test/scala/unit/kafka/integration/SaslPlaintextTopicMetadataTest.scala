@@ -19,8 +19,10 @@ package kafka.integration
 
 import kafka.api.SaslTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.authenticator.SaslMechanism
 
 class SaslPlaintextTopicMetadataTest extends BaseTopicMetadataTest with SaslTestHarness {
   protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   protected def trustStoreFile = None
+  protected def saslMechanism = Some(SaslMechanism.GSSAPI)
 }

@@ -19,7 +19,6 @@ package kafka.integration
 
 import java.io.File
 import java.nio.ByteBuffer
-
 import kafka.admin.AdminUtils
 import kafka.api.{TopicMetadataRequest, TopicMetadataResponse}
 import kafka.client.ClientUtils
@@ -32,6 +31,7 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{Test, After, Before}
+import org.apache.kafka.common.security.authenticator.SaslMechanism
 
 abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
   private var server1: KafkaServer = null
@@ -42,12 +42,13 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
   // This should be defined if `securityProtocol` uses SSL (eg SSL, SASL_SSL)
   protected def trustStoreFile: Option[File]
   protected def securityProtocol: SecurityProtocol
+  protected def saslMechanism: Option[SaslMechanism]
 
   @Before
   override def setUp() {
     super.setUp()
     val props = createBrokerConfigs(numConfigs, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile)
+      trustStoreFile = trustStoreFile, saslMechanism = saslMechanism)
     val configs: Seq[KafkaConfig] = props.map(KafkaConfig.fromProps)
     adHocConfigs = configs.takeRight(configs.size - 1) // Started and stopped by individual test cases
     server1 = TestUtils.createServer(configs.head)

@@ -16,37 +16,56 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.kerberos;
+package org.apache.kafka.common.security.authenticator;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.LoginException;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.Map;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.LoginType;
 import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.kerberos.KerberosLogin;
+import org.apache.kafka.common.security.plain.PlainLogin;
 
 public class LoginManager {
 
-    private static final EnumMap<LoginType, LoginManager> CACHED_INSTANCES = new EnumMap(LoginType.class);
+    private static final EnumMap<LoginType, EnumMap<SaslMechanism, LoginManager>> CACHED_INSTANCES = new EnumMap<>(LoginType.class);
 
     private final Login login;
     private final String serviceName;
     private final LoginType loginType;
+    private final SaslMechanism mechanism;
     private int refCount;
 
-    private LoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
+    private LoginManager(LoginType loginType, SaslMechanism mechanism, Map<String, ?> configs) throws IOException, LoginException {
         this.loginType = loginType;
+        this.mechanism = mechanism;
         String loginContext = loginType.contextName();
-        login = new Login(loginContext, configs);
-        this.serviceName = getServiceName(loginContext, configs);
-        login.startThreadIfNeeded();
+        
+        switch (mechanism) {
+            case GSSAPI:
+                login = new KerberosLogin(loginContext, configs);
+                this.serviceName = findServiceName(loginContext, configs);
+                login.startThreadIfNeeded();
+                break;
+            case PLAIN:
+                login = new PlainLogin(loginContext, configs);
+                // serviceName is used as protocol in createSaslClient and needs to be non-null.
+                // For SASL/PLAIN, this does not need to be configurable
+                this.serviceName = "kafka";
+                break;
+            default:
+                throw new KafkaException("Unsupported SASL mechanism " + mechanism);
+        }
     }
 
-    private static String getServiceName(String loginContext, Map<String, ?> configs) throws IOException {
+    private static String findServiceName(String loginContext, Map<String, ?> configs) throws IOException {
         String jaasServiceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
         String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
         if (jaasServiceName != null && configServiceName != null && jaasServiceName != configServiceName) {
@@ -76,14 +95,20 @@ public class LoginManager {
      *
      * @param loginType the type of the login context, it should be SERVER for the broker and CLIENT for the clients
      *                  (i.e. consumer and producer)
+     * @param mechanism SASL mechanism 
      * @param configs configuration as key/value pairs
      */
-    public static final LoginManager acquireLoginManager(LoginType loginType, Map<String, ?> configs) throws IOException, LoginException {
+    public static final LoginManager acquireLoginManager(LoginType loginType, SaslMechanism mechanism, Map<String, ?> configs) throws IOException, LoginException {
         synchronized (LoginManager.class) {
-            LoginManager loginManager = CACHED_INSTANCES.get(loginType);
+            EnumMap<SaslMechanism, LoginManager> loginManagers = CACHED_INSTANCES.get(loginType);
+            if (loginManagers == null) {
+                loginManagers = new EnumMap<>(SaslMechanism.class);
+                CACHED_INSTANCES.put(loginType, loginManagers);
+            }
+            LoginManager loginManager = loginManagers.get(mechanism);
             if (loginManager == null) {
-                loginManager = new LoginManager(loginType, configs);
-                CACHED_INSTANCES.put(loginType, loginManager);
+                loginManager = new LoginManager(loginType, mechanism, configs);
+                loginManagers.put(mechanism, loginManager);
             }
             return loginManager.acquire();
         }
@@ -110,7 +135,10 @@ public class LoginManager {
             if (refCount == 0)
                 throw new IllegalStateException("release called on LoginManager with refCount == 0");
             else if (refCount == 1) {
-                CACHED_INSTANCES.remove(loginType);
+                EnumMap<SaslMechanism, LoginManager> loginManagers = CACHED_INSTANCES.get(loginType);
+                loginManagers.remove(mechanism);
+                if (loginManagers.size() == 0)
+                    CACHED_INSTANCES.remove(loginType);
                 login.shutdown();
             }
             --refCount;
@@ -121,10 +149,12 @@ public class LoginManager {
     public static void closeAll() {
         synchronized (LoginManager.class) {
             for (LoginType loginType : new ArrayList<>(CACHED_INSTANCES.keySet())) {
-                LoginManager loginManager = CACHED_INSTANCES.remove(loginType);
-                loginManager.login.shutdown();
+                EnumMap<SaslMechanism, LoginManager> loginManagers = CACHED_INSTANCES.get(loginType);
+                for (SaslMechanism saslMechanism : new ArrayList<>(loginManagers.keySet())) {
+                    LoginManager loginManager = loginManagers.remove(saslMechanism);
+                    loginManager.login.shutdown();
+                }
             }
         }
     }
-
 }

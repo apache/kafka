@@ -19,8 +19,10 @@ package kafka.server
 
 import kafka.api.SaslTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.authenticator.SaslMechanism
 
 class SaslPlaintextReplicaFetchTest extends BaseReplicaFetchTest with SaslTestHarness {
   protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   protected def trustStoreFile = None
+  protected def saslMechanism = Some(SaslMechanism.GSSAPI)
 }

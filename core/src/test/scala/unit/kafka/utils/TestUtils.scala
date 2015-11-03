@@ -25,17 +25,13 @@ import java.util.Properties
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 import charset.Charset
-
 import kafka.security.auth.{Resource, Authorizer, Acl}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.ssl.SslFactory
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.TestSslUtils
-
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
-
 import kafka.server._
 import kafka.producer._
 import kafka.message._
@@ -48,15 +44,15 @@ import kafka.admin.AdminUtils
 import kafka.producer.ProducerConfig
 import kafka.log._
 import kafka.utils.ZkUtils._
-
 import org.junit.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.{RangeAssignor, KafkaConsumer}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
-
 import scala.collection.Map
 import scala.collection.JavaConversions._
+import org.apache.kafka.common.security.authenticator.SaslMechanism
+import org.apache.kafka.common.config.SaslConfigs
 
 /**
  * Utility functions to help with testing
@@ -146,13 +142,14 @@ object TestUtils extends Logging {
     enableDeleteTopic: Boolean = false,
     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
     trustStoreFile: Option[File] = None,
+    saslMechanism: Option[SaslMechanism] = None,
     enablePlaintext: Boolean = true,
     enableSsl: Boolean = false,
     enableSaslPlaintext: Boolean = false,
     enableSaslSsl: Boolean = false): Seq[Properties] = {
     (0 until numConfigs).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
-        interBrokerSecurityProtocol, trustStoreFile, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
+        interBrokerSecurityProtocol, trustStoreFile, saslMechanism, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
         enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl)
     }
   }
@@ -172,6 +169,7 @@ object TestUtils extends Logging {
     port: Int = RandomPort,
     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
     trustStoreFile: Option[File] = None,
+    saslMechanism: Option[SaslMechanism] = None,
     enablePlaintext: Boolean = true,
     enableSaslPlaintext: Boolean = false, saslPlaintextPort: Int = RandomPort,
     enableSsl: Boolean = false, sslPort: Int = RandomPort,
@@ -207,6 +205,8 @@ object TestUtils extends Logging {
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props.putAll(sslConfigs(Mode.SERVER, true, trustStoreFile, s"server$nodeId"))
+    if (protocolAndPorts.exists { case (protocol, _) => usesSaslTransportLayer(protocol) })
+      props.putAll(saslConfigs(saslMechanism))
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -430,16 +430,20 @@ object TestUtils extends Logging {
   private def securityConfigs(mode: Mode,
                               securityProtocol: SecurityProtocol,
                               trustStoreFile: Option[File],
-                              certAlias: String): Properties = {
+                              certAlias: String,
+                              saslMechanism: Option[SaslMechanism]): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
       props.putAll(sslConfigs(mode, false, trustStoreFile, certAlias))
+    if (usesSaslTransportLayer(securityProtocol))
+      props.putAll(saslConfigs(saslMechanism))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
 
-  def producerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer")
+  def producerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslMechanism: Option[SaslMechanism]): Properties =
+    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer", saslMechanism)
+    
 
   /**
    * Create a (new) producer with a few pre-configured properties.
@@ -453,6 +457,7 @@ object TestUtils extends Logging {
                         lingerMs: Long = 0,
                         securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                         trustStoreFile: Option[File] = None,
+                        saslMechanism: Option[SaslMechanism] = None,
                         props: Option[Properties] = None): KafkaProducer[Array[Byte], Array[Byte]] = {
     import org.apache.kafka.clients.producer.ProducerConfig
 
@@ -475,7 +480,7 @@ object TestUtils extends Logging {
       if (!producerProps.containsKey(key)) producerProps.put(key, value)
     }
 
-    producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile))
+    producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile, saslMechanism))
 
     new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
   }
@@ -484,9 +489,14 @@ object TestUtils extends Logging {
     case SecurityProtocol.SSL | SecurityProtocol.SASL_SSL => true
     case _ => false
   }
+  
+  private def usesSaslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
+    case SecurityProtocol.SASL_PLAINTEXT | SecurityProtocol.SASL_SSL => true
+    case _ => false
+  }
 
-  def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer")
+  def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslMechanism: Option[SaslMechanism]): Properties =
+    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer", saslMechanism)
 
   /**
    * Create a new consumer with a few pre-configured properties.
@@ -498,7 +508,8 @@ object TestUtils extends Logging {
                         partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
                         sessionTimeout: Int = 30000,
                         securityProtocol: SecurityProtocol,
-                        trustStoreFile: Option[File] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
+                        trustStoreFile: Option[File] = None,
+                        saslMechanism: Option[SaslMechanism] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
 
     val consumerProps= new Properties()
@@ -513,8 +524,7 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, partitionAssignmentStrategy)
     consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeout.toString)
-
-    consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile))
+    consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile, saslMechanism))
 
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
@@ -989,6 +999,15 @@ object TestUtils extends Logging {
     val sslProps = new Properties()
     sslConfigs.foreach { case (k, v) => sslProps.put(k, v) }
     sslProps
+  }
+  
+  def saslConfigs(saslMechanism: Option[SaslMechanism]): Properties = {
+    val mechanism = saslMechanism.getOrElse {
+      throw new Exception("SASL enabled but no mechanism specified")
+    }
+    val saslProps = new Properties()
+    saslProps.put(SaslConfigs.SASL_MECHANISM, mechanism.mechanismName)
+    saslProps
   }
 
   // a X509TrustManager to trust self-signed certs for unit tests.
