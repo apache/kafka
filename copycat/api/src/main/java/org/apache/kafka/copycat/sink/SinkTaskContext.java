@@ -60,8 +60,10 @@ public abstract class SinkTaskContext {
     }
 
     /**
-     * Set the backoff timeout. SinkTasks should use this to indicate that they need to retry certain
-     * operations after the backoff timeout.
+     * Set the backoff timeout in milliseconds. SinkTasks should use this to indicate that they need to retry certain
+     * operations after the backoff timeout. SinkTasks may have certain operations on external systems that may need
+     * to retry in case of failures. For example, append a record to an HDFS file may fail due to temporary network
+     * issues. SinkTasks use this method to set how long to wait before retrying.
      * @param backoffMs the backoff timeout in milliseconds.
      */
     public void backoff(long backoffMs) {

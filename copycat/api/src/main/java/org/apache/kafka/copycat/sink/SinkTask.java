@@ -63,10 +63,25 @@ public abstract class SinkTask implements Task {
      */
     public abstract void flush(Map<TopicPartition, OffsetAndMetadata> offsets);
 
-
+    /**
+     * The SinkTask use this method to create writers for newly assigned partitions in case of partition
+     * re-assignment. In partition re-assignment, some new partitions may be assigned to the SinkTask.
+     * The SinkTask needs to create writers and perform necessary recovery for the newly assigned partitions.
+     * This method will be called after partition re-assignment completes and before the SinkTask starts
+     * fetching data.
+     * @param partitions The list of partitions that are now assigned to the task (may include
+     *                   partitions previously assigned to the task)
+     */
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
     }
 
+    /**
+     * The SinkTask use this method to close writers and commit offsets for partitions that are
+     * longer assigned to the SinkTask. This method will be called before a rebalance operation starts
+     * and after the SinkTask stops fetching data.
+     * @param partitions The list of partitions that were assigned to the consumer on the last
+     *                   rebalance
+     */
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
     }
 }
