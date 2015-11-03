@@ -434,7 +434,7 @@ public class Protocol {
                                                                                                  "The current group protocol (only provided if the group is Stable)"),
                                                                                        new Field("members",
                                                                                                  new ArrayOf(DESCRIBE_GROUPS_RESPONSE_MEMBER_V0),
-                                                                                                 "Current group members (only provided if the group is stable)"));
+                                                                                                 "Current group members (only provided if the group is not Dead)"));
 
     public static final Schema DESCRIBE_GROUPS_RESPONSE_V0 = new Schema(new Field("groups", new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
 
