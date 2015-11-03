@@ -59,7 +59,7 @@ public enum Errors {
     NETWORK_EXCEPTION(13,
             new NetworkException("The server disconnected before a response was received.")),
     GROUP_LOAD_IN_PROGRESS(14,
-            new OffsetLoadInProgressException("The coordinator is loading and hence can't process requests for this group.")),
+            new GroupLoadInProgressException("The coordinator is loading and hence can't process requests for this group.")),
     GROUP_COORDINATOR_NOT_AVAILABLE(15,
             new GroupCoordinatorNotAvailableException("The group coordinator is not available.")),
     NOT_COORDINATOR_FOR_GROUP(16,

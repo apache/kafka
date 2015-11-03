@@ -30,7 +30,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest
 import scala.collection.{Map, Seq, immutable}
 
 case class GroupConfig(groupMinSessionTimeoutMs: Int,
-                              groupMaxSessionTimeoutMs: Int)
+                       groupMaxSessionTimeoutMs: Int)
 
 case class JoinGroupResult(members: Map[String, Array[Byte]],
                            memberId: String,

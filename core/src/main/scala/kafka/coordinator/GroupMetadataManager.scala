@@ -117,7 +117,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   private def addGroup(groupId: String, group: GroupMetadata): GroupMetadata = {
     groupsCache.putIfNotExists(groupId, group)
-    group
+    groupsCache.get(groupId)
   }
 
   /**
@@ -325,30 +325,24 @@ class GroupMetadataManager(val brokerId: Int,
   def getOffsets(group: String, topicPartitions: Seq[TopicAndPartition]): Map[TopicAndPartition, OffsetMetadataAndError] = {
     trace("Getting offsets %s for group %s.".format(topicPartitions, group))
 
-    /**
-     * we need to put the leader-is-local check inside the offsetLock to protects against fetching from an empty/cleared
-     * offset cache (i.e., cleared due to a leader->follower transition right after the check and clear the cache).
-     */
-    inReadLock(offsetRemoveLock) {
-      if (isGroupLocal(group)) {
-        if (topicPartitions.isEmpty) {
-          // Return offsets for all partitions owned by this consumer group. (this only applies to consumers that commit offsets to Kafka.)
-          offsetsCache.filter(_._1.group == group).map { case(groupTopicPartition, offsetAndMetadata) =>
-            (groupTopicPartition.topicPartition, OffsetMetadataAndError(offsetAndMetadata.offset, offsetAndMetadata.metadata, ErrorMapping.NoError))
-          }.toMap
-        } else {
-          topicPartitions.map { topicAndPartition =>
-            val groupTopicPartition = GroupTopicPartition(group, topicAndPartition)
-            (groupTopicPartition.topicPartition, getOffset(groupTopicPartition))
-          }.toMap
-        }
+    if (isGroupLocal(group)) {
+      if (topicPartitions.isEmpty) {
+        // Return offsets for all partitions owned by this consumer group. (this only applies to consumers that commit offsets to Kafka.)
+        offsetsCache.filter(_._1.group == group).map { case(groupTopicPartition, offsetAndMetadata) =>
+          (groupTopicPartition.topicPartition, OffsetMetadataAndError(offsetAndMetadata.offset, offsetAndMetadata.metadata, ErrorMapping.NoError))
+        }.toMap
       } else {
-        debug("Could not fetch offsets for group %s (not offset coordinator).".format(group))
         topicPartitions.map { topicAndPartition =>
           val groupTopicPartition = GroupTopicPartition(group, topicAndPartition)
-          (groupTopicPartition.topicPartition, OffsetMetadataAndError.NotCoordinatorForGroup)
+          (groupTopicPartition.topicPartition, getOffset(groupTopicPartition))
         }.toMap
       }
+    } else {
+      debug("Could not fetch offsets for group %s (not offset coordinator).".format(group))
+      topicPartitions.map { topicAndPartition =>
+        val groupTopicPartition = GroupTopicPartition(group, topicAndPartition)
+        (groupTopicPartition.topicPartition, OffsetMetadataAndError.NotCoordinatorForGroup)
+      }.toMap
     }
   }
 
@@ -449,23 +443,26 @@ class GroupMetadataManager(val brokerId: Int,
    */
   def removeGroupsForPartition(offsetsPartition: Int) {
     var numOffsetsRemoved = 0
-    inWriteLock(offsetRemoveLock) {
+    var numGroupsRemoved = 0
+
+    loadingPartitions synchronized {
+      // we need to guard the group removal in cache in the loading partition lock
+      // to prevent coordinator's check-and-get-group race condition
+      ownedPartitions.remove(offsetsPartition)
+
+      // clear the offsets for this partition in the cache
+
+      /**
+       * NOTE: we need to put this in the loading partition lock as well to prevent race condition of the leader-is-local check
+       * in getOffsets to protects against fetching from an empty/cleared offset cache (i.e., cleared due to a leader->follower
+       * transition right after the check and clear the cache), causing offset fetch return empty offsets with NONE error code
+       */
       offsetsCache.keys.foreach { key =>
         if (partitionFor(key.group) == offsetsPartition) {
           offsetsCache.remove(key)
           numOffsetsRemoved += 1
         }
       }
-    }
-
-    if (numOffsetsRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
-      .format(numOffsetsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
-
-    var numGroupsRemoved = 0
-    loadingPartitions synchronized {
-      // we need to guard the group removal in cache in the loading partition lock
-      // to prevent coordinator's check-and-get-group race condition
-      ownedPartitions.remove(offsetsPartition)
 
       // clear the groups for this partition in the cache
       for (group <- groupsCache.values) {
@@ -480,6 +477,9 @@ class GroupMetadataManager(val brokerId: Int,
         }
       }
     }
+
+    if (numOffsetsRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
+      .format(numOffsetsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
 
     if (numGroupsRemoved > 0) info("Removed %d cached groups for %s on follower transition."
       .format(numGroupsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
@@ -610,7 +610,21 @@ class GroupMetadataManager(val brokerId: Int,
   }
 }
 
-
+/**
+ * Messages stored for the group topic has versions for both the key and value fields. Key
+ * version is used to indicate the type of the message (also to differentiate different types
+ * of messages from being compacted together if they have the same field values); and value
+ * version is used to evolve the messages within their data types:
+ *
+ * key version 0:       group consumption offset
+ *    -> value version 0:       [offset, metadata, timestamp]
+ *
+ * key version 1:       group consumption offset
+ *    -> value version 1:       [offset, metadata, commit_timestamp, expire_timestamp]
+ *
+ * key version 2:       group metadata
+ *     -> value version 0:       [protocol_type, generation, protocol, leader, members]
+ */
 object GroupMetadataManager {
 
   private val CURRENT_OFFSET_KEY_SCHEMA_VERSION = 1.toShort
@@ -629,7 +643,6 @@ object GroupMetadataManager {
   private val OFFSET_VALUE_OFFSET_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("offset")
   private val OFFSET_VALUE_METADATA_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("metadata")
   private val OFFSET_VALUE_TIMESTAMP_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("timestamp")
-
 
   private val OFFSET_COMMIT_VALUE_SCHEMA_V1 = new Schema(new Field("offset", INT64),
     new Field("metadata", STRING, "Associated metadata.", ""),
