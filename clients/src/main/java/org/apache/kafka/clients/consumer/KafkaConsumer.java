@@ -283,6 +283,7 @@ import java.util.regex.Pattern;
  * <li>On restart restore the position of the consumer using {@link #seek(TopicPartition, long)}.
  * </ul>
  *
+ * <p>
  * This type of usage is simplest when the partition assignment is also done manually (this would be likely in the
  * search index use case described above). If the partition assignment is done automatically special care is
  * needed to handle the case where partition assignments change. This can be done by providing a
@@ -375,6 +376,7 @@ import java.util.regex.Pattern;
  *
  * Then in a separate thread, the consumer can be shutdown by setting the closed flag and waking up the consumer.
  *
+ * <p>
  * <pre>
  *     closed.set(true);
  *     consumer.wakeup();
@@ -621,7 +623,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * The set of partitions currently assigned to this consumer. If subscription happened by directly assigning
+     * Get the set of partitions currently assigned to this consumer. If subscription happened by directly assigning
      * partitions using {@link #assign(List)} then this will simply return the same partitions that
      * were assigned. If topic subscription was used, then this will give the set of topic partitions currently assigned
      * to the consumer (which may be none if the assignment hasn't happened yet, or the partitions are in the
@@ -652,8 +654,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Subscribe to the given list of topics and use the consumer's group management functionality to
-     * assign partitions. Topic subscriptions are not incremental. This list will replace the current
+     * Subscribe to the given list of topics to get dynamically
+     * assigned partitions. Topic subscriptions are not incremental. This list will replace the current
      * assignment (if there is one). Note that it is not possible to combine topic subscription with group management
      * with manual partition assignment through {@link #assign(List)}.
      *
@@ -697,8 +699,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Subscribe to the given list of topics and use the consumer's group management functionality to
-     * assign partitions. Topic subscriptions are not incremental. This list will replace the current
+     * Subscribe to the given list of topics to get dynamically assigned partitions.
+     * Topic subscriptions are not incremental. This list will replace the current
      * assignment (if there is one). It is not possible to combine topic subscription with group management
      * with manual partition assignment through {@link #assign(List)}.
      *
@@ -719,8 +721,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Subscribes to topics matching specified pattern and uses the consumer's group
-     * management functionality. The pattern matching will be done periodically against topics
+     * Subscribe to all topics matching specified pattern to get dynamically assigned partitions. The pattern matching will be done periodically against topics
      * existing at the time of check.
      * <p>
      * As part of group management, the consumer will keep track of the list of consumers that
@@ -748,7 +749,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Unsubscribe from topics currently subscribed to
+     * Unsubscribe from all topics currently subscribed to.
      */
     public void unsubscribe() {
         acquire();
@@ -763,7 +764,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Assign a list of partition to this consumer. This interface does not allow for incremental assignment
+     * Manually assign a list of partition to this consumer. This interface does not allow for incremental assignment
      * and will replace the previous assignment (if there is one).
      * <p>
      * Manual topic assignment through this method does not use the consumer's group management
@@ -789,7 +790,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Fetches data for the topics or partitions specified using one of the subscribe/assign APIs. It is an error to not have
+     * Fetch data for the topics or partitions specified using one of the subscribe/assign APIs. It is an error to not have
      * subscribed to any topics or partitions before polling for data.
      * <p>
      * The offset used for fetching the data is governed by whether or not {@link #seek(TopicPartition, long)} is used.
@@ -879,7 +880,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
 
     /**
-     * Commits offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
+     * Commit offsets returned on the last {@link #poll(long) poll()} for all the subscribed list of topics and partitions.
      * <p>
      * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
@@ -901,7 +902,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Commits the specified offsets for the specified list of topics and partitions to Kafka.
+     * Commit the specified offsets for the specified list of topics and partitions.
      * <p>
      * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
@@ -927,7 +928,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Convenient method. Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
+     * Commit offsets returned on the last {@link #poll(long) poll()} for all the subscribed list of topics and partition.
+     * Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
      */
     @Override
     public void commitAsync() {
@@ -935,7 +937,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Commits offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
+     * Commit offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
      * <p>
      * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
@@ -957,7 +959,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Commits the specified offsets for the specified list of topics and partitions to Kafka.
+     * Commit the specified offsets for the specified list of topics and partitions to Kafka.
      * <p>
      * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
@@ -1033,7 +1035,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Returns the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
+     * Get the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
      *
      * @param partition The partition to get the position for
      * @return The offset
@@ -1062,7 +1064,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Fetches the last committed offset for the given partition (whether the commit happened by this process or
+     * Get the last committed offset for the given partition (whether the commit happened by this process or
      * another). This offset will be used as the position for the consumer in the event of a failure.
      * <p>
      * This call may block to do a remote call if the partition in question isn't assigned to this consumer or if the
@@ -1167,7 +1169,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Resume any partitions which have been paused with {@link #pause(TopicPartition...)}. New calls to
+     * Resume requested partitions which have been paused with {@link #pause(TopicPartition...)}. New calls to
      * {@link #poll(long)} will return records from these partitions if there are any to be fetched.
      * If the partitions were not previously paused, this method is a no-op.
      * @param partitions The partitions which should be resumed
