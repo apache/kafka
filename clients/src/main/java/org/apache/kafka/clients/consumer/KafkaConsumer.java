@@ -755,7 +755,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
-            this.coordinator.resetGeneration();
+            this.coordinator.maybeLeaveGroup(false);
             this.metadata.needMetadataForAllTopics(false);
         } finally {
             release();
@@ -818,11 +818,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalArgumentException("Timeout must not be negative");
 
             // poll for new data until the timeout expires
+            long start = time.milliseconds();
             long remaining = timeout;
-            while (remaining >= 0) {
-                long start = time.milliseconds();
+            do {
                 Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
-
                 if (!records.isEmpty()) {
                     // if data is available, then return it, but first send off the
                     // next round of fetches to enable pipelining while the user is
@@ -832,8 +831,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     return new ConsumerRecords<>(records);
                 }
 
-                remaining -= time.milliseconds() - start;
-            }
+                long elapsed = time.milliseconds() - start;
+                remaining = timeout - elapsed;
+            } while (remaining > 0);
 
             return ConsumerRecords.empty();
         } finally {
@@ -1185,6 +1185,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    /**
+     * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is
+     * enabled, this will commit the current offsets.
+     */
     @Override
     public void close() {
         acquire();
@@ -1207,7 +1211,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private void close(boolean swallowException) {
         log.trace("Closing the Kafka consumer.");
-        AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
         this.closed = true;
         ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);

@@ -673,12 +673,14 @@ object GroupMetadataManager {
   private val GROUP_METADATA_MEMBERS_V0 = GROUP_METADATA_VALUE_SCHEMA_V0.get("members")
 
   // map of versions to key schemas as data types
-  private val MESSAGE_TYPE_SCHEMAS = Map(0 -> OFFSET_COMMIT_KEY_SCHEMA,
+  private val MESSAGE_TYPE_SCHEMAS = Map(
+    0 -> OFFSET_COMMIT_KEY_SCHEMA,
     1 -> OFFSET_COMMIT_KEY_SCHEMA,
     2 -> GROUP_METADATA_KEY_SCHEMA)
 
   // map of version of offset value schemas
-  private val OFFSET_VALUE_SCHEMAS = Map(0 -> OFFSET_COMMIT_VALUE_SCHEMA_V0,
+  private val OFFSET_VALUE_SCHEMAS = Map(
+    0 -> OFFSET_COMMIT_VALUE_SCHEMA_V0,
     1 -> OFFSET_COMMIT_VALUE_SCHEMA_V1)
   private val CURRENT_OFFSET_VALUE_SCHEMA_VERSION = 1.toShort
 
@@ -712,7 +714,7 @@ object GroupMetadataManager {
     val schemaOpt = GROUP_VALUE_SCHEMAS.get(version)
     schemaOpt match {
       case Some(schema) => schema
-      case _ => throw new KafkaException("Unknown offset schema version " + version)
+      case _ => throw new KafkaException("Unknown group metadata version " + version)
     }
   }
 
@@ -762,7 +764,7 @@ object GroupMetadataManager {
     value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1, offsetAndMetadata.commitTimestamp)
     value.set(OFFSET_VALUE_EXPIRE_TIMESTAMP_FIELD_V1, offsetAndMetadata.expireTimestamp)
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(CURRENT_OFFSET_KEY_SCHEMA_VERSION)
+    byteBuffer.putShort(CURRENT_OFFSET_VALUE_SCHEMA_VERSION)
     value.writeTo(byteBuffer)
     byteBuffer.array()
   }
@@ -804,7 +806,7 @@ object GroupMetadataManager {
     value.set(GROUP_METADATA_MEMBERS_V0, memberArray.toArray)
 
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(CURRENT_OFFSET_KEY_SCHEMA_VERSION)
+    byteBuffer.putShort(CURRENT_GROUP_VALUE_SCHEMA_VERSION)
     value.writeTo(byteBuffer)
     byteBuffer.array()
   }

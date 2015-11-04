@@ -242,12 +242,13 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         return super.needRejoin() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
     }
 
-    @Override
-    public void close() {
-    }
-
     public String memberId() {
         return this.memberId;
+    }
+
+    @Override
+    public void close() {
+        super.close();
     }
 
     private class CopycatWorkerCoordinatorMetrics {
