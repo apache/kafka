@@ -248,7 +248,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
     @Override
     public void close() {
-        super.close(Long.MAX_VALUE);
+        super.close();
     }
 
     private class CopycatWorkerCoordinatorMetrics {

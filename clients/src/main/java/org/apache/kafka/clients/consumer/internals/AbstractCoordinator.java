@@ -47,6 +47,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -79,7 +80,7 @@ import java.util.concurrent.TimeUnit;
  * {@link #onJoinComplete(int, String, String, ByteBuffer)}.
  *
  */
-public abstract class AbstractCoordinator {
+public abstract class AbstractCoordinator implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractCoordinator.class);
 
@@ -519,23 +520,20 @@ public abstract class AbstractCoordinator {
 
     /**
      * Close the coordinator, waiting if needed to send LeaveGroup.
-     * @param timeout time in milliseconds to await the response
      */
-    public void close(long timeout) {
-        maybeLeaveGroup(timeout);
+    @Override
+    public void close() {
+        maybeLeaveGroup(true);
     }
-
 
     /**
      * Leave the current group and reset local generation/memberId.
-     * @param timeoutMs duration in milliseconds to await leave group response
      */
-    public void maybeLeaveGroup(long timeoutMs) {
+    public void maybeLeaveGroup(boolean awaitResponse) {
         if (!coordinatorUnknown() && generation > 0) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
-            RequestFuture<Void> future = sendLeaveGroupRequest();
-            client.poll(future, timeoutMs);
+            sendLeaveGroupRequest(awaitResponse);
         }
 
         this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
@@ -543,23 +541,26 @@ public abstract class AbstractCoordinator {
         rejoinNeeded = true;
     }
 
-    private RequestFuture<Void> sendLeaveGroupRequest() {
+    private void sendLeaveGroupRequest(boolean awaitResponse) {
         LeaveGroupRequest request = new LeaveGroupRequest(groupId, memberId);
         RequestFuture<Void> future = client.send(coordinator, ApiKeys.LEAVE_GROUP, request)
                 .compose(new LeaveGroupResponseHandler());
+
         future.addListener(new RequestFutureListener<Void>() {
             @Override
-            public void onSuccess(Void value) {
-            }
+            public void onSuccess(Void value) {}
 
             @Override
             public void onFailure(RuntimeException e) {
                 log.debug("LeaveGroup request failed with error", e);
             }
         });
-        return future;
-    }
 
+        if (awaitResponse)
+            client.poll(future);
+        else
+            client.poll(future, 0);
+    }
 
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
         @Override

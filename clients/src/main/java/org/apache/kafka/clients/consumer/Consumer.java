@@ -12,18 +12,17 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.io.Closeable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * @see KafkaConsumer
@@ -151,11 +150,6 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#close()
      */
     public void close();
-
-    /**
-     * @see KafkaConsumer#close(long, TimeUnit)
-     */
-    public void close(long timeout, TimeUnit unit);
 
     /**
      * @see KafkaConsumer#wakeup()

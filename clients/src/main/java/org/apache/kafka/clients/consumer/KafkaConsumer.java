@@ -29,7 +29,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -587,7 +586,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
             // this is to prevent resource leak. see KAFKA-2121
-            close(0, true);
+            close(true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
@@ -728,7 +727,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
-            this.coordinator.maybeLeaveGroup(0);
+            this.coordinator.maybeLeaveGroup(false);
             this.metadata.needMetadataForAllTopics(false);
         } finally {
             release();
@@ -1164,23 +1163,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void close() {
-        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Close the consumer, waiting only for a given timeout to complete. If auto-commit is
-     * enabled, this will commit the current offsets, though this operation may timeout,
-     * causing an exception to be thrown.
-     * @param timeout duration to await closing
-     * @param unit unit of timeout
-     * @throws TimeoutException if the timeout expires before cleanup could be completed
-     */
-    public void close(long timeout, TimeUnit unit) throws TimeoutException {
         acquire();
         try {
             if (closed) return;
-            if (timeout < 0) throw new IllegalArgumentException("The timeout cannot be negative.");
-            close(unit.toMillis(timeout), false);
+            close(false);
         } finally {
             release();
         }
@@ -1195,18 +1181,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.client.wakeup();
     }
 
-    private void close(long timeoutMs, boolean swallowException) {
+    private void close(boolean swallowException) {
         log.trace("Closing the Kafka consumer.");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
         this.closed = true;
-
-        try {
-            coordinator.close(timeoutMs);
-        } catch (Exception e) {
-            firstException.compareAndSet(null, e);
-            log.error("Failed to close coordinator", e);
-        }
-
+        ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);
         ClientUtils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);

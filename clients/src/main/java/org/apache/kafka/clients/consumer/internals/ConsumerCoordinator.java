@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Measurable;
@@ -304,25 +303,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    public void close(long timeout) throws TimeoutException {
-        long begin = time.milliseconds();
-
+    public void close() {
         try {
-            long remainingMs = timeout;
-            do {
+            while (true) {
                 try {
-                    maybeAutoCommitOffsetsSync(remainingMs);
+                    maybeAutoCommitOffsetsSync();
                     return;
                 } catch (WakeupException e) {
                     // ignore wakeups while closing to ensure we have a chance to commit
-                    long elapsed = time.milliseconds() - begin;
-                    remainingMs = timeout - elapsed;
                     continue;
                 }
-            } while (remainingMs > 0);
+            }
         } finally {
-            long elapsed = time.milliseconds() - begin;
-            super.close(Math.max(timeout - elapsed, 0));
+            super.close();
         }
     }
 
@@ -344,22 +337,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        commitOffsetsSync(offsets, Long.MAX_VALUE);
-    }
-
-    private void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeout) {
         if (offsets.isEmpty())
             return;
 
-        long begin = time.milliseconds();
-        long remaining = timeout;
-
-        do {
+        while (true) {
             ensureCoordinatorKnown();
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-            if (!client.poll(future, remaining))
-                break;
+            client.poll(future);
 
             if (future.succeeded())
                 return;
@@ -367,17 +352,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!future.isRetriable())
                 throw future.exception();
 
-            long elapsed = time.milliseconds() - begin;
-            remaining = timeout - elapsed;
-
-            if (remaining > 0) {
-                long backoff = Math.min(remaining, retryBackoffMs);
-                Utils.sleep(backoff);
-                remaining -= backoff;
-            }
-        } while (remaining > 0);
-
-        throw new TimeoutException("Failed to commit offsets before timeout");
+            Utils.sleep(retryBackoffMs);
+        }
     }
 
     private void scheduleAutoCommitTask(final long interval) {
@@ -397,13 +373,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private void maybeAutoCommitOffsetsSync() {
-        maybeAutoCommitOffsetsSync(Long.MAX_VALUE);
-    }
-
-    private void maybeAutoCommitOffsetsSync(long timeoutMs) {
         if (autoCommitEnabled) {
             try {
-                commitOffsetsSync(subscriptions.allConsumed(), timeoutMs);
+                commitOffsetsSync(subscriptions.allConsumed());
             } catch (WakeupException e) {
                 // rethrow wakeups since they are triggered by the user
                 throw e;
