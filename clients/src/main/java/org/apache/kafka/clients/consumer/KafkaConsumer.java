@@ -29,6 +29,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -790,11 +791,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalArgumentException("Timeout must not be negative");
 
             // poll for new data until the timeout expires
+            long start = time.milliseconds();
             long remaining = timeout;
-            while (remaining >= 0) {
-                long start = time.milliseconds();
+            do {
                 Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
-
                 if (!records.isEmpty()) {
                     // if data is available, then return it, but first send off the
                     // next round of fetches to enable pipelining while the user is
@@ -804,8 +804,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     return new ConsumerRecords<>(records);
                 }
 
-                remaining -= time.milliseconds() - start;
-            }
+                long elapsed = time.milliseconds() - start;
+                remaining = timeout - elapsed;
+            } while (remaining > 0);
 
             return ConsumerRecords.empty();
         } finally {
@@ -1157,12 +1158,24 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    /**
+     * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is
+     * enabled, this will commit the current offsets.
+     */
     @Override
     public void close() {
         close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
     }
 
-    public void close(long timeout, TimeUnit unit) {
+    /**
+     * Close the consumer, waiting only for a given timeout to complete. If auto-commit is
+     * enabled, this will commit the current offsets, though this operation may timeout,
+     * causing an exception to be thrown.
+     * @param timeout duration to await closing
+     * @param unit unit of timeout
+     * @throws TimeoutException if the timeout expires before cleanup could be completed
+     */
+    public void close(long timeout, TimeUnit unit) throws TimeoutException {
         acquire();
         try {
             if (closed) return;
@@ -1190,6 +1203,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             coordinator.close(timeoutMs);
         } catch (Exception e) {
+            firstException.compareAndSet(null, e);
             log.error("Failed to close coordinator", e);
         }
 

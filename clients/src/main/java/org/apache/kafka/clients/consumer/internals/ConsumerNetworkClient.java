@@ -17,8 +17,8 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -162,13 +162,15 @@ public class ConsumerNetworkClient implements Closeable {
      * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public boolean poll(RequestFuture<?> future, long timeout) {
-        long now = time.milliseconds();
-        long deadline = now + timeout;
-        if (deadline < 0) deadline = Long.MAX_VALUE;
-        while (!future.isDone() && now <= deadline) {
-            poll(deadline - now, now);
+        long begin = time.milliseconds();
+        long remaining = timeout;
+        long now = begin;
+        do {
+            poll(remaining, now);
             now = time.milliseconds();
-        }
+            long elapsed = now - begin;
+            remaining = timeout - elapsed;
+        } while (!future.isDone() && remaining > 0);
         return future.isDone();
     }
 

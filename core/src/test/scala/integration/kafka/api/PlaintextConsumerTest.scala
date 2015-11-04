@@ -467,6 +467,40 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
+  @Test
+  def testLeaveGroup() {
+    // this is fairly tricky to test since the only apparent side effect
+    // is faster rebalances on member departure, so that's what we try to test
+    val sessionTimeout = 10000
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeout.toString)
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumer0.subscribe(List(topic).asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      !consumer0.assignment().isEmpty
+    }, "Timed out waiting for non-empty assignment")
+
+    // leave the group by explicitly closing
+    consumer0.close()
+
+    val consumer1 = consumers(0)
+    consumer1.subscribe(List(topic).asJava)
+
+    // leave group ensures that the new consumer gets an assignment quickly
+    // without it, we'd be stuck waiting the full session timeout
+    val start = System.currentTimeMillis()
+    TestUtils.waitUntilTrue(() => {
+      consumer1.poll(50)
+      !consumer1.assignment().isEmpty
+    }, "Timed out waiting for non-empty assignment")
+    val end = System.currentTimeMillis()
+
+    // the rebalance should take well less than half the session timeout
+    assertTrue((end - start) < sessionTimeout/2)
+  }
+
+
   /**
    * Creates topic 'topicName' with 'numPartitions' partitions and produces 'recordsPerPartition'
    * records to each partition
@@ -481,4 +515,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
     parts
   }
+
+
 }

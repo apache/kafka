@@ -303,28 +303,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             ensureActiveGroup();
     }
 
-    public void close(long timeoutMs) {
-        if (timeoutMs < 0)
-            throw new IllegalArgumentException("Timeout must be non-negative");
-
-        long now = time.milliseconds();
-        long deadline = now + timeoutMs;
-        if (deadline < 0) deadline = Long.MAX_VALUE;
+    @Override
+    public void close(long timeout) throws TimeoutException {
+        long begin = time.milliseconds();
 
         try {
-            while (now <= deadline) {
+            long remainingMs = timeout;
+            do {
                 try {
-                    maybeAutoCommitOffsetsSync(deadline - now);
+                    maybeAutoCommitOffsetsSync(remainingMs);
                     return;
                 } catch (WakeupException e) {
                     // ignore wakeups while closing to ensure we have a chance to commit
-                    now = time.milliseconds();
+                    long elapsed = time.milliseconds() - begin;
+                    remainingMs = timeout - elapsed;
                     continue;
                 }
-            }
+            } while (remainingMs > 0);
         } finally {
-            now = time.milliseconds();
-            super.close(Math.max(deadline - now, 0));
+            long elapsed = time.milliseconds() - begin;
+            super.close(Math.max(timeout - elapsed, 0));
         }
     }
 
@@ -349,23 +347,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         commitOffsetsSync(offsets, Long.MAX_VALUE);
     }
 
-    private void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeoutMs) {
-        if (timeoutMs < 0)
-            throw new IllegalArgumentException("Timeout must be non-negative");
-
+    private void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeout) {
         if (offsets.isEmpty())
             return;
 
-        long now = time.milliseconds();
-        long deadline = now + timeoutMs;
-        if (deadline < 0) deadline = Long.MAX_VALUE;
+        long begin = time.milliseconds();
+        long remaining = timeout;
 
-        while (now <= deadline) {
+        do {
             ensureCoordinatorKnown();
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-            if (!client.poll(future, deadline - now))
-                throw new TimeoutException("Failed to commit offsets before timeout");
+            if (!client.poll(future, remaining))
+                break;
 
             if (future.succeeded())
                 return;
@@ -373,11 +367,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!future.isRetriable())
                 throw future.exception();
 
-            now = time.milliseconds();
-            long backoffDurationMs = Math.min(retryBackoffMs, deadline - now);
-            Utils.sleep(backoffDurationMs);
-            now += backoffDurationMs;
-        }
+            long elapsed = time.milliseconds() - begin;
+            remaining = timeout - elapsed;
+
+            if (remaining > 0) {
+                long backoff = Math.min(remaining, retryBackoffMs);
+                Utils.sleep(backoff);
+                remaining -= backoff;
+            }
+        } while (remaining > 0);
+
+        throw new TimeoutException("Failed to commit offsets before timeout");
     }
 
     private void scheduleAutoCommitTask(final long interval) {

@@ -36,6 +36,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
@@ -360,6 +361,62 @@ public class ConsumerCoordinatorTest {
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(Collections.singleton(tp), rebalanceListener.assigned);
+    }
+
+    @Test
+    public void testLeaveGroupOnClose() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        final AtomicBoolean received = new AtomicBoolean(false);
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                received.set(true);
+                LeaveGroupRequest leaveRequest = new LeaveGroupRequest(request.request().body());
+                return leaveRequest.memberId().equals(consumerId) &&
+                        leaveRequest.groupId().equals(groupId);
+            }
+        }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        coordinator.close(0);
+        assertTrue(received.get());
+    }
+
+    @Test
+    public void testLeaveGroupOnResetGeneration() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        final AtomicBoolean received = new AtomicBoolean(false);
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                received.set(true);
+                LeaveGroupRequest leaveRequest = new LeaveGroupRequest(request.request().body());
+                return leaveRequest.memberId().equals(consumerId) &&
+                        leaveRequest.groupId().equals(groupId);
+            }
+        }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        coordinator.resetGeneration();
+        assertTrue(received.get());
     }
 
     @Test

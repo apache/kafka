@@ -20,7 +20,6 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -519,7 +518,6 @@ public abstract class AbstractCoordinator {
         return false;
     }
 
-
     /**
      * Mark the current coordinator as dead.
      */
@@ -530,15 +528,20 @@ public abstract class AbstractCoordinator {
         }
     }
 
-    public void close(long timeoutMs) {
-        maybeLeaveGroup(timeoutMs);
+    /**
+     * Close the coordinator, waiting if needed to send LeaveGroup.
+     * @param timeout time in milliseconds to await the response
+     */
+    public void close(long timeout) {
+        maybeLeaveGroup(timeout);
     }
 
     private void maybeLeaveGroup(long timeoutMs) {
         if (!coordinatorUnknown() && generation > 0) {
+            // this is a minimal effort attempt to leave the group. we do not
+            // attempt any resending if the request fails or times out.
             RequestFuture<Void> future = sendLeaveGroupRequest();
-            if (!client.poll(future, timeoutMs))
-                throw new TimeoutException("Timeout while awaiting leave group response");
+            client.poll(future, timeoutMs);
         }
     }
 
@@ -556,7 +559,6 @@ public abstract class AbstractCoordinator {
                 log.debug("LeaveGroup request failed with error", e);
             }
         });
-
         return future;
     }
 
