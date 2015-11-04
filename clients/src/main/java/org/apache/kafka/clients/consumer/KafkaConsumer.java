@@ -65,10 +65,10 @@ import java.util.regex.Pattern;
  * A Kafka client that consumes records from a Kafka cluster.
  * <p>
  * It will transparently handle the failure of servers in the Kafka cluster, and transparently adapt as partitions of
- * data it subscribes to migrate within the cluster. This client also interacts with the server to allow groups of
+ * data it fetches migrate within the cluster. This client also interacts with the server to allow groups of
  * consumers to load balance consumption using consumer groups (as described below).
  * <p>
- * The consumer maintains TCP connections to the necessary brokers to fetch data for the topics it subscribes to.
+ * The consumer maintains TCP connections to the necessary brokers to fetch data.
  * Failure to close the consumer after use will leak these connections.
  * The consumer is not thread-safe. See <a href="#multithreaded">Multi-threaded Processing</a> for more details.
  *
@@ -84,19 +84,24 @@ import java.util.regex.Pattern;
  * <p>
  * The {@link #commitSync() committed position} is the last offset that has been saved securely. Should the
  * process fail and restart, this is the offset that it will recover to. The consumer can either automatically commit
- * offsets periodically, or it can choose to control this committed position manually by calling
- * {@link #commitSync() commit}.
+ * offsets periodically; or it can choose to control this committed position manually by calling
+ * {@link #commitSync() commitSync}, which will block until the offsets have been successfully committed
+ * or fatal error has happened during the commit process, or {@link #commitAsync(OffsetCommitCallback) commitAsync} which is non-blocking
+ * and will trigger {@link OffsetCommitCallback} upon either successfully committed or fatally failed.
  * <p>
  * This distinction gives the consumer control over when a record is considered consumed. It is discussed in further
  * detail below.
  *
- * <h3>Consumer Groups</h3>
+ * <h3>Consumer Groups and Consume Subscriptions</h3>
  *
  * Kafka uses the concept of <i>consumer groups</i> to allow a pool of processes to divide up the work of consuming and
  * processing records. These processes can either be running on the same machine or, as is more likely, they can be
  * distributed over many machines to provide additional scalability and fault tolerance for processing.
  * <p>
- * Each Kafka consumer must specify a consumer group that it belongs to. Kafka will deliver each message in the
+ * Each Kafka consumer must specify a consumer group that it belongs to, and it can dynamically set the
+ * list of topics it wants to subscribe to through {@link #subscribe(List, ConsumerRebalanceListener)},
+ * or subscribe to all topics matching certain pattern through {@link #subscribe(Pattern, ConsumerRebalanceListener)}.
+ * Kafka will deliver each message in the
  * subscribed topics to one process in each consumer group. This is achieved by balancing the partitions in the topic
  * over the consumer processes in each group. So if there is a topic with four partitions, and a consumer group with two
  * processes, each process would consume from two partitions. This group membership is maintained dynamically: if a
@@ -116,18 +121,21 @@ import java.util.regex.Pattern;
  * have multiple such groups. To get semantics similar to pub-sub in a traditional messaging system each process would
  * have its own consumer group, so each process would subscribe to all the records published to the topic.
  * <p>
- * In addition, when offsets are committed they are always committed for a given consumer group.
+ * In addition, when group reassignment happens automatically, consumers can be notified through {@link ConsumerRebalanceListener},
+ * which allows them to finish necessary application-level logic such as state cleanup, manual offset
+ * commits (note that offsets always committed for a given consumer group), etc.
+ * See <a href="#rebalancecallback">Managing Your Own Offsets</a> for more details
  * <p>
- * It is also possible for the consumer to manually specify the partitions it subscribes to, which disables this dynamic
- * partition balancing.
+ * It is also possible for the consumer to manually specify the partitions it subscribes to through {@link #assign(List)},
+ * which disables this dynamic partition assignment.
  *
  * <h3>Usage Examples</h3>
  * The consumer APIs offer flexibility to cover a variety of consumption use cases. Here are some examples to
  * demonstrate how to use them.
  *
- * <h4>Simple Processing</h4>
- * This example demonstrates the simplest usage of Kafka's consumer api.
- *
+ * <h4>Automatic Offset Committing</h4>
+ * This example demonstrates a simple usage of Kafka's consumer api that relying on automatic offset committing.
+ * <p>
  * <pre>
  *     Properties props = new Properties();
  *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
@@ -138,7 +146,7 @@ import java.util.regex.Pattern;
  *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;String, String&gt;(props);
- *     consumer.subscribe(&quot;foo&quot;, &quot;bar&quot;);
+ *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
  *     while (true) {
  *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(100);
  *         for (ConsumerRecord&lt;String, String&gt; record : records)
@@ -166,8 +174,11 @@ import java.util.regex.Pattern;
  * The deserializer settings specify how to turn bytes into objects. For example, by specifying string deserializers, we
  * are saying that our record's key and value will just be simple strings.
  *
- * <h4>Controlling When Messages Are Considered Consumed</h4>
+ * <h4>Manual Offset Committing</h4>
  *
+ * Instead of relying on the consumer to periodically commit consumed offsets, users can also control when messages
+ * should be considered as consumed and hence commit their offsets. This is useful when the consumption of the messages
+ * are coupled with some processing logic and hence a message should not be considered as consumed until it is completed processing.
  * In this example we will consume a batch of records and batch them up in memory, when we have sufficient records
  * batched we will insert them into a database. If we allowed offsets to auto commit as in the previous example messages
  * would be considered consumed after they were given out by the consumer, and it would be possible that our process
@@ -179,7 +190,7 @@ import java.util.regex.Pattern;
  * would consume from last committed offset and would repeat the insert of the last batch of data. Used in this way
  * Kafka provides what is often called "at-least once delivery" guarantees, as each message will likely be delivered one
  * time but in failure cases could be duplicated.
- *
+ * <p>
  * <pre>
  *     Properties props = new Properties();
  *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
@@ -242,7 +253,7 @@ import java.util.regex.Pattern;
  * It isn't possible to mix both subscription to specific partitions (with no load balancing) and to topics (with load
  * balancing) using the same consumer instance.
  *
- * <h4>Managing Your Own Offsets</h4>
+ * <h4><a name="rebalancecallback">Managing Your Own Offsets</h4>
  *
  * The consumer application need not use Kafka's built-in offset storage, it can store offsets in a store of its own
  * choosing. The primary use case for this is allowing the application to store both the offset and the results of the
@@ -263,19 +274,21 @@ import java.util.regex.Pattern;
  * This means that in this case the indexing process that comes back having lost recent updates just resumes indexing
  * from what it has ensuring that no updates are lost.
  * </ul>
- *
+ * <p>
  * Each record comes with its own offset, so to manage your own offset you just need to do the following:
- * <ol>
+ *
+ * <ul>
  * <li>Configure <code>enable.auto.commit=false</code>
  * <li>Use the offset provided with each {@link ConsumerRecord} to save your position.
  * <li>On restart restore the position of the consumer using {@link #seek(TopicPartition, long)}.
- * </ol>
+ * </ul>
  *
  * This type of usage is simplest when the partition assignment is also done manually (this would be likely in the
  * search index use case described above). If the partition assignment is done automatically special care is
  * needed to handle the case where partition assignments change. This can be done by providing a
- * {@link ConsumerRebalanceListener} instance in the call to {@link #subscribe(List, ConsumerRebalanceListener)}.
- * When partitions are taken from a consumer the consumer will want to commit its offset for those partitions by
+ * {@link ConsumerRebalanceListener} instance in the call to {@link #subscribe(List, ConsumerRebalanceListener)}
+ * and {@link #subscribe(Pattern, ConsumerRebalanceListener)}.
+ * For example, when partitions are taken from a consumer the consumer will want to commit its offset for those partitions by
  * implementing {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}. When partitions are assigned to a
  * consumer, the consumer will want to look up the offset for those new partitions an correctly initialize the consumer
  * to that position by implementing {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}.
@@ -298,12 +311,27 @@ import java.util.regex.Pattern;
  * Another use case is for a system that maintains local state as described in the previous section. In such a system
  * the consumer will want to initialize its position on start-up to whatever is contained in the local store. Likewise
  * if the local state is destroyed (say because the disk is lost) the state may be recreated on a new machine by
- * reconsuming all the data and recreating the state (assuming that Kafka is retaining sufficient history).
- *
+ * re-consuming all the data and recreating the state (assuming that Kafka is retaining sufficient history).
+ * <p>
  * Kafka allows specifying the position using {@link #seek(TopicPartition, long)} to specify the new position. Special
  * methods for seeking to the earliest and latest offset the server maintains are also available (
  * {@link #seekToBeginning(TopicPartition...)} and {@link #seekToEnd(TopicPartition...)} respectively).
  *
+ * <h4>Prioritizing Partitions for Consumption</h4>
+ *
+ * If a consumer is assigned multiple partitions to fetch data from, it will try to consume from all of them at the same time,
+ * effectively giving these partitions the same priority for consumption. However in some cases consumers want to give some topics
+ * or partitions higher priority over others such that it will first focus on fetching from these topics or partitions, and only
+ * when it has few or no data to fetch from it will then enable fetching on other topics or partitions.
+ *
+ * <p>
+ * One of such cases is stream processing, or bootstrap messaging from Kafka where applications wants to catch up first on some
+ * of the topics before consider fetching others.
+ *
+ * <p>
+ * Kafka allows dynamically changing priorities of consumptions by using {@link #pause(TopicPartition...)} and {@link #resume(TopicPartition...)}
+ * to pause the consumption on the specified assigned partitions and resume the consumption
+ * on the specified paused partitions respectively in the future {@link #poll(long)} calls.
  *
  * <h3><a name="multithreaded">Multi-threaded Processing</a></h3>
  *
