@@ -57,7 +57,7 @@ object ConsumerGroupCommand {
 
     try {
       if (opts.options.has(opts.listOpt))
-        list(zkUtils)
+        list(zkUtils, opts)
       else if (opts.options.has(opts.describeOpt))
         describe(zkUtils, opts)
       else if (opts.options.has(opts.deleteOpt))
@@ -71,20 +71,43 @@ object ConsumerGroupCommand {
     }
   }
 
-  def list(zkUtils: ZkUtils) {
-    zkUtils.getConsumerGroups().foreach(println)
+  def list(zkUtils: ZkUtils, opts: ConsumerGroupCommandOptions) {
+    val useNewConsumer = opts.options.has(opts.newConsumerOpt)
+    if (!useNewConsumer)
+      zkUtils.getConsumerGroups().foreach(println)
+    else {
+      val adminClient = createAndGetAdminClient(opts)
+      adminClient.listAllGroupsFlattened().foreach(x => println(x.groupId))
+    }
+  }
+
+  def createAndGetAdminClient(opts: ConsumerGroupCommandOptions): AdminClient = {
+    AdminClient.createSimplePlaintext(opts.options.valueOf(opts.bootstrapServerOpt))
   }
 
   def describe(zkUtils: ZkUtils, opts: ConsumerGroupCommandOptions) {
+    val useNewConsumer = opts.options.has(opts.newConsumerOpt)
+    val group = opts.options.valueOf(opts.groupOpt)
     val configs = parseConfigs(opts)
     val channelSocketTimeoutMs = configs.getProperty("channelSocketTimeoutMs", "600").toInt
     val channelRetryBackoffMs = configs.getProperty("channelRetryBackoffMsOpt", "300").toInt
-    val group = opts.options.valueOf(opts.groupOpt)
-    val topics = zkUtils.getTopicsByConsumerGroup(group)
-    if (topics.isEmpty) {
+    def warnNoTopicsForGroupFound: Unit = {
       println("No topic available for consumer group provided")
     }
-    topics.foreach(topic => describeTopic(zkUtils, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs, opts))
+    if (!useNewConsumer) {
+      val topics = zkUtils.getTopicsByConsumerGroup(group)
+      if (topics.isEmpty) {
+        warnNoTopicsForGroupFound
+      }
+      topics.foreach(topic => describeTopic(zkUtils, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs, opts))
+    } else {
+      val groupAndTopicPartitions: Map[String, List[TopicPartition]] = createAndGetAdminClient(opts).describeConsumerGroup(group)
+      if (groupAndTopicPartitions.isEmpty)
+        warnNoTopicsForGroupFound
+      groupAndTopicPartitions.foreach(x =>
+        describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, x._2.map(tp => new TopicAndPartition(tp.topic(), tp.partition()))))
+
+    }
   }
 
   def delete(zkUtils: ZkUtils, opts: ConsumerGroupCommandOptions) {
@@ -156,6 +179,10 @@ object ConsumerGroupCommand {
                             channelRetryBackoffMs: Int,
                             opts: ConsumerGroupCommandOptions) {
     val topicPartitions = getTopicPartitions(zkUtils, topic)
+    describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, topicPartitions)
+  }
+
+  def describeTopicPartition(zkUtils: ZkUtils, group: String, channelSocketTimeoutMs: Int, channelRetryBackoffMs: Int, opts: ConsumerGroupCommandOptions, topicPartitions: Seq[TopicAndPartition]): Unit = {
     val partitionOffsets = getPartitionOffsets(zkUtils, group, topicPartitions, channelSocketTimeoutMs, channelRetryBackoffMs)
     println("%s, %s, %s, %s, %s, %s, %s"
       .format("GROUP", "TOPIC", "PARTITION", "CURRENT OFFSET", "LOG END OFFSET", "LAG", "OWNER"))
@@ -311,6 +338,7 @@ object ConsumerGroupCommand {
   class ConsumerGroupCommandOptions(args: Array[String]) {
     val ZkConnectDoc = "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over."
+    val BootstrapServerDoc = "REQUIRED (only when using new-consumer): The server to connect to."
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted."
     val ConfigDoc = "Configuration for timeouts. For instance --config channelSocketTimeoutMs=600"
@@ -323,13 +351,18 @@ object ConsumerGroupCommand {
       "information for the given consumer groups. For instance --group g1 --group g2 --topic t1" + nl +
       "Pass in just a topic to delete the given topic's partition offsets and ownership information " +
       "for every consumer group. For instance --topic t1" + nl +
-      "WARNING: Only does deletions on consumer groups that are not active."
+      "WARNING: Only does deletions on consumer groups that are not active." + nl +
+      "WARNING: Does not work for new-consumer, as group deletion happens automatically once a group has no active member left in new-consumer."
     val NewConsumerDoc = "Use new consumer."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
                              .describedAs("urls")
                              .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
+                                   .withRequiredArg
+                                   .describedAs("server to connect to")
+                                   .ofType(classOf[String])
     val groupOpt = parser.accepts("group", GroupDoc)
                          .withRequiredArg
                          .describedAs("consumer group")
@@ -352,7 +385,12 @@ object ConsumerGroupCommand {
 
     def checkArgs() {
       // check required args
-      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+      if (options.has(newConsumerOpt)) {
+        CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
+        if (options.has(deleteOpt))
+          CommandLineUtils.printUsageAndDie(parser, "Option %s does not work with %s".format(deleteOpt, newConsumerOpt))
+      } else
+        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
       if (options.has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
