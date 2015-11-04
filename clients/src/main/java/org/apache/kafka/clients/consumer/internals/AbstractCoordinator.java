@@ -552,7 +552,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
             @Override
             public void onFailure(RuntimeException e) {
-                log.debug("LeaveGroup request failed with error", e);
+                log.info("LeaveGroup request failed with error", e);
             }
         });
 
