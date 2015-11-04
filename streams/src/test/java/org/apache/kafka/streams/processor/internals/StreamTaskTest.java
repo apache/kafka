@@ -40,8 +40,8 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -54,7 +54,7 @@ public class StreamTaskTest {
 
     private final TopicPartition partition1 = new TopicPartition("topic1", 1);
     private final TopicPartition partition2 = new TopicPartition("topic2", 1);
-    private final HashSet<TopicPartition> partitions = new HashSet<>(Arrays.asList(partition1, partition2));
+    private final Set<TopicPartition> partitions = Utils.mkSet(partition1, partition2);
 
     private final MockSourceNode source1 = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final MockSourceNode source2 = new MockSourceNode<>(intDeserializer, intDeserializer);
@@ -117,29 +117,29 @@ public class StreamTaskTest {
                     new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, recordKey, recordValue)
             ));
 
-            assertEquals(task.process(), 5);
-            assertEquals(source1.numReceived, 1);
-            assertEquals(source2.numReceived, 0);
+            assertEquals(5, task.process());
+            assertEquals(1, source1.numReceived);
+            assertEquals(0, source2.numReceived);
 
-            assertEquals(task.process(), 4);
-            assertEquals(source1.numReceived, 1);
-            assertEquals(source2.numReceived, 1);
+            assertEquals(4, task.process());
+            assertEquals(1, source1.numReceived);
+            assertEquals(1, source2.numReceived);
 
-            assertEquals(task.process(), 3);
-            assertEquals(source1.numReceived, 2);
-            assertEquals(source2.numReceived, 1);
+            assertEquals(3, task.process());
+            assertEquals(2, source1.numReceived);
+            assertEquals(1, source2.numReceived);
 
-            assertEquals(task.process(), 2);
-            assertEquals(source1.numReceived, 3);
-            assertEquals(source2.numReceived, 1);
+            assertEquals(2, task.process());
+            assertEquals(3, source1.numReceived);
+            assertEquals(1, source2.numReceived);
 
-            assertEquals(task.process(), 1);
-            assertEquals(source1.numReceived, 3);
-            assertEquals(source2.numReceived, 2);
+            assertEquals(1, task.process());
+            assertEquals(3, source1.numReceived);
+            assertEquals(2, source2.numReceived);
 
-            assertEquals(task.process(), 0);
-            assertEquals(source1.numReceived, 3);
-            assertEquals(source2.numReceived, 3);
+            assertEquals(0, task.process());
+            assertEquals(3, source1.numReceived);
+            assertEquals(3, source2.numReceived);
 
             task.close();
 
@@ -168,11 +168,11 @@ public class StreamTaskTest {
                     new ConsumerRecord<>(partition2.topic(), partition2.partition(), 65, recordKey, recordValue)
             ));
 
-            assertEquals(task.process(), 5);
-            assertEquals(source1.numReceived, 1);
-            assertEquals(source2.numReceived, 0);
+            assertEquals(5, task.process());
+            assertEquals(1, source1.numReceived);
+            assertEquals(0, source2.numReceived);
 
-            assertEquals(consumer.paused().size(), 1);
+            assertEquals(1, consumer.paused().size());
             assertTrue(consumer.paused().contains(partition2));
 
             task.addRecords(partition1, records(
@@ -181,22 +181,22 @@ public class StreamTaskTest {
                     new ConsumerRecord<>(partition1.topic(), partition1.partition(), 50, recordKey, recordValue)
             ));
 
-            assertEquals(consumer.paused().size(), 2);
+            assertEquals(2, consumer.paused().size());
             assertTrue(consumer.paused().contains(partition1));
             assertTrue(consumer.paused().contains(partition2));
 
-            assertEquals(task.process(), 7);
-            assertEquals(source1.numReceived, 1);
-            assertEquals(source2.numReceived, 1);
+            assertEquals(7, task.process());
+            assertEquals(1, source1.numReceived);
+            assertEquals(1, source2.numReceived);
 
-            assertEquals(consumer.paused().size(), 1);
+            assertEquals(1, consumer.paused().size());
             assertTrue(consumer.paused().contains(partition1));
 
-            assertEquals(task.process(), 6);
-            assertEquals(source1.numReceived, 2);
-            assertEquals(source2.numReceived, 1);
+            assertEquals(6, task.process());
+            assertEquals(2, source1.numReceived);
+            assertEquals(1, source2.numReceived);
 
-            assertEquals(consumer.paused().size(), 0);
+            assertEquals(0, consumer.paused().size());
 
             task.close();
 

@@ -95,7 +95,7 @@ public class ProcessorTopologyTest {
         builder.addSink("sink-1", "topic-3", "processor-1");
         builder.addSink("sink-2", "topic-4", "processor-1", "processor-2");
 
-        final ProcessorTopology topology = builder.build();
+        final ProcessorTopology topology = builder.build(null);
 
         assertEquals(6, topology.processors().size());
 
