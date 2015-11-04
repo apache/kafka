@@ -315,23 +315,19 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
 
     override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = count += 1
   }
+
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]]) extends ShutdownableThread("daemon-consumer-assignment", false)
   {
-    private var partitionAssignment = scala.collection.mutable.Set[TopicPartition]()
-    private object lock
+    @volatile private var partitionAssignment: Set[TopicPartition] = Set.empty[TopicPartition]
 
     def consumerAssignment(): Set[TopicPartition] = {
-      lock.synchronized {
-        collection.immutable.Set(partitionAssignment.toArray: _*)
-      }
+      partitionAssignment
     }
 
     override def doWork(): Unit = {
       consumer.poll(50)
-      lock.synchronized {
-        if (consumer.assignment() != partitionAssignment.asJava) {
-          partitionAssignment = consumer.assignment().asScala
-        }
+      if (consumer.assignment() != partitionAssignment.asJava) {
+        partitionAssignment = collection.immutable.Set(consumer.assignment().asScala.toArray: _*)
       }
       Thread.sleep(100L)
     }

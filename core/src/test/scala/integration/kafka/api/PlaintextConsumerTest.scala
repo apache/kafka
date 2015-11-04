@@ -375,46 +375,37 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
 
-    def createTopicAndSendRecords(topicName: String, numPartitions: Int, recordsPerPartition: Int): Unit = {
-      TestUtils.createTopic(this.zkUtils, topicName, numPartitions, serverCount, this.servers)
-      for (partition <- 0 until numPartitions) {
-        sendRecords(recordsPerPartition, new TopicPartition(topicName, partition))
-      }
-    }
-
     // create two new topics, each having 2 partitions
     val topic1 = "topic1"
-    createTopicAndSendRecords(topic1, 2, 100)
     val topic2 = "topic2"
-    createTopicAndSendRecords(topic2, 2, 100)
+    val expectedAssignment = createTopicAndSendRecords(topic1, 2, 100) ++ createTopicAndSendRecords(topic2, 2, 100)
 
     assertEquals(0, consumer0.assignment().size)
 
     // subscribe to two topics
-    val subscriptions = Set(new TopicPartition(topic1, 0), new TopicPartition(topic1, 1), new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
     consumer0.subscribe(List(topic1, topic2).asJava)
     TestUtils.waitUntilTrue(() => {
       consumer0.poll(50)
-      consumer0.assignment() == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer0.assignment()}")
+      consumer0.assignment() == expectedAssignment.asJava
+    }, s"Expected partitions ${expectedAssignment.asJava} but actually got ${consumer0.assignment()}")
 
     // add one more topic with 2 partitions
     val topic3 = "topic3"
     createTopicAndSendRecords(topic3, 2, 100)
 
-    val expandedSubscriptions = subscriptions ++ Set(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
+    val newExpectedAssignment = expectedAssignment ++ Set(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
     consumer0.subscribe(List(topic1, topic2, topic3).asJava)
     TestUtils.waitUntilTrue(() => {
       consumer0.poll(50)
-      consumer0.assignment() == expandedSubscriptions.asJava
-    }, s"Expected partitions ${expandedSubscriptions.asJava} but actually got ${consumer0.assignment()}")
+      consumer0.assignment() == newExpectedAssignment.asJava
+    }, s"Expected partitions ${newExpectedAssignment.asJava} but actually got ${consumer0.assignment()}")
 
     // remove the topic we just added
     consumer0.subscribe(List(topic1, topic2).asJava)
     TestUtils.waitUntilTrue(() => {
       consumer0.poll(50)
-      consumer0.assignment() == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer0.assignment()}")
+      consumer0.assignment() == expectedAssignment.asJava
+    }, s"Expected partitions ${expectedAssignment.asJava} but actually got ${consumer0.assignment()}")
 
     consumer0.unsubscribe()
     assertEquals(0, consumer0.assignment().size)
@@ -432,16 +423,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
 
     // create two new topics, total number of partitions must be greater than number of consumers
-    def createTopicAndSendRecords(topicName: String, numPartitions: Int, recordsPerPartition: Int): Set[TopicPartition] = {
-      TestUtils.createTopic(this.zkUtils, topicName, numPartitions, serverCount, this.servers)
-      var parts = Set[TopicPartition]()
-      for (partition <- 0 until numPartitions) {
-        val tp = new TopicPartition(topicName, partition)
-        sendRecords(recordsPerPartition, tp)
-        parts = parts + tp
-      }
-      parts
-    }
     val topic1 = "topic1"
     val topic2 = "topic2"
     val subscriptions = createTopicAndSendRecords(topic1, 5, 100) ++ createTopicAndSendRecords(topic2, 8, 100)
@@ -484,5 +465,20 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     for (consumer <- rrConsumers) {
       consumer.unsubscribe()
     }
+  }
+
+  /**
+   * Creates topic 'topicName' with 'numPartitions' partitions and produces 'recordsPerPartition'
+   * records to each partition
+   */
+  def createTopicAndSendRecords(topicName: String, numPartitions: Int, recordsPerPartition: Int): Set[TopicPartition] = {
+    TestUtils.createTopic(this.zkUtils, topicName, numPartitions, serverCount, this.servers)
+    var parts = Set[TopicPartition]()
+    for (partition <- 0 until numPartitions) {
+      val tp = new TopicPartition(topicName, partition)
+      sendRecords(recordsPerPartition, tp)
+      parts = parts + tp
+    }
+    parts
   }
 }
