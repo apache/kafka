@@ -20,7 +20,6 @@ package org.apache.kafka.copycat.sink;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,14 +27,7 @@ import java.util.Set;
  * Context passed to SinkTasks, allowing them to access utilities in the copycat runtime.
  */
 @InterfaceStability.Unstable
-public abstract class SinkTaskContext {
-    protected Map<TopicPartition, Long> offsets;
-    protected long timeoutMs = -1L;
-
-    public SinkTaskContext() {
-        offsets = new HashMap<>();
-    }
-
+public interface SinkTaskContext {
     /**
      * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets
      * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
@@ -46,9 +38,7 @@ public abstract class SinkTaskContext {
      *
      * @param offsets map of offsets for topic partitions
      */
-    public void offset(Map<TopicPartition, Long> offsets) {
-        this.offsets = offsets;
-    }
+    void offset(Map<TopicPartition, Long> offsets);
 
     /**
      * Reset the consumer offsets for the given topic partition. SinkTasks should use if they manage offsets
@@ -61,9 +51,7 @@ public abstract class SinkTaskContext {
      * @param tp the topic partition to reset offset.
      * @param offset the offset to reset to.
      */
-    public void offset(TopicPartition tp, long offset) {
-        offsets.put(tp, offset);
-    }
+    void offset(TopicPartition tp, long offset);
 
     /**
      * Set the timeout in milliseconds. SinkTasks should use this to indicate that they need to retry certain
@@ -72,25 +60,23 @@ public abstract class SinkTaskContext {
      * issues. SinkTasks use this method to set how long to wait before retrying.
      * @param timeoutMs the backoff timeout in milliseconds.
      */
-    public void timeout(long timeoutMs) {
-        this.timeoutMs = timeoutMs;
-    }
+    void timeout(long timeoutMs);
 
     /**
      * Get the current set of assigned TopicPartitions for this task.
      * @return the set of currently assigned TopicPartitions
      */
-    public abstract Set<TopicPartition> assignment();
+    Set<TopicPartition> assignment();
 
     /**
      * Pause consumption of messages from the specified TopicPartitions.
      * @param partitions the partitions which should be paused
      */
-    public abstract void pause(TopicPartition... partitions);
+    void pause(TopicPartition... partitions);
 
     /**
      * Resume consumption of messages from previously paused TopicPartitions.
      * @param partitions the partitions to resume
      */
-    public abstract void resume(TopicPartition... partitions);
+    void resume(TopicPartition... partitions);
 }

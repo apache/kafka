@@ -44,6 +44,7 @@ public class FileStreamSourceTaskTest {
     private File tempFile;
     private Properties config;
     private OffsetStorageReader offsetStorageReader;
+    private SourceTaskContext context;
     private FileStreamSourceTask task;
 
     private boolean verifyMocks = false;
@@ -56,7 +57,8 @@ public class FileStreamSourceTaskTest {
         config.setProperty(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
         task = new FileStreamSourceTask();
         offsetStorageReader = PowerMock.createMock(OffsetStorageReader.class);
-        task.initialize(new SourceTaskContext(offsetStorageReader));
+        context = PowerMock.createMock(SourceTaskContext.class);
+        task.initialize(context);
     }
 
     @After
@@ -142,6 +144,7 @@ public class FileStreamSourceTaskTest {
 
 
     private void expectOffsetLookupReturnNone() {
+        EasyMock.expect(context.offsetStorageReader()).andReturn(offsetStorageReader);
         EasyMock.expect(offsetStorageReader.offset(EasyMock.anyObject(Map.class))).andReturn(null);
     }
 }

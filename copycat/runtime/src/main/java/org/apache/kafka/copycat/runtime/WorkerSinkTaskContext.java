@@ -16,15 +16,33 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.copycat.errors.IllegalWorkerStateException;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-public class WorkerSinkTaskContext extends SinkTaskContext {
-
-    KafkaConsumer<byte[], byte[]> consumer;
+public class WorkerSinkTaskContext implements SinkTaskContext {
+    private Map<TopicPartition, Long> offsets;
+    private long timeoutMs;
+    private KafkaConsumer<byte[], byte[]> consumer;
 
     public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer) {
+        this.offsets = new HashMap<>();
+        this.timeoutMs = -1L;
         this.consumer = consumer;
+    }
+
+    @Override
+    public void offset(Map<TopicPartition, Long> offsets) {
+        this.offsets.putAll(offsets);
+    }
+
+    @Override
+    public void offset(TopicPartition tp, long offset) {
+        offsets.put(tp, offset);
+    }
+
+    public void clearOffsets() {
+        offsets.clear();
     }
 
     /**
@@ -33,6 +51,11 @@ public class WorkerSinkTaskContext extends SinkTaskContext {
      */
     public Map<TopicPartition, Long> offsets() {
         return offsets;
+    }
+
+    @Override
+    public void timeout(long timeoutMs) {
+        this.timeoutMs = timeoutMs;
     }
 
     /**

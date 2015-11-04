@@ -77,8 +77,14 @@ class WorkerSinkTask implements WorkerTask {
     public void start(Properties props) {
         consumer = createConsumer(props);
         context = new WorkerSinkTaskContext(consumer);
+
+        // Ensure we're in the group so that if start() wants to rewind offsets, it will have an assignment of partitions
+        // to work with. Any rewinding will be handled immediately when polling starts.
+        consumer.poll(0);
+
         task.initialize(context);
         task.start(props);
+
         workThread = createWorkerThread();
         workThread.start();
     }
@@ -207,18 +213,6 @@ class WorkerSinkTask implements WorkerTask {
         log.debug("Task {} subscribing to topics {}", id, topics);
         newConsumer.subscribe(Arrays.asList(topics), new HandleRebalance());
 
-        // Seek to any user-provided offsets. This is useful if offsets are tracked in the downstream system (e.g., to
-        // enable exactly once delivery to that system).
-        //
-        // To do this correctly, we need to first make sure we have been assigned partitions, which poll() will guarantee.
-        // We ask for offsets after this poll to make sure any offsets committed before the rebalance are picked up correctly.
-        newConsumer.poll(0);
-        Map<TopicPartition, Long> offsets = context.offsets();
-        for (TopicPartition tp : newConsumer.assignment()) {
-            Long offset = offsets.get(tp);
-            if (offset != null)
-                newConsumer.seek(tp, offset);
-        }
         return newConsumer;
     }
 
@@ -264,7 +258,7 @@ class WorkerSinkTask implements WorkerTask {
                 consumer.seek(tp, offset);
             }
         }
-        offsets.clear();
+        context.clearOffsets();
     }
 
     private class HandleRebalance implements ConsumerRebalanceListener {
