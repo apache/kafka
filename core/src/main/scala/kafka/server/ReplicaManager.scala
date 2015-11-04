@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.{File, IOException}
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
 import com.yammer.metrics.core.Gauge
 import kafka.api._
@@ -29,7 +29,6 @@ import kafka.log.{LogAppendInfo, LogManager}
 import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.{Time => JTime}
@@ -93,6 +92,8 @@ case class BecomeLeaderOrFollowerResult(responseMap: collection.Map[(String, Int
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
+  val IsrChangePropagationBlackOut = 5000L
+  val IsrChangePropagationInterval = 60000L
 }
 
 class ReplicaManager(val config: KafkaConfig,
@@ -116,6 +117,8 @@ class ReplicaManager(val config: KafkaConfig,
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
   val stateChangeLogger = KafkaController.stateChangeLogger
   private val isrChangeSet: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
+  private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
+  private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
 
   val delayedProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
@@ -157,14 +160,25 @@ class ReplicaManager(val config: KafkaConfig,
   def recordIsrChange(topicAndPartition: TopicAndPartition) {
     isrChangeSet synchronized {
       isrChangeSet += topicAndPartition
+      lastIsrChangeMs.set(System.currentTimeMillis())
     }
   }
-
+  /**
+   * This function periodically runs to see if ISR needs to be propagated. It propagates ISR when:
+   * 1. There is ISR change not propagated yet.
+   * 2. There is no ISR Change in the last five seconds, or it has been more than 60 seconds since the last ISR propagation.
+   * This allows an occasional ISR change to be propagated within a few seconds, and avoids overwhelming controller and
+   * other brokers when large amount of ISR change occurs.
+   */
   def maybePropagateIsrChanges() {
+    val now = System.currentTimeMillis()
     isrChangeSet synchronized {
-      if (isrChangeSet.nonEmpty) {
+      if (isrChangeSet.nonEmpty &&
+        (lastIsrChangeMs.get() + ReplicaManager.IsrChangePropagationBlackOut < now ||
+          lastIsrPropagationMs.get() + ReplicaManager.IsrChangePropagationInterval < now)) {
         ReplicationUtils.propagateIsrChanges(zkUtils, isrChangeSet)
         isrChangeSet.clear()
+        lastIsrPropagationMs.set(now)
       }
     }
   }
@@ -196,7 +210,7 @@ class ReplicaManager(val config: KafkaConfig,
   def startup() {
     // start ISR expiration thread
     scheduler.schedule("isr-expiration", maybeShrinkIsr, period = config.replicaLagTimeMaxMs, unit = TimeUnit.MILLISECONDS)
-    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = 5000, unit = TimeUnit.MILLISECONDS)
+    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = 2500L, unit = TimeUnit.MILLISECONDS)
   }
 
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
