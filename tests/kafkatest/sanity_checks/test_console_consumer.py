@@ -24,7 +24,7 @@ from kafkatest.services.kafka.version import LATEST_0_8_2
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.utils.remote_account import line_count, file_exists
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.utils.security_config import SecurityConfig
+from kafkatest.services.security.security_config import SecurityConfig
 
 
 import time
@@ -44,9 +44,9 @@ class ConsoleConsumerTest(Test):
     def setUp(self):
         self.zk.start()
 
-    @parametrize(security_protocol=SecurityConfig.SSL, new_consumer=True)
-    @matrix(security_protocol=[SecurityConfig.PLAINTEXT], new_consumer=[False, True])
-    def test_lifecycle(self, security_protocol, new_consumer):
+    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
+    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'])
+    def test_lifecycle(self, security_protocol, new_consumer=True):
         """Check that console consumer starts/stops properly, and that we are capturing log output."""
 
         self.kafka.security_protocol = security_protocol

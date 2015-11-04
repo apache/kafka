@@ -15,7 +15,7 @@
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.utils.security_config import SecurityConfig
+from kafkatest.services.security.security_config import SecurityConfig
 
 import os
 
@@ -69,11 +69,10 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, security_protocol, topic, messages, new_consumer=False, settings={}):
+    def __init__(self, context, num_nodes, kafka, topic, messages, new_consumer=False, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
-        self.security_config = SecurityConfig(security_protocol)
-        self.security_protocol = security_protocol
+        self.security_config = kafka.security_config.client_config()
         self.topic = topic
         self.messages = messages
         self.new_consumer = new_consumer
@@ -123,6 +122,7 @@ class ConsumerPerformanceService(PerformanceService):
 
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % ConsumerPerformanceService.LOG_DIR
+        cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsumerPerformanceService.LOG4J_CONFIG
         cmd += " /opt/%s/bin/kafka-consumer-perf-test.sh" % kafka_dir(node)
         for key, value in self.args.items():
