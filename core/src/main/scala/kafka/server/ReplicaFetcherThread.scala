@@ -65,6 +65,8 @@ class ReplicaFetcherThread(name: String,
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
+  // we need to include the full thread id composed of the broker and the thread index
+  // as the metrics tag to avoid metric name conflicts with more than one thread to the same broker
   private val networkClient = {
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
