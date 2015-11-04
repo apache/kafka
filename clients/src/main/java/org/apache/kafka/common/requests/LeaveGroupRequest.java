@@ -57,7 +57,7 @@ public class LeaveGroupRequest extends AbstractRequest {
         return groupId;
     }
 
-    public String consumerId() {
+    public String memberId() {
         return memberId;
     }
 
