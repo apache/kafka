@@ -198,17 +198,6 @@ public abstract class AbstractCoordinator {
     }
 
     /**
-     * Reset the generation/memberId tracked by this member
-     */
-    public void resetGeneration() {
-        // leave the group if it is needed, but don't block
-        maybeLeaveGroup(0);
-        this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
-        this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
-        rejoinNeeded = true;
-    }
-
-    /**
      * Ensure that the group is active (i.e. joined and synced)
      */
     public void ensureActiveGroup() {
@@ -536,13 +525,22 @@ public abstract class AbstractCoordinator {
         maybeLeaveGroup(timeout);
     }
 
-    private void maybeLeaveGroup(long timeoutMs) {
+
+    /**
+     * Leave the current group and reset local generation/memberId.
+     * @param timeoutMs duration in milliseconds to await leave group response
+     */
+    public void maybeLeaveGroup(long timeoutMs) {
         if (!coordinatorUnknown() && generation > 0) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
             RequestFuture<Void> future = sendLeaveGroupRequest();
             client.poll(future, timeoutMs);
         }
+
+        this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
+        this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+        rejoinNeeded = true;
     }
 
     private RequestFuture<Void> sendLeaveGroupRequest() {
