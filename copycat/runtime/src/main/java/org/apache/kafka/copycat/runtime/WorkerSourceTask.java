@@ -96,24 +96,24 @@ class WorkerSourceTask implements WorkerTask {
     @Override
     public void stop() {
         task.stop();
-        commitOffsets();
         if (workThread != null)
             workThread.startGracefulShutdown();
     }
 
     @Override
     public boolean awaitStop(long timeoutMs) {
+        boolean success = true;
         if (workThread != null) {
             try {
-                boolean success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
+                success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
                 if (!success)
                     workThread.forceShutdown();
-                return success;
             } catch (InterruptedException e) {
-                return false;
+                success = false;
             }
         }
-        return true;
+        commitOffsets();
+        return success;
     }
 
     @Override
