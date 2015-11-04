@@ -395,18 +395,7 @@ public class TopologyBuilder {
 
         return nodeGroups;
     }
-
-    /**
-     * Asserts that the streams of the specified source nodes must be copartitioned.
-     *
-     * @param sourceNodes source node names
-     * @return this builder instance so methods can be chained together; never null
-     */
-    public final TopologyBuilder copartitionSources(String... sourceNodes) {
-        copartitionSourceGroups.add(Collections.unmodifiableSet(Utils.mkSet(sourceNodes)));
-        return this;
-    }
-
+    
     /**
      * Asserts that the streams of the specified source nodes must be copartitioned.
      *
