@@ -544,7 +544,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metricGrpPrefix,
                     metricsTags,
                     this.time,
-                    requestTimeoutMs,
                     retryBackoffMs,
                     new ConsumerCoordinator.DefaultOffsetCommitCallback(),
                     config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
@@ -777,10 +776,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws NoOffsetForPartitionException if there is no stored offset for a subscribed partition and no automatic
      *             offset reset policy has been configured.
      * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException if there is OffsetOutOfRange error in fetchResponse and
-     *         the defaultResetPolicy is NONE
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
-     *
-     * @throws org.apache.kafka.common.errors.AuthorizationException if caller does not have Read permission on topic.
+     *             the defaultResetPolicy is NONE
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if caller does Read access to any of the subscribed
+     *             topics or to the configured groupId
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
@@ -883,7 +883,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller).
      *
      * @param offsets A map of offsets by partition with associated metadata
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -1008,7 +1011,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The offset
      * @throws NoOffsetForPartitionException If a position hasn't been set for a given partition, and no reset policy is
      *             available.
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
+     *
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId
      */
     public long position(TopicPartition partition) {
         acquire();
@@ -1035,7 +1042,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partition The partition to check
      * @return The last committed offset and metadata or null if there was no prior commit
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
@@ -1160,7 +1170,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Wakeup the consumer. This method is thread-safe and is useful in particular to abort a long poll.
-     * The thread which is blocking in an operation will throw {@link WakeupException}.
+     * The thread which is blocking in an operation will throw {@link org.apache.kafka.common.errors.WakeupException}.
      */
     @Override
     public void wakeup() {

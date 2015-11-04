@@ -12,10 +12,16 @@
  */
 package org.apache.kafka.common.errors;
 
-public class AuthorizationException extends ApiException {
+public class GroupAuthorizationException extends AuthorizationException {
+    private final String groupId;
 
-    public AuthorizationException(String message) {
-        super(message);
+    public GroupAuthorizationException(String groupId) {
+        super("Not authorized to access group: " + groupId);
+        this.groupId = groupId;
+    }
+
+    public String groupId() {
+        return groupId;
     }
 
 }

@@ -15,6 +15,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -82,7 +84,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                                String metricGrpPrefix,
                                Map<String, String> metricTags,
                                Time time,
-                               long requestTimeoutMs,
                                long retryBackoffMs,
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
@@ -95,7 +96,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                 metricGrpPrefix,
                 metricTags,
                 time,
-                requestTimeoutMs,
                 retryBackoffMs);
         this.metadata = metadata;
 
@@ -136,6 +136,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         this.metadata.addListener(new Metadata.Listener() {
             @Override
             public void onMetadataUpdate(Cluster cluster) {
+                // if we encounter any unauthorized topics, raise an exception to the user
+                if (!cluster.unauthorizedTopics().isEmpty())
+                    throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+
                 if (subscriptions.hasPatternSubscription()) {
                     final List<String> topicsToSubscribe = new ArrayList<>();
 
@@ -340,13 +344,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future);
 
-            if (future.succeeded()) {
+            if (future.succeeded())
                 return;
-            }
 
-            if (!future.isRetriable()) {
+            if (!future.isRetriable())
                 throw future.exception();
-            }
 
             Utils.sleep(retryBackoffMs);
         }
@@ -439,6 +441,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         @Override
         public void handle(OffsetCommitResponse commitResponse, RequestFuture<Void> future) {
             sensors.commitLatency.record(response.requestLatencyMs());
+            Set<String> unauthorizedTopics = new HashSet<>();
+
             for (Map.Entry<TopicPartition, Short> entry : commitResponse.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetAndMetadata offsetAndMetadata = this.offsets.get(tp);
@@ -450,6 +454,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                     if (subscriptions.isAssigned(tp))
                         // update the local cache only if the partition is still assigned
                         subscriptions.committed(tp, offsetAndMetadata);
+                } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+                    future.raise(new GroupAuthorizationException(groupId));
+                    return;
+                } else if (errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
+                    unauthorizedTopics.add(tp.topic());
                 } else {
                     if (errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
                         // just retry
@@ -458,7 +467,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                             || errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
                         coordinatorDead();
                     } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()
-                            || errorCode == Errors.ILLEGAL_GENERATION.code()) {
+                            || errorCode == Errors.ILLEGAL_GENERATION.code()
+                            || errorCode == Errors.REBALANCE_IN_PROGRESS.code()) {
                         // need to re-join group
                         subscriptions.needReassignment();
                     }
@@ -473,7 +483,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                 }
             }
 
-            future.complete(null);
+            if (!unauthorizedTopics.isEmpty())
+                future.raise(new TopicAuthorizationException(unauthorizedTopics));
+            else
+                future.complete(null);
         }
     }
 

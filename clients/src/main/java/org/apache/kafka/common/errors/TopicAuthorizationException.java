@@ -12,10 +12,22 @@
  */
 package org.apache.kafka.common.errors;
 
-public class AuthorizationException extends ApiException {
+import java.util.Collections;
+import java.util.Set;
 
-    public AuthorizationException(String message) {
-        super(message);
+public class TopicAuthorizationException extends AuthorizationException {
+    private final Set<String> unauthorizedTopics;
+
+    public TopicAuthorizationException(Set<String> unauthorizedTopics) {
+        super("Not authorized to access topics: " + unauthorizedTopics);
+        this.unauthorizedTopics = unauthorizedTopics;
     }
 
+    public TopicAuthorizationException(String unauthorizedTopic) {
+        this(Collections.singleton(unauthorizedTopic));
+    }
+
+    public Set<String> unauthorizedTopics() {
+        return unauthorizedTopics;
+    }
 }

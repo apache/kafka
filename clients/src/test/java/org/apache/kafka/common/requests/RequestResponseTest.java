@@ -254,7 +254,8 @@ public class RequestResponseTest {
         replicas[0] = node;
         Node[] isr = new Node[1];
         isr[0] = node;
-        Cluster cluster = new Cluster(Arrays.asList(node), Arrays.asList(new PartitionInfo("topic1", 1, node, replicas, isr)));
+        Cluster cluster = new Cluster(Arrays.asList(node), Arrays.asList(new PartitionInfo("topic1", 1, node, replicas, isr)),
+                Collections.<String>emptySet());
 
         Map<String, Errors> errors = new HashMap<String, Errors>();
         errors.put("topic2", Errors.LEADER_NOT_AVAILABLE);

@@ -17,6 +17,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -88,7 +89,6 @@ public abstract class AbstractCoordinator {
     protected final ConsumerNetworkClient client;
     protected final Time time;
     protected final long retryBackoffMs;
-    protected final long requestTimeoutMs;
 
     private boolean needsJoinPrepare = true;
     private boolean rejoinNeeded = true;
@@ -108,7 +108,6 @@ public abstract class AbstractCoordinator {
                                String metricGrpPrefix,
                                Map<String, String> metricTags,
                                Time time,
-                               long requestTimeoutMs,
                                long retryBackoffMs) {
         this.client = client;
         this.time = time;
@@ -120,7 +119,6 @@ public abstract class AbstractCoordinator {
         this.heartbeat = new Heartbeat(this.sessionTimeoutMs, heartbeatIntervalMs, time.milliseconds());
         this.heartbeatTask = new HeartbeatTask();
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
-        this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
     }
 
@@ -178,7 +176,7 @@ public abstract class AbstractCoordinator {
     public void ensureCoordinatorKnown() {
         while (coordinatorUnknown()) {
             RequestFuture<Void> future = sendGroupMetadataRequest();
-            client.poll(future, requestTimeoutMs);
+            client.poll(future);
 
             if (future.failed()) {
                 if (future.isRetriable())
@@ -376,6 +374,8 @@ public abstract class AbstractCoordinator {
                 log.error("Attempt to join group {} failed due to: {}",
                         groupId, error.exception().getMessage());
                 future.raise(error);
+            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+                future.raise(new GroupAuthorizationException(groupId));
             } else {
                 // unexpected error, throw the exception
                 future.raise(new KafkaException("Unexpected error in join group response: "
@@ -427,6 +427,8 @@ public abstract class AbstractCoordinator {
             if (errorCode == Errors.NONE.code()) {
                 future.complete(syncResponse.memberAssignment());
                 sensors.syncLatency.record(response.requestLatencyMs());
+            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+                future.raise(new GroupAuthorizationException(groupId));
             } else {
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.forCode(errorCode));
@@ -476,7 +478,8 @@ public abstract class AbstractCoordinator {
             // use MAX_VALUE - node.id as the coordinator id to mimic separate connections
             // for the coordinator in the underlying network client layer
             // TODO: this needs to be better handled in KAFKA-1935
-            if (groupCoordinatorResponse.errorCode() == Errors.NONE.code()) {
+            short errorCode = groupCoordinatorResponse.errorCode();
+            if (errorCode == Errors.NONE.code()) {
                 this.coordinator = new Node(Integer.MAX_VALUE - groupCoordinatorResponse.node().id(),
                         groupCoordinatorResponse.node().host(),
                         groupCoordinatorResponse.node().port());
@@ -487,8 +490,10 @@ public abstract class AbstractCoordinator {
                 if (generation > 0)
                     heartbeatTask.reset();
                 future.complete(null);
+            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+                future.raise(new GroupAuthorizationException(groupId));
             } else {
-                future.raise(Errors.forCode(groupCoordinatorResponse.errorCode()));
+                future.raise(Errors.forCode(errorCode));
             }
         }
     }
@@ -538,31 +543,33 @@ public abstract class AbstractCoordinator {
         @Override
         public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
             sensors.heartbeatLatency.record(response.requestLatencyMs());
-            short error = heartbeatResponse.errorCode();
-            if (error == Errors.NONE.code()) {
+            short errorCode = heartbeatResponse.errorCode();
+            if (errorCode == Errors.NONE.code()) {
                 log.debug("Received successful heartbeat response.");
                 future.complete(null);
-            } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
-                    || error == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
+            } else if (errorCode == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
+                    || errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
                 log.info("Attempt to heart beat failed since coordinator is either not started or not valid, marking it as dead.");
                 coordinatorDead();
-                future.raise(Errors.forCode(error));
-            } else if (error == Errors.REBALANCE_IN_PROGRESS.code()) {
+                future.raise(Errors.forCode(errorCode));
+            } else if (errorCode == Errors.REBALANCE_IN_PROGRESS.code()) {
                 log.info("Attempt to heart beat failed since the group is rebalancing, try to re-join group.");
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.REBALANCE_IN_PROGRESS);
-            } else if (error == Errors.ILLEGAL_GENERATION.code()) {
+            } else if (errorCode == Errors.ILLEGAL_GENERATION.code()) {
                 log.info("Attempt to heart beat failed since generation id is not legal, try to re-join group.");
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.ILLEGAL_GENERATION);
-            } else if (error == Errors.UNKNOWN_MEMBER_ID.code()) {
+            } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
                 log.info("Attempt to heart beat failed since member id is not valid, reset it and try to re-join group.");
                 memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
+            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+                future.raise(new GroupAuthorizationException(groupId));
             } else {
-                future.raise(new KafkaException("Unexpected error in heartbeat response: "
-                        + Errors.forCode(error).exception().getMessage()));
+                future.raise(new KafkaException("Unexpected errorCode in heartbeat response: "
+                        + Errors.forCode(errorCode).exception().getMessage()));
             }
         }
     }

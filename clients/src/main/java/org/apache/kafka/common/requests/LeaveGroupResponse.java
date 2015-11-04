@@ -30,6 +30,7 @@ public class LeaveGroupResponse extends AbstractRequestResponse {
      * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
      * NOT_COORDINATOR_FOR_CONSUMER (16)
      * UNKNOWN_CONSUMER_ID (25)
+     * GROUP_AUTHORIZATION_FAILED (30)
      */
 
     private final short errorCode;

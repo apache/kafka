@@ -84,12 +84,16 @@ public enum Errors {
             new UnknownMemberIdException("The coordinator is not aware of this member.")),
     INVALID_SESSION_TIMEOUT(26,
             new ApiException("The session timeout is not within an acceptable range.")),
+    REBALANCE_IN_PROGRESS(27,
+            new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed.")),
     INVALID_COMMIT_OFFSET_SIZE(28,
             new ApiException("The committing offset data size is not valid")),
-    AUTHORIZATION_FAILED(29,
-            new ApiException("Request is not authorized.")),
-    REBALANCE_IN_PROGRESS(30,
-            new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed."));
+    TOPIC_AUTHORIZATION_FAILED(29,
+            new AuthorizationException("Topic authorization failed.")),
+    GROUP_AUTHORIZATION_FAILED(30,
+            new AuthorizationException("Group authorization failed.")),
+    CLUSTER_AUTHORIZATION_FAILED(31,
+            new AuthorizationException("Cluster authorization failed."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

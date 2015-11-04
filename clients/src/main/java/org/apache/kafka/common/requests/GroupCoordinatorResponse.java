@@ -26,6 +26,15 @@ public class GroupCoordinatorResponse extends AbstractRequestResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String COORDINATOR_KEY_NAME = "coordinator";
 
+    /**
+     * Possible error codes:
+     *
+     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR_FOR_GROUP (16)
+     * GROUP_AUTHORIZATION_FAILED (30)
+     */
+
+
     // coordinator level field names
     private static final String NODE_ID_KEY_NAME = "node_id";
     private static final String HOST_KEY_NAME = "host";
