@@ -35,7 +35,10 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -362,6 +365,64 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testLeaveGroupOnClose() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        final AtomicBoolean received = new AtomicBoolean(false);
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                received.set(true);
+                LeaveGroupRequest leaveRequest = new LeaveGroupRequest(request.request().body());
+                return leaveRequest.memberId().equals(consumerId) &&
+                        leaveRequest.groupId().equals(groupId);
+            }
+        }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        coordinator.close();
+        assertTrue(received.get());
+    }
+
+    @Test
+    public void testMaybeLeaveGroup() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        final AtomicBoolean received = new AtomicBoolean(false);
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                received.set(true);
+                LeaveGroupRequest leaveRequest = new LeaveGroupRequest(request.request().body());
+                return leaveRequest.memberId().equals(consumerId) &&
+                        leaveRequest.groupId().equals(groupId);
+            }
+        }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        coordinator.maybeLeaveGroup(false);
+        assertTrue(received.get());
+        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, coordinator.memberId);
+        assertEquals(OffsetCommitRequest.DEFAULT_GENERATION_ID, coordinator.generation);
+    }
+
+    @Test
     public void testRebalanceInProgressOnSyncGroup() {
         final String consumerId = "consumer";
 
@@ -543,7 +604,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testResetGeneration() {
+    public void testCommitAfterLeaveGroup() {
         // enable auto-assignment
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
 
@@ -555,8 +616,9 @@ public class ConsumerCoordinatorTest {
         coordinator.ensurePartitionAssignment();
 
         // now switch to manual assignment
+        client.prepareResponse(new LeaveGroupResponse(Errors.NONE.code()).toStruct());
         subscriptions.unsubscribe();
-        coordinator.resetGeneration();
+        coordinator.maybeLeaveGroup(false);
         subscriptions.assignFromUser(Arrays.asList(tp));
 
         // the client should not reuse generation/memberId from auto-subscribed generation

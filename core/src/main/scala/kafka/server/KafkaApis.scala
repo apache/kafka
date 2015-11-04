@@ -895,7 +895,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // let the coordinator to handle leave-group
       coordinator.handleLeaveGroup(
         leaveGroupRequest.groupId(),
-        leaveGroupRequest.consumerId(),
+        leaveGroupRequest.memberId(),
         sendResponseCallback)
     }
   }

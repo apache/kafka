@@ -15,9 +15,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
@@ -26,6 +23,9 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -45,7 +45,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,7 +57,7 @@ import java.util.Set;
 /**
  * This class manages the coordination process with the consumer coordinator.
  */
-public final class ConsumerCoordinator extends AbstractCoordinator implements Closeable {
+public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
@@ -305,15 +304,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
 
     @Override
     public void close() {
-        // commit offsets prior to closing if auto-commit enabled
-        while (true) {
-            try {
-                maybeAutoCommitOffsetsSync();
-                return;
-            } catch (WakeupException e) {
-                // ignore wakeups while closing to ensure we have a chance to commit
-                continue;
+        try {
+            while (true) {
+                try {
+                    maybeAutoCommitOffsetsSync();
+                    return;
+                } catch (WakeupException e) {
+                    // ignore wakeups while closing to ensure we have a chance to commit
+                    continue;
+                }
             }
+        } finally {
+            super.close();
         }
     }
 
