@@ -19,13 +19,14 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 
-import kafka.utils.{TestUtils, Logging}
+import kafka.utils.{TestUtils, Logging, ShutdownableThread}
 import kafka.server.KafkaConfig
 
 import java.util.ArrayList
 import org.junit.Assert._
 import org.junit.{Test, Before}
 
+import scala.collection.mutable.Buffer
 import scala.collection.JavaConverters._
 import kafka.coordinator.GroupCoordinator
 
@@ -313,6 +314,61 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     var count = 0
 
     override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = count += 1
+  }
+  protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]]) extends ShutdownableThread("daemon-consumer-assignment", false)
+  {
+    private var partitionAssignment = scala.collection.mutable.Set[TopicPartition]()
+    private object lock
+
+    def consumerAssignment(): Set[TopicPartition] = {
+      lock.synchronized {
+        collection.immutable.Set(partitionAssignment.toArray: _*)
+      }
+    }
+
+    override def doWork(): Unit = {
+      consumer.poll(50)
+      lock.synchronized {
+        if (consumer.assignment() != partitionAssignment.asJava) {
+          partitionAssignment = consumer.assignment().asScala
+        }
+      }
+      Thread.sleep(100L)
+    }
+  }
+
+  /**
+   * Check whether partition assignment is valid
+   * Assumes partition assignment is valid iff
+   * 1. Every consumer got assigned at least one partition
+   * 2. Each partition is assigned to only one consumer
+   * 3. Every partition is assigned to one of the consumers
+   *
+   * @param assignments set of consumer assignments; one per each consumer
+   * @param partitions set of partitions that consumers subscribed to
+   * @return true if partition assignment is valid
+   */
+  def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]],
+                                 partitions: Set[TopicPartition]): Boolean = {
+    val allNonEmptyAssignments = assignments forall (assignment => assignment.size > 0)
+    if (!allNonEmptyAssignments) {
+      // at least one consumer got empty assignment
+      return false
+    }
+
+    // make sure that sum of all partitions to all consumers equals total number of partitions
+    val totalPartitionsInAssignments = (0 /: assignments) (_ + _.size)
+    if (totalPartitionsInAssignments != partitions.size) {
+      // either same partitions got assigned to more than one consumer or some
+      // partitions were not assigned
+      return false
+    }
+
+    // The above checks could miss the case where one or more partitions were assigned to more
+    // than one consumer and the same number of partitions were missing from assignments.
+    // Make sure that all unique assignments are the same as 'partitions'
+    val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments) (_ ++ _)
+    uniqueAssignedPartitions == partitions
   }
 
 }

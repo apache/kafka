@@ -15,13 +15,14 @@ package kafka.api
 import java.util.regex.Pattern
 
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{NoOffsetForPartitionException, OffsetAndMetadata, KafkaConsumer, ConsumerConfig}
+import org.apache.kafka.clients.consumer.{NoOffsetForPartitionException, OffsetAndMetadata, KafkaConsumer, ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordTooLargeException}
 import org.junit.Assert._
 import org.junit.Test
+import scala.collection.mutable.Buffer
 import scala.collection.JavaConverters
 import JavaConverters._
 
@@ -365,5 +366,123 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0L, oversizedPartitions.get(tp))
 
     consumer0.close()
+  }
+
+  @Test
+  def testRoundRobinAssignment() {
+    // 1 consumer using round-robin assignment
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
+    this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    def createTopicAndSendRecords(topicName: String, numPartitions: Int, recordsPerPartition: Int): Unit = {
+      TestUtils.createTopic(this.zkUtils, topicName, numPartitions, serverCount, this.servers)
+      for (partition <- 0 until numPartitions) {
+        sendRecords(recordsPerPartition, new TopicPartition(topicName, partition))
+      }
+    }
+
+    // create two new topics, each having 2 partitions
+    val topic1 = "topic1"
+    createTopicAndSendRecords(topic1, 2, 100)
+    val topic2 = "topic2"
+    createTopicAndSendRecords(topic2, 2, 100)
+
+    assertEquals(0, consumer0.assignment().size)
+
+    // subscribe to two topics
+    val subscriptions = Set(new TopicPartition(topic1, 0), new TopicPartition(topic1, 1), new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
+    consumer0.subscribe(List(topic1, topic2).asJava)
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer0.assignment()}")
+
+    // add one more topic with 2 partitions
+    val topic3 = "topic3"
+    createTopicAndSendRecords(topic3, 2, 100)
+
+    val expandedSubscriptions = subscriptions ++ Set(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
+    consumer0.subscribe(List(topic1, topic2, topic3).asJava)
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == expandedSubscriptions.asJava
+    }, s"Expected partitions ${expandedSubscriptions.asJava} but actually got ${consumer0.assignment()}")
+
+    // remove the topic we just added
+    consumer0.subscribe(List(topic1, topic2).asJava)
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer0.assignment()}")
+
+    consumer0.unsubscribe()
+    assertEquals(0, consumer0.assignment().size)
+  }
+
+  @Test
+  def testMultiConsumerRoundRobinAssignment() {
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
+    this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
+
+    val consumerCount = 10
+    val rrConsumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    for (i <- 0 until consumerCount) {
+      rrConsumers += new KafkaConsumer(this.consumerConfig)
+    }
+
+    // create two new topics, total number of partitions must be greater than number of consumers
+    def createTopicAndSendRecords(topicName: String, numPartitions: Int, recordsPerPartition: Int): Set[TopicPartition] = {
+      TestUtils.createTopic(this.zkUtils, topicName, numPartitions, serverCount, this.servers)
+      var parts = Set[TopicPartition]()
+      for (partition <- 0 until numPartitions) {
+        val tp = new TopicPartition(topicName, partition)
+        sendRecords(recordsPerPartition, tp)
+        parts = parts + tp
+      }
+      parts
+    }
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+    val subscriptions = createTopicAndSendRecords(topic1, 5, 100) ++ createTopicAndSendRecords(topic2, 8, 100)
+
+    // all consumers subscribe to all the topics and start polling
+    // for the topic partition assignment
+    val consumerPollers = Buffer[ConsumerAssignmentPoller]()
+    for (consumer <- rrConsumers) {
+      assertEquals(0, consumer.assignment().size)
+      consumer.subscribe(List(topic1, topic2).asJava)
+      val poller = new ConsumerAssignmentPoller(consumer)
+      consumerPollers += poller
+      poller.start()
+    }
+
+    TestUtils.waitUntilTrue(() => {
+      val assignments = Buffer[Set[TopicPartition]]()
+      consumerPollers.foreach(assignments += _.consumerAssignment())
+      isPartitionAssignmentValid(assignments, subscriptions)
+    }, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
+
+    // add one more consumer
+    val newConsumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
+    newConsumer.subscribe(List(topic1, topic2).asJava)
+    val newPoller = new ConsumerAssignmentPoller(newConsumer)
+    rrConsumers += newConsumer
+    consumerPollers += newPoller
+    newPoller.start()
+
+    // wait until topics get re-assigned
+    TestUtils.waitUntilTrue(() => {
+      val assignments = Buffer[Set[TopicPartition]]()
+      consumerPollers.foreach(assignments += _.consumerAssignment())
+      isPartitionAssignmentValid(assignments, subscriptions)
+    }, s"Did not get valid assignment for partitions ${subscriptions.asJava} after we added one more consumer")
+
+    for (poller <- consumerPollers)
+      poller.shutdown()
+
+    for (consumer <- rrConsumers) {
+      consumer.unsubscribe()
+    }
   }
 }
