@@ -252,7 +252,7 @@ object ConsoleConsumer extends Logging {
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
         CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
-      val topicArg = options.valueOf(topicOrFilterOpt.head)
+      topicArg = options.valueOf(topicOrFilterOpt.head)
       filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
     }
     val consumerProps = if (options.has(consumerConfigOpt))
