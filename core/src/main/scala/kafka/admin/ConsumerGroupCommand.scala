@@ -18,7 +18,6 @@
 package kafka.admin
 
 
-import java.nio.ByteBuffer
 import java.util.Properties
 
 import joptsimple.{OptionParser, OptionSpec}
@@ -26,10 +25,8 @@ import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, Partit
 import kafka.client.ClientUtils
 import kafka.common.{TopicAndPartition, _}
 import kafka.consumer.SimpleConsumer
-import kafka.coordinator.{GroupSummary, MemberSummary}
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNoNodeException
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.JaasUtils
@@ -37,7 +34,6 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConversions._
-import scala.collection.JavaConverters._
 import scala.collection.{Set, mutable}
 
 object ConsumerGroupCommand {
@@ -82,7 +78,7 @@ object ConsumerGroupCommand {
       zkUtils.getConsumerGroups().foreach(println)
     else {
       val adminClient = createAndGetAdminClient(opts)
-      adminClient.listAllGroupsFlattened().foreach(x => println(x.groupId))
+      adminClient.listAllConsumerGroupsFlattened().foreach(x => println(x.groupId))
     }
   }
 
@@ -110,31 +106,11 @@ object ConsumerGroupCommand {
       }
       topics.foreach(topic => describeTopic(zkUtils, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs, opts))
     } else {
-      val groupSummary: GroupSummary = createAndGetAdminClient(opts).describeGroup(group)
-      if (groupSummary.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-        println(s"Group ${group} is not a consumer group")
-
-      val members: List[MemberSummary] = groupSummary.members
-      val owners: Map[TopicPartition, String] = members.flatMap {
-        case member =>
-          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
-          val partitions = assignment.partitions().asScala.toList
-          partitions.map {
-            case partition: TopicPartition =>
-              partition -> "%s_%s".format(member.memberId, member.clientHost)
-          }.toMap
-      }.toMap
-
-      val groupAndTopicPartitions: Map[String, List[TopicPartition]] = members.map {
-        case member =>
-          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
-          member.memberId -> assignment.partitions().toList
-      }.toMap
+      val (owners, groupAndTopicPartitions) = createAndGetAdminClient(opts).describeConsumerGroup(group)
 
       if (groupAndTopicPartitions.isEmpty)
         warnNoTopicsForGroupFound
-      groupAndTopicPartitions.foreach(x =>
-        describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, x._2.map(tp => new TopicAndPartition(tp.topic(), tp.partition())), owners))
+      groupAndTopicPartitions.foreach(x => describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, x._2.map(tp => new TopicAndPartition(tp.topic(), tp.partition())), owners))
     }
   }
 

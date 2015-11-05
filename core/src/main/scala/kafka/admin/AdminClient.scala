@@ -147,10 +147,21 @@ class AdminClient(val time: Time,
     GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
   }
 
-  def describeConsumerGroup(groupId: String): Map[String, List[TopicPartition]] = {
+  def describeConsumerGroup(groupId: String): (Map[TopicPartition, String], Map[String, List[TopicPartition]]) = {
     val group = describeGroup(groupId)
+    try {
+      val membersAndTopicPartitions: Map[String, List[TopicPartition]] = getMembersAndTopicPartitions(group)
+      val owners = getOwners(group)
+      (owners, membersAndTopicPartitions)
+    } catch {
+      case (ex: scala.IllegalArgumentException) =>
+        throw new scala.IllegalArgumentException(s"Group ${groupId} is not a consumer group.")
+    }
+  }
+
+  def getMembersAndTopicPartitions(group: GroupSummary): Map[String, List[TopicPartition]] = {
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group ${groupId} is not a consumer group")
+      throw new scala.IllegalArgumentException(s"${group} is not a valid GroupSummary")
 
     group.members.map {
       case member =>
@@ -159,6 +170,20 @@ class AdminClient(val time: Time,
     }.toMap
   }
 
+  def getOwners(groupSummary: GroupSummary): Map[TopicPartition, String] = {
+    if (groupSummary.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
+      throw new IllegalArgumentException(s"${groupSummary} is not a valid GroupSummary")
+
+    groupSummary.members.flatMap {
+      case member =>
+        val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
+        val partitions = assignment.partitions().asScala.toList
+        partitions.map {
+          case partition: TopicPartition =>
+            partition -> "%s_%s".format(member.memberId, member.clientHost)
+        }.toMap
+    }.toMap
+  }
 }
 
 object AdminClient {
