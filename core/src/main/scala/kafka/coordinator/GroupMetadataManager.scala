@@ -402,7 +402,8 @@ class GroupMetadataManager(val brokerId: Int,
                     val groupId = baseKey.key.asInstanceOf[String]
                     val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, msgAndOffset.message.payload)
 
-                    addGroup(groupId, groupMetadata)
+                    if (groupMetadata != null)
+                      addGroup(groupId, groupMetadata)
                   }
 
                   currOffset = msgAndOffset.nextOffset

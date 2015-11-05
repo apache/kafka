@@ -752,7 +752,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Unsubscribe from all topics currently subscribed to.
+     * Unsubscribe from topics currently subscribed with {@link #subscribe(List)}. This
+     * also clears any partitions directly assigned through {@link #assign(List)}.
      */
     public void unsubscribe() {
         acquire();
@@ -804,10 +805,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *            immediately with any records available now. Must not be negative.
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
      *
-     * @throws NoOffsetForPartitionException if there is no stored offset for a subscribed partition and no automatic
-     *             offset reset policy has been configured.
-     * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException if there is OffsetOutOfRange error in fetchResponse and
-     *             the defaultResetPolicy is NONE
+     * @throws org.apache.kafka.common.errors.SerializationException if there are problems deserializing fetched
+     *             records with the configured deserializers
+     * @throws InvalidOffsetException if the offset for a partition or set of partitions is undefined or out of
+     *             rand and no offset reset policy has been configured
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller does Read access to any of the subscribed
@@ -849,9 +850,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * heart-beating, auto-commits, and offset updates.
      * @param timeout The maximum time to block in the underlying poll
      * @return The fetched records (may be empty)
-     * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
-     *         the defaultResetPolicy is NONE
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
@@ -879,8 +877,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return fetcher.fetchedRecords();
     }
 
-
-
     /**
      * Commit offsets returned on the last {@link #poll(long) poll()} for all the subscribed list of topics and partitions.
      * <p>
@@ -891,7 +887,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller).
      *
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws CommitFailedException if the commit failed and cannot be retried. This can only occur if you are
+     *             using automatic group management with {@link #subscribe(List)}, or if there is an active group
+     *             with the same groupId which is using group management.
      */
     @Override
     public void commitSync() {
@@ -918,6 +918,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
+     * @throws CommitFailedException if the commit failed and cannot be retried. This can only occur if you are
+     *             using automatic group management with {@link #subscribe(List)}, or if there is an active group
+     *             with the same groupId which is using group management.
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -1191,7 +1194,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is
-     * enabled, this will commit the current offsets.
+     * enabled, this will commit the current offsets. Note that {@link #wakeup()} cannot be used
+     * to interrupt close.
      */
     @Override
     public void close() {
@@ -1234,7 +1238,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * or reset it using the offset reset policy the user has configured.
      *
      * @param partitions The partitions that needs updating fetch positions
-     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
+     * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
      */
     private void updateFetchPositions(Set<TopicPartition> partitions) {

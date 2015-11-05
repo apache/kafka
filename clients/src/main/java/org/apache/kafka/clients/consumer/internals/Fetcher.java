@@ -17,6 +17,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
@@ -241,7 +242,7 @@ public class Fetcher<K, V> {
         else if (strategy == OffsetResetStrategy.LATEST)
             timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
         else
-            throw new NoOffsetForPartitionException("No offset is set and no reset policy is defined");
+            throw new NoOffsetForPartitionException(partition);
 
         log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase());
         long offset = listOffset(partition, timestamp);
@@ -318,7 +319,7 @@ public class Fetcher<K, V> {
      *
      * @throws RecordTooLargeException If there is a message larger than fetch size and hence cannot be ever returned
      */
-    private void throwIfRecordTooLarge() throws OffsetOutOfRangeException {
+    private void throwIfRecordTooLarge() throws RecordTooLargeException {
         Map<TopicPartition, Long> copiedRecordTooLargePartitions = new HashMap<>(this.recordTooLargePartitions);
         this.recordTooLargePartitions.clear();
 

@@ -110,7 +110,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       } catch {
         // TODO: should be no need to catch these exceptions once KAFKA-2017 is
         // merged since coordinator fail-over will not cause a rebalance
-        case _: UnknownMemberIdException | _: IllegalGenerationException =>
+        case _: CommitFailedException =>
       }
     }
     scheduler.shutdown()

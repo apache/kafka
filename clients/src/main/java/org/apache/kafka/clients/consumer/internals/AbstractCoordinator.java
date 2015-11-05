@@ -539,6 +539,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     @Override
     public void close() {
+        client.disableWakeups();
         maybeLeaveGroup(true);
     }
 

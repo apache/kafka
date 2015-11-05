@@ -52,6 +52,7 @@ public class ConsumerNetworkClient implements Closeable {
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
+    private boolean wakeupsEnabled = true;
 
     public ConsumerNetworkClient(KafkaClient client,
                                  Metadata metadata,
@@ -140,8 +141,10 @@ public class ConsumerNetworkClient implements Closeable {
      * on the current poll if one is active, or the next poll.
      */
     public void wakeup() {
-        this.wakeup.set(true);
-        this.client.wakeup();
+        if (wakeupsEnabled) {
+            this.wakeup.set(true);
+            this.client.wakeup();
+        }
     }
 
     /**
@@ -303,6 +306,15 @@ public class ConsumerNetworkClient implements Closeable {
             wakeup.set(false);
             throw new WakeupException();
         }
+    }
+
+    public void disableWakeups() {
+        this.wakeup.set(false);
+        this.wakeupsEnabled = false;
+    }
+
+    public void enableWakeups() {
+        this.wakeupsEnabled = true;
     }
 
     @Override
