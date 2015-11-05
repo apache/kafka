@@ -18,6 +18,7 @@
 package org.apache.kafka.copycat.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.copycat.connector.ConnectorContext;
 import org.apache.kafka.copycat.errors.AlreadyExistsException;
 import org.apache.kafka.copycat.runtime.ConnectorConfig;
@@ -124,6 +125,7 @@ public class DistributedHerderTest {
 
     @Mock private KafkaConfigStorage configStorage;
     @Mock private WorkerGroupMember member;
+    private MockTime time;
     private DistributedHerder herder;
     @Mock private Worker worker;
     @Mock private Callback<Herder.Created<ConnectorInfo>> putConnectorCallback;
@@ -135,9 +137,10 @@ public class DistributedHerderTest {
     @Before
     public void setUp() throws Exception {
         worker = PowerMock.createMock(Worker.class);
+        time = new MockTime();
 
         herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff"},
-                new DistributedConfig(HERDER_CONFIG), worker, configStorage, member, MEMBER_URL);
+                new DistributedConfig(HERDER_CONFIG), worker, configStorage, member, MEMBER_URL, time);
         connectorConfigCallback = Whitebox.invokeMethod(herder, "connectorConfigCallback");
         taskConfigCallback = Whitebox.invokeMethod(herder, "taskConfigCallback");
         rebalanceListener = Whitebox.invokeMethod(herder, "rebalanceListener");
