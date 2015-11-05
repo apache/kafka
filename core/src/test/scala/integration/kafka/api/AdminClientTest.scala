@@ -111,4 +111,15 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
       assertEquals(Set(tp, tp2), partitions.toSet)
   }
 
+  @Test
+  def testDescribeConsumerGroupForNonExistentGroup() {
+    val nonExistentGroup = "non" + groupId
+    try {
+      client.describeConsumerGroup(nonExistentGroup)
+      fail("Should have failed for non existent group.")
+    } catch {
+      case ex: IllegalArgumentException => // Pass
+      case _: Throwable => fail("Should have failed for non existent group with IllegalArgumentException.")
+    }
+  }
 }
