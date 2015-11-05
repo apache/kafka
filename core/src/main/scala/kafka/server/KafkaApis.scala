@@ -113,7 +113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     try {
       // call replica manager to handle updating partitions to become leader or follower
-      val result = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest)
+      val result = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest, metadataCache)
       val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.correlationId, result.responseMap, result.errorCode)
       // for each new leader or follower, call coordinator to handle
       // consumer group migration
