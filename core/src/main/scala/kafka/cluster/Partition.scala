@@ -160,8 +160,7 @@ class Partition(val topic: String,
    * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset from the time when this broker was the leader last time)
    *  and setting the new leader and ISR
    */
-  def makeLeader(controllerId: Int,
-                 partitionStateInfo: PartitionStateInfo, correlationId: Int) {
+  def makeLeader(controllerId: Int, partitionStateInfo: PartitionStateInfo, correlationId: Int) {
     val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
@@ -177,15 +176,24 @@ class Partition(val topic: String,
       inSyncReplicas = newInSyncReplicas
       leaderEpoch = leaderAndIsr.leaderEpoch
       zkVersion = leaderAndIsr.zkVersion
-      leaderReplicaIdOpt = Some(localBrokerId)
-      // construct the high watermark metadata for the new leader replica
-      val newLeaderReplica = getReplica().get
-      newLeaderReplica.convertHWToLocalOffsetMetadata()
-      // reset log end offset for remote replicas
-      assignedReplicas.foreach(r =>
-        if (r.brokerId != localBrokerId) r.updateLogReadResult(LogReadResult.UnknownLogReadResult))
+
+      val isNewLeader =
+        if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == localBrokerId) {
+          false
+        } else {
+          leaderReplicaIdOpt = Some(localBrokerId)
+          true
+        }
+      val leaderReplica = getReplica().get
       // we may need to increment high watermark since ISR could be down to 1
-      maybeIncrementLeaderHW(newLeaderReplica)
+      maybeIncrementLeaderHW(leaderReplica)
+      if (isNewLeader) {
+        // construct the high watermark metadata for the new leader replica
+        leaderReplica.convertHWToLocalOffsetMetadata()
+        // reset log end offset for remote replicas
+        assignedReplicas.filter(_.brokerId != localBrokerId).foreach(_.updateLogReadResult(LogReadResult.UnknownLogReadResult))
+      }
+      isNewLeader
     }
 
     // some delayed operations may be unblocked after HW changed
