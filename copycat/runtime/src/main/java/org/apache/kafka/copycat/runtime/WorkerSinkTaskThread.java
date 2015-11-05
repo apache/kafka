@@ -54,7 +54,7 @@ class WorkerSinkTaskThread extends ShutdownableThread {
             iteration();
         }
         // Make sure any uncommitted data has committed
-        task.commitOffsets(task.time().milliseconds(), true, -1, false);
+        task.commitOffsets(true, -1);
     }
 
     public void iteration() {
@@ -67,7 +67,7 @@ class WorkerSinkTaskThread extends ShutdownableThread {
                 commitSeqno += 1;
                 commitStarted = now;
             }
-            task.commitOffsets(now, false, commitSeqno, true);
+            task.commitOffsets(false, commitSeqno);
             nextCommit += task.workerConfig().getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         }
 
