@@ -149,7 +149,6 @@ class WorkerSinkTask implements WorkerTask {
     /**
      * Starts an offset commit by flushing outstanding messages from the task and then starting
      * the write commit. This should only be invoked by the WorkerSinkTaskThread.
-     * @returns true if synchronous and successful or asynchronous, false if synchronous and failed
      **/
     public void commitOffsets(boolean sync, final int seqno) {
         log.info("{} Committing offsets", this);
