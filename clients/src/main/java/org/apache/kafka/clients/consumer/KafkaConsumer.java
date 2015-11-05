@@ -98,7 +98,7 @@ import java.util.regex.Pattern;
  * processing records. These processes can either be running on the same machine or, as is more likely, they can be
  * distributed over many machines to provide additional scalability and fault tolerance for processing.
  * <p>
- * Each Kafka consumer must specify a consumer group that it belongs to, and it can dynamically set the
+ * Each Kafka consumer must configure a consumer group that it belongs to, and it can dynamically set the
  * list of topics it wants to subscribe to through {@link #subscribe(List, ConsumerRebalanceListener)},
  * or subscribe to all topics matching certain pattern through {@link #subscribe(Pattern, ConsumerRebalanceListener)}.
  * Kafka will deliver each message in the
@@ -123,7 +123,7 @@ import java.util.regex.Pattern;
  * <p>
  * In addition, when group reassignment happens automatically, consumers can be notified through {@link ConsumerRebalanceListener},
  * which allows them to finish necessary application-level logic such as state cleanup, manual offset
- * commits (note that offsets always committed for a given consumer group), etc.
+ * commits (note that offsets are always committed for a given consumer group), etc.
  * See <a href="#rebalancecallback">Managing Your Own Offsets</a> for more details
  * <p>
  * It is also possible for the consumer to manually specify the partitions it subscribes to through {@link #assign(List)},
@@ -201,7 +201,7 @@ import java.util.regex.Pattern;
  *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;String, String&gt;(props);
- *     consumer.subscribe(&quot;foo&quot;, &quot;bar&quot;);
+ *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
  *     int commitInterval = 200;
  *     List&lt;ConsumerRecord&lt;String, String&gt;&gt; buffer = new ArrayList&lt;ConsumerRecord&lt;String, String&gt;&gt;();
  *     while (true) {
@@ -323,14 +323,17 @@ import java.util.regex.Pattern;
  * If a consumer is assigned multiple partitions to fetch data from, it will try to consume from all of them at the same time,
  * effectively giving these partitions the same priority for consumption. However in some cases consumers may want to
  * first focus on fetching from some subset of the assigned partitions at full speed, and only start fetching other partitions
- * when these partitions has few or no data to consume.
+ * when these partitions have few or no data to consume.
  *
  * <p>
- * One of such cases is stream processing, or bootstrap messaging from Kafka where applications wants to control the flow traffic
- * so that they can catch up first on some of the topics before consider fetching others.
+ * One of such cases is stream processing, where processor fetches from two topics and performs the join on these two streams.
+ * When one of the topic is long lagging behind the other, the processor would like to pause fetching from the ahead topic
+ * in order to get the lagging stream to catch up. Another example is bootstraping upon consumer starting up where there are
+ * a lot of history data to catch up, the applciations usually wants to get the latest data on some of the topics before consider
+ * fetching other topics.
  *
  * <p>
- * Kafka allows dynamic controlling of consumption flows by using {@link #pause(TopicPartition...)} and {@link #resume(TopicPartition...)}
+ * Kafka supports dynamic controlling of consumption flows by using {@link #pause(TopicPartition...)} and {@link #resume(TopicPartition...)}
  * to pause the consumption on the specified assigned partitions and resume the consumption
  * on the specified paused partitions respectively in the future {@link #poll(long)} calls.
  *
@@ -1168,7 +1171,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Resume requested partitions which have been paused with {@link #pause(TopicPartition...)}. New calls to
+     * Resume specified partitions which have been paused with {@link #pause(TopicPartition...)}. New calls to
      * {@link #poll(long)} will return records from these partitions if there are any to be fetched.
      * If the partitions were not previously paused, this method is a no-op.
      * @param partitions The partitions which should be resumed
