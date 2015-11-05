@@ -72,7 +72,7 @@ class MirrorMaker(Service):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1, consumer_timeout_ms=None, offsets_storage="zookeeper"):
         """
         MirrorMaker mirrors messages from one or more source clusters to a single destination cluster.
 
@@ -86,6 +86,7 @@ class MirrorMaker(Service):
                                             one value per node, allowing num_streams to be the same for each node,
                                             or configured independently per-node
             consumer_timeout_ms:        consumer stops if t > consumer_timeout_ms elapses between consecutive messages
+            offsets_storage:            used for consumer offsets.storage property
         """
         super(MirrorMaker, self).__init__(context, num_nodes=num_nodes)
 
@@ -98,6 +99,7 @@ class MirrorMaker(Service):
         self.blacklist = blacklist
         self.source = source
         self.target = target
+        self.offsets_storage = offsets_storage
 
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
@@ -134,6 +136,7 @@ class MirrorMaker(Service):
 
         # Create, upload one consumer config file for source cluster
         consumer_props = self.render('consumer.properties', zookeeper_connect=self.source.zk.connect_setting())
+        consumer_props += "\noffsets.storage=%s\n" % self.offsets_storage
         node.account.create_file(MirrorMaker.CONSUMER_CONFIG, consumer_props)
 
         # Create, upload producer properties file for target cluster

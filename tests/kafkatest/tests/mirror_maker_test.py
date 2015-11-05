@@ -22,22 +22,28 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.mirror_maker import MirrorMaker
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 
-import signal
 
 def clean_bounce(test):
-    """Chase the leader of one partition and restart it cleanly."""
     for i in range(3):
-        test.mirror_maker.stop()
-        test.mirror_maker.start()
+        test.logger.info("Bringing mirror maker nodes down...")
+        for node in test.mirror_maker.nodes:
+            test.mirror_maker.stop_node(node)
+
+        test.logger.info("Bringing mirror maker nodes back up...")
+        for node in test.mirror_maker.nodes:
+            test.mirror_maker.start_node(node)
 
 
 def hard_bounce(test):
-    """Chase the leader and restart it with a hard kill."""
     for i in range(1):
 
+        test.logger.info("Bringing mirror maker nodes down...")
         for node in test.mirror_maker.nodes:
             test.mirror_maker.stop_node(node, clean_shutdown=False)
-        test.mirror_maker.start()
+
+        test.logger.info("Bringing mirror maker nodes back up...")
+        for node in test.mirror_maker.nodes:
+            test.mirror_maker.start_node(node)
 
 
 class TestMirrorMakerService(ProduceConsumeValidateTest):
@@ -96,7 +102,12 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         self.run_produce_consume_validate(core_test_action=self.wait_for_n_messages)
         self.mirror_maker.stop()
 
-    def test_with_mirrormaker_failure(self):
+    def test_clean_bounce(self):
+        self.mirror_maker.start()
+        self.run_produce_consume_validate(core_test_action=lambda: clean_bounce(self))
+        self.mirror_maker.stop()
+
+    def test_hard_bounce(self):
         self.mirror_maker.start()
         self.run_produce_consume_validate(core_test_action=lambda: hard_bounce(self))
         self.mirror_maker.stop()
