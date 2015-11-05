@@ -14,19 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-package org.apache.kafka.copycat.source;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+package org.apache.kafka.copycat.runtime;
+
+import org.apache.kafka.copycat.source.SourceTaskContext;
 import org.apache.kafka.copycat.storage.OffsetStorageReader;
 
-/**
- * SourceTaskContext is provided to SourceTasks to allow them to interact with the underlying
- * runtime.
- */
-@InterfaceStability.Unstable
-public interface SourceTaskContext {
-    /**
-     * Get the OffsetStorageReader for this SourceTask.
-     */
-    OffsetStorageReader offsetStorageReader();
+public class WorkerSourceTaskContext implements SourceTaskContext {
+
+    private final OffsetStorageReader reader;
+
+    public WorkerSourceTaskContext(OffsetStorageReader reader) {
+        this.reader = reader;
+    }
+
+    @Override
+    public OffsetStorageReader offsetStorageReader() {
+        return reader;
+    }
 }

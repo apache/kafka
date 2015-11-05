@@ -400,13 +400,16 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     }
 
     private void expectInitializeTask(Properties taskProps) throws Exception {
+        PowerMock.expectPrivate(workerTask, "createConsumer", taskProps)
+                .andReturn(consumer);
+
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andReturn(ConsumerRecords.<byte[], byte[]>empty());
+
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));
         PowerMock.expectLastCall();
         sinkTask.start(taskProps);
         PowerMock.expectLastCall();
 
-        PowerMock.expectPrivate(workerTask, "createConsumer", taskProps)
-                .andReturn(consumer);
         workerThread = PowerMock.createPartialMock(WorkerSinkTaskThread.class, new String[]{"start"},
                 workerTask, "mock-worker-thread", time,
                 workerConfig);
