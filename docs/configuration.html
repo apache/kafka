@@ -140,8 +140,8 @@ ZooKeeper also allows you to add a "chroot" path which will make all kafka data 
     </tr>
     <tr>
       <td>log.retention.{ms,minutes,hours}</td>
-      <td>7 days</td>
-      <td>The amount of time to keep a log segment before it is deleted, i.e. the default data retention window for all topics. Note that if both log.retention.minutes and log.retention.bytes are both set we delete a segment when either limit is exceeded. This setting can be overridden on a per-topic basis (see <a href="#topic-config">the per-topic configuration section</a>).</td>
+      <td>24*7 hours</td>
+      <td>The amount of time to keep a log segment before it is deleted, i.e. the default data retention window in time for all topics. This can be set in the granularity of millionseconds, minutes, or hours. If it is set in more than one granularity, the setting with finest granularity is applied. Note that if both log.retention.{ms,minutes,hours} and log.retention.bytes are set, we delete a segment when either limit is exceeded. This setting can be overridden on a per-topic basis (see <a href="#topic-config">the per-topic configuration section</a>).</td>
     </tr>
     <tr>
       <td>log.retention.bytes</td>
