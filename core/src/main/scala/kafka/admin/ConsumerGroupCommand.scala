@@ -99,6 +99,10 @@ object ConsumerGroupCommand {
     def warnNoTopicsForGroupFound: Unit = {
       println("No topic available for consumer group provided")
     }
+
+    println("%s, %s, %s, %s, %s, %s, %s"
+      .format("GROUP", "TOPIC", "PARTITION", "CURRENT OFFSET", "LOG END OFFSET", "LAG", "OWNER"))
+
     if (!useNewConsumer) {
       val topics = zkUtils.getTopicsByConsumerGroup(group)
       if (topics.isEmpty) {
@@ -208,8 +212,6 @@ object ConsumerGroupCommand {
 
   def describeTopicPartition(zkUtils: ZkUtils, group: String, channelSocketTimeoutMs: Int, channelRetryBackoffMs: Int, opts: ConsumerGroupCommandOptions, topicPartitions: Seq[TopicAndPartition], owners: Map[TopicPartition, String] = null): Unit = {
     val partitionOffsets = getPartitionOffsets(zkUtils, group, topicPartitions, channelSocketTimeoutMs, channelRetryBackoffMs)
-    println("%s, %s, %s, %s, %s, %s, %s"
-      .format("GROUP", "TOPIC", "PARTITION", "CURRENT OFFSET", "LOG END OFFSET", "LAG", "OWNER"))
     topicPartitions
       .sortBy { case topicPartition => topicPartition.partition }
       .foreach { topicPartition =>
