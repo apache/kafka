@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
@@ -422,6 +423,52 @@ public class ConsumerCoordinatorTest {
         assertEquals(OffsetCommitRequest.DEFAULT_GENERATION_ID, coordinator.generation);
     }
 
+    @Test(expected = KafkaException.class)
+    public void testUnexpectedErrorOnSyncGroup() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // join initially, but let coordinator rebalance on sync
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN.code()));
+        coordinator.ensurePartitionAssignment();
+    }
+
+    @Test
+    public void testUnknownMemberIdOnSyncGroup() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // join initially, but let coordinator returns unknown member id
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN_MEMBER_ID.code()));
+
+        // now we should see a new join with the empty UNKNOWN_MEMBER_ID
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                JoinGroupRequest joinRequest = new JoinGroupRequest(request.request().body());
+                return joinRequest.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            }
+        }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+
+        coordinator.ensurePartitionAssignment();
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+        assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
+    }
+
     @Test
     public void testRebalanceInProgressOnSyncGroup() {
         final String consumerId = "consumer";
@@ -461,7 +508,13 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.ILLEGAL_GENERATION.code()));
 
         // then let the full join/sync finish successfully
-        client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                JoinGroupRequest joinRequest = new JoinGroupRequest(request.request().body());
+                return joinRequest.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            }
+        }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
 
         coordinator.ensurePartitionAssignment();
