@@ -111,6 +111,8 @@ public class ThroughputThrottler {
                         long sleepMs = remaining / 1000000;
                         long sleepNs = remaining - sleepMs * 1000000;
                         this.wait(sleepMs, (int) sleepNs);
+                        elapsed = System.nanoTime() - sleepStartNs;
+                        remaining = sleepDeficitNs - elapsed;
                     }
                     wakeup = false;
                 }

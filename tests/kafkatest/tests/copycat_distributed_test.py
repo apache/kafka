@@ -71,7 +71,7 @@ class CopycatDistributedTest(KafkaTest):
         # do rebalancing of the group, etc, and b) without explicit leave group support, rebalancing takes awhile
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
-        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST), timeout_sec=120, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
+        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST), timeout_sec=70, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
 
         # Restarting both should result in them picking up where they left off,
         # only processing new data.
@@ -79,7 +79,7 @@ class CopycatDistributedTest(KafkaTest):
 
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
-        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=120, err_msg="Sink output file never converged to the same state as the input file")
+        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=70, err_msg="Sink output file never converged to the same state as the input file")
 
 
     def test_clean_bounce(self):
@@ -97,7 +97,7 @@ class CopycatDistributedTest(KafkaTest):
         self.sink = VerifiableSink(self.cc, tasks=num_tasks)
         self.sink.start()
 
-        for _ in range(1):
+        for _ in range(3):
             for node in self.cc.nodes:
                 started = time.time()
                 self.logger.info("Cleanly bouncing Copycat on " + str(node.account))
@@ -159,6 +159,10 @@ class CopycatDistributedTest(KafkaTest):
             if sink_seqno_max > src_seqno_max:
                 self.logger.error("Found sink sequence number greater than any generated sink sequence number for task %d: %d > %d", task, sink_seqno_max, src_seqno_max)
                 errors.append("Found sink sequence number greater than any generated sink sequence number for task %d: %d > %d" % (task, sink_seqno_max, src_seqno_max))
+                success = False
+
+            if src_seqno_max < 1000 or sink_seqno_max < 1000:
+                errors.append("Not enough messages were processed: source:%d sink:%d" % (src_seqno_max, sink_seqno_max))
                 success = False
 
         if not success:
