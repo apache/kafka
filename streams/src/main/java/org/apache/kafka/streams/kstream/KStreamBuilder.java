@@ -68,6 +68,16 @@ public class KStreamBuilder extends TopologyBuilder {
         return new KStreamImpl<>(this, name, Collections.singleton(name));
     }
 
+    /**
+     * Creates a new stream by merging the given streams
+     *
+     * @param streams the streams to be merged
+     * @return KStream
+     */
+    public <K, V> KStream<K, V> merge(KStream<K, V>... streams) {
+        return KStreamImpl.merge(this, streams);
+    }
+
     public String newName(String prefix) {
         return prefix + String.format("%010d", index.getAndIncrement());
     }
