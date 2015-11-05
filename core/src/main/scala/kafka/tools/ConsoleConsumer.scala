@@ -52,7 +52,7 @@ object ConsoleConsumer extends Logging {
     val consumer =
       if (conf.useNewConsumer) {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
-        new NewShinyConsumer(conf.topicArg, getNewConsumerProps(conf), timeoutMs)
+        new NewShinyConsumer(Option(conf.topicArg), Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
       } else {
         checkZk(conf)
         new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
@@ -243,11 +243,14 @@ object ConsoleConsumer extends Logging {
     // If using old consumer, exactly one of whitelist/blacklist/topic is required.
     // If using new consumer, topic must be specified.
     var topicArg: String = null
+    var whitelistArg: String = null
     var filterSpec: TopicFilter = null
     if (useNewConsumer) {
-      if (!options.has(topicIdOpt))
-        CommandLineUtils.printUsageAndDie(parser, "Topic must be specified.")
+      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
+      if (topicOrFilterOpt.size != 1)
+        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
       topicArg = options.valueOf(topicIdOpt)
+      whitelistArg = options.valueOf(whitelistOpt)
     } else {
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
