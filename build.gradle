@@ -521,7 +521,7 @@ project(':core') {
   }
 
   jar {
-    dependsOn('copyDependantLibs', 'copyDependantTestLibs')
+    dependsOn('copyDependantLibs')
   }
 
   jar.manifest {
@@ -537,6 +537,8 @@ project(':core') {
     into "$buildDir/dependant-testlibs"
     duplicatesStrategy 'exclude'
   }
+
+  systemTestLibs.dependsOn('jar', 'copyDependantTestLibs')
 
   checkstyle {
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
