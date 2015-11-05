@@ -128,6 +128,35 @@ public class FetcherTest {
         }
     }
 
+    @Test
+    public void testFetchNonContinuousRecords() {
+        // if we are fetching from a compacted topic, there may be gaps in the returned records
+        // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case
+
+        MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
+        records.append(15L, "key".getBytes(), "value-1".getBytes());
+        records.append(20L, "key".getBytes(), "value-2".getBytes());
+        records.append(30L, "key".getBytes(), "value-3".getBytes());
+        records.close();
+
+        List<ConsumerRecord<byte[], byte[]>> consumerRecords;
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.seek(tp, 0);
+
+        // normal fetch
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(records.buffer(), Errors.NONE.code(), 100L, 0));
+        consumerClient.poll(0);
+        consumerRecords = fetcher.fetchedRecords().get(tp);
+        assertEquals(3, consumerRecords.size());
+        assertEquals(31L, (long) subscriptions.fetched(tp)); // this is the next fetching position
+        assertEquals(31L, (long) subscriptions.consumed(tp));
+
+        assertEquals(15L, consumerRecords.get(0).offset());
+        assertEquals(20L, consumerRecords.get(1).offset());
+        assertEquals(30L, consumerRecords.get(2).offset());
+    }
+
     @Test(expected = RecordTooLargeException.class)
     public void testFetchRecordTooLarge() {
         subscriptions.assignFromUser(Arrays.asList(tp));
