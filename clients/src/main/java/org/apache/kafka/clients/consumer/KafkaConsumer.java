@@ -92,7 +92,7 @@ import java.util.regex.Pattern;
  * This distinction gives the consumer control over when a record is considered consumed. It is discussed in further
  * detail below.
  *
- * <h3>Consumer Groups and Consume Subscriptions</h3>
+ * <h3>Consumer Groups and Topic Subscriptions</h3>
  *
  * Kafka uses the concept of <i>consumer groups</i> to allow a pool of processes to divide up the work of consuming and
  * processing records. These processes can either be running on the same machine or, as is more likely, they can be
@@ -174,7 +174,7 @@ import java.util.regex.Pattern;
  * The deserializer settings specify how to turn bytes into objects. For example, by specifying string deserializers, we
  * are saying that our record's key and value will just be simple strings.
  *
- * <h4>Manual Offset Committing</h4>
+ * <h4>Manual Offset Control</h4>
  *
  * Instead of relying on the consumer to periodically commit consumed offsets, users can also control when messages
  * should be considered as consumed and hence commit their offsets. This is useful when the consumption of the messages
@@ -318,19 +318,19 @@ import java.util.regex.Pattern;
  * methods for seeking to the earliest and latest offset the server maintains are also available (
  * {@link #seekToBeginning(TopicPartition...)} and {@link #seekToEnd(TopicPartition...)} respectively).
  *
- * <h4>Prioritizing Partitions for Consumption</h4>
+ * <h4>Consumption Flow Control</h4>
  *
  * If a consumer is assigned multiple partitions to fetch data from, it will try to consume from all of them at the same time,
- * effectively giving these partitions the same priority for consumption. However in some cases consumers want to give some topics
- * or partitions higher priority over others such that it will first focus on fetching from these topics or partitions, and only
- * when it has few or no data to fetch from it will then enable fetching on other topics or partitions.
+ * effectively giving these partitions the same priority for consumption. However in some cases consumers may want to
+ * first focus on fetching from some subset of the assigned partitions at full speed, and only start fetching other partitions
+ * when these partitions has few or no data to consume.
  *
  * <p>
- * One of such cases is stream processing, or bootstrap messaging from Kafka where applications wants to catch up first on some
- * of the topics before consider fetching others.
+ * One of such cases is stream processing, or bootstrap messaging from Kafka where applications wants to control the flow traffic
+ * so that they can catch up first on some of the topics before consider fetching others.
  *
  * <p>
- * Kafka allows dynamically changing priorities of consumptions by using {@link #pause(TopicPartition...)} and {@link #resume(TopicPartition...)}
+ * Kafka allows dynamic controlling of consumption flows by using {@link #pause(TopicPartition...)} and {@link #resume(TopicPartition...)}
  * to pause the consumption on the specified assigned partitions and resume the consumption
  * on the specified paused partitions respectively in the future {@link #poll(long)} calls.
  *
@@ -793,11 +793,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Fetch data for the topics or partitions specified using one of the subscribe/assign APIs. It is an error to not have
      * subscribed to any topics or partitions before polling for data.
      * <p>
-     * The offset used for fetching the data is governed by whether or not {@link #seek(TopicPartition, long)} is used.
-     * If {@link #seek(TopicPartition, long)} is used, it will use the specified offsets on startup and on every
-     * rebalance, to consume data from that offset sequentially on every poll. If not, it will use the last checkpointed
-     * offset using {@link #commitSync(Map) commit(offsets)} for the subscribed list of partitions.
-     * 
+     * On each poll, consumer will try to use the last consumed offset as the starting offset and fetch sequentially. The last
+     * consumed offset can be manually set through {@link #seek(TopicPartition, long)} or automatically set as the last committed
+     * offset for the subscribed list of partitions
+     *
      * @param timeout The time, in milliseconds, spent waiting in poll if data is not available. If 0, returns
      *            immediately with any records available now. Must not be negative.
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
