@@ -662,13 +662,13 @@ class GroupCoordinator(val brokerId: Int,
 
 object GroupCoordinator {
 
-  val EmptyGroup = GroupSummary(NoState, NoProtocolType, NoProtocol, NoMembers)
-  val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)
-  val NoMembers = List[MemberSummary]()
   val NoState = ""
   val NoProtocolType = ""
   val NoProtocol = ""
   val NoLeader = ""
+  val NoMembers = List[MemberSummary]()
+  val EmptyGroup = GroupSummary(NoState, NoProtocolType, NoProtocol, NoMembers)
+  val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)
 
   // TODO: we store both group metadata and offset data here despite the topic name being offsets only
   val GroupMetadataTopicName = "__consumer_offsets"
