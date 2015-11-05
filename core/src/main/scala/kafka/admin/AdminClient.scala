@@ -154,14 +154,14 @@ class AdminClient(val time: Time,
       val owners = getOwners(group)
       (owners, membersAndTopicPartitions)
     } catch {
-      case (ex: scala.IllegalArgumentException) =>
-        throw new scala.IllegalArgumentException(s"Group ${groupId} is not a consumer group.")
+      case (ex: IllegalArgumentException) =>
+        throw new IllegalArgumentException(s"Group ${groupId} is not a consumer group.")
     }
   }
 
   def getMembersAndTopicPartitions(group: GroupSummary): Map[String, List[TopicPartition]] = {
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new scala.IllegalArgumentException(s"${group} is not a valid GroupSummary")
+      throw new IllegalArgumentException(s"${group} is not a valid GroupSummary")
 
     group.members.map {
       case member =>
