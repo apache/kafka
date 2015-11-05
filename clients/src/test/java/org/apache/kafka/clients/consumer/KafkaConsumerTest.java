@@ -54,13 +54,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testSubscription() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testSubscription");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-
-        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<byte[], byte[]>(
-            props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
         consumer.subscribe(Collections.singletonList(topic));
         Assert.assertEquals(Collections.singleton(topic), consumer.subscription());
@@ -77,5 +71,33 @@ public class KafkaConsumerTest {
         consumer.unsubscribe();
         Assert.assertTrue(consumer.subscription().isEmpty());
         Assert.assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testPause() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+
+        consumer.assign(Collections.singletonList(tp0));
+        Assert.assertEquals(Collections.singleton(tp0), consumer.assignment());
+        Assert.assertTrue(consumer.paused().isEmpty());
+
+        consumer.pause(tp0);
+        Assert.assertEquals(Collections.singleton(tp0), consumer.paused());
+
+        consumer.resume(tp0);
+        Assert.assertTrue(consumer.paused().isEmpty());
+
+        consumer.unsubscribe();
+        Assert.assertTrue(consumer.paused().isEmpty());
+    }
+
+    private KafkaConsumer<byte[], byte[]> newConsumer() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "my.consumer");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+
+        return new KafkaConsumer<byte[], byte[]>(
+            props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 }
