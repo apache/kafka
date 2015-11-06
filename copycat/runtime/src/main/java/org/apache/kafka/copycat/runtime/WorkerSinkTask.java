@@ -60,8 +60,10 @@ class WorkerSinkTask implements WorkerTask {
     private final Converter keyConverter;
     private final Converter valueConverter;
     private WorkerSinkTaskThread workThread;
+    private Properties taskProps;
     private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
+    private boolean started;
     private Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
@@ -72,25 +74,14 @@ class WorkerSinkTask implements WorkerTask {
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.time = time;
+        this.started = false;
     }
 
     @Override
     public void start(Properties props) {
+        taskProps = props;
         consumer = createConsumer();
         context = new WorkerSinkTaskContext(consumer);
-
-        // Ensure we're in the group so that if start() wants to rewind offsets, it will have an assignment of partitions
-        // to work with. Any rewinding will be handled immediately when polling starts.
-        String topicsStr = props.getProperty(SinkTask.TOPICS_CONFIG);
-        if (topicsStr == null || topicsStr.isEmpty())
-            throw new CopycatException("Sink tasks require a list of topics.");
-        String[] topics = topicsStr.split(",");
-        log.debug("Task {} subscribing to topics {}", id, topics);
-        consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
-        consumer.poll(0);
-
-        task.initialize(context);
-        task.start(props);
 
         workThread = createWorkerThread();
         workThread.start();
@@ -128,6 +119,35 @@ class WorkerSinkTask implements WorkerTask {
             consumer.close();
     }
 
+    /**
+     * Preforms initial join process for consumer group, ensures we have an assignment, and initializes + starts the
+     * SinkTask.
+     *
+     * @returns true if successful, false if joining the consumer group was interrupted
+     */
+    public boolean joinConsumerGroupAndStart() {
+        String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
+        if (topicsStr == null || topicsStr.isEmpty())
+            throw new CopycatException("Sink tasks require a list of topics.");
+        String[] topics = topicsStr.split(",");
+        log.debug("Task {} subscribing to topics {}", id, topics);
+        consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
+
+        // Ensure we're in the group so that if start() wants to rewind offsets, it will have an assignment of partitions
+        // to work with. Any rewinding will be handled immediately when polling starts.
+        try {
+            consumer.poll(0);
+        } catch (WakeupException e) {
+            log.error("Sink task {} was stopped before completing join group. Task initialization and start is being skipped", this);
+            return false;
+        }
+        task.initialize(context);
+        task.start(taskProps);
+        log.info("Sink task {} finished initialization and start", this);
+        started = true;
+        return true;
+    }
+
     /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
     public void poll(long timeoutMs) {
         try {
@@ -156,7 +176,7 @@ class WorkerSinkTask implements WorkerTask {
         for (TopicPartition tp : consumer.assignment()) {
             long pos = consumer.position(tp);
             offsets.put(tp, new OffsetAndMetadata(pos));
-            log.trace("{} committing {} offset {}", id, tp, pos);
+            log.debug("{} committing {} offset {}", id, tp, pos);
         }
 
         try {
@@ -273,12 +293,12 @@ class WorkerSinkTask implements WorkerTask {
             for (TopicPartition tp : partitions) {
                 long pos = consumer.position(tp);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
-                log.trace("{} assigned topic partition {} with offset {}", id, tp, pos);
+                log.debug("{} assigned topic partition {} with offset {}", id, tp, pos);
             }
             // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
             // task start. Since this callback gets invoked during that initial setup before we've started the task, we
             // need to guard against invoking the user's callback method during that period.
-            if (workThread != null)
+            if (started)
                 task.onPartitionsAssigned(partitions);
         }
 

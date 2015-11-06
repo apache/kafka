@@ -136,6 +136,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
         for (int i = 0; i < 10; i++) {
             workerThread.iteration();
         }
@@ -202,6 +203,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
         // First iteration gets one record
         workerThread.iteration();
         // Second triggers commit, gets a second offset
@@ -236,6 +238,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
         // Second iteration triggers commit
         workerThread.iteration();
         workerThread.iteration();
@@ -267,6 +270,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
         // Second iteration triggers first commit, third iteration triggers second (failing) commit
         workerThread.iteration();
         workerThread.iteration();
@@ -292,6 +296,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
         // Second iteration triggers commit
         workerThread.iteration();
         workerThread.iteration();
@@ -318,6 +323,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
         // Third iteration triggers commit, fourth gives a chance to trigger the timeout but doesn't
         // trigger another commit
         workerThread.iteration();
@@ -393,6 +399,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
         workerThread.iteration();
         workerThread.iteration();
         workerThread.iteration();
@@ -436,6 +443,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.start(TASK_PROPS);
+        workerTask.joinConsumerGroupAndStart();
         workerThread.iteration();
         workerThread.iteration();
         workerTask.stop();
@@ -448,7 +456,17 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     private void expectInitializeTask() throws Exception {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
 
+        workerThread = PowerMock.createPartialMock(WorkerSinkTaskThread.class, new String[]{"start", "awaitShutdown"},
+                workerTask, "mock-worker-thread", time,
+                workerConfig);
+        PowerMock.expectPrivate(workerTask, "createWorkerThread")
+                .andReturn(workerThread);
+        workerThread.start();
+        PowerMock.expectLastCall();
+
         consumer.subscribe(EasyMock.eq(Arrays.asList(TOPIC)), EasyMock.capture(rebalanceListener));
+        PowerMock.expectLastCall();
+
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
             @Override
             public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
@@ -463,14 +481,6 @@ public class WorkerSinkTaskTest extends ThreadedTest {
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));
         PowerMock.expectLastCall();
         sinkTask.start(TASK_PROPS);
-        PowerMock.expectLastCall();
-
-        workerThread = PowerMock.createPartialMock(WorkerSinkTaskThread.class, new String[]{"start", "awaitShutdown"},
-                workerTask, "mock-worker-thread", time,
-                workerConfig);
-        PowerMock.expectPrivate(workerTask, "createWorkerThread")
-                .andReturn(workerThread);
-        workerThread.start();
         PowerMock.expectLastCall();
     }
 
