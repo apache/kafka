@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.file;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.apache.kafka.copycat.source.SourceConnector;
@@ -36,6 +37,11 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     private String filename;
     private String topic;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void start(Map<String, String> props) {

@@ -92,6 +92,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.mockStatic(Worker.class);
         PowerMock.expectPrivate(Worker.class, "instantiateConnector", new Object[]{TestConnector.class}).andReturn(connector);
+        EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
@@ -162,6 +163,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.mockStatic(Worker.class);
         PowerMock.expectPrivate(Worker.class, "instantiateConnector", new Object[]{TestConnector.class}).andReturn(connector);
+        EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
@@ -234,6 +236,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.mockStatic(Worker.class);
         PowerMock.expectPrivate(Worker.class, "instantiateTask", new Object[]{TestSourceTask.class}).andReturn(task);
+        EasyMock.expect(task.version()).andReturn("1.0");
 
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(taskId), EasyMock.eq(task),
@@ -303,7 +306,8 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.mockStatic(Worker.class);
         PowerMock.expectPrivate(Worker.class, "instantiateTask", new Object[]{TestSourceTask.class}).andReturn(task);
-
+        EasyMock.expect(task.version()).andReturn("1.0");
+        
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(TASK_ID), EasyMock.eq(task),
                 EasyMock.anyObject(Converter.class),
@@ -343,6 +347,11 @@ public class WorkerTest extends ThreadedTest {
 
     private static class TestConnector extends Connector {
         @Override
+        public String version() {
+            return "1.0";
+        }
+
+        @Override
         public void start(Map<String, String> props) {
 
         }
@@ -365,6 +374,11 @@ public class WorkerTest extends ThreadedTest {
 
     private static class TestSourceTask extends SourceTask {
         public TestSourceTask() {
+        }
+
+        @Override
+        public String version() {
+            return "1.0";
         }
 
         @Override

@@ -46,6 +46,11 @@ public class FileStreamSourceTask extends SourceTask {
     private Long streamOffset;
 
     @Override
+    public String version() {
+        return new FileStreamSourceConnector().version();
+    }
+
+    @Override
     public void start(Map<String, String> props) {
         filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
         if (filename == null || filename.isEmpty()) {
