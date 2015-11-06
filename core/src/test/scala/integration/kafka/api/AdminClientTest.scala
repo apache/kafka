@@ -105,10 +105,9 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
       !consumers(0).assignment().isEmpty
     }, "Expected non-empty assignment")
 
-    val (_, assignment) = client.describeConsumerGroup(groupId)
-    assertEquals(1, assignment.size)
-    for (partitions <- assignment.values)
-      assertEquals(Set(tp, tp2), partitions.toSet)
+    val consumerSummaries = client.describeConsumerGroup(groupId)
+    assertEquals(1, consumerSummaries.size)
+    assertEquals(Set(tp, tp2), consumerSummaries.head.assignment.toSet)
   }
 
   @Test

@@ -106,11 +106,11 @@ object ConsumerGroupCommand {
       }
       topics.foreach(topic => describeTopic(zkUtils, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs, opts))
     } else {
-      val (owners, groupAndTopicPartitions) = createAndGetAdminClient(opts).describeConsumerGroup(group)
+      val consumers = createAndGetAdminClient(opts).describeConsumerGroup(group)
 
-      if (groupAndTopicPartitions.isEmpty)
+      if (consumers.isEmpty)
         warnNoTopicsForGroupFound
-      groupAndTopicPartitions.foreach(x => describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, x._2.map(tp => new TopicAndPartition(tp.topic(), tp.partition())), owners))
+      consumers.foreach(x => describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, x.assignment.map(tp => new TopicAndPartition(tp.topic(), tp.partition())), Option("%s_%s".format(x.clientId, x.clientHost))))
     }
   }
 
@@ -186,12 +186,12 @@ object ConsumerGroupCommand {
     describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, topicPartitions)
   }
 
-  def describeTopicPartition(zkUtils: ZkUtils, group: String, channelSocketTimeoutMs: Int, channelRetryBackoffMs: Int, opts: ConsumerGroupCommandOptions, topicPartitions: Seq[TopicAndPartition], owners: Map[TopicPartition, String] = null): Unit = {
+  def describeTopicPartition(zkUtils: ZkUtils, group: String, channelSocketTimeoutMs: Int, channelRetryBackoffMs: Int, opts: ConsumerGroupCommandOptions, topicPartitions: Seq[TopicAndPartition], owner: Option[String] = None): Unit = {
     val partitionOffsets = getPartitionOffsets(zkUtils, group, topicPartitions, channelSocketTimeoutMs, channelRetryBackoffMs)
     topicPartitions
       .sortBy { case topicPartition => topicPartition.partition }
       .foreach { topicPartition =>
-      describePartition(zkUtils, group, topicPartition.topic, topicPartition.partition, partitionOffsets.get(topicPartition), opts, owners)
+      describePartition(zkUtils, group, topicPartition.topic, topicPartition.partition, partitionOffsets.get(topicPartition), opts, owner)
     }
   }
 
@@ -241,11 +241,11 @@ object ConsumerGroupCommand {
                                 partition: Int,
                                 offsetOpt: Option[Long],
                                 opts: ConsumerGroupCommandOptions,
-                                owners: Map[TopicPartition, String] = null) {
+                                ownerOpt: Option[String] = None) {
     val topicPartition = new TopicPartition(topic, partition)
     val groupDirs = new ZKGroupTopicDirs(group, topic)
     val useNewConsumer: Boolean = opts.options.has(opts.newConsumerOpt)
-    val owner = if (useNewConsumer) owners.get(new TopicPartition(topic, partition)) else zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/" + partition)._1
+    val owner: Option[String] = if (useNewConsumer) ownerOpt else zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/" + partition)._1
     def print(logEndOffset: Long): Unit = {
       val lag = offsetOpt.filter(_ != -1).map(logEndOffset - _)
       println("%s, %s, %s, %s, %s, %s, %s"
