@@ -44,7 +44,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -60,7 +59,7 @@ class WorkerSinkTask implements WorkerTask {
     private final Converter keyConverter;
     private final Converter valueConverter;
     private WorkerSinkTaskThread workThread;
-    private Properties taskProps;
+    private Map<String, String> taskProps;
     private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
     private boolean started;
@@ -78,7 +77,7 @@ class WorkerSinkTask implements WorkerTask {
     }
 
     @Override
-    public void start(Properties props) {
+    public void start(Map<String, String> props) {
         taskProps = props;
         consumer = createConsumer();
         context = new WorkerSinkTaskContext(consumer);
@@ -126,7 +125,7 @@ class WorkerSinkTask implements WorkerTask {
      * @returns true if successful, false if joining the consumer group was interrupted
      */
     public boolean joinConsumerGroupAndStart() {
-        String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
+        String topicsStr = taskProps.get(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
             throw new CopycatException("Sink tasks require a list of topics.");
         String[] topics = topicsStr.split(",");
@@ -222,14 +221,14 @@ class WorkerSinkTask implements WorkerTask {
     private KafkaConsumer<byte[], byte[]> createConsumer() {
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
-        Properties props = workerConfig.unusedProperties();
-        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "copycat-" + id.connector());
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+        Map<String, Object> props = workerConfig.unusedConfigs();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "copycat-" + id.connector());
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
-        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         KafkaConsumer<byte[], byte[]> newConsumer;
         try {

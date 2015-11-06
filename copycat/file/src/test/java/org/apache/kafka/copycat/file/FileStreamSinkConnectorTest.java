@@ -25,8 +25,9 @@ import org.junit.Test;
 import org.powermock.api.easymock.PowerMock;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Properties;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -42,7 +43,7 @@ public class FileStreamSinkConnectorTest {
 
     private FileStreamSinkConnector connector;
     private ConnectorContext ctx;
-    private Properties sinkProperties;
+    private Map<String, String> sinkProperties;
 
     @Before
     public void setup() {
@@ -50,9 +51,9 @@ public class FileStreamSinkConnectorTest {
         ctx = PowerMock.createMock(ConnectorContext.class);
         connector.initialize(ctx);
 
-        sinkProperties = new Properties();
-        sinkProperties.setProperty(SinkConnector.TOPICS_CONFIG, MULTIPLE_TOPICS);
-        sinkProperties.setProperty(FileStreamSinkConnector.FILE_CONFIG, FILENAME);
+        sinkProperties = new HashMap<>();
+        sinkProperties.put(SinkConnector.TOPICS_CONFIG, MULTIPLE_TOPICS);
+        sinkProperties.put(FileStreamSinkConnector.FILE_CONFIG, FILENAME);
     }
 
     @Test
@@ -60,14 +61,14 @@ public class FileStreamSinkConnectorTest {
         PowerMock.replayAll();
 
         connector.start(sinkProperties);
-        List<Properties> taskConfigs = connector.taskConfigs(1);
+        List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
-        assertEquals(FILENAME, taskConfigs.get(0).getProperty(FileStreamSinkConnector.FILE_CONFIG));
+        assertEquals(FILENAME, taskConfigs.get(0).get(FileStreamSinkConnector.FILE_CONFIG));
 
         taskConfigs = connector.taskConfigs(2);
         assertEquals(2, taskConfigs.size());
         for (int i = 0; i < 2; i++) {
-            assertEquals(FILENAME, taskConfigs.get(0).getProperty(FileStreamSinkConnector.FILE_CONFIG));
+            assertEquals(FILENAME, taskConfigs.get(0).get(FileStreamSinkConnector.FILE_CONFIG));
         }
 
         PowerMock.verifyAll();

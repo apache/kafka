@@ -28,7 +28,8 @@ import org.apache.kafka.copycat.storage.KafkaOffsetBackingStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Properties;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * <p>
@@ -44,15 +45,14 @@ public class CopycatDistributed {
     private static final Logger log = LoggerFactory.getLogger(CopycatDistributed.class);
 
     public static void main(String[] args) throws Exception {
-        Properties workerProps;
-
         if (args.length < 1) {
             log.info("Usage: CopycatDistributed worker.properties");
             System.exit(1);
         }
 
         String workerPropsFile = args[0];
-        workerProps = !workerPropsFile.isEmpty() ? Utils.loadProps(workerPropsFile) : new Properties();
+        Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
+                Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
         DistributedConfig config = new DistributedConfig(workerProps);
         Worker worker = new Worker(config, new KafkaOffsetBackingStore());

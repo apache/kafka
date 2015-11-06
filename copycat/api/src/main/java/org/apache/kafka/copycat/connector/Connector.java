@@ -20,7 +20,7 @@ package org.apache.kafka.copycat.connector;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.List;
-import java.util.Properties;
+import java.util.Map;
 
 /**
  * <p>
@@ -69,7 +69,7 @@ public abstract class Connector {
      * @param taskConfigs existing task configurations, which may be used when generating new task configs to avoid
      *                    churn in partition to task assignments
      */
-    public void initialize(ConnectorContext ctx, List<Properties> taskConfigs) {
+    public void initialize(ConnectorContext ctx, List<Map<String, String>> taskConfigs) {
         context = ctx;
         // Ignore taskConfigs. May result in more churn of tasks during recovery if updated configs
         // are very different, but reduces the difficulty of implementing a Connector
@@ -81,17 +81,17 @@ public abstract class Connector {
      *
      * @param props configuration settings
      */
-    public abstract void start(Properties props);
+    public abstract void start(Map<String, String> props);
 
     /**
      * Reconfigure this Connector. Most implementations will not override this, using the default
-     * implementation that calls {@link #stop()} followed by {@link #start(Properties)}.
+     * implementation that calls {@link #stop()} followed by {@link #start(Map)}.
      * Implementations only need to override this if they want to handle this process more
      * efficiently, e.g. without shutting down network connections to the external system.
      *
      * @param props new configuration settings
      */
-    public void reconfigure(Properties props) {
+    public void reconfigure(Map<String, String> props) {
         stop();
         start(props);
     }
@@ -108,7 +108,7 @@ public abstract class Connector {
      * @param maxTasks maximum number of configurations to generate
      * @return configurations for Tasks
      */
-    public abstract List<Properties> taskConfigs(int maxTasks);
+    public abstract List<Map<String, String>> taskConfigs(int maxTasks);
 
     /**
      * Stop this connector.

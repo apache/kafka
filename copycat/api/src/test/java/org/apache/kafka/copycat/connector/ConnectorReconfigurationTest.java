@@ -20,8 +20,9 @@ package org.apache.kafka.copycat.connector;
 import org.apache.kafka.copycat.errors.CopycatException;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
-import java.util.Properties;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -30,7 +31,7 @@ public class ConnectorReconfigurationTest {
     @Test
     public void testDefaultReconfigure() throws Exception {
         TestConnector conn = new TestConnector(false);
-        conn.reconfigure(new Properties());
+        conn.reconfigure(Collections.<String, String>emptyMap());
         assertEquals(conn.stopOrder, 0);
         assertEquals(conn.configureOrder, 1);
     }
@@ -38,7 +39,7 @@ public class ConnectorReconfigurationTest {
     @Test(expected = CopycatException.class)
     public void testReconfigureStopException() throws Exception {
         TestConnector conn = new TestConnector(true);
-        conn.reconfigure(new Properties());
+        conn.reconfigure(Collections.<String, String>emptyMap());
     }
 
     private static class TestConnector extends Connector {
@@ -52,7 +53,7 @@ public class ConnectorReconfigurationTest {
         }
 
         @Override
-        public void start(Properties props) {
+        public void start(Map<String, String> props) {
             configureOrder = order++;
         }
 
@@ -62,7 +63,7 @@ public class ConnectorReconfigurationTest {
         }
 
         @Override
-        public List<Properties> taskConfigs(int count) {
+        public List<Map<String, String>> taskConfigs(int count) {
             return null;
         }
 

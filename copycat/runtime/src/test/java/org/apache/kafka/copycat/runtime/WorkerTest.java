@@ -19,7 +19,6 @@ package org.apache.kafka.copycat.runtime;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.connector.Connector;
 import org.apache.kafka.copycat.connector.ConnectorContext;
 import org.apache.kafka.copycat.connector.Task;
@@ -46,10 +45,10 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -70,13 +69,13 @@ public class WorkerTest extends ThreadedTest {
     public void setup() {
         super.setup();
 
-        Properties workerProps = new Properties();
-        workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.key.converter.schemas.enable", "false");
-        workerProps.setProperty("internal.value.converter.schemas.enable", "false");
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.key.converter.schemas.enable", "false");
+        workerProps.put("internal.value.converter.schemas.enable", "false");
         config = new StandaloneConfig(workerProps);
     }
 
@@ -94,7 +93,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.mockStatic(Worker.class);
         PowerMock.expectPrivate(Worker.class, "instantiateConnector", new Object[]{TestConnector.class}).andReturn(connector);
 
-        Properties props = new Properties();
+        Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
@@ -117,7 +116,7 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(new MockTime(), config, offsetBackingStore);
         worker.start();
 
-        ConnectorConfig config = new ConnectorConfig(Utils.propsToStringMap(props));
+        ConnectorConfig config = new ConnectorConfig(props);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         worker.addConnector(config, ctx);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
@@ -164,7 +163,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.mockStatic(Worker.class);
         PowerMock.expectPrivate(Worker.class, "instantiateConnector", new Object[]{TestConnector.class}).andReturn(connector);
 
-        Properties props = new Properties();
+        Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.TOPICS_CONFIG, "foo,bar");
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
@@ -177,8 +176,8 @@ public class WorkerTest extends ThreadedTest {
 
         // Reconfigure
         EasyMock.<Class<? extends Task>>expect(connector.taskClass()).andReturn(TestSourceTask.class);
-        Properties taskProps = new Properties();
-        taskProps.setProperty("foo", "bar");
+        Map<String, String> taskProps = new HashMap<>();
+        taskProps.put("foo", "bar");
         EasyMock.expect(connector.taskConfigs(2)).andReturn(Arrays.asList(taskProps, taskProps));
 
         // Remove
@@ -193,7 +192,7 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(new MockTime(), config, offsetBackingStore);
         worker.start();
 
-        ConnectorConfig config = new ConnectorConfig(Utils.propsToStringMap(props));
+        ConnectorConfig config = new ConnectorConfig(props);
         assertEquals(Collections.emptySet(), worker.connectorNames());
         worker.addConnector(config, ctx);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
@@ -204,10 +203,10 @@ public class WorkerTest extends ThreadedTest {
             // expected
         }
         List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, 2, Arrays.asList("foo", "bar"));
-        Properties expectedTaskProps = new Properties();
-        expectedTaskProps.setProperty("foo", "bar");
-        expectedTaskProps.setProperty(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
-        expectedTaskProps.setProperty(SinkTask.TOPICS_CONFIG, "foo,bar");
+        Map<String, String> expectedTaskProps = new HashMap<>();
+        expectedTaskProps.put("foo", "bar");
+        expectedTaskProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+        expectedTaskProps.put(SinkTask.TOPICS_CONFIG, "foo,bar");
         assertEquals(2, taskConfigs.size());
         assertEquals(expectedTaskProps, taskConfigs.get(0));
         assertEquals(expectedTaskProps, taskConfigs.get(1));
@@ -246,7 +245,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.anyObject(WorkerConfig.class),
                 EasyMock.anyObject(Time.class))
                 .andReturn(workerTask);
-        Properties origProps = new Properties();
+        Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
         workerTask.start(origProps);
         EasyMock.expectLastCall();
@@ -266,7 +265,7 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(new MockTime(), config, offsetBackingStore);
         worker.start();
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.addTask(taskId, new TaskConfig(Utils.propsToStringMap(origProps)));
+        worker.addTask(taskId, new TaskConfig(origProps));
         assertEquals(new HashSet<>(Arrays.asList(taskId)), worker.taskIds());
         worker.stopTask(taskId);
         assertEquals(Collections.emptySet(), worker.taskIds());
@@ -315,7 +314,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.anyObject(WorkerConfig.class),
                 EasyMock.anyObject(Time.class))
                 .andReturn(workerTask);
-        Properties origProps = new Properties();
+        Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
         workerTask.start(origProps);
         EasyMock.expectLastCall();
@@ -335,7 +334,7 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(new MockTime(), config, offsetBackingStore);
         worker.start();
-        worker.addTask(TASK_ID, new TaskConfig(Utils.propsToStringMap(origProps)));
+        worker.addTask(TASK_ID, new TaskConfig(origProps));
         worker.stop();
 
         PowerMock.verifyAll();
@@ -344,7 +343,7 @@ public class WorkerTest extends ThreadedTest {
 
     private static class TestConnector extends Connector {
         @Override
-        public void start(Properties props) {
+        public void start(Map<String, String> props) {
 
         }
 
@@ -354,7 +353,7 @@ public class WorkerTest extends ThreadedTest {
         }
 
         @Override
-        public List<Properties> taskConfigs(int maxTasks) {
+        public List<Map<String, String>> taskConfigs(int maxTasks) {
             return null;
         }
 
@@ -369,7 +368,7 @@ public class WorkerTest extends ThreadedTest {
         }
 
         @Override
-        public void start(Properties props) {
+        public void start(Map<String, String> props) {
         }
 
         @Override

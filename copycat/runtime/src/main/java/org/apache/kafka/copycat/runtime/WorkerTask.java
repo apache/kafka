@@ -17,7 +17,7 @@
 
 package org.apache.kafka.copycat.runtime;
 
-import java.util.Properties;
+import java.util.Map;
 
 /**
  * Handles processing for an individual task. This interface only provides the basic methods
@@ -29,7 +29,7 @@ interface WorkerTask {
      * Start the Task
      * @param props initial configuration
      */
-    void start(Properties props);
+    void start(Map<String, String> props);
 
     /**
      * Stop this task from processing messages. This method does not block, it only triggers

@@ -23,7 +23,6 @@ import org.apache.kafka.copycat.connector.Task;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * SinkTask is a Task takes records loaded from Kafka and sends them to another system. In
@@ -52,7 +51,7 @@ public abstract class SinkTask implements Task {
      * @param props initial configuration
      */
     @Override
-    public abstract void start(Properties props);
+    public abstract void start(Map<String, String> props);
 
     /**
      * Put the records in the sink. Usually this should send the records to the sink asynchronously

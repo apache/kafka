@@ -30,7 +30,6 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * FileStreamSinkTask writes records to stdout or a file.
@@ -51,8 +50,8 @@ public class FileStreamSinkTask extends SinkTask {
     }
 
     @Override
-    public void start(Properties props) {
-        filename = props.getProperty(FileStreamSinkConnector.FILE_CONFIG);
+    public void start(Map<String, String> props) {
+        filename = props.get(FileStreamSinkConnector.FILE_CONFIG);
         if (filename == null) {
             outputStream = System.out;
         } else {

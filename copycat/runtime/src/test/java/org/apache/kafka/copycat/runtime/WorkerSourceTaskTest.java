@@ -82,7 +82,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private Capture<org.apache.kafka.clients.producer.Callback> producerCallbacks;
 
-    private static final Properties EMPTY_TASK_PROPS = new Properties();
+    private static final Map<String, String> EMPTY_TASK_PROPS = Collections.emptyMap();
     private static final List<SourceRecord> RECORDS = Arrays.asList(
             new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
@@ -90,13 +90,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Override
     public void setup() {
         super.setup();
-        Properties workerProps = new Properties();
-        workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.key.converter.schemas.enable", "false");
-        workerProps.setProperty("internal.value.converter.schemas.enable", "false");
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.key.converter.schemas.enable", "false");
+        workerProps.put("internal.value.converter.schemas.enable", "false");
         config = new StandaloneConfig(workerProps);
         producerCallbacks = EasyMock.newCapture();
     }

@@ -46,15 +46,15 @@ public class FileStreamSourceTask extends SourceTask {
     private Long streamOffset;
 
     @Override
-    public void start(Properties props) {
-        filename = props.getProperty(FileStreamSourceConnector.FILE_CONFIG);
+    public void start(Map<String, String> props) {
+        filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
         if (filename == null || filename.isEmpty()) {
             stream = System.in;
             // Tracking offset for stdin doesn't make sense
             streamOffset = null;
             reader = new BufferedReader(new InputStreamReader(stream));
         }
-        topic = props.getProperty(FileStreamSourceConnector.TOPIC_CONFIG);
+        topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
         if (topic == null)
             throw new CopycatException("FileStreamSourceTask config missing topic setting");
     }
