@@ -72,7 +72,9 @@ class MirrorMaker(Service):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1, new_consumer=False, consumer_timeout_ms=None, offsets_storage="kafka", offset_commit_interval_ms=60000):
+    def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1,
+                 new_consumer=False, consumer_timeout_ms=None, offsets_storage="kafka",
+                 offset_commit_interval_ms=60000):
         """
         MirrorMaker mirrors messages from one or more source clusters to a single destination cluster.
 
@@ -87,6 +89,7 @@ class MirrorMaker(Service):
                                             or configured independently per-node
             consumer_timeout_ms:        consumer stops if t > consumer_timeout_ms elapses between consecutive messages
             offsets_storage:            used for consumer offsets.storage property
+            offset_commit_interval_ms:  how frequently the mirror maker consumer commits offsets
         """
         super(MirrorMaker, self).__init__(context, num_nodes=num_nodes)
         self.log_level = "DEBUG"
@@ -102,7 +105,7 @@ class MirrorMaker(Service):
         self.target = target
 
         self.offsets_storage = offsets_storage.lower()
-        if not (self.offsets_storage == "kafka" or self.offsets_storage == "zookeeper"):
+        if not (self.offsets_storage in ["kafka", "zookeeper"]):
             raise Exception("offsets_storage should be 'kafka' or 'zookeeper'. Instead found %s" % self.offsets_storage)
 
         self.offset_commit_interval_ms = offset_commit_interval_ms
@@ -145,19 +148,13 @@ class MirrorMaker(Service):
         node.account.ssh("mkdir -p %s" % MirrorMaker.LOG_DIR, allow_fail=False)
 
         # Create, upload one consumer config file for source cluster
-        if self.new_consumer:
-            consumer_props = self.render("new_consumer.properties", bootstrap_servers=self.source.bootstrap_servers())
-        else:
-            consumer_props = self.render("consumer.properties", zookeeper_connect=self.source.zk.connect_setting())
-            consumer_props += "\noffsets.storage=%s\n" % self.offsets_storage
-
+        consumer_props = self.render("mirror_maker_consumer.properties")
         node.account.create_file(MirrorMaker.CONSUMER_CONFIG, consumer_props)
-        self.logger.info("Mirromaker consumer props:\n" + consumer_props)
+        self.logger.info("Mirrormaker consumer props:\n" + consumer_props)
 
         # Create, upload producer properties file for target cluster
-        producer_props = self.render('producer.properties',  broker_list=self.target.bootstrap_servers(),
-                                     producer_type="async")
-        self.logger.info("Mirromaker producer props:\n" + producer_props)
+        producer_props = self.render('mirror_maker_producer.properties')
+        self.logger.info("Mirrormaker producer props:\n" + producer_props)
         node.account.create_file(MirrorMaker.PRODUCER_CONFIG, producer_props)
 
         # Create and upload log properties

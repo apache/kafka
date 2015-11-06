@@ -26,28 +26,6 @@ from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 import time
 
 
-def bounce(test, clean_shutdown=True):
-    """Bounce mirror maker with a clean (kill -15) or hard (kill -9) shutdown"""
-
-    # Wait until messages start appearing in the target cluster
-    wait_until(lambda: len(test.consumer.messages_consumed[1]) > 0, timeout_sec=15)
-
-    # Wait for at least one offset to be committed
-    time.sleep(test.mirror_maker.offset_commit_interval_ms / 1000.0 + .5)
-
-    for i in range(1):
-        test.logger.info("Bringing mirror maker nodes down...")
-        for node in test.mirror_maker.nodes:
-            test.mirror_maker.stop_node(node, clean_shutdown=clean_shutdown)
-
-        num_consumed = len(test.consumer.messages_consumed[1])
-        test.logger.info("Bringing mirror maker nodes back up...")
-        for node in test.mirror_maker.nodes:
-            test.mirror_maker.start_node(node)
-
-        wait_until(lambda: len(test.consumer.messages_consumed[1]) > num_consumed + 100, timeout_sec=30)
-
-
 class TestMirrorMakerService(ProduceConsumeValidateTest):
     """Sanity checks on mirror maker service class."""
     def __init__(self, test_context):
@@ -69,7 +47,7 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
                                         whitelist=self.topic)
         # This will consume from target kafka cluster
         self.consumer = ConsoleConsumer(test_context, num_nodes=1, kafka=self.target_kafka, topic=self.topic,
-                                        message_validator=is_int, consumer_timeout_ms=30000)
+                                        message_validator=is_int, consumer_timeout_ms=15000)
 
     def setUp(self):
         # Source cluster
@@ -79,6 +57,41 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         # Target cluster
         self.target_zk.start()
         self.target_kafka.start()
+
+    def bounce(self, clean_shutdown=True):
+        """Bounce mirror maker with a clean (kill -15) or hard (kill -9) shutdown"""
+
+        # Wait until messages start appearing in the target cluster
+        wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=15)
+
+        # Wait for at least one offset to be committed.
+        #
+        # This step is necessary to prevent data loss with default mirror maker settings:
+        # currently, if we don't have at least one committed offset,
+        # and we bounce mirror maker, the consumer internals will throw OffsetOutOfRangeException, and the default
+        # auto.offset.reset policy ("largest") will kick in, causing mirrormaker to start consuming from the largest
+        # offset. As a result, any messages produced to the source cluster while mirrormaker was dead won't get
+        # mirrored to the target cluster.
+        # (see https://issues.apache.org/jira/browse/KAFKA-2759)
+        #
+        # This isn't necessary with kill -15 because mirror maker commits its offsets during graceful
+        # shutdown.
+        if not clean_shutdown:
+            time.sleep(self.mirror_maker.offset_commit_interval_ms / 1000.0 + 0.5)
+
+        for i in range(3):
+            self.logger.info("Bringing mirror maker nodes down...")
+            for node in self.mirror_maker.nodes:
+                self.mirror_maker.stop_node(node, clean_shutdown=clean_shutdown)
+
+            num_consumed = len(self.consumer.messages_consumed[1])
+            self.logger.info("Bringing mirror maker nodes back up...")
+            for node in self.mirror_maker.nodes:
+                self.mirror_maker.start_node(node)
+
+            # Ensure new messages are once again showing up on the target cluster
+            # new consumer requires higher timeout here
+            wait_until(lambda: len(self.consumer.messages_consumed[1]) > num_consumed + 100, timeout_sec=60)
 
     def wait_for_n_messages(self, n_messages=100):
         """Wait for a minimum number of messages to be successfully produced."""
@@ -126,6 +139,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         - Bounce MM process
         - Verify every message acknowledged by the source producer is consumed by the target consumer
         """
+        if new_consumer and not clean_shutdown:
+            # Increase timeout on downstream console consumer; mirror maker with new consumer takes extra time
+            # during hard bounce. This is because the restarted mirror maker consumer won't be able to rejoin
+            # the group until the previous session times out
+            self.consumer.consumer_timeout_ms = 60000
 
         self.mirror_maker.offsets_storage = offsets_storage
         self.mirror_maker.new_consumer = new_consumer
@@ -139,5 +157,5 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
             else:
                 monitor.wait_until("reset fetch offset", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
 
-        self.run_produce_consume_validate(core_test_action=lambda: bounce(self, clean_shutdown=clean_shutdown))
+        self.run_produce_consume_validate(core_test_action=lambda: self.bounce(clean_shutdown=clean_shutdown))
         self.mirror_maker.stop()
