@@ -659,7 +659,6 @@ class GroupCoordinator(val brokerId: Int,
 
   private def shouldKeepMemberAlive(member: MemberMetadata, heartbeatDeadline: Long) =
     member.awaitingJoinCallback != null ||
-      member.awaitingSyncCallback != null ||
       member.latestHeartbeat + member.sessionTimeoutMs > heartbeatDeadline
 
   private def isCoordinatorForGroup(groupId: String) = groupManager.isGroupLocal(groupId)
