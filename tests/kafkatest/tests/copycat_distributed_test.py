@@ -15,6 +15,7 @@
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.copycat import CopycatDistributedService, VerifiableSource, VerifiableSink
+from kafkatest.services.console_consumer import ConsoleConsumer
 from ducktape.utils.util import wait_until
 import hashlib, subprocess, json, itertools, time
 from collections import Counter
@@ -125,6 +126,7 @@ class CopycatDistributedTest(KafkaTest):
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because clean
             # bouncing should commit on rebalance.
             src_seqno_max = max(src_seqnos)
+            self.logger.debug("Max source seqno: %d", src_seqno_max)
             src_seqno_counts = Counter(src_seqnos)
             missing_src_seqnos = sorted(set(range(src_seqno_max)).difference(set(src_seqnos)))
             duplicate_src_seqnos = sorted([seqno for seqno,count in src_seqno_counts.iteritems() if count > 1])
@@ -142,6 +144,7 @@ class CopycatDistributedTest(KafkaTest):
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because
             # clean bouncing should commit on rebalance.
             sink_seqno_max = max(sink_seqnos)
+            self.logger.debug("Max sink seqno: %d", sink_seqno_max)
             sink_seqno_counts = Counter(sink_seqnos)
             missing_sink_seqnos = sorted(set(range(sink_seqno_max)).difference(set(sink_seqnos)))
             duplicate_sink_seqnos = sorted([seqno for seqno,count in sink_seqno_counts.iteritems() if count > 1])
@@ -167,6 +170,10 @@ class CopycatDistributedTest(KafkaTest):
 
         if not success:
             self.mark_for_collect(self.cc)
+            # Also collect the data in the topic to aid in debugging
+            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True)
+            consumer_validator.run()
+            self.mark_for_collect(consumer_validator, "consumer_stdout")
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
 

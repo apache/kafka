@@ -232,6 +232,7 @@ class VerifiableConnector(object):
                 try:
                     data = json.loads(line)
                 except ValueError:
+                    self.logger.debug("Ignoring unparseable line: %s", line)
                     continue
                 # Filter to only ones matching our name to support multiple verifiable producers
                 if data['name'] != self.name: continue
