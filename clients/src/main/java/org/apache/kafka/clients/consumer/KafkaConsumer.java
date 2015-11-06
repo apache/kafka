@@ -98,7 +98,7 @@ import java.util.regex.Pattern;
  * processing records. These processes can either be running on the same machine or, as is more likely, they can be
  * distributed over many machines to provide additional scalability and fault tolerance for processing.
  * <p>
- * Each Kafka consumer must configure a consumer group that it belongs to, and it can dynamically set the
+ * Each Kafka consumer is able to configure a consumer group that it belongs to, and can dynamically set the
  * list of topics it wants to subscribe to through {@link #subscribe(List, ConsumerRebalanceListener)},
  * or subscribe to all topics matching certain pattern through {@link #subscribe(Pattern, ConsumerRebalanceListener)}.
  * Kafka will deliver each message in the
@@ -124,9 +124,9 @@ import java.util.regex.Pattern;
  * In addition, when group reassignment happens automatically, consumers can be notified through {@link ConsumerRebalanceListener},
  * which allows them to finish necessary application-level logic such as state cleanup, manual offset
  * commits (note that offsets are always committed for a given consumer group), etc.
- * See <a href="#rebalancecallback">Managing Your Own Offsets</a> for more details
+ * See <a href="#rebalancecallback">Storing Offsets Outside Kafka</a> for more details
  * <p>
- * It is also possible for the consumer to manually specify the partitions it subscribes to through {@link #assign(List)},
+ * It is also possible for the consumer to manually specify the partitions that are assigned to it through {@link #assign(List)},
  * which disables this dynamic partition assignment.
  *
  * <h3>Usage Examples</h3>
@@ -253,7 +253,7 @@ import java.util.regex.Pattern;
  * It isn't possible to mix both subscription to specific partitions (with no load balancing) and to topics (with load
  * balancing) using the same consumer instance.
  *
- * <h4><a name="rebalancecallback">Managing Your Own Offsets</h4>
+ * <h4><a name="rebalancecallback">Storing Offsets Outside Kafka</h4>
  *
  * The consumer application need not use Kafka's built-in offset storage, it can store offsets in a store of its own
  * choosing. The primary use case for this is allowing the application to store both the offset and the results of the
@@ -658,8 +658,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Subscribe to the given list of topics to get dynamically
-     * assigned partitions. Topic subscriptions are not incremental. This list will replace the current
-     * assignment (if there is one). Note that it is not possible to combine topic subscription with group management
+     * assigned partitions. <b>Topic subscriptions are not incremental. This list will replace the current
+     * assignment (if there is one).</b> Note that it is not possible to combine topic subscription with group management
      * with manual partition assignment through {@link #assign(List)}.
      *
      * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
@@ -703,8 +703,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Subscribe to the given list of topics to get dynamically assigned partitions.
-     * Topic subscriptions are not incremental. This list will replace the current
-     * assignment (if there is one). It is not possible to combine topic subscription with group management
+     * <b>Topic subscriptions are not incremental. This list will replace the current
+     * assignment (if there is one).</b> It is not possible to combine topic subscription with group management
      * with manual partition assignment through {@link #assign(List)}.
      *
      * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
