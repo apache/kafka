@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.copycat.runtime.WorkerConfig;
 
-import java.util.Properties;
+import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -180,7 +180,7 @@ public class DistributedConfig extends WorkerConfig {
                         WORKER_UNSYNC_BACKOFF_MS_DOC);
     }
 
-    public DistributedConfig(Properties props) {
+    public DistributedConfig(Map<String, String> props) {
         super(CONFIG, props);
     }
 

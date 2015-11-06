@@ -31,9 +31,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
@@ -42,7 +42,7 @@ public class FileStreamSourceTaskTest {
     private static final String TOPIC = "test";
 
     private File tempFile;
-    private Properties config;
+    private Map<String, String> config;
     private OffsetStorageReader offsetStorageReader;
     private SourceTaskContext context;
     private FileStreamSourceTask task;
@@ -52,9 +52,9 @@ public class FileStreamSourceTaskTest {
     @Before
     public void setup() throws IOException {
         tempFile = File.createTempFile("file-stream-source-task-test", null);
-        config = new Properties();
-        config.setProperty(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
-        config.setProperty(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
+        config = new HashMap<>();
+        config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
+        config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
         task = new FileStreamSourceTask();
         offsetStorageReader = PowerMock.createMock(OffsetStorageReader.class);
         context = PowerMock.createMock(SourceTaskContext.class);
@@ -135,7 +135,7 @@ public class FileStreamSourceTaskTest {
     }
 
     public void testInvalidFile() throws InterruptedException {
-        config.setProperty(FileStreamSourceConnector.FILE_CONFIG, "bogusfilename");
+        config.put(FileStreamSourceConnector.FILE_CONFIG, "bogusfilename");
         task.start(config);
         // Currently the task retries indefinitely if the file isn't found, but shouldn't return any data.
         for (int i = 0; i < 100; i++)

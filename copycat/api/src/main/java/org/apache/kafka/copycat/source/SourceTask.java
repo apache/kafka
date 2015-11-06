@@ -21,7 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.Task;
 
 import java.util.List;
-import java.util.Properties;
+import java.util.Map;
 
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
@@ -43,7 +43,7 @@ public abstract class SourceTask implements Task {
      * @param props initial configuration
      */
     @Override
-    public abstract void start(Properties props);
+    public abstract void start(Map<String, String> props);
 
     /**
      * Poll this SourceTask for new records. This method should block if no data is currently

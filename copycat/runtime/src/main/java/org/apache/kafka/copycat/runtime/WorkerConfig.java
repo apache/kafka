@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
-import java.util.Properties;
+import java.util.Map;
 
 /**
  * Common base class providing configuration for Copycat workers, whether standalone or distributed.
@@ -132,7 +132,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC);
     }
 
-    public WorkerConfig(ConfigDef definition, Properties props) {
+    public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
     }
 }

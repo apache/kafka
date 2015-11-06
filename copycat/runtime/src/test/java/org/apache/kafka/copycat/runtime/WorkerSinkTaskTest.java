@@ -56,7 +56,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -86,7 +85,7 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     private static final TopicPartition TOPIC_PARTITION3 = new TopicPartition(TOPIC, PARTITION3);
     private static final TopicPartition UNASSIGNED_TOPIC_PARTITION = new TopicPartition(TOPIC, 200);
 
-    private static final Properties TASK_PROPS = new Properties();
+    private static final Map<String, String> TASK_PROPS = new HashMap<>();
     static {
         TASK_PROPS.put(SinkConnector.TOPICS_CONFIG, TOPIC);
     }
@@ -111,13 +110,13 @@ public class WorkerSinkTaskTest extends ThreadedTest {
     public void setup() {
         super.setup();
         time = new MockTime();
-        Properties workerProps = new Properties();
-        workerProps.setProperty("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
-        workerProps.setProperty("internal.key.converter.schemas.enable", "false");
-        workerProps.setProperty("internal.value.converter.schemas.enable", "false");
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.key.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.value.converter", "org.apache.kafka.copycat.json.JsonConverter");
+        workerProps.put("internal.key.converter.schemas.enable", "false");
+        workerProps.put("internal.value.converter.schemas.enable", "false");
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer", "createWorkerThread"},

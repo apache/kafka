@@ -23,8 +23,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.powermock.api.easymock.PowerMock;
 
+import java.util.HashMap;
 import java.util.List;
-import java.util.Properties;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -37,7 +38,7 @@ public class FileStreamSourceConnectorTest {
 
     private FileStreamSourceConnector connector;
     private ConnectorContext ctx;
-    private Properties sourceProperties;
+    private Map<String, String> sourceProperties;
 
     @Before
     public void setup() {
@@ -45,9 +46,9 @@ public class FileStreamSourceConnectorTest {
         ctx = PowerMock.createMock(ConnectorContext.class);
         connector.initialize(ctx);
 
-        sourceProperties = new Properties();
-        sourceProperties.setProperty(FileStreamSourceConnector.TOPIC_CONFIG, SINGLE_TOPIC);
-        sourceProperties.setProperty(FileStreamSourceConnector.FILE_CONFIG, FILENAME);
+        sourceProperties = new HashMap<>();
+        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, SINGLE_TOPIC);
+        sourceProperties.put(FileStreamSourceConnector.FILE_CONFIG, FILENAME);
     }
 
     @Test
@@ -55,20 +56,20 @@ public class FileStreamSourceConnectorTest {
         PowerMock.replayAll();
 
         connector.start(sourceProperties);
-        List<Properties> taskConfigs = connector.taskConfigs(1);
+        List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertEquals(FILENAME,
-                taskConfigs.get(0).getProperty(FileStreamSourceConnector.FILE_CONFIG));
+                taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
         assertEquals(SINGLE_TOPIC,
-                taskConfigs.get(0).getProperty(FileStreamSourceConnector.TOPIC_CONFIG));
+                taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
 
         // Should be able to return fewer than requested #
         taskConfigs = connector.taskConfigs(2);
         assertEquals(1, taskConfigs.size());
         assertEquals(FILENAME,
-                taskConfigs.get(0).getProperty(FileStreamSourceConnector.FILE_CONFIG));
+                taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
         assertEquals(SINGLE_TOPIC,
-                taskConfigs.get(0).getProperty(FileStreamSourceConnector.TOPIC_CONFIG));
+                taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
 
         PowerMock.verifyAll();
     }
@@ -79,16 +80,16 @@ public class FileStreamSourceConnectorTest {
 
         sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
         connector.start(sourceProperties);
-        List<Properties> taskConfigs = connector.taskConfigs(1);
+        List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
-        assertNull(taskConfigs.get(0).getProperty(FileStreamSourceConnector.FILE_CONFIG));
+        assertNull(taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
 
         PowerMock.verifyAll();
     }
 
     @Test(expected = CopycatException.class)
     public void testMultipleSourcesInvalid() {
-        sourceProperties.setProperty(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
+        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
         connector.start(sourceProperties);
     }
 

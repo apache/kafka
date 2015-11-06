@@ -20,7 +20,7 @@ package org.apache.kafka.copycat.runtime.standalone;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.copycat.runtime.WorkerConfig;
 
-import java.util.Properties;
+import java.util.Map;
 
 public class StandaloneConfig extends WorkerConfig {
     private static final ConfigDef CONFIG;
@@ -29,7 +29,7 @@ public class StandaloneConfig extends WorkerConfig {
         CONFIG = baseConfigDef();
     }
 
-    public StandaloneConfig(Properties props) {
+    public StandaloneConfig(Map<String, String> props) {
         super(CONFIG, props);
     }
 }

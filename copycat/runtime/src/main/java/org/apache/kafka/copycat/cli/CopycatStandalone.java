@@ -34,7 +34,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.Properties;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * <p>
@@ -52,8 +53,6 @@ public class CopycatStandalone {
     private static final Logger log = LoggerFactory.getLogger(CopycatStandalone.class);
 
     public static void main(String[] args) throws Exception {
-        Properties workerProps;
-        Properties connectorProps;
 
         if (args.length < 2) {
             log.info("Usage: CopycatStandalone worker.properties connector1.properties [connector2.properties ...]");
@@ -61,7 +60,8 @@ public class CopycatStandalone {
         }
 
         String workerPropsFile = args[0];
-        workerProps = !workerPropsFile.isEmpty() ? Utils.loadProps(workerPropsFile) : new Properties();
+        Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
+                Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
         StandaloneConfig config = new StandaloneConfig(workerProps);
         Worker worker = new Worker(config, new FileOffsetBackingStore());
@@ -72,7 +72,7 @@ public class CopycatStandalone {
 
         try {
             for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
-                connectorProps = Utils.loadProps(connectorPropsFile);
+                Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
                 FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>(new Callback<Herder.Created<ConnectorInfo>>() {
                     @Override
                     public void onCompletion(Throwable error, Herder.Created<ConnectorInfo> info) {
@@ -83,8 +83,8 @@ public class CopycatStandalone {
                     }
                 });
                 herder.putConnectorConfig(
-                        connectorProps.getProperty(ConnectorConfig.NAME_CONFIG),
-                        Utils.propsToStringMap(connectorProps), false, cb);
+                        connectorProps.get(ConnectorConfig.NAME_CONFIG),
+                        connectorProps, false, cb);
                 cb.get();
             }
         } catch (Throwable t) {

@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -89,15 +88,12 @@ public class Worker {
     public void start() {
         log.info("Worker starting");
 
-        Properties unusedConfigs = config.unusedProperties();
-
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        for (String propName : unusedConfigs.stringPropertyNames()) {
-            producerProps.put(propName, unusedConfigs.getProperty(propName));
-        }
+        producerProps.putAll(config.unusedConfigs());
+
         producer = new KafkaProducer<>(producerProps);
 
         offsetBackingStore.start();
@@ -177,10 +173,7 @@ public class Worker {
         final Connector connector = instantiateConnector(connClass);
         connector.initialize(ctx);
         try {
-            Map<String, Object> originals = connConfig.originals();
-            Properties props = new Properties();
-            props.putAll(originals);
-            connector.start(props);
+            connector.start(connConfig.originalsStrings());
         } catch (CopycatException e) {
             throw new CopycatException("Connector threw an exception while starting", e);
         }
@@ -209,8 +202,8 @@ public class Worker {
 
         List<Map<String, String>> result = new ArrayList<>();
         String taskClassName = connector.taskClass().getName();
-        for (Properties taskProps : connector.taskConfigs(maxTasks)) {
-            Map<String, String> taskConfig = Utils.propsToStringMap(taskProps);
+        for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
+            Map<String, String> taskConfig = new HashMap<>(taskProps); // Ensure we don't modify the connector's copy of the config
             taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
             if (sinkTopics != null)
                 taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
@@ -280,9 +273,7 @@ public class Worker {
 
         // Start the task before adding modifying any state, any exceptions are caught higher up the
         // call chain and there's no cleanup to do here
-        Properties props = new Properties();
-        props.putAll(taskConfig.originals());
-        workerTask.start(props);
+        workerTask.start(taskConfig.originalsStrings());
         if (task instanceof SourceTask) {
             WorkerSourceTask workerSourceTask = (WorkerSourceTask) workerTask;
             sourceTaskOffsetCommitter.schedule(id, workerSourceTask);

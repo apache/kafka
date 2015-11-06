@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Properties;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -85,7 +85,7 @@ class WorkerSourceTask implements WorkerTask {
     }
 
     @Override
-    public void start(Properties props) {
+    public void start(Map<String, String> props) {
         workThread = new WorkerSourceTaskThread("WorkerSourceTask-" + id, props);
         workThread.start();
     }
@@ -273,11 +273,11 @@ class WorkerSourceTask implements WorkerTask {
 
 
     private class WorkerSourceTaskThread extends ShutdownableThread {
-        private Properties workerProps;
+        private Map<String, String> workerProps;
         private boolean finishedStart;
         private boolean startedShutdownBeforeStartCompleted;
 
-        public WorkerSourceTaskThread(String name, Properties workerProps) {
+        public WorkerSourceTaskThread(String name, Map<String, String> workerProps) {
             super(name);
             this.workerProps = workerProps;
             this.finishedStart = false;

@@ -19,7 +19,7 @@ package org.apache.kafka.copycat.connector;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Properties;
+import java.util.Map;
 
 /**
  * <p>
@@ -40,7 +40,7 @@ public interface Task {
      * Start the Task
      * @param props initial configuration
      */
-    void start(Properties props);
+    void start(Map<String, String> props);
 
     /**
      * Stop this task.
