@@ -22,7 +22,8 @@ from kafkatest.services.kafka.version import TRUNK
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.utils.security_config import SecurityConfig
+from kafkatest.services.security.security_config import SecurityConfig
+from kafkatest.services.security.minikdc import MiniKdc
 import json
 import re
 import signal
@@ -45,7 +46,7 @@ class KafkaService(JmxMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
         """
         :type context
         :type zk: ZookeeperService
@@ -59,6 +60,7 @@ class KafkaService(JmxMixin, Service):
 
         self.security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
+        self.sasl_mechanism = sasl_mechanism
         self.topics = topics
 
         for node in self.nodes:
@@ -67,16 +69,15 @@ class KafkaService(JmxMixin, Service):
 
     @property
     def security_config(self):
-        if self.security_protocol == SecurityConfig.SSL or self.interbroker_security_protocol == SecurityConfig.SSL:
-            return SecurityConfig(SecurityConfig.SSL)
-        else:
-            return SecurityConfig(SecurityConfig.PLAINTEXT)
+        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, sasl_mechanism=self.sasl_mechanism)
 
-    @property
-    def port(self):
-        return 9092 if self.security_protocol == SecurityConfig.PLAINTEXT else 9093
 
     def start(self):
+        if self.security_config.has_sasl_kerberos:
+            self.minikdc = MiniKdc(self.context, self.nodes)
+            self.minikdc.start()
+        else:
+            self.minikdc = None
         Service.start(self)
 
         # Create topics if necessary
@@ -96,12 +97,15 @@ class KafkaService(JmxMixin, Service):
         # TODO - clean up duplicate configuration logic
         prop_file = cfg.render()
         prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
-                                  security_config=self.security_config, port=self.port)
+                                  security_config=self.security_config, 
+                                  interbroker_security_protocol=self.interbroker_security_protocol,
+                                  sasl_mechanism=self.sasl_mechanism)
         return prop_file
 
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export LOG_DIR=/mnt/kafka-operational-logs/; "
+        cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
         return cmd
 
@@ -296,8 +300,7 @@ class KafkaService(JmxMixin, Service):
 
     def bootstrap_servers(self):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
-        using the port for the configured security protocol.
 
         This is the format expected by many config files.
         """
-        return ','.join([node.account.hostname + ":" + str(self.port) for node in self.nodes])
+        return ','.join([node.account.hostname + ":9092" for node in self.nodes])

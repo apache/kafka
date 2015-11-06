@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
+import java.util
 
 import kafka.admin.AdminUtils
 import kafka.api._
@@ -31,13 +32,12 @@ import kafka.network.RequestChannel.{Session, Response}
 import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.Node
 
 import scala.collection._
-
-
 /**
  * Logic to handle the various Kafka requests
  */
@@ -74,11 +74,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.ControlledShutdownKey => handleControlledShutdownRequest(request)
         case RequestKeys.OffsetCommitKey => handleOffsetCommitRequest(request)
         case RequestKeys.OffsetFetchKey => handleOffsetFetchRequest(request)
-        case RequestKeys.GroupMetadataKey => handleGroupMetadataRequest(request)
+        case RequestKeys.GroupCoordinatorKey => handleGroupCoordinatorRequest(request)
         case RequestKeys.JoinGroupKey => handleJoinGroupRequest(request)
         case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
         case RequestKeys.LeaveGroupKey => handleLeaveGroupRequest(request)
         case RequestKeys.SyncGroupKey => handleSyncGroupRequest(request)
+        case RequestKeys.DescribeGroupsKey => handleDescribeGroupRequest(request)
+        case RequestKeys.ListGroupsKey => handleListGroupsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -111,17 +113,17 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     try {
       // call replica manager to handle updating partitions to become leader or follower
-      val result = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest)
+      val result = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest, metadataCache)
       val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.correlationId, result.responseMap, result.errorCode)
       // for each new leader or follower, call coordinator to handle
       // consumer group migration
       result.updatedLeaders.foreach { case partition =>
-        if (partition.topic == GroupCoordinator.OffsetsTopicName)
+        if (partition.topic == GroupCoordinator.GroupMetadataTopicName)
           coordinator.handleGroupImmigration(partition.partitionId)
       }
       result.updatedFollowers.foreach { case partition =>
         partition.leaderReplicaIdOpt.foreach { leaderReplica =>
-          if (partition.topic == GroupCoordinator.OffsetsTopicName &&
+          if (partition.topic == GroupCoordinator.GroupMetadataTopicName &&
               leaderReplica == brokerId)
             coordinator.handleGroupEmigration(partition.partitionId)
         }
@@ -181,6 +183,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetCommitRequest(request: RequestChannel.Request) {
     val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
 
+    // reject the request immediately if not authorized to the group
+    if (!authorize(request.session, Read, new Resource(Group, offsetCommitRequest.groupId))) {
+      val errors = offsetCommitRequest.requestInfo.mapValues(_ => ErrorMapping.GroupAuthorizationCode)
+      val response = OffsetCommitResponse(errors, offsetCommitRequest.correlationId)
+      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
+      return
+    }
+
     // filter non-exist topics
     val invalidRequestsInfo = offsetCommitRequest.requestInfo.filter { case (topicAndPartition, offsetMetadata) =>
       !metadataCache.contains(topicAndPartition.topic)
@@ -189,13 +199,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) =  filteredRequestInfo.partition {
       case (topicAndPartition, offsetMetadata) =>
-        authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic)) &&
-          authorize(request.session, Read, new Resource(Group, offsetCommitRequest.groupId))
+        authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
     }
 
     // the callback for sending an offset commit response
     def sendResponseCallback(commitStatus: immutable.Map[TopicAndPartition, Short]) {
-      val mergedCommitStatus = commitStatus ++ unauthorizedRequestInfo.mapValues(_ => ErrorMapping.AuthorizationCode)
+      val mergedCommitStatus = commitStatus ++ unauthorizedRequestInfo.mapValues(_ => ErrorMapping.TopicAuthorizationCode)
 
       mergedCommitStatus.foreach { case (topicAndPartition, errorCode) =>
         // we only print warnings for known errors here; only replica manager could see an unknown
@@ -296,7 +305,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
       var errorInResponse = false
-      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => ProducerResponseStatus(ErrorMapping.AuthorizationCode, -1))
+      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ => ProducerResponseStatus(ErrorMapping.TopicAuthorizationCode, -1))
 
       mergedResponseStatus.foreach { case (topicAndPartition, status) =>
         // we only print warnings for known errors here; if it is unknown, it will cause
@@ -377,7 +386,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicAndPartition, _) => authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
     }
 
-    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => FetchResponsePartitionData(ErrorMapping.AuthorizationCode, -1, MessageSet.Empty))
+    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => FetchResponsePartitionData(ErrorMapping.TopicAuthorizationCode, -1, MessageSet.Empty))
 
     // the callback for sending a fetch response
     def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
@@ -440,7 +449,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicAndPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicAndPartition.topic))
     }
 
-    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => PartitionOffsetsResponse(ErrorMapping.AuthorizationCode, Nil))
+    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => PartitionOffsetsResponse(ErrorMapping.TopicAuthorizationCode, Nil))
 
     val responseMap = authorizedRequestInfo.map(elem => {
       val (topicAndPartition, partitionOffsetRequestInfo) = elem
@@ -546,9 +555,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (topics.size > 0 && topicResponses.size != topics.size) {
       val nonExistentTopics = topics -- topicResponses.map(_.topic).toSet
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
-        if (topic == GroupCoordinator.OffsetsTopicName || config.autoCreateTopicsEnable) {
+        if (topic == GroupCoordinator.GroupMetadataTopicName || config.autoCreateTopicsEnable) {
           try {
-            if (topic == GroupCoordinator.OffsetsTopicName) {
+            if (topic == GroupCoordinator.GroupMetadataTopicName) {
               val aliveBrokers = metadataCache.getAliveBrokers
               val offsetsTopicReplicationFactor =
                 if (aliveBrokers.length > 0)
@@ -612,7 +621,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val unauthorizedTopicMetaData = unauthorizedTopics.map(topic => new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.AuthorizationCode))
+    val unauthorizedTopicMetaData = unauthorizedTopics.map(topic => new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.TopicAuthorizationCode))
 
     val topicMetadata = if (authorizedTopics.isEmpty) Seq.empty[TopicMetadata] else getTopicMetadata(authorizedTopics, request.securityProtocol)
     val brokers = metadataCache.getAliveBrokers
@@ -628,12 +637,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetFetchRequest(request: RequestChannel.Request) {
     val offsetFetchRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
 
-    val (authorizedTopicPartitions, unauthorizedTopicPartitions) = offsetFetchRequest.requestInfo.partition { topicAndPartition =>
-      authorize(request.session, Describe, new Resource(Topic, topicAndPartition.topic)) &&
-        authorize(request.session, Read, new Resource(Group, offsetFetchRequest.groupId))
+    // reject the request immediately if not authorized to the group
+    if (!authorize(request.session, Read, new Resource(Group, offsetFetchRequest.groupId))) {
+      val authorizationError = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, ErrorMapping.GroupAuthorizationCode)
+      val response = OffsetFetchResponse(offsetFetchRequest.requestInfo.map{ _ -> authorizationError}.toMap)
+      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
+      return
     }
 
-    val authorizationError = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, ErrorMapping.AuthorizationCode)
+    val (authorizedTopicPartitions, unauthorizedTopicPartitions) = offsetFetchRequest.requestInfo.partition { topicAndPartition =>
+      authorize(request.session, Describe, new Resource(Topic, topicAndPartition.topic))
+    }
+
+    val authorizationError = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, ErrorMapping.TopicAuthorizationCode)
     val unauthorizedStatus = unauthorizedTopicPartitions.map(topicAndPartition => (topicAndPartition, authorizationError)).toMap
 
     val response = if (offsetFetchRequest.versionId == 0) {
@@ -657,9 +673,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       })
 
-      val unauthorizedTopics = unauthorizedTopicPartitions.map( topicAndPartition =>
-        (topicAndPartition, OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata,ErrorMapping.AuthorizationCode)))
-      OffsetFetchResponse(collection.immutable.Map(responseInfo: _*) ++ unauthorizedTopics, offsetFetchRequest.correlationId)
+      OffsetFetchResponse(collection.immutable.Map(responseInfo: _*) ++ unauthorizedStatus, offsetFetchRequest.correlationId)
     } else {
       // version 1 reads offsets from Kafka;
       val offsets = coordinator.handleFetchOffsets(offsetFetchRequest.groupId, authorizedTopicPartitions).toMap
@@ -676,34 +690,73 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
   }
 
-  /*
-   * Handle a consumer metadata request
-   */
-  def handleGroupMetadataRequest(request: RequestChannel.Request) {
-    val groupMetadataRequest = request.requestObj.asInstanceOf[GroupMetadataRequest]
+  def handleGroupCoordinatorRequest(request: RequestChannel.Request) {
+    val groupCoordinatorRequest = request.body.asInstanceOf[GroupCoordinatorRequest]
+    val responseHeader = new ResponseHeader(request.header.correlationId)
 
-    if (!authorize(request.session, Read, new Resource(Group, groupMetadataRequest.group))) {
-      val response = GroupMetadataResponse(None, ErrorMapping.AuthorizationCode, groupMetadataRequest.correlationId)
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
+    if (!authorize(request.session, Describe, new Resource(Group, groupCoordinatorRequest.groupId))) {
+      val responseBody = new GroupCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED.code, Node.noNode)
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
-      val partition = coordinator.partitionFor(groupMetadataRequest.group)
+      val partition = coordinator.partitionFor(groupCoordinatorRequest.groupId)
 
       // get metadata (and create the topic if necessary)
-      val offsetsTopicMetadata = getTopicMetadata(Set(GroupCoordinator.OffsetsTopicName), request.securityProtocol).head
+      val offsetsTopicMetadata = getTopicMetadata(Set(GroupCoordinator.GroupMetadataTopicName), request.securityProtocol).head
+      val coordinatorEndpoint = offsetsTopicMetadata.partitionsMetadata.find(_.partitionId == partition).flatMap {
+        partitionMetadata => partitionMetadata.leader
+      }
 
-      val errorResponse = GroupMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, groupMetadataRequest.correlationId)
-
-      val response =
-        offsetsTopicMetadata.partitionsMetadata.find(_.partitionId == partition).map { partitionMetadata =>
-          partitionMetadata.leader.map { leader =>
-            GroupMetadataResponse(Some(leader), ErrorMapping.NoError, groupMetadataRequest.correlationId)
-          }.getOrElse(errorResponse)
-        }.getOrElse(errorResponse)
+      val responseBody = coordinatorEndpoint match {
+        case None =>
+          new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code, Node.noNode())
+        case Some(endpoint) =>
+          new GroupCoordinatorResponse(Errors.NONE.code, new Node(endpoint.id, endpoint.host, endpoint.port))
+      }
 
       trace("Sending consumer metadata %s for correlation id %d to client %s."
-        .format(response, groupMetadataRequest.correlationId, groupMetadataRequest.clientId))
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, response)))
+        .format(responseBody, request.header.correlationId, request.header.clientId))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
+  }
+
+  def handleDescribeGroupRequest(request: RequestChannel.Request) {
+    import JavaConverters._
+
+    val describeRequest = request.body.asInstanceOf[DescribeGroupsRequest]
+    val responseHeader = new ResponseHeader(request.header.correlationId)
+
+    val groups = describeRequest.groupIds().asScala.map {
+      case groupId =>
+        if (!authorize(request.session, Describe, new Resource(Group, groupId))) {
+          groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.GROUP_AUTHORIZATION_FAILED)
+        } else {
+          val (error, summary) = coordinator.handleDescribeGroup(groupId)
+          val members = summary.members.map { member =>
+            val metadata = ByteBuffer.wrap(member.metadata)
+            val assignment = ByteBuffer.wrap(member.assignment)
+            new DescribeGroupsResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
+          }
+          groupId -> new DescribeGroupsResponse.GroupMetadata(error.code, summary.state, summary.protocolType,
+            summary.protocol, members.asJava)
+        }
+    }.toMap
+
+    val responseBody = new DescribeGroupsResponse(groups.asJava)
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
+  }
+
+  def handleListGroupsRequest(request: RequestChannel.Request) {
+    import JavaConverters._
+
+    val responseHeader = new ResponseHeader(request.header.correlationId)
+    val responseBody = if (!authorize(request.session, Describe, Resource.ClusterResource)) {
+      ListGroupsResponse.fromError(Errors.CLUSTER_AUTHORIZATION_FAILED)
+    } else {
+      val (error, groups) = coordinator.handleListGroups()
+      val allGroups = groups.map{ group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }
+      new ListGroupsResponse(error.code, allGroups.asJava)
+    }
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
   }
 
   def handleJoinGroupRequest(request: RequestChannel.Request) {
@@ -717,6 +770,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
       val responseBody = new JoinGroupResponse(joinResult.errorCode, joinResult.generationId, joinResult.subProtocol,
         joinResult.memberId, joinResult.leaderId, members)
+
       trace("Sending join group response %s for correlation id %d to client %s."
         .format(responseBody, request.header.correlationId, request.header.clientId))
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
@@ -724,7 +778,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!authorize(request.session, Read, new Resource(Group, joinGroupRequest.groupId()))) {
       val responseBody = new JoinGroupResponse(
-        ErrorMapping.AuthorizationCode,
+        ErrorMapping.GroupAuthorizationCode,
         JoinGroupResponse.UNKNOWN_GENERATION_ID,
         JoinGroupResponse.UNKNOWN_PROTOCOL,
         JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
@@ -738,6 +792,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       coordinator.handleJoinGroup(
         joinGroupRequest.groupId(),
         joinGroupRequest.memberId(),
+        request.header.clientId(),
+        request.session.host,
         joinGroupRequest.sessionTimeout(),
         joinGroupRequest.protocolType(),
         protocols,
@@ -757,7 +813,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!authorize(request.session, Read, new Resource(Group, syncGroupRequest.groupId()))) {
-      sendResponseCallback(Array[Byte](), ErrorMapping.AuthorizationCode)
+      sendResponseCallback(Array[Byte](), ErrorMapping.GroupAuthorizationCode)
     } else {
       coordinator.handleSyncGroup(
         syncGroupRequest.groupId(),
@@ -782,7 +838,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!authorize(request.session, Read, new Resource(Group, heartbeatRequest.groupId))) {
-      val heartbeatResponse = new HeartbeatResponse(ErrorMapping.AuthorizationCode)
+      val heartbeatResponse = new HeartbeatResponse(ErrorMapping.GroupAuthorizationCode)
       requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, heartbeatResponse)))
     }
     else {
@@ -833,13 +889,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!authorize(request.session, Read, new Resource(Group, leaveGroupRequest.groupId))) {
-      val leaveGroupResponse = new LeaveGroupResponse(ErrorMapping.AuthorizationCode)
+      val leaveGroupResponse = new LeaveGroupResponse(ErrorMapping.GroupAuthorizationCode)
       requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, leaveGroupResponse)))
     } else {
       // let the coordinator to handle leave-group
       coordinator.handleLeaveGroup(
         leaveGroupRequest.groupId(),
-        leaveGroupRequest.consumerId(),
+        leaveGroupRequest.memberId(),
         sendResponseCallback)
     }
   }
@@ -853,7 +909,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
     if (!authorize(request.session, ClusterAction, Resource.ClusterResource))
-      throw new AuthorizationException(s"Request $request is not authorized.")
+      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
 
 }

@@ -45,13 +45,11 @@ class QuotaTest(Test):
         self.maximum_broker_deviation_percentage = 5.0
         self.num_records = 100000
         self.record_size = 3000
-        self.security_protocol = 'PLAINTEXT'
-        self.interbroker_security_protocol = 'PLAINTEXT'
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
-                                  security_protocol=self.security_protocol,
-                                  interbroker_security_protocol=self.interbroker_security_protocol,
+                                  security_protocol='PLAINTEXT',
+                                  interbroker_security_protocol='PLAINTEXT',
                                   topics={self.topic: {'partitions': 6, 'replication-factor': 1, 'min.insync.replicas': 1}},
                                   quota_config=self.quota_config,
                                   jmx_object_names=['kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec',
@@ -74,7 +72,7 @@ class QuotaTest(Test):
     def test_quota(self, producer_id='default_id', producer_num=1, consumer_id='default_id', consumer_num=1):
         # Produce all messages
         producer = ProducerPerformanceService(
-            self.test_context, producer_num, self.kafka, security_protocol=self.security_protocol,
+            self.test_context, producer_num, self.kafka,
             topic=self.topic, num_records=self.num_records, record_size=self.record_size, throughput=-1, client_id=producer_id,
             jmx_object_names=['kafka.producer:type=producer-metrics,client-id=%s' % producer_id], jmx_attributes=['outgoing-byte-rate'])
 
@@ -82,7 +80,7 @@ class QuotaTest(Test):
 
         # Consume all messages
         consumer = ConsoleConsumer(self.test_context, consumer_num, self.kafka, self.topic,
-            security_protocol=self.security_protocol, new_consumer=False,
+            new_consumer=False,
             consumer_timeout_ms=60000, client_id=consumer_id,
             jmx_object_names=['kafka.consumer:type=ConsumerTopicMetrics,name=BytesPerSec,clientId=%s' % consumer_id],
             jmx_attributes=['OneMinuteRate'])

@@ -74,6 +74,7 @@ fi
 chmod a+rwx /mnt
 
 # Run ntpdate once to sync to ntp servers
-ntpdate pool.ntp.org
+# use -u option to avoid port collision in case ntp daemon is already running
+ntpdate -u pool.ntp.org
 # Install ntp daemon - it will automatically start on boot
 apt-get -y install ntp

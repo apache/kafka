@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -68,9 +68,12 @@ public class ConfigDefTest {
         new ConfigDef().define("a", Type.INT, "hello", Importance.HIGH, "docs");
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testNullDefault() {
-        new ConfigDef().define("a", Type.INT, null, null, null, "docs");
+        ConfigDef def = new ConfigDef().define("a", Type.INT, null, null, null, "docs");
+        Map<String, Object> vals = def.parse(new Properties());
+
+        assertEquals(null, vals.get("a"));
     }
 
     @Test(expected = ConfigException.class)
@@ -85,9 +88,9 @@ public class ConfigDefTest {
 
     @Test
     public void testBadInputs() {
-        testBadInputs(Type.INT, "hello", null, "42.5", 42.5, Long.MAX_VALUE, Long.toString(Long.MAX_VALUE), new Object());
-        testBadInputs(Type.LONG, "hello", null, "42.5", Long.toString(Long.MAX_VALUE) + "00", new Object());
-        testBadInputs(Type.DOUBLE, "hello", null, new Object());
+        testBadInputs(Type.INT, "hello", "42.5", 42.5, Long.MAX_VALUE, Long.toString(Long.MAX_VALUE), new Object());
+        testBadInputs(Type.LONG, "hello", "42.5", Long.toString(Long.MAX_VALUE) + "00", new Object());
+        testBadInputs(Type.DOUBLE, "hello", new Object());
         testBadInputs(Type.STRING, new Object());
         testBadInputs(Type.LIST, 53, new Object());
         testBadInputs(Type.BOOLEAN, "hello", "truee", "fals");

@@ -126,10 +126,10 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, OFFSET_COMMIT_INTERVAL_MS_DOC)
                 .define(OFFSET_COMMIT_TIMEOUT_MS_CONFIG, Type.LONG, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT,
                         Importance.LOW, OFFSET_COMMIT_TIMEOUT_MS_DOC)
-                .define(REST_HOST_NAME_CONFIG, Type.STRING, Importance.LOW, REST_HOST_NAME_DOC, false)
+                .define(REST_HOST_NAME_CONFIG, Type.STRING, null, Importance.LOW, REST_HOST_NAME_DOC)
                 .define(REST_PORT_CONFIG, Type.INT, REST_PORT_DEFAULT, Importance.LOW, REST_PORT_DOC)
-                .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC, false)
-                .define(REST_ADVERTISED_PORT_CONFIG, Type.INT, Importance.LOW, REST_ADVERTISED_PORT_DOC, false);
+                .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
+                .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC);
     }
 
     public WorkerConfig(ConfigDef definition, Properties props) {

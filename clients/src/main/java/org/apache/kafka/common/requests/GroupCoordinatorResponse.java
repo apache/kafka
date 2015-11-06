@@ -20,11 +20,20 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class GroupMetadataResponse extends AbstractRequestResponse {
+public class GroupCoordinatorResponse extends AbstractRequestResponse {
     
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.GROUP_METADATA.id);
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.GROUP_COORDINATOR.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String COORDINATOR_KEY_NAME = "coordinator";
+
+    /**
+     * Possible error codes:
+     *
+     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR_FOR_GROUP (16)
+     * GROUP_AUTHORIZATION_FAILED (30)
+     */
+
 
     // coordinator level field names
     private static final String NODE_ID_KEY_NAME = "node_id";
@@ -34,7 +43,7 @@ public class GroupMetadataResponse extends AbstractRequestResponse {
     private final short errorCode;
     private final Node node;
 
-    public GroupMetadataResponse(short errorCode, Node node) {
+    public GroupCoordinatorResponse(short errorCode, Node node) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
         Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
@@ -46,7 +55,7 @@ public class GroupMetadataResponse extends AbstractRequestResponse {
         this.node = node;
     }
 
-    public GroupMetadataResponse(Struct struct) {
+    public GroupCoordinatorResponse(Struct struct) {
         super(struct);
         errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
         Struct broker = (Struct) struct.get(COORDINATOR_KEY_NAME);
@@ -64,7 +73,7 @@ public class GroupMetadataResponse extends AbstractRequestResponse {
         return node;
     }
 
-    public static GroupMetadataResponse parse(ByteBuffer buffer) {
-        return new GroupMetadataResponse((Struct) CURRENT_SCHEMA.read(buffer));
+    public static GroupCoordinatorResponse parse(ByteBuffer buffer) {
+        return new GroupCoordinatorResponse((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

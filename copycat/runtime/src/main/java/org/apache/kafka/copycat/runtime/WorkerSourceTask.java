@@ -24,7 +24,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.copycat.source.SourceRecord;
 import org.apache.kafka.copycat.source.SourceTask;
-import org.apache.kafka.copycat.source.SourceTaskContext;
 import org.apache.kafka.copycat.storage.Converter;
 import org.apache.kafka.copycat.storage.OffsetStorageReader;
 import org.apache.kafka.copycat.storage.OffsetStorageWriter;
@@ -87,7 +86,7 @@ class WorkerSourceTask implements WorkerTask {
 
     @Override
     public void start(Properties props) {
-        task.initialize(new SourceTaskContext(offsetReader));
+        task.initialize(new WorkerSourceTaskContext(offsetReader));
         task.start(props);
         workThread = new WorkerSourceTaskThread("WorkerSourceTask-" + id);
         workThread.start();
@@ -96,24 +95,24 @@ class WorkerSourceTask implements WorkerTask {
     @Override
     public void stop() {
         task.stop();
-        commitOffsets();
         if (workThread != null)
             workThread.startGracefulShutdown();
     }
 
     @Override
     public boolean awaitStop(long timeoutMs) {
+        boolean success = true;
         if (workThread != null) {
             try {
-                boolean success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
+                success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
                 if (!success)
                     workThread.forceShutdown();
-                return success;
             } catch (InterruptedException e) {
-                return false;
+                success = false;
             }
         }
-        return true;
+        commitOffsets();
+        return success;
     }
 
     @Override

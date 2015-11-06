@@ -17,24 +17,34 @@
 
 package org.apache.kafka.copycat.runtime;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
-import org.apache.kafka.copycat.errors.IllegalWorkerStateException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
-import org.apache.kafka.copycat.sink.SinkTaskContext;
 import org.apache.kafka.copycat.storage.Converter;
 import org.apache.kafka.copycat.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -51,7 +61,8 @@ class WorkerSinkTask implements WorkerTask {
     private final Converter valueConverter;
     private WorkerSinkTaskThread workThread;
     private KafkaConsumer<byte[], byte[]> consumer;
-    private final SinkTaskContext context;
+    private WorkerSinkTaskContext context;
+    private Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
                           Converter keyConverter, Converter valueConverter, Time time) {
@@ -61,14 +72,26 @@ class WorkerSinkTask implements WorkerTask {
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.time = time;
-        this.context = new WorkerSinkTaskContext();
     }
 
     @Override
     public void start(Properties props) {
+        consumer = createConsumer();
+        context = new WorkerSinkTaskContext(consumer);
+
+        // Ensure we're in the group so that if start() wants to rewind offsets, it will have an assignment of partitions
+        // to work with. Any rewinding will be handled immediately when polling starts.
+        String topicsStr = props.getProperty(SinkTask.TOPICS_CONFIG);
+        if (topicsStr == null || topicsStr.isEmpty())
+            throw new CopycatException("Sink tasks require a list of topics.");
+        String[] topics = topicsStr.split(",");
+        log.debug("Task {} subscribing to topics {}", id, topics);
+        consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
+        consumer.poll(0);
+
         task.initialize(context);
         task.start(props);
-        consumer = createConsumer(props);
+
         workThread = createWorkerThread();
         workThread.start();
     }
@@ -76,7 +99,6 @@ class WorkerSinkTask implements WorkerTask {
     @Override
     public void stop() {
         // Offset commit is handled upon exit in work thread
-        task.stop();
         if (workThread != null)
             workThread.startGracefulShutdown();
         consumer.wakeup();
@@ -84,17 +106,18 @@ class WorkerSinkTask implements WorkerTask {
 
     @Override
     public boolean awaitStop(long timeoutMs) {
+        boolean success = true;
         if (workThread != null) {
             try {
-                boolean success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
+                success = workThread.awaitShutdown(timeoutMs, TimeUnit.MILLISECONDS);
                 if (!success)
                     workThread.forceShutdown();
-                return success;
             } catch (InterruptedException e) {
-                return false;
+                success = false;
             }
         }
-        return true;
+        task.stop();
+        return success;
     }
 
     @Override
@@ -108,6 +131,12 @@ class WorkerSinkTask implements WorkerTask {
     /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
     public void poll(long timeoutMs) {
         try {
+            rewind();
+            long retryTimeout = context.timeout();
+            if (retryTimeout > 0) {
+                timeoutMs = Math.min(timeoutMs, retryTimeout);
+                context.timeout(-1L);
+            }
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
             ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
             log.trace("{} polling returned {} messages", id, msgs.count());
@@ -121,27 +150,32 @@ class WorkerSinkTask implements WorkerTask {
      * Starts an offset commit by flushing outstanding messages from the task and then starting
      * the write commit. This should only be invoked by the WorkerSinkTaskThread.
      **/
-    public void commitOffsets(long now, boolean sync, final int seqno, boolean flush) {
+    public void commitOffsets(boolean sync, final int seqno) {
         log.info("{} Committing offsets", this);
-        HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        final HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (TopicPartition tp : consumer.assignment()) {
-            offsets.put(tp, new OffsetAndMetadata(consumer.position(tp)));
+            long pos = consumer.position(tp);
+            offsets.put(tp, new OffsetAndMetadata(pos));
+            log.trace("{} committing {} offset {}", id, tp, pos);
         }
-        // We only don't flush the task in one case: when shutting down, the task has already been
-        // stopped and all data should have already been flushed
-        if (flush) {
-            try {
-                task.flush(offsets);
-            } catch (Throwable t) {
-                log.error("Commit of {} offsets failed due to exception while flushing: {}", this, t);
-                workThread.onCommitCompleted(t, seqno);
-                return;
+
+        try {
+            task.flush(offsets);
+        } catch (Throwable t) {
+            log.error("Commit of {} offsets failed due to exception while flushing: {}", this, t);
+            log.error("Rewinding offsets to last committed offsets");
+            for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
+                log.debug("{} Rewinding topic partition {} to offset {}", id, entry.getKey(), entry.getValue().offset());
+                consumer.seek(entry.getKey(), entry.getValue().offset());
             }
+            workThread.onCommitCompleted(t, seqno);
+            return;
         }
 
         if (sync) {
             try {
                 consumer.commitSync(offsets);
+                lastCommittedOffsets = offsets;
             } catch (KafkaException e) {
                 workThread.onCommitCompleted(e, seqno);
             }
@@ -149,6 +183,7 @@ class WorkerSinkTask implements WorkerTask {
             OffsetCommitCallback cb = new OffsetCommitCallback() {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
+                    lastCommittedOffsets = offsets;
                     workThread.onCommitCompleted(error, seqno);
                 }
             };
@@ -164,16 +199,11 @@ class WorkerSinkTask implements WorkerTask {
         return workerConfig;
     }
 
-    private KafkaConsumer<byte[], byte[]> createConsumer(Properties taskProps) {
-        String topicsStr = taskProps.getProperty(SinkTask.TOPICS_CONFIG);
-        if (topicsStr == null || topicsStr.isEmpty())
-            throw new CopycatException("Sink tasks require a list of topics.");
-        String[] topics = topicsStr.split(",");
-
+    private KafkaConsumer<byte[], byte[]> createConsumer() {
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
         Properties props = workerConfig.unusedProperties();
-        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "copycat-" + id.toString());
+        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "copycat-" + id.connector());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
@@ -188,21 +218,6 @@ class WorkerSinkTask implements WorkerTask {
             throw new CopycatException("Failed to create consumer", t);
         }
 
-        log.debug("Task {} subscribing to topics {}", id, topics);
-        newConsumer.subscribe(Arrays.asList(topics));
-
-        // Seek to any user-provided offsets. This is useful if offsets are tracked in the downstream system (e.g., to
-        // enable exactly once delivery to that system).
-        //
-        // To do this correctly, we need to first make sure we have been assigned partitions, which poll() will guarantee.
-        // We ask for offsets after this poll to make sure any offsets committed before the rebalance are picked up correctly.
-        newConsumer.poll(0);
-        Map<TopicPartition, Long> offsets = context.offsets();
-        for (TopicPartition tp : newConsumer.assignment()) {
-            Long offset = offsets.get(tp);
-            if (offset != null)
-                newConsumer.seek(tp, offset);
-        }
         return newConsumer;
     }
 
@@ -236,35 +251,41 @@ class WorkerSinkTask implements WorkerTask {
         }
     }
 
+    private void rewind() {
+        Map<TopicPartition, Long> offsets = context.offsets();
+        if (offsets.isEmpty()) {
+            return;
+        }
+        for (TopicPartition tp: offsets.keySet()) {
+            Long offset = offsets.get(tp);
+            if (offset != null) {
+                log.trace("Rewind {} to offset {}.", tp, offset);
+                consumer.seek(tp, offset);
+            }
+        }
+        context.clearOffsets();
+    }
 
-    private class WorkerSinkTaskContext extends SinkTaskContext {
+    private class HandleRebalance implements ConsumerRebalanceListener {
         @Override
-        public Set<TopicPartition> assignment() {
-            if (consumer == null)
-                throw new IllegalWorkerStateException("SinkTaskContext may not be used to look up partition assignment until the task is initialized");
-            return consumer.assignment();
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            lastCommittedOffsets = new HashMap<>();
+            for (TopicPartition tp : partitions) {
+                long pos = consumer.position(tp);
+                lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
+                log.trace("{} assigned topic partition {} with offset {}", id, tp, pos);
+            }
+            // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
+            // task start. Since this callback gets invoked during that initial setup before we've started the task, we
+            // need to guard against invoking the user's callback method during that period.
+            if (workThread != null)
+                task.onPartitionsAssigned(partitions);
         }
 
         @Override
-        public void pause(TopicPartition... partitions) {
-            if (consumer == null)
-                throw new IllegalWorkerStateException("SinkTaskContext may not be used to pause consumption until the task is initialized");
-            try {
-                consumer.pause(partitions);
-            } catch (IllegalStateException e) {
-                throw new IllegalWorkerStateException("SinkTasks may not pause partitions that are not currently assigned to them.", e);
-            }
-        }
-
-        @Override
-        public void resume(TopicPartition... partitions) {
-            if (consumer == null)
-                throw new IllegalWorkerStateException("SinkTaskContext may not be used to resume consumption until the task is initialized");
-            try {
-                consumer.resume(partitions);
-            } catch (IllegalStateException e) {
-                throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);
-            }
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            task.onPartitionsRevoked(partitions);
+            commitOffsets(true, -1);
         }
     }
 }

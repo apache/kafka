@@ -23,7 +23,7 @@ import kafka.common.ErrorMapping
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 
-object GroupMetadataRequest {
+object GroupCoordinatorRequest {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
 
@@ -35,16 +35,16 @@ object GroupMetadataRequest {
 
     // request
     val group = ApiUtils.readShortString(buffer)
-    GroupMetadataRequest(group, versionId, correlationId, clientId)
+    GroupCoordinatorRequest(group, versionId, correlationId, clientId)
   }
 
 }
 
-case class GroupMetadataRequest(group: String,
-                                versionId: Short = GroupMetadataRequest.CurrentVersion,
-                                correlationId: Int = 0,
-                                clientId: String = GroupMetadataRequest.DefaultClientId)
-  extends RequestOrResponse(Some(RequestKeys.GroupMetadataKey)) {
+case class GroupCoordinatorRequest(group: String,
+                                   versionId: Short = GroupCoordinatorRequest.CurrentVersion,
+                                   correlationId: Int = 0,
+                                   clientId: String = GroupCoordinatorRequest.DefaultClientId)
+  extends RequestOrResponse(Some(RequestKeys.GroupCoordinatorKey)) {
 
   def sizeInBytes =
     2 + /* versionId */
@@ -64,7 +64,7 @@ case class GroupMetadataRequest(group: String,
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     // return ConsumerCoordinatorNotAvailable for all uncaught errors
-    val errorResponse = GroupMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, correlationId)
+    val errorResponse = GroupCoordinatorResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, correlationId)
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 

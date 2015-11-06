@@ -30,7 +30,7 @@ public class PunctuationQueueTest {
     @Test
     public void testPunctuationInterval() {
         TestProcessor processor = new TestProcessor();
-        ProcessorNode<String, String> node = new ProcessorNode<>("test", processor);
+        ProcessorNode<String, String> node = new ProcessorNode<>("test", processor, null);
         PunctuationQueue queue = new PunctuationQueue();
 
         PunctuationSchedule sched = new PunctuationSchedule(node, 100L);

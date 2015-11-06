@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
@@ -243,6 +245,22 @@ public class StreamingConfig extends AbstractConfig {
         props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
 
         return props;
+    }
+
+    public Serializer keySerializer() {
+        return getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
+    }
+
+    public Serializer valueSerializer() {
+        return getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
+    }
+
+    public Deserializer keyDeserializer() {
+        return getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+    }
+
+    public Deserializer valueDeserializer() {
+        return getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
     }
 
     public static void main(String[] args) {

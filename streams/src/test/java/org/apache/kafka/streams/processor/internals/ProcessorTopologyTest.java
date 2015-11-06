@@ -83,7 +83,7 @@ public class ProcessorTopologyTest {
         }
         driver = null;
     }
-    
+
     @Test
     public void testTopologyMetadata() {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -95,7 +95,7 @@ public class ProcessorTopologyTest {
         builder.addSink("sink-1", "topic-3", "processor-1");
         builder.addSink("sink-2", "topic-4", "processor-1", "processor-2");
 
-        final ProcessorTopology topology = builder.build();
+        final ProcessorTopology topology = builder.build(null);
 
         assertEquals(6, topology.processors().size());
 
@@ -203,6 +203,10 @@ public class ProcessorTopologyTest {
     protected TopologyBuilder createStatefulTopology(String storeName) {
         return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC)
                                     .addProcessor("processor", define(new StatefulProcessor(storeName)), "source")
+                                    .addStateStore(
+                                            Stores.create(storeName, config).withStringKeys().withStringValues().inMemory().build(),
+                                            "processor"
+                                    )
                                     .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
@@ -262,9 +266,10 @@ public class ProcessorTopologyTest {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public void init(ProcessorContext context) {
             super.init(context);
-            store = Stores.create(storeName, context).withStringKeys().withStringValues().inMemory().build();
+            store = (KeyValueStore<String, String>) context.getStateStore(storeName);
         }
 
         @Override
@@ -281,7 +286,7 @@ public class ProcessorTopologyTest {
             }
             context().forward(Long.toString(streamTime), count);
         }
-        
+
         @Override
         public void close() {
             store.close();

@@ -13,7 +13,9 @@
 package org.apache.kafka.common.errors;
 
 public class AuthorizationException extends ApiException {
+
     public AuthorizationException(String message) {
         super(message);
     }
+
 }

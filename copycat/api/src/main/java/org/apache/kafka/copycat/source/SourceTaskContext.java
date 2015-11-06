@@ -24,17 +24,9 @@ import org.apache.kafka.copycat.storage.OffsetStorageReader;
  * runtime.
  */
 @InterfaceStability.Unstable
-public class SourceTaskContext {
-    private final OffsetStorageReader reader;
-
-    public SourceTaskContext(OffsetStorageReader reader) {
-        this.reader = reader;
-    }
-
+public interface SourceTaskContext {
     /**
      * Get the OffsetStorageReader for this SourceTask.
      */
-    public OffsetStorageReader offsetStorageReader() {
-        return reader;
-    }
+    OffsetStorageReader offsetStorageReader();
 }

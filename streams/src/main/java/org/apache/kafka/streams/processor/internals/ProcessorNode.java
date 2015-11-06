@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class ProcessorNode<K, V> {
 
@@ -30,14 +31,17 @@ public class ProcessorNode<K, V> {
     private final String name;
     private final Processor<K, V> processor;
 
+    public final Set<String> stateStores;
+
     public ProcessorNode(String name) {
-        this(name, null);
+        this(name, null, null);
     }
 
-    public ProcessorNode(String name, Processor<K, V> processor) {
+    public ProcessorNode(String name, Processor<K, V> processor, Set<String> stateStores) {
         this.name = name;
         this.processor = processor;
         this.children = new ArrayList<>();
+        this.stateStores = stateStores;
     }
 
     public final String name() {

@@ -36,8 +36,8 @@ public class SyncGroupResponse extends AbstractRequestResponse {
      * NOT_COORDINATOR_FOR_GROUP (16)
      * ILLEGAL_GENERATION (22)
      * UNKNOWN_MEMBER_ID (25)
-     * REBALANCE_IN_PROGRESS (30)
-     *
+     * REBALANCE_IN_PROGRESS (27)
+     * GROUP_AUTHORIZATION_FAILED (30)
      */
 
     private final short errorCode;

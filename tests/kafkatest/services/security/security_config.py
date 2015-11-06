@@ -15,7 +15,8 @@
 
 import os
 import subprocess
-
+from ducktape.template import TemplateRenderer
+from kafkatest.services.security.minikdc import MiniKdc
 
 class Keytool(object):
 
@@ -56,17 +57,24 @@ class Keytool(object):
             raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
-class SecurityConfig(object):
+class SecurityConfig(TemplateRenderer):
 
     PLAINTEXT = 'PLAINTEXT'
     SSL = 'SSL'
-    SSL_DIR = "/mnt/ssl"
-    KEYSTORE_PATH = "/mnt/ssl/test.keystore.jks"
-    TRUSTSTORE_PATH = "/mnt/ssl/test.truststore.jks"
+    SASL_PLAINTEXT = 'SASL_PLAINTEXT'
+    SASL_SSL = 'SASL_SSL'
+    SASL_MECHANISM_GSSAPI = 'GSSAPI'
+    SASL_MECHANISM_PLAIN = 'PLAIN'
+    CONFIG_DIR = "/mnt/security"
+    KEYSTORE_PATH = "/mnt/security/test.keystore.jks"
+    TRUSTSTORE_PATH = "/mnt/security/test.truststore.jks"
+    JAAS_CONF_PATH = "/mnt/security/jaas.conf"
+    KRB5CONF_PATH = "/mnt/security/krb5.conf"
+    KEYTAB_PATH = "/mnt/security/keytab"
 
     ssl_stores = Keytool.generate_keystore_truststore('.')
 
-    def __init__(self, security_protocol, template_props=""):
+    def __init__(self, security_protocol, interbroker_security_protocol=None, sasl_mechanism=SASL_MECHANISM_GSSAPI, template_props=""):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -79,27 +87,52 @@ class SecurityConfig(object):
             security_protocol = self.get_property('security.protocol', template_props)
         if security_protocol is None:
             security_protocol = SecurityConfig.PLAINTEXT
-        elif security_protocol not in [SecurityConfig.PLAINTEXT, SecurityConfig.SSL]:
+        elif security_protocol not in [SecurityConfig.PLAINTEXT, SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL]:
             raise Exception("Invalid security.protocol in template properties: " + security_protocol)
 
+        if interbroker_security_protocol is None:
+            interbroker_security_protocol = security_protocol
+        self.interbroker_security_protocol = interbroker_security_protocol
+        self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol)
+        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
             'ssl.keystore.password' : SecurityConfig.ssl_stores['ssl.keystore.password'],
             'ssl.key.password' : SecurityConfig.ssl_stores['ssl.key.password'],
             'ssl.truststore.location' : SecurityConfig.TRUSTSTORE_PATH,
-            'ssl.truststore.password' : SecurityConfig.ssl_stores['ssl.truststore.password']
+            'ssl.truststore.password' : SecurityConfig.ssl_stores['ssl.truststore.password'],
+            'sasl.mechanism' : sasl_mechanism,
+            'sasl.kerberos.service.name' : 'kafka'
         }
-    
+
+
+    def client_config(self, template_props=""):
+        return SecurityConfig(self.security_protocol, sasl_mechanism=self.sasl_mechanism, template_props=template_props)
+
     def setup_node(self, node):
-        if self.security_protocol == SecurityConfig.SSL:
-            node.account.ssh("mkdir -p %s" % SecurityConfig.SSL_DIR, allow_fail=False)
+        if self.has_ssl:
+            node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
             node.account.scp_to(SecurityConfig.ssl_stores['ssl.keystore.location'], SecurityConfig.KEYSTORE_PATH)
             node.account.scp_to(SecurityConfig.ssl_stores['ssl.truststore.location'], SecurityConfig.TRUSTSTORE_PATH)
 
+        if self.has_sasl:
+            node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
+            jaas_conf_file = self.sasl_mechanism.lower() + "_jaas.conf"
+            java_version = node.account.ssh_capture("java -version")
+            if any('IBM' in line for line in java_version):
+                is_ibm_jdk = True
+            else:
+                is_ibm_jdk = False
+            jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk)
+            node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
+            if self.has_sasl_kerberos:
+                node.account.scp_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
+                node.account.scp_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
+
     def clean_node(self, node):
-        if self.security_protocol == SecurityConfig.SSL:
-            node.account.ssh("rm -rf %s" % SecurityConfig.SSL_DIR, allow_fail=False)
+        if self.security_protocol != SecurityConfig.PLAINTEXT:
+            node.account.ssh("rm -rf %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
 
     def get_property(self, prop_name, template_props=""):
         """
@@ -113,9 +146,30 @@ class SecurityConfig(object):
                 value = str(items[1].strip())
         return value
 
+    def is_ssl(self, security_protocol):
+        return security_protocol == SecurityConfig.SSL or security_protocol == SecurityConfig.SASL_SSL
+
+    def is_sasl(self, security_protocol):
+        return security_protocol == SecurityConfig.SASL_PLAINTEXT or security_protocol == SecurityConfig.SASL_SSL
+
     @property
     def security_protocol(self):
         return self.properties['security.protocol']
+
+    @property
+    def sasl_mechanism(self):
+        return self.properties['sasl.mechanism']
+
+    @property
+    def has_sasl_kerberos(self):
+        return self.has_sasl and self.sasl_mechanism == SecurityConfig.SASL_MECHANISM_GSSAPI
+
+    @property
+    def kafka_opts(self):
+        if self.has_sasl:
+            return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
+        else:
+            return ""
 
     def __str__(self):
         """
@@ -125,7 +179,7 @@ class SecurityConfig(object):
         """
 
         prop_str = ""
-        if self.security_protocol == SecurityConfig.SSL:
+        if self.security_protocol != SecurityConfig.PLAINTEXT:
             for key, value in self.properties.items():
                 prop_str += ("\n" + key + "=" + value)
             prop_str += "\n"

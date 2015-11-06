@@ -22,7 +22,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka_log4j_appender import KafkaLog4jAppender
-from kafkatest.utils.security_config import SecurityConfig
+from kafkatest.services.security.security_config import SecurityConfig
 
 TOPIC = "topic-log4j-appender"
 MAX_MESSAGES = 100
@@ -59,7 +59,7 @@ class Log4jAppenderTest(Test):
     def start_consumer(self, security_protocol):
         enable_new_consumer = security_protocol == SecurityConfig.SSL
         self.consumer = ConsoleConsumer(self.test_context, num_nodes=self.num_brokers, kafka=self.kafka, topic=TOPIC,
-                                        consumer_timeout_ms=1000, new_consumer=enable_new_consumer, security_protocol=security_protocol)
+                                        consumer_timeout_ms=1000, new_consumer=enable_new_consumer)
         self.consumer.start()
 
     @matrix(security_protocol=['PLAINTEXT', 'SSL'])

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -141,7 +142,7 @@ public class ProcessorTopologyTestDriver {
      */
     public ProcessorTopologyTestDriver(StreamingConfig config, TopologyBuilder builder, String... storeNames) {
         id = new TaskId(0, 0);
-        topology = builder.build();
+        topology = builder.build(null);
 
         // Set up the consumer and producer ...
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -266,7 +267,7 @@ public class ProcessorTopologyTestDriver {
      * @see #getKeyValueStore(String)
      */
     public StateStore getStateStore(String name) {
-        return task.context().getStateStore(name);
+        return ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
     }
 
     /**

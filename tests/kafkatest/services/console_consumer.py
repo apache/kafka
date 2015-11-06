@@ -19,7 +19,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.services.kafka.directory import kafka_dir
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.utils.security_config import SecurityConfig
+from kafkatest.services.security.security_config import SecurityConfig
 
 import itertools
 import os
@@ -99,7 +99,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, security_protocol=SecurityConfig.PLAINTEXT, new_consumer=False, message_validator=None,
+    def __init__(self, context, num_nodes, kafka, topic, new_consumer=False, message_validator=None,
                  from_beginning=True, consumer_timeout_ms=None, version=TRUNK, client_id="console-consumer", jmx_object_names=None, jmx_attributes=[]):
         """
         Args:
@@ -107,7 +107,6 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
             num_nodes:                  number of nodes to use (this should be 1)
             kafka:                      kafka service
             topic:                      consume from this topic
-            security_protocol:          security protocol for Kafka connections
             new_consumer:               use new Kafka consumer if True
             message_validator:          function which returns message or None
             from_beginning:             consume from beginning if True, else from the end
@@ -132,13 +131,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
         self.client_id = client_id
-        self.security_protocol = security_protocol
 
-        # Validate a few configs
-        if self.new_consumer is None:
-            self.new_consumer = self.security_protocol == SecurityConfig.SSL
-        if self.security_protocol == SecurityConfig.SSL and not self.new_consumer:
-            raise Exception("SSL protocol is supported only with the new consumer")
 
     def prop_file(self, node):
         """Return a string which can be used to create a configuration file appropriate for the given node."""
@@ -151,8 +144,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
-        self.security_config = SecurityConfig(self.security_protocol, prop_file)
-        self.security_protocol = self.security_config.security_protocol
+        self.security_config = self.kafka.security_config.client_config(prop_file)
 
         prop_file += str(self.security_config)
         return prop_file
@@ -170,10 +162,12 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         args['jmx_port'] = self.jmx_port
         args['kafka_dir'] = kafka_dir(node)
         args['broker_list'] = self.kafka.bootstrap_servers()
+        args['kafka_opts'] = self.security_config.kafka_opts
 
         cmd = "export JMX_PORT=%(jmx_port)s; " \
               "export LOG_DIR=%(log_dir)s; " \
               "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
+              "export KAFKA_OPTS=%(kafka_opts)s; " \
               "/opt/%(kafka_dir)s/bin/kafka-console-consumer.sh " \
               "--topic %(topic)s --consumer.config %(config_file)s" % args
 

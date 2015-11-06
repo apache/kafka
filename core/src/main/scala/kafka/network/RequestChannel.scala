@@ -65,7 +65,8 @@ object RequestChannel extends Logging {
         RequestKeys.deserializerForKey(requestId)(buffer)
       else
         null
-    // for client-side request / response format
+    // if we failed to find a server-side mapping, then try using the
+    // client-side request / response format
     val header: RequestHeader =
       if (requestObj == null) {
         buffer.rewind

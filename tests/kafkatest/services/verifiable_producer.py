@@ -17,7 +17,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
-from kafkatest.utils.security_config import SecurityConfig
+from kafkatest.services.security.security_config import SecurityConfig
 
 import json
 import os
@@ -46,7 +46,7 @@ class VerifiableProducer(BackgroundThreadService):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, kafka, topic, security_protocol=SecurityConfig.PLAINTEXT, max_messages=-1, throughput=100000, version=TRUNK):
+    def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000, version=TRUNK):
         super(VerifiableProducer, self).__init__(context, num_nodes)
         self.log_level = "TRACE"
 
@@ -61,8 +61,7 @@ class VerifiableProducer(BackgroundThreadService):
         self.not_acked_values = []
 
         self.prop_file = ""
-        self.security_config = SecurityConfig(security_protocol, self.prop_file)
-        self.security_protocol = self.security_config.security_protocol
+        self.security_config = kafka.security_config.client_config(self.prop_file)
         self.prop_file += str(self.security_config)
 
     def _worker(self, idx, node):
@@ -120,6 +119,7 @@ class VerifiableProducer(BackgroundThreadService):
             cmd += "export CLASSPATH; "
 
         cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
+        cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableProducer" \
               " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers())

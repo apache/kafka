@@ -37,7 +37,7 @@ public class KStreamTestDriver {
     }
 
     public KStreamTestDriver(KStreamBuilder builder, Serializer<?> serializer, Deserializer<?> deserializer) {
-        this.topology = builder.build();
+        this.topology = builder.build(null);
         this.context = new MockProcessorContext(this, serializer, deserializer);
 
         for (ProcessorNode node : topology.processors()) {

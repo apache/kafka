@@ -1354,8 +1354,10 @@ class IsrChangeNotificationListener(controller: KafkaController) extends IZkChil
       val childrenAsScala: mutable.Buffer[String] = currentChildren.asScala
       try {
         val topicAndPartitions: immutable.Set[TopicAndPartition] = childrenAsScala.map(x => getTopicAndPartition(x)).flatten.toSet
-        controller.updateLeaderAndIsrCache(topicAndPartitions)
-        processUpdateNotifications(topicAndPartitions)
+        if (topicAndPartitions.nonEmpty) {
+          controller.updateLeaderAndIsrCache(topicAndPartitions)
+          processUpdateNotifications(topicAndPartitions)
+        }
       } finally {
         // delete processed children
         childrenAsScala.map(x => controller.controllerContext.zkUtils.deletePath(

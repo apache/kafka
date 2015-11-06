@@ -36,6 +36,11 @@ public interface StateStore {
     String name();
 
     /**
+     * Initializes this state store
+     */
+    void init(ProcessorContext context);
+
+    /**
      * Flush any cached data
      */
     void flush();

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -35,33 +36,51 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
     protected final Serdes<K, V> serialization;
-
-    private final Time time;
-    private final Sensor putTime;
-    private final Sensor getTime;
-    private final Sensor deleteTime;
-    private final Sensor putAllTime;
-    private final Sensor allTime;
-    private final Sensor rangeTime;
-    private final Sensor flushTime;
-    private final Sensor restoreTime;
-    private final StreamingMetrics metrics;
+    protected final String metricGrp;
+    protected final Time time;
 
     private final String topic;
-    private final int partition;
+
+    private Sensor putTime;
+    private Sensor getTime;
+    private Sensor deleteTime;
+    private Sensor putAllTime;
+    private Sensor allTime;
+    private Sensor rangeTime;
+    private Sensor flushTime;
+    private Sensor restoreTime;
+    private StreamingMetrics metrics;
+
     private final Set<K> dirty;
     private final Set<K> removed;
     private final int maxDirty;
     private final int maxRemoved;
-    private final ProcessorContext context;
+
+    private int partition;
+    private ProcessorContext context;
 
     // always wrap the logged store with the metered store
-    public MeteredKeyValueStore(final String name, final KeyValueStore<K, V> inner, ProcessorContext context,
-                                Serdes<K, V> serialization, String metricGrp, Time time) {
+    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, Serdes<K, V> serialization, String metricGrp, Time time) {
         this.inner = inner;
         this.serialization = serialization;
+        this.metricGrp = metricGrp;
+        this.time = time != null ? time : new SystemTime();
+        this.topic = inner.name();
 
-        this.time = time;
+        this.dirty = new HashSet<K>();
+        this.removed = new HashSet<K>();
+        this.maxDirty = 100; // TODO: this needs to be configurable
+        this.maxRemoved = 100; // TODO: this needs to be configurable
+    }
+
+    @Override
+    public String name() {
+        return inner.name();
+    }
+
+    @Override
+    public void init(ProcessorContext context) {
+        String name = name();
         this.metrics = context.metrics();
         this.putTime = this.metrics.addLatencySensor(metricGrp, name, "put", "store-name", name);
         this.getTime = this.metrics.addLatencySensor(metricGrp, name, "get", "store-name", name);
@@ -72,18 +91,12 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.flushTime = this.metrics.addLatencySensor(metricGrp, name, "flush", "store-name", name);
         this.restoreTime = this.metrics.addLatencySensor(metricGrp, name, "restore", "store-name", name);
 
-        this.topic = name;
-        this.partition = context.id().partition;
-
         this.context = context;
-
-        this.dirty = new HashSet<K>();
-        this.removed = new HashSet<K>();
-        this.maxDirty = 100; // TODO: this needs to be configurable
-        this.maxRemoved = 100; // TODO: this needs to be configurable
+        this.partition = context.id().partition;
 
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();
+        inner.init(context);
         try {
             final Deserializer<K> keyDeserializer = serialization.keyDeserializer();
             final Deserializer<V> valDeserializer = serialization.valueDeserializer();
@@ -92,17 +105,12 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
                 @Override
                 public void restore(byte[] key, byte[] value) {
                     inner.put(keyDeserializer.deserialize(topic, key),
-                        valDeserializer.deserialize(topic, value));
+                            valDeserializer.deserialize(topic, value));
                 }
             });
         } finally {
             this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
         }
-    }
-
-    @Override
-    public String name() {
-        return inner.name();
     }
 
     @Override

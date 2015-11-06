@@ -210,7 +210,7 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
                                 metadata.topicsMetadata.head.partitionsMetadata.nonEmpty)
                               metadata.topicsMetadata.head.partitionsMetadata.head.isr
                             else
-                              ""), 6000L)
+                              ""), 8000L)
     })
   }
 

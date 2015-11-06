@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.processor.StateStoreSupplier;
+
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -27,11 +29,14 @@ public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
     private final Map<String, SourceNode> sourceByTopics;
+    private final List<StateStoreSupplier> stateStoreSuppliers;
 
     public ProcessorTopology(List<ProcessorNode> processorNodes,
-                             Map<String, SourceNode> sourceByTopics) {
+                             Map<String, SourceNode> sourceByTopics,
+                             List<StateStoreSupplier> stateStoreSuppliers) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
+        this.stateStoreSuppliers = Collections.unmodifiableList(stateStoreSuppliers);
     }
 
     public Set<String> sourceTopics() {
@@ -48,6 +53,10 @@ public class ProcessorTopology {
 
     public List<ProcessorNode> processors() {
         return processorNodes;
+    }
+
+    public List<StateStoreSupplier> stateStoreSuppliers() {
+        return stateStoreSuppliers;
     }
 
 }

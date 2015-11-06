@@ -24,14 +24,11 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.OffsetCheckpoint;
+import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Test;
 
 import java.io.File;
@@ -52,45 +49,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
 public class ProcessorStateManagerTest {
-
-    private static class MockStateStore implements StateStore {
-        private final String name;
-        private final boolean persistent;
-
-        public boolean flushed = false;
-        public boolean closed = false;
-        public final ArrayList<Integer> keys = new ArrayList<>();
-
-        public MockStateStore(String name, boolean persistent) {
-            this.name = name;
-            this.persistent = persistent;
-        }
-        @Override
-        public String name() {
-            return name;
-        }
-        @Override
-        public void flush() {
-            flushed = true;
-        }
-        @Override
-        public void close() {
-            closed = true;
-        }
-        @Override
-        public boolean persistent() {
-            return persistent;
-        }
-
-        public final StateRestoreCallback stateRestoreCallback = new StateRestoreCallback() {
-            private final Deserializer<Integer> deserializer = new IntegerDeserializer();
-
-            @Override
-            public void restore(byte[] key, byte[] value) {
-                keys.add(deserializer.deserialize("", key));
-            }
-        };
-    }
 
     private class MockRestoreConsumer  extends MockConsumer<byte[], byte[]> {
         private final Serializer<Integer> serializer = new IntegerSerializer();
@@ -255,7 +213,7 @@ public class ProcessorStateManagerTest {
     public void testNoTopic() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
-            MockStateStore mockStateStore = new MockStateStore("mockStore", false);
+            MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore("mockStore", false);
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, new MockRestoreConsumer());
             try {
@@ -283,7 +241,7 @@ public class ProcessorStateManagerTest {
             ));
             restoreConsumer.updateEndOffsets(Collections.singletonMap(new TopicPartition("persistentStore", 2), 13L));
 
-            MockStateStore persistentStore = new MockStateStore("persistentStore", true); // persistent store
+            MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore("persistentStore", true); // persistent store
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer);
             try {
@@ -331,7 +289,7 @@ public class ProcessorStateManagerTest {
             ));
             restoreConsumer.updateEndOffsets(Collections.singletonMap(new TopicPartition("persistentStore", 2), 13L));
 
-            MockStateStore nonPersistentStore = new MockStateStore("nonPersistentStore", false); // non persistent store
+            MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore("nonPersistentStore", false); // non persistent store
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer);
             try {
@@ -371,7 +329,7 @@ public class ProcessorStateManagerTest {
                     new PartitionInfo("mockStore", 1, Node.noNode(), new Node[0], new Node[0])
             ));
 
-            MockStateStore mockStateStore = new MockStateStore("mockStore", false);
+            MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore("mockStore", false);
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer);
             try {
@@ -411,8 +369,8 @@ public class ProcessorStateManagerTest {
             ackedOffsets.put(new TopicPartition("nonPersistentStore", 1), 456L);
             ackedOffsets.put(new TopicPartition("otherTopic", 1), 789L);
 
-            MockStateStore persistentStore = new MockStateStore("persistentStore", true);
-            MockStateStore nonPersistentStore = new MockStateStore("nonPersistentStore", false);
+            MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore("persistentStore", true);
+            MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore("nonPersistentStore", false);
 
             ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer);
             try {
