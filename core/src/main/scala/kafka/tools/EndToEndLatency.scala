@@ -41,7 +41,6 @@ object EndToEndLatency {
   private val timeout: Long = 60000
 
   def main(args: Array[String]) {
-    println(args.length)
     if (args.length != 5 && args.length != 6) {
       System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] ssl_properties_file")
       System.exit(1)
