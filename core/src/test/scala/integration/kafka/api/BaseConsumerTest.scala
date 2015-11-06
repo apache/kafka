@@ -50,6 +50,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
+  this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -316,20 +317,56 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = count += 1
   }
 
-  protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]]) extends ShutdownableThread("daemon-consumer-assignment", false)
+  protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
+                                           topicsToSubscribe: List[String]) extends ShutdownableThread("daemon-consumer-assignment", false)
   {
     @volatile private var partitionAssignment: Set[TopicPartition] = Set.empty[TopicPartition]
+    private var topicsSubscription = topicsToSubscribe
+    @volatile private var subscriptionChanged = false
+
+    val rebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+        partitionAssignment = collection.immutable.Set(consumer.assignment().asScala.toArray: _*)
+      }
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {
+        partitionAssignment = Set.empty[TopicPartition]
+      }
+    }
+    consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
 
     def consumerAssignment(): Set[TopicPartition] = {
       partitionAssignment
     }
 
-    override def doWork(): Unit = {
-      consumer.poll(50)
-      if (consumer.assignment() != partitionAssignment.asJava) {
-        partitionAssignment = collection.immutable.Set(consumer.assignment().asScala.toArray: _*)
+    /**
+     * Subscribe consumer to a new set of topics.
+     * Since this method most likely be called from a different thread, this function
+     * just "schedules" the subscription change, and actual call to consumer.subscribe is done
+     * in the doWork() method
+     *
+     * This method does not allow to change subscription until doWork processes the previous call
+     * to this method. This is just to avoid race conditions and enough functionality for testing purposes
+     * @param newTopicsToSubscribe
+     */
+    def subscribe(newTopicsToSubscribe: List[String]): Unit = {
+      if (subscriptionChanged) {
+        throw new IllegalStateException("Do not call subscribe until the previous subsribe request is processed.")
       }
-      Thread.sleep(100L)
+      topicsSubscription = newTopicsToSubscribe
+      subscriptionChanged = true
+    }
+
+    def isSubscribeRequestProcessed(): Boolean = {
+      !subscriptionChanged
+    }
+
+    override def doWork(): Unit = {
+      if (subscriptionChanged) {
+        consumer.subscribe(topicsSubscription.asJava, rebalanceListener)
+        subscriptionChanged = false
+      }
+      consumer.poll(50)
     }
   }
 

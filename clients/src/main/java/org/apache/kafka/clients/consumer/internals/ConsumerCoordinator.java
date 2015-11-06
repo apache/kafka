@@ -68,6 +68,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
+    private DelayedTask autoCommitTask = null;
 
     /**
      * Initialize the coordination manager.
@@ -111,7 +112,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         addMetadataListener();
 
         if (autoCommitEnabled)
-            scheduleAutoCommitTask(autoCommitIntervalMs);
+            this.autoCommitTask = scheduleAutoCommitTask(autoCommitIntervalMs);
 
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
     }
@@ -305,6 +306,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     public void close() {
         try {
+            if (autoCommitTask != null)
+                client.unschedule(autoCommitTask);
             while (true) {
                 try {
                     maybeAutoCommitOffsetsSync();
@@ -356,7 +359,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private void scheduleAutoCommitTask(final long interval) {
+    private DelayedTask scheduleAutoCommitTask(final long interval) {
         DelayedTask task = new DelayedTask() {
             public void run(long now) {
                 commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
@@ -370,6 +373,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         };
         client.schedule(task, time.milliseconds() + interval);
+        return task;
     }
 
     private void maybeAutoCommitOffsetsSync() {
