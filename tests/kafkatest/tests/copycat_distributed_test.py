@@ -48,6 +48,7 @@ class CopycatDistributedTest(KafkaTest):
         })
 
         self.cc = CopycatDistributedService(test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE])
+        self.cc.log_level = "DEBUG"
         self.key_converter = "org.apache.kafka.copycat.json.JsonConverter"
         self.value_converter = "org.apache.kafka.copycat.json.JsonConverter"
         self.schemas = True
