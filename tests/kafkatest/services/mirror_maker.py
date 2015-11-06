@@ -100,7 +100,11 @@ class MirrorMaker(Service):
         self.blacklist = blacklist
         self.source = source
         self.target = target
-        self.offsets_storage = offsets_storage
+
+        self.offsets_storage = offsets_storage.lower()
+        if not (self.offsets_storage == "kafka" or self.offsets_storage == "zookeeper"):
+            raise Exception("offsets_storage should be 'kafka' or 'zookeeper'. Instead found %s" % self.offsets_storage)
+
         self.offset_commit_interval_ms = offset_commit_interval_ms
 
     def start_cmd(self, node):
@@ -170,7 +174,7 @@ class MirrorMaker(Service):
 
     def stop_node(self, node, clean_shutdown=True):
         node.account.kill_process("java", allow_fail=True, clean_shutdown=clean_shutdown)
-        wait_until(lambda: not self.alive(node), timeout_sec=240, backoff_sec=.5,
+        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.5,
                    err_msg="Mirror maker took to long to stop.")
 
     def clean_node(self, node):

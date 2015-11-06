@@ -99,7 +99,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, new_consumer=False, message_validator=is_int,
+    def __init__(self, context, num_nodes, kafka, topic, new_consumer=False, message_validator=None,
                  from_beginning=True, consumer_timeout_ms=None, version=TRUNK, client_id="console-consumer", jmx_object_names=None, jmx_attributes=[]):
         """
         Args:

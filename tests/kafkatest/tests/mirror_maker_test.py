@@ -18,7 +18,7 @@ from ducktape.mark import parametrize, matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.console_consumer import ConsoleConsumer
+from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.mirror_maker import MirrorMaker
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
@@ -69,7 +69,7 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
                                         whitelist=self.topic)
         # This will consume from target kafka cluster
         self.consumer = ConsoleConsumer(test_context, num_nodes=1, kafka=self.target_kafka, topic=self.topic,
-                                        consumer_timeout_ms=30000)
+                                        message_validator=is_int, consumer_timeout_ms=30000)
 
     def setUp(self):
         # Source cluster
