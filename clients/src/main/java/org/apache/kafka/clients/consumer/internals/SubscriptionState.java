@@ -185,6 +185,7 @@ public class SubscriptionState {
 
     public void unsubscribe() {
         this.subscription.clear();
+        this.userAssignment.clear();
         this.assignment.clear();
         this.needsPartitionAssignment = true;
         this.subscribedPattern = null;
