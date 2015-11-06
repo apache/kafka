@@ -177,6 +177,22 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void unsubscribeUserAssignment() {
+        state.assignFromUser(Arrays.asList(tp0, tp1));
+        state.unsubscribe();
+        state.subscribe(Arrays.asList(topic), rebalanceListener);
+        assertEquals(Collections.singleton(topic), state.subscription());
+    }
+
+    @Test
+    public void unsubscribeUserSubscribe() {
+        state.subscribe(Arrays.asList(topic), rebalanceListener);
+        state.unsubscribe();
+        state.assignFromUser(Arrays.asList(tp0));
+        assertEquals(Collections.singleton(tp0), state.assignedPartitions());
+    }
+
+    @Test
     public void unsubscription() {
         state.subscribe(Pattern.compile(".*"), rebalanceListener);
         state.changeSubscription(Arrays.asList(topic, topic1));
