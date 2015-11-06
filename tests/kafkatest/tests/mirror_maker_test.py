@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.utils.util import wait_until
+from ducktape.mark import parametrize, matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -22,28 +23,29 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.mirror_maker import MirrorMaker
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 
-
-def clean_bounce(test):
-    for i in range(3):
-        test.logger.info("Bringing mirror maker nodes down...")
-        for node in test.mirror_maker.nodes:
-            test.mirror_maker.stop_node(node)
-
-        test.logger.info("Bringing mirror maker nodes back up...")
-        for node in test.mirror_maker.nodes:
-            test.mirror_maker.start_node(node)
+import time
 
 
-def hard_bounce(test):
+def bounce(test, clean_shutdown=True):
+    """Bounce mirror maker with a clean (kill -15) or hard (kill -9) shutdown"""
+
+    # Wait until messages start appearing in the target cluster
+    wait_until(lambda: len(test.consumer.messages_consumed[1]) > 0, timeout_sec=15)
+
+    # Wait for at least one offset to be committed
+    time.sleep(test.mirror_maker.offset_commit_interval_ms / 1000.0 + .5)
+
     for i in range(1):
-
         test.logger.info("Bringing mirror maker nodes down...")
         for node in test.mirror_maker.nodes:
-            test.mirror_maker.stop_node(node, clean_shutdown=False)
+            test.mirror_maker.stop_node(node, clean_shutdown=clean_shutdown)
 
+        num_consumed = len(test.consumer.messages_consumed[1])
         test.logger.info("Bringing mirror maker nodes back up...")
         for node in test.mirror_maker.nodes:
             test.mirror_maker.start_node(node)
+
+        wait_until(lambda: len(test.consumer.messages_consumed[1]) > num_consumed + 100, timeout_sec=30)
 
 
 class TestMirrorMakerService(ProduceConsumeValidateTest):
@@ -63,14 +65,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.source_kafka, topic=self.topic,
                                            throughput=1000)
-
-        # Use a regex whitelist to check that the start command is well-formed in this case
         self.mirror_maker = MirrorMaker(test_context, num_nodes=1, source=self.source_kafka, target=self.target_kafka,
-                                        whitelist=".*", consumer_timeout_ms=30000)
-
+                                        whitelist=self.topic)
         # This will consume from target kafka cluster
         self.consumer = ConsoleConsumer(test_context, num_nodes=1, kafka=self.target_kafka, topic=self.topic,
-                                        consumer_timeout_ms=180000)
+                                        consumer_timeout_ms=30000)
 
     def setUp(self):
         # Source cluster
@@ -86,7 +85,9 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         wait_until(lambda: self.producer.num_acked > n_messages, timeout_sec=10,
                      err_msg="Producer failed to produce %d messages in a reasonable amount of time." % n_messages)
 
-    def test_end_to_end(self):
+    @parametrize(new_consumer=True)
+    @parametrize(new_consumer=False)
+    def test_simple_end_to_end(self, new_consumer):
         """
         Test end-to-end behavior under non-failure conditions.
 
@@ -98,16 +99,45 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         - Consume messages from target.
         - Verify that number of consumed messages matches the number produced.
         """
+        self.mirror_maker.new_consumer = new_consumer
         self.mirror_maker.start()
+
+        mm_node = self.mirror_maker.nodes[0]
+        with mm_node.account.monitor_log(self.mirror_maker.LOG_FILE) as monitor:
+            if new_consumer:
+                monitor.wait_until("Resetting offset for partition", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
+            else:
+                monitor.wait_until("reset fetch offset", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
+
         self.run_produce_consume_validate(core_test_action=self.wait_for_n_messages)
         self.mirror_maker.stop()
 
-    def test_clean_bounce(self):
-        self.mirror_maker.start()
-        self.run_produce_consume_validate(core_test_action=lambda: clean_bounce(self))
-        self.mirror_maker.stop()
+    @matrix(offsets_storage=["kafka", "zookeeper"], new_consumer=[False], clean_shutdown=[False])
+    @matrix(new_consumer=[True], clean_shutdown=[False])
+    def test_bounce(self, offsets_storage="kafka", new_consumer=True, clean_shutdown=True):
+        """
+        Test end-to-end behavior under failure conditions.
 
-    def test_hard_bounce(self):
+        Setup: two single node Kafka clusters, each connected to its own single node zookeeper cluster.
+        One is source, and the other is target. Single-node mirror maker mirrors from source to target.
+
+        - Start mirror maker.
+        - Produce to source cluster, and consume from target cluster in the background.
+        - Bounce MM process
+        - Verify every message acknowledged by the source producer is consumed by the target consumer
+        """
+
+        self.mirror_maker.offsets_storage = offsets_storage
+        self.mirror_maker.new_consumer = new_consumer
         self.mirror_maker.start()
-        self.run_produce_consume_validate(core_test_action=lambda: hard_bounce(self))
+
+        # Wait until mirror maker has reset fetch offset at least once before continuing with the rest of the test
+        mm_node = self.mirror_maker.nodes[0]
+        with mm_node.account.monitor_log(self.mirror_maker.LOG_FILE) as monitor:
+            if new_consumer:
+                monitor.wait_until("Resetting offset for partition", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
+            else:
+                monitor.wait_until("reset fetch offset", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
+
+        self.run_produce_consume_validate(core_test_action=lambda: bounce(self, clean_shutdown=clean_shutdown))
         self.mirror_maker.stop()
