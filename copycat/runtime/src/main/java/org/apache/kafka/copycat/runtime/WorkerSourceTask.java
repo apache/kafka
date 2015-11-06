@@ -306,6 +306,13 @@ class WorkerSourceTask implements WorkerTask {
                 }
             } catch (InterruptedException e) {
                 // Ignore and allow to exit.
+            } catch (Throwable t) {
+                log.error("Task {} threw an uncaught and unrecoverable exception", id);
+                log.error("Task is being killed and will not recover until manually restarted:", t);
+                // It should still be safe to let this fall through and commit offsets since this exception would have
+                // simply resulted in not getting more records but all the existing records should be ok to flush
+                // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
+                // to fail.
             }
 
             commitOffsets();
