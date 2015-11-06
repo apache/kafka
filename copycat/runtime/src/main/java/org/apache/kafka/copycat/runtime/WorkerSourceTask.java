@@ -46,14 +46,14 @@ import java.util.concurrent.TimeoutException;
 class WorkerSourceTask implements WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);
 
-    private ConnectorTaskId id;
-    private SourceTask task;
+    private final ConnectorTaskId id;
+    private final SourceTask task;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private KafkaProducer<byte[], byte[]> producer;
     private WorkerSourceTaskThread workThread;
-    private OffsetStorageReader offsetReader;
-    private OffsetStorageWriter offsetWriter;
+    private final OffsetStorageReader offsetReader;
+    private final OffsetStorageWriter offsetWriter;
     private final WorkerConfig workerConfig;
     private final Time time;
 
@@ -86,15 +86,12 @@ class WorkerSourceTask implements WorkerTask {
 
     @Override
     public void start(Properties props) {
-        task.initialize(new WorkerSourceTaskContext(offsetReader));
-        task.start(props);
-        workThread = new WorkerSourceTaskThread("WorkerSourceTask-" + id);
+        workThread = new WorkerSourceTaskThread("WorkerSourceTask-" + id, props);
         workThread.start();
     }
 
     @Override
     public void stop() {
-        task.stop();
         if (workThread != null)
             workThread.startGracefulShutdown();
     }
@@ -111,7 +108,6 @@ class WorkerSourceTask implements WorkerTask {
                 success = false;
             }
         }
-        commitOffsets();
         return success;
     }
 
@@ -279,13 +275,31 @@ class WorkerSourceTask implements WorkerTask {
 
 
     private class WorkerSourceTaskThread extends ShutdownableThread {
-        public WorkerSourceTaskThread(String name) {
+        private Properties workerProps;
+        private boolean finishedStart;
+        private boolean startedShutdownBeforeStartCompleted;
+
+        public WorkerSourceTaskThread(String name, Properties workerProps) {
             super(name);
+            this.workerProps = workerProps;
+            this.finishedStart = false;
+            this.startedShutdownBeforeStartCompleted = false;
         }
 
         @Override
         public void execute() {
             try {
+                task.initialize(new WorkerSourceTaskContext(offsetReader));
+                task.start(workerProps);
+                log.info("Source task {} finished initialization and start", this);
+                synchronized (this) {
+                    if (startedShutdownBeforeStartCompleted) {
+                        task.stop();
+                        return;
+                    }
+                    finishedStart = true;
+                }
+
                 while (getRunning()) {
                     List<SourceRecord> records = task.poll();
                     if (records == null)
@@ -294,6 +308,19 @@ class WorkerSourceTask implements WorkerTask {
                 }
             } catch (InterruptedException e) {
                 // Ignore and allow to exit.
+            }
+
+            commitOffsets();
+        }
+
+        @Override
+        public void startGracefulShutdown() {
+            super.startGracefulShutdown();
+            synchronized (this) {
+                if (finishedStart)
+                    task.stop();
+                else
+                    startedShutdownBeforeStartCompleted = true;
             }
         }
     }

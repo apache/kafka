@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.data.Schema;
 import org.apache.kafka.copycat.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.copycat.source.SourceRecord;
@@ -208,6 +209,34 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testSlowTaskStart() throws Exception {
+        createWorkerTask();
+
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(EMPTY_TASK_PROPS);
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                Utils.sleep(100);
+                return null;
+            }
+        });
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.start(EMPTY_TASK_PROPS);
+        // Stopping immediately while the other thread has work to do should result in no polling, no offset commits,
+        // exiting the work thread immediately, and the stop() method will be invoked in the background thread since it
+        // cannot be invoked immediately in the thread trying to stop the task.
+        workerTask.stop();
+        assertEquals(true, workerTask.awaitStop(1000));
+
+        PowerMock.verifyAll();
+    }
 
     private CountDownLatch expectPolls(int count) throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(count);

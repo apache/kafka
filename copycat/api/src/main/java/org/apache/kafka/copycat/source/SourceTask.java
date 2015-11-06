@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.copycat.connector.Task;
 
 import java.util.List;
+import java.util.Properties;
 
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
@@ -36,6 +37,13 @@ public abstract class SourceTask implements Task {
     public void initialize(SourceTaskContext context) {
         this.context = context;
     }
+
+    /**
+     * Start the Task. This should handle any configuration parsing and one-time setup of the task.
+     * @param props initial configuration
+     */
+    @Override
+    public abstract void start(Properties props);
 
     /**
      * Poll this SourceTask for new records. This method should block if no data is currently
@@ -59,4 +67,16 @@ public abstract class SourceTask implements Task {
     public void commit() throws InterruptedException {
         // This space intentionally left blank.
     }
+
+    /**
+     * Signal this SourceTask to stop. In SourceTasks, this method only needs to signal to the task that it should stop
+     * trying to poll for new data and interrupt any outstanding poll() requests. It is not required that the task has
+     * fully stopped. Note that this method necessarily may be invoked from a different thread than {@link #poll()} and
+     * {@link #commit()}.
+     *
+     * For example, if a task uses a {@link java.nio.channels.Selector} to receive data over the network, this method
+     * could set a flag that will force {@link #poll()} to exit immediately and invoke
+     * {@link java.nio.channels.Selector#wakeup()} to interrupt any ongoing requests.
+     */
+    public abstract void stop();
 }

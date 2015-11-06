@@ -23,6 +23,7 @@ import org.apache.kafka.copycat.connector.Task;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * SinkTask is a Task takes records loaded from Kafka and sends them to another system. In
@@ -45,6 +46,13 @@ public abstract class SinkTask implements Task {
     public void initialize(SinkTaskContext context) {
         this.context = context;
     }
+
+    /**
+     * Start the Task. This should handle any configuration parsing and one-time setup of the task.
+     * @param props initial configuration
+     */
+    @Override
+    public abstract void start(Properties props);
 
     /**
      * Put the records in the sink. Usually this should send the records to the sink asynchronously
@@ -84,4 +92,12 @@ public abstract class SinkTask implements Task {
      */
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
     }
+
+    /**
+     * Perform any cleanup to stop this task. In SinkTasks, this method is invoked only once outstanding calls to other
+     * methods have completed (e.g., {@link #put(Collection)} has returned) and a final {@link #flush(Map)} and offset
+     * commit has completed. Implementations of this method should only need to perform final cleanup operations, such
+     * as closing network connections to the sink system.
+     */
+    public abstract void stop();
 }
