@@ -44,7 +44,7 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.source_kafka, topic=self.topic,
                                            throughput=1000)
         self.mirror_maker = MirrorMaker(test_context, num_nodes=1, source=self.source_kafka, target=self.target_kafka,
-                                        whitelist=self.topic)
+                                        whitelist=self.topic, offset_commit_interval_ms=1000)
         # This will consume from target kafka cluster
         self.consumer = ConsoleConsumer(test_context, num_nodes=1, kafka=self.target_kafka, topic=self.topic,
                                         message_validator=is_int, consumer_timeout_ms=15000)
@@ -125,8 +125,8 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         self.run_produce_consume_validate(core_test_action=self.wait_for_n_messages)
         self.mirror_maker.stop()
 
-    @matrix(offsets_storage=["kafka", "zookeeper"], new_consumer=[False], clean_shutdown=[False])
-    @matrix(new_consumer=[True], clean_shutdown=[False])
+    @matrix(offsets_storage=["kafka", "zookeeper"], new_consumer=[False], clean_shutdown=[True, False])
+    @matrix(new_consumer=[True], clean_shutdown=[True, False])
     def test_bounce(self, offsets_storage="kafka", new_consumer=True, clean_shutdown=True):
         """
         Test end-to-end behavior under failure conditions.
