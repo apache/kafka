@@ -212,6 +212,16 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Check if the node with the given id is connected
+     * @param node the node
+     * @return true if the node is connected
+     */
+    @Override
+    public boolean isConnected(Node node) {
+        return connectionStates.isConnected(node.idString());
+    }
+
+    /**
      * Check if the node with the given id is ready to send more requests.
      *
      * @param node The node
