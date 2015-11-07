@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -27,8 +28,7 @@ import java.util.Map;
  * partition returned by a {@link Consumer#poll(long)} operation.
  */
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
-    public static final ConsumerRecords<Object, Object> EMPTY =
-            new ConsumerRecords<Object, Object>(Collections.EMPTY_MAP);
+    public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Collections.EMPTY_MAP);
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
 
@@ -41,12 +41,12 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
      * 
      * @param partition The partition to get records for
      */
-    public Iterable<ConsumerRecord<K, V>> records(TopicPartition partition) {
+    public List<ConsumerRecord<K, V>> records(TopicPartition partition) {
         List<ConsumerRecord<K, V>> recs = this.records.get(partition);
         if (recs == null)
             return Collections.emptyList();
         else
-            return recs;
+            return Collections.unmodifiableList(recs);
     }
 
     /**
@@ -55,19 +55,27 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public Iterable<ConsumerRecord<K, V>> records(String topic) {
         if (topic == null)
             throw new IllegalArgumentException("Topic must be non-null.");
-        List<List<ConsumerRecord<K, V>>> recs = new ArrayList<List<ConsumerRecord<K, V>>>();
+        List<List<ConsumerRecord<K, V>>> recs = new ArrayList<>();
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : records.entrySet()) {
             if (entry.getKey().topic().equals(topic))
                 recs.add(entry.getValue());
         }
-        return new ConcatenatedIterable<K, V>(recs);
+        return new ConcatenatedIterable<>(recs);
+    }
+
+    /**
+     * Get the partitions which have records contained in this record set.
+     * @return the set of partitions with data in this record set (may be empty if no data was returned)
+     */
+    public Set<TopicPartition> partitions() {
+        return Collections.unmodifiableSet(records.keySet());
     }
 
     @Override
     public Iterator<ConsumerRecord<K, V>> iterator() {
-        return new ConcatenatedIterable<K, V>(records.values()).iterator();
+        return new ConcatenatedIterable<>(records.values()).iterator();
     }
-    
+
     /**
      * The number of records for all topics
      */
