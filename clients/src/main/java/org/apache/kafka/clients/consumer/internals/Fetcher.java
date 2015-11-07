@@ -20,11 +20,15 @@ import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.*;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -51,11 +55,11 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.HashSet;
 
 /**
  * This class manage the fetching process with the brokers.
@@ -577,16 +581,22 @@ public class Fetcher<K, V> {
      * Parse the record entry, deserializing the key / value fields if necessary
      */
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition, LogEntry logEntry) {
-        if (this.checkCrcs)
-            logEntry.record().ensureValid();
+        try {
+            if (this.checkCrcs)
+                logEntry.record().ensureValid();
+            long offset = logEntry.offset();
+            ByteBuffer keyBytes = logEntry.record().key();
+            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), Utils.toArray(keyBytes));
+            ByteBuffer valueBytes = logEntry.record().value();
+            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), Utils.toArray(valueBytes));
 
-        long offset = logEntry.offset();
-        ByteBuffer keyBytes = logEntry.record().key();
-        K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), Utils.toArray(keyBytes));
-        ByteBuffer valueBytes = logEntry.record().value();
-        V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), Utils.toArray(valueBytes));
+            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, key, value);
+        } catch (KafkaException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new KafkaException("Error deserializing key/value for partition " + partition + " at offset " + logEntry.offset(), e);
+        }
 
-        return new ConsumerRecord<K, V>(partition.topic(), partition.partition(), offset, key, value);
     }
 
     private static class PartitionRecords<K, V> {
