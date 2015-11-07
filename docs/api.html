@@ -19,7 +19,7 @@ We are in the process of rewritting the JVM clients for Kafka. As of 0.8.2 Kafka
 
 <h3><a id="producerapi">2.1 Producer API</a></h3>
 
-As of the 0.8.2 release we encourage all new development to use the new Java producer. This client is production tested and generally both faster and more fully featured than the previous Scala client. You can use this client by adding a dependency on the client jar using the following maven co-ordinates:
+As of the 0.8.2 release we encourage all new development to use the new Java producer. This client is production tested and generally both faster and more fully featured than the previous Scala client. You can use this client by adding a dependency on the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
 <pre>
 	&lt;dependency&gt;
 	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
@@ -152,3 +152,17 @@ Providing a horizontally scalable solution for aggregating and loading data into
 <p>
 Usage information on the hadoop consumer can be found <a href="https://github.com/linkedin/camus/">here</a>.
 </p>
+
+
+<h3><a id="newconsumerapi">2.5 New Consumer API</a></h3>
+As of the 0.9.0 release we have added a replacement for our existing simple and high-level consumers. This client is considered beta quality. You can use this client by adding a dependency on the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
+<pre>
+	&lt;dependency&gt;
+	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+	    &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+	    &lt;version&gt;0.9.0.0&lt;/version&gt;
+	&lt;/dependency&gt;
+</pre>
+
+Examples showing how to use the producer are given in the
+<a href="http://kafka.apache.org/090/javadoc/index.html?org/apache/kafka/clients/producer/KafkaConsumer.html" title="Kafka 0.9.0 Javadoc">javadocs</a>.
