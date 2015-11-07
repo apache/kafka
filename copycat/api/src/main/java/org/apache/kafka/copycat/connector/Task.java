@@ -37,6 +37,13 @@ import java.util.Map;
 @InterfaceStability.Unstable
 public interface Task {
     /**
+     * Get the version of this task. Usually this should be the same as the corresponding {@link Connector} class's version.
+     *
+     * @return the version, formatted as a String
+     */
+    String version();
+
+    /**
      * Start the Task
      * @param props initial configuration
      */

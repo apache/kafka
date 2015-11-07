@@ -53,6 +53,11 @@ public class ConnectorReconfigurationTest {
         }
 
         @Override
+        public String version() {
+            return "1.0";
+        }
+
+        @Override
         public void start(Map<String, String> props) {
             configureOrder = order++;
         }

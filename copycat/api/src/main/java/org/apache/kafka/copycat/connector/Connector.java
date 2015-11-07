@@ -45,6 +45,13 @@ public abstract class Connector {
     protected ConnectorContext context;
 
     /**
+     * Get the version of this connector.
+     *
+     * @return the version, formatted as a String
+     */
+    public abstract String version();
+
+    /**
      * Initialize this connector, using the provided ConnectorContext to notify the runtime of
      * input configuration changes.
      * @param ctx context object used to interact with the Copycat runtime

@@ -50,6 +50,11 @@ public class FileStreamSinkTask extends SinkTask {
     }
 
     @Override
+    public String version() {
+        return new FileStreamSinkConnector().version();
+    }
+
+    @Override
     public void start(Map<String, String> props) {
         filename = props.get(FileStreamSinkConnector.FILE_CONFIG);
         if (filename == null) {

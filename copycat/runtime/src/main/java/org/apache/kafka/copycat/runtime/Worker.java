@@ -171,6 +171,7 @@ public class Worker {
             throw new CopycatException("Connector with name " + connName + " already exists");
 
         final Connector connector = instantiateConnector(connClass);
+        log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connClass.getName());
         connector.initialize(ctx);
         try {
             connector.start(connConfig.originalsStrings());
@@ -252,7 +253,9 @@ public class Worker {
             throw new CopycatException(msg);
         }
 
-        final Task task = instantiateTask(taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class));
+        Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
+        final Task task = instantiateTask(taskClass);
+        log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
         // Decide which type of worker task we need based on the type of task.
         final WorkerTask workerTask;

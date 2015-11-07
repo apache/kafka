@@ -17,6 +17,7 @@
 
 package org.apache.kafka.copycat.file;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.copycat.connector.Task;
 import org.apache.kafka.copycat.sink.SinkConnector;
 
@@ -33,6 +34,11 @@ public class FileStreamSinkConnector extends SinkConnector {
     public static final String FILE_CONFIG = "file";
 
     private String filename;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void start(Map<String, String> props) {
