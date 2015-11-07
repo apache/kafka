@@ -318,15 +318,15 @@ The essential consumer configurations are the following:
 <p>More details about consumer configuration can be found in the scala class <code>kafka.consumer.ConsumerConfig</code>.</p>
 
     <h3><a id="newconsumerconfigs">3.3 New Consumer Configs</a></h3>
-    We are working on a replacement for our existing simple and high-level consumers. The code is available in trunk now and can be considered beta quality. Below is the configuration for the new consumer: </p>
+    Since 0.9.0.0 we have been working on a replacement for our existing simple and high-level consumers. The code can be considered beta quality. Below is the configuration for the new consumer: </p>
 <!--#include virtual="consumer_config.html" -->
 
-<h3><a id="newproducerconfigs">3.4 Kafka Producer Configs</a></h3>
+<h3><a id="producerconfigs">3.4 Kafka Producer Configs</a></h3>
 
 We recommend using KafkaProducer as SyncProducer and AsyncProducer will be deprecated in the next release. Below is the configuration for the new producer:</p>
 <!--#include virtual="producer_config.html" -->
 
-<h3><a id="producerconfigs">3.5 Old Producer Configs</a></h3>
+<h3><a id="oldproducerconfigs">3.5 Old Producer Configs</a></h3>
 We recommend not to use the Scala SyncProducer and AsyncProducer as they will be deprecated in the next release. Below you can see their configuration:
 <ul>
         <li><code>metadata.broker.list</code>
