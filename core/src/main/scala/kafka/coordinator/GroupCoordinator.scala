@@ -279,16 +279,17 @@ class GroupCoordinator(val brokerId: Int,
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
               // persist the group metadata and upon finish transition to stable and propagate the assignment
+              val generationId = group.generationId
               groupManager.storeGroup(group, assignment, (errorCode: Short) => {
                 group synchronized {
                   // another member may have joined the group while we were awaiting this callback,
-                  // so we must ensure we are still in the AwaitingSync state when it gets invoked.
-                  // if we have transitioned to another state, then we shouldn't do anything
-                  if (group.is(AwaitingSync)) {
+                  // so we must ensure we are still in the AwaitingSync state and the same generation
+                  // when it gets invoked. if we have transitioned to another state, then do nothing
+                  if (group.is(AwaitingSync) && generationId == group.generationId) {
                     if (errorCode != Errors.NONE.code) {
                       resetAndPropagateAssignmentError(group, errorCode)
                       maybePrepareRebalance(group)
-                    } else if (group.is(AwaitingSync)) {
+                    } else {
                       setAndPropagateAssignment(group, assignment)
                       group.transitionTo(Stable)
                     }
@@ -485,6 +486,12 @@ class GroupCoordinator(val brokerId: Int,
       if (member.awaitingSyncCallback != null) {
         member.awaitingSyncCallback(member.assignment, errorCode)
         member.awaitingSyncCallback = null
+
+        // reset the session timeout for members after propagating the member's assignment.
+        // This is because if any member's session expired while we were still awaiting either
+        // the leader sync group or the storage callback, its expiration will be ignored and no
+        // future heartbeat expectations will not be scheduled.
+        completeAndScheduleNextHeartbeatExpiration(group, member)
       }
     }
   }
