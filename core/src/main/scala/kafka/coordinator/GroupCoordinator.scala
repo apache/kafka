@@ -288,7 +288,7 @@ class GroupCoordinator(val brokerId: Int,
                     if (errorCode != Errors.NONE.code) {
                       resetAndPropagateAssignmentError(group, errorCode)
                       maybePrepareRebalance(group)
-                    } else if (group.is(AwaitingSync)) {
+                    } else {
                       setAndPropagateAssignment(group, assignment)
                       group.transitionTo(Stable)
                     }

@@ -752,7 +752,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Unsubscribe from all topics currently subscribed to.
+     * Unsubscribe from topics currently subscribed with {@link #subscribe(List)}. This
+     * also clears any partitions directly assigned through {@link #assign(List)}.
      */
     public void unsubscribe() {
         acquire();
@@ -800,18 +801,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * consumed offset can be manually set through {@link #seek(TopicPartition, long)} or automatically set as the last committed
      * offset for the subscribed list of partitions
      *
+     *
      * @param timeout The time, in milliseconds, spent waiting in poll if data is not available. If 0, returns
-     *            immediately with any records available now. Must not be negative.
+     *            immediately with any records that are available now. Must not be negative.
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
      *
-     * @throws NoOffsetForPartitionException if there is no stored offset for a subscribed partition and no automatic
-     *             offset reset policy has been configured.
-     * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException if there is OffsetOutOfRange error in fetchResponse and
-     *             the defaultResetPolicy is NONE
+     * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if the offset for a partition or set of
+     *             partitions is undefined or out of range and no offset reset policy has been configured
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller does Read access to any of the subscribed
      *             topics or to the configured groupId
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
+     *             session timeout, errors deserializing key/value pairs, or any new error cases in future versions)
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
@@ -849,9 +851,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * heart-beating, auto-commits, and offset updates.
      * @param timeout The maximum time to block in the underlying poll
      * @return The fetched records (may be empty)
-     * @throws org.apache.kafka.common.errors.OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
-     *         the defaultResetPolicy is NONE
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
@@ -879,8 +878,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return fetcher.fetchedRecords();
     }
 
-
-
     /**
      * Commit offsets returned on the last {@link #poll(long) poll()} for all the subscribed list of topics and partitions.
      * <p>
@@ -891,7 +888,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller).
      *
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
+     *             This can only occur if you are using automatic group management with {@link #subscribe(List)},
+     *             or if there is an active group with the same groupId which is using group management.
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the committed offset is invalid).
      */
     @Override
     public void commitSync() {
@@ -914,10 +919,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller).
      *
      * @param offsets A map of offsets by partition with associated metadata
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
+     *             This can only occur if you are using automatic group management with {@link #subscribe(List)},
+     *             or if there is an active group with the same groupId which is using group management.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the committed offset is invalid).
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -1002,7 +1012,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Seek to the first offset for each of the given partitions
+     * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
+     * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      */
     public void seekToBeginning(TopicPartition... partitions) {
         acquire();
@@ -1020,7 +1031,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
-     * final offset in all partitions only when poll() or position() are called.
+     * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      */
     public void seekToEnd(TopicPartition... partitions) {
         acquire();
@@ -1041,13 +1052,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partition The partition to get the position for
      * @return The offset
-     * @throws NoOffsetForPartitionException If a position hasn't been set for a given partition, and no reset policy is
-     *             available.
-     *
+     * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
+     *             the partition
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     public long position(TopicPartition partition) {
         acquire();
@@ -1078,6 +1089,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
@@ -1115,7 +1127,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param topic The topic to get partition metadata for
      * @return The list of partitions
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1134,11 +1148,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Get metadata about partitions for all topics. This method will issue a remote call to the
-     * server.
-     *
+     * Get metadata about partitions for all topics that the user is authorized to view. This method will issue a
+     * remote call to the server.
+
      * @return The map of topics and its partitions
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this function is called
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {
@@ -1190,8 +1205,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is
-     * enabled, this will commit the current offsets.
+     * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is enabled, this
+     * will commit the current offsets. Note that {@link #wakeup()} cannot be use to interrupt close.
      */
     @Override
     public void close() {
@@ -1234,7 +1249,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * or reset it using the offset reset policy the user has configured.
      *
      * @param partitions The partitions that needs updating fetch positions
-     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
+     * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
      */
     private void updateFetchPositions(Set<TopicPartition> partitions) {

@@ -15,11 +15,11 @@ package kafka.api
 import java.util.regex.Pattern
 
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{NoOffsetForPartitionException, OffsetAndMetadata, KafkaConsumer, ConsumerConfig, RoundRobinAssignor}
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordTooLargeException}
+import org.apache.kafka.common.errors.RecordTooLargeException
 import org.junit.Assert._
 import org.junit.Test
 import scala.collection.mutable.Buffer
