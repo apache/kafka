@@ -10,41 +10,33 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+
 import java.util.Map;
+import java.util.Set;
 
 /**
- * This offset is either larger or smaller than the range of offsets the server has for the given partition.
- * 
+ * No reset policy has been defined, and the offsets for these partitions are either larger or smaller
+ * than the range of offsets the server has for the given partition.
  */
-public class OffsetOutOfRangeException extends RetriableException {
+public class OffsetOutOfRangeException extends InvalidOffsetException {
 
     private static final long serialVersionUID = 1L;
-    private Map<TopicPartition, Long> offsetOutOfRangePartitions = null;
-
-    public OffsetOutOfRangeException() {
-    }
+    private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
 
     public OffsetOutOfRangeException(Map<TopicPartition, Long> offsetOutOfRangePartitions) {
+        super("Offsets out of range with no configured reset policy for partitions: " + offsetOutOfRangePartitions);
         this.offsetOutOfRangePartitions = offsetOutOfRangePartitions;
-    }
-
-    public OffsetOutOfRangeException(String message) {
-        super(message);
-    }
-
-    public OffsetOutOfRangeException(Throwable cause) {
-        super(cause);
-    }
-
-    public OffsetOutOfRangeException(String message, Throwable cause) {
-        super(message, cause);
     }
 
     public Map<TopicPartition, Long> offsetOutOfRangePartitions() {
         return offsetOutOfRangePartitions;
     }
 
+    @Override
+    public Set<TopicPartition> partitions() {
+        return offsetOutOfRangePartitions.keySet();
+    }
 }

@@ -34,7 +34,7 @@ public enum Errors {
     UNKNOWN(-1, new UnknownServerException("The server experienced an unexpected error when processing the request")),
     NONE(0, null),
     OFFSET_OUT_OF_RANGE(1,
-            new OffsetOutOfRangeException("The requested offset is not within the range of offsets maintained by the server.")),
+            new ApiException("The requested offset is not within the range of offsets maintained by the server.")),
     CORRUPT_MESSAGE(2,
             new CorruptRecordException("The message contents does not match the message CRC or the message is otherwise corrupt.")),
     UNKNOWN_TOPIC_OR_PARTITION(3,
