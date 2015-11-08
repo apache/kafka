@@ -206,6 +206,7 @@ class WorkerSinkTask implements WorkerTask {
             try {
                 consumer.commitSync(offsets);
                 lastCommittedOffsets = offsets;
+                workThread.onCommitCompleted(null, seqno);
             } catch (KafkaException e) {
                 workThread.onCommitCompleted(e, seqno);
             }
