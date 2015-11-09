@@ -224,7 +224,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             </ol>
         </li>
         <li><b><a name="jaas_client">Creating Client Side JAAS Config</a></b><br>
-        Clients (producers, consumers, copycat workers, etc) will authenticate to the cluster with their own principal (usually with the same name as the user used for running the client), so obtain or create these principals as needed. Then create a JAAS file as follows:
+        Clients (producers, consumers, connect workers, etc) will authenticate to the cluster with their own principal (usually with the same name as the user used for running the client), so obtain or create these principals as needed. Then create a JAAS file as follows:
             <pre>
                 KafkaClient {
                     com.sun.security.auth.module.Krb5LoginModule required

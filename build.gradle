@@ -228,17 +228,17 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
   }
 }
 
-def copycatPkgs = ['copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
-def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools', 'streams'] + copycatPkgs
+def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file']
+def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools', 'streams'] + connectPkgs
 
-tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
+tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
 tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) { }
 
 tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10_5', 'srcJar_2_11_7'] + pkgs.collect { it + ":srcJar" }) { }
 
 tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10_5', 'docsJar_2_11_7'] + pkgs.collect { it + ":docsJar" }) { }
 
-tasks.create(name: "testCopycat", dependsOn: copycatPkgs.collect { it + ":test" }) {}
+tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
 tasks.create(name: "testAll", dependsOn: ['test_core_2_10_5', 'test_core_2_11_7'] + pkgs.collect { it + ":test" }) { }
 
 tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10_5', 'releaseTarGz_2_11_7']) {
@@ -675,9 +675,9 @@ project(':log4j-appender') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:api') {
+project(':connect:api') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-api"
+  archivesBaseName = "connect-api"
 
   dependencies {
     compile "$slf4japi"
@@ -700,7 +700,7 @@ project(':copycat:api') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/*"
+    include "**/org/apache/kafka/connect/*"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -709,7 +709,7 @@ project(':copycat:api') {
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
-      exclude('copycat-*')
+      exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
   }
@@ -732,12 +732,12 @@ project(':copycat:api') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:json') {
+project(':connect:json') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-json"
+  archivesBaseName = "connect-json"
 
   dependencies {
-    compile project(':copycat:api')
+    compile project(':connect:api')
     compile "$slf4japi"
     compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
 
@@ -761,7 +761,7 @@ project(':copycat:json') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/*"
+    include "**/org/apache/kafka/connect/*"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -770,7 +770,7 @@ project(':copycat:json') {
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
-      exclude('copycat-*')
+      exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
   }
@@ -793,12 +793,12 @@ project(':copycat:json') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:runtime') {
+project(':connect:runtime') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-runtime"
+  archivesBaseName = "connect-runtime"
 
   dependencies {
-    compile project(':copycat:api')
+    compile project(':connect:api')
     compile project(':clients')
     compile "$slf4japi"
 
@@ -813,7 +813,7 @@ project(':copycat:runtime') {
     testCompile "$powermock_easymock"
     testCompile project(':clients').sourceSets.test.output
     testRuntime "$slf4jlog4j"
-    testRuntime project(":copycat:json")
+    testRuntime project(":connect:json")
   }
 
   task testJar(type: Jar) {
@@ -829,7 +829,7 @@ project(':copycat:runtime') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/*"
+    include "**/org/apache/kafka/connect/*"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -838,7 +838,7 @@ project(':copycat:runtime') {
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
-      exclude('copycat-*')
+      exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
   }
@@ -861,12 +861,12 @@ project(':copycat:runtime') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:file') {
+project(':connect:file') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-file"
+  archivesBaseName = "connect-file"
 
   dependencies {
-    compile project(':copycat:api')
+    compile project(':connect:api')
     compile "$slf4japi"
 
     testCompile "$junit"
@@ -889,7 +889,7 @@ project(':copycat:file') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/*"
+    include "**/org/apache/kafka/connect/*"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -898,7 +898,7 @@ project(':copycat:file') {
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
-      exclude('copycat-*')
+      exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
   }
