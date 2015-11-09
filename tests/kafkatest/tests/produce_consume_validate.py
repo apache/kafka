@@ -57,11 +57,14 @@ class ProduceConsumeValidateTest(Test):
         self.producer.stop()
         self.consumer.wait()
 
-    def run_produce_consume_validate(self, core_test_action):
+    def run_produce_consume_validate(self, core_test_action=None):
         """Top-level template for simple produce/consume/validate tests."""
 
         self.start_producer_and_consumer()
-        core_test_action()
+
+        if core_test_action is not None:
+            core_test_action()
+
         self.stop_producer_and_consumer()
         self.validate()
 
@@ -95,12 +98,10 @@ class ProduceConsumeValidateTest(Test):
                     msg += str(acked_minus_consumed.pop()) + ", "
                 msg += "...plus " + str(len(acked_minus_consumed) - 20) + " more"
 
+        # collect all logs if validation fails
         if not success:
-            # Collect all the data logs if there was a failure
-            self.mark_for_collect(self.kafka)
-
-        if not success:
-            self.mark_for_collect(self.producer)
+            for s in self.test_context.services:
+                self.mark_for_collect(s)
 
         assert success, msg
 
