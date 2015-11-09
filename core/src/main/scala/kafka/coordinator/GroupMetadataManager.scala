@@ -124,9 +124,6 @@ class GroupMetadataManager(val brokerId: Int,
     groupsCache.get(groupId)
   }
 
-
-
-
   /**
    * Update the current cached metadata for the group with the given groupId or add the group if there is none.
    */

@@ -29,7 +29,7 @@ def partitions_for(topic, num_partitions):
         partitions.add(TopicPartition(topic=topic, partition=i))
     return partitions
 
-class HelloVerifiableConsumerTest(KafkaTest):
+class VerifiableConsumerTest(KafkaTest):
 
     STOPIC = "simple_topic"
     TOPIC = "test_topic"
@@ -38,7 +38,7 @@ class HelloVerifiableConsumerTest(KafkaTest):
     GROUP_ID = "test_group_id"
 
     def __init__(self, test_context):
-        super(HelloVerifiableConsumerTest, self).__init__(test_context, num_zk=1, num_brokers=2, topics={
+        super(VerifiableConsumerTest, self).__init__(test_context, num_zk=1, num_brokers=2, topics={
             self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 },
             self.STOPIC : { 'partitions': 1, 'replication-factor': 2 }
         })
@@ -47,7 +47,7 @@ class HelloVerifiableConsumerTest(KafkaTest):
 
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
-        return super(HelloVerifiableConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
+        return super(VerifiableConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
 
     def _partitions(self, assignment):
         partitions = []
