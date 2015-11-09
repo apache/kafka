@@ -57,11 +57,6 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/stream/build/libs/kafka-streams*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
 for file in $base_dir/tools/build/libs/kafka-tools*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
