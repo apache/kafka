@@ -57,6 +57,11 @@ public abstract class SinkTask implements Task {
      * Put the records in the sink. Usually this should send the records to the sink asynchronously
      * and immediately return.
      *
+     * If this operation fails, the SinkTask may throw a {@link org.apache.kafka.copycat.errors.RetriableException} to
+     * indicate that the framework should attempt to retry the same call again. Other exceptions will cause the task to
+     * be stopped immediately. {@link SinkTaskContext#timeout(long)} can be used to set the maximum time before the
+     * batch will be retried.
+     *
      * @param records the set of records to send
      */
     public abstract void put(Collection<SinkRecord> records);
