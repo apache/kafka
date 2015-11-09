@@ -126,7 +126,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Unique identifier for the class of protocols implements (e.g. "consumer" or "copycat").
+     * Unique identifier for the class of protocols implements (e.g. "consumer" or "connect").
      * @return Non-null protocol type name
      */
     protected abstract String protocolType();
