@@ -138,6 +138,11 @@ class WorkerSourceTask implements WorkerTask {
                         @Override
                         public void onCompletion(RecordMetadata recordMetadata, Exception e) {
                             if (e != null) {
+                                // Given the default settings for zero data loss, this should basically never happen --
+                                // between "infinite" retries, indefinite blocking on full buffers, and "infinite" request
+                                // timeouts, callbacks with exceptions should never be invoked in practice. If the
+                                // user overrode these settings, the best we can do is notify them of the failure via
+                                // logging.
                                 log.error("Failed to send record: ", e);
                             } else {
                                 log.trace("Wrote record successfully: topic {} partition {} offset {}",
