@@ -44,7 +44,7 @@ import java.util.Map;
 public class JsonConverter implements Converter {
     private static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
     private static final boolean SCHEMAS_ENABLE_DEFAULT = true;
-    private static final String SCHEMAS_CACHE_CONFIG = "schemas.cache.size";
+    private static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.size";
     private static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
 
     private static final HashMap<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new HashMap<>();
@@ -293,7 +293,7 @@ public class JsonConverter implements Converter {
         serializer.configure(configs, isKey);
         deserializer.configure(configs, isKey);
 
-        Object cacheSizeVal = configs.get(SCHEMAS_CACHE_SIZE_DEFAULT);
+        Object cacheSizeVal = configs.get(SCHEMAS_CACHE_SIZE_CONFIG);
         if (cacheSizeVal != null)
             cacheSize = (int) cacheSizeVal;
         fromConnectSchemaCache = new SynchronizedCache<>(new LRUCache<Schema, ObjectNode>(cacheSize));
