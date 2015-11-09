@@ -335,7 +335,14 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   def commitOffsets(mirrorMakerConsumer: MirrorMakerBaseConsumer) {
     if (!exitingOnSendFailure) {
       trace("Committing offsets.")
-      mirrorMakerConsumer.commit()
+      try {
+        mirrorMakerConsumer.commit()
+      } catch {
+        case e: WakeupException =>
+          // we only call wakeup() once to close the consumer,
+          // so if we catch it in commit upon closing we can safely ignore it and retry
+          mirrorMakerConsumer.commit()
+      }
     } else {
       info("Exiting on send failure, skip committing offsets.")
     }
@@ -405,7 +412,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         info("Committing consumer offsets.")
         commitOffsets(mirrorMakerConsumer)
         info("Shutting down consumer connectors.")
-        mirrorMakerConsumer.stop()
+        // we do not need to call consumer.close() since the consumer has already been interrupted
         mirrorMakerConsumer.cleanup()
         shutdownLatch.countDown()
         info("Mirror maker thread stopped")
