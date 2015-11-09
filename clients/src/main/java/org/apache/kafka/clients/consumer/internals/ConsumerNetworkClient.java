@@ -104,44 +104,6 @@ public class ConsumerNetworkClient implements Closeable {
         return future;
     }
 
-    /**
-     * Similar to the send() method, except this method retries send() on SendFailedException
-     * several times
-     * @param node The destination of the request
-     * @param api The Kafka API call
-     * @param request The request payload
-     * @return A future which indicates the result of the send
-     */
-    public RequestFuture<ClientResponse> sendWithRetries(final Node node,
-                                                         final ApiKeys api,
-                                                         final AbstractRequest request) {
-        final RequestFuture<ClientResponse> retFuture = new RequestFutureCompletionHandler();
-        RequestFuture<ClientResponse> future = this.send(node, api, request);
-
-        future.addListener(new RequestFutureListener<ClientResponse>() {
-            final int maxRetries = 10;
-            int retries = 0;
-
-            @Override
-            public void onSuccess(ClientResponse value) {
-                retFuture.complete(value);
-            }
-
-            @Override
-            public void onFailure(RuntimeException e) {
-                if ((e instanceof SendFailedException) && (retries < maxRetries) && (client.isConnected(node))) {
-                    RequestFuture<ClientResponse> newFuture = send(node, api, request);
-                    newFuture.addListener(this);
-                    ++retries;
-                } else {
-                    retFuture.raise(e);
-                }
-            }
-        });
-
-        return retFuture;
-    }
-
     private void put(Node node, ClientRequest request) {
         List<ClientRequest> nodeUnsent = unsent.get(node);
         if (nodeUnsent == null) {
@@ -307,10 +269,7 @@ public class ConsumerNetworkClient implements Closeable {
     private void failUnsentRequests() {
         // clear all unsent requests and fail their corresponding futures
         for (Map.Entry<Node, List<ClientRequest>> requestEntry: unsent.entrySet()) {
-            List<ClientRequest> originalList = requestEntry.getValue();
-            List<ClientRequest> copyOfOriginalList = new ArrayList<>(originalList);
-            originalList.clear();
-            Iterator<ClientRequest> iterator = copyOfOriginalList.iterator();
+            Iterator<ClientRequest> iterator = requestEntry.getValue().iterator();
             while (iterator.hasNext()) {
                 ClientRequest request = iterator.next();
                 RequestFutureCompletionHandler handler =
@@ -319,6 +278,7 @@ public class ConsumerNetworkClient implements Closeable {
                 iterator.remove();
             }
         }
+        unsent.clear();
     }
 
     private boolean trySend(long now) {
