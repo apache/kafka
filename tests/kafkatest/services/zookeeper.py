@@ -27,6 +27,9 @@ class ZookeeperService(Service):
     logs = {
         "zk_log": {
             "path": "/mnt/zk.log",
+            "collect_default": True},
+        "zk_data": {
+            "path": "/mnt/zookeeper",
             "collect_default": True}
     }
 

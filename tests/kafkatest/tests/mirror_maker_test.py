@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize, matrix
+from ducktape.mark import parametrize, matrix, ignore
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -77,7 +77,7 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         # This isn't necessary with kill -15 because mirror maker commits its offsets during graceful
         # shutdown.
         if not clean_shutdown:
-            time.sleep(self.mirror_maker.offset_commit_interval_ms / 1000.0 + 0.5)
+            time.sleep(self.mirror_maker.offset_commit_interval_ms / 1000.0 + .5)
 
         for i in range(3):
             self.logger.info("Bringing mirror maker nodes down...")
@@ -126,6 +126,9 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         self.mirror_maker.stop()
 
     @matrix(offsets_storage=["kafka", "zookeeper"], new_consumer=[False], clean_shutdown=[True, False])
+    # Ignore tests where mirrormaker uses new consumer - both cases are currently broken
+    # KAFKA-2770, KAFKA-2747
+    @ignore
     @matrix(new_consumer=[True], clean_shutdown=[True, False])
     def test_bounce(self, offsets_storage="kafka", new_consumer=True, clean_shutdown=True):
         """
