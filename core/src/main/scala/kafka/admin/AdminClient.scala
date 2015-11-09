@@ -156,7 +156,7 @@ class AdminClient(val time: Time,
   def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
     val group = describeGroup(groupId)
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"${group} is not a valid GroupSummary")
+      throw new IllegalArgumentException(s"Group, ${groupId}, does not exist.")
 
     group.members.map {
       case member =>
