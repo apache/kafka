@@ -126,7 +126,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Unique identifier for the class of protocols implements (e.g. "consumer" or "copycat").
+     * Unique identifier for the class of protocols implements (e.g. "consumer" or "connect").
      * @return Non-null protocol type name
      */
     protected abstract String protocolType();
@@ -417,15 +417,31 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void handle(SyncGroupResponse syncResponse,
                            RequestFuture<ByteBuffer> future) {
-            short errorCode = syncResponse.errorCode();
-            if (errorCode == Errors.NONE.code()) {
-                future.complete(syncResponse.memberAssignment());
+            Errors error = Errors.forCode(syncResponse.errorCode());
+            if (error == Errors.NONE) {
+                log.debug("Received successful sync group response for group {}: {}", groupId, syncResponse.toStruct());
                 sensors.syncLatency.record(response.requestLatencyMs());
-            } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
-                future.raise(new GroupAuthorizationException(groupId));
+                future.complete(syncResponse.memberAssignment());
             } else {
                 AbstractCoordinator.this.rejoinNeeded = true;
-                future.raise(Errors.forCode(errorCode));
+                if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    future.raise(new GroupAuthorizationException(groupId));
+                } else if (error == Errors.REBALANCE_IN_PROGRESS) {
+                    log.info("SyncGroup for group {} failed due to coordinator rebalance, rejoining the group", groupId);
+                    future.raise(error);
+                } else if (error == Errors.UNKNOWN_MEMBER_ID
+                        || error == Errors.ILLEGAL_GENERATION) {
+                    log.info("SyncGroup for group {} failed due to {}, rejoining the group", groupId, error);
+                    AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+                    future.raise(error);
+                } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                    log.info("SyncGroup for group {} failed due to {}, will find new coordinator and rejoin", groupId, error);
+                    coordinatorDead();
+                    future.raise(error);
+                } else {
+                    future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.exception().getMessage()));
+                }
             }
         }
     }
@@ -523,6 +539,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     @Override
     public void close() {
+        client.disableWakeups();
         maybeLeaveGroup(true);
     }
 

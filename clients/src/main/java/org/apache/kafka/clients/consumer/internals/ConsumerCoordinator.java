@@ -14,6 +14,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -304,16 +305,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void close() {
+        client.disableWakeups();
         try {
-            while (true) {
-                try {
-                    maybeAutoCommitOffsetsSync();
-                    return;
-                } catch (WakeupException e) {
-                    // ignore wakeups while closing to ensure we have a chance to commit
-                    continue;
-                }
-            }
+            maybeAutoCommitOffsetsSync();
         } finally {
             super.close();
         }
@@ -336,6 +330,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
     }
 
+    /**
+     * Commit offsets synchronously. This method will retry until the commit completes successfully
+     * or an unrecoverable error is encountered.
+     * @param offsets The offsets to be committed
+     * @throws org.apache.kafka.common.errors.AuthorizationException if the consumer is not authorized to the group
+     *             or to any of the specified partitions
+     * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
+     */
     public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (offsets.isEmpty())
             return;
@@ -450,45 +452,57 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 OffsetAndMetadata offsetAndMetadata = this.offsets.get(tp);
                 long offset = offsetAndMetadata.offset();
 
-                short errorCode = entry.getValue();
-                if (errorCode == Errors.NONE.code()) {
+                Errors error = Errors.forCode(entry.getValue());
+                if (error == Errors.NONE) {
                     log.debug("Committed offset {} for partition {}", offset, tp);
                     if (subscriptions.isAssigned(tp))
                         // update the local cache only if the partition is still assigned
                         subscriptions.committed(tp, offsetAndMetadata);
-                } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    log.error("Unauthorized to commit for group {}", groupId);
                     future.raise(new GroupAuthorizationException(groupId));
                     return;
-                } else if (errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
+                } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                     unauthorizedTopics.add(tp.topic());
+                } else if (error == Errors.OFFSET_METADATA_TOO_LARGE
+                        || error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
+                    // raise the error to the user
+                    log.info("Offset commit for group {} failed on partition {} due to {}, will retry", groupId, tp, error);
+                    future.raise(error);
+                    return;
+                } else if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
+                    // just retry
+                    log.info("Offset commit for group {} failed due to {}, will retry", groupId, error);
+                    future.raise(error);
+                    return;
+                } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.NOT_COORDINATOR_FOR_GROUP
+                        || error == Errors.REQUEST_TIMED_OUT) {
+                    log.info("Offset commit for group {} failed due to {}, will find new coordinator and retry", groupId, error);
+                    coordinatorDead();
+                    future.raise(error);
+                    return;
+                } else if (error == Errors.UNKNOWN_MEMBER_ID
+                        || error == Errors.ILLEGAL_GENERATION
+                        || error == Errors.REBALANCE_IN_PROGRESS) {
+                    // need to re-join group
+                    log.error("Error {} occurred while committing offsets for group {}", error, groupId);
+                    subscriptions.needReassignment();
+                    future.raise(new CommitFailedException("Commit cannot be completed due to group rebalance"));
+                    return;
                 } else {
-                    if (errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
-                        // just retry
-                        future.raise(Errors.GROUP_LOAD_IN_PROGRESS);
-                    } else if (errorCode == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
-                            || errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
-                        coordinatorDead();
-                    } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()
-                            || errorCode == Errors.ILLEGAL_GENERATION.code()
-                            || errorCode == Errors.REBALANCE_IN_PROGRESS.code()) {
-                        // need to re-join group
-                        subscriptions.needReassignment();
-                    }
-
-                    log.error("Error committing partition {} at offset {}: {}",
-                            tp,
-                            offset,
-                            Errors.forCode(errorCode).exception().getMessage());
-
-                    future.raise(Errors.forCode(errorCode));
+                    log.error("Error committing partition {} at offset {}: {}", tp, offset, error.exception().getMessage());
+                    future.raise(new KafkaException("Unexpected error in commit: " + error.exception().getMessage()));
                     return;
                 }
             }
 
-            if (!unauthorizedTopics.isEmpty())
+            if (!unauthorizedTopics.isEmpty()) {
+                log.error("Unauthorized to commit to topics {}", unauthorizedTopics);
                 future.raise(new TopicAuthorizationException(unauthorizedTopics));
-            else
+            } else {
                 future.complete(null);
+            }
         }
     }
 
@@ -503,7 +517,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
-        log.debug("Fetching committed offsets for partitions: {}",  Utils.join(partitions, ", "));
+        log.debug("Fetching committed offsets for partitions: {}",  partitions);
         // construct the request
         OffsetFetchRequest request = new OffsetFetchRequest(this.groupId, new ArrayList<TopicPartition>(partitions));
 

@@ -32,7 +32,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig, replicaMgr: ReplicaManage
       case Some(p) =>
         "%s:ReplicaFetcherThread-%d-%d".format(p, fetcherId, sourceBroker.id)
     }
-    new ReplicaFetcherThread(threadName, sourceBroker, brokerConfig,
+    new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig,
       replicaMgr, metrics, time)
   }
 
