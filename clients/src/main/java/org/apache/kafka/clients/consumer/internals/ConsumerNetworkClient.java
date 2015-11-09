@@ -12,7 +12,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import jdk.nashorn.internal.ir.RuntimeNode;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
@@ -113,10 +112,10 @@ public class ConsumerNetworkClient implements Closeable {
      * @param request The request payload
      * @return A future which indicates the result of the send
      */
-    public RequestFuture<ClientResponse> sendWithRetries(Node node,
-                                                         ApiKeys api,
-                                                         AbstractRequest request) {
-        RequestFuture<ClientResponse> retFuture = new RequestFutureCompletionHandler();
+    public RequestFuture<ClientResponse> sendWithRetries(final Node node,
+                                                         final ApiKeys api,
+                                                         final AbstractRequest request) {
+        final RequestFuture<ClientResponse> retFuture = new RequestFutureCompletionHandler();
         RequestFuture<ClientResponse> future = this.send(node, api, request);
 
         future.addListener(new RequestFutureListener<ClientResponse>() {
