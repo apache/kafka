@@ -205,7 +205,7 @@
     </subpackage>
 
     <subpackage name="tools">
-      <allow pkg="org.apache.kafka.copycat" />
+      <allow pkg="org.apache.kafka.connect" />
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
   </subpackage>

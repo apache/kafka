@@ -34,7 +34,7 @@ import java.util.Properties;
 /**
  * Counterpart to {@link VerifiableSourceTask} that consumes records and logs information about each to stdout. This
  * allows validation of processing of messages by sink tasks on distributed workers even in the face of worker restarts
- * and failures. This task relies on the offset management provided by the Copycat framework and therefore can detect
+ * and failures. This task relies on the offset management provided by the Kafka Connect framework and therefore can detect
  * bugs in its implementation.
  */
 public class VerifiableSinkTask extends SinkTask {

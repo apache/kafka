@@ -122,7 +122,7 @@ class WorkerSourceTask implements WorkerTask {
      * @param records
      */
     private synchronized void sendRecords(List<SourceRecord> records) {
-        for (SourceRecord record : records) {
+        for (final SourceRecord record : records) {
             byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
             byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
             final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(), key, value);
@@ -138,7 +138,15 @@ class WorkerSourceTask implements WorkerTask {
                         @Override
                         public void onCompletion(RecordMetadata recordMetadata, Exception e) {
                             if (e != null) {
-                                log.error("Failed to send record: ", e);
+                                // Given the default settings for zero data loss, this should basically never happen --
+                                // between "infinite" retries, indefinite blocking on full buffers, and "infinite" request
+                                // timeouts, callbacks with exceptions should never be invoked in practice. If the
+                                // user overrode these settings, the best we can do is notify them of the failure via
+                                // logging.
+                                log.error("{} failed to send record to {}: {}", id, record.topic(), e);
+                                log.debug("Failed record: topic {}, Kafka partition {}, key {}, value {}, source offset {}, source partition {}",
+                                        record.topic(), record.kafkaPartition(), record.key(), record.value(),
+                                        record.sourceOffset(), record.sourcePartition());
                             } else {
                                 log.trace("Wrote record successfully: topic {} partition {} offset {}",
                                         recordMetadata.topic(), recordMetadata.partition(),

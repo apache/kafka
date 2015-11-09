@@ -36,9 +36,9 @@ import java.util.Map;
 /**
  * A connector primarily intended for system tests. The connector simply generates as many tasks as requested. The
  * tasks print metadata in the form of JSON to stdout for each message generated, making externally visible which
- * messages have been sent. Each message is also assigned a unique, increasing seqno that is passed to Copycat; when
+ * messages have been sent. Each message is also assigned a unique, increasing seqno that is passed to Kafka Connect; when
  * tasks are started on new nodes, this seqno is used to resume where the task previously left off, allowing for
- * testing of distributed Copycat.
+ * testing of distributed Kafka Connect.
  *
  * If logging is left enabled, log output on stdout can be easily ignored by checking whether a given line is valid JSON.
  */

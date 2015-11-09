@@ -57,6 +57,7 @@ class KafkaService(JmxMixin, Service):
         """
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
+        self.log_level = "DEBUG"
 
         self.zk = zk
         self.quota_config = quota_config
@@ -73,7 +74,6 @@ class KafkaService(JmxMixin, Service):
     @property
     def security_config(self):
         return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, sasl_mechanism=self.sasl_mechanism)
-
 
     def start(self):
         if self.security_config.has_sasl_kerberos:
