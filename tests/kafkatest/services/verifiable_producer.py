@@ -28,7 +28,6 @@ import time
 class VerifiableProducer(BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
-    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "verifiable_producer.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
@@ -37,9 +36,6 @@ class VerifiableProducer(BackgroundThreadService):
     logs = {
         "verifiable_producer_stdout": {
             "path": STDOUT_CAPTURE,
-            "collect_default": False},
-        "verifiable_producer_stderr": {
-            "path": STDERR_CAPTURE,
             "collect_default": False},
         "verifiable_producer_log": {
             "path": LOG_FILE,
