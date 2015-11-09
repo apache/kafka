@@ -5,9 +5,9 @@
  The ASF licenses this file to You under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
- 
+
     http://www.apache.org/licenses/LICENSE-2.0
- 
+
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,7 +28,7 @@ As of the 0.8.2 release we encourage all new development to use the new Java pro
 	&lt;/dependency&gt;
 </pre>
 
-Examples showing how to use the producer are given in the 
+Examples showing how to use the producer are given in the
 <a href="http://kafka.apache.org/082/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html" title="Kafka 0.8.2 Javadoc">javadocs</a>.
 
 <p>
@@ -144,17 +144,7 @@ class kafka.javaapi.consumer.SimpleConsumer {
 For most applications, the high level consumer Api is good enough. Some applications want features not exposed to the high level consumer yet (e.g., set initial offset when restarting the consumer). They can instead use our low level SimpleConsumer Api. The logic will be a bit more complicated and you can follow the example in
 <a href="https://cwiki.apache.org/confluence/display/KAFKA/0.8.0+SimpleConsumer+Example" title="Kafka 0.8 SimpleConsumer example">here</a>.
 
-<h3><a id="kafkahadoopconsumerapi">2.4 Kafka Hadoop Consumer API</a></h3>
-<p>
-Providing a horizontally scalable solution for aggregating and loading data into Hadoop was one of our basic use cases. To support this use case, we provide a Hadoop-based consumer which spawns off many map tasks to pull data from the Kafka cluster in parallel. This provides extremely fast pull-based Hadoop data load capabilities (we were able to fully saturate the network with only a handful of Kafka servers).
-</p>
-
-<p>
-Usage information on the hadoop consumer can be found <a href="https://github.com/linkedin/camus/">here</a>.
-</p>
-
-
-<h3><a id="newconsumerapi">2.5 New Consumer API</a></h3>
+<h3><a id="newconsumerapi">2.4 New Consumer API</a></h3>
 As of the 0.9.0 release we have added a replacement for our existing simple and high-level consumers. This client is considered beta quality. You can use this client by adding a dependency on the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
 <pre>
 	&lt;dependency&gt;
