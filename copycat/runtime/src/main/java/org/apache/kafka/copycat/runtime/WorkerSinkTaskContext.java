@@ -17,6 +17,7 @@ import org.apache.kafka.copycat.errors.IllegalWorkerStateException;
 import org.apache.kafka.copycat.sink.SinkTaskContext;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -24,11 +25,13 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     private Map<TopicPartition, Long> offsets;
     private long timeoutMs;
     private KafkaConsumer<byte[], byte[]> consumer;
+    private final Set<TopicPartition> pausedPartitions;
 
     public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer) {
         this.offsets = new HashMap<>();
         this.timeoutMs = -1L;
         this.consumer = consumer;
+        this.pausedPartitions = new HashSet<>();
     }
 
     @Override
@@ -80,6 +83,8 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
             throw new IllegalWorkerStateException("SinkTaskContext may not be used to pause consumption until the task is initialized");
         }
         try {
+            for (TopicPartition partition : partitions)
+                pausedPartitions.add(partition);
             consumer.pause(partitions);
         } catch (IllegalStateException e) {
             throw new IllegalWorkerStateException("SinkTasks may not pause partitions that are not currently assigned to them.", e);
@@ -92,9 +97,15 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
             throw new IllegalWorkerStateException("SinkTaskContext may not be used to resume consumption until the task is initialized");
         }
         try {
+            for (TopicPartition partition : partitions)
+                pausedPartitions.remove(partition);
             consumer.resume(partitions);
         } catch (IllegalStateException e) {
             throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);
         }
+    }
+
+    public Set<TopicPartition> pausedPartitions() {
+        return pausedPartitions;
     }
 }

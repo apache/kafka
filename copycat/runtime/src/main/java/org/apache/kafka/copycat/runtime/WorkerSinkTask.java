@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.copycat.data.SchemaAndValue;
 import org.apache.kafka.copycat.errors.CopycatException;
+import org.apache.kafka.copycat.errors.RetriableException;
 import org.apache.kafka.copycat.sink.SinkRecord;
 import org.apache.kafka.copycat.sink.SinkTask;
 import org.apache.kafka.copycat.storage.Converter;
@@ -42,8 +43,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -63,7 +67,10 @@ class WorkerSinkTask implements WorkerTask {
     private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
     private boolean started;
+    private final List<SinkRecord> messageBatch;
     private Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
+    private Map<TopicPartition, OffsetAndMetadata> currentOffsets;
+    private boolean pausedForRedelivery;
 
     public WorkerSinkTask(ConnectorTaskId id, SinkTask task, WorkerConfig workerConfig,
                           Converter keyConverter, Converter valueConverter, Time time) {
@@ -74,6 +81,9 @@ class WorkerSinkTask implements WorkerTask {
         this.valueConverter = valueConverter;
         this.time = time;
         this.started = false;
+        this.messageBatch = new ArrayList<>();
+        this.currentOffsets = new HashMap<>();
+        this.pausedForRedelivery = false;
     }
 
     @Override
@@ -156,10 +166,14 @@ class WorkerSinkTask implements WorkerTask {
                 timeoutMs = Math.min(timeoutMs, retryTimeout);
                 context.timeout(-1L);
             }
+
             log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
             ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
+            assert messageBatch.isEmpty() || msgs.isEmpty();
             log.trace("{} polling returned {} messages", id, msgs.count());
-            deliverMessages(msgs);
+
+            convertMessages(msgs);
+            deliverMessages();
         } catch (WakeupException we) {
             log.trace("{} consumer woken up", id);
         }
@@ -171,12 +185,8 @@ class WorkerSinkTask implements WorkerTask {
      **/
     public void commitOffsets(boolean sync, final int seqno) {
         log.info("{} Committing offsets", this);
-        final HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        for (TopicPartition tp : consumer.assignment()) {
-            long pos = consumer.position(tp);
-            offsets.put(tp, new OffsetAndMetadata(pos));
-            log.debug("{} committing {} offset {}", id, tp, pos);
-        }
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(currentOffsets);
 
         try {
             task.flush(offsets);
@@ -187,6 +197,7 @@ class WorkerSinkTask implements WorkerTask {
                 log.debug("{} Rewinding topic partition {} to offset {}", id, entry.getKey(), entry.getValue().offset());
                 consumer.seek(entry.getKey(), entry.getValue().offset());
             }
+            currentOffsets = new HashMap<>(lastCommittedOffsets);
             workThread.onCommitCompleted(t, seqno);
             return;
         }
@@ -195,6 +206,7 @@ class WorkerSinkTask implements WorkerTask {
             try {
                 consumer.commitSync(offsets);
                 lastCommittedOffsets = offsets;
+                workThread.onCommitCompleted(null, seqno);
             } catch (KafkaException e) {
                 workThread.onCommitCompleted(e, seqno);
             }
@@ -244,29 +256,49 @@ class WorkerSinkTask implements WorkerTask {
         return new WorkerSinkTaskThread(this, "WorkerSinkTask-" + id, time, workerConfig);
     }
 
-    private void deliverMessages(ConsumerRecords<byte[], byte[]> msgs) {
-        // Finally, deliver this batch to the sink
-        if (msgs.count() > 0) {
-            List<SinkRecord> records = new ArrayList<>();
-            for (ConsumerRecord<byte[], byte[]> msg : msgs) {
-                log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
-                SchemaAndValue keyAndSchema = keyConverter.toCopycatData(msg.topic(), msg.key());
-                SchemaAndValue valueAndSchema = valueConverter.toCopycatData(msg.topic(), msg.value());
-                records.add(
-                        new SinkRecord(msg.topic(), msg.partition(),
-                                keyAndSchema.schema(), keyAndSchema.value(),
-                                valueAndSchema.schema(), valueAndSchema.value(),
-                                msg.offset())
-                );
-            }
+    private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
+        for (ConsumerRecord<byte[], byte[]> msg : msgs) {
+            log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
+            SchemaAndValue keyAndSchema = keyConverter.toCopycatData(msg.topic(), msg.key());
+            SchemaAndValue valueAndSchema = valueConverter.toCopycatData(msg.topic(), msg.value());
+            messageBatch.add(
+                    new SinkRecord(msg.topic(), msg.partition(),
+                            keyAndSchema.schema(), keyAndSchema.value(),
+                            valueAndSchema.schema(), valueAndSchema.value(),
+                            msg.offset())
+            );
+        }
+    }
 
-            try {
-                task.put(records);
-            } catch (CopycatException e) {
-                log.error("Exception from SinkTask {}: ", id, e);
-            } catch (Throwable t) {
-                log.error("Unexpected exception from SinkTask {}: ", id, t);
+    private void deliverMessages() {
+        // Finally, deliver this batch to the sink
+        try {
+            // Since we reuse the messageBatch buffer, ensure we give the task its own copy
+            task.put(new ArrayList<>(messageBatch));
+            for (SinkRecord record : messageBatch)
+                currentOffsets.put(new TopicPartition(record.topic(), record.kafkaPartition()),
+                        new OffsetAndMetadata(record.kafkaOffset() + 1));
+            messageBatch.clear();
+            // If we had paused all consumer topic partitions to try to redeliver data, then we should resume any that
+            // the task had not explicitly paused
+            if (pausedForRedelivery) {
+                for (TopicPartition tp : consumer.assignment())
+                    if (!context.pausedPartitions().contains(tp))
+                        consumer.resume(tp);
+                pausedForRedelivery = false;
             }
+        } catch (RetriableException e) {
+            log.error("RetriableException from SinkTask {}: {}", id, e);
+            // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,
+            // but will still be able to poll in order to handle user-requested timeouts, keep group membership, etc.
+            pausedForRedelivery = true;
+            for (TopicPartition tp : consumer.assignment())
+                consumer.pause(tp);
+            // Let this exit normally, the batch will be reprocessed on the next loop.
+        } catch (Throwable t) {
+            log.error("Task {} threw an uncaught and unrecoverable exception", id);
+            log.error("Task is being killed and will not recover until manually restarted:", t);
+            throw new CopycatException("Exiting WorkerSinkTask due to unrecoverable exception.");
         }
     }
 
@@ -280,6 +312,8 @@ class WorkerSinkTask implements WorkerTask {
             if (offset != null) {
                 log.trace("Rewind {} to offset {}.", tp, offset);
                 consumer.seek(tp, offset);
+                lastCommittedOffsets.put(tp, new OffsetAndMetadata(offset));
+                currentOffsets.put(tp, new OffsetAndMetadata(offset));
             }
         }
         context.clearOffsets();
@@ -289,11 +323,35 @@ class WorkerSinkTask implements WorkerTask {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             lastCommittedOffsets = new HashMap<>();
+            currentOffsets = new HashMap<>();
             for (TopicPartition tp : partitions) {
                 long pos = consumer.position(tp);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
+                currentOffsets.put(tp, new OffsetAndMetadata(pos));
                 log.debug("{} assigned topic partition {} with offset {}", id, tp, pos);
             }
+
+            // If we paused everything for redelivery (which is no longer relevant since we discarded the data), make
+            // sure anything we paused that the task didn't request to be paused *and* which we still own is resumed.
+            // Also make sure our tracking of paused partitions is updated to remove any partitions we no longer own.
+            if (pausedForRedelivery) {
+                pausedForRedelivery = false;
+                Set<TopicPartition> assigned = new HashSet<>(partitions);
+                Set<TopicPartition> taskPaused = context.pausedPartitions();
+
+                for (TopicPartition tp : partitions) {
+                    if (!taskPaused.contains(tp))
+                        consumer.resume(tp);
+                }
+
+                Iterator<TopicPartition> tpIter = taskPaused.iterator();
+                while (tpIter.hasNext()) {
+                    TopicPartition tp = tpIter.next();
+                    if (assigned.contains(tp))
+                        tpIter.remove();
+                }
+            }
+
             // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
             // task start. Since this callback gets invoked during that initial setup before we've started the task, we
             // need to guard against invoking the user's callback method during that period.
@@ -305,6 +363,8 @@ class WorkerSinkTask implements WorkerTask {
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
             task.onPartitionsRevoked(partitions);
             commitOffsets(true, -1);
+            // Make sure we don't have any leftover data since offsets will be reset to committed positions
+            messageBatch.clear();
         }
     }
 }
