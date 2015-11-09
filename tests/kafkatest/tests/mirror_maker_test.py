@@ -128,7 +128,7 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
     @matrix(offsets_storage=["kafka", "zookeeper"], new_consumer=[False], clean_shutdown=[True, False])
     # Ignore tests where mirrormaker uses new consumer - both cases are currently broken
     # KAFKA-2770, KAFKA-2747
-    @ignore
+    # @ignore
     @matrix(new_consumer=[True], clean_shutdown=[True, False])
     def test_bounce(self, offsets_storage="kafka", new_consumer=True, clean_shutdown=True):
         """
