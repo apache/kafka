@@ -229,7 +229,7 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
 }
 
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file']
-def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools', 'streams'] + connectPkgs
+def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams'] + connectPkgs
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
 tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) { }
@@ -373,55 +373,6 @@ project(':core') {
       include('*.jar')
     }
     into "$buildDir/dependant-testlibs"
-  }
-}
-
-project(':contrib:hadoop-consumer') {
-  archivesBaseName = "kafka-hadoop-consumer"
-
-  dependencies {
-    compile project(':core')
-    compile "org.apache.avro:avro:1.4.0"
-    compile "org.apache.pig:pig:0.8.0"
-    compile "commons-logging:commons-logging:1.0.4"
-    compile "org.codehaus.jackson:jackson-core-asl:1.5.5"
-    compile "org.codehaus.jackson:jackson-mapper-asl:1.5.5"
-    compile "org.apache.hadoop:hadoop-core:0.20.2"
-  }
-
-  configurations {
-    // manually excludes some unnecessary dependencies
-    compile.exclude module: 'javax'
-    compile.exclude module: 'jms'
-    compile.exclude module: 'jmxri'
-    compile.exclude module: 'jmxtools'
-    compile.exclude module: 'mail'
-    compile.exclude module: 'netty'
-  }
-}
-
-project(':contrib:hadoop-producer') {
-  archivesBaseName = "kafka-hadoop-producer"
-
-  dependencies {
-    compile project(':core')
-    compile("org.apache.avro:avro:1.4.0") { force = true }
-    compile "org.apache.pig:pig:0.8.0"
-    compile "commons-logging:commons-logging:1.0.4"
-    compile "org.codehaus.jackson:jackson-core-asl:1.5.5"
-    compile "org.codehaus.jackson:jackson-mapper-asl:1.5.5"
-    compile "org.apache.hadoop:hadoop-core:0.20.2"
-    compile "org.apache.pig:piggybank:0.12.0"
-  }
-
-  configurations {
-    // manually excludes some unnecessary dependencies
-    compile.exclude module: 'javax'
-    compile.exclude module: 'jms'
-    compile.exclude module: 'jmxri'
-    compile.exclude module: 'jmxtools'
-    compile.exclude module: 'mail'
-    compile.exclude module: 'netty'
   }
 }
 
