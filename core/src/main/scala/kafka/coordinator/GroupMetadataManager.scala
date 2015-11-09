@@ -125,6 +125,13 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   /**
+   * Update the current cached metadata for the group with the given groupId or add the group if there is none.
+   */
+  private def updateGroup(groupId: String, group: GroupMetadata) {
+    groupsCache.put(groupId, group)
+  }
+
+  /**
    * Remove all metadata associated with the group, note this function needs to be
    * called inside the group lock
    * @param group
@@ -401,9 +408,10 @@ class GroupMetadataManager(val brokerId: Int,
                     // load group metadata
                     val groupId = baseKey.key.asInstanceOf[String]
                     val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, msgAndOffset.message.payload)
-
-                    if (groupMetadata != null)
-                      addGroup(groupId, groupMetadata)
+                    if (groupMetadata != null) {
+                      trace(s"Loaded group metadata for group ${groupMetadata.groupId} with generation ${groupMetadata.generationId}")
+                      updateGroup(groupId, groupMetadata)
+                    }
                   }
 
                   currOffset = msgAndOffset.nextOffset
