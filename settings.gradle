@@ -14,5 +14,5 @@
 // limitations under the License.
 
 apply from: file('scala.gradle')
-include 'core', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'examples', 'clients', 'tools', 'streams', 'log4j-appender',
-        'copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file'
+include 'core', 'examples', 'clients', 'tools', 'streams', 'log4j-appender',
+        'connect:api', 'connect:runtime', 'connect:json', 'connect:file'

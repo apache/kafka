@@ -156,7 +156,7 @@ class AdminClient(val time: Time,
   def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
     val group = describeGroup(groupId)
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"${group} is not a valid GroupSummary")
+      throw new IllegalArgumentException(s"Group ${groupId} is not a valid kafka consumer group but belongs to ${if (!group.protocolType.isEmpty) group.protocolType else "not exist"}")
 
     group.members.map {
       case member =>
