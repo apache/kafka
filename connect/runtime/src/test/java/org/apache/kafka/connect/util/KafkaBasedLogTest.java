@@ -258,14 +258,11 @@ public class KafkaBasedLogTest {
         assertEquals(2, invoked.get());
 
         // Now we should have to wait for the records to be read back when we call readToEnd()
-        final AtomicBoolean getInvokedAndPassed = new AtomicBoolean(false);
+        final AtomicBoolean getInvoked = new AtomicBoolean(false);
         final FutureCallback<Void> readEndFutureCallback = new FutureCallback<>(new Callback<Void>() {
             @Override
             public void onCompletion(Throwable error, Void result) {
-                assertEquals(4, consumedRecords.size());
-                assertEquals(TP0_VALUE_NEW, consumedRecords.get(2).value());
-                assertEquals(TP1_VALUE_NEW, consumedRecords.get(3).value());
-                getInvokedAndPassed.set(true);
+                getInvoked.set(true);
             }
         });
         consumer.schedulePollTask(new Runnable() {
@@ -275,7 +272,6 @@ public class KafkaBasedLogTest {
                 // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
                 // returning any data.
                 store.readToEnd(readEndFutureCallback);
-
                 // Needs to seek to end to find end offsets
                 consumer.schedulePollTask(new Runnable() {
                     @Override
@@ -311,7 +307,12 @@ public class KafkaBasedLogTest {
             }
         });
         readEndFutureCallback.get(10000, TimeUnit.MILLISECONDS);
-        assertTrue(getInvokedAndPassed.get());
+        assertTrue(getInvoked.get());
+        assertEquals(4, consumedRecords.size());
+        assertEquals(TP0_VALUE, consumedRecords.get(0).value());
+        assertEquals(TP0_VALUE_NEW, consumedRecords.get(1).value());
+        assertEquals(TP1_VALUE, consumedRecords.get(2).value());
+        assertEquals(TP1_VALUE_NEW, consumedRecords.get(3).value());
 
         // Cleanup
         store.stop();
