@@ -340,8 +340,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       } catch {
         case e: WakeupException =>
           // we only call wakeup() once to close the consumer,
-          // so if we catch it in commit upon closing we can safely ignore it and retry
+          // so if we catch it in commit we can safely retry
+          // and re-throw to break the loop
           mirrorMakerConsumer.commit()
+          throw e
       }
     } else {
       info("Exiting on send failure, skip committing offsets.")
@@ -410,7 +412,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         info("Flushing producer.")
         producer.flush()
         info("Committing consumer offsets.")
-        commitOffsets(mirrorMakerConsumer)
+        try {
+          commitOffsets(mirrorMakerConsumer)
+        } catch {
+          case e: WakeupException => // just ignore
+        }
         info("Shutting down consumer connectors.")
         // we do not need to call consumer.close() since the consumer has already been interrupted
         mirrorMakerConsumer.cleanup()
