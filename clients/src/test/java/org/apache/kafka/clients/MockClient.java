@@ -87,6 +87,11 @@ public class MockClient implements KafkaClient {
         return false;
     }
 
+    @Override
+    public boolean isConnected(Node node) {
+        return true;
+    }
+
     public void disconnect(String node) {
         long now = time.milliseconds();
         Iterator<ClientRequest> iter = requests.iterator();
