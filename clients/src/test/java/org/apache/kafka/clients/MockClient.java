@@ -88,7 +88,9 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public boolean isConnected(Node node) { return true; }
+    public boolean isConnected(Node node) {
+        return true;
+    }
 
     public void disconnect(String node) {
         long now = time.milliseconds();
