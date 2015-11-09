@@ -142,7 +142,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             long minOffset = partitionRecords.get(0).offset();
             long maxOffset = partitionRecords.get(partitionRecords.size() - 1).offset();
 
-            offsets.put(tp, new OffsetAndMetadata(maxOffset+1));
+            offsets.put(tp, new OffsetAndMetadata(maxOffset + 1));
             summaries.add(new RecordSetSummary(tp.topic(), tp.partition(),
                     partitionRecords.size(), minOffset, maxOffset));
 
@@ -250,14 +250,12 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     }
 
     private static abstract class ConsumerEvent {
-        private static final String clazz = VerifiableConsumer.class.getName();
-
         @JsonProperty
         public abstract String name();
 
         @JsonProperty("class")
         public String clazz() {
-            return clazz;
+            return VerifiableConsumer.class.getName();
         }
     }
 
@@ -570,7 +568,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(res.getInt("sessionTimeout")));
 
-        StringDeserializer deserializer= new StringDeserializer();
+        StringDeserializer deserializer = new StringDeserializer();
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);
 
         return new VerifiableConsumer(
