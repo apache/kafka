@@ -105,14 +105,6 @@ public class AbstractConfig {
         return keys;
     }
 
-    public Map<String, Object> unusedConfigs() {
-        Set<String> unusedKeys = this.unused();
-        Map<String, Object> unusedProps = new HashMap<>();
-        for (String key : unusedKeys)
-            unusedProps.put(key, this.originals.get(key));
-        return unusedProps;
-    }
-
     public Map<String, Object> originals() {
         Map<String, Object> copy = new RecordingMap<>();
         copy.putAll(originals);
