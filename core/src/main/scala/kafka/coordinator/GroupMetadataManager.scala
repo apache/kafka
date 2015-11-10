@@ -67,9 +67,6 @@ class GroupMetadataManager(val brokerId: Int,
   /* lock for expiring stale offsets, it should be always called BEFORE the group lock if needed */
   private val offsetExpireLock = new ReentrantReadWriteLock()
 
-  /* lock for removing offsets of a range partition, it should be always called BEFORE the group lock if needed */
-  private val offsetRemoveLock = new ReentrantReadWriteLock()
-
   /* shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
 
@@ -116,12 +113,12 @@ class GroupMetadataManager(val brokerId: Int,
    * Add a group or get the group associated with the given groupId if it already exists
    */
   def addGroup(groupId: String, protocolType: String): GroupMetadata = {
-    addGroup(groupId, new GroupMetadata(groupId, protocolType))
-  }
-
-  private def addGroup(groupId: String, group: GroupMetadata): GroupMetadata = {
-    groupsCache.putIfNotExists(groupId, group)
-    groupsCache.get(groupId)
+    val newGroup = new GroupMetadata(groupId, protocolType)
+    val currentGroup = groupsCache.putIfNotExists(groupId, newGroup)
+    if (currentGroup != null)
+      currentGroup
+    else
+      newGroup
   }
 
   /**
