@@ -1,42 +1,176 @@
-dist
-*classes
-target/
-build/
-.gradle/
+# Compiled from https://github.com/github/gitignore
+# With Kafka Specific alterations
+
+# Covers Linux OS
+*~
+## KDE directory preferences
+.directory
+## Linux trash folder which might appear on any partition or disk
+.Trash-*
+
+# Covers Windows OS
+## Windows image file caches
+Thumbs.db
+ehthumbs.db
+## Folder config file
+Desktop.ini
+## Recycle Bin used on file shares
+$RECYCLE.BIN/
+## Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+## Windows shortcuts
+*.lnk
+
+# Covers Mac OSX
+.DS_Store
+.AppleDouble
+.LSOverride
+## Thumbnails
+._*
+## Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+## Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Covers Eclipse IDE
+.metadata
+.recommenders
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+## Eclipse Core
+.project
+## External tool builders
+.externalToolBuilders/
+## Locally stored "Eclipse launch configurations"
+*.launch
+## JDT-specific (Eclipse Java Development Tools)
+.classpath
+## Java annotation processor (APT)
+.factorypath
+
+# Covers IntelliJ IDE
+*.iml
+## Directory-based project format:
+.idea/
+## File-based project format:
+*.ipr
+*.iws
+## Plugin-specific files:
+# IntelliJ
+/out/
+## JIRA plugin
+atlassian-ide-plugin.xml
+
+# Ignore tags created by etags, ctags, gtags (GNU global) and cscope
+TAGS
+.TAGS
+!TAGS/
+tags
+.tags
+!tags/
+gtags.files
+GTAGS
+GRTAGS
+GPATH
+cscope.files
+cscope.out
+cscope.in.out
+cscope.po.out
+
+# Covers SVN
+.svn/
+
+# Covers Java
+*.class
+## Package Files
+*.jar
+*.war
+*.ear
+## virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+
+# Covers Scala
+*.log
+# sbt specific
+.cache
+.history
+.lib/
+dist/*
 lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
-patch-process/*
-.idea
-.svn
-.classpath
-/.metadata
-/.recommenders
-*~
-*#
-.#*
-rat.out
-TAGS
-*.iml
-.project
-.settings
-.gradle
-kafka.ipr
-kafka.iws
-.vagrant
-Vagrantfile.local
-/logs
+# Scala-IDE specific
+.scala_dependencies
+.worksheet
 
-config/server-*
-config/zookeeper-*
-core/data/*
+# Covers Gradle
+.gradle
+build/
+## Ignore Gradle GUI config
+gradle-app.setting
+## Cache of project
+.gradletasknamecache
+## Don't check wrapper executable into Kafka source
 gradle/wrapper/*
 
+# Covers Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+
+# Covers Binary Packages
+## it's better to unpack these files and commit the raw source
+## git has its own built in compression methods
+*.gz
+*.rar
+*.tar
+*.zip
+
+# Covers Kafka Vagrant usage
+.vagrant
+Vagrantfile.local
+config/server-*
+config/zookeeper-*
+
+# Covers Kafka Ducktape usage
 results
 tests/results
 .ducktape
 tests/.ducktape
-.cache
 
+# Covers Kafka Generated Docs
 docs/generated/
+
+# Covers Kafka Build Generated Files
+rat.out
+/logs
+core/data/*
+
+# Covers Other
+patch-process/*
