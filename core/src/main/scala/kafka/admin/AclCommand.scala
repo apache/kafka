@@ -293,17 +293,17 @@ object AclCommand {
     val allowPrincipalsOpt = parser.accepts("allow-principal", "principal is in principalType:name format." +
       " User:* is the wild card indicating all users.")
       .withRequiredArg
-      .describedAs("allow-principals")
+      .describedAs("allow-principal")
       .ofType(classOf[String])
 
     val denyPrincipalsOpt = parser.accepts("deny-principal", "principal is in principalType: name format. " +
-      "By default anyone not in --allow-principal list is denied access. " +
+      "By default anyone not added through --allow-principal is denied access. " +
       "You only need to use this option as negation to already allowed set. " +
       "For example if you wanted to allow access to all users in the system but not test-user you can define an acl that " +
       "allows access to User:* and specify --deny-principal=User:test@EXAMPLE.COM. " +
       "AND PLEASE REMEMBER DENY RULES TAKES PRECEDENCE OVER ALLOW RULES.")
       .withRequiredArg
-      .describedAs("deny-principals")
+      .describedAs("deny-principal")
       .ofType(classOf[String])
 
     val allowHostsOpt = parser.accepts("allow-hosts", "Comma separated list of hosts from which principals listed in --allow-principals will have access. " +
