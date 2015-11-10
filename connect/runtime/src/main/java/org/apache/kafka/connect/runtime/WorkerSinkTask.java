@@ -233,7 +233,8 @@ class WorkerSinkTask implements WorkerTask {
     private KafkaConsumer<byte[], byte[]> createConsumer() {
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
-        Map<String, Object> props = workerConfig.unusedConfigs();
+        Map<String, Object> props = new HashMap<>();
+
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "connect-" + id.connector());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
@@ -241,6 +242,8 @@ class WorkerSinkTask implements WorkerTask {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+
+        props.putAll(workerConfig.originalsWithPrefix("consumer."));
 
         KafkaConsumer<byte[], byte[]> newConsumer;
         try {
