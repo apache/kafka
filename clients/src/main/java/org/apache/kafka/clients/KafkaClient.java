@@ -65,13 +65,6 @@ public interface KafkaClient extends Closeable {
     public boolean connectionFailed(Node node);
 
     /**
-     * Check if the node with the given id is connected
-     * @param node the node
-     * @return true if the node is connected
-     */
-    public boolean isConnected(Node node);
-
-    /**
      * Queue up the given request for sending. Requests can only be sent on ready connections.
      * 
      * @param request The request
