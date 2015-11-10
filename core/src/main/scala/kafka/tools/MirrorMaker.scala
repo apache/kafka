@@ -393,16 +393,16 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           try {
             while (!exitingOnSendFailure && !shuttingDown && mirrorMakerConsumer.hasData) {
               val data = mirrorMakerConsumer.receive()
-              debug("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
+              trace("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
               val records = messageHandler.handle(data)
               records.foreach(producer.send)
               maybeFlushAndCommitOffsets()
             }
           } catch {
             case cte: ConsumerTimeoutException =>
-              debug("Caught ConsumerTimeoutException, continue iteration.")
+              trace("Caught ConsumerTimeoutException, continue iteration.")
             case we: WakeupException =>
-              debug("Caught ConsumerWakeupException, continue iteration.")
+              trace("Caught ConsumerWakeupException, continue iteration.")
           }
           maybeFlushAndCommitOffsets()
         }
@@ -433,11 +433,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     def maybeFlushAndCommitOffsets() {
       if (System.currentTimeMillis() - lastOffsetCommitMs > offsetCommitIntervalMs) {
-        debug("Flushing and committing according at tick.")
+        debug("Committing MirrorMaker state automatically.")
         producer.flush()
-        debug("Flushed at tick.")
         commitOffsets(mirrorMakerConsumer)
-        debug("Committed at tick.")
         lastOffsetCommitMs = System.currentTimeMillis()
       }
     }
@@ -509,6 +507,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
+    // TODO: we need to manually maintain the consumed offsets for new consumer
+    // since its internal consumed position is updated in batch rather than one
+    // record at a time, this can be resolved when we break the unification of both consumers
     private val offsets = new HashMap[TopicPartition, Long]()
 
     override def init() {
@@ -529,7 +530,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val tp = new TopicPartition(record.topic, record.partition)
 
       offsets.put(tp, record.offset + 1)
-      debug("Update %s with %d".format(tp, record.offset + 1))
 
       BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
     }
@@ -543,8 +543,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def commit() {
-      debug("Committing %s".format(offsets))
-
       consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))})
     }
   }

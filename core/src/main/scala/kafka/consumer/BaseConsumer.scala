@@ -20,8 +20,6 @@ package kafka.consumer
 import java.util.Properties
 import java.util.regex.Pattern
 
-import kafka.utils.Logging
-
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 
 /**
@@ -38,7 +36,7 @@ trait BaseConsumer {
 
 case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: Array[Byte], value: Array[Byte])
 
-class NewShinyConsumer(topic: Option[String], whitelist: Option[String], consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer with Logging {
+class NewShinyConsumer(topic: Option[String], whitelist: Option[String], consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
 
   import scala.collection.JavaConversions._
@@ -61,7 +59,6 @@ class NewShinyConsumer(topic: Option[String], whitelist: Option[String], consume
     }
 
     val record = recordIter.next
-
     BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
   }
 

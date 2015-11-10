@@ -373,7 +373,7 @@ public class Fetcher<K, V> {
                 } else if (part.fetchOffset == consumed) {
                     long nextOffset = part.records.get(part.records.size() - 1).offset() + 1;
 
-                    log.debug("Returning fetched records for assigned partition {} and update consumed position to {}", part.partition, nextOffset);
+                    log.trace("Returning fetched records for assigned partition {} and update consumed position to {}", part.partition, nextOffset);
 
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
                     if (records == null) {
