@@ -340,6 +340,8 @@ public class Fetcher<K, V> {
     /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
+     * NOTE: returning empty records guarantees the consumed position are NOT updated.
+     *
      * @return The fetched records per partition
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE

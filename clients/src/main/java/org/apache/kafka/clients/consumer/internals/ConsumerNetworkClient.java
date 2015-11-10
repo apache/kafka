@@ -141,10 +141,8 @@ public class ConsumerNetworkClient implements Closeable {
      * on the current poll if one is active, or the next poll.
      */
     public void wakeup() {
-        if (wakeupsEnabled) {
-            this.wakeup.set(true);
-            this.client.wakeup();
-        }
+        this.wakeup.set(true);
+        this.client.wakeup();
     }
 
     /**
@@ -301,7 +299,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void clientPoll(long timeout, long now) {
         client.poll(timeout, now);
-        if (wakeup.get()) {
+        if (wakeupsEnabled && wakeup.get()) {
             failUnsentRequests();
             wakeup.set(false);
             throw new WakeupException();
@@ -309,7 +307,6 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     public void disableWakeups() {
-        this.wakeup.set(false);
         this.wakeupsEnabled = false;
     }
 
