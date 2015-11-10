@@ -414,14 +414,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         info("Flushing producer.")
         producer.flush()
         info("Committing consumer offsets.")
-        try {
-          commitOffsets(mirrorMakerConsumer)
-        } catch {
-          case e: WakeupException => // just ignore
-        }
+        CoreUtils.swallow(commitOffsets(mirrorMakerConsumer))
         info("Shutting down consumer connectors.")
-        // we do not need to call consumer.close() since the consumer has already been interrupted
-        mirrorMakerConsumer.cleanup()
+        CoreUtils.swallow(mirrorMakerConsumer.stop())
+        CoreUtils.swallow(mirrorMakerConsumer.cleanup())
         shutdownLatch.countDown()
         info("Mirror maker thread stopped")
         // if it exits accidentally, stop the entire mirror maker
@@ -547,7 +543,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def cleanup() {
-      ClientUtils.swallow(consumer.close())
+      consumer.close()
     }
 
     override def commit() {
