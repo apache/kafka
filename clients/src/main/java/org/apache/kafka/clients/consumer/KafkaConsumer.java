@@ -760,7 +760,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
-            this.coordinator.maybeLeaveGroup(false);
+            this.coordinator.maybeLeaveGroup();
             this.metadata.needMetadataForAllTopics(false);
         } finally {
             release();
