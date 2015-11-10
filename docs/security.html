@@ -321,16 +321,14 @@ Kafka Authorization management CLI can be found under bin directory with all the
         <td>Resource</td>
     </tr>
     <tr>
-        <td>--allow-principals</td>
-        <td>Comma separated list of principals where principal is in PrincipalType:name format. <br>
-            These principals will be used to generate an ACL with Allow permission.</td>
+        <td>--allow-principal</td>
+        <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. <br>You can specify multiple --allow-principal in a single command.</td>
         <td></td>
         <td>Principal</td>
     </tr>
     <tr>
-        <td>--deny-principals</td>
-        <td>Comma separated list of principals where principal is in PrincipalType:name format. <br>
-            These principals will be used to generate an ACL with Deny permission.</td>
+        <td>--deny-principal</td>
+        <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. <br>You can specify multiple --deny-principal in a single command.</td>
         <td></td>
         <td>Principal</td>
     </tr>
@@ -372,14 +370,14 @@ Kafka Authorization management CLI can be found under bin directory with all the
 <ul>
     <li><b>Adding Acls</b><br>
 Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from Host1 and Host2". You can do that by executing the CLI with following options:
-        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principals User:Bob,User:Alice --allow-hosts Host1,Host2 --operations Read,Write --topic Test-topic</pre>
+        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-hosts Host1,Host2 --operations Read,Write --topic Test-topic</pre>
         By default all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principals and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from host bad-host we can do so using following commands:
-        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principals User:* --allow-hosts * --deny-principals User:BadBob --deny-hosts bad-host --operations Read--topic Test-topic</pre>
+        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-hosts * --deny-principal User:BadBob --deny-hosts bad-host --operations Read--topic Test-topic</pre>
         Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --consumer-group [group-name].</li>
 
     <li><b>Removing Acls</b><br>
-            Removing acls is pretty much same , the only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
-           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principals User:Bob,User:Alice --allow-hosts Host1,Host2 --operations Read,Write --topic Test-topic </pre></li>
+            Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
+           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-hosts Host1,Host2 --operations Read,Write --topic Test-topic </pre></li>
 
     <li><b>List Acls</b><br>
             We can list acls for any resource by specifying the --list option with the resource. To list all acls for Test-topic we can execute the CLI with following options:
@@ -387,9 +385,9 @@ Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed t
 
     <li><b>Adding or removing a principal as producer or consumer</b><br>
             The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
-           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principals User:Bob --producer --topic Test-topic</pre>
+           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --producer --topic Test-topic</pre>
             Similarly to add Alice as a consumer of Test-topic with consumer group Group-1 we just have to pass --consumer option:
-           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principals User:Bob --consumer --topic test-topic --consumer-group Group-1 </pre>
+           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --consumer --topic test-topic --consumer-group Group-1 </pre>
             Note that for consumer option we must also specify the consumer group.
             In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
     </ul>
