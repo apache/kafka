@@ -306,6 +306,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void close() {
+        // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
             if (autoCommitTask != null)
