@@ -101,7 +101,7 @@ public class Worker {
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
         producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
 
-        producerProps.putAll(config.unusedConfigs());
+        producerProps.putAll(config.originalsWithPrefix("producer."));
 
         producer = new KafkaProducer<>(producerProps);
 
