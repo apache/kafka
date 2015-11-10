@@ -205,6 +205,10 @@
       <allow pkg="org.powermock" />
     </subpackage>
 
+    <subpackage name="tools">
+      <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
   </subpackage>
 
 </import-control>

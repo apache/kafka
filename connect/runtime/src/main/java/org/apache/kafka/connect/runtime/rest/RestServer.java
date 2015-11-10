@@ -133,6 +133,8 @@ public class RestServer {
     }
 
     public void stop() {
+        log.info("Stopping REST server");
+
         try {
             jettyServer.stop();
             jettyServer.join();
@@ -141,6 +143,8 @@ public class RestServer {
         } finally {
             jettyServer.destroy();
         }
+
+        log.info("REST server stopped");
     }
 
     /**

@@ -27,6 +27,8 @@ import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.FutureCallback;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
@@ -51,6 +53,8 @@ import java.util.concurrent.TimeoutException;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class ConnectorsResource {
+    private static final Logger log = LoggerFactory.getLogger(ConnectorsResource.class);
+
     // TODO: This should not be so long. However, due to potentially long rebalances that may have to wait a full
     // session timeout to complete, during which we cannot serve some requests. Ideally we could reduce this, but
     // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
@@ -159,7 +163,9 @@ public class ConnectorsResource {
         } catch (ExecutionException e) {
             if (e.getCause() instanceof NotLeaderException) {
                 NotLeaderException notLeaderError = (NotLeaderException) e.getCause();
-                return translator.translate(RestServer.httpRequest(RestServer.urlJoin(notLeaderError.leaderUrl(), path), method, body, resultType));
+                String forwardUrl = RestServer.urlJoin(notLeaderError.leaderUrl(), path);
+                log.debug("Forwarding request to leader: {} {} {}", forwardUrl, method, body);
+                return translator.translate(RestServer.httpRequest(forwardUrl, method, body, resultType));
             }
 
             throw e.getCause();

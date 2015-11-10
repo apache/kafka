@@ -80,7 +80,7 @@ class WorkerSinkTaskThread extends ShutdownableThread {
         long commitTimeout = commitStarted + task.workerConfig().getLong(
                 WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
         if (committing && now >= commitTimeout) {
-            log.warn("Commit of {} offsets timed out", this);
+            log.warn("Commit of {} offsets timed out", task);
             commitFailures++;
             committing = false;
         }
@@ -98,11 +98,11 @@ class WorkerSinkTaskThread extends ShutdownableThread {
                         seqno, commitSeqno);
             } else {
                 if (error != null) {
-                    log.error("Commit of {} offsets threw an unexpected exception: ", this, error);
+                    log.error("Commit of {} offsets threw an unexpected exception: ", task, error);
                     commitFailures++;
                 } else {
                     log.debug("Finished {} offset commit successfully in {} ms",
-                            this, task.time().milliseconds() - commitStarted);
+                            task, task.time().milliseconds() - commitStarted);
                     commitFailures = 0;
                 }
                 committing = false;

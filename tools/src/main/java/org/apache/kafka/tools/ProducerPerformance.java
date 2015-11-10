@@ -24,6 +24,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
 import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.common.utils.ThroughputThrottler;
 
 public class ProducerPerformance {
 
