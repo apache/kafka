@@ -16,8 +16,9 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 * Install Vagrant >= 1.6.4 from [http://www.vagrantup.com/](http://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
 * Install system test dependiences, including ducktape, a command-line tool and library for testing distributed systems.
 
-        $ cd tests 
+        $ cd kafka/tests
         $ python setup.py develop
+        $ cd ..  # back to base kafka directory
 
 * Run the bootstrap script to set up Vagrant for testing
 
@@ -29,7 +30,6 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 
 * Build the desired branch of Kafka
        
-        $ cd ..  # back to main kafka directory
         $ git checkout $BRANCH
         $ gradle  # (only if necessary)
         $ ./gradlew systemTestLibs
