@@ -21,6 +21,7 @@ from kafkatest.services.security.security_config import SecurityConfig
 
 import json
 import os
+import signal
 import subprocess
 import time
 
@@ -128,9 +129,17 @@ class VerifiableProducer(BackgroundThreadService):
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
         return cmd
 
+    def kill_node(self, node, clean_shutdown=True, allow_fail=False):
+        if clean_shutdown:
+            sig = signal.SIGTERM
+        else:
+            sig = signal.SIGKILL
+        for pid in self.pids(node):
+            node.account.signal(pid, sig, allow_fail)
+
     def pids(self, node):
         try:
-            cmd = "ps ax | grep -i VerifiableProducer | grep java | grep -v grep | awk '{print $1}'"
+            cmd = "jps | grep -i VerifiableProducer | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (subprocess.CalledProcessError, ValueError) as e:
@@ -160,7 +169,7 @@ class VerifiableProducer(BackgroundThreadService):
             return len(self.not_acked_values)
 
     def stop_node(self, node):
-        node.account.kill_process("VerifiableProducer", allow_fail=False)
+        self.kill_node(node, clean_shutdown=False, allow_fail=False)
         if self.worker_threads is None:
             return
 
@@ -170,7 +179,7 @@ class VerifiableProducer(BackgroundThreadService):
             self.worker_threads[self.idx(node) - 1].join()
 
     def clean_node(self, node):
-        node.account.kill_process("VerifiableProducer", clean_shutdown=False, allow_fail=False)
+        self.kill_node(node, clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
 
