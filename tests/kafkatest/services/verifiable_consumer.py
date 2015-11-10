@@ -18,7 +18,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.services.kafka.util import TopicPartition
+from kafkatest.services.kafka import TopicPartition
 
 from collections import namedtuple
 import json

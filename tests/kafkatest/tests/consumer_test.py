@@ -21,7 +21,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
-from kafkatest.services.kafka.util import TopicPartition
+from kafkatest.services.kafka import TopicPartition
 
 def partitions_for(topic, num_partitions):
     partitions = set()
