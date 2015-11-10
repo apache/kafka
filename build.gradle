@@ -319,7 +319,7 @@ project(':core') {
     standardOutput = new File('docs/kafka_config.html').newOutputStream()
   }
 
-  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs'], type: Tar) {
+  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs', ':connect:runtime:genConnectConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
@@ -818,6 +818,12 @@ project(':connect:runtime') {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  tasks.create(name: "genConnectConfigDocs", dependsOn:jar, type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
+    standardOutput = new File('docs/connect_config.html').newOutputStream()
+  }
 }
 
 project(':connect:file') {

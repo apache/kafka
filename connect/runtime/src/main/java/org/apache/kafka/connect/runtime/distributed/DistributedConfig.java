@@ -184,4 +184,7 @@ public class DistributedConfig extends WorkerConfig {
         super(CONFIG, props);
     }
 
+    public static void main(String[] args) {
+        System.out.println(CONFIG.toHtmlTable());
+    }
 }
