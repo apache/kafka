@@ -191,7 +191,7 @@ class WorkerSinkTask implements WorkerTask {
         try {
             task.flush(offsets);
         } catch (Throwable t) {
-            log.error("Commit of {} offsets failed due to exception while flushing: {}", this, t);
+            log.error("Commit of {} offsets failed due to exception while flushing:", this, t);
             log.error("Rewinding offsets to last committed offsets");
             for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
                 log.debug("{} Rewinding topic partition {} to offset {}", id, entry.getKey(), entry.getValue().offset());
@@ -240,7 +240,8 @@ class WorkerSinkTask implements WorkerTask {
     private KafkaConsumer<byte[], byte[]> createConsumer() {
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
-        Map<String, Object> props = workerConfig.unusedConfigs();
+        Map<String, Object> props = new HashMap<>();
+
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "connect-" + id.connector());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
@@ -248,6 +249,8 @@ class WorkerSinkTask implements WorkerTask {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+
+        props.putAll(workerConfig.originalsWithPrefix("consumer."));
 
         KafkaConsumer<byte[], byte[]> newConsumer;
         try {
@@ -295,7 +298,7 @@ class WorkerSinkTask implements WorkerTask {
                 pausedForRedelivery = false;
             }
         } catch (RetriableException e) {
-            log.error("RetriableException from SinkTask {}: {}", id, e);
+            log.error("RetriableException from SinkTask {}:", id, e);
             // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,
             // but will still be able to poll in order to handle user-requested timeouts, keep group membership, etc.
             pausedForRedelivery = true;
@@ -368,8 +371,10 @@ class WorkerSinkTask implements WorkerTask {
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            task.onPartitionsRevoked(partitions);
-            commitOffsets(true, -1);
+            if (started) {
+                task.onPartitionsRevoked(partitions);
+                commitOffsets(true, -1);
+            }
             // Make sure we don't have any leftover data since offsets will be reset to committed positions
             messageBatch.clear();
         }
