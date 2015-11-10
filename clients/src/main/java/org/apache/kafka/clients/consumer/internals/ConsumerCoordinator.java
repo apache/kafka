@@ -339,6 +339,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
      */
     public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        log.debug("Committing offsets {}", offsets);
+
         if (offsets.isEmpty())
             return;
 

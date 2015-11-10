@@ -32,7 +32,7 @@ import kafka.message.MessageAndMetadata
 import kafka.metrics.KafkaMetricsGroup
 import kafka.serializer.DefaultDecoder
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.WakeupException
 
 import scala.collection.JavaConversions._
+import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 
 /**
@@ -392,16 +393,16 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           try {
             while (!exitingOnSendFailure && !shuttingDown && mirrorMakerConsumer.hasData) {
               val data = mirrorMakerConsumer.receive()
-              trace("Sending message with value size %d".format(data.value.length))
+              debug("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
               val records = messageHandler.handle(data)
               records.foreach(producer.send)
               maybeFlushAndCommitOffsets()
             }
           } catch {
             case cte: ConsumerTimeoutException =>
-              trace("Caught ConsumerTimeoutException, continue iteration.")
+              debug("Caught ConsumerTimeoutException, continue iteration.")
             case we: WakeupException =>
-              trace("Caught ConsumerWakeupException, continue iteration.")
+              debug("Caught ConsumerWakeupException, continue iteration.")
           }
           maybeFlushAndCommitOffsets()
         }
@@ -432,8 +433,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     def maybeFlushAndCommitOffsets() {
       if (System.currentTimeMillis() - lastOffsetCommitMs > offsetCommitIntervalMs) {
+        debug("Flushing and committing according at tick.")
         producer.flush()
+        debug("Flushed at tick.")
         commitOffsets(mirrorMakerConsumer)
+        debug("Committed at tick.")
         lastOffsetCommitMs = System.currentTimeMillis()
       }
     }
@@ -505,6 +509,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
+    private val offsets = new HashMap[TopicPartition, Long]()
+
     override def init() {
       debug("Initiating new consumer")
       val consumerRebalanceListener = new InternalRebalanceListenerForNewConsumer(this, customRebalanceListener)
@@ -520,6 +526,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         recordIter = consumer.poll(1000).iterator
 
       val record = recordIter.next()
+      val tp = new TopicPartition(record.topic, record.partition)
+
+      offsets.put(tp, record.offset + 1)
+      debug("Update %s with %d".format(tp, record.offset + 1))
+
       BaseConsumerRecord(record.topic, record.partition, record.offset, record.key, record.value)
     }
 
@@ -532,7 +543,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def commit() {
-      consumer.commitSync()
+      debug("Committing %s".format(offsets))
+
+      consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))})
     }
   }
 
