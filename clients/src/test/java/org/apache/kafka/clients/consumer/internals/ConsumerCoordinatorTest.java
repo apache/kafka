@@ -418,7 +418,7 @@ public class ConsumerCoordinatorTest {
                         leaveRequest.groupId().equals(groupId);
             }
         }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
-        coordinator.maybeLeaveGroup(false);
+        coordinator.maybeLeaveGroup();
         assertTrue(received.get());
         assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, coordinator.memberId);
         assertEquals(OffsetCommitRequest.DEFAULT_GENERATION_ID, coordinator.generation);
@@ -672,7 +672,7 @@ public class ConsumerCoordinatorTest {
         // now switch to manual assignment
         client.prepareResponse(new LeaveGroupResponse(Errors.NONE.code()).toStruct());
         subscriptions.unsubscribe();
-        coordinator.maybeLeaveGroup(false);
+        coordinator.maybeLeaveGroup();
         subscriptions.assignFromUser(Arrays.asList(tp));
 
         // the client should not reuse generation/memberId from auto-subscribed generation
