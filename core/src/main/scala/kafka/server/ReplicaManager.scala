@@ -770,7 +770,10 @@ class ReplicaManager(val config: KafkaConfig,
               partition.topic, partition.partitionId, newLeaderBrokerId))
             // Create the local replica even if the leader is unavailable. This is required to ensure that we include
             // the partition's high watermark in the checkpoint file (see KAFKA-1647)
-            partition.getOrCreateReplica()
+            partitionStateInfo.replicaDirs.get(localBrokerId.toString) match {
+              case Some(logDir) => partition.getOrCreateReplicaWithFixedDir(logDir.asInstanceOf[String])
+              case _ => partition.getOrCreateReplica()
+            }
         }
       }
 

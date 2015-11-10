@@ -33,16 +33,33 @@ public class UpdateMetadataRequest extends AbstractRequest {
         public final List<Integer> isr;
         public final int zkVersion;
         public final Set<Integer> replicas;
+        public final Map<String, String> replicaLogDirs;
 
-        public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, Set<Integer> replicas) {
+        public PartitionState(int controllerEpoch,
+                              int leader, int leaderEpoch,
+                              List<Integer> isr,
+                              int zkVersion, Set<Integer> replicas) {
             this.controllerEpoch = controllerEpoch;
             this.leader = leader;
             this.leaderEpoch = leaderEpoch;
             this.isr = isr;
             this.zkVersion = zkVersion;
             this.replicas = replicas;
+            this.replicaLogDirs = new HashMap<String, String>();
         }
 
+        public PartitionState(int controllerEpoch, int leader,
+                              int leaderEpoch, List<Integer> isr,
+                              int zkVersion, Set<Integer> replicas,
+                              Map<String, String> replicaLogDirs) {
+            this.controllerEpoch = controllerEpoch;
+            this.leader = leader;
+            this.leaderEpoch = leaderEpoch;
+            this.isr = isr;
+            this.zkVersion = zkVersion;
+            this.replicas = replicas;
+            this.replicaLogDirs = replicaLogDirs;
+        }
     }
 
     public static final class Broker {
@@ -93,6 +110,11 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final String ISR_KEY_NAME = "isr";
     private static final String ZK_VERSION_KEY_NAME = "zk_version";
     private static final String REPLICAS_KEY_NAME = "replicas";
+    private static final String REPLICA_LOGDIRS_KEY_NAME = "replica_logdirs";
+
+    // replica_logdirs key names
+    private static final String REPLICA_ID_KEY_NAME = "replica";
+    private static final String LOG_DIR_KEY_NAME = "log_dir";
 
     // Broker key names
     private static final String BROKER_ID_KEY_NAME = "id";
@@ -155,6 +177,14 @@ public class UpdateMetadataRequest extends AbstractRequest {
             partitionStateData.set(ISR_KEY_NAME, partitionState.isr.toArray());
             partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.zkVersion);
             partitionStateData.set(REPLICAS_KEY_NAME, partitionState.replicas.toArray());
+            List<Struct> replicaLogDirs = new ArrayList<>(partitionState.replicaLogDirs.size());
+            for (Map.Entry<String, String> dirEntry : partitionState.replicaLogDirs.entrySet()) {
+                Struct replicaLogDir = partitionStateData.instance(REPLICA_LOGDIRS_KEY_NAME);
+                replicaLogDir.set(REPLICA_ID_KEY_NAME, dirEntry.getKey());
+                replicaLogDir.set(LOG_DIR_KEY_NAME, dirEntry.getValue());
+                replicaLogDirs.add(replicaLogDir);
+            }
+            partitionStateData.set(REPLICA_LOGDIRS_KEY_NAME, replicaLogDirs.toArray());
             partitionStatesData.add(partitionStateData);
         }
         struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
@@ -215,9 +245,14 @@ public class UpdateMetadataRequest extends AbstractRequest {
             for (Object r : replicasArray)
                 replicas.add((Integer) r);
 
-            PartitionState partitionState = new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
+            Object[] replicaLogDirsArray = partitionStateData.getArray(REPLICA_LOGDIRS_KEY_NAME);
+            HashMap<String, String> replicaLogDirs = new HashMap<>();
+            for (Object logDirObj : replicaLogDirsArray) {
+                Struct logDir = (Struct) logDirObj;
+                replicaLogDirs.put(logDir.getString(REPLICA_ID_KEY_NAME), logDir.getString(LOG_DIR_KEY_NAME));
+            }
+            PartitionState partitionState = new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas, replicaLogDirs);
             partitionStates.put(new TopicPartition(topic, partition), partitionState);
-
         }
 
         Set<Broker> liveBrokers = new HashSet<>();

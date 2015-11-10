@@ -104,6 +104,30 @@ class Partition(val topic: String,
     }
   }
 
+  def getOrCreateReplicaWithFixedDir(replicaDir: String, replicaId: Int = localBrokerId): Replica = {
+    val replicaOpt = getReplica(replicaId)
+    replicaOpt match {
+      case Some(replica) => replica
+      case None =>
+        if (isReplicaLocal(replicaId)) {
+          val config = LogConfig.fromProps(logManager.defaultConfig.originals,
+            AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
+          val log = logManager.createLog(TopicAndPartition(topic, partitionId), config, replicaDir)
+          val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
+          val offsetMap = checkpoint.read
+          if (!offsetMap.contains(TopicAndPartition(topic, partitionId)))
+            warn("No checkpointed highwatermark is found for partition [%s,%d]".format(topic, partitionId))
+          val offset = offsetMap.getOrElse(TopicAndPartition(topic, partitionId), 0L).min(log.logEndOffset)
+          val localReplica = new Replica(replicaId, this, time, offset, Some(log))
+          addReplicaIfNotExists(localReplica)
+        } else {
+          val remoteReplica = new Replica(replicaId, this, time)
+          addReplicaIfNotExists(remoteReplica)
+        }
+        getReplica(replicaId).get
+    }
+  }
+
   def getReplica(replicaId: Int = localBrokerId): Option[Replica] = {
     val replica = assignedReplicaMap.get(replicaId)
     if (replica == null)
@@ -206,7 +230,10 @@ class Partition(val topic: String,
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
       // add replicas that are new
-      allReplicas.foreach(r => getOrCreateReplica(r))
+      allReplicas.foreach(replica => partitionStateInfo.replicaDirs.get(replica.toString) match {
+        case Some(replicaDir) => getOrCreateReplicaWithFixedDir(replicaDir, replica)
+        case _ => getOrCreateReplica(replica)
+      })
       // remove assigned replicas that have been removed by the controller
       (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
       inSyncReplicas = Set.empty[Replica]

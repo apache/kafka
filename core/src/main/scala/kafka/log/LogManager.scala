@@ -342,7 +342,7 @@ class LogManager(val logDirs: Array[File],
    * Create a log for the given topic and the given partition
    * If the log already exists, just return a copy of the existing log
    */
-  def createLog(topicAndPartition: TopicAndPartition, config: LogConfig): Log = {
+  def createLog(topicAndPartition: TopicAndPartition, config: LogConfig, logDir: String = null): Log = {
     logCreationOrDeletionLock synchronized {
       var log = logs.get(topicAndPartition)
       
@@ -351,7 +351,11 @@ class LogManager(val logDirs: Array[File],
         return log
       
       // if not, create it
-      val dataDir = nextLogDir()
+      var dataDir: File = null
+      if (logDir != null && !logDir.isEmpty)
+        dataDir = new File(logDir)
+      else
+        dataDir = nextLogDir()
       val dir = new File(dataDir, topicAndPartition.topic + "-" + topicAndPartition.partition)
       dir.mkdirs()
       log = new Log(dir, 
