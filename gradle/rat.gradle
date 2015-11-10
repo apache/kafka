@@ -17,6 +17,16 @@
  * under the License.
  */
 
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+
+  dependencies {
+    classpath 'org.ajoberstar:grgit:1.4.1'  // For Apache Rat plugin to ignore non-Git files
+  }
+}
+
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
@@ -111,5 +121,25 @@ class RatPlugin implements Plugin<Project> {
     project.dependencies {
       rat 'org.apache.rat:apache-rat-tasks:0.11'
     }
+  }
+}
+
+import org.ajoberstar.grgit.Grgit
+if (new File("$rootDir/.git").exists()) {
+  rat {
+    // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
+    // restrict us only to files that are checked in or are staged.
+    def repo = Grgit.open(project.file('.'))
+    excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
+    // And some of the files that we have checked in should also be excluded from this check
+    excludes.addAll([
+      '**/.git/**',
+      '**/build/**',
+      'CONTRIBUTING.md',
+      'gradlew',
+      'gradlew.bat',
+      '**/README.md',
+      '.reviewboardrc'
+    ])
   }
 }

@@ -1,0 +1,145 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'signing'
+
+sourceCompatibility = 1.7
+
+// Java configuration
+if (JavaVersion.current().isJava8Compatible()) {
+    tasks.withType(Javadoc) {
+        // disable the crazy super-strict doclint tool in Java 8
+        //noinspection SpellCheckingInspection
+        options.addStringOption('Xdoclint:none', '-quiet')
+    }
+}
+
+// Scala configuration
+tasks.withType(ScalaCompile) {
+    scalaCompileOptions.useAnt = false
+
+    configure(scalaCompileOptions.forkOptions) {
+        memoryMaximumSize = '1g'
+        jvmArgs = ['-XX:MaxPermSize=512m', '-Xss2m']
+    }
+}
+
+// Add license and notice to jar
+jar {
+    from '../LICENSE'
+    from '../NOTICE'
+}
+
+// Create a source jar
+task srcJar(type:Jar) {
+    classifier = 'sources'
+    from '../LICENSE'
+    from '../NOTICE'
+    from sourceSets.main.java
+}
+
+// Create a javadoc jar
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier 'javadoc'
+    from '../LICENSE'
+    from '../NOTICE'
+    from javadoc.destinationDir
+}
+
+// Create a test jar
+task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+}
+
+// Add additional jars to built artifacts
+artifacts {
+    archives srcJar
+    archives javadocJar
+    archives testJar
+}
+
+task docsJar(dependsOn: javadocJar)
+
+task systemTestLibs(dependsOn: jar)
+
+// If this is a scala module
+plugins.withType(ScalaPlugin) {
+    // Source jar should also contain scala source:
+    srcJar.from sourceSets.main.scala
+
+    // Create a scaladoc jar
+    task scaladocJar(type:Jar) {
+        classifier = 'scaladoc'
+        from '../LICENSE'
+        from '../NOTICE'
+        from scaladoc
+    }
+
+    // Documentation task should also trigger building scala doc jar
+    docsJar.dependsOn scaladocJar
+
+    // Add additional scaladocJar jar to built artifacts
+    artifacts {
+        archives scaladocJar
+    }
+}
+
+ext {
+    skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
+    shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
+
+    mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
+    mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
+    mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+}
+
+uploadArchives {
+    repositories {
+        signing {
+            required { shouldSign }
+            sign configurations.archives
+
+            // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
+            mavenDeployer {
+                beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+                repository(url: "${mavenUrl}") {
+                    authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
+                }
+                afterEvaluate {
+                    pom.artifactId = "${archivesBaseName}"
+                    pom.project {
+                        name 'Apache Kafka'
+                        packaging 'jar'
+                        url 'http://kafka.apache.org'
+                        licenses {
+                            license {
+                                name 'The Apache Software License, Version 2.0'
+                                url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                                distribution 'repo'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

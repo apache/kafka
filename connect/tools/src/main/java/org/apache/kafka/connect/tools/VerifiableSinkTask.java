@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Counterpart to {@link VerifiableSourceTask} that consumes records and logs information about each to stdout. This
