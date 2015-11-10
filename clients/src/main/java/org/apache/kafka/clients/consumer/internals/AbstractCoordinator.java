@@ -547,6 +547,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Leave the current group and reset local generation/memberId.
      */
     public void maybeLeaveGroup(boolean awaitResponse) {
+        client.unschedule(heartbeatTask);
         if (!coordinatorUnknown() && generation > 0) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
