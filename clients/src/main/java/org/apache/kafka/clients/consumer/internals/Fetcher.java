@@ -596,7 +596,6 @@ public class Fetcher<K, V> {
         } catch (RuntimeException e) {
             throw new KafkaException("Error deserializing key/value for partition " + partition + " at offset " + logEntry.offset(), e);
         }
-
     }
 
     private static class PartitionRecords<K, V> {
