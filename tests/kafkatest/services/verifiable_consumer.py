@@ -20,12 +20,94 @@ from kafkatest.services.kafka.version import TRUNK
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.kafka import TopicPartition
 
-from collections import namedtuple
 import json
 import os
+import signal
 import subprocess
 import time
-import signal
+
+class ConsumerState:
+    Dead = 1
+    Rebalancing = 3
+    Joined = 2
+
+class ConsumerEventHandler(object):
+
+    def __init__(self, node):
+        self.node = node
+        self.state = ConsumerState.Dead
+        self.revoked_count = 0
+        self.assigned_count = 0
+        self.assignment = []
+        self.position = {}
+        self.committed = {}
+        self.total_consumed = 0
+
+    def handle_shutdown_complete(self):
+        self.state = ConsumerState.Dead
+        self.assignment = []
+
+    def handle_offsets_committed(self, event):
+        if event["success"]:
+            for offset_commit in event["offsets"]:
+                topic = offset_commit["topic"]
+                partition = offset_commit["partition"]
+                tp = TopicPartition(topic, partition)
+                offset = offset_commit["offset"]
+                assert tp in self.assignment, "Committed offsets for a partition not assigned"
+                assert self.position[tp] <= offset, "The committed offset was greater than the current position"
+                self.committed[tp] = offset
+
+    def handle_records_consumed(self, event):
+        assert self.state == ConsumerState.Joined, "Consumed records should only be received when joined"
+
+        for record_batch in event["partitions"]:
+            tp = TopicPartition(topic=record_batch["topic"],
+                                partition=record_batch["partition"])
+            minOffset = record_batch["minOffset"]
+            maxOffset = record_batch["maxOffset"]
+
+            assert tp in self.assignment, "Consumed records for a partition not assigned"
+            assert tp not in self.position or self.position[tp] == minOffset, "Consumed from an unexpected offset"
+            self.position[tp] = maxOffset + 1 
+
+        self.total_consumed += event["count"]
+
+    def handle_partitions_revoked(self, event):
+        self.revoked_count += 1
+        self.state = ConsumerState.Rebalancing
+
+    def handle_partitions_assigned(self, event):
+        self.assigned_count += 1
+        self.state = ConsumerState.Joined
+        assignment = []
+        for topic_partition in event["partitions"]:
+            topic = topic_partition["topic"]
+            partition = topic_partition["partition"]
+            assignment.append(TopicPartition(topic, partition))
+        self.assignment = assignment
+
+    def handle_kill_process(self, clean_shutdown):
+        # if the shutdown was clean, then we expect the explicit
+        # shutdown event from the consumer
+        if not clean_shutdown:
+            self.state = ConsumerState.Dead
+            self.assignment = []
+
+    def current_assignment(self):
+        return list(self.assignment)
+
+    def current_position(self, tp):
+        if tp in self.position:
+            return self.position[tp]
+        else:
+            return None
+
+    def last_commit(self, tp):
+        if tp in self.committed:
+            return self.committed[tp]
+        else:
+            return None
 
 class VerifiableConsumer(BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_consumer"
@@ -49,7 +131,8 @@ class VerifiableConsumer(BackgroundThreadService):
         }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 max_messages=-1, session_timeout=30000, version=TRUNK):
+                 max_messages=-1, session_timeout=30000, enable_autocommit=False,
+                 version=TRUNK):
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = "TRACE"
         
@@ -58,23 +141,22 @@ class VerifiableConsumer(BackgroundThreadService):
         self.group_id = group_id
         self.max_messages = max_messages
         self.session_timeout = session_timeout
-
-        self.assignment = {}
-        self.joined = set()
-        self.total_records = 0
-        self.consumed_positions = {}
-        self.committed_offsets = {}
-        self.revoked_count = 0
-        self.assigned_count = 0
-
-        for node in self.nodes:
-            node.version = version
-
+        self.enable_autocommit = enable_autocommit
         self.prop_file = ""
         self.security_config = kafka.security_config.client_config(self.prop_file)
         self.prop_file += str(self.security_config)
 
+        self.event_handlers = {}
+        self.global_position = {}
+        self.global_committed = {}
+
+        for node in self.nodes:
+            node.version = version
+
     def _worker(self, idx, node):
+        handler = ConsumerEventHandler(node)
+        self.event_handlers[node] = handler
+
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
@@ -92,55 +174,40 @@ class VerifiableConsumer(BackgroundThreadService):
 
         for line in node.account.ssh_capture(cmd):
             event = self.try_parse_json(line.strip())
-            if event is not None:
-                with self.lock:
-                    name = event["name"]
-                    if name == "shutdown_complete":
-                        self._handle_shutdown_complete(node)
-                    if name == "offsets_committed":
-                        self._handle_offsets_committed(node, event)
-                    elif name == "records_consumed":
-                        self._handle_records_consumed(node, event)
-                    elif name == "partitions_revoked":
-                        self._handle_partitions_revoked(node, event)
-                    elif name == "partitions_assigned":
-                        self._handle_partitions_assigned(node, event)
+            with self.lock:
+                name = event["name"]
+                if name == "shutdown_complete":
+                    handler.handle_shutdown_complete()
+                if name == "offsets_committed":
+                    handler.handle_offsets_committed(event)
+                    self._update_global_committed(event)
+                elif name == "records_consumed":
+                    handler.handle_records_consumed(event)
+                    self._update_global_position(event)
+                elif name == "partitions_revoked":
+                    handler.handle_partitions_revoked(event)
+                elif name == "partitions_assigned":
+                    handler.handle_partitions_assigned(event)
 
-    def _handle_shutdown_complete(self, node):
-        if node in self.joined:
-            self.joined.remove(node)
+    def _update_global_position(self, consumed_event):
+        for consumed_partition in consumed_event["partitions"]:
+            tp = TopicPartition(consumed_partition["topic"], consumed_partition["partition"])
+            if tp in self.global_committed:
+                # verify that the position never gets behind the current commit.
+                # it would be nice to also verify that the position increases monotonically
+                # without gaps, but we cannot generally guarantee this for hard client failures
+                assert self.global_committed[tp] <= consumed_partition["minOffset"], \
+                    "Consumed position is behind the current committed offset"
 
-    def _handle_offsets_committed(self, node, event):
-        if event["success"]:
-            for offset_commit in event["offsets"]:
-                topic = offset_commit["topic"]
-                partition = offset_commit["partition"]
-                tp = TopicPartition(topic, partition)
-                self.committed_offsets[tp] = offset_commit["offset"]
+            self.global_position[tp] = consumed_partition["maxOffset"] + 1
 
-    def _handle_records_consumed(self, node, event):
-        for topic_partition in event["partitions"]:
-            topic = topic_partition["topic"]
-            partition = topic_partition["partition"]
-            tp = TopicPartition(topic, partition)
-            self.consumed_positions[tp] = topic_partition["maxOffset"] + 1
-        self.total_records += event["count"]
-
-    def _handle_partitions_revoked(self, node, event):
-        self.revoked_count += 1
-        self.assignment[node] = []
-        if node in self.joined:
-            self.joined.remove(node)
-
-    def _handle_partitions_assigned(self, node, event):
-        self.assigned_count += 1
-        self.joined.add(node)
-        assignment =[]
-        for topic_partition in event["partitions"]:
-            topic = topic_partition["topic"]
-            partition = topic_partition["partition"]
-            assignment.append(TopicPartition(topic, partition))
-        self.assignment[node] = assignment
+    def _update_global_committed(self, commit_event):
+        for offset_commit in commit_event["offsets"]:
+            tp = TopicPartition(offset_commit["topic"], offset_commit["partition"])
+            offset = offset_commit["offset"]
+            assert self.global_position[tp] >= offset, \
+                "committed offset is ahead of the current partition"
+            self.global_committed[tp] = offset
 
     def start_cmd(self, node):
         cmd = ""
@@ -148,14 +215,14 @@ class VerifiableConsumer(BackgroundThreadService):
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableConsumer" \
-              " --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
-              (self.group_id, self.topic, self.kafka.bootstrap_servers(), self.session_timeout)
+              " --group-id %s --topic %s --broker-list %s --session-timeout %s %s" % \
+              (self.group_id, self.topic, self.kafka.bootstrap_servers(), self.session_timeout,
+               "--enable-autocommit" if self.enable_autocommit else "")
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
         cmd += " --consumer.config %s" % VerifiableConsumer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableConsumer.STDOUT_CAPTURE, VerifiableConsumer.STDOUT_CAPTURE)
-        print(cmd)
         return cmd
 
     def pids(self, node):
@@ -174,6 +241,10 @@ class VerifiableConsumer(BackgroundThreadService):
             self.logger.debug("Could not parse as json: %s" % str(string))
             return None
 
+    def stop_all(self):
+        for node in self.event_handlers:
+            self.stop_node(node)
+
     def kill_node(self, node, clean_shutdown=True, allow_fail=False):
         if clean_shutdown:
             sig = signal.SIGTERM
@@ -182,11 +253,10 @@ class VerifiableConsumer(BackgroundThreadService):
         for pid in self.pids(node):
             node.account.signal(pid, sig, allow_fail)
 
-        if not clean_shutdown:
-            self._handle_shutdown_complete(node)
+        self.event_handlers[node].handle_kill_process(clean_shutdown)
 
-    def stop_node(self, node, clean_shutdown=True, allow_fail=False):
-        self.kill_node(node, clean_shutdown, allow_fail)
+    def stop_node(self, node):
+        self.kill_node(node)
         
         if self.worker_threads is None:
             return
@@ -203,20 +273,47 @@ class VerifiableConsumer(BackgroundThreadService):
 
     def current_assignment(self):
         with self.lock:
-            return self.assignment
+            return dict((handler.node, handler.current_assignment()) for handler in self.event_handlers.itervalues())
 
-    def position(self, tp):
+    def current_position(self, tp):
         with self.lock:
-            return self.consumed_positions[tp]
+            if tp in self.global_position:
+                return self.global_position[tp]
+            else:
+                return None
 
     def owner(self, tp):
-        with self.lock:
-            for node, assignment in self.assignment.iteritems():
-                if tp in assignment:
-                    return node
-            return None
+        for handler in self.event_handlers.itervalues():
+            if tp in handler.current_assignment():
+                return handler.node
+        return None
 
-    def committed(self, tp):
+    def last_commit(self, tp):
         with self.lock:
-            return self.committed_offsets[tp]
+            if tp in self.global_committed:
+                return self.global_committed[tp]
+            else:
+                return None
 
+    def total_consumed(self):
+        with self.lock:
+            return sum(handler.total_consumed for handler in self.event_handlers.itervalues())
+
+    def num_rebalances(self):
+        with self.lock:
+            return max(handler.assigned_count for handler in self.event_handlers.itervalues())
+
+    def joined_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.itervalues()
+                    if handler.state == ConsumerState.Joined]
+
+    def rebalancing_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.itervalues()
+                    if handler.state == ConsumerState.Rebalancing]
+
+    def dead_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.itervalues()
+                    if handler.state == ConsumerState.Dead]        
