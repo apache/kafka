@@ -88,11 +88,7 @@ class ConnectServiceBase(Service):
             self.start_node(node)
 
     def clean_node(self, node):
-        if len(self.pids(node)) > 0:
-            self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
-                             (self.__class__.__name__, node.account))
-        self.stop_node(node, clean_shutdown=False)
-
+        node.account.kill_process("connect", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf " + " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE] + self.config_filenames() + self.files), allow_fail=False)
 
     def config_filenames(self):
