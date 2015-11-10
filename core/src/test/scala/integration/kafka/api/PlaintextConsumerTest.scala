@@ -437,8 +437,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       consumer.unsubscribe()
   }
 
+  /**
+   * This test re-uses BaseConsumerTest's consumers.
+   * As a result, it is testing the default assignment strategy set by BaseConsumerTest
+   */
   @Test
-  def testMultiConsumerAssignment() {
+  def testMultiConsumerDefaultAssignment() {
     // use consumers and topics defined in this class + one more topic
     sendRecords(100, tp)
     sendRecords(100, tp2)
