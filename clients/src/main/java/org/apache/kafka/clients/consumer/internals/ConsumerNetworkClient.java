@@ -52,7 +52,8 @@ public class ConsumerNetworkClient implements Closeable {
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
-    private boolean wakeupsEnabled = true;
+    // wakeup enabled flag need to be volatile since it is allowed to be accessed concurrently
+    volatile private boolean wakeupsEnabled = true;
 
     public ConsumerNetworkClient(KafkaClient client,
                                  Metadata metadata,
@@ -312,6 +313,11 @@ public class ConsumerNetworkClient implements Closeable {
 
     public void enableWakeups() {
         this.wakeupsEnabled = true;
+
+        // re-wakeup the client if the flag was set since previous wake-up call
+        // could be cleared by poll(0) while wakeups were disabled
+        if (wakeup.get())
+            this.client.wakeup();
     }
 
     @Override
