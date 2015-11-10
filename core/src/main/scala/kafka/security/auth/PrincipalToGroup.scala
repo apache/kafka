@@ -16,18 +16,20 @@
  */
 package kafka.security.auth
 
-import java.util
+import java.security.Principal
 
-import kafka.utils._
+import org.apache.kafka.common.Configurable
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
-class KerberosPrincipalToLocal extends PrincipalToLocal with Logging  {
+/**
+ * A plugin that converts kafka Principal to Groups.
+ */
+trait PrincipalToGroup extends Configurable {
 
-  override def toLocal(principal: KafkaPrincipal): KafkaPrincipal = {
-    new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal.getName.split("[/@]")(0))
-  }
-
-  override def configure(configs: util.Map[String, _]) = {
-    //no-op
-  }
+  /**
+   *
+   * @param principal
+   * @return Set of Groups this principal is part of, empty Set if not part of any group.
+   */
+  def toGroups(principal: KafkaPrincipal): Set[KafkaPrincipal]
 }

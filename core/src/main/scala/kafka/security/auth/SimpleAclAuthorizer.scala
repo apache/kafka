@@ -44,8 +44,9 @@ object SimpleAclAuthorizer {
   //If set to true when no acls are found for a resource , authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
   //FQCN of Plugin class that can convert kafka principal to local user name.
-  val PrincipalToLocalProp = "principal.to.local.class"
-
+  val PrincipalToLocalProp = "principal.to.local.class.name"
+  //FQCN of Plugin class that can convert principal to group name.
+  val PrincipalToGroupPlugin = "principal.to.group.class.name"
   /**
    * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, ConsumerGroup).
    * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
@@ -72,6 +73,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
   private var principalToLocalPlugin: Option[PrincipalToLocal] = None
+  private var principalToGroupPlugin: Option[PrincipalToGroup] = None
 
   private var zkUtils: ZkUtils = null
   private var aclChangeListener: ZkNodeChangeNotificationListener = null
@@ -92,9 +94,16 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       case str: String if str.nonEmpty => str.split(",").map(s => KafkaPrincipal.fromString(s.trim)).toSet
     }.getOrElse(Set.empty[KafkaPrincipal])
 
-    principalToLocalPlugin = configs.get(SimpleAclAuthorizer.PrincipalToLocalProp).collect {
-      case str: String if str.nonEmpty => CoreUtils.createObject(str)
+    def getInstanceForConfig(configName: String): Option[Nothing] = {
+      configs.get(configName).collect {
+        case str: String if str.nonEmpty => CoreUtils.createObject(str)
+      }
     }
+    principalToLocalPlugin = getInstanceForConfig(SimpleAclAuthorizer.PrincipalToLocalProp)
+    principalToGroupPlugin = getInstanceForConfig(SimpleAclAuthorizer.PrincipalToGroupPlugin)
+
+    principalToLocalPlugin.foreach(_.configure(javaConfigs))
+    principalToGroupPlugin.foreach(_.configure(javaConfigs))
 
     shouldAllowEveryoneIfNoAclIsFound = configs.get(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).map(_.toString.toBoolean).getOrElse(false)
 
@@ -118,12 +127,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    val principal: KafkaPrincipal = session.principal
-    val localPrincipal: KafkaPrincipal = principalToLocalPlugin map (ptol => new KafkaPrincipal(principal.getPrincipalType, ptol.toLocal(principal))) getOrElse(null)
+    val localPrincipal: KafkaPrincipal = principalToLocalPlugin map (ptol => ptol.toLocal(session.principal)) getOrElse(null)
+    var principals = (if (localPrincipal != null) Set(session.principal, localPrincipal) else Set(session.principal))
+    val groups: Set[KafkaPrincipal] = principals.map(principal =>
+      principalToGroupPlugin map (ptog => ptog.toGroups(principal)) getOrElse(Set.empty[KafkaPrincipal])).flatten.toSet
     val host = session.host
     val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
-
-    val principals = if (localPrincipal != null) Set(principal, localPrincipal) else Set(principal)
+    principals = principals ++ groups
 
     //check if there is any Deny acl match that would disallow this operation.
     val denyMatch = principals.foldLeft(false)((result, principal) => result || aclMatch(session, operation, resource, principal, host, Deny, acls))
@@ -144,7 +154,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       (result, principal) => isSuperUser(operation, resource, principal, host) || isEmptyAclAndAuthorized(operation, resource, principal, host, acls)) ||
       (!denyMatch && allowMatch)
 
-    logAuditMessage(principal, authorized, operation, resource, host)
+    logAuditMessage(session.principal, authorized, operation, resource, host)
     authorized
   }
 

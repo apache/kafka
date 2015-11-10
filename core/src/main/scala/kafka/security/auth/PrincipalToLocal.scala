@@ -16,14 +16,16 @@
  */
 package kafka.security.auth
 
-import java.security.Principal
+import org.apache.kafka.common.Configurable
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 
-trait PrincipalToLocal {
+
+trait PrincipalToLocal extends Configurable {
 
   /**
    * Given a principal converts it to local identity.
    * @param principal
    * @return local identity.
    */
-  def toLocal(principal: Principal): String
+  def toLocal(principal: KafkaPrincipal): KafkaPrincipal
 }

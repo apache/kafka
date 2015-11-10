@@ -142,6 +142,36 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testGroupAcls() {
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.put(SimpleAclAuthorizer.PrincipalToLocalProp, classOf[KerberosPrincipalToLocal].getName)
+    props.put(SimpleAclAuthorizer.PrincipalToGroupPlugin, classOf[PrincipalToUnixGroup].getName)
+
+    val cfg = KafkaConfig.fromProps(props)
+    val testAuthoizer: SimpleAclAuthorizer = new SimpleAclAuthorizer
+    testAuthoizer.configure(cfg.originals)
+
+    val host = "random-host"
+    val currentUser = System.getProperty("user.name")
+    val kerberosPrincipal = s"$currentUser/$host@EXAMPLE.COM"
+
+    val principalToGroup = new PrincipalToUnixGroup
+    principalToGroup.configure(cfg.originals())
+    val groups = principalToGroup.toGroups(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, currentUser))
+
+    val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, kerberosPrincipal)
+    val session = new Session(user, host)
+
+    val allowAll = new Acl(groups.head, Allow, host, All)
+    val acls = Set[Acl](allowAll)
+
+    changeAclAndVerify(Set.empty[Acl], acls, Set.empty[Acl])
+
+    assertTrue(s"Principal to group should have transalted $currentUser to group ${groups.head} which should have in turn allowed access.",
+      testAuthoizer.authorize(session, Read, resource))
+  }
+
+  @Test
   def testAllowAllAccess() {
     val allowAllAcl = Acl.AllowAllAcl
 
