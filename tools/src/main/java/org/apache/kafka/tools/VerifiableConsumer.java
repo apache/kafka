@@ -38,11 +38,10 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,6 +53,8 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
+
 
 /**
  * Command line consumer designed for system testing. It outputs consumer events to STDOUT as JSON
@@ -71,6 +72,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  *     output is enabled). See {@link org.apache.kafka.tools.VerifiableConsumer.RecordData}.</li>
  * <li>offsets_committed: The result of every offset commit (only included if auto-commit is not enabled).
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.OffsetsCommitted}</li>
+ * <li>shutdown_complete: emitted after the consumer returns from {@link KafkaConsumer#close()}.
+ *     See {@link org.apache.kafka.tools.VerifiableConsumer.ShutdownComplete}.</li>
  * </ul>
  */
 public class VerifiableConsumer implements Closeable, OffsetCommitCallback, ConsumerRebalanceListener {
@@ -227,6 +230,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             // ignore, we are closing
         } finally {
             consumer.close();
+            printJson(new ShutdownComplete());
             shutdownLatch.countDown();
         }
     }
@@ -256,6 +260,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         @JsonProperty("class")
         public String clazz() {
             return VerifiableConsumer.class.getName();
+        }
+    }
+
+    private static class ShutdownComplete extends ConsumerEvent {
+
+        @Override
+        public String name() {
+            return "shutdown_complete";
         }
     }
 
@@ -462,56 +474,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("verifiable-consumer")
                 .defaultHelp(true)
-                .description("This tool produces increasing integers to the specified topic and prints JSON metadata to stdout on each \"send\" request, making externally visible which messages have been acked and which have not.");
-
-        parser.addArgument("--topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("TOPIC")
-                .help("Produce messages to this topic.");
-
-        parser.addArgument("--groupId")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("GROUP_ID")
-                .help("The groupId shared among members of the consumer group");
-
-        parser.addArgument("--max-messages")
-                .action(store())
-                .required(false)
-                .type(Integer.class)
-                .setDefault(-1)
-                .metavar("MAX-MESSAGES")
-                .dest("maxMessages")
-                .help("Consume this many messages. If -1, the consumer will consume until the process is killed externally");
-
-        parser.addArgument("--session-timeout")
-                .action(store())
-                .required(false)
-                .type(Integer.class)
-                .setDefault(30000)
-                .metavar("TIMEOUT_MS")
-                .dest("sessionTimeout")
-                .help("Set the consumer's session timeout");
-
-        parser.addArgument("--verbose")
-                .action(store())
-                .required(false)
-                .setDefault(false)
-                .type(Boolean.class)
-                .metavar("VERBOSE")
-                .help("Set to false to only log rebalances and commits");
-
-        parser.addArgument("--enable-autocommit")
-                .action(store())
-                .required(false)
-                .setDefault(false)
-                .type(Boolean.class)
-                .metavar("ENABLE-AUTOCOMMIT")
-                .dest("useAutoCommit")
-                .help("Enable offset auto-commit on consumer");
+                .description("This tool consumes messages from a specific topic and emits consumer events (e.g. group rebalances, received messages, and offsets committed) as JSON objects to STDOUT.");
 
         parser.addArgument("--broker-list")
                 .action(store())
@@ -521,42 +484,83 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .dest("brokerList")
                 .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
+        parser.addArgument("--topic")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .metavar("TOPIC")
+                .help("Consumes messages from this topic.");
+
+        parser.addArgument("--group-id")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .metavar("GROUP_ID")
+                .dest("groupId")
+                .help("The groupId shared among members of the consumer group");
+
+        parser.addArgument("--max-messages")
+                .action(store())
+                .required(false)
+                .type(Integer.class)
+                .setDefault(-1)
+                .metavar("MAX-MESSAGES")
+                .dest("maxMessages")
+                .help("Consume this many messages. If -1 (the default), the consumer will consume until the process is killed externally");
+
+        parser.addArgument("--session-timeout")
+                .action(store())
+                .required(false)
+                .setDefault(30000)
+                .type(Integer.class)
+                .metavar("TIMEOUT_MS")
+                .dest("sessionTimeout")
+                .help("Set the consumer's session timeout");
+
+        parser.addArgument("--verbose")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("VERBOSE")
+                .help("Enable to log individual consumed records");
+
+        parser.addArgument("--enable-autocommit")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("ENABLE-AUTOCOMMIT")
+                .dest("useAutoCommit")
+                .help("Enable offset auto-commit on consumer");
+
+        parser.addArgument("--reset-policy")
+                .action(store())
+                .required(false)
+                .setDefault("earliest")
+                .type(String.class)
+                .dest("resetPolicy")
+                .help("Set reset policy (must be either 'earliest', 'latest', or 'none'");
+
         parser.addArgument("--consumer.config")
                 .action(store())
                 .required(false)
                 .type(String.class)
                 .metavar("CONFIG_FILE")
-                .help("Consumer config properties file.");
+                .help("Consumer config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;
-    }
-
-    public static Properties loadProps(String filename) throws IOException {
-        Properties props = new Properties();
-        InputStream propStream = null;
-        try {
-            propStream = new FileInputStream(filename);
-            props.load(propStream);
-        } finally {
-            if (propStream != null)
-                propStream.close();
-        }
-        return props;
     }
 
     public static VerifiableConsumer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
         Namespace res = parser.parseArgs(args);
 
         String topic = res.getString("topic");
-        int maxMessages = res.getInt("maxMessages");
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
+        int maxMessages = res.getInt("maxMessages");
         boolean verbose = res.getBoolean("verbose");
         String configFile = res.getString("consumer.config");
 
         Properties consumerProps = new Properties();
         if (configFile != null) {
             try {
-                consumerProps.putAll(loadProps(configFile));
+                consumerProps.putAll(Utils.loadProps(configFile));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
@@ -564,8 +568,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
-        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, Boolean.toString(useAutoCommit));
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));
         consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(res.getInt("sessionTimeout")));
 
         StringDeserializer deserializer = new StringDeserializer();

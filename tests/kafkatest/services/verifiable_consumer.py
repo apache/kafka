@@ -18,6 +18,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK
 from kafkatest.services.security.security_config import SecurityConfig
+from kafkatest.services.kafka.util import TopicPartition
 
 from collections import namedtuple
 import json
@@ -25,8 +26,6 @@ import os
 import subprocess
 import time
 import signal
-
-TopicPartition = namedtuple('TopicPartition', ['topic', 'partition'])
 
 class VerifiableConsumer(BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_consumer"
@@ -96,6 +95,8 @@ class VerifiableConsumer(BackgroundThreadService):
             if event is not None:
                 with self.lock:
                     name = event["name"]
+                    if name == "shutdown_complete":
+                        self._handle_shutdown_complete(node)
                     if name == "offsets_committed":
                         self._handle_offsets_committed(node, event)
                     elif name == "records_consumed":
@@ -104,6 +105,10 @@ class VerifiableConsumer(BackgroundThreadService):
                         self._handle_partitions_revoked(node, event)
                     elif name == "partitions_assigned":
                         self._handle_partitions_assigned(node, event)
+
+    def _handle_shutdown_complete(self, node):
+        if node in self.joined:
+            self.joined.remove(node)
 
     def _handle_offsets_committed(self, node, event):
         if event["success"]:
@@ -143,7 +148,7 @@ class VerifiableConsumer(BackgroundThreadService):
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableConsumer" \
-              " --groupId %s --topic %s --broker-list %s --session-timeout %s" % \
+              " --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
               (self.group_id, self.topic, self.kafka.bootstrap_servers(), self.session_timeout)
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
@@ -164,13 +169,12 @@ class VerifiableConsumer(BackgroundThreadService):
     def try_parse_json(self, string):
         """Try to parse a string as json. Return None if not parseable."""
         try:
-            record = json.loads(string)
-            return record
+            return json.loads(string)
         except ValueError:
             self.logger.debug("Could not parse as json: %s" % str(string))
             return None
 
-    def kill_consumer(self, node, clean_shutdown=True, allow_fail=False):
+    def kill_node(self, node, clean_shutdown=True, allow_fail=False):
         if clean_shutdown:
             sig = signal.SIGTERM
         else:
@@ -178,8 +182,11 @@ class VerifiableConsumer(BackgroundThreadService):
         for pid in self.pids(node):
             node.account.signal(pid, sig, allow_fail)
 
-    def stop_node(self, node):
-        self.kill_consumer(node)
+        if not clean_shutdown:
+            self._handle_shutdown_complete(node)
+
+    def stop_node(self, node, clean_shutdown=True, allow_fail=False):
+        self.kill_node(node, clean_shutdown, allow_fail)
         
         if self.worker_threads is None:
             return
@@ -190,7 +197,7 @@ class VerifiableConsumer(BackgroundThreadService):
             self.worker_threads[self.idx(node) - 1].join()
 
     def clean_node(self, node):
-        self.kill_consumer(node, clean_shutdown=False)
+        self.kill_node(node, clean_shutdown=False)
         node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
 
