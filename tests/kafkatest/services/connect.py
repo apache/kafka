@@ -159,7 +159,7 @@ class ConnectStandaloneService(ConnectServiceBase):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
-        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         remote_connector_configs = []
         for idx, template in enumerate(self.connector_config_templates):
             target_file = os.path.join(self.PERSISTENT_ROOT, "connect-connector-" + str(idx) + ".properties")
@@ -190,7 +190,7 @@ class ConnectDistributedService(ConnectServiceBase):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
-        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         if self.connector_config_templates:
             raise DucktapeError("Config files are not valid in distributed mode, submit connectors via the REST API")
 
