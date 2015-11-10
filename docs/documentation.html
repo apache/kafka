@@ -30,6 +30,7 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
              <li><a href="#ecosystem">1.4 Ecosystem</a>
              <li><a href="#upgrade">1.5 Upgrading</a>
          </ul>
+    </li>
     <li><a href="#api">2. API</a>
           <ul>
               <li><a href="#producerapi">2.1 Producer API</a>
@@ -37,13 +38,16 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
               <li><a href="#simpleconsumerapi">2.3 Simple Consumer API</a>
               <li><a href="#newconsumerapi">2.4 New Consumer API</a>
           </ul>
+    </li>
     <li><a href="#configuration">3. Configuration</a>
         <ul>
             <li><a href="#brokerconfigs">3.1 Broker Configs</a>
             <li><a href="#producerconfigs">3.2 Producer Configs</a>
             <li><a href="#consumerconfigs">3.3 Consumer Configs</a>
             <li><a href="#newconsumerconfigs">3.4 New Consumer Configs</a>
+            <li><a href="#connectconfigs">3.5 Kafka Connect Configs</a>
         </ul>
+    </li>
     <li><a href="#design">4. Design</a>
         <ul>
              <li><a href="#majordesignelements">4.1 Motivation</a>
@@ -55,6 +59,7 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
              <li><a href="#replication">4.7 Replication</a>
              <li><a href="#compaction">4.8 Log Compaction</a>
         </ul>
+    </li>
     <li><a href="#implementation">5. Implementation</a>
         <ul>
               <li><a href="#apidesign">5.1 API Design</a>
@@ -64,6 +69,7 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
               <li><a href="#log">5.5 Log</a>
               <li><a href="#distributionimpl">5.6 Distribution</a>
         </ul>
+    </li>
     <li><a href="#operations">6. Operations</a>
         <ul>
              <li><a href="#basic_ops">6.1 Basic Kafka Operations</a>
@@ -101,13 +107,22 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
                     <li><a href="#zkops">Operationalization</a>
                 </ul>
         </ul>
-    <li><a href="#security">7. Security</a></li>
+    </li>
+    <li><a href="#security">7. Security</a>
         <ul>
             <li><a href="#security_overview">7.1 Security Overview</a></li>
             <li><a href="#security_ssl">7.2 Encryption and Authentication using SSL</a></li>
             <li><a href="#security_sasl">7.3 Authentication using SASL</a></li>
             <li><a href="#security_authz">7.4 Authorization and ACLs</a></li>
         </ul>
+    </li>
+    <li><a href="#connect">8. Kafka Connect</a>
+        <ul>
+            <li><a href="#connect_overview">8.1 Overview</a></li>
+            <li><a href="#connect_user">8.2 User Guide</a></li>
+            <li><a href="#connect_development">8.3 Connector Development Guide</a></li>
+        </ul>
+    </li>
 </ul>
 
 <h2><a id="gettingStarted">1. Getting Started</a></h2>
@@ -140,5 +155,7 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
 <h2><a id="security">7. Security</a></h2>
 <!--#include virtual="security.html" -->
 
-<!--#include virtual="../includes/footer.html" -->
+<h2><a id="connect">8. Kafka Connect</a></h2>
+<!--#include virtual="connect.html" -->
 
+<!--#include virtual="../includes/footer.html" -->
