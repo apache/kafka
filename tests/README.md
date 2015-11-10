@@ -22,7 +22,7 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 
 * Run the bootstrap script to set up Vagrant for testing
 
-        $ bootstrap-test-env.sh
+        $ tests/bootstrap-test-env.sh
 
 * Bring up the test cluster
 
