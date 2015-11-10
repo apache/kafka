@@ -25,12 +25,11 @@ import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.{Assert, Test}
+import org.junit.Test
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
-  private val Users = Set(KafkaPrincipal.fromString("User:test1"), KafkaPrincipal.fromString("User:test2"))
-  private val UsersString = Users.mkString(AclCommand.Delimiter.toString)
+  private val Users = Set(KafkaPrincipal.fromString("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"), KafkaPrincipal.fromString("User:test2"))
   private val Hosts = Set("host1", "host2")
   private val HostsString = Hosts.mkString(AclCommand.Delimiter.toString)
 
@@ -118,10 +117,11 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   private def getCmd(permissionType: PermissionType): Array[String] = {
-    if (permissionType == Allow)
-      Array("--allow-principals", UsersString, "--allow-hosts", HostsString)
-    else
-      Array("--deny-principals", UsersString, "--deny-hosts", HostsString)
+    val principalCmd = if (permissionType == Allow) "--allow-principal" else "--deny-principal"
+    val hostCmd = if (permissionType == Allow) "--allow-hosts" else "--deny-hosts"
+
+    val cmd = Array(hostCmd, HostsString)
+    Users.foldLeft(cmd) ((cmd, user) => cmd ++ Array(principalCmd, user.toString))
   }
 
   def getAuthorizer(props: Properties): Authorizer = {
