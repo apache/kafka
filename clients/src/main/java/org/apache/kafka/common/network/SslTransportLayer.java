@@ -440,7 +440,7 @@ public class SslTransportLayer implements TransportLayer {
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
             if (netReadBuffer.remaining() > 0) {
                 int netread = socketChannel.read(netReadBuffer);
-                if (netread == 0) return netread;
+                if (netread == 0 && netReadBuffer.position() == 0) return netread;
                 else if (netread < 0) throw new EOFException("EOF during read");
             }
             do {
