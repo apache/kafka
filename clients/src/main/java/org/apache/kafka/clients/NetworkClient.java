@@ -12,16 +12,6 @@
  */
 package org.apache.kafka.clients;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
-
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -39,6 +29,16 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -58,6 +58,7 @@ public class NetworkClient implements KafkaClient {
     /* a list of nodes we've connected to in the past */
     private final List<Integer> nodesEverSeen;
     private final Map<Integer, Node> nodesEverSeenById;
+
     /* random offset into nodesEverSeen list */
     private final Random randOffset;
     
@@ -234,16 +235,6 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Return the state of the connection to the given node
-     *
-     * @param node The node to check
-     * @return The connection state
-     */
-    public ConnectionState connectionState(String node) {
-        return connectionStates.connectionState(node);
-    }
-
-    /**
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
      *
      * @param request The request
@@ -275,7 +266,6 @@ public class NetworkClient implements KafkaClient {
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
-        long updatedNow = now;
         try {
             this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
         } catch (IOException e) {
@@ -283,7 +273,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         // process completed actions
-        updatedNow = this.time.milliseconds();
+        long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
         handleCompletedSends(responses, updatedNow);
         handleCompletedReceives(responses, updatedNow);
@@ -468,8 +458,10 @@ public class NetworkClient implements KafkaClient {
             String source = receive.source();
             ClientRequest req = inFlightRequests.completeNext(source);
             ResponseHeader header = ResponseHeader.parse(receive.payload());
+            // Always expect the response version id to be the same as the request version id
             short apiKey = req.request().header().apiKey();
-            Struct body = (Struct) ProtoUtils.currentResponseSchema(apiKey).read(receive.payload());
+            short apiVer = req.request().header().apiVersion();
+            Struct body = (Struct) ProtoUtils.responseSchema(apiKey, apiVer).read(receive.payload());
             correlate(req.request().header(), header);
             if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
                 responses.add(new ClientResponse(req, now, false, body));
@@ -612,9 +604,8 @@ public class NetworkClient implements KafkaClient {
          * @param nodes Current alive nodes
          */
         private void updateNodesEverSeen(List<Node> nodes) {
-            Node existing = null;
             for (Node n : nodes) {
-                existing = nodesEverSeenById.get(n.id());
+                Node existing = nodesEverSeenById.get(n.id());
                 if (existing == null) {
                     nodesEverSeenById.put(n.id(), n);
                     log.debug("Adding node {} to nodes ever seen", n.id());

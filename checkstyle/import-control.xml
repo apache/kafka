@@ -108,6 +108,7 @@
   </subpackage>
 
   <subpackage name="tools">
+    <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
     <allow pkg="com.fasterxml.jackson" />
@@ -141,59 +142,73 @@
     <allow pkg="org.bouncycastle" />
   </subpackage>
 
-  <subpackage name="copycat">
+  <subpackage name="connect">
     <allow pkg="org.apache.kafka.common" />
-    <allow pkg="org.apache.kafka.copycat.data" />
-    <allow pkg="org.apache.kafka.copycat.errors" />
+    <allow pkg="org.apache.kafka.connect.data" />
+    <allow pkg="org.apache.kafka.connect.errors" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
 
     <subpackage name="source">
-      <allow pkg="org.apache.kafka.copycat.connector" />
-      <allow pkg="org.apache.kafka.copycat.storage" />
+      <allow pkg="org.apache.kafka.connect.connector" />
+      <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 
     <subpackage name="sink">
       <allow pkg="org.apache.kafka.clients.consumer" />
-      <allow pkg="org.apache.kafka.copycat.connector" />
-      <allow pkg="org.apache.kafka.copycat.storage" />
+      <allow pkg="org.apache.kafka.connect.connector" />
+      <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 
     <subpackage name="runtime">
-      <allow pkg="org.apache.kafka.copycat" />
+      <allow pkg="org.apache.kafka.connect" />
+
+      <subpackage name="rest">
+        <allow pkg="org.eclipse.jetty" />
+        <allow pkg="javax.ws.rs" />
+        <allow pkg="javax.servlet" />
+        <allow pkg="org.glassfish.jersey" />
+        <allow pkg="com.fasterxml.jackson" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="cli">
-      <allow pkg="org.apache.kafka.copycat.runtime" />
-      <allow pkg="org.apache.kafka.copycat.storage" />
-      <allow pkg="org.apache.kafka.copycat.util" />
+      <allow pkg="org.apache.kafka.connect.runtime" />
+      <allow pkg="org.apache.kafka.connect.storage" />
+      <allow pkg="org.apache.kafka.connect.util" />
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
 
     <subpackage name="storage">
-      <allow pkg="org.apache.kafka.copycat" />
+      <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.common.serialization" />
     </subpackage>
 
     <subpackage name="util">
-      <allow pkg="org.apache.kafka.copycat" />
+      <allow pkg="org.apache.kafka.connect" />
+      <!-- for annotations to avoid code duplication -->
+      <allow pkg="com.fasterxml.jackson.annotation" />
     </subpackage>
 
     <subpackage name="json">
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.common.serialization" />
       <allow pkg="org.apache.kafka.common.errors" />
-      <allow pkg="org.apache.kafka.copycat.storage" />
+      <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 
     <subpackage name="file">
-      <allow pkg="org.apache.kafka.copycat" />
+      <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.clients.consumer" />
       <!-- for tests -->
       <allow pkg="org.easymock" />
       <allow pkg="org.powermock" />
     </subpackage>
 
+    <subpackage name="tools">
+      <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
   </subpackage>
 
 </import-control>

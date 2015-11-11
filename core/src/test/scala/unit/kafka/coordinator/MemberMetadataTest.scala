@@ -23,15 +23,18 @@ import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 
 class MemberMetadataTest extends JUnitSuite {
+  val groupId = "groupId"
+  val clientId = "clientId"
+  val clientHost = "clientHost"
+  val memberId = "memberId"
+  val sessionTimeoutMs = 10000
+
 
   @Test
   def testMatchesSupportedProtocols {
-    val groupId = "groupId"
-    val memberId = "memberId"
-    val sessionTimeoutMs = 10000
     val protocols = List(("range", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, sessionTimeoutMs, protocols)
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeoutMs, protocols)
     assertTrue(member.matches(protocols))
     assertFalse(member.matches(List(("range", Array[Byte](0)))))
     assertFalse(member.matches(List(("roundrobin", Array.empty[Byte]))))
@@ -40,48 +43,36 @@ class MemberMetadataTest extends JUnitSuite {
 
   @Test
   def testVoteForPreferredProtocol {
-    val groupId = "groupId"
-    val memberId = "memberId"
-    val sessionTimeoutMs = 10000
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, sessionTimeoutMs, protocols)
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeoutMs, protocols)
     assertEquals("range", member.vote(Set("range", "roundrobin")))
     assertEquals("roundrobin", member.vote(Set("blah", "roundrobin")))
   }
 
   @Test
   def testMetadata {
-    val groupId = "groupId"
-    val memberId = "memberId"
-    val sessionTimeoutMs = 10000
     val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
-    val member = new MemberMetadata(memberId, groupId, sessionTimeoutMs, protocols)
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeoutMs, protocols)
     assertTrue(util.Arrays.equals(Array[Byte](0), member.metadata("range")))
     assertTrue(util.Arrays.equals(Array[Byte](1), member.metadata("roundrobin")))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def testMetadataRaisesOnUnsupportedProtocol {
-    val groupId = "groupId"
-    val memberId = "memberId"
-    val sessionTimeoutMs = 10000
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, sessionTimeoutMs, protocols)
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeoutMs, protocols)
     member.metadata("blah")
     fail()
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def testVoteRaisesOnNoSupportedProtocols {
-    val groupId = "groupId"
-    val memberId = "memberId"
-    val sessionTimeoutMs = 10000
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, sessionTimeoutMs, protocols)
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeoutMs, protocols)
     member.vote(Set("blah"))
     fail()
   }

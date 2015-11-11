@@ -50,7 +50,7 @@ import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBroker
 import kafka.network.{BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import kafka.coordinator.{GroupManagerConfig, GroupCoordinator}
+import kafka.coordinator.{GroupConfig, GroupCoordinator}
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -260,7 +260,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         ""
     }
 
-    val secureAclsEnabled = JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)) && config.zkEnableSecureAcls
+    val secureAclsEnabled = JaasUtils.isZkSecurityEnabled() && config.zkEnableSecureAcls
     
     if(config.zkEnableSecureAcls && !secureAclsEnabled) {
       throw new java.lang.SecurityException("zkEnableSecureAcls is true, but the verification of the JAAS login file failed.")    

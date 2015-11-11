@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.MockTimestampExtractor;
 
 import java.io.File;
 import java.util.HashMap;
@@ -38,6 +40,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -218,6 +221,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private final Map<K, V> flushedEntries = new HashMap<>();
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<Entry<K, V>> restorableEntries = new LinkedList<>();
+    private final StreamingConfig config;
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
     private final StreamingMetrics metrics = new StreamingMetrics() {
@@ -243,6 +247,15 @@ public class KeyValueStoreTestDriver<K, V> {
                 recordFlushed(record.key(), record.value());
             }
         };
+        Properties props = new Properties();
+        props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+        props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, serdes.keySerializer().getClass());
+        props.put(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, serdes.keyDeserializer().getClass());
+        props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, serdes.valueSerializer().getClass());
+        props.put(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, serdes.valueDeserializer().getClass());
+        this.config = new StreamingConfig(props);
+
         this.context = new MockProcessorContext(null, serdes.keySerializer(), serdes.keyDeserializer(), serdes.valueSerializer(),
                 serdes.valueDeserializer(), recordCollector) {
             @Override
@@ -346,6 +359,15 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public void addEntryToRestoreLog(K key, V value) {
         restorableEntries.add(new Entry<K, V>(key, value));
+    }
+
+    /**
+     * Get the streaming config that should be supplied to a {@link Serdes}'s constructor.
+     *
+     * @return the streaming config; never null
+     */
+    public StreamingConfig config() {
+        return config;
     }
 
     /**

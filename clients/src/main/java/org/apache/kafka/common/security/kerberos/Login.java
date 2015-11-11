@@ -258,7 +258,7 @@ public class Login {
                     }
                 }
             }
-        }, false);
+        }, true);
     }
 
     public void startThreadIfNeeded() {
@@ -288,20 +288,10 @@ public class Login {
         if (jaasConfigFile == null) {
             throw new IllegalArgumentException("You must pass " + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + " in secure mode.");
         }
-
         AppConfigurationEntry[] configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
         if (configEntries == null) {
-            // Forcing a reload of the configuration in case it's been overridden by third-party code.
-            // Without this, our tests fail sometimes depending on the order the tests are executed.
-            // Singletons are bad.
-            Configuration.setConfiguration(null);
-            configEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
-            if (configEntries == null) {
-                String errorMessage = "Could not find a '" + loginContextName + "' entry in `" + jaasConfigFile + "`.";
-                throw new IllegalArgumentException(errorMessage);
-            } else {
-                log.info("Found `" + loginContextName + "` in JAAS configuration after forced reload.");
-            }
+            String errorMessage = "Could not find a '" + loginContextName + "' entry in `" + jaasConfigFile + "`.";
+            throw new IllegalArgumentException(errorMessage);
         }
 
         LoginContext loginContext = new LoginContext(loginContextName, callbackHandler);
@@ -351,8 +341,7 @@ public class Login {
      * Re-login a principal. This method assumes that {@link #login(String)} has happened already.
      * @throws javax.security.auth.login.LoginException on a failure
      */
-    private synchronized void reLogin()
-            throws LoginException {
+    private synchronized void reLogin() throws LoginException {
         if (!isKrbTicket) {
             return;
         }

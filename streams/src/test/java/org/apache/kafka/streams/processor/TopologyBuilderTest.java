@@ -20,10 +20,14 @@ package org.apache.kafka.streams.processor;
 import static org.junit.Assert.assertEquals;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.mkList;
+
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -106,6 +110,55 @@ public class TopologyBuilderTest {
         assertEquals(3, builder.sourceTopics().size());
     }
 
+    @Test(expected = TopologyException.class)
+    public void testAddStateStoreWithNonExistingProcessor() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addStateStore(new MockStateStoreSupplier("store", false), "no-such-processsor");
+    }
+
+    @Test(expected = TopologyException.class)
+    public void testAddStateStoreWithSource() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addSource("source-1", "topic-1");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), "source-1");
+    }
+
+    @Test(expected = TopologyException.class)
+    public void testAddStateStoreWithSink() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addSink("sink-1", "topic-1");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), "sink-1");
+    }
+
+    @Test(expected = TopologyException.class)
+    public void testAddStateStoreWithDuplicates() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addStateStore(new MockStateStoreSupplier("store", false));
+        builder.addStateStore(new MockStateStoreSupplier("store", false));
+    }
+
+    @Test
+    public void testAddStateStore() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        List<StateStoreSupplier> suppliers;
+
+        StateStoreSupplier supplier = new MockStateStoreSupplier("store-1", false);
+        builder.addStateStore(supplier);
+        suppliers = builder.build(null).stateStoreSuppliers();
+        assertEquals(0, suppliers.size());
+
+        builder.addSource("source-1", "topic-1");
+        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.connectProcessorAndStateStores("processor-1", "store-1");
+        suppliers = builder.build(null).stateStoreSuppliers();
+        assertEquals(1, suppliers.size());
+        assertEquals(supplier.name(), suppliers.get(0).name());
+    }
+
     @Test
     public void testTopicGroups() {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -119,16 +172,16 @@ public class TopologyBuilderTest {
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
 
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2", "processor-1");
-        builder.copartitionSources(list("source-1", "source-2"));
+        builder.copartitionSources(mkList("source-1", "source-2"));
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
         Map<Integer, Set<String>> topicGroups = builder.topicGroups();
 
         Map<Integer, Set<String>> expectedTopicGroups = new HashMap<>();
-        expectedTopicGroups.put(0, set("topic-1", "topic-1x", "topic-2"));
-        expectedTopicGroups.put(1, set("topic-3", "topic-4"));
-        expectedTopicGroups.put(2, set("topic-5"));
+        expectedTopicGroups.put(0, mkSet("topic-1", "topic-1x", "topic-2"));
+        expectedTopicGroups.put(1, mkSet("topic-3", "topic-4"));
+        expectedTopicGroups.put(2, mkSet("topic-5"));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -138,16 +191,64 @@ public class TopologyBuilderTest {
         assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
     }
 
-    private <T> Set<T> set(T... items) {
-        Set<T> set = new HashSet<>();
-        for (T item : items) {
-            set.add(item);
-        }
-        return set;
+    @Test
+    public void testTopicGroupsByStateStore() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addSource("source-1", "topic-1", "topic-1x");
+        builder.addSource("source-2", "topic-2");
+        builder.addSource("source-3", "topic-3");
+        builder.addSource("source-4", "topic-4");
+        builder.addSource("source-5", "topic-5");
+
+        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
+        builder.addStateStore(new MockStateStoreSupplier("strore-1", false), "processor-1", "processor-2");
+
+        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
+        builder.addProcessor("processor-4", new MockProcessorSupplier(), "source-4");
+        builder.addStateStore(new MockStateStoreSupplier("strore-2", false), "processor-3", "processor-4");
+
+        Map<Integer, Set<String>> topicGroups = builder.topicGroups();
+
+        Map<Integer, Set<String>> expectedTopicGroups = new HashMap<>();
+        expectedTopicGroups.put(0, mkSet("topic-1", "topic-1x", "topic-2"));
+        expectedTopicGroups.put(1, mkSet("topic-3", "topic-4"));
+        expectedTopicGroups.put(2, mkSet("topic-5"));
+
+        assertEquals(3, topicGroups.size());
+        assertEquals(expectedTopicGroups, topicGroups);
     }
 
-    private <T> List<T> list(T... elems) {
-        return Arrays.asList(elems);
+    @Test
+    public void testBuild() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addSource("source-1", "topic-1", "topic-1x");
+        builder.addSource("source-2", "topic-2");
+        builder.addSource("source-3", "topic-3");
+        builder.addSource("source-4", "topic-4");
+        builder.addSource("source-5", "topic-5");
+
+        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2", "processor-1");
+        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
+
+        ProcessorTopology topology0 = builder.build(0);
+        ProcessorTopology topology1 = builder.build(1);
+        ProcessorTopology topology2 = builder.build(2);
+
+        assertEquals(mkSet("source-1", "source-2", "processor-1", "processor-2"), nodeNames(topology0.processors()));
+        assertEquals(mkSet("source-3", "source-4", "processor-3"), nodeNames(topology1.processors()));
+        assertEquals(mkSet("source-5"), nodeNames(topology2.processors()));
+    }
+
+    private Set<String> nodeNames(Collection<ProcessorNode> nodes) {
+        Set<String> nodeNames = new HashSet<>();
+        for (ProcessorNode node : nodes) {
+            nodeNames.add(node.name());
+        }
+        return nodeNames;
     }
 
 }

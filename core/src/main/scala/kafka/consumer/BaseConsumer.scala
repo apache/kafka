@@ -18,6 +18,9 @@
 package kafka.consumer
 
 import java.util.Properties
+import java.util.regex.Pattern
+
+import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 
 /**
  * A base consumer used to abstract both old and new consumer
@@ -33,13 +36,19 @@ trait BaseConsumer {
 
 case class BaseConsumerRecord(topic: String, partition: Int, offset: Long, key: Array[Byte], value: Array[Byte])
 
-class NewShinyConsumer(topic: String, consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
+class NewShinyConsumer(topic: Option[String], whitelist: Option[String], consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
 
-import scala.collection.JavaConversions._
+  import scala.collection.JavaConversions._
 
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-  consumer.subscribe(List(topic))
+  if (topic.isDefined)
+    consumer.subscribe(List(topic.get))
+  else if (whitelist.isDefined)
+    consumer.subscribe(Pattern.compile(whitelist.get), new NoOpConsumerRebalanceListener())
+  else
+    throw new IllegalArgumentException("Exactly one of topic or whitelist has to be provided.")
+
   var recordIter = consumer.poll(0).iterator
 
   override def receive(): BaseConsumerRecord = {

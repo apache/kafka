@@ -29,13 +29,15 @@ public class JoinGroupResponse extends AbstractRequestResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     /**
-     * Possible error code:
+     * Possible error codes:
      *
+     * GROUP_LOAD_IN_PROGRESS (14)
      * GROUP_COORDINATOR_NOT_AVAILABLE (15)
      * NOT_COORDINATOR_FOR_GROUP (16)
      * INCONSISTENT_GROUP_PROTOCOL (23)
      * UNKNOWN_MEMBER_ID (25)
      * INVALID_SESSION_TIMEOUT (26)
+     * GROUP_AUTHORIZATION_FAILED (30)
      */
 
     private static final String GENERATION_ID_KEY_NAME = "generation_id";

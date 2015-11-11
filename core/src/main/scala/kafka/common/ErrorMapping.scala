@@ -57,9 +57,11 @@ object ErrorMapping {
   // 24: UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY
   // 25: UNKNOWN_CONSUMER_ID
   // 26: INVALID_SESSION_TIMEOUT
-  // 27: COMMITTING_PARTITIONS_NOT_ASSIGNED
+  // 27: REBALANCE_IN_PROGRESS
   // 28: INVALID_COMMIT_OFFSET_SIZE
-  val AuthorizationCode: Short = 29;
+  val TopicAuthorizationCode: Short = 29
+  val GroupAuthorizationCode: Short = 30
+  val ClusterAuthorizationCode: Short = 31
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](
@@ -82,7 +84,9 @@ object ErrorMapping {
       classOf[MessageSetSizeTooLargeException].asInstanceOf[Class[Throwable]] -> MessageSetSizeTooLargeCode,
       classOf[NotEnoughReplicasException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasCode,
       classOf[NotEnoughReplicasAfterAppendException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasAfterAppendCode,
-      classOf[AuthorizationException].asInstanceOf[Class[Throwable]] -> AuthorizationCode
+      classOf[TopicAuthorizationException].asInstanceOf[Class[Throwable]] -> TopicAuthorizationCode,
+      classOf[GroupAuthorizationException].asInstanceOf[Class[Throwable]] -> GroupAuthorizationCode,
+      classOf[ClusterAuthorizationException].asInstanceOf[Class[Throwable]] -> ClusterAuthorizationCode
     ).withDefaultValue(UnknownCode)
 
   /* invert the mapping */

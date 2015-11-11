@@ -265,22 +265,29 @@ public class StreamThread extends Thread {
                     sensors.pollTimeSensor.record(endPoll - startPoll);
                 }
 
-                // try to process one record from each task
                 totalNumBuffered = 0;
-                requiresPoll = false;
 
-                for (StreamTask task : tasks.values()) {
-                    long startProcess = time.milliseconds();
+                if (!tasks.isEmpty()) {
+                    // try to process one record from each task
+                    requiresPoll = false;
 
-                    totalNumBuffered += task.process();
-                    requiresPoll = requiresPoll || task.requiresPoll();
+                    for (StreamTask task : tasks.values()) {
+                        long startProcess = time.milliseconds();
 
-                    sensors.processTimeSensor.record(time.milliseconds() - startProcess);
+                        totalNumBuffered += task.process();
+                        requiresPoll = requiresPoll || task.requiresPoll();
+
+                        sensors.processTimeSensor.record(time.milliseconds() - startProcess);
+                    }
+
+                    maybePunctuate();
+                    maybeCommit();
+                } else {
+                    // even when no task is assigned, we must poll to get a task.
+                    requiresPoll = true;
                 }
 
-                maybePunctuate();
                 maybeClean();
-                maybeCommit();
             }
         } catch (Exception e) {
             throw new KafkaException(e);
@@ -411,7 +418,9 @@ public class StreamThread extends Thread {
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
         sensors.taskCreationSensor.record();
 
-        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, builder.build(), config, sensors);
+        ProcessorTopology topology = builder.build(id.topicGroupId);
+
+        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, topology, config, sensors);
     }
 
     private void addPartitions(Collection<TopicPartition> assignment) {

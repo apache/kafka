@@ -186,6 +186,10 @@ public class Compressor {
         writtenUncompressed += size;
     }
 
+    public long numRecordsWritten() {
+        return numRecords;
+    }
+
     public long estimatedBytesWritten() {
         if (type == CompressionType.NONE) {
             return bufferStream.buffer().position();

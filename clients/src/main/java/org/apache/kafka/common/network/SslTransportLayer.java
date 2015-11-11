@@ -137,11 +137,9 @@ public class SslTransportLayer implements TransportLayer {
 
     /**
     * Sends a SSL close message and closes socketChannel.
-    * @throws IOException if an I/O error occurs
-    * @throws IOException if there is data on the outgoing network buffer and we are unable to flush it
     */
     @Override
-    public void close() throws IOException {
+    public void close() {
         if (closing) return;
         closing = true;
         sslEngine.closeOutbound();
@@ -159,10 +157,15 @@ public class SslTransportLayer implements TransportLayer {
             }
             netWriteBuffer.flip();
             flush(netWriteBuffer);
-            socketChannel.socket().close();
-            socketChannel.close();
         } catch (IOException ie) {
             log.warn("Failed to send SSL Close message ", ie);
+        } finally {
+            try {
+                socketChannel.socket().close();
+                socketChannel.close();
+            } catch (IOException e) {
+                log.warn("Failed to close SSL socket channel: " + e);
+            }
         }
         key.attach(null);
         key.cancel();
@@ -437,7 +440,7 @@ public class SslTransportLayer implements TransportLayer {
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
             if (netReadBuffer.remaining() > 0) {
                 int netread = socketChannel.read(netReadBuffer);
-                if (netread == 0) return netread;
+                if (netread == 0 && netReadBuffer.position() == 0) return netread;
                 else if (netread < 0) throw new EOFException("EOF during read");
             }
             do {

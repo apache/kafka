@@ -20,5 +20,17 @@ package kafka.common
  * Exception thrown when a principal is not authorized to perform an operation.
  * @param message
  */
-class AuthorizationException(message: String) extends RuntimeException(message) {
+abstract class AuthorizationException(message: String) extends RuntimeException(message) {
+}
+
+class TopicAuthorizationException(message: String) extends AuthorizationException(message) {
+  def this() = this(null)
+}
+
+class GroupAuthorizationException(message: String) extends AuthorizationException(message) {
+  def this() = this(null)
+}
+
+class ClusterAuthorizationException(message: String) extends AuthorizationException(message) {
+  def this() = this(null)
 }

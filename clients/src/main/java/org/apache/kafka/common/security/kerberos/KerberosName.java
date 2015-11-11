@@ -18,10 +18,15 @@
 
 package org.apache.kafka.common.security.kerberos;
 
-import java.io.IOException;
-import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class KerberosName {
+
+    /**
+     * A pattern that matches a Kerberos name with at most 3 components.
+     */
+    private static final Pattern NAME_PARSER = Pattern.compile("([^/@]*)(/([^/@]*))?@([^/@]*)");
 
     /** The first component of the name */
     private final String serviceName;
@@ -30,19 +35,31 @@ public class KerberosName {
     /** The realm of the name. */
     private final String realm;
 
-    /* Rules for the translation of the principal name into an operating system name */
-    private final List<KerberosRule> authToLocalRules;
-
     /**
      * Creates an instance of `KerberosName` with the provided parameters.
      */
-    public KerberosName(String serviceName, String hostName, String realm, List<KerberosRule> authToLocalRules) {
+    public KerberosName(String serviceName, String hostName, String realm) {
         if (serviceName == null)
             throw new IllegalArgumentException("serviceName must not be null");
         this.serviceName = serviceName;
         this.hostName = hostName;
         this.realm = realm;
-        this.authToLocalRules = authToLocalRules;
+    }
+
+    /**
+     * Create a name from the full Kerberos principal name.
+     */
+    public static KerberosName parse(String principalName) {
+        Matcher match = NAME_PARSER.matcher(principalName);
+        if (!match.matches()) {
+            if (principalName.contains("@")) {
+                throw new IllegalArgumentException("Malformed Kerberos name: " + principalName);
+            } else {
+                return new KerberosName(principalName, null, null);
+            }
+        } else {
+            return new KerberosName(match.group(1), match.group(3), match.group(4));
+        }
     }
 
     /**
@@ -85,30 +102,6 @@ public class KerberosName {
      */
     public String realm() {
         return realm;
-    }
-
-    /**
-     * Get the translation of the principal name into an operating system
-     * user name.
-     * @return the short name
-     * @throws IOException
-     */
-    public String shortName() throws IOException {
-        String[] params;
-        if (hostName == null) {
-            // if it is already simple, just return it
-            if (realm == null)
-                return serviceName;
-            params = new String[]{realm, serviceName};
-        } else {
-            params = new String[]{realm, serviceName, hostName};
-        }
-        for (KerberosRule r : authToLocalRules) {
-            String result = r.apply(params);
-            if (result != null)
-                return result;
-        }
-        throw new NoMatchingRule("No rules applied to " + toString());
     }
 
 }

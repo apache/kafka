@@ -19,22 +19,28 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.requests.GroupMetadataResponse;
+import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -114,7 +120,6 @@ public class ConsumerCoordinatorTest {
                 "consumer" + groupId,
                 metricTags,
                 time,
-                requestTimeoutMs,
                 retryBackoffMs,
                 defaultOffsetCommitCallback,
                 autoCommitEnabled,
@@ -142,6 +147,24 @@ public class ConsumerCoordinatorTest {
 
         assertTrue(future.isDone());
         assertTrue(future.succeeded());
+    }
+
+    @Test(expected = GroupAuthorizationException.class)
+    public void testGroupDescribeUnauthorized() {
+        client.prepareResponse(consumerMetadataResponse(node, Errors.GROUP_AUTHORIZATION_FAILED.code()));
+        coordinator.ensureCoordinatorKnown();
+    }
+
+    @Test(expected = GroupAuthorizationException.class)
+    public void testGroupReadUnauthorized() {
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupLeaderResponse(0, "memberId", Collections.<String, List<String>>emptyMap(),
+                Errors.GROUP_AUTHORIZATION_FAILED.code()));
+        coordinator.ensurePartitionAssignment();
     }
 
     @Test
@@ -255,6 +278,25 @@ public class ConsumerCoordinatorTest {
         assertTrue(coordinator.coordinatorUnknown());
     }
 
+    @Test(expected = ApiException.class)
+    public void testJoinGroupInvalidGroupId() {
+        final String consumerId = "leader";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        // ensure metadata is up-to-date for leader
+        metadata.setTopics(Arrays.asList(topicName));
+        metadata.update(cluster, time.milliseconds());
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupLeaderResponse(0, consumerId, Collections.<String, List<String>>emptyMap(),
+                Errors.INVALID_GROUP_ID.code()));
+        coordinator.ensurePartitionAssignment();
+    }
+
     @Test
     public void testNormalJoinGroupLeader() {
         final String consumerId = "leader";
@@ -324,6 +366,163 @@ public class ConsumerCoordinatorTest {
         assertEquals(Collections.singleton(tp), rebalanceListener.assigned);
     }
 
+    @Test
+    public void testLeaveGroupOnClose() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        final AtomicBoolean received = new AtomicBoolean(false);
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                received.set(true);
+                LeaveGroupRequest leaveRequest = new LeaveGroupRequest(request.request().body());
+                return leaveRequest.memberId().equals(consumerId) &&
+                        leaveRequest.groupId().equals(groupId);
+            }
+        }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        coordinator.close();
+        assertTrue(received.get());
+    }
+
+    @Test
+    public void testMaybeLeaveGroup() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        final AtomicBoolean received = new AtomicBoolean(false);
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                received.set(true);
+                LeaveGroupRequest leaveRequest = new LeaveGroupRequest(request.request().body());
+                return leaveRequest.memberId().equals(consumerId) &&
+                        leaveRequest.groupId().equals(groupId);
+            }
+        }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        coordinator.maybeLeaveGroup();
+        assertTrue(received.get());
+        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, coordinator.memberId);
+        assertEquals(OffsetCommitRequest.DEFAULT_GENERATION_ID, coordinator.generation);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testUnexpectedErrorOnSyncGroup() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // join initially, but let coordinator rebalance on sync
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN.code()));
+        coordinator.ensurePartitionAssignment();
+    }
+
+    @Test
+    public void testUnknownMemberIdOnSyncGroup() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // join initially, but let coordinator returns unknown member id
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN_MEMBER_ID.code()));
+
+        // now we should see a new join with the empty UNKNOWN_MEMBER_ID
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                JoinGroupRequest joinRequest = new JoinGroupRequest(request.request().body());
+                return joinRequest.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            }
+        }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+
+        coordinator.ensurePartitionAssignment();
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+        assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
+    }
+
+    @Test
+    public void testRebalanceInProgressOnSyncGroup() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // join initially, but let coordinator rebalance on sync
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.REBALANCE_IN_PROGRESS.code()));
+
+        // then let the full join/sync finish successfully
+        client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+
+        coordinator.ensurePartitionAssignment();
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+        assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
+    }
+
+    @Test
+    public void testIllegalGenerationOnSyncGroup() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        // join initially, but let coordinator rebalance on sync
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.ILLEGAL_GENERATION.code()));
+
+        // then let the full join/sync finish successfully
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                JoinGroupRequest joinRequest = new JoinGroupRequest(request.request().body());
+                return joinRequest.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            }
+        }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+
+        coordinator.ensurePartitionAssignment();
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+        assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
+    }
 
     @Test
     public void testMetadataChangeTriggersRebalance() {
@@ -459,7 +658,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testResetGeneration() {
+    public void testCommitAfterLeaveGroup() {
         // enable auto-assignment
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
 
@@ -471,8 +670,9 @@ public class ConsumerCoordinatorTest {
         coordinator.ensurePartitionAssignment();
 
         // now switch to manual assignment
+        client.prepareResponse(new LeaveGroupResponse(Errors.NONE.code()).toStruct());
         subscriptions.unsubscribe();
-        coordinator.resetGeneration();
+        coordinator.maybeLeaveGroup();
         subscriptions.assignFromUser(Arrays.asList(tp));
 
         // the client should not reuse generation/memberId from auto-subscribed generation
@@ -597,7 +797,37 @@ public class ConsumerCoordinatorTest {
         coordinator.commitOffsetsSync(Collections.singletonMap(tp, new OffsetAndMetadata(100L, "metadata")));
     }
 
-    @Test(expected = ApiException.class)
+    @Test(expected = CommitFailedException.class)
+    public void testCommitOffsetIllegalGeneration() {
+        // we cannot retry if a rebalance occurs before the commit completed
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.ILLEGAL_GENERATION.code())));
+        coordinator.commitOffsetsSync(Collections.singletonMap(tp, new OffsetAndMetadata(100L, "metadata")));
+    }
+
+    @Test(expected = CommitFailedException.class)
+    public void testCommitOffsetUnknownMemberId() {
+        // we cannot retry if a rebalance occurs before the commit completed
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.UNKNOWN_MEMBER_ID.code())));
+        coordinator.commitOffsetsSync(Collections.singletonMap(tp, new OffsetAndMetadata(100L, "metadata")));
+    }
+
+    @Test(expected = CommitFailedException.class)
+    public void testCommitOffsetRebalanceInProgress() {
+        // we cannot retry if a rebalance occurs before the commit completed
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorKnown();
+
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.REBALANCE_IN_PROGRESS.code())));
+        coordinator.commitOffsetsSync(Collections.singletonMap(tp, new OffsetAndMetadata(100L, "metadata")));
+    }
+
+    @Test(expected = KafkaException.class)
     public void testCommitOffsetSyncCallbackWithNonRetriableException() {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
         coordinator.ensureCoordinatorKnown();
@@ -627,7 +857,7 @@ public class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(Arrays.asList(tp));
         subscriptions.needRefreshCommits();
-        client.prepareResponse(offsetFetchResponse(tp, Errors.OFFSET_LOAD_IN_PROGRESS.code(), "", 100L));
+        client.prepareResponse(offsetFetchResponse(tp, Errors.GROUP_LOAD_IN_PROGRESS.code(), "", 100L));
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded();
         assertFalse(subscriptions.refreshCommitsNeeded());
@@ -663,7 +893,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private Struct consumerMetadataResponse(Node node, short error) {
-        GroupMetadataResponse response = new GroupMetadataResponse(error, node);
+        GroupCoordinatorResponse response = new GroupCoordinatorResponse(error, node);
         return response.toStruct();
     }
 

@@ -28,8 +28,9 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -98,7 +99,6 @@ public class FetcherTest {
         records.append(2L, "key".getBytes(), "value-2".getBytes());
         records.append(3L, "key".getBytes(), "value-3".getBytes());
         records.close();
-        records.flip();
     }
 
     @After
@@ -128,6 +128,35 @@ public class FetcherTest {
         }
     }
 
+    @Test
+    public void testFetchNonContinuousRecords() {
+        // if we are fetching from a compacted topic, there may be gaps in the returned records
+        // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case
+
+        MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
+        records.append(15L, "key".getBytes(), "value-1".getBytes());
+        records.append(20L, "key".getBytes(), "value-2".getBytes());
+        records.append(30L, "key".getBytes(), "value-3".getBytes());
+        records.close();
+
+        List<ConsumerRecord<byte[], byte[]>> consumerRecords;
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.seek(tp, 0);
+
+        // normal fetch
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(records.buffer(), Errors.NONE.code(), 100L, 0));
+        consumerClient.poll(0);
+        consumerRecords = fetcher.fetchedRecords().get(tp);
+        assertEquals(3, consumerRecords.size());
+        assertEquals(31L, (long) subscriptions.fetched(tp)); // this is the next fetching position
+        assertEquals(31L, (long) subscriptions.consumed(tp));
+
+        assertEquals(15L, consumerRecords.get(0).offset());
+        assertEquals(20L, consumerRecords.get(1).offset());
+        assertEquals(30L, consumerRecords.get(2).offset());
+    }
+
     @Test(expected = RecordTooLargeException.class)
     public void testFetchRecordTooLarge() {
         subscriptions.assignFromUser(Arrays.asList(tp));
@@ -142,9 +171,26 @@ public class FetcherTest {
 
         // resize the limit of the buffer to pretend it is only fetch-size large
         fetcher.initFetches(cluster);
-        client.prepareResponse(fetchResponse((ByteBuffer) records.flip().limit(this.fetchSize), Errors.NONE.code(), 100L, 0));
+        client.prepareResponse(fetchResponse((ByteBuffer) records.buffer().limit(this.fetchSize), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
         fetcher.fetchedRecords();
+    }
+
+    @Test
+    public void testUnauthorizedTopic() {
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.seek(tp, 0);
+
+        // resize the limit of the buffer to pretend it is only fetch-size large
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.TOPIC_AUTHORIZATION_FAILED.code(), 100L, 0));
+        consumerClient.poll(0);
+        try {
+            fetcher.fetchedRecords();
+            fail("fetchedRecords should have thrown");
+        } catch (TopicAuthorizationException e) {
+            assertEquals(Collections.singleton(topicName), e.unauthorizedTopics());
+        }
     }
 
     @Test

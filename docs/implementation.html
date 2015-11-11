@@ -5,9 +5,9 @@
  The ASF licenses this file to You under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
- 
+
     http://www.apache.org/licenses/LICENSE-2.0
- 
+
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,10 +20,10 @@
 <h4>Producer APIs</h4>
 
 <p>
-The Producer API that wraps the 2 low-level producers - <code>kafka.producer.SyncProducer</code> and <code>kafka.producer.async.AsyncProducer</code>. 
+The Producer API that wraps the 2 low-level producers - <code>kafka.producer.SyncProducer</code> and <code>kafka.producer.async.AsyncProducer</code>.
 <pre>
 class Producer<T> {
-	
+
   /* Sends the data, partitioned by key to the topic using either the */
   /* synchronous or the asynchronous producer */
   public void send(kafka.javaapi.producer.ProducerData&lt;K,V&gt; producerData);
@@ -32,21 +32,21 @@ class Producer<T> {
   /* the synchronous or the asynchronous producer */
   public void send(java.util.List&lt;kafka.javaapi.producer.ProducerData&lt;K,V&gt;&gt; producerData);
 
-  /* Closes the producer and cleans up */	
+  /* Closes the producer and cleans up */
   public void close();
 
 }
 </pre>
 
-The goal is to expose all the producer functionality through a single API to the client.  
+The goal is to expose all the producer functionality through a single API to the client.
 
 The new producer -
 <ul>
-<li>can handle queueing/buffering of multiple producer requests and asynchronous dispatch of the batched data - 	
+<li>can handle queueing/buffering of multiple producer requests and asynchronous dispatch of the batched data -
 <p><code>kafka.producer.Producer</code> provides the ability to batch multiple produce requests (<code>producer.type=async</code>), before serializing and dispatching them to the appropriate kafka broker partition. The size of the batch can be controlled by a few config parameters. As events enter a queue, they are buffered in a queue, until either <code>queue.time</code> or <code>batch.size</code> is reached. A background thread (<code>kafka.producer.async.ProducerSendThread</code>) dequeues the batch of data and lets the <code>kafka.producer.EventHandler</code> serialize and send the data to the appropriate kafka broker partition. A custom event handler can be plugged in through the <code>event.handler</code> config parameter. At various stages of this producer queue pipeline, it is helpful to be able to inject callbacks, either for plugging in custom logging/tracing code or custom monitoring logic. This is possible by implementing the <code>kafka.producer.async.CallbackHandler</code> interface and setting <code>callback.handler</code> config parameter to that class.
 </p>
 </li>
-<li>handles the serialization of data through a user-specified <code>Encoder</code> - 
+<li>handles the serialization of data through a user-specified <code>Encoder</code> -
 <pre>
 interface Encoder&lt;T&gt; {
   public Message toMessage(T data);
@@ -54,15 +54,15 @@ interface Encoder&lt;T&gt; {
 </pre>
 <p>The default is the no-op <code>kafka.serializer.DefaultEncoder</code></p>
 </li>
-<li>provides software load balancing through an optionally user-specified <code>Partitioner</code> - 
+<li>provides software load balancing through an optionally user-specified <code>Partitioner</code> -
 <p>
-The routing decision is influenced by the <code>kafka.producer.Partitioner</code>. 
+The routing decision is influenced by the <code>kafka.producer.Partitioner</code>.
 <pre>
 interface Partitioner&lt;T&gt; {
    int partition(T key, int numPartitions);
 }
 </pre>
-The partition API uses the key and the number of available broker partitions to return a partition id. This id is used as an index into a sorted list of broker_ids and partitions to pick a broker partition for the producer request. The default partitioning strategy is <code>hash(key)%numPartitions</code>. If the key is null, then a random broker partition is picked. A custom partitioning strategy can also be plugged in using the <code>partitioner.class</code> config parameter.	
+The partition API uses the key and the number of available broker partitions to return a partition id. This id is used as an index into a sorted list of broker_ids and partitions to pick a broker partition for the producer request. The default partitioning strategy is <code>hash(key)%numPartitions</code>. If the key is null, then a random broker partition is picked. A custom partitioning strategy can also be plugged in using the <code>partitioner.class</code> config parameter.
 </p>
 </li>
 </ul>
@@ -79,11 +79,11 @@ The high-level API hides the details of brokers from the consumer and allows con
 <h5>Low-level API</h5>
 <pre>
 class SimpleConsumer {
-	
-  /* Send fetch request to a broker and get back a set of messages. */ 
+
+  /* Send fetch request to a broker and get back a set of messages. */
   public ByteBufferMessageSet fetch(FetchRequest request);
 
-  /* Send a list of fetch requests to a broker and get back a response set. */ 
+  /* Send a list of fetch requests to a broker and get back a response set. */
   public MultiFetchResponse multifetch(List&lt;FetchRequest&gt; fetches);
 
   /**
@@ -97,16 +97,16 @@ class SimpleConsumer {
 }
 </pre>
 
-The low-level API is used to implement the high-level API as well as being used directly for some of our offline consumers (such as the hadoop consumer) which have particular requirements around maintaining state.
+The low-level API is used to implement the high-level API as well as being used directly for some of our offline consumers which have particular requirements around maintaining state.
 
 <h5>High-level API</h5>
 <pre>
 
-/* create a connection to the cluster */ 
+/* create a connection to the cluster */
 ConsumerConnector connector = Consumer.create(consumerConfig);
 
 interface ConsumerConnector {
-	
+
   /**
    * This method is used to get a list of KafkaStreams, which are iterators over
    * MessageAndMetadata objects from which you can obtain messages and their
@@ -114,7 +114,7 @@ interface ConsumerConnector {
    *  Input: a map of &lt;topic, #streams&gt;
    *  Output: a map of &lt;topic, list of message streams&gt;
    */
-  public Map&lt;String,List&lt;KafkaStream&gt;&gt; createMessageStreams(Map&lt;String,Int&gt; topicCountMap); 
+  public Map&lt;String,List&lt;KafkaStream&gt;&gt; createMessageStreams(Map&lt;String,Int&gt; topicCountMap);
 
   /**
    * You can also obtain a list of KafkaStreams, that iterate over messages
@@ -126,7 +126,7 @@ interface ConsumerConnector {
 
   /* Commit the offsets of all messages consumed so far. */
   public commitOffsets()
-  
+
   /* Shut down the connector */
   public shutdown()
 }
@@ -149,27 +149,27 @@ Messages consist of a fixed-size header and variable length opaque byte array pa
 <h3><a id="messageformat">5.4 Message Format</a></h3>
 
 <pre>
-	/** 
-	 * A message. The format of an N byte message is the following: 
-	 * 
-	 * If magic byte is 0 
-	 * 
-	 * 1. 1 byte "magic" identifier to allow format changes 
-	 * 
-	 * 2. 4 byte CRC32 of the payload 
-	 * 
-	 * 3. N - 5 byte payload 
-	 * 
-	 * If magic byte is 1 
-	 * 
-	 * 1. 1 byte "magic" identifier to allow format changes 
-	 * 
-	 * 2. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used) 
-	 * 
-	 * 3. 4 byte CRC32 of the payload 
-	 * 
-	 * 4. N - 6 byte payload 
-	 * 
+	/**
+	 * A message. The format of an N byte message is the following:
+	 *
+	 * If magic byte is 0
+	 *
+	 * 1. 1 byte "magic" identifier to allow format changes
+	 *
+	 * 2. 4 byte CRC32 of the payload
+	 *
+	 * 3. N - 5 byte payload
+	 *
+	 * If magic byte is 1
+	 *
+	 * 1. 1 byte "magic" identifier to allow format changes
+	 *
+	 * 2. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used)
+	 *
+	 * 3. 4 byte CRC32 of the payload
+	 *
+	 * 4. N - 6 byte payload
+	 *
 	 */
 </pre>
 </p>
@@ -183,7 +183,7 @@ The exact binary format for messages is versioned and maintained as a standard i
 <pre>
 On-disk format of a message
 
-message length : 4 bytes (value: 1+4+n) 
+message length : 4 bytes (value: 1+4+n)
 "magic" value  : 1 byte
 crc            : 4 bytes
 payload        : n bytes
@@ -289,7 +289,7 @@ When an element in a path is denoted [xyz], that means that the value of xyz is 
 This is a list of all present broker nodes, each of which provides a unique logical broker id which identifies it to consumers (which must be given as part of its configuration). On startup, a broker node registers itself by creating a znode with the logical broker id under /brokers/ids. The purpose of the logical broker id is to allow a broker to be moved to a different physical machine without affecting consumers. An attempt to register a broker id that is already in use (say because two servers are configured with the same broker id) is an error.
 </p>
 <p>
-Since the broker registers itself in ZooKeeper using ephemeral znodes, this registration is dynamic and will disappear if the broker is shutdown or dies (thus notifying consumers it is no longer available).	
+Since the broker registers itself in ZooKeeper using ephemeral znodes, this registration is dynamic and will disappear if the broker is shutdown or dies (thus notifying consumers it is no longer available).
 </p>
 <h4>Broker Topic Registry</h4>
 <pre>
@@ -306,7 +306,7 @@ Consumers of topics also register themselves in ZooKeeper, in order to coordinat
 </p>
 
 <p>
-Multiple consumers can form a group and jointly consume a single topic. Each consumer in the same group is given a shared group_id. 
+Multiple consumers can form a group and jointly consume a single topic. Each consumer in the same group is given a shared group_id.
 For example if one consumer is your foobar process, which is run across three machines, then you might assign this group of consumers the id "foobar". This group id is provided in the configuration of the consumer, and is your way to tell the consumer which group it belongs to.
 </p>
 
@@ -371,7 +371,7 @@ The consumer rebalancing algorithms allows all the consumers in a group to come 
 Each consumer does the following during rebalancing:
 </p>
 <pre>
-   1. For each topic T that C<sub>i</sub> subscribes to 
+   1. For each topic T that C<sub>i</sub> subscribes to
    2.   let P<sub>T</sub> be all partitions producing topic T
    3.   let C<sub>G</sub> be all consumers in the same group as C<sub>i</sub> that consume topic T
    4.   sort P<sub>T</sub> (so partitions on the same broker are clustered together)

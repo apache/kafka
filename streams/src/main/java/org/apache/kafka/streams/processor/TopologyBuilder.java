@@ -33,6 +33,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,10 +50,9 @@ import java.util.Set;
  */
 public class TopologyBuilder {
 
-    // list of node factories in a topological order
-    private final ArrayList<NodeFactory> nodeFactories = new ArrayList<>();
+    // node factories in a topological order
+    private final LinkedHashMap<String, NodeFactory> nodeFactories = new LinkedHashMap<>();
 
-    private final Set<String> nodeNames = new HashSet<>();
     private final Set<String> sourceTopicNames = new HashSet<>();
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
@@ -59,35 +60,47 @@ public class TopologyBuilder {
     private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    private interface NodeFactory {
-        ProcessorNode build();
+    private Map<String, StateStoreSupplier> stateStores = new HashMap<>();
+    private Map<String, Set<String>> stateStoreUsers = new HashMap();
+
+    private static abstract class NodeFactory {
+        public final String name;
+
+        NodeFactory(String name) {
+            this.name = name;
+        }
+
+        public abstract ProcessorNode build();
     }
 
-    private class ProcessorNodeFactory implements NodeFactory {
+    private static class ProcessorNodeFactory extends NodeFactory {
         public final String[] parents;
-        private final String name;
         private final ProcessorSupplier supplier;
+        private final Set<String> stateStoreNames = new HashSet<>();
 
         public ProcessorNodeFactory(String name, String[] parents, ProcessorSupplier supplier) {
-            this.name = name;
+            super(name);
             this.parents = parents.clone();
             this.supplier = supplier;
         }
 
+        public void addStateStore(String stateStoreName) {
+            stateStoreNames.add(stateStoreName);
+        }
+
         @Override
         public ProcessorNode build() {
-            return new ProcessorNode(name, supplier.get());
+            return new ProcessorNode(name, supplier.get(), stateStoreNames);
         }
     }
 
-    private class SourceNodeFactory implements NodeFactory {
+    private static class SourceNodeFactory extends NodeFactory {
         public final String[] topics;
-        private final String name;
         private Deserializer keyDeserializer;
         private Deserializer valDeserializer;
 
         private SourceNodeFactory(String name, String[] topics, Deserializer keyDeserializer, Deserializer valDeserializer) {
-            this.name = name;
+            super(name);
             this.topics = topics.clone();
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
@@ -99,15 +112,14 @@ public class TopologyBuilder {
         }
     }
 
-    private class SinkNodeFactory implements NodeFactory {
+    private static class SinkNodeFactory extends NodeFactory {
         public final String[] parents;
         public final String topic;
-        private final String name;
         private Serializer keySerializer;
         private Serializer valSerializer;
 
         private SinkNodeFactory(String name, String[] parents, String topic, Serializer keySerializer, Serializer valSerializer) {
-            this.name = name;
+            super(name);
             this.parents = parents.clone();
             this.topic = topic;
             this.keySerializer = keySerializer;
@@ -155,7 +167,7 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
-        if (nodeNames.contains(name))
+        if (nodeFactories.containsKey(name))
             throw new TopologyException("Processor " + name + " is already added.");
 
         for (String topic : topics) {
@@ -165,8 +177,7 @@ public class TopologyBuilder {
             sourceTopicNames.add(topic);
         }
 
-        nodeNames.add(name);
-        nodeFactories.add(new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
+        nodeFactories.put(name, new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
         nodeToTopics.put(name, topics.clone());
         nodeGrouper.add(name);
 
@@ -204,7 +215,7 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public final TopologyBuilder addSink(String name, String topic, Serializer keySerializer, Serializer valSerializer, String... parentNames) {
-        if (nodeNames.contains(name))
+        if (nodeFactories.containsKey(name))
             throw new TopologyException("Processor " + name + " is already added.");
 
         if (parentNames != null) {
@@ -212,14 +223,13 @@ public class TopologyBuilder {
                 if (parent.equals(name)) {
                     throw new TopologyException("Processor " + name + " cannot be a parent of itself.");
                 }
-                if (!nodeNames.contains(parent)) {
+                if (!nodeFactories.containsKey(parent)) {
                     throw new TopologyException("Parent processor " + parent + " is not added yet.");
                 }
             }
         }
 
-        nodeNames.add(name);
-        nodeFactories.add(new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
+        nodeFactories.put(name, new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
         return this;
     }
 
@@ -233,7 +243,7 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public final TopologyBuilder addProcessor(String name, ProcessorSupplier supplier, String... parentNames) {
-        if (nodeNames.contains(name))
+        if (nodeFactories.containsKey(name))
             throw new TopologyException("Processor " + name + " is already added.");
 
         if (parentNames != null) {
@@ -241,17 +251,77 @@ public class TopologyBuilder {
                 if (parent.equals(name)) {
                     throw new TopologyException("Processor " + name + " cannot be a parent of itself.");
                 }
-                if (!nodeNames.contains(parent)) {
+                if (!nodeFactories.containsKey(parent)) {
                     throw new TopologyException("Parent processor " + parent + " is not added yet.");
                 }
             }
         }
 
-        nodeNames.add(name);
-        nodeFactories.add(new ProcessorNodeFactory(name, parentNames, supplier));
+        nodeFactories.put(name, new ProcessorNodeFactory(name, parentNames, supplier));
         nodeGrouper.add(name);
         nodeGrouper.unite(name, parentNames);
         return this;
+    }
+
+    /**
+     * Adds a state store
+     *
+     * @param supplier the supplier used to obtain this state store {@link StateStore} instance
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder addStateStore(StateStoreSupplier supplier, String... processorNames) {
+        if (stateStores.containsKey(supplier.name())) {
+            throw new TopologyException("StateStore " + supplier.name() + " is already added.");
+        }
+        stateStores.put(supplier.name(), supplier);
+        stateStoreUsers.put(supplier.name(), new HashSet<String>());
+
+        if (processorNames != null) {
+            for (String processorName : processorNames) {
+                connectProcessorAndStateStore(processorName, supplier.name());
+            }
+        }
+
+        return this;
+    }
+
+    /**
+     * Connects the processor and the state stores
+     *
+     * @param processorName the name of the processor
+     * @param stateStoreNames the names of state stores that the processor uses
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder connectProcessorAndStateStores(String processorName, String... stateStoreNames) {
+        if (stateStoreNames != null) {
+            for (String stateStoreName : stateStoreNames) {
+                connectProcessorAndStateStore(processorName, stateStoreName);
+            }
+        }
+
+        return this;
+    }
+
+    private void connectProcessorAndStateStore(String processorName, String stateStoreName) {
+        if (!stateStores.containsKey(stateStoreName))
+            throw new TopologyException("StateStore " + stateStoreName + " is not added yet.");
+        if (!nodeFactories.containsKey(processorName))
+            throw new TopologyException("Processor " + processorName + " is not added yet.");
+
+        Set<String> users = stateStoreUsers.get(stateStoreName);
+        Iterator<String> iter = users.iterator();
+        if (iter.hasNext()) {
+            String user = iter.next();
+            nodeGrouper.unite(user, processorName);
+        }
+        users.add(processorName);
+
+        NodeFactory factory = nodeFactories.get(processorName);
+        if (factory instanceof ProcessorNodeFactory) {
+            ((ProcessorNodeFactory) factory).addStateStore(stateStoreName);
+        } else {
+            throw new TopologyException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
+        }
     }
 
     /**
@@ -263,11 +333,8 @@ public class TopologyBuilder {
     public Map<Integer, Set<String>> topicGroups() {
         Map<Integer, Set<String>> topicGroups = new HashMap<>();
 
-        if (nodeGroups == null) {
-            nodeGroups = nodeGroups();
-        } else if (!nodeGroups.equals(nodeGroups())) {
-            throw new TopologyException("topology has mutated");
-        }
+        if (nodeGroups == null)
+            nodeGroups = makeNodeGroups();
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> topicGroup = new HashSet<>();
@@ -282,7 +349,19 @@ public class TopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
-    private Map<Integer, Set<String>> nodeGroups() {
+    /**
+     * Returns the map of node groups keyed by the topic group id.
+     *
+     * @return groups of node names
+     */
+    public Map<Integer, Set<String>> nodeGroups() {
+        if (nodeGroups == null)
+            nodeGroups = makeNodeGroups();
+
+        return nodeGroups;
+    }
+
+    private Map<Integer, Set<String>> makeNodeGroups() {
         HashMap<Integer, Set<String>> nodeGroups = new HashMap<>();
         HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
@@ -301,7 +380,7 @@ public class TopologyBuilder {
         }
 
         // Go through non-source nodes
-        for (String nodeName : Utils.sorted(nodeNames)) {
+        for (String nodeName : Utils.sorted(nodeFactories.keySet())) {
             if (!nodeToTopics.containsKey(nodeName)) {
                 String root = nodeGrouper.root(nodeName);
                 Set<String> nodeGroup = rootToNodeGroup.get(root);
@@ -316,14 +395,16 @@ public class TopologyBuilder {
 
         return nodeGroups;
     }
-
+    
     /**
      * Asserts that the streams of the specified source nodes must be copartitioned.
      *
      * @param sourceNodes a set of source node names
+     * @return this builder instance so methods can be chained together; never null
      */
-    public void copartitionSources(Collection<String> sourceNodes) {
+    public final TopologyBuilder copartitionSources(Collection<String> sourceNodes) {
         copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
+        return this;
     }
 
     /**
@@ -347,45 +428,64 @@ public class TopologyBuilder {
     }
 
     /**
-     * Build the topology. This is typically called automatically when passing this builder into the
+     * Build the topology for the specified topic group. This is called automatically when passing this builder into the
      * {@link KafkaStreaming#KafkaStreaming(TopologyBuilder, StreamingConfig)} constructor.
      *
      * @see KafkaStreaming#KafkaStreaming(TopologyBuilder, StreamingConfig)
      */
+    public ProcessorTopology build(Integer topicGroupId) {
+        Set<String> nodeGroup;
+        if (topicGroupId != null) {
+            nodeGroup = nodeGroups().get(topicGroupId);
+        } else {
+            // when nodeGroup is null, we build the full topology. this is used in some tests.
+            nodeGroup = null;
+        }
+        return build(nodeGroup);
+    }
+
     @SuppressWarnings("unchecked")
-    public ProcessorTopology build() {
+    private ProcessorTopology build(Set<String> nodeGroup) {
         List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
+        Map<String, StateStoreSupplier> stateStoreMap = new HashMap<>();
 
         try {
             // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
-            for (NodeFactory factory : nodeFactories) {
-                ProcessorNode node = factory.build();
-                processorNodes.add(node);
-                processorMap.put(node.name(), node);
+            for (NodeFactory factory : nodeFactories.values()) {
+                if (nodeGroup == null || nodeGroup.contains(factory.name)) {
+                    ProcessorNode node = factory.build();
+                    processorNodes.add(node);
+                    processorMap.put(node.name(), node);
 
-                if (factory instanceof ProcessorNodeFactory) {
-                    for (String parent : ((ProcessorNodeFactory) factory).parents) {
-                        processorMap.get(parent).addChild(node);
+                    if (factory instanceof ProcessorNodeFactory) {
+                        for (String parent : ((ProcessorNodeFactory) factory).parents) {
+                            processorMap.get(parent).addChild(node);
+                        }
+                        for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
+                            if (!stateStoreMap.containsKey(stateStoreName)) {
+                                stateStoreMap.put(stateStoreName, stateStores.get(stateStoreName));
+                            }
+                        }
+                    } else if (factory instanceof SourceNodeFactory) {
+                        for (String topic : ((SourceNodeFactory) factory).topics) {
+                            topicSourceMap.put(topic, (SourceNode) node);
+                        }
+                    } else if (factory instanceof SinkNodeFactory) {
+                        for (String parent : ((SinkNodeFactory) factory).parents) {
+                            processorMap.get(parent).addChild(node);
+                        }
+                    } else {
+                        throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                     }
-                } else if (factory instanceof SourceNodeFactory) {
-                    for (String topic : ((SourceNodeFactory) factory).topics) {
-                        topicSourceMap.put(topic, (SourceNode) node);
-                    }
-                } else if (factory instanceof SinkNodeFactory) {
-                    for (String parent : ((SinkNodeFactory) factory).parents) {
-                        processorMap.get(parent).addChild(node);
-                    }
-                } else {
-                    throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                 }
             }
         } catch (Exception e) {
             throw new KafkaException("ProcessorNode construction failed: this should not happen.");
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap);
+        return new ProcessorTopology(processorNodes, topicSourceMap, new ArrayList<>(stateStoreMap.values()));
     }
 
     /**

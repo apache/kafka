@@ -238,14 +238,18 @@ public final class Metadata {
     }
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {
+        Set<String> unauthorizedTopics = new HashSet<>();
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
         if (cluster != null) {
+            unauthorizedTopics.addAll(cluster.unauthorizedTopics());
+            unauthorizedTopics.retainAll(this.topics);
+
             for (String topic : this.topics) {
                 partitionInfos.addAll(cluster.partitionsForTopic(topic));
             }
             nodes = cluster.nodes();
         }
-        return new Cluster(nodes, partitionInfos);
+        return new Cluster(nodes, partitionInfos, unauthorizedTopics);
     }
 }

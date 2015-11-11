@@ -30,9 +30,9 @@ object AclCommand {
   val Delimiter = ','
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
-    Topic -> Set(Read, Write, Describe),
-    Group -> Set(Read),
-    Cluster -> Set(Create, ClusterAction)
+    Topic -> Set(Read, Write, Describe, All),
+    Group -> Set(Read, All),
+    Cluster -> Set(Create, ClusterAction, All)
   )
 
   def main(args: Array[String]) {
@@ -44,6 +44,22 @@ object AclCommand {
 
     opts.checkArgs()
 
+    try {
+      if (opts.options.has(opts.addOpt))
+        addAcl(opts)
+      else if (opts.options.has(opts.removeOpt))
+        removeAcl(opts)
+      else if (opts.options.has(opts.listOpt))
+        listAcl(opts)
+    } catch {
+      case e: Throwable =>
+        println(s"Error while executing topic Acl command ${e.getMessage}")
+        println(Utils.stackTrace(e))
+        System.exit(-1)
+    }
+  }
+
+  def getAuthorizer(opts: AclCommandOptions): Authorizer = {
     var authorizerProperties = Map.empty[String, Any]
     if (opts.options.has(opts.authorizerPropertiesOpt)) {
       val props = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala.map(_.split("="))
@@ -53,23 +69,11 @@ object AclCommand {
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
     val authZ: Authorizer = CoreUtils.createObject(authorizerClass)
     authZ.configure(authorizerProperties.asJava)
-
-    try {
-      if (opts.options.has(opts.addOpt))
-        addAcl(authZ, opts)
-      else if (opts.options.has(opts.removeOpt))
-        removeAcl(authZ, opts)
-      else if (opts.options.has(opts.listOpt))
-        listAcl(authZ, opts)
-    } catch {
-      case e: Throwable =>
-        println(s"Error while executing topic Acl command ${e.getMessage}")
-        println(Utils.stackTrace(e))
-        System.exit(-1)
-    }
+    authZ
   }
 
-  private def addAcl(authZ: Authorizer, opts: AclCommandOptions) {
+  private def addAcl(opts: AclCommandOptions) {
+    val authZ: Authorizer = getAuthorizer(opts)
     val resourceToAcl = getResourceToAcls(opts)
 
     if (resourceToAcl.values.exists(_.isEmpty))
@@ -81,10 +85,11 @@ object AclCommand {
       authZ.addAcls(acls, resource)
     }
 
-    listAcl(authZ, opts)
+    listAcl(opts)
   }
 
-  private def removeAcl(authZ: Authorizer, opts: AclCommandOptions) {
+  private def removeAcl(opts: AclCommandOptions) {
+    val authZ: Authorizer = getAuthorizer(opts)
     val resourceToAcl = getResourceToAcls(opts)
 
     for ((resource, acls) <- resourceToAcl) {
@@ -97,10 +102,11 @@ object AclCommand {
       }
     }
 
-    listAcl(authZ, opts)
+    listAcl(opts)
   }
 
-  private def listAcl(authZ: Authorizer, opts: AclCommandOptions) {
+  private def listAcl(opts: AclCommandOptions) {
+    val authZ = getAuthorizer(opts)
     val resources = getResource(opts, dieIfNoResourceFound = false)
 
     val resourceToAcls = if(resources.isEmpty)
@@ -284,23 +290,21 @@ object AclCommand {
       .defaultsTo(All.name)
       .withValuesSeparatedBy(Delimiter)
 
-    val allowPrincipalsOpt = parser.accepts("allow-principals", "Comma separated list of principals where principal is in principalType:name format." +
+    val allowPrincipalsOpt = parser.accepts("allow-principal", "principal is in principalType:name format." +
       " User:* is the wild card indicating all users.")
       .withRequiredArg
-      .describedAs("allow-principals")
+      .describedAs("allow-principal")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(Delimiter)
 
-    val denyPrincipalsOpt = parser.accepts("deny-principals", "Comma separated list of principals where principal is in " +
-      "principalType: name format. By default anyone not in --allow-principals list is denied access. " +
+    val denyPrincipalsOpt = parser.accepts("deny-principal", "principal is in principalType: name format. " +
+      "By default anyone not added through --allow-principal is denied access. " +
       "You only need to use this option as negation to already allowed set. " +
       "For example if you wanted to allow access to all users in the system but not test-user you can define an acl that " +
-      "allows access to User:* and specify --deny-principals=User:test@EXAMPLE.COM. " +
+      "allows access to User:* and specify --deny-principal=User:test@EXAMPLE.COM. " +
       "AND PLEASE REMEMBER DENY RULES TAKES PRECEDENCE OVER ALLOW RULES.")
       .withRequiredArg
-      .describedAs("deny-principals")
+      .describedAs("deny-principal")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(Delimiter)
 
     val allowHostsOpt = parser.accepts("allow-hosts", "Comma separated list of hosts from which principals listed in --allow-principals will have access. " +
       "If you have specified --allow-principals then the default for this option will be set to * which allows access from all hosts.")

@@ -14,8 +14,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.ConsumerWakeupException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
@@ -24,6 +24,9 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -43,7 +46,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,7 +58,7 @@ import java.util.Set;
 /**
  * This class manages the coordination process with the consumer coordinator.
  */
-public final class ConsumerCoordinator extends AbstractCoordinator implements Closeable {
+public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
@@ -67,6 +69,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
+    private DelayedTask autoCommitTask = null;
 
     /**
      * Initialize the coordination manager.
@@ -82,7 +85,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                                String metricGrpPrefix,
                                Map<String, String> metricTags,
                                Time time,
-                               long requestTimeoutMs,
                                long retryBackoffMs,
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
@@ -95,7 +97,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                 metricGrpPrefix,
                 metricTags,
                 time,
-                requestTimeoutMs,
                 retryBackoffMs);
         this.metadata = metadata;
 
@@ -112,14 +113,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         addMetadataListener();
 
         if (autoCommitEnabled)
-            scheduleAutoCommitTask(autoCommitIntervalMs);
+            this.autoCommitTask = scheduleAutoCommitTask(autoCommitIntervalMs);
 
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
     }
 
     @Override
     public String protocolType() {
-        return "consumer";
+        return ConsumerProtocol.PROTOCOL_TYPE;
     }
 
     @Override
@@ -136,6 +137,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         this.metadata.addListener(new Metadata.Listener() {
             @Override
             public void onMetadataUpdate(Cluster cluster) {
+                // if we encounter any unauthorized topics, raise an exception to the user
+                if (!cluster.unauthorizedTopics().isEmpty())
+                    throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+
                 if (subscriptions.hasPatternSubscription()) {
                     final List<String> topicsToSubscribe = new ArrayList<>();
 
@@ -180,6 +185,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         try {
             Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsAssigned(assigned);
+        } catch (WakeupException e) {
+            throw e;
         } catch (Exception e) {
             log.error("User provided listener " + listener.getClass().getName()
                     + " failed on partition assignment: ", e);
@@ -234,6 +241,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         try {
             Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsRevoked(revoked);
+        } catch (WakeupException e) {
+            throw e;
         } catch (Exception e) {
             log.error("User provided listener " + listener.getClass().getName()
                     + " failed on partition revocation: ", e);
@@ -297,15 +306,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
 
     @Override
     public void close() {
-        // commit offsets prior to closing if auto-commit enabled
-        while (true) {
-            try {
-                maybeAutoCommitOffsetsSync();
-                return;
-            } catch (ConsumerWakeupException e) {
-                // ignore wakeups while closing to ensure we have a chance to commit
-                continue;
-            }
+        // we do not need to re-enable wakeups since we are closing already
+        client.disableWakeups();
+        try {
+            if (autoCommitTask != null)
+                client.unschedule(autoCommitTask);
+            maybeAutoCommitOffsetsSync();
+        } finally {
+            super.close();
         }
     }
 
@@ -326,6 +334,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         });
     }
 
+    /**
+     * Commit offsets synchronously. This method will retry until the commit completes successfully
+     * or an unrecoverable error is encountered.
+     * @param offsets The offsets to be committed
+     * @throws org.apache.kafka.common.errors.AuthorizationException if the consumer is not authorized to the group
+     *             or to any of the specified partitions
+     * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
+     */
     public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (offsets.isEmpty())
             return;
@@ -336,19 +352,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future);
 
-            if (future.succeeded()) {
+            if (future.succeeded())
                 return;
-            }
 
-            if (!future.isRetriable()) {
+            if (!future.isRetriable())
                 throw future.exception();
-            }
 
             Utils.sleep(retryBackoffMs);
         }
     }
 
-    private void scheduleAutoCommitTask(final long interval) {
+    private DelayedTask scheduleAutoCommitTask(final long interval) {
         DelayedTask task = new DelayedTask() {
             public void run(long now) {
                 commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
@@ -362,13 +376,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
             }
         };
         client.schedule(task, time.milliseconds() + interval);
+        return task;
     }
 
     private void maybeAutoCommitOffsetsSync() {
         if (autoCommitEnabled) {
             try {
                 commitOffsetsSync(subscriptions.allConsumed());
-            } catch (ConsumerWakeupException e) {
+            } catch (WakeupException e) {
                 // rethrow wakeups since they are triggered by the user
                 throw e;
             } catch (Exception e) {
@@ -407,6 +422,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                 OffsetCommitRequest.DEFAULT_RETENTION_TIME,
                 offsetData);
 
+        log.trace("Sending offset-commit request with {} to {}", offsets, coordinator);
+
         return client.send(coordinator, ApiKeys.OFFSET_COMMIT, req)
                 .compose(new OffsetCommitResponseHandler(offsets));
     }
@@ -435,38 +452,64 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         @Override
         public void handle(OffsetCommitResponse commitResponse, RequestFuture<Void> future) {
             sensors.commitLatency.record(response.requestLatencyMs());
+            Set<String> unauthorizedTopics = new HashSet<>();
+
             for (Map.Entry<TopicPartition, Short> entry : commitResponse.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetAndMetadata offsetAndMetadata = this.offsets.get(tp);
                 long offset = offsetAndMetadata.offset();
 
-                short errorCode = entry.getValue();
-                if (errorCode == Errors.NONE.code()) {
+                Errors error = Errors.forCode(entry.getValue());
+                if (error == Errors.NONE) {
                     log.debug("Committed offset {} for partition {}", offset, tp);
                     if (subscriptions.isAssigned(tp))
                         // update the local cache only if the partition is still assigned
                         subscriptions.committed(tp, offsetAndMetadata);
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    log.error("Unauthorized to commit for group {}", groupId);
+                    future.raise(new GroupAuthorizationException(groupId));
+                    return;
+                } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                    unauthorizedTopics.add(tp.topic());
+                } else if (error == Errors.OFFSET_METADATA_TOO_LARGE
+                        || error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
+                    // raise the error to the user
+                    log.info("Offset commit for group {} failed on partition {} due to {}, will retry", groupId, tp, error);
+                    future.raise(error);
+                    return;
+                } else if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
+                    // just retry
+                    log.info("Offset commit for group {} failed due to {}, will retry", groupId, error);
+                    future.raise(error);
+                    return;
+                } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.NOT_COORDINATOR_FOR_GROUP
+                        || error == Errors.REQUEST_TIMED_OUT) {
+                    log.info("Offset commit for group {} failed due to {}, will find new coordinator and retry", groupId, error);
+                    coordinatorDead();
+                    future.raise(error);
+                    return;
+                } else if (error == Errors.UNKNOWN_MEMBER_ID
+                        || error == Errors.ILLEGAL_GENERATION
+                        || error == Errors.REBALANCE_IN_PROGRESS) {
+                    // need to re-join group
+                    log.error("Error {} occurred while committing offsets for group {}", error, groupId);
+                    subscriptions.needReassignment();
+                    future.raise(new CommitFailedException("Commit cannot be completed due to group rebalance"));
+                    return;
                 } else {
-                    if (errorCode == Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code()
-                            || errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
-                        coordinatorDead();
-                    } else if (errorCode == Errors.UNKNOWN_MEMBER_ID.code()
-                            || errorCode == Errors.ILLEGAL_GENERATION.code()) {
-                        // need to re-join group
-                        subscriptions.needReassignment();
-                    }
-
-                    log.error("Error committing partition {} at offset {}: {}",
-                            tp,
-                            offset,
-                            Errors.forCode(errorCode).exception().getMessage());
-
-                    future.raise(Errors.forCode(errorCode));
+                    log.error("Error committing partition {} at offset {}: {}", tp, offset, error.exception().getMessage());
+                    future.raise(new KafkaException("Unexpected error in commit: " + error.exception().getMessage()));
                     return;
                 }
             }
 
-            future.complete(null);
+            if (!unauthorizedTopics.isEmpty()) {
+                log.error("Unauthorized to commit to topics {}", unauthorizedTopics);
+                future.raise(new TopicAuthorizationException(unauthorizedTopics));
+            } else {
+                future.complete(null);
+            }
         }
     }
 
@@ -481,7 +524,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
-        log.debug("Fetching committed offsets for partitions: {}",  Utils.join(partitions, ", "));
+        log.debug("Fetching committed offsets for partitions: {}",  partitions);
         // construct the request
         OffsetFetchRequest request = new OffsetFetchRequest(this.groupId, new ArrayList<TopicPartition>(partitions));
 
@@ -507,9 +550,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator implements Cl
                     log.debug("Error fetching offset for topic-partition {}: {}", tp, Errors.forCode(data.errorCode)
                             .exception()
                             .getMessage());
-                    if (data.errorCode == Errors.OFFSET_LOAD_IN_PROGRESS.code()) {
+                    if (data.errorCode == Errors.GROUP_LOAD_IN_PROGRESS.code()) {
                         // just retry
-                        future.raise(Errors.OFFSET_LOAD_IN_PROGRESS);
+                        future.raise(Errors.GROUP_LOAD_IN_PROGRESS);
                     } else if (data.errorCode == Errors.NOT_COORDINATOR_FOR_GROUP.code()) {
                         // re-discover the coordinator and retry
                         coordinatorDead();

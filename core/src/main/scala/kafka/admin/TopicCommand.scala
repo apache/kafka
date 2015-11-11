@@ -53,7 +53,7 @@ object TopicCommand extends Logging {
     val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt), 
                           30000,
                           30000,
-                          JaasUtils.isZkSecurityEnabled(System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)))
+                          JaasUtils.isZkSecurityEnabled())
     var exitCode = 0
     try {
       if(opts.options.has(opts.createOpt))
@@ -129,7 +129,7 @@ object TopicCommand extends Logging {
       }
 
       if(opts.options.has(opts.partitionsOpt)) {
-        if (topic == GroupCoordinator.OffsetsTopicName) {
+        if (topic == GroupCoordinator.GroupMetadataTopicName) {
           throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
         }
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +

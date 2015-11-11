@@ -57,10 +57,10 @@ public class MockClient implements KafkaClient {
     private final Time time;
     private int correlation = 0;
     private Node node = null;
-    private final Set<Integer> ready = new HashSet<Integer>();
-    private final Queue<ClientRequest> requests = new ArrayDeque<ClientRequest>();
-    private final Queue<ClientResponse> responses = new ArrayDeque<ClientResponse>();
-    private final Queue<FutureResponse> futureResponses = new ArrayDeque<FutureResponse>();
+    private final Set<Integer> ready = new HashSet<>();
+    private final Queue<ClientRequest> requests = new ArrayDeque<>();
+    private final Queue<ClientResponse> responses = new ArrayDeque<>();
+    private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
 
     public MockClient(Time time) {
         this.time = time;
@@ -88,11 +88,12 @@ public class MockClient implements KafkaClient {
     }
 
     public void disconnect(String node) {
+        long now = time.milliseconds();
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
             if (request.request().destination() == node) {
-                responses.add(new ClientResponse(request, time.milliseconds(), true, null));
+                responses.add(new ClientResponse(request, now, true, null));
                 iter.remove();
             }
         }
@@ -146,7 +147,7 @@ public class MockClient implements KafkaClient {
 
     /**
      * Prepare a response for a request matching the provided matcher. If the matcher does not
-     * match, {@link #send(ClientRequest)} will throw IllegalStateException
+     * match, {@link #send(ClientRequest, long)} will throw IllegalStateException
      * @param matcher The matcher to apply
      * @param body The response body
      */
@@ -160,7 +161,7 @@ public class MockClient implements KafkaClient {
 
     /**
      * Prepare a response for a request matching the provided matcher. If the matcher does not
-     * match, {@link #send(ClientRequest)} will throw IllegalStateException
+     * match, {@link #send(ClientRequest, long)} will throw IllegalStateException
      * @param matcher The matcher to apply
      * @param body The response body
      * @param disconnected Whether the request was disconnected

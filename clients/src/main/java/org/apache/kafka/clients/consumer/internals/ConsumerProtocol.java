@@ -54,6 +54,8 @@ import java.util.Map;
  */
 public class ConsumerProtocol {
 
+    public static final String PROTOCOL_TYPE = "consumer";
+
     public static final String VERSION_KEY_NAME = "version";
     public static final String TOPICS_KEY_NAME = "topics";
     public static final String TOPIC_KEY_NAME = "topic";

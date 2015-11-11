@@ -132,6 +132,6 @@ public class KStreamImplTest {
             1 + // to
             2 + // through
             1, // process
-            builder.build().processors().size());
+            builder.build(null).processors().size());
     }
 }

@@ -33,6 +33,9 @@ def junit='junit:junit:4.11'
 def easymock='org.easymock:easymock:3.3.1'
 def powermock='org.powermock:powermock-module-junit4:1.6.2'
 def powermock_easymock='org.powermock:powermock-api-easymock:1.6.2'
+def jackson_version = '2.5.4'
+def jetty_version = '9.2.12.v20150709'
+def jersey_version = '2.22.1'
 
 allprojects {
   apply plugin: 'idea'
@@ -48,7 +51,7 @@ ext {
     userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
     skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-    shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
+    shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
     mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
     mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
@@ -57,24 +60,25 @@ ext {
 
 apply from: file('wrapper.gradle')
 apply from: file('scala.gradle')
-apply from: file('gradle/rat.gradle')
 
-rat {
-  // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
-  // restrict us only to files that are checked in or are staged.
-  def repo = Grgit.open(project.file('.'))
-  excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
-  // And some of the files that we have checked in should also be excluded from this check
-  excludes.addAll([
-    '**/.git/**',
-    '**/build/**',
-    'CONTRIBUTING.md',
-    'gradlew',
-    'gradlew.bat',
-    '**/README.md',
-    '.reviewboardrc',
-    'system_test/**'
-  ])
+if (new File('.git').exists()) {
+  apply from: file('gradle/rat.gradle')
+  rat {
+    // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
+    // restrict us only to files that are checked in or are staged.
+    def repo = Grgit.open(project.file('.'))
+    excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
+    // And some of the files that we have checked in should also be excluded from this check
+    excludes.addAll([
+        '**/.git/**',
+        '**/build/**',
+        'CONTRIBUTING.md',
+        'gradlew',
+        'gradlew.bat',
+        '**/README.md',
+        '.reviewboardrc'
+    ])
+  }
 }
 
 subprojects {
@@ -150,6 +154,8 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
+  task systemTestLibs(dependsOn: jar)
+
   artifacts {
     archives srcJar
     archives javadocJar
@@ -224,17 +230,17 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
   }
 }
 
-def copycatPkgs = ['copycat:api', 'copycat:runtime', 'copycat:json', 'copycat:file']
-def pkgs = ['clients', 'examples', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'log4j-appender', 'tools', 'streams'] + copycatPkgs
+def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file', 'connect:tools']
+def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams'] + connectPkgs
 
-tasks.create(name: "jarCopycat", dependsOn: copycatPkgs.collect { it + ":jar" }) {}
+tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
 tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) { }
 
 tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10_5', 'srcJar_2_11_7'] + pkgs.collect { it + ":srcJar" }) { }
 
 tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10_5', 'docsJar_2_11_7'] + pkgs.collect { it + ":docsJar" }) { }
 
-tasks.create(name: "testCopycat", dependsOn: copycatPkgs.collect { it + ":test" }) {}
+tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
 tasks.create(name: "testAll", dependsOn: ['test_core_2_10_5', 'test_core_2_11_7'] + pkgs.collect { it + ":test" }) { }
 
 tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10_5', 'releaseTarGz_2_11_7']) {
@@ -250,10 +256,10 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
-    compile project(':log4j-appender')
+    compile "$slf4jlog4j"
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
-    compile 'com.101tec:zkclient:0.6'
+    compile 'com.101tec:zkclient:0.7'
     compile 'com.yammer.metrics:metrics-core:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
     if (scalaVersion.startsWith('2.11')) {
@@ -297,12 +303,32 @@ project(':core') {
     into "$buildDir/dependant-libs-${scalaVersion}"
   }
 
-  task siteDocsTar(type: Tar) {
+  tasks.create(name: "genProducerConfigDocs", dependsOn:jar, type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.clients.producer.ProducerConfig'
+    standardOutput = new File('docs/producer_config.html').newOutputStream()
+  }
+
+  tasks.create(name: "genConsumerConfigDocs", dependsOn:jar, type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.clients.consumer.ConsumerConfig'
+    standardOutput = new File('docs/consumer_config.html').newOutputStream()
+  }
+
+  tasks.create(name: "genKafkaConfigDocs", dependsOn:jar, type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'kafka.server.KafkaConfig'
+    standardOutput = new File('docs/kafka_config.html').newOutputStream()
+  }
+
+  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs', ':connect:runtime:genConnectConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
     into 'site-docs'
   }
+
+
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${baseScalaVersion}-${version}"
@@ -314,10 +340,22 @@ project(':core') {
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
+    from(project(':tools').jar) { into("libs/") }
+    from(project(':tools').configurations.runtime) { into("libs/") }
+    from(project(':connect:api').jar) { into("libs/") }
+    from(project(':connect:api').configurations.runtime) { into("libs/") }
+    from(project(':connect:runtime').jar) { into("libs/") }
+    from(project(':connect:runtime').configurations.runtime) { into("libs/") }
+    from(project(':connect:json').jar) { into("libs/") }
+    from(project(':connect:json').configurations.runtime) { into("libs/") }
+    from(project(':connect:file').jar) { into("libs/") }
+    from(project(':connect:file').configurations.runtime) { into("libs/") }
+    from(project(':connect:tools').jar) { into("libs/") }
+    from(project(':connect:tools').configurations.runtime) { into("libs/") }
   }
 
   jar {
-    dependsOn 'copyDependantLibs'
+    dependsOn('copyDependantLibs', 'copyDependantTestLibs')
   }
 
   jar.manifest {
@@ -341,54 +379,12 @@ project(':core') {
   artifacts {
     archives testJar
   }
-}
 
-project(':contrib:hadoop-consumer') {
-  archivesBaseName = "kafka-hadoop-consumer"
-
-  dependencies {
-    compile project(':core')
-    compile "org.apache.avro:avro:1.4.0"
-    compile "org.apache.pig:pig:0.8.0"
-    compile "commons-logging:commons-logging:1.0.4"
-    compile "org.codehaus.jackson:jackson-core-asl:1.5.5"
-    compile "org.codehaus.jackson:jackson-mapper-asl:1.5.5"
-    compile "org.apache.hadoop:hadoop-core:0.20.2"
-  }
-
-  configurations {
-    // manually excludes some unnecessary dependencies
-    compile.exclude module: 'javax'
-    compile.exclude module: 'jms'
-    compile.exclude module: 'jmxri'
-    compile.exclude module: 'jmxtools'
-    compile.exclude module: 'mail'
-    compile.exclude module: 'netty'
-  }
-}
-
-project(':contrib:hadoop-producer') {
-  archivesBaseName = "kafka-hadoop-producer"
-
-  dependencies {
-    compile project(':core')
-    compile("org.apache.avro:avro:1.4.0") { force = true }
-    compile "org.apache.pig:pig:0.8.0"
-    compile "commons-logging:commons-logging:1.0.4"
-    compile "org.codehaus.jackson:jackson-core-asl:1.5.5"
-    compile "org.codehaus.jackson:jackson-mapper-asl:1.5.5"
-    compile "org.apache.hadoop:hadoop-core:0.20.2"
-    compile "org.apache.pig:piggybank:0.12.0"
-  }
-
-  configurations {
-    // manually excludes some unnecessary dependencies
-    compile.exclude module: 'javax'
-    compile.exclude module: 'jms'
-    compile.exclude module: 'jmxri'
-    compile.exclude module: 'jmxtools'
-    compile.exclude module: 'mail'
-    compile.exclude module: 'netty'
+  tasks.create(name: "copyDependantTestLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('*.jar')
+    }
+    into "$buildDir/dependant-testlibs"
   }
 }
 
@@ -498,8 +494,9 @@ project(':tools') {
 
     dependencies {
         compile project(':clients')
+        compile project(':log4j-appender')
         compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
-        compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
+        compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
         compile "$slf4jlog4j"
 
         testCompile "$junit"
@@ -641,9 +638,9 @@ project(':log4j-appender') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:api') {
+project(':connect:api') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-api"
+  archivesBaseName = "connect-api"
 
   dependencies {
     compile "$slf4japi"
@@ -666,7 +663,22 @@ project(':copycat:api') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/*"
+    include "**/org/apache/kafka/connect/*"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
   }
 
   artifacts {
@@ -683,14 +695,14 @@ project(':copycat:api') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:json') {
+project(':connect:json') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-json"
+  archivesBaseName = "connect-json"
 
   dependencies {
-    compile project(':copycat:api')
+    compile project(':connect:api')
     compile "$slf4japi"
-    compile 'com.fasterxml.jackson.core:jackson-databind:2.5.4'
+    compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
 
     testCompile "$junit"
     testCompile "$easymock"
@@ -712,26 +724,16 @@ project(':copycat:json') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/*"
+    include "**/org/apache/kafka/connect/*"
   }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom(testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
     from (configurations.runtime) {
       exclude('kafka-clients*')
-      exclude('copycat-*')
+      exclude('connect-*')
     }
     into "$buildDir/dependant-libs"
   }
@@ -739,16 +741,34 @@ project(':copycat:json') {
   jar {
     dependsOn copyDependantLibs
   }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom(testCompile)
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:runtime') {
+project(':connect:runtime') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-runtime"
+  archivesBaseName = "connect-runtime"
 
   dependencies {
-    compile project(':copycat:api')
+    compile project(':connect:api')
     compile project(':clients')
     compile "$slf4japi"
+
+    compile "org.eclipse.jetty:jetty-server:$jetty_version"
+    compile "org.eclipse.jetty:jetty-servlet:$jetty_version"
+    compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$jackson_version"
+    compile "org.glassfish.jersey.containers:jersey-container-servlet:$jersey_version"
 
     testCompile "$junit"
     testCompile "$easymock"
@@ -756,7 +776,7 @@ project(':copycat:runtime') {
     testCompile "$powermock_easymock"
     testCompile project(':clients').sourceSets.test.output
     testRuntime "$slf4jlog4j"
-    testRuntime project(":copycat:json")
+    testRuntime project(":connect:json")
   }
 
   task testJar(type: Jar) {
@@ -772,7 +792,88 @@ project(':copycat:runtime') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/*"
+    include "**/org/apache/kafka/connect/*"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  configurations {
+    archives.extendsFrom(testCompile)
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  tasks.create(name: "genConnectConfigDocs", dependsOn:jar, type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
+    standardOutput = new File('docs/connect_config.html').newOutputStream()
+  }
+}
+
+project(':connect:file') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "connect-file"
+
+  dependencies {
+    compile project(':connect:api')
+    compile "$slf4japi"
+
+    testCompile "$junit"
+    testCompile "$easymock"
+    testCompile "$powermock"
+    testCompile "$powermock_easymock"
+    testRuntime "$slf4jlog4j"
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/connect/*"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
   }
 
   artifacts {
@@ -789,13 +890,14 @@ project(':copycat:runtime') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':copycat:file') {
+project(':connect:tools') {
   apply plugin: 'checkstyle'
-  archivesBaseName = "copycat-file"
+  archivesBaseName = "connect-tools"
 
   dependencies {
-    compile project(':copycat:api')
+    compile project(':connect:api')
     compile "$slf4japi"
+    compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
 
     testCompile "$junit"
     testCompile "$easymock"
@@ -817,7 +919,22 @@ project(':copycat:file') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/copycat/*"
+    include "**/org/apache/kafka/connect/*"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+  }
+
+  jar {
+    dependsOn copyDependantLibs
   }
 
   artifacts {

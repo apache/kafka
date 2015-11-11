@@ -19,6 +19,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,8 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 /**
  * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka. This class is <i> not
@@ -135,7 +136,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         if (wakeup.get()) {
             wakeup.set(false);
-            throw new ConsumerWakeupException();
+            throw new WakeupException();
         }
 
         if (exception != null) {
@@ -368,7 +369,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have end offset specified, but tried to seek to end");
         } else {
-            throw new NoOffsetForPartitionException("No offset available");
+            throw new NoOffsetForPartitionException(tp);
         }
         seek(tp, offset);
     }

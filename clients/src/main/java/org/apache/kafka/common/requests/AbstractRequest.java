@@ -49,8 +49,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return OffsetCommitRequest.parse(buffer, versionId);
             case OFFSET_FETCH:
                 return OffsetFetchRequest.parse(buffer, versionId);
-            case GROUP_METADATA:
-                return GroupMetadataRequest.parse(buffer, versionId);
+            case GROUP_COORDINATOR:
+                return GroupCoordinatorRequest.parse(buffer, versionId);
             case JOIN_GROUP:
                 return JoinGroupRequest.parse(buffer, versionId);
             case HEARTBEAT:
@@ -67,6 +67,10 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return UpdateMetadataRequest.parse(buffer, versionId);
             case LEADER_AND_ISR:
                 return LeaderAndIsrRequest.parse(buffer, versionId);
+            case DESCRIBE_GROUPS:
+                return DescribeGroupsRequest.parse(buffer, versionId);
+            case LIST_GROUPS:
+                return ListGroupsRequest.parse(buffer, versionId);
             default:
                 return null;
         }
