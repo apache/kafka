@@ -433,6 +433,11 @@ public class StreamThread extends Thread {
      * Returns ids of tasks whose states are kept on the local storage.
      */
     public Set<TaskId> cachedTasks() {
+        // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
+        // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
+        // 2) the client has just got some tasks migrated out of itself to other clients while these task states
+        //    have not been cleaned up yet (this can happen in a rolling bounce upgrade, for example).
+
         HashSet<TaskId> tasks = new HashSet<>();
 
         File[] stateDirs = stateDir.listFiles();

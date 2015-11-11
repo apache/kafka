@@ -96,6 +96,8 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         //      If there is no such client, assign a task to a client which has its valid local state.
         //    - A client may have more than one stream threads.
         //      The assignor tries to assign tasks to a client proportionally to the number of threads.
+        //    - We try not to assign the same set of tasks to two different clients
+        //    We do the assignment in one-pass. The result may not satisfy above all.
         // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
 
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
