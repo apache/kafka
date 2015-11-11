@@ -33,7 +33,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
-import org.apache.kafka.common.utils.Password;
+import org.apache.kafka.common.config.types.Password;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -109,7 +109,7 @@ public class TestSslUtils {
                                      Password password) throws GeneralSecurityException, IOException {
         FileOutputStream out = new FileOutputStream(filename);
         try {
-            ks.store(out, password.value.toCharArray());
+            ks.store(out, password.getValue().toCharArray());
         } finally {
             out.close();
         }
@@ -119,7 +119,7 @@ public class TestSslUtils {
                                       Password password, String alias,
                                       Key privateKey, Certificate cert) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
-        ks.setKeyEntry(alias, privateKey, password.value.toCharArray(),
+        ks.setKeyEntry(alias, privateKey, password.getValue().toCharArray(),
                 new Certificate[]{cert});
         saveKeyStore(ks, filename, password);
     }
@@ -140,7 +140,7 @@ public class TestSslUtils {
                                       Password password, Password keyPassword, String alias,
                                       Key privateKey, Certificate cert) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
-        ks.setKeyEntry(alias, privateKey, keyPassword.value.toCharArray(),
+        ks.setKeyEntry(alias, privateKey, keyPassword.getValue().toCharArray(),
                 new Certificate[]{cert});
         saveKeyStore(ks, filename, password);
     }
@@ -158,7 +158,7 @@ public class TestSslUtils {
         KeyStore ks = KeyStore.getInstance("JKS");
         try {
             FileInputStream in = new FileInputStream(filename);
-            ks.load(in, password.value.toCharArray());
+            ks.load(in, password.getValue().toCharArray());
             in.close();
         } catch (EOFException e) {
             ks = createEmptyKeyStore();

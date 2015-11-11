@@ -21,7 +21,7 @@ import java.security.Permission
 
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.config.SslConfigs
-import org.apache.kafka.common.utils.Password
+import org.apache.kafka.common.config.types.Password
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -111,9 +111,9 @@ class KafkaTest {
     assertEquals(Password.HIDDEN, config.sslKeystorePassword.toString)
     assertEquals(Password.HIDDEN, config.sslTruststorePassword.toString)
 
-    assertEquals("key_password", config.sslKeyPassword.value)
-    assertEquals("keystore_password", config.sslKeystorePassword.value)
-    assertEquals("truststore_password", config.sslTruststorePassword.value)
+    assertEquals("key_password", config.sslKeyPassword.getValue)
+    assertEquals("keystore_password", config.sslKeystorePassword.getValue)
+    assertEquals("truststore_password", config.sslTruststorePassword.getValue)
   }
 
   def prepareDefaultConfig(): String = {

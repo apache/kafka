@@ -15,21 +15,28 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.utils;
+package org.apache.kafka.common.config.types;
 
+/**
+ * A wrapper class for passwords to hide them while logging a config
+ */
 public class Password {
 
     public static final String HIDDEN = "[hidden]";
 
-    public final String value;
+    private final String value;
 
+    /**
+     * Construct a new Password object
+     * @param value The value of a password
+     */
     public Password(String value) {
         this.value = value;
     }
 
     @Override
     public int hashCode() {
-        return value.hashCode();
+        return getValue().hashCode();
     }
 
     @Override
@@ -40,8 +47,22 @@ public class Password {
         return value.equals(other.value);
     }
 
+    /**
+     * Returns hidden password string
+     *
+     * @return hidden password string
+     */
     @Override
     public String toString() {
         return HIDDEN;
+    }
+
+    /**
+     * Returns real password string
+     *
+     * @return real password string
+     */
+    public String getValue() {
+        return value;
     }
 }

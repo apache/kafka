@@ -20,7 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.utils.Password;
+import org.apache.kafka.common.config.types.Password;
 
 import javax.net.ssl.*;
 import java.io.FileInputStream;
@@ -110,7 +110,7 @@ public class SslFactory implements Configurable {
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
             KeyStore ks = keystore.load();
             Password keyPassword = this.keyPassword != null ? this.keyPassword : keystore.password;
-            kmf.init(ks, keyPassword.value.toCharArray());
+            kmf.init(ks, keyPassword.getValue().toCharArray());
             keyManagers = kmf.getKeyManagers();
         }
 
@@ -188,7 +188,7 @@ public class SslFactory implements Configurable {
             try {
                 KeyStore ks = KeyStore.getInstance(type);
                 in = new FileInputStream(path);
-                ks.load(in, password.value.toCharArray());
+                ks.load(in, password.getValue().toCharArray());
                 return ks;
             } finally {
                 if (in != null) in.close();
