@@ -544,6 +544,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def commit() {
       consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))})
+      offsets.clear()
     }
   }
 
