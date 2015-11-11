@@ -15,4 +15,4 @@
 
 apply from: file('scala.gradle')
 include 'core', 'examples', 'clients', 'tools', 'streams', 'log4j-appender',
-        'connect:api', 'connect:runtime', 'connect:json', 'connect:file', 'connect:tools'
+        'connect-api', 'connect-runtime', 'connect-json', 'connect-file', 'connect-tools'
