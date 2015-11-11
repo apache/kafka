@@ -27,8 +27,8 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
-import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 
 import java.util.Map;
 
@@ -205,16 +205,16 @@ public class StreamingConfig extends AbstractConfig {
     }
 
     public static class InternalConfig {
-        public static final String PARTITION_GROUPER_INSTANCE = "__partition.grouper.instance__";
+        public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
     }
 
     public StreamingConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 
-    public Map<String, Object> getConsumerConfigs(PartitionGrouper partitionGrouper) {
+    public Map<String, Object> getConsumerConfigs(StreamThread streamThread) {
         Map<String, Object> props = getConsumerConfigs();
-        props.put(StreamingConfig.InternalConfig.PARTITION_GROUPER_INSTANCE, partitionGrouper);
+        props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
         return props;
     }
