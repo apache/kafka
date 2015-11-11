@@ -1,0 +1,77 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+// For each scala version create the artifact tasks
+for ( sv in ['2_10_5', '2_11_7'] ) {
+    String svInDot = sv.replaceAll( "_", ".")
+
+    tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
+        buildFile = './build.gradle'
+        tasks = ['core:jar']
+        startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+    }
+
+    tasks.create(name: "test_core_${sv}", type: GradleBuild) {
+        buildFile = './build.gradle'
+        tasks = ['core:test']
+        startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+    }
+
+    tasks.create(name: "srcJar_${sv}", type: GradleBuild) {
+        buildFile = './build.gradle'
+        tasks = ['core:srcJar']
+        startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+    }
+
+    tasks.create(name: "docsJar_${sv}", type: GradleBuild) {
+        buildFile = './build.gradle'
+        tasks = ['core:docsJar']
+        startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+    }
+
+    tasks.create(name: "releaseTarGz_${sv}", type: GradleBuild) {
+        buildFile = './build.gradle'
+        tasks = ['releaseTarGz']
+        startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+    }
+
+    tasks.create(name: "uploadCoreArchives_${sv}", type: GradleBuild) {
+        buildFile = './build.gradle'
+        tasks = ['core:uploadArchives']
+        startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+    }
+}
+
+// Create all task needed for a release
+def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file', 'connect:tools']
+def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams'] + connectPkgs
+
+tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) { }
+
+tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10_5', 'srcJar_2_11_7'] + pkgs.collect { it + ":srcJar" }) { }
+
+tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10_5', 'docsJar_2_11_7'] + pkgs.collect { it + ":docsJar" }) { }
+
+tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
+tasks.create(name: "testAll", dependsOn: ['test_core_2_10_5', 'test_core_2_11_7'] + pkgs.collect { it + ":test" }) { }
+
+tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10_5', 'releaseTarGz_2_11_7']) { }
+
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10_5', 'uploadCoreArchives_2_11_7'] + pkgs.collect { it + ":uploadArchives" }) { }
