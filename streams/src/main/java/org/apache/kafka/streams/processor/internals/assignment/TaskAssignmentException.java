@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.KafkaException;
+
 /**
  * The run time exception class for stream task assignments
  */
-public class TaskAssignmentException extends RuntimeException {
+public class TaskAssignmentException extends KafkaException {
 
     private final static long serialVersionUID = 1L;
 

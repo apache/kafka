@@ -75,6 +75,11 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
     @Override
     public Subscription subscription(Set<String> topics) {
+        // Adds the following information to subscription
+        // 1. Client UUID (a unique id assigned to an instance of KafkaStreaming)
+        // 2. Task ids of previously running tasks
+        // 3. Task ids of valid local states on the client's state directory.
+
         Set<TaskId> prevTasks = streamThread.prevTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
         standbyTasks.removeAll(prevTasks);
@@ -85,6 +90,14 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+        // This assigns tasks to consumer clients in two steps.
+        // 1. using TaskAssignor tasks are assigned to streaming clients.
+        //    - Assign a task to a client which was running it previously.
+        //      If there is no such client, assign a task to a client which has its valid local state.
+        //    - A client may have more than one stream threads.
+        //      The assignor tries to assign tasks to a client proportionally to the number of threads.
+        // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
+
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
 
@@ -188,7 +201,10 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
             if (iter.hasNext()) {
                 taskIds.add(iter.next());
             } else {
-                TaskAssignmentException ex = new TaskAssignmentException("failed to find a task id for the partition: " + partition.toString());
+                TaskAssignmentException ex = new TaskAssignmentException(
+                        "failed to find a task id for the partition=" + partition.toString() +
+                        ", partitions=" + partitions.size() + ", assignmentInfo=" + info.toString()
+                );
                 log.error(ex.getMessage(), ex);
                 throw ex;
             }

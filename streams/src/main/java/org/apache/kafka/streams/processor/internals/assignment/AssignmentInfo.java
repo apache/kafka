@@ -117,4 +117,9 @@ public class AssignmentInfo {
         }
     }
 
+    @Override
+    public String toString() {
+        return "[version=" + version + ", active tasks=" + activeTasks.size() + ", standby tasks=" + standbyTasks.size() + "]";
+    }
+
 }
