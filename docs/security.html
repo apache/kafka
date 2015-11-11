@@ -261,6 +261,137 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
 </ol>
 
 <h3><a id="security_authz">7.4 Authorization and ACLs</a></h3>
+Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H On Resource R". You can read more about the acl structure on KIP-11. In order to add, remove or list acls you can use the Kafka authorizer CLI.
+<h4>Command Line Interface</h4>
+Kafka Authorization management CLI can be found under bin directory with all the other CLIs. The CLI script is called <b>kafka-acls.sh</b>. Following lists all the options that the script supports:
+<p></p>
+<table class="data-table">
+    <tr>
+        <th>Option</th>
+        <th>Description</th>
+        <th>Default</th>
+        <th>Option type</th>
+    </tr>
+    <tr>
+        <td>--add</td>
+        <td>Indicates to the script that user is trying to add an acl.</td>
+        <td></td>
+        <td>Action</td>
+    </tr>
+    <tr>
+        <td>--remove</td>
+        <td>Indicates to the script that user is trying to remove an acl.</td>
+        <td></td>
+        <td>Action</td>
+    </tr>
+    <tr>
+        <td>--list</td>
+        <td>Indicates to the script that user is trying to list acls.</td>
+        <td></td>
+        <td>Action</td>
+    </tr>
+    <tr>
+        <td>--authorizer</td>
+        <td>Fully qualified class name of the authorizer.</td>
+        <td>kafka.security.auth.SimpleAclAuthorizer</td>
+        <td>Configuration</td>
+    </tr>
+    <tr>
+        <td>--authorizer-properties</td>
+        <td>comma separated key=val pairs that will be passed to authorizer for initialization.</td>
+        <td></td>
+        <td>Configuration</td>
+    </tr>
+    <tr>
+        <td>--cluster</td>
+        <td>Specifies cluster as resource.</td>
+        <td></td>
+        <td>Resource</td>
+    </tr>
+    <tr>
+        <td>--topic [topic-name]</td>
+        <td>Specifies the topic as resource.</td>
+        <td></td>
+        <td>Resource</td>
+    </tr>
+    <tr>
+        <td>--consumer-group [group-name]</td>
+        <td>Specifies the consumer-group as resource.</td>
+        <td></td>
+        <td>Resource</td>
+    </tr>
+    <tr>
+        <td>--allow-principal</td>
+        <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. <br>You can specify multiple --allow-principal in a single command.</td>
+        <td></td>
+        <td>Principal</td>
+    </tr>
+    <tr>
+        <td>--deny-principal</td>
+        <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. <br>You can specify multiple --deny-principal in a single command.</td>
+        <td></td>
+        <td>Principal</td>
+    </tr>
+    <tr>
+        <td>--allow-hosts</td>
+        <td>Comma separated list of hosts from which principals listed in --allow-principals will have access.</td>
+        <td> if --allow-principals is specified defaults to * which translates to "all hosts"</td>
+        <td>Host</td>
+    </tr>
+    <tr>
+        <td>--deny-hosts</td>
+        <td>Comma separated list of hosts from which principals listed in --deny-principals will be denied access.</td>
+        <td>if --deny-principals is specified defaults to * which translates to "all hosts"</td>
+        <td>Host</td>
+    </tr>
+    <tr>
+        <td>--operations</td>
+        <td>Comma separated list of operations.<br>
+            Valid values are : Read, Write, Create, Delete, Alter, Describe, ClusterAction, All</td>
+        <td>All</td>
+        <td>Operation</td>
+    </tr>
+    <tr>
+        <td>--producer</td>
+        <td> Convenience option to add/remove acls for producer role. This will generate acls that allows WRITE,
+            DESCRIBE on topic and CREATE on cluster.</td>
+        <td></td>
+        <td>Convenience</td>
+    </tr>
+    <tr>
+        <td>--consumer</td>
+        <td> Convenience option to add/remove acls for consumer role. This will generate acls that allows READ,
+            DESCRIBE on topic and READ on consumer-group.</td>
+        <td>Convenience</td>
+    </tr>
+</tbody></table>
+
+<h4>Examples</h4>
+<ul>
+    <li><b>Adding Acls</b><br>
+Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from Host1 and Host2". You can do that by executing the CLI with following options:
+        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-hosts Host1,Host2 --operations Read,Write --topic Test-topic</pre>
+        By default all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principals and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from host bad-host we can do so using following commands:
+        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-hosts * --deny-principal User:BadBob --deny-hosts bad-host --operations Read--topic Test-topic</pre>
+        Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --consumer-group [group-name].</li>
+
+    <li><b>Removing Acls</b><br>
+            Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
+           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-hosts Host1,Host2 --operations Read,Write --topic Test-topic </pre></li>
+
+    <li><b>List Acls</b><br>
+            We can list acls for any resource by specifying the --list option with the resource. To list all acls for Test-topic we can execute the CLI with following options:
+            <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</pre></li>
+
+    <li><b>Adding or removing a principal as producer or consumer</b><br>
+            The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
+           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --producer --topic Test-topic</pre>
+            Similarly to add Alice as a consumer of Test-topic with consumer group Group-1 we just have to pass --consumer option:
+           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --consumer --topic test-topic --consumer-group Group-1 </pre>
+            Note that for consumer option we must also specify the consumer group.
+            In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
+    </ul>
+
 <h3><a id="zk_authz">7.5 ZooKeeper Authentication</a></h3>
 <h4><a id="zk_authz_new">7.5.1 New clusters</a></h4>
 To enable ZooKeeper authentication on brokers, there are two necessary steps:
@@ -292,7 +423,7 @@ Here is an example of how to run the migration tool:
 <pre>
 ./bin/zookeeper-security-migration --help
 </pre>
-<h4><a id="zk_authz_new">7.5.3 Migrating the ZooKeeper ensemble</a></h4>
+<h4><a id="zk_authz_ensemble">7.5.3 Migrating the ZooKeeper ensemble</a></h4>
 It is also necessary to enable authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. Please refer to the ZooKeeper documentation for more detail:
 <ol>
 	<li><a href="http://zookeeper.apache.org/doc/r3.4.6/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper documentation</a></li>
