@@ -159,7 +159,7 @@ class AdminClient(val time: Time,
       throw new IllegalArgumentException(s"Group ${groupId} has no active members")
 
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group ${groupId} is not a valid consumer group, but belongs to ${group.protocolType}")
+      throw new IllegalArgumentException(s"Group ${groupId} with protocol type '${group.protocolType}' is not a valid consumer group")
 
     group.members.map {
       case member =>
