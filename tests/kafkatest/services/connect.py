@@ -138,7 +138,7 @@ class ConnectServiceBase(Service):
 
 
     def _base_url(self, node):
-        return 'http://' + node.account.hostname + ':' + '8083'
+        return 'http://' + node.account.externally_routable_ip + ':' + '8083'
 
 class ConnectStandaloneService(ConnectServiceBase):
     """Runs Kafka Connect in standalone mode."""
