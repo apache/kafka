@@ -53,7 +53,6 @@ class MiniKdc(Service):
         try:
             self.local_temp_dir = tempfile.mkdtemp(dir=self.local_temp_dir)
             self.logger.debug("Created temporary local directory %s" % (self.local_temp_dir))
-            # os.chmod(self.local_temp_dir, 0755)
         except OSError as e:
             raise Exception("Failed to create temporary tocal directory for $s and %s files: %s" % (self.LOCAL_KEYTAB_FILENAME, self.LOCAL_KRB5CONF_FILENAME, e.strerror))
 
@@ -73,6 +72,10 @@ class MiniKdc(Service):
             node.account.ssh(cmd)
             monitor.wait_until("MiniKdc Running", timeout_sec=60, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
 
+        if os.path.exists(self.local_keytab_file):
+            os.remove(self.local_keytab_file)
+        if os.path.exists(self.local_krb5conf_file):
+            os.remove(self.local_krb5conf_file)
         node.account.scp_from(MiniKdc.KEYTAB_FILE, self.local_keytab_file)
         node.account.scp_from(MiniKdc.KRB5CONF_FILE, self.local_krb5conf_file)
 
@@ -80,6 +83,10 @@ class MiniKdc(Service):
     def stop_node(self, node):
         self.logger.info("Stopping %s on %s" % (type(self).__name__, node.account.hostname))
         node.account.kill_process("apacheds", allow_fail=False)
+        if os.path.exists(self.local_keytab_file):
+            os.remove(self.local_keytab_file)
+        if os.path.exists(self.local_krb5conf_file):
+            os.remove(self.local_krb5conf_file)
         if os.path.exists(self.local_temp_dir):
             os.removedirs(self.local_temp_dir)
 
@@ -87,9 +94,5 @@ class MiniKdc(Service):
     def clean_node(self, node):
         node.account.kill_process("apacheds", clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf " + MiniKdc.WORK_DIR, allow_fail=False)
-        if os.path.exists(self.local_keytab_file):
-            os.remove(self.local_keytab_file)
-        if os.path.exists(self.local_krb5conf_file):
-            os.remove(self.local_krb5conf_file)
 
 
