@@ -139,9 +139,9 @@ class AdminClient(val time: Time,
 
     Errors.forCode(metadata.errorCode()).maybeThrow()
     val members = metadata.members().map { member =>
-        val metadata = Utils.readBytes(member.memberMetadata())
-        val assignment = Utils.readBytes(member.memberAssignment())
-        MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
+      val metadata = Utils.readBytes(member.memberMetadata())
+      val assignment = Utils.readBytes(member.memberAssignment())
+      MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
     }.toList
     GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
   }
@@ -162,8 +162,8 @@ class AdminClient(val time: Time,
 
     if (group.state == "Stable") {
       group.members.map { member =>
-          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
-          new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
+        val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
+        new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
       }
     } else {
       List.empty
