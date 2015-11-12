@@ -58,7 +58,7 @@ class ConnectServiceBase(Service):
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=False)
         for pid in pids:
-            wait_until(lambda: not node.account.alive(pid), timeout_sec=10, err_msg="Kafka Connect standalone process took too long to exit")
+            wait_until(lambda: not node.account.alive(pid), timeout_sec=60, err_msg="Kafka Connect standalone process took too long to exit")
 
         node.account.ssh("rm -f /mnt/connect.pid", allow_fail=False)
 
@@ -149,7 +149,7 @@ class ConnectStandaloneService(ConnectServiceBase):
             node.account.ssh("/opt/%s/bin/connect-standalone.sh /mnt/connect.properties " % kafka_dir(node) +
                              " ".join(remote_connector_configs) +
                              " 1>> /mnt/connect.log 2>> /mnt/connect.log & echo $! > /mnt/connect.pid")
-            monitor.wait_until('Kafka Connect started', timeout_sec=10, err_msg="Never saw message indicating Kafka Connect finished startup")
+            monitor.wait_until('Kafka Connect started', timeout_sec=15, err_msg="Never saw message indicating Kafka Connect finished startup")
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -173,7 +173,7 @@ class ConnectDistributedService(ConnectServiceBase):
             cmd = "/opt/%s/bin/connect-distributed.sh /mnt/connect.properties " % kafka_dir(node)
             cmd += " 1>> /mnt/connect.log 2>> /mnt/connect.log & echo $! > /mnt/connect.pid"
             node.account.ssh(cmd)
-            monitor.wait_until('Kafka Connect started', timeout_sec=10, err_msg="Never saw message indicating Kafka Connect finished startup")
+            monitor.wait_until('Kafka Connect started', timeout_sec=15, err_msg="Never saw message indicating Kafka Connect finished startup")
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
