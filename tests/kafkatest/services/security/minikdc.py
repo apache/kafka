@@ -50,7 +50,6 @@ class MiniKdc(Service):
         try:
             self.local_temp_dir = tempfile.mkdtemp(dir=self.local_temp_dir)
             self.logger.debug("Created temporary local directory %s" % (self.local_temp_dir))
-            # os.chmod(self.local_temp_dir, 0755)
         except OSError as e:
             raise Exception("Failed to create temporary tocal directory for $s and %s files: %s" % (self.LOCAL_KEYTAB_FILENAME, self.LOCAL_KRB5CONF_FILENAME, e.strerror))
 
@@ -77,6 +76,4 @@ class MiniKdc(Service):
     def clean_node(self, node):
         node.account.kill_process("apacheds", clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf " + MiniKdc.WORK_DIR, allow_fail=False)
-
-
 
