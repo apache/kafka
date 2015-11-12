@@ -37,6 +37,7 @@ class MiniKdc(Service):
         self.kafka_nodes = kafka_nodes
         self.extra_principals = extra_principals
 
+
     def start_node(self, node):
 
         node.account.ssh("mkdir -p %s" % MiniKdc.WORK_DIR, allow_fail=False)
@@ -44,6 +45,17 @@ class MiniKdc(Service):
         node.account.create_file(MiniKdc.PROPS_FILE, props_file)
         self.logger.info("minikdc.properties")
         self.logger.info(props_file)
+
+        # create local temp dir where we will store keytab and krb5conf files
+        try:
+            self.local_temp_dir = tempfile.mkdtemp(dir=self.local_temp_dir)
+            self.logger.debug("Created temporary local directory %s" % (self.local_temp_dir))
+            # os.chmod(self.local_temp_dir, 0755)
+        except OSError as e:
+            raise Exception("Failed to create temporary tocal directory for $s and %s files: %s" % (self.LOCAL_KEYTAB_FILENAME, self.LOCAL_KRB5CONF_FILENAME, e.strerror))
+
+        self.local_keytab_file = os.path.join(self.local_temp_dir, self.LOCAL_KEYTAB_FILENAME)
+        self.local_krb5conf_file = os.path.join(self.local_temp_dir, self.LOCAL_KRB5CONF_FILENAME)
 
         kafka_principals = ' '.join(['kafka/' + kafka_node.account.hostname for kafka_node in self.kafka_nodes])
         principals = 'client ' + kafka_principals + self.extra_principals
