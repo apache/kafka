@@ -241,7 +241,6 @@ public class Selector implements Selectable {
      * @throws IllegalArgumentException If `timeout` is negative
      * @throws IllegalStateException If a send is given for which we have no existing connection or for which there is
      *         already an in-progress send
-     * @throws InvalidReceiveException If invalid data is received
      */
     @Override
     public void poll(long timeout) throws IOException {
@@ -284,16 +283,8 @@ public class Selector implements Selectable {
                     /* if channel is ready read from any connections that have readable data */
                     if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
                         NetworkReceive networkReceive;
-                        try {
-                            while ((networkReceive = channel.read()) != null) {
-                                addToStagedReceives(channel, networkReceive);
-                            }
-                        } catch (InvalidReceiveException e) {
-                            log.error("Invalid data received from " + channel.id() + " closing connection", e);
-                            close(channel);
-                            this.disconnected.add(channel.id());
-                            throw e;
-                        }
+                        while ((networkReceive = channel.read()) != null)
+                            addToStagedReceives(channel, networkReceive);
                     }
 
                     /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
@@ -310,9 +301,12 @@ public class Selector implements Selectable {
                         close(channel);
                         this.disconnected.add(channel.id());
                     }
-                } catch (IOException e) {
+                } catch (Exception e) {
                     String desc = channel.socketDescription();
-                    log.debug("Connection with {} disconnected", desc, e);
+                    if (e instanceof IOException)
+                        log.debug("Connection with {} disconnected", desc, e);
+                    else
+                        log.warn("Unexpected error from {}; closing connection", desc, e);
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
