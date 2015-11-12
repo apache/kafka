@@ -207,6 +207,7 @@
 
     <subpackage name="tools">
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.kafka.tools" />
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
   </subpackage>
