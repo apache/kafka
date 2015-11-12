@@ -156,7 +156,7 @@ class AdminClient(val time: Time,
   def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
     val group = describeGroup(groupId)
     if (group.state == "Dead")
-      throw new IllegalArgumentException(s"Group ${groupId} has no active members")
+      return List.empty[ConsumerSummary]
 
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
       throw new IllegalArgumentException(s"Group ${groupId} with protocol type '${group.protocolType}' is not a valid consumer group")
