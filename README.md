@@ -53,7 +53,7 @@ The release file can be found inside ./core/build/distributions/.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task on a particular version of Scala (either 2.10.5 or 2.11.7) ###
+### Running a task on a particular version of Scala (either 2.10.6 or 2.11.7) ###
 #### (If building a jar with a version other than 2.10, need to set SCALA_BINARY_VERSION variable or change it in bin/kafka-run-class.sh to run quick start.) ####
     ./gradlew -PscalaVersion=2.11.7 jar
     ./gradlew -PscalaVersion=2.11.7 test
