@@ -20,8 +20,6 @@ import os
 from tempfile import mkstemp
 from shutil import move
 from os import remove, close
-import tempfile
-import shutil
 from io import open
 
 class MiniKdc(Service):
