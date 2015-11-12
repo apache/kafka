@@ -30,7 +30,7 @@ class ZookeeperService(Service):
             "collect_default": True},
         "zk_data": {
             "path": "/mnt/zookeeper",
-            "collect_default": True}
+            "collect_default": False}
     }
 
     def __init__(self, context, num_nodes):
