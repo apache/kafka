@@ -109,7 +109,7 @@ public class TestSslUtils {
                                      Password password) throws GeneralSecurityException, IOException {
         FileOutputStream out = new FileOutputStream(filename);
         try {
-            ks.store(out, password.getValue().toCharArray());
+            ks.store(out, password.value().toCharArray());
         } finally {
             out.close();
         }
@@ -119,7 +119,7 @@ public class TestSslUtils {
                                       Password password, String alias,
                                       Key privateKey, Certificate cert) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
-        ks.setKeyEntry(alias, privateKey, password.getValue().toCharArray(),
+        ks.setKeyEntry(alias, privateKey, password.value().toCharArray(),
                 new Certificate[]{cert});
         saveKeyStore(ks, filename, password);
     }
@@ -140,7 +140,7 @@ public class TestSslUtils {
                                       Password password, Password keyPassword, String alias,
                                       Key privateKey, Certificate cert) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
-        ks.setKeyEntry(alias, privateKey, keyPassword.getValue().toCharArray(),
+        ks.setKeyEntry(alias, privateKey, keyPassword.value().toCharArray(),
                 new Certificate[]{cert});
         saveKeyStore(ks, filename, password);
     }
@@ -158,7 +158,7 @@ public class TestSslUtils {
         KeyStore ks = KeyStore.getInstance("JKS");
         try {
             FileInputStream in = new FileInputStream(filename);
-            ks.load(in, password.getValue().toCharArray());
+            ks.load(in, password.value().toCharArray());
             in.close();
         } catch (EOFException e) {
             ks = createEmptyKeyStore();

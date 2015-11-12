@@ -36,7 +36,7 @@ public class Password {
 
     @Override
     public int hashCode() {
-        return getValue().hashCode();
+        return value.hashCode();
     }
 
     @Override
@@ -62,7 +62,7 @@ public class Password {
      *
      * @return real password string
      */
-    public String getValue() {
+    public String value() {
         return value;
     }
 }

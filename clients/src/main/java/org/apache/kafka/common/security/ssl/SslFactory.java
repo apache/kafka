@@ -110,7 +110,7 @@ public class SslFactory implements Configurable {
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
             KeyStore ks = keystore.load();
             Password keyPassword = this.keyPassword != null ? this.keyPassword : keystore.password;
-            kmf.init(ks, keyPassword.getValue().toCharArray());
+            kmf.init(ks, keyPassword.value().toCharArray());
             keyManagers = kmf.getKeyManagers();
         }
 
@@ -188,7 +188,7 @@ public class SslFactory implements Configurable {
             try {
                 KeyStore ks = KeyStore.getInstance(type);
                 in = new FileInputStream(path);
-                ks.load(in, password.getValue().toCharArray());
+                ks.load(in, password.value().toCharArray());
                 return ks;
             } finally {
                 if (in != null) in.close();
