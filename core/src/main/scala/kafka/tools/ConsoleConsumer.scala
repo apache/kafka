@@ -100,11 +100,14 @@ object ConsoleConsumer extends Logging {
       val msg: BaseConsumerRecord = try {
         consumer.receive()
       } catch {
-        case e: Throwable => {
+        case nse: NoSuchElementException =>
+          trace("Caught NoSuchElementException because consumer is shutdown, ignore and terminate.")
+          // Consumer is already closed
+          return
+        case e: Throwable =>
           error("Error processing message, terminating consumer process: ", e)
           // Consumer will be closed
           return
-        }
       }
       try {
         formatter.writeTo(msg.key, msg.value, System.out)
