@@ -20,6 +20,7 @@ package kafka.tools
 import java.io.PrintStream
 import java.util.{Properties, Random}
 import joptsimple._
+import kafka.common.StreamEndException
 import kafka.consumer._
 import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
@@ -100,8 +101,8 @@ object ConsoleConsumer extends Logging {
       val msg: BaseConsumerRecord = try {
         consumer.receive()
       } catch {
-        case nse: NoSuchElementException =>
-          trace("Caught NoSuchElementException because consumer is shutdown, ignore and terminate.")
+        case nse: StreamEndException =>
+          trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
           // Consumer is already closed
           return
         case e: Throwable =>
