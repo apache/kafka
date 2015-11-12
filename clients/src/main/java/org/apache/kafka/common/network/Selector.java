@@ -241,7 +241,6 @@ public class Selector implements Selectable {
      * @throws IllegalArgumentException If `timeout` is negative
      * @throws IllegalStateException If a send is given for which we have no existing connection or for which there is
      *         already an in-progress send
-     * @throws InvalidReceiveException If invalid data is received
      */
     @Override
     public void poll(long timeout) throws IOException {
