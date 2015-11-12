@@ -99,9 +99,7 @@ object ConsumerGroupCommand {
     if (!useNewConsumer) {
       val topics = zkUtils.getTopicsByConsumerGroup(group)
       if (topics.isEmpty) {
-        {
-          println("No topic available for consumer group provided")
-        }
+        println("No topic available for consumer group provided")
       }
       topics.foreach(topic => describeTopic(zkUtils, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs, opts))
     } else {

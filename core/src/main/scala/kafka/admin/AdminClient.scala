@@ -138,8 +138,7 @@ class AdminClient(val time: Time,
       throw new KafkaException(s"Response from broker contained no metadata for group ${groupId}")
 
     Errors.forCode(metadata.errorCode()).maybeThrow()
-    val members = metadata.members().map {
-      case member =>
+    val members = metadata.members().map { member =>
         val metadata = Utils.readBytes(member.memberMetadata())
         val assignment = Utils.readBytes(member.memberAssignment())
         MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
@@ -162,8 +161,7 @@ class AdminClient(val time: Time,
       throw new IllegalArgumentException(s"Group ${groupId} with protocol type '${group.protocolType}' is not a valid consumer group")
 
     if (group.state == "Stable") {
-      group.members.map {
-        case member =>
+      group.members.map { member =>
           val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
           new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
       }
