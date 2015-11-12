@@ -279,8 +279,6 @@ class GroupCoordinator(val brokerId: Int,
               val missing = group.allMembers -- groupAssignment.keySet
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
-              // persist the group metadata and upon finish transition to stable and propagate the assignment
-              val generationId = group.generationId
               groupManager.storeGroup(group, assignment, (errorCode: Short) => {
                 group synchronized {
                   // another member may have joined the group while we were awaiting this callback,
