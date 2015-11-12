@@ -59,6 +59,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -67,16 +68,18 @@ public class StreamThread extends Thread {
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
     private static final AtomicInteger STREAMING_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
-    private final AtomicBoolean running;
+    public final PartitionGrouper partitionGrouper;
+    public final UUID clientUUID;
 
     protected final StreamingConfig config;
     protected final TopologyBuilder builder;
-    protected final PartitionGrouper partitionGrouper;
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
 
+    private final AtomicBoolean running;
     private final Map<TaskId, StreamTask> tasks;
+    private final Set<TaskId> prevTasks;
     private final String clientId;
     private final Time time;
     private final File stateDir;
@@ -108,9 +111,10 @@ public class StreamThread extends Thread {
     public StreamThread(TopologyBuilder builder,
                         StreamingConfig config,
                         String clientId,
+                        UUID clientUUID,
                         Metrics metrics,
                         Time time) throws Exception {
-        this(builder, config, null , null, null, clientId, metrics, time);
+        this(builder, config, null , null, null, clientId, clientUUID, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
@@ -119,6 +123,7 @@ public class StreamThread extends Thread {
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
                  String clientId,
+                 UUID clientUUID,
                  Metrics metrics,
                  Time time) throws Exception {
         super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
@@ -126,6 +131,7 @@ public class StreamThread extends Thread {
         this.config = config;
         this.builder = builder;
         this.clientId = clientId;
+        this.clientUUID = clientUUID;
         this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.partitionGrouper.topicGroups(builder.topicGroups());
 
@@ -136,6 +142,7 @@ public class StreamThread extends Thread {
 
         // initialize the task list
         this.tasks = new HashMap<>();
+        this.prevTasks = new HashSet<>();
 
         // read in task specific config values
         this.stateDir = new File(this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
@@ -164,7 +171,7 @@ public class StreamThread extends Thread {
 
     private Consumer<byte[], byte[]> createConsumer() {
         log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(partitionGrouper),
+        return new KafkaConsumer<>(config.getConsumerConfigs(this),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
@@ -415,6 +422,43 @@ public class StreamThread extends Thread {
         }
     }
 
+    /**
+     * Returns ids of tasks that were being executed before the rebalance.
+     */
+    public Set<TaskId> prevTasks() {
+        return prevTasks;
+    }
+
+    /**
+     * Returns ids of tasks whose states are kept on the local storage.
+     */
+    public Set<TaskId> cachedTasks() {
+        // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
+        // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
+        // 2) the client has just got some tasks migrated out of itself to other clients while these task states
+        //    have not been cleaned up yet (this can happen in a rolling bounce upgrade, for example).
+
+        HashSet<TaskId> tasks = new HashSet<>();
+
+        File[] stateDirs = stateDir.listFiles();
+        if (stateDirs != null) {
+            for (File dir : stateDirs) {
+                try {
+                    TaskId id = TaskId.parse(dir.getName());
+                    // if the checkpoint file exists, the state is valid.
+                    if (new File(dir, ProcessorStateManager.CHECKPOINT_FILE_NAME).exists())
+                        tasks.add(id);
+
+                } catch (TaskId.TaskIdFormatException e) {
+                    // there may be some unknown files that sits in the same directory,
+                    // we should ignore these files instead trying to delete them as well
+                }
+            }
+        }
+
+        return tasks;
+    }
+
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
         sensors.taskCreationSensor.record();
 
@@ -465,11 +509,10 @@ public class StreamThread extends Thread {
             }
             sensors.taskDestructionSensor.record();
         }
-        tasks.clear();
-    }
+        prevTasks.clear();
+        prevTasks.addAll(tasks.keySet());
 
-    public PartitionGrouper partitionGrouper() {
-        return partitionGrouper;
+        tasks.clear();
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
