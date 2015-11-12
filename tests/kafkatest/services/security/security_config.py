@@ -127,8 +127,8 @@ class SecurityConfig(TemplateRenderer):
             jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk)
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             if self.has_sasl_kerberos:
-                node.account.scp_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
-                node.account.scp_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
+                node.account.scp_to(MiniKdc.local_keytab_file, SecurityConfig.KEYTAB_PATH)
+                node.account.scp_to(MiniKdc.local_krb5conf_file, SecurityConfig.KRB5CONF_PATH)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
