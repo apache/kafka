@@ -47,7 +47,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import com.yammer.metrics.core.Gauge
 
 
-case class DelayedAppend(messageSet: Map[TopicAndPartition, MessageSet],
+case class DelayedStore(messageSet: Map[TopicAndPartition, MessageSet],
                          callback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
 
 class GroupMetadataManager(val brokerId: Int,
@@ -171,7 +171,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   def prepareStoreGroup(group: GroupMetadata,
                         groupAssignment: Map[String, Array[Byte]],
-                        responseCallback: Short => Unit): DelayedAppend = {
+                        responseCallback: Short => Unit): DelayedStore = {
     // construct the message to append
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
@@ -226,10 +226,10 @@ class GroupMetadataManager(val brokerId: Int,
       responseCallback(responseCode)
     }
 
-    DelayedAppend(groupMetadataMessageSet, putCacheCallback)
+    DelayedStore(groupMetadataMessageSet, putCacheCallback)
   }
 
-  def appendMessages(delayedAppend: DelayedAppend) {
+  def store(delayedAppend: DelayedStore) {
     // call replica manager to append the group message
     replicaManager.appendMessages(
       config.offsetCommitTimeoutMs.toLong,
@@ -246,7 +246,7 @@ class GroupMetadataManager(val brokerId: Int,
                           consumerId: String,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicAndPartition, Short] => Unit): DelayedAppend = {
+                          responseCallback: immutable.Map[TopicAndPartition, Short] => Unit): DelayedStore = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (topicAndPartition, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -312,7 +312,7 @@ class GroupMetadataManager(val brokerId: Int,
       responseCallback(commitStatus)
     }
 
-    DelayedAppend(offsetsAndMetadataMessageSet, putCacheCallback)
+    DelayedStore(offsetsAndMetadataMessageSet, putCacheCallback)
   }
 
   /**

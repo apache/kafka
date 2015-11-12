@@ -254,7 +254,7 @@ class GroupCoordinator(val brokerId: Int,
                           memberId: String,
                           groupAssignment: Map[String, Array[Byte]],
                           responseCallback: SyncCallback) {
-    var messageToAppend: Option[DelayedAppend] = None
+    var delayedStore: Option[DelayedStore] = None
 
     group synchronized {
       if (!group.has(memberId)) {
@@ -281,7 +281,7 @@ class GroupCoordinator(val brokerId: Int,
               val missing = group.allMembers -- groupAssignment.keySet
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
-              messageToAppend = Some(groupManager.prepareStoreGroup(group, assignment, (errorCode: Short) => {
+              delayedStore = Some(groupManager.prepareStoreGroup(group, assignment, (errorCode: Short) => {
                 group synchronized {
                   // another member may have joined the group while we were awaiting this callback,
                   // so we must ensure we are still in the AwaitingSync state and the same generation
@@ -309,8 +309,8 @@ class GroupCoordinator(val brokerId: Int,
     }
 
     // Append the offset commit to the log without holding the group metadata lock
-    if (messageToAppend.isDefined)
-      groupManager.appendMessages(messageToAppend.get)
+    if (delayedStore.isDefined)
+      groupManager.store(delayedStore.get)
   }
 
   def handleLeaveGroup(groupId: String, consumerId: String, responseCallback: Short => Unit) {
@@ -389,7 +389,7 @@ class GroupCoordinator(val brokerId: Int,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
                           responseCallback: immutable.Map[TopicAndPartition, Short] => Unit) {
-    var messageToWrite: Option[DelayedAppend] = None
+    var delayedStore: Option[DelayedStore] = None
 
     if (!isActive.get) {
       responseCallback(offsetMetadata.mapValues(_ => Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code))
@@ -402,7 +402,7 @@ class GroupCoordinator(val brokerId: Int,
       if (group == null) {
         if (generationId < 0)
           // the group is not relying on Kafka for partition management, so allow the commit
-          messageToWrite = Some(groupManager.prepareStoreOffsets(groupId, memberId, generationId, offsetMetadata,
+          delayedStore = Some(groupManager.prepareStoreOffsets(groupId, memberId, generationId, offsetMetadata,
             responseCallback))
         else
           // the group has failed over to this coordinator (which will be handled in KAFKA-2017),
@@ -419,7 +419,7 @@ class GroupCoordinator(val brokerId: Int,
           } else if (generationId != group.generationId) {
             responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION.code))
           } else {
-            messageToWrite = Some(groupManager.prepareStoreOffsets(groupId, memberId, generationId,
+            delayedStore = Some(groupManager.prepareStoreOffsets(groupId, memberId, generationId,
               offsetMetadata, responseCallback))
           }
         }
@@ -427,8 +427,8 @@ class GroupCoordinator(val brokerId: Int,
     }
 
     // Append the offset commit to the log without holding the group metadata lock
-    if (messageToWrite.isDefined)
-      groupManager.appendMessages(messageToWrite.get)
+    if (delayedStore.isDefined)
+      groupManager.store(delayedStore.get)
   }
 
   def handleFetchOffsets(groupId: String,
