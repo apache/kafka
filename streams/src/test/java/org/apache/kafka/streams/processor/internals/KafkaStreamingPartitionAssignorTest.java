@@ -171,6 +171,7 @@ public class KafkaStreamingPartitionAssignorTest {
 
         PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1", "topic2"));
 
+        Collections.sort(subscription.topics());
         assertEquals(Utils.mkList("topic1", "topic2"), subscription.topics());
 
         Set<TaskId> standbyTasks = new HashSet<>(cachedTasks);
