@@ -46,6 +46,7 @@ class ConsumerEventHandler(object):
     def handle_shutdown_complete(self):
         self.state = ConsumerState.Dead
         self.assignment = []
+        self.position = {}
 
     def handle_offsets_committed(self, event):
         if event["success"]:
@@ -64,18 +65,20 @@ class ConsumerEventHandler(object):
         for record_batch in event["partitions"]:
             tp = TopicPartition(topic=record_batch["topic"],
                                 partition=record_batch["partition"])
-            minOffset = record_batch["minOffset"]
-            maxOffset = record_batch["maxOffset"]
+            min_offset = record_batch["minOffset"]
+            max_offset = record_batch["maxOffset"]
 
             assert tp in self.assignment, "Consumed records for a partition not assigned"
-            assert tp not in self.position or self.position[tp] == minOffset, "Consumed from an unexpected offset"
-            self.position[tp] = maxOffset + 1 
+            assert tp not in self.position or self.position[tp] == min_offset, \
+                "Consumed from an unexpected offset (%s, %s)" % (str(self.position[tp]), str(min_offset))
+            self.position[tp] = max_offset + 1 
 
         self.total_consumed += event["count"]
 
     def handle_partitions_revoked(self, event):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
+        self.position = {}
 
     def handle_partitions_assigned(self, event):
         self.assigned_count += 1
@@ -91,8 +94,7 @@ class ConsumerEventHandler(object):
         # if the shutdown was clean, then we expect the explicit
         # shutdown event from the consumer
         if not clean_shutdown:
-            self.state = ConsumerState.Dead
-            self.assignment = []
+            self.handle_shutdown_complete()
 
     def current_assignment(self):
         return list(self.assignment)
@@ -154,9 +156,10 @@ class VerifiableConsumer(BackgroundThreadService):
             node.version = version
 
     def _worker(self, idx, node):
-        handler = ConsumerEventHandler(node)
-        self.event_handlers[node] = handler
+        if node not in self.event_handlers:
+            self.event_handlers[node] = ConsumerEventHandler(node)
 
+        handler = self.event_handlers[node]
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
@@ -168,26 +171,26 @@ class VerifiableConsumer(BackgroundThreadService):
         self.logger.info(self.prop_file)
         node.account.create_file(VerifiableConsumer.CONFIG_FILE, self.prop_file)
         self.security_config.setup_node(node)
-
         cmd = self.start_cmd(node)
         self.logger.debug("VerifiableConsumer %d command: %s" % (idx, cmd))
 
         for line in node.account.ssh_capture(cmd):
             event = self.try_parse_json(line.strip())
-            with self.lock:
-                name = event["name"]
-                if name == "shutdown_complete":
-                    handler.handle_shutdown_complete()
-                if name == "offsets_committed":
-                    handler.handle_offsets_committed(event)
-                    self._update_global_committed(event)
-                elif name == "records_consumed":
-                    handler.handle_records_consumed(event)
-                    self._update_global_position(event)
-                elif name == "partitions_revoked":
-                    handler.handle_partitions_revoked(event)
-                elif name == "partitions_assigned":
-                    handler.handle_partitions_assigned(event)
+            if event is not None:
+                with self.lock:
+                    name = event["name"]
+                    if name == "shutdown_complete":
+                        handler.handle_shutdown_complete()
+                    if name == "offsets_committed":
+                        handler.handle_offsets_committed(event)
+                        self._update_global_committed(event)
+                    elif name == "records_consumed":
+                        handler.handle_records_consumed(event)
+                        self._update_global_position(event)
+                    elif name == "partitions_revoked":
+                        handler.handle_partitions_revoked(event)
+                    elif name == "partitions_assigned":
+                        handler.handle_partitions_assigned(event)
 
     def _update_global_position(self, consumed_event):
         for consumed_partition in consumed_event["partitions"]:
@@ -197,17 +200,22 @@ class VerifiableConsumer(BackgroundThreadService):
                 # it would be nice to also verify that the position increases monotonically
                 # without gaps, but we cannot generally guarantee this for hard client failures
                 assert self.global_committed[tp] <= consumed_partition["minOffset"], \
-                    "Consumed position is behind the current committed offset"
+                    "Consumed position %d is behind the current committed offset %d" % (consumed_partition["minOffset"], self.global_committed[tp])
+
+            if tp in self.global_position and self.global_position[tp] != consumed_partition["minOffset"]:
+                self.logger.warn("Expected next consumed offset of %d, but instead saw %d" %
+                                 (self.global_position[tp], consumed_partition["minOffset"]))
 
             self.global_position[tp] = consumed_partition["maxOffset"] + 1
 
     def _update_global_committed(self, commit_event):
-        for offset_commit in commit_event["offsets"]:
-            tp = TopicPartition(offset_commit["topic"], offset_commit["partition"])
-            offset = offset_commit["offset"]
-            assert self.global_position[tp] >= offset, \
-                "committed offset is ahead of the current partition"
-            self.global_committed[tp] = offset
+        if commit_event["success"]:
+            for offset_commit in commit_event["offsets"]:
+                tp = TopicPartition(offset_commit["topic"], offset_commit["partition"])
+                offset = offset_commit["offset"]
+                assert self.global_position[tp] >= offset, \
+                    "committed offset is ahead of the current partition"
+                self.global_committed[tp] = offset
 
     def start_cmd(self, node):
         cmd = ""
@@ -242,7 +250,7 @@ class VerifiableConsumer(BackgroundThreadService):
             return None
 
     def stop_all(self):
-        for node in self.event_handlers:
+        for node in self.nodes:
             self.stop_node(node)
 
     def kill_node(self, node, clean_shutdown=True, allow_fail=False):
@@ -255,8 +263,8 @@ class VerifiableConsumer(BackgroundThreadService):
 
         self.event_handlers[node].handle_kill_process(clean_shutdown)
 
-    def stop_node(self, node):
-        self.kill_node(node)
+    def stop_node(self, node, clean_shutdown=True):
+        self.kill_node(node, clean_shutdown=clean_shutdown)
         
         if self.worker_threads is None:
             return
@@ -273,7 +281,7 @@ class VerifiableConsumer(BackgroundThreadService):
 
     def current_assignment(self):
         with self.lock:
-            return dict((handler.node, handler.current_assignment()) for handler in self.event_handlers.itervalues())
+            return { handler.node: handler.current_assignment() for handler in self.event_handlers.itervalues() }
 
     def current_position(self, tp):
         with self.lock:
