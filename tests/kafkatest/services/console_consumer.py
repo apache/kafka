@@ -100,7 +100,8 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
     }
 
     def __init__(self, context, num_nodes, kafka, topic, new_consumer=False, message_validator=None,
-                 from_beginning=True, consumer_timeout_ms=None, version=TRUNK, client_id="console-consumer", jmx_object_names=None, jmx_attributes=[]):
+                 from_beginning=True, consumer_timeout_ms=None, version=TRUNK, client_id="console-consumer",
+                 print_key=False, jmx_object_names=None, jmx_attributes=[]):
         """
         Args:
             context:                    standard context
@@ -114,6 +115,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
                                         successively consumed messages exceeds this timeout. Setting this and
                                         waiting for the consumer to stop is a pretty good way to consume all messages
                                         in a topic.
+            print_key                   if True, print each message's key in addition to its value
         """
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
         BackgroundThreadService.__init__(self, context, num_nodes)
@@ -131,7 +133,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.message_validator = message_validator
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
         self.client_id = client_id
-
+        self.print_key = print_key
 
     def prop_file(self, node):
         """Return a string which can be used to create a configuration file appropriate for the given node."""
@@ -183,6 +185,9 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
             # This will be added in the properties file instead
             if node.version > LATEST_0_8_2:
                 cmd += " --timeout-ms %s" % self.consumer_timeout_ms
+
+        if self.print_key:
+            cmd += " --property print.key=true"
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd

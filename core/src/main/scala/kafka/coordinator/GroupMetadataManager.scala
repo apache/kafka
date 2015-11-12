@@ -67,9 +67,6 @@ class GroupMetadataManager(val brokerId: Int,
   /* lock for expiring stale offsets, it should be always called BEFORE the group lock if needed */
   private val offsetExpireLock = new ReentrantReadWriteLock()
 
-  /* lock for removing offsets of a range partition, it should be always called BEFORE the group lock if needed */
-  private val offsetRemoveLock = new ReentrantReadWriteLock()
-
   /* shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
 
@@ -116,12 +113,19 @@ class GroupMetadataManager(val brokerId: Int,
    * Add a group or get the group associated with the given groupId if it already exists
    */
   def addGroup(groupId: String, protocolType: String): GroupMetadata = {
-    addGroup(groupId, new GroupMetadata(groupId, protocolType))
+    val newGroup = new GroupMetadata(groupId, protocolType)
+    val currentGroup = groupsCache.putIfNotExists(groupId, newGroup)
+    if (currentGroup != null)
+      currentGroup
+    else
+      newGroup
   }
 
-  private def addGroup(groupId: String, group: GroupMetadata): GroupMetadata = {
-    groupsCache.putIfNotExists(groupId, group)
-    groupsCache.get(groupId)
+  /**
+   * Update the current cached metadata for the group with the given groupId or add the group if there is none.
+   */
+  private def updateGroup(groupId: String, group: GroupMetadata) {
+    groupsCache.put(groupId, group)
   }
 
   /**
@@ -401,8 +405,10 @@ class GroupMetadataManager(val brokerId: Int,
                     // load group metadata
                     val groupId = baseKey.key.asInstanceOf[String]
                     val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, msgAndOffset.message.payload)
-
-                    addGroup(groupId, groupMetadata)
+                    if (groupMetadata != null) {
+                      trace(s"Loaded group metadata for group ${groupMetadata.groupId} with generation ${groupMetadata.generationId}")
+                      updateGroup(groupId, groupMetadata)
+                    }
                   }
 
                   currOffset = msgAndOffset.nextOffset

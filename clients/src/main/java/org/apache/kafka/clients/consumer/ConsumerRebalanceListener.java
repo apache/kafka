@@ -57,21 +57,36 @@ import org.apache.kafka.common.TopicPartition;
  *           this.consumer = consumer;
  *       }
  *
- *       public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
- *           // read the offsets from an external store using some custom code not described here
- *           for(TopicPartition partition: partitions)
- *              consumer.seek(partition, readOffsetFromExternalStore(partition));
- *       }      
  *       public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
  *           // save the offsets in an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
  *              saveOffsetInExternalStore(consumer.position(partition));
+ *       }
+ *
+ *       public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+ *           // read the offsets from an external store using some custom code not described here
+ *           for(TopicPartition partition: partitions)
+ *              consumer.seek(partition, readOffsetFromExternalStore(partition));
  *       }
  *   }
  * }
  * </pre>
  */
 public interface ConsumerRebalanceListener {
+
+    /**
+     * A callback method the user can implement to provide handling of offset commits to a customized store on the start
+     * of a rebalance operation. This method will be called before a rebalance operation starts and after the consumer
+     * stops fetching data. It is recommended that offsets should be committed in this callback to either Kafka or a
+     * custom offset store to prevent duplicate data.
+     * <p>
+     * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}
+     * <p>
+     * <b>NOTE:</b> This method is only called before rebalances. It is not called prior to {@link KafkaConsumer#close()}.
+     *
+     * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
+     */
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions);
 
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
@@ -86,16 +101,4 @@ public interface ConsumerRebalanceListener {
      *            assigned to the consumer)
      */
     public void onPartitionsAssigned(Collection<TopicPartition> partitions);
-
-    /**
-     * A callback method the user can implement to provide handling of offset commits to a customized store on the start
-     * of a rebalance operation. This method will be called before a rebalance operation starts and after the consumer
-     * stops fetching data. It is recommended that offsets should be committed in this callback to either Kafka or a
-     * custom offset store to prevent duplicate data
-     * <p>
-     * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}
-     *
-     * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
-     */
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions);
 }

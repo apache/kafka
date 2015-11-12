@@ -39,10 +39,10 @@ object ConsoleProducer {
         reader.init(System.in, getReaderProps(config))
 
         val producer =
-          if(config.useNewProducer) {
-            new NewShinyProducer(getNewProducerProps(config))
-          } else {
+          if(config.useOldProducer) {
             new OldProducer(getOldProducerProps(config))
+          } else {
+            new NewShinyProducer(getNewProducerProps(config))
           }
 
         Runtime.getRuntime.addShutdownHook(new Thread() {
@@ -239,7 +239,7 @@ object ConsoleProducer {
             .withRequiredArg
             .describedAs("producer_prop")
             .ofType(classOf[String])
-    val useNewProducerOpt = parser.accepts("new-producer", "Use the new producer implementation.")
+    val useOldProducerOpt = parser.accepts("old-producer", "Use the old producer implementation.")
 
     val options = parser.parse(args : _*)
     if(args.length == 0)
@@ -247,7 +247,7 @@ object ConsoleProducer {
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
     import scala.collection.JavaConversions._
-    val useNewProducer = options.has(useNewProducerOpt)
+    val useOldProducer = options.has(useOldProducerOpt)
     val topic = options.valueOf(topicOpt)
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)

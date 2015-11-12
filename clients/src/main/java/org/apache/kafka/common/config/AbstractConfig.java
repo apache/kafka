@@ -105,17 +105,24 @@ public class AbstractConfig {
         return keys;
     }
 
-    public Properties unusedProperties() {
-        Set<String> unusedKeys = this.unused();
-        Properties unusedProps = new Properties();
-        for (String key : unusedKeys)
-            unusedProps.put(key, this.originals.get(key));
-        return unusedProps;
-    }
-
     public Map<String, Object> originals() {
         Map<String, Object> copy = new RecordingMap<>();
         copy.putAll(originals);
+        return copy;
+    }
+
+    /**
+     * Get all the original settings, ensuring that all values are of type String.
+     * @return the original settings
+     * @throw ClassCastException if any of the values are not strings
+     */
+    public Map<String, String> originalsStrings() {
+        Map<String, String> copy = new RecordingMap<>();
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (!(entry.getValue() instanceof String))
+                throw new ClassCastException("Non-string value found in original settings");
+            copy.put(entry.getKey(), (String) entry.getValue());
+        }
         return copy;
     }
 

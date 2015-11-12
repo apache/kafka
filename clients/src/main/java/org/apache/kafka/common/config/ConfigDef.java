@@ -384,19 +384,22 @@ public class ConfigDef {
             }
         });
         StringBuilder b = new StringBuilder();
-        b.append("<table>\n");
+        b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
         b.append("<th>Name</th>\n");
+        b.append("<th>Description</th>\n");
         b.append("<th>Type</th>\n");
         b.append("<th>Default</th>\n");
         b.append("<th>Valid Values</th>\n");
         b.append("<th>Importance</th>\n");
-        b.append("<th>Description</th>\n");
         b.append("</tr>\n");
         for (ConfigKey def : configs) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append(def.name);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(def.documentation);
             b.append("</td>");
             b.append("<td>");
             b.append(def.type.toString().toLowerCase());
@@ -418,12 +421,9 @@ public class ConfigDef {
             b.append("<td>");
             b.append(def.importance.toString().toLowerCase());
             b.append("</td>");
-            b.append("<td>");
-            b.append(def.documentation);
-            b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>");
+        b.append("</tbody></table>");
         return b.toString();
     }
 }

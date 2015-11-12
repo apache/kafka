@@ -23,14 +23,15 @@ ZKID=$1
 NUM_ZK=$2
 JMX_PORT=$3
 
-cd /opt/kafka
+kafka_dir=/opt/kafka-trunk
+cd $kafka_dir
 
-cp /opt/kafka/config/zookeeper.properties /opt/kafka/config/zookeeper-$ZKID.properties
-echo "initLimit=5" >> /opt/kafka/config/zookeeper-$ZKID.properties
-echo "syncLimit=2" >> /opt/kafka/config/zookeeper-$ZKID.properties
-echo "quorumListenOnAllIPs=true" >> /opt/kafka/config/zookeeper-$ZKID.properties
+cp $kafka_dir/config/zookeeper.properties $kafka_dir/config/zookeeper-$ZKID.properties
+echo "initLimit=5" >> $kafka_dir/config/zookeeper-$ZKID.properties
+echo "syncLimit=2" >> $kafka_dir/config/zookeeper-$ZKID.properties
+echo "quorumListenOnAllIPs=true" >> $kafka_dir/config/zookeeper-$ZKID.properties
 for i in `seq 1 $NUM_ZK`; do
-    echo "server.${i}=zk${i}:2888:3888" >> /opt/kafka/config/zookeeper-$ZKID.properties
+    echo "server.${i}=zk${i}:2888:3888" >> $kafka_dir/config/zookeeper-$ZKID.properties
 done
 
 mkdir -p /tmp/zookeeper
