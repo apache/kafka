@@ -120,7 +120,7 @@ class KafkaService(JmxMixin, Service):
         node.account.create_file("/mnt/kafka.properties", prop_file)
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('log4j.properties'))
 
-        self.security_config.setup_node(node)
+        self.security_config.setup_node(node, self.minikdc)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))

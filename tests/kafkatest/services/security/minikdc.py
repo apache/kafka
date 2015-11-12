@@ -38,9 +38,8 @@ class MiniKdc(Service):
     def __init__(self, context, kafka_nodes):
         super(MiniKdc, self).__init__(context, 1)
         self.kafka_nodes = kafka_nodes
-        self.local_temp_dir = tempfile.mkdtemp(dir="/tmp")
-        self.local_keytab_file = self.local_temp_dir + "/" + self.LOCAL_KEYTAB_FILENAME
-        self.local_krb5conf_file = self.local_temp_dir + "/" + self.LOCAL_KRB5CONF_FILENAME
+        self.local_temp_dir = "/tmp"
+
 
     def start_node(self, node):
 
@@ -49,6 +48,17 @@ class MiniKdc(Service):
         node.account.create_file(MiniKdc.PROPS_FILE, props_file)
         self.logger.info("minikdc.properties")
         self.logger.info(props_file)
+
+        # create local temp dir where we will store keytab and krb5conf files
+        try:
+            self.local_temp_dir = tempfile.mkdtemp(dir=self.local_temp_dir)
+            self.logger.debug("Created temporary local directory %s" % (self.local_temp_dir))
+            # os.chmod(self.local_temp_dir, 0755)
+        except OSError as e:
+            raise Exception("Failed to create temporary tocal directory for $s and %s files: %s" % (self.LOCAL_KEYTAB_FILENAME, self.LOCAL_KRB5CONF_FILENAME, e.strerror))
+
+        self.local_keytab_file = os.path.join(self.local_temp_dir, self.LOCAL_KEYTAB_FILENAME)
+        self.local_krb5conf_file = os.path.join(self.local_temp_dir, self.LOCAL_KRB5CONF_FILENAME)
 
         kafka_principals = ' '.join(['kafka/' + kafka_node.account.hostname for kafka_node in self.kafka_nodes])
         principals = 'client ' + kafka_principals
@@ -62,6 +72,7 @@ class MiniKdc(Service):
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("MiniKdc Running", timeout_sec=60, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
+
         node.account.scp_from(MiniKdc.KEYTAB_FILE, self.local_keytab_file)
         node.account.scp_from(MiniKdc.KRB5CONF_FILE, self.local_krb5conf_file)
 
@@ -69,6 +80,9 @@ class MiniKdc(Service):
     def stop_node(self, node):
         self.logger.info("Stopping %s on %s" % (type(self).__name__, node.account.hostname))
         node.account.kill_process("apacheds", allow_fail=False)
+        if os.path.exists(self.local_temp_dir):
+            os.removedirs(self.local_temp_dir)
+
 
     def clean_node(self, node):
         node.account.kill_process("apacheds", clean_shutdown=False, allow_fail=False)
@@ -77,7 +91,5 @@ class MiniKdc(Service):
             os.remove(self.local_keytab_file)
         if os.path.exists(self.local_krb5conf_file):
             os.remove(self.local_krb5conf_file)
-        if os.path.exists(self.local_temp_dir):
-            os.removedirs(self.local_temp_dir)
 
 
