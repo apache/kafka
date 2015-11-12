@@ -72,7 +72,7 @@ class VerifiableConsumerTest(KafkaTest):
 
     def _await_all_members(self, consumer):
         # Wait until all members have joined the group
-        wait_until(lambda: len(consumer.joined_nodes()) == self.num_consumers, timeout_sec=10,
+        wait_until(lambda: len(consumer.joined_nodes()) == self.num_consumers, timeout_sec=self.session_timeout+5,
                    err_msg="Consumers failed to join in a reasonable amount of time")
 
     @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
@@ -95,7 +95,7 @@ class VerifiableConsumerTest(KafkaTest):
 
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
-        wait_until(lambda: len(consumer.joined_nodes()) == 1 and consumer.owner(partition) != None,
+        wait_until(lambda: len(consumer.joined_nodes()) == (self.num_consumers - 1) and consumer.owner(partition) != None,
                    timeout_sec=self.session_timeout+5, err_msg="Timed out waiting for consumer to close")
 
         # ensure that the remaining consumer does some work after rebalancing
