@@ -91,7 +91,7 @@ class MiniKdc(Service):
         node.account.ssh("rm -rf " + MiniKdc.WORK_DIR, allow_fail=False)
         if os.path.exists(MiniKdc.LOCAL_KEYTAB_FILE):
             os.remove(MiniKdc.LOCAL_KEYTAB_FILE)
-        # if os.path.exists(MiniKdc.LOCAL_KRB5CONF_FILE):
-        #     os.remove(MiniKdc.LOCAL_KRB5CONF_FILE)
+        if os.path.exists(MiniKdc.LOCAL_KRB5CONF_FILE):
+            os.remove(MiniKdc.LOCAL_KRB5CONF_FILE)
 
 
