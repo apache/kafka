@@ -92,9 +92,6 @@ object ConsumerGroupCommand {
     val configs = parseConfigs(opts)
     val channelSocketTimeoutMs = configs.getProperty("channelSocketTimeoutMs", "600").toInt
     val channelRetryBackoffMs = configs.getProperty("channelRetryBackoffMsOpt", "300").toInt
-    def warnNoTopicsForGroupFound: Unit = {
-      println("No topic available for consumer group provided")
-    }
 
     println("%s, %s, %s, %s, %s, %s, %s"
       .format("GROUP", "TOPIC", "PARTITION", "CURRENT OFFSET", "LOG END OFFSET", "LAG", "OWNER"))
@@ -102,15 +99,18 @@ object ConsumerGroupCommand {
     if (!useNewConsumer) {
       val topics = zkUtils.getTopicsByConsumerGroup(group)
       if (topics.isEmpty) {
-        warnNoTopicsForGroupFound
+        println("No topic available for consumer group provided")
+      } else {
+        topics.foreach(topic => describeTopic(zkUtils, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs, opts))
       }
-      topics.foreach(topic => describeTopic(zkUtils, group, topic, channelSocketTimeoutMs, channelRetryBackoffMs, opts))
     } else {
       val consumers = createAndGetAdminClient(opts).describeConsumerGroup(group)
 
-      if (consumers.isEmpty)
-        warnNoTopicsForGroupFound
-      consumers.foreach(x => describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, x.assignment.map(tp => new TopicAndPartition(tp.topic(), tp.partition())), Option("%s_%s".format(x.clientId, x.clientHost))))
+      if (consumers.isEmpty) {
+        println(s"Consumer group, ${group}, does not exist or is rebalancing.")
+      } else {
+        consumers.foreach(x => describeTopicPartition(zkUtils, group, channelSocketTimeoutMs, channelRetryBackoffMs, opts, x.assignment.map(tp => new TopicAndPartition(tp.topic(), tp.partition())), Option("%s_%s".format(x.clientId, x.clientHost))))
+      }
     }
   }
 
