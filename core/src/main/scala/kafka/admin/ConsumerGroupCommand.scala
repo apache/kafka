@@ -320,9 +320,10 @@ object ConsumerGroupCommand {
       else
         consumerSummaries.foreach { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
-          val partitionOffsets = topicPartitions.map { topicPartition =>
-            val offset = consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition)).offset
-            topicPartition -> offset
+          val partitionOffsets = topicPartitions.flatMap { topicPartition =>
+            Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>
+              topicPartition -> offsetAndMetadata.offset
+            }
           }.toMap
           describeTopicPartition(group, topicPartitions, partitionOffsets.get,
             _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
