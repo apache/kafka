@@ -62,7 +62,7 @@ class GroupMetadataManager(val brokerId: Int,
   /* group metadata cache */
   private val groupsCache = new Pool[String, GroupMetadata]
 
-  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE the group lock if needed */
+  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE offsetExpireLock and the group lock if needed */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
   /* partitions of consumer groups that are assigned, using the same loading partition lock */
@@ -410,6 +410,14 @@ class GroupMetadataManager(val brokerId: Int,
                     if (groupMetadata != null) {
                       trace(s"Loaded group metadata for group ${groupMetadata.groupId} with generation ${groupMetadata.generationId}")
                       updateGroup(groupId, groupMetadata)
+                    } else {
+                      // this is a tombstone mark, we need to delete the group from cache if it exists
+                      val group = groupsCache.remove(groupId)
+                      if (group != null) {
+                        group synchronized {
+                          group.transitionTo(Dead)
+                        }
+                      }
                     }
                   }
 
