@@ -50,7 +50,7 @@ import static org.junit.Assert.assertFalse;
 
 public class ProcessorStateManagerTest {
 
-    private class MockRestoreConsumer  extends MockConsumer<byte[], byte[]> {
+    public static class MockRestoreConsumer extends MockConsumer<byte[], byte[]> {
         private final Serializer<Integer> serializer = new IntegerSerializer();
 
         public TopicPartition assignedPartition = null;
@@ -79,7 +79,7 @@ public class ProcessorStateManagerTest {
             recordBuffer.clear();
         }
 
-        // buffer a record (we cannot use addRecord because we need to add records before asigning a partition)
+        // buffer a record (we cannot use addRecord because we need to add records before assigning a partition)
         public void bufferRecord(ConsumerRecord<Integer, Integer> record) {
             recordBuffer.add(
                 new ConsumerRecord<>(record.topic(), record.partition(), record.offset(),
@@ -186,7 +186,7 @@ public class ProcessorStateManagerTest {
             FileLock lock;
 
             // the state manager locks the directory
-            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, new MockRestoreConsumer());
+            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, new MockRestoreConsumer(), false);
 
             try {
                 // this should not get the lock
@@ -215,7 +215,7 @@ public class ProcessorStateManagerTest {
         try {
             MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore("mockStore", false);
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, new MockRestoreConsumer());
+            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, new MockRestoreConsumer(), false);
             try {
                 stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
             } finally {
@@ -243,7 +243,7 @@ public class ProcessorStateManagerTest {
 
             MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore("persistentStore", true); // persistent store
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer);
+            ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer, false);
             try {
                 restoreConsumer.reset();
 
@@ -291,7 +291,7 @@ public class ProcessorStateManagerTest {
 
             MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore("nonPersistentStore", false); // non persistent store
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer);
+            ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer, false);
             try {
                 restoreConsumer.reset();
 
@@ -331,7 +331,7 @@ public class ProcessorStateManagerTest {
 
             MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore("mockStore", false);
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer);
+            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer, false);
             try {
                 stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
 
@@ -372,7 +372,7 @@ public class ProcessorStateManagerTest {
             MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore("persistentStore", true);
             MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore("nonPersistentStore", false);
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer);
+            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer, false);
             try {
                 // make sure the checkpoint file is deleted
                 assertFalse(checkpointFile.exists());
