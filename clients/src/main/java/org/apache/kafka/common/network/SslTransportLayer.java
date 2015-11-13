@@ -144,19 +144,22 @@ public class SslTransportLayer implements TransportLayer {
         closing = true;
         sslEngine.closeOutbound();
         try {
-            if (!flush(netWriteBuffer)) {
-                throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
+            if (isConnected()) {
+                if (!flush(netWriteBuffer)) {
+                    throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
+                }
+                //prep the buffer for the close message
+                netWriteBuffer.clear();
+                //perform the close, since we called sslEngine.closeOutbound
+                SSLEngineResult wrapResult = sslEngine.wrap(emptyBuf, netWriteBuffer);
+                //we should be in a close state
+                if (wrapResult.getStatus() != SSLEngineResult.Status.CLOSED) {
+                    throw new IOException("Unexpected status returned by SSLEngine.wrap, expected CLOSED, received " +
+                            wrapResult.getStatus() + ". Will not send close message to peer.");
+                }
+                netWriteBuffer.flip();
+                flush(netWriteBuffer);
             }
-            //prep the buffer for the close message
-            netWriteBuffer.clear();
-            //perform the close, since we called sslEngine.closeOutbound
-            SSLEngineResult handshake = sslEngine.wrap(emptyBuf, netWriteBuffer);
-            //we should be in a close state
-            if (handshake.getStatus() != SSLEngineResult.Status.CLOSED) {
-                throw new IOException("Invalid close state, will not send network data.");
-            }
-            netWriteBuffer.flip();
-            flush(netWriteBuffer);
         } catch (IOException ie) {
             log.warn("Failed to send SSL Close message ", ie);
         } finally {
