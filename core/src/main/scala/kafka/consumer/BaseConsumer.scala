@@ -18,6 +18,7 @@
 package kafka.consumer
 
 import java.util.Properties
+import kafka.common.StreamEndException
 
 /**
  * A base consumer used to abstract both old and new consumer
@@ -75,7 +76,9 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
   val iter = stream.iterator
 
   override def receive(): BaseConsumerRecord = {
-    // we do not need to check hasNext for KafkaStream iterator
+    if (!iter.hasNext())
+      throw new StreamEndException
+
     val messageAndMetadata = iter.next
     BaseConsumerRecord(messageAndMetadata.topic, messageAndMetadata.partition, messageAndMetadata.offset, messageAndMetadata.key, messageAndMetadata.message)
   }
