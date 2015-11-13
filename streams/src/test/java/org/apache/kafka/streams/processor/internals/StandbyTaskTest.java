@@ -148,7 +148,7 @@ public class StandbyTaskTest {
                 restoreStateConsumer.bufferRecord(record);
             }
 
-            for (Map.Entry<TopicPartition, Long> entry : task.changeLogStartOffsets().entrySet()) {
+            for (Map.Entry<TopicPartition, Long> entry : task.checkpointedOffsets().entrySet()) {
                 TopicPartition partition = entry.getKey();
                 long offset = entry.getValue();
                 if (offset >= 0) {

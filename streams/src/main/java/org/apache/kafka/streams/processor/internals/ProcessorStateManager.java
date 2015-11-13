@@ -131,11 +131,11 @@ public class ProcessorStateManager {
             if (store.persistent())
                 restoreCallbacks.put(store.name(), stateRestoreCallback);
         } else {
-            restore(store, stateRestoreCallback);
+            restoreActiveState(store, stateRestoreCallback);
         }
     }
 
-    private void restore(StateStore store, StateRestoreCallback stateRestoreCallback) {
+    private void restoreActiveState(StateStore store, StateRestoreCallback stateRestoreCallback) {
 
         if (store == null)
             throw new IllegalArgumentException("Store " + store.name() + " has not been registered.");
@@ -157,7 +157,7 @@ public class ProcessorStateManager {
 
             // restore from the checkpointed offset of the change log if it is persistent and the offset exists;
             // restore the state from the beginning of the change log otherwise
-            if (checkpointedOffsets.containsKey(storePartition) && store.persistent()) {
+            if (checkpointedOffsets.containsKey(storePartition)) {
                 restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
             } else {
                 restoreConsumer.seekToBeginning(storePartition);
@@ -186,21 +186,18 @@ public class ProcessorStateManager {
         }
     }
 
-    public Map<TopicPartition, Long> changeLogOffsets() {
+    public Map<TopicPartition, Long> checkpointedOffsets() {
         Map<TopicPartition, Long> partitionsAndOffsets = new HashMap<>();
 
         for (Map.Entry<String, StateRestoreCallback> entry : restoreCallbacks.entrySet()) {
             String storeName = entry.getKey();
             TopicPartition storePartition = new TopicPartition(storeName, partition);
 
-            long offset = -1;
-            if (restoredOffsets.containsKey(storePartition)) {
-                restoredOffsets.get(storePartition);
-            } else if (checkpointedOffsets.containsKey(storePartition)) {
-                checkpointedOffsets.get(storePartition);
+            if (checkpointedOffsets.containsKey(storePartition)) {
+                partitionsAndOffsets.put(storePartition, checkpointedOffsets.get(storePartition));
+            } else {
+                partitionsAndOffsets.put(storePartition, -1L);
             }
-
-            partitionsAndOffsets.put(new TopicPartition(storeName, partition), offset);
         }
         return partitionsAndOffsets;
     }

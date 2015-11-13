@@ -38,7 +38,7 @@ public class StandbyTask extends AbstractTask {
 
     private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
 
-    private final Map<TopicPartition, Long> changeLogStartOffsets;
+    private final Map<TopicPartition, Long> checkpointedOffsets;
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -63,15 +63,15 @@ public class StandbyTask extends AbstractTask {
 
         ((StandbyContextImpl) this.processorContext).initialized();
 
-        this.changeLogStartOffsets = Collections.unmodifiableMap(stateMgr.changeLogOffsets());
+        this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointedOffsets());
     }
 
-    public Map<TopicPartition, Long> changeLogStartOffsets() {
-        return changeLogStartOffsets;
+    public Map<TopicPartition, Long> checkpointedOffsets() {
+        return checkpointedOffsets;
     }
 
     public Collection<TopicPartition> changeLogPartitions() {
-        return changeLogStartOffsets.keySet();
+        return checkpointedOffsets.keySet();
     }
 
     /**

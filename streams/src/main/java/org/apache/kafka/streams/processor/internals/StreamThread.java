@@ -546,17 +546,17 @@ public class StreamThread extends Thread {
     }
 
     private void addStandbyTasks() {
-        Map<TopicPartition, Long> changeLogStartOffsets = new HashMap<>();
+        Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
         for (TaskId taskId : partitionGrouper.standbyTasks()) {
             StandbyTask task = createStandbyTask(taskId);
             standbyTasks.put(taskId, task);
-            changeLogStartOffsets.putAll(task.changeLogStartOffsets());
+            checkpointedOffsets.putAll(task.checkpointedOffsets());
         }
 
-        restoreConsumer.assign(new ArrayList<>(changeLogStartOffsets.keySet()));
+        restoreConsumer.assign(new ArrayList<>(checkpointedOffsets.keySet()));
 
-        for (Map.Entry<TopicPartition, Long> entry : changeLogStartOffsets.entrySet()) {
+        for (Map.Entry<TopicPartition, Long> entry : checkpointedOffsets.entrySet()) {
             TopicPartition partition = entry.getKey();
             long offset = entry.getValue();
             if (offset >= 0) {
