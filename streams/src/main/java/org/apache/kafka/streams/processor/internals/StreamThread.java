@@ -105,7 +105,8 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             commitAll();
-            removeAllTasks();
+            removeStreamTasks();
+            removeStandbyTasks();
             lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
         }
     };
@@ -239,7 +240,8 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
         try {
-            removeAllTasks();
+            removeStreamTasks();
+            removeStandbyTasks();
         } catch (Throwable e) {
             // already logged in removePartition()
         }
@@ -485,7 +487,6 @@ public class StreamThread extends Thread {
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
-
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
         for (TopicPartition partition : assignment) {
@@ -513,24 +514,16 @@ public class StreamThread extends Thread {
         lastClean = time.milliseconds();
     }
 
-    private void removeAllTasks() {
-
+    private void removeStreamTasks() {
         // TODO: change this clearing tasks behavior
         for (StreamTask task : activeTasks.values()) {
             closeOne(task);
         }
 
-        for (StandbyTask task : standbyTasks.values()) {
-            closeOne(task);
-        }
-        // un-assign the change log partitions
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-
         prevTasks.clear();
         prevTasks.addAll(activeTasks.keySet());
 
         activeTasks.clear();
-        standbyTasks.clear();
     }
 
     private void closeOne(AbstractTask task) {
@@ -572,6 +565,17 @@ public class StreamThread extends Thread {
                 restoreConsumer.seekToBeginning(partition);
             }
         }
+    }
+
+
+    private void removeStandbyTasks() {
+        for (StandbyTask task : standbyTasks.values()) {
+            closeOne(task);
+        }
+        // un-assign the change log partitions
+        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+
+        standbyTasks.clear();
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups) {
