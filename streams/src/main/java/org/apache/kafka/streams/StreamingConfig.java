@@ -56,7 +56,7 @@ public class StreamingConfig extends AbstractConfig {
 
     /** <code>num.stream.threads</code> */
     public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
-    private static final String NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas.";
+    private static final String NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas for each task.";
 
     /** <code>buffered.records.per.partition</code> */
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
