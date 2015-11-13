@@ -306,7 +306,8 @@ object ConsumerGroupCommand {
 
   class KafkaConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
 
-    private val adminClient = createAndGetAdminClient(opts)
+    private val adminClient = createAdminClient(opts)
+    private val consumer = createNewConsumer()
 
     def list() {
       adminClient.listAllConsumerGroupsFlattened().foreach(x => println(x.groupId))
@@ -320,12 +321,8 @@ object ConsumerGroupCommand {
         consumerSummaries.foreach { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
           val partitionOffsets = topicPartitions.map { topicPartition =>
-            val consumer = getNewConsumer()
-            try {
-              val offset = consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition)).offset
-              topicPartition -> offset
-            }
-            finally consumer.close()
+            val offset = consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition)).offset
+            topicPartition -> offset
           }.toMap
           describeTopicPartition(group, topicPartitions, partitionOffsets.get,
             _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
@@ -334,25 +331,26 @@ object ConsumerGroupCommand {
 
     protected def getLogEndOffset(topic: String, partition: Int): LogEndOffsetResult = {
       val topicPartition = new TopicPartition(topic, partition)
-      val consumer = getNewConsumer()
-      try {
-        consumer.assign(List(topicPartition).asJava)
-        consumer.seekToEnd(topicPartition)
-        val logEndOffset = consumer.position(topicPartition)
-        LogEndOffsetResult.LogEndOffset(logEndOffset)
-      } finally consumer.close()
+      consumer.assign(List(topicPartition).asJava)
+      consumer.seekToEnd(topicPartition)
+      val logEndOffset = consumer.position(topicPartition)
+      LogEndOffsetResult.LogEndOffset(logEndOffset)
     }
 
     def close() {
       adminClient.close()
+      consumer.close()
     }
 
-    private def createAndGetAdminClient(opts: ConsumerGroupCommandOptions): AdminClient =
+    private def createAdminClient(opts: ConsumerGroupCommandOptions): AdminClient =
       AdminClient.createSimplePlaintext(opts.options.valueOf(opts.bootstrapServerOpt))
 
-    private def getNewConsumer(): KafkaConsumer[String, String] = {
+    private def createNewConsumer(): KafkaConsumer[String, String] = {
+      val properties =
+        if (opts.options.has(opts.consumerConfigOpt))
+          Utils.loadProps(opts.options.valueOf(opts.consumerConfigOpt))
+        else new Properties()
       val deserializer = (new StringDeserializer).getClass.getName
-      val properties = new Properties()
       val brokerUrl = opts.options.valueOf(opts.bootstrapServerOpt)
       properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
       properties.put(ConsumerConfig.GROUP_ID_CONFIG, "ConsumerGroupCommand")
@@ -412,6 +410,10 @@ object ConsumerGroupCommand {
                           .withRequiredArg
                           .describedAs("name=value")
                           .ofType(classOf[String])
+    val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
+                          .withRequiredArg
+                          .describedAs("config file")
+                          .ofType(classOf[String])
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
@@ -425,7 +427,9 @@ object ConsumerGroupCommand {
       if (options.has(newConsumerOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
         if (options.has(deleteOpt))
-          CommandLineUtils.printUsageAndDie(parser, "Option %s does not work with %s".format(deleteOpt, newConsumerOpt))
+          CommandLineUtils.printUsageAndDie(parser, ("Option %s does not work with %s. Note that there's no need to " +
+            "delete group metadata for the new consumer as it is automatically deleted when the last member " +
+            "leaves").format(deleteOpt, newConsumerOpt))
       } else
         CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
       if (options.has(describeOpt))
