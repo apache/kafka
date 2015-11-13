@@ -310,7 +310,7 @@ class GroupCoordinator(val brokerId: Int,
 
     // store the group metadata without holding the group lock to avoid the potential
     // for deadlock when the callback is invoked
-    delayedGroupStore.map(groupManager.store(_))
+    delayedGroupStore.foreach(groupManager.store)
   }
 
   def handleLeaveGroup(groupId: String, consumerId: String, responseCallback: Short => Unit) {
@@ -427,7 +427,7 @@ class GroupCoordinator(val brokerId: Int,
     }
 
     // store the offsets without holding the group lock
-    delayedOffsetStore.map(groupManager.store(_))
+    delayedOffsetStore.foreach(groupManager.store)
   }
 
   def handleFetchOffsets(groupId: String,

@@ -48,7 +48,7 @@ import com.yammer.metrics.core.Gauge
 
 
 case class DelayedStore(messageSet: Map[TopicAndPartition, MessageSet],
-                         callback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
+                        callback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
 
 class GroupMetadataManager(val brokerId: Int,
                            val config: OffsetConfig,
