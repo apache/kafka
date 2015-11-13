@@ -62,7 +62,7 @@ class GroupMetadataManager(val brokerId: Int,
   /* group metadata cache */
   private val groupsCache = new Pool[String, GroupMetadata]
 
-  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE the group lock if needed */
+  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE offsetExpireLock and the group lock if needed */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
   /* partitions of consumer groups that are assigned, using the same loading partition lock */
@@ -410,6 +410,14 @@ class GroupMetadataManager(val brokerId: Int,
                     if (groupMetadata != null) {
                       trace(s"Loaded group metadata for group ${groupMetadata.groupId} with generation ${groupMetadata.generationId}")
                       updateGroup(groupId, groupMetadata)
+                    } else {
+                      // this is a tombstone mark, we need to delete the group from cache if it exists
+                      val group = groupsCache.remove(groupId)
+                      if (group != null) {
+                        group synchronized {
+                          group.transitionTo(Dead)
+                        }
+                      }
                     }
                   }
 
@@ -932,12 +940,34 @@ object GroupMetadataManager {
   // (specify --formatter "kafka.coordinator.GroupMetadataManager\$OffsetsMessageFormatter" when consuming __consumer_offsets)
   class OffsetsMessageFormatter extends MessageFormatter {
     def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
-      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key)).toString
-      val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
-      output.write(formattedKey.getBytes)
-      output.write("::".getBytes)
-      output.write(formattedValue.getBytes)
-      output.write("\n".getBytes)
+      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
+
+      // only print if the message is an offset record
+      if (formattedKey.isInstanceOf[OffsetKey]) {
+        val groupTopicPartition = formattedKey.asInstanceOf[OffsetKey].toString
+        val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
+        output.write(groupTopicPartition.getBytes)
+        output.write("::".getBytes)
+        output.write(formattedValue.getBytes)
+        output.write("\n".getBytes)
+      }
+    }
+  }
+
+  // Formatter for use with tools to read group metadata history
+  class GroupMetadataMessageFormatter extends MessageFormatter {
+    def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
+      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
+
+      // only print if the message is a group metadata record
+      if (formattedKey.isInstanceOf[GroupKey]) {
+        val groupId = formattedKey.asInstanceOf[GroupKey].key
+        val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value)).toString
+        output.write(groupId.getBytes)
+        output.write("::".getBytes)
+        output.write(formattedValue.getBytes)
+        output.write("\n".getBytes)
+      }
     }
   }
 }
@@ -956,7 +986,13 @@ trait BaseKey{
   def key: Object
 }
 
-case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey
+case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey {
 
-case class GroupKey(version: Short, key: String) extends BaseKey
+  override def toString = key.toString
+}
+
+case class GroupKey(version: Short, key: String) extends BaseKey {
+
+  override def toString = key
+}
 

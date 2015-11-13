@@ -236,4 +236,8 @@ private[coordinator] class GroupMetadata(val groupId: String, val protocolType: 
       throw new IllegalStateException("Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
         .format(groupId, GroupMetadata.validPreviousStates(targetState).mkString(","), targetState, state))
   }
+
+  override def toString = {
+    "[%s,%s,%s,%s]".format(groupId, protocolType, currentState.toString, members)
+  }
 }
