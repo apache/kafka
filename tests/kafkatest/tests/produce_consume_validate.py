@@ -51,7 +51,8 @@ class ProduceConsumeValidateTest(Test):
 
         # Check that producer is still successfully producing
         currently_acked = self.producer.num_acked
-        wait_until(lambda: self.producer.num_acked > currently_acked + 5, timeout_sec=360,
+        # Relatively large timeout here is to avoid spurious failures due to KAFKA-2827
+        wait_until(lambda: self.producer.num_acked > currently_acked + 5, timeout_sec=60,
              err_msg="Expected producer to still be producing.")
 
         self.producer.stop()
