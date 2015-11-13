@@ -306,7 +306,7 @@ object ConsumerGroupCommand {
 
   class KafkaConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
 
-    private val adminClient = createAdminClient(opts)
+    private val adminClient = createAdminClient()
     private val consumer = createNewConsumer()
 
     def list() {
@@ -343,7 +343,7 @@ object ConsumerGroupCommand {
       consumer.close()
     }
 
-    private def createAdminClient(opts: ConsumerGroupCommandOptions): AdminClient =
+    private def createAdminClient(): AdminClient =
       AdminClient.createSimplePlaintext(opts.options.valueOf(opts.bootstrapServerOpt))
 
     private def createNewConsumer(): KafkaConsumer[String, String] = {
@@ -351,7 +351,7 @@ object ConsumerGroupCommand {
       val deserializer = (new StringDeserializer).getClass.getName
       val brokerUrl = opts.options.valueOf(opts.bootstrapServerOpt)
       properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-      properties.put(ConsumerConfig.GROUP_ID_CONFIG, "ConsumerGroupCommand")
+      properties.put(ConsumerConfig.GROUP_ID_CONFIG, opts.options.valueOf(opts.groupOpt))
       properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
       properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
       properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
