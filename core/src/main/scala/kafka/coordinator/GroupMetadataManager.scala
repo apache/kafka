@@ -930,12 +930,34 @@ object GroupMetadataManager {
   // (specify --formatter "kafka.coordinator.GroupMetadataManager\$OffsetsMessageFormatter" when consuming __consumer_offsets)
   class OffsetsMessageFormatter extends MessageFormatter {
     def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
-      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key)).toString
-      val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
-      output.write(formattedKey.getBytes)
-      output.write("::".getBytes)
-      output.write(formattedValue.getBytes)
-      output.write("\n".getBytes)
+      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
+
+      // only print if the message is an offset record
+      if (formattedKey.isInstanceOf[OffsetKey]) {
+        val groupTopicPartition = formattedKey.asInstanceOf[OffsetKey].toString
+        val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
+        output.write(groupTopicPartition.getBytes)
+        output.write("::".getBytes)
+        output.write(formattedValue.getBytes)
+        output.write("\n".getBytes)
+      }
+    }
+  }
+
+  // Formatter for use with tools to read group metadata history
+  class GroupMetadataMessageFormatter extends MessageFormatter {
+    def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
+      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
+
+      // only print if the message is a group metadata record
+      if (formattedKey.isInstanceOf[GroupKey]) {
+        val groupId = formattedKey.asInstanceOf[GroupKey].key
+        val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value)).toString
+        output.write(groupId.getBytes)
+        output.write("::".getBytes)
+        output.write(formattedValue.getBytes)
+        output.write("\n".getBytes)
+      }
     }
   }
 }
@@ -954,7 +976,13 @@ trait BaseKey{
   def key: Object
 }
 
-case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey
+case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey {
 
-case class GroupKey(version: Short, key: String) extends BaseKey
+  override def toString = key.toString
+}
+
+case class GroupKey(version: Short, key: String) extends BaseKey {
+
+  override def toString = key
+}
 
