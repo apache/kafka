@@ -161,9 +161,8 @@ class Partition(val topic: String,
    *  and setting the new leader and ISR
    */
   def makeLeader(controllerId: Int,
-                 partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
-    var leaderHWIncremented = false
-    inWriteLock(leaderIsrUpdateLock) {
+                 partitionStateInfo: PartitionStateInfo, correlationId: Int) = {
+    val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
@@ -186,14 +185,12 @@ class Partition(val topic: String,
       assignedReplicas.foreach(r =>
         if (r.brokerId != localBrokerId) r.updateLogReadResult(LogReadResult.UnknownLogReadResult))
       // we may need to increment high watermark since ISR could be down to 1
-      leaderHWIncremented = maybeIncrementLeaderHW(newLeaderReplica)
+      maybeIncrementLeaderHW(newLeaderReplica)
     }
 
     // some delayed operations may be unblocked after HW changed
     if (leaderHWIncremented)
       tryCompleteDelayedRequests()
-
-    true
   }
 
   /**
@@ -261,9 +258,7 @@ class Partition(val topic: String,
    * This function can be triggered when a replica's LEO has incremented
    */
   def maybeExpandIsr(replicaId: Int) {
-    var leaderHWIncremented = false
-
-    inWriteLock(leaderIsrUpdateLock) {
+    val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       // check if this replica needs to be added to the ISR
       leaderReplicaIfLocal() match {
         case Some(leaderReplica) =>
@@ -283,9 +278,9 @@ class Partition(val topic: String,
 
           // check if the HW of the partition can now be incremented
           // since the replica maybe now be in the ISR and its LEO has just incremented
-          leaderHWIncremented = maybeIncrementLeaderHW(leaderReplica)
+          maybeIncrementLeaderHW(leaderReplica)
 
-        case None => // nothing to do if no longer leader
+        case None => false // nothing to do if no longer leader
       }
     }
 
@@ -374,8 +369,7 @@ class Partition(val topic: String,
   }
 
   def maybeShrinkIsr(replicaMaxLagTimeMs: Long) {
-    var leaderHWIncremented = false
-    inWriteLock(leaderIsrUpdateLock) {
+    val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal() match {
         case Some(leaderReplica) =>
           val outOfSyncReplicas = getOutOfSyncReplicas(leaderReplica, replicaMaxLagTimeMs)
@@ -387,10 +381,14 @@ class Partition(val topic: String,
             // update ISR in zk and in cache
             updateIsr(newInSyncReplicas)
             // we may need to increment high watermark since ISR could be down to 1
-            leaderHWIncremented = maybeIncrementLeaderHW(leaderReplica)
+
             replicaManager.isrShrinkRate.mark()
+            maybeIncrementLeaderHW(leaderReplica)
+          } else {
+            false
           }
-        case None => // do nothing if no longer leader
+
+        case None => false // do nothing if no longer leader
       }
     }
 
@@ -443,6 +441,7 @@ class Partition(val topic: String,
           // we may need to increment high watermark since ISR could be down to 1
           leaderHWIncremented = maybeIncrementLeaderHW(leaderReplica)
           info
+
         case None =>
           throw new NotLeaderForPartitionException("Leader not local for partition [%s,%d] on broker %d"
             .format(topic, partitionId, localBrokerId))
