@@ -346,10 +346,7 @@ object ConsumerGroupCommand {
       AdminClient.createSimplePlaintext(opts.options.valueOf(opts.bootstrapServerOpt))
 
     private def createNewConsumer(): KafkaConsumer[String, String] = {
-      val properties =
-        if (opts.options.has(opts.consumerConfigOpt))
-          Utils.loadProps(opts.options.valueOf(opts.consumerConfigOpt))
-        else new Properties()
+      val properties = new Properties()
       val deserializer = (new StringDeserializer).getClass.getName
       val brokerUrl = opts.options.valueOf(opts.bootstrapServerOpt)
       properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
@@ -409,10 +406,6 @@ object ConsumerGroupCommand {
     val configOpt = parser.accepts("config", ConfigDoc)
                           .withRequiredArg
                           .describedAs("name=value")
-                          .ofType(classOf[String])
-    val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
-                          .withRequiredArg
-                          .describedAs("config file")
                           .ofType(classOf[String])
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
