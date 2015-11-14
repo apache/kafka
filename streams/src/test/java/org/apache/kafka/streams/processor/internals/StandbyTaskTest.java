@@ -85,6 +85,7 @@ public class StandbyTaskTest {
 
     @Before
     public void setup() {
+        restoreStateConsumer.reset();
         restoreStateConsumer.updatePartitions("store1", Utils.mkList(
                 new PartitionInfo("store1", 0, Node.noNode(), new Node[0], new Node[0]),
                 new PartitionInfo("store1", 1, Node.noNode(), new Node[0], new Node[0]),
