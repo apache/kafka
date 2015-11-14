@@ -257,12 +257,10 @@ object AclCommand {
       .defaultsTo(classOf[SimpleAclAuthorizer].getName)
 
     val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "REQUIRED: properties required to configure an instance of Authorizer. " +
-      "These are comma separated key=val pairs. For the default authorizer the example values are: " +
-      "zookeeper.connect=localhost:2181")
+      "These are key=val pairs. For the default authorizer the example values are: zookeeper.connect=localhost:2181")
       .withRequiredArg
       .describedAs("authorizer-properties")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(Delimiter)
 
     val topicOpt = parser.accepts("topic", "Comma separated list of topic to which acls should be added or removed. " +
       "A value of * indicates acl should apply to all topics.")
