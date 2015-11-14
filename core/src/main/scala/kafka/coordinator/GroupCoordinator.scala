@@ -132,7 +132,7 @@ class GroupCoordinator(val brokerId: Int,
         if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
           responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID.code))
         } else {
-          group = groupManager.addGroup(groupId, protocolType)
+          group = groupManager.addGroup(new GroupMetadata(groupId, protocolType))
           doJoinGroup(group, memberId, clientId, clientHost, sessionTimeoutMs, protocolType, protocols, responseCallback)
         }
       } else {
@@ -226,7 +226,7 @@ class GroupCoordinator(val brokerId: Int,
         }
 
         if (group.is(PreparingRebalance))
-          joinPurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+          joinPurgatory.checkAndComplete(GroupKey(group.groupId))
       }
     }
   }
@@ -473,12 +473,55 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
+  private def unloadGroup(groupEmigrating: Boolean)(group: GroupMetadata) {
+    info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
+    group synchronized {
+      val previousState = group.currentState
+      group.transitionTo(Dead)
+
+      // if the group is moving to another coordinator, then we want to have members with pending
+      // requests find the new group coordinator. if the group is unloaded during immigration,
+      // however, then we want them to rejoin with UNKNOWN_MEMBER_ID set. this latter case
+      // shouldn't actually happen since we shouldn't have any cached group metadata for any
+      // groups transferred from another coordinator (because we remove cached entries on fail-over)
+      val errorCode = if (groupEmigrating)
+        Errors.NOT_COORDINATOR_FOR_GROUP.code
+      else
+        Errors.UNKNOWN_MEMBER_ID.code
+
+      previousState match {
+        case Dead =>
+        case PreparingRebalance =>
+          for (member <- group.allMemberMetadata) {
+            if (member.awaitingJoinCallback != null) {
+              member.awaitingJoinCallback(joinError(member.memberId, errorCode))
+              member.awaitingJoinCallback = null
+            }
+          }
+          joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+
+        case Stable | AwaitingSync =>
+          for (member <- group.allMemberMetadata) {
+            if (member.awaitingSyncCallback != null) {
+              member.awaitingSyncCallback(Array.empty[Byte], errorCode)
+              member.awaitingSyncCallback = null
+            }
+            heartbeatPurgatory.checkAndComplete(MemberKey(member.groupId, member.memberId))
+          }
+      }
+    }
+  }
+
+  private def loadGroup(group: GroupMetadata) {
+    info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
+  }
+
   def handleGroupImmigration(offsetTopicPartitionId: Int) = {
-    groupManager.loadGroupsForPartition(offsetTopicPartitionId)
+    groupManager.loadGroupsForPartition(offsetTopicPartitionId, loadGroup, unloadGroup(false))
   }
 
   def handleGroupEmigration(offsetTopicPartitionId: Int) = {
-    groupManager.removeGroupsForPartition(offsetTopicPartitionId)
+    groupManager.removeGroupsForPartition(offsetTopicPartitionId, unloadGroup(true))
   }
 
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {
@@ -528,7 +571,7 @@ class GroupCoordinator(val brokerId: Int,
   private def completeAndScheduleNextHeartbeatExpiration(group: GroupMetadata, member: MemberMetadata) {
     // complete current heartbeat expectation
     member.latestHeartbeat = SystemTime.milliseconds
-    val memberKey = ConsumerKey(member.groupId, member.memberId)
+    val memberKey = MemberKey(member.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
 
     // reschedule the next heartbeat expiration deadline
@@ -539,8 +582,8 @@ class GroupCoordinator(val brokerId: Int,
 
   private def removeHeartbeatForLeavingMember(group: GroupMetadata, member: MemberMetadata) {
     member.isLeaving = true
-    val consumerKey = ConsumerKey(member.groupId, member.memberId)
-    heartbeatPurgatory.checkAndComplete(consumerKey)
+    val memberKey = MemberKey(member.groupId, member.memberId)
+    heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
   private def addMemberAndRebalance(sessionTimeoutMs: Int,
@@ -584,8 +627,8 @@ class GroupCoordinator(val brokerId: Int,
 
     val rebalanceTimeout = group.rebalanceTimeout
     val delayedRebalance = new DelayedJoin(this, group, rebalanceTimeout)
-    val consumerGroupKey = ConsumerGroupKey(group.groupId)
-    joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(consumerGroupKey))
+    val groupKey = GroupKey(group.groupId)
+    joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 
   private def onMemberFailure(group: GroupMetadata, member: MemberMetadata) {
@@ -594,7 +637,7 @@ class GroupCoordinator(val brokerId: Int,
     group.currentState match {
       case Dead =>
       case Stable | AwaitingSync => maybePrepareRebalance(group)
-      case PreparingRebalance => joinPurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+      case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
   }
 
@@ -621,6 +664,7 @@ class GroupCoordinator(val brokerId: Int,
 
         // TODO KAFKA-2720: only remove group in the background thread
         if (group.isEmpty) {
+          group.transitionTo(Dead)
           groupManager.removeGroup(group)
           info("Group %s generation %s is dead and removed".format(group.groupId, group.generationId))
         }

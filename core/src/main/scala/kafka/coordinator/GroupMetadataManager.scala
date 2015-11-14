@@ -116,55 +116,45 @@ class GroupMetadataManager(val brokerId: Int,
   /**
    * Add a group or get the group associated with the given groupId if it already exists
    */
-  def addGroup(groupId: String, protocolType: String): GroupMetadata = {
-    val newGroup = new GroupMetadata(groupId, protocolType)
-    val currentGroup = groupsCache.putIfNotExists(groupId, newGroup)
-    if (currentGroup != null)
+  def addGroup(group: GroupMetadata): GroupMetadata = {
+    val currentGroup = groupsCache.putIfNotExists(group.groupId, group)
+    if (currentGroup != null) {
       currentGroup
-    else
-      newGroup
+    } else {
+      group
+    }
   }
 
   /**
-   * Update the current cached metadata for the group with the given groupId or add the group if there is none.
-   */
-  private def updateGroup(groupId: String, group: GroupMetadata) {
-    groupsCache.put(groupId, group)
-  }
-
-  /**
-   * Remove all metadata associated with the group, note this function needs to be
-   * called inside the group lock
+   * Remove all metadata associated with the group
    * @param group
    */
   def removeGroup(group: GroupMetadata) {
-    // first mark the group as dead
-    group.transitionTo(Dead)
+    // guard this removal in case of concurrent access (e.g. if a delayed join completes with no members
+    // while the group is being removed due to coordinator emigration)
+    if (groupsCache.remove(group.groupId, group)) {
+      // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
+      // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
+      // retry removing this group.
+      val groupPartition = partitionFor(group.groupId)
+      val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId))
 
-    if (groupsCache.remove(group.groupId) != group)
-      throw new IllegalArgumentException("Cannot remove group " + group.groupId + " since it has been replaced.")
+      val partitionOpt = replicaManager.getPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
+      partitionOpt.foreach { partition =>
+        val appendPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
 
-    // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
-    // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
-    // retry removing this group.
-    val groupPartition = partitionFor(group.groupId)
-    val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId))
+        trace("Marking group %s as deleted.".format(group.groupId))
 
-    val partitionOpt = replicaManager.getPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
-    partitionOpt.foreach { partition =>
-      val appendPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, groupPartition)
-
-      trace("Marking group %s as deleted.".format(group.groupId))
-
-      try {
-        // do not need to require acks since even if the tombstone is lost,
-        // it will be appended again by the new leader
-        // TODO KAFKA-2720: periodic purging instead of immediate removal of groups
-        partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, tombstone))
-      } catch {
-        case t: Throwable =>
-          error("Failed to mark group %s as deleted in %s.".format(group.groupId, appendPartition), t)
+        try {
+          // do not need to require acks since even if the tombstone is lost,
+          // it will be appended again by the new leader
+          // TODO KAFKA-2720: periodic purging instead of immediate removal of groups
+          partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, tombstone))
+        } catch {
+          case t: Throwable =>
+            error("Failed to mark group %s as deleted in %s.".format(group.groupId, appendPartition), t)
           // ignore and continue
+        }
       }
     }
   }
@@ -346,8 +336,9 @@ class GroupMetadataManager(val brokerId: Int,
   /**
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
-  def loadGroupsForPartition(offsetsPartition: Int) {
-
+  def loadGroupsForPartition(offsetsPartition: Int,
+                             onGroupLoaded: GroupMetadata => Unit,
+                             onGroupUnloaded: GroupMetadata => Unit) {
     val topicPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)
 
     loadingPartitions synchronized {
@@ -362,7 +353,7 @@ class GroupMetadataManager(val brokerId: Int,
     }
 
     def loadGroupsAndOffsets() {
-      info("Loading offsets from " + topicPartition)
+      info("Loading offsets and group metadata from " + topicPartition)
 
       val startMs = SystemTime.milliseconds
       try {
@@ -372,6 +363,9 @@ class GroupMetadataManager(val brokerId: Int,
             val buffer = ByteBuffer.allocate(config.loadBufferSize)
             // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
             inWriteLock(offsetExpireLock) {
+              val loadedGroups: mutable.Map[String, GroupMetadata] = mutable.Map()
+              val removedGroups: mutable.Set[String] = mutable.Set()
+
               while (currOffset < getHighWatermark(offsetsPartition) && !shuttingDown.get()) {
                 buffer.clear()
                 val messages = log.read(currOffset, config.loadBufferSize).messageSet.asInstanceOf[FileMessageSet]
@@ -409,19 +403,35 @@ class GroupMetadataManager(val brokerId: Int,
                     val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, msgAndOffset.message.payload)
                     if (groupMetadata != null) {
                       trace(s"Loaded group metadata for group ${groupMetadata.groupId} with generation ${groupMetadata.generationId}")
-                      updateGroup(groupId, groupMetadata)
+                      removedGroups.remove(groupId)
+                      loadedGroups.put(groupId, groupMetadata)
                     } else {
-                      // this is a tombstone mark, we need to delete the group from cache if it exists
-                      val group = groupsCache.remove(groupId)
-                      if (group != null) {
-                        group synchronized {
-                          group.transitionTo(Dead)
-                        }
-                      }
+                      loadedGroups.remove(groupId)
+                      removedGroups.add(groupId)
                     }
                   }
 
                   currOffset = msgAndOffset.nextOffset
+                }
+              }
+
+              loadedGroups.values.foreach { group =>
+                val currentGroup = addGroup(group)
+                if (group != currentGroup)
+                  warn(s"Attempt to load group ${group.groupId} from log with generation ${group.generationId} failed " +
+                    s"because there is already a cached group with generation ${currentGroup.generationId}")
+                else
+                  onGroupLoaded(group)
+              }
+
+              removedGroups.foreach { groupId =>
+                val group = groupsCache.get(groupId)
+                if (group != null) {
+                  // we shouldn't actually hit this case in practice because it would imply that
+                  // a tombstone was written by another broker while we were still the owner of the
+                  // group's partition
+                  onGroupUnloaded(group)
+                  groupsCache.remove(groupId, group)
                 }
               }
             }
@@ -448,7 +458,8 @@ class GroupMetadataManager(val brokerId: Int,
    * that partition.
    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
-  def removeGroupsForPartition(offsetsPartition: Int) {
+  def removeGroupsForPartition(offsetsPartition: Int,
+                               onGroupUnloaded: GroupMetadata => Unit) {
     var numOffsetsRemoved = 0
     var numGroupsRemoved = 0
 
@@ -473,15 +484,9 @@ class GroupMetadataManager(val brokerId: Int,
 
       // clear the groups for this partition in the cache
       for (group <- groupsCache.values) {
-        group synchronized {
-          // mark the group as dead and then remove it from cache
-          group.transitionTo(Dead)
-
-          if (groupsCache.remove(group.groupId) != group)
-            throw new IllegalArgumentException("Cannot remove group " + group.groupId + " since it has been replaced.")
-
-          numGroupsRemoved += 1
-        }
+        onGroupUnloaded(group)
+        groupsCache.remove(group.groupId, group)
+        numGroupsRemoved += 1
       }
     }
 
@@ -850,7 +855,7 @@ object GroupMetadataManager {
       // version 2 refers to offset
       val group = key.get(GROUP_KEY_GROUP_FIELD).asInstanceOf[String]
 
-      GroupKey(version, group)
+      GroupMetadataKey(version, group)
     } else {
       throw new IllegalStateException("Unknown version " + version + " for group metadata message")
     }
@@ -960,8 +965,8 @@ object GroupMetadataManager {
       val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
 
       // only print if the message is a group metadata record
-      if (formattedKey.isInstanceOf[GroupKey]) {
-        val groupId = formattedKey.asInstanceOf[GroupKey].key
+      if (formattedKey.isInstanceOf[GroupMetadataKey]) {
+        val groupId = formattedKey.asInstanceOf[GroupMetadataKey].key
         val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value)).toString
         output.write(groupId.getBytes)
         output.write("::".getBytes)
@@ -991,7 +996,7 @@ case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey {
   override def toString = key.toString
 }
 
-case class GroupKey(version: Short, key: String) extends BaseKey {
+case class GroupMetadataKey(version: Short, key: String) extends BaseKey {
 
   override def toString = key
 }
