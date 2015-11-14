@@ -172,8 +172,8 @@ object ConsumerGroupCommand {
                               channelSocketTimeoutMs: Int,
                               channelRetryBackoffMs: Int) {
       val topicPartitions = getTopicPartitions(topic)
+      val groupDirs = new ZKGroupTopicDirs(group, topic)
       val ownerByTopicPartition = topicPartitions.flatMap { topicPartition =>
-        val groupDirs = new ZKGroupTopicDirs(group, topic)
         zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/" + topicPartition.partition)._1.map { owner =>
           topicPartition -> owner
         }
@@ -307,7 +307,9 @@ object ConsumerGroupCommand {
   class KafkaConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
 
     private val adminClient = createAdminClient()
-    private val consumer = createNewConsumer()
+
+    // `consumer` is only needed for `describe`, so we instantiate it lazily
+    private var consumer: KafkaConsumer[String, String] = null
 
     def list() {
       adminClient.listAllConsumerGroupsFlattened().foreach(x => println(x.groupId))
@@ -317,7 +319,8 @@ object ConsumerGroupCommand {
       val consumerSummaries = adminClient.describeConsumerGroup(group)
       if (consumerSummaries.isEmpty)
         println(s"Consumer group, ${group}, does not exist or is rebalancing.")
-      else
+      else {
+        val consumer = getConsumer
         consumerSummaries.foreach { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
           val partitionOffsets = topicPartitions.flatMap { topicPartition =>
@@ -328,9 +331,11 @@ object ConsumerGroupCommand {
           describeTopicPartition(group, topicPartitions, partitionOffsets.get,
             _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
         }
+      }
     }
 
     protected def getLogEndOffset(topic: String, partition: Int): LogEndOffsetResult = {
+      val consumer = getConsumer()
       val topicPartition = new TopicPartition(topic, partition)
       consumer.assign(List(topicPartition).asJava)
       consumer.seekToEnd(topicPartition)
@@ -340,11 +345,17 @@ object ConsumerGroupCommand {
 
     def close() {
       adminClient.close()
-      consumer.close()
+      if (consumer != null) consumer.close()
     }
 
     private def createAdminClient(): AdminClient =
       AdminClient.createSimplePlaintext(opts.options.valueOf(opts.bootstrapServerOpt))
+
+    private def getConsumer() = {
+      if (consumer == null)
+        consumer = createNewConsumer()
+      consumer
+    }
 
     private def createNewConsumer(): KafkaConsumer[String, String] = {
       val properties = new Properties()
