@@ -21,6 +21,8 @@ package kafka.utils
 import java.lang.management.ManagementFactory
 import javax.management.ObjectName
 
+import scala.util.control.NonFatal
+
 /**
  * If mx4j-tools is in the classpath call maybeLoad to load the HTTP interface of mx4j.
  *
@@ -64,7 +66,7 @@ object Mx4jLoader extends Logging {
 	  case e: ClassNotFoundException => {
         info("Will not load MX4J, mx4j-tools.jar is not in the classpath");
       }
-      case e: Throwable => {
+      case NonFatal(e) => {
         warn("Could not start register mbean in JMX", e);
       }
     }

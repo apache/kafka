@@ -28,6 +28,8 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, Set}
 import java.util.concurrent.atomic._
 import kafka.api.{TopicMetadata, ProducerRequest}
 
+import scala.util.control.NonFatal
+
 class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val partitioner: Partitioner,
                                private val encoder: Encoder[V],
@@ -112,7 +114,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
             })
           }
         } catch {
-          case t: Throwable => error("Failed to send messages", t)
+          case NonFatal(t) => error("Failed to send messages", t)
         }
         failedProduceRequests
       case None => // all produce requests failed
@@ -129,7 +131,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         else
           serializedMessages += new KeyedMessage[K,Message](topic = e.topic, key = e.key, partKey = e.partKey, message = new Message(bytes = encoder.toBytes(e.message)))
       } catch {
-        case t: Throwable =>
+        case NonFatal(t) =>
           producerStats.serializationErrorRate.mark()
           if (isSync) {
             throw t
@@ -178,7 +180,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     }catch {    // Swallow recoverable exceptions and return None so that they can be retried.
       case ute: UnknownTopicOrPartitionException => warn("Failed to collate messages by topic,partition due to: " + ute.getMessage); None
       case lnae: LeaderNotAvailableException => warn("Failed to collate messages by topic,partition due to: " + lnae.getMessage); None
-      case oe: Throwable => error("Failed to collate messages by topic, partition due to: " + oe.getMessage); None
+      case NonFatal(oe) => error("Failed to collate messages by topic, partition due to: " + oe.getMessage); None
     }
   }
 
@@ -280,7 +282,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           Seq.empty[TopicAndPartition]
         }
       } catch {
-        case t: Throwable =>
+        case NonFatal(t) =>
           warn("Failed to send producer request with correlation id %d to broker %d with data for partitions %s"
             .format(currentCorrelationId, brokerId, messagesPerTopic.map(_._1).mkString(",")), t)
           messagesPerTopic.keys.toSeq

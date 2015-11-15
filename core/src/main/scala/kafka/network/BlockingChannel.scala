@@ -22,6 +22,8 @@ import java.nio.channels._
 import kafka.utils.{nonthreadsafe, Logging}
 import kafka.api.RequestOrResponse
 
+import scala.util.control.NonFatal
+
 
 object BlockingChannel{
   val UseDefaultBufferSize = -1
@@ -72,7 +74,7 @@ class BlockingChannel( val host: String,
                          connectTimeoutMs))
 
       } catch {
-        case e: Throwable => disconnect()
+        case NonFatal(e) => disconnect()
       }
     }
   }

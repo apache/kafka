@@ -32,6 +32,8 @@ import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
 import java.util.concurrent.atomic.AtomicInteger
 
+import scala.util.control.NonFatal
+
 /**
  *  Usage:
  *  Once ConsumerFetcherManager is created, startConnections() and stopAllConnections() can be called repeatedly
@@ -81,7 +83,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           }
         }
       } catch {
-        case t: Throwable => {
+        case NonFatal(t) => {
             if (!isRunning.get())
               throw t /* If this thread is stopped, propagate this exception to kill the thread. */
             else
@@ -97,7 +99,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
             topicAndPartition -> BrokerAndInitialOffset(broker, partitionMap(topicAndPartition).getFetchOffset())}
         )
       } catch {
-        case t: Throwable => {
+        case NonFatal(t) => {
           if (!isRunning.get())
             throw t /* If this thread is stopped, propagate this exception to kill the thread. */
           else {

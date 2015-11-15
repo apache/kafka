@@ -41,6 +41,8 @@ import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Gauge
 import org.I0Itec.zkclient.ZkClient
 
+import scala.util.control.NonFatal
+
 
 /**
  * Configuration settings for in-built offset management
@@ -148,7 +150,7 @@ class OffsetManager(val config: OffsetManagerConfig,
           tombstones.size
         }
         catch {
-          case t: Throwable =>
+          case NonFatal(t) =>
             error("Failed to mark %d stale offsets for deletion in %s.".format(messages.size, appendPartition), t)
             // ignore and continue
             0
@@ -302,7 +304,7 @@ class OffsetManager(val config: OffsetManagerConfig,
         }
       }
       catch {
-        case t: Throwable =>
+        case NonFatal(t) =>
           error("Error in loading offsets from " + topicPartition, t)
       }
       finally {

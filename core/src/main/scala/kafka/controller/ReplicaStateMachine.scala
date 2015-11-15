@@ -26,6 +26,8 @@ import org.apache.log4j.Logger
 import kafka.controller.Callbacks._
 import kafka.utils.Utils._
 
+import scala.util.control.NonFatal
+
 /**
  * This class represents the state machine for replicas. It defines the states that a replica can be in, and
  * transitions to move the replica to another legal state. The different states that a replica can be in are -
@@ -114,7 +116,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         replicas.foreach(r => handleStateChange(r, targetState, callbacks))
         brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
       }catch {
-        case e: Throwable => error("Error while moving some replicas to %s state".format(targetState), e)
+        case NonFatal(e) => error("Error while moving some replicas to %s state".format(targetState), e)
       }
     }
   }
@@ -272,7 +274,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       }
     }
     catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
         stateChangeLogger.error("Controller %d epoch %d initiated state change of replica %d for partition [%s,%d] from %s to %s failed"
                                   .format(controllerId, controller.epoch, replicaId, topic, partition, currState, targetState), t)
     }
@@ -372,7 +374,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               if(deadBrokerIds.size > 0)
                 controller.onBrokerFailure(deadBrokerIds.toSeq)
             } catch {
-              case e: Throwable => error("Error while handling broker changes", e)
+              case NonFatal(e) => error("Error while handling broker changes", e)
             }
           }
         }

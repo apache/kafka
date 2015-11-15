@@ -29,6 +29,7 @@ import scala.Some
 import kafka.common.TopicAndPartition
 import kafka.api.RequestOrResponse
 import collection.Set
+import scala.util.control.NonFatal
 
 class ControllerChannelManager (private val controllerContext: ControllerContext, config: KafkaConfig) extends Logging {
   private val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
@@ -96,7 +97,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
       brokerStateInfo(brokerId).requestSendThread.shutdown()
       brokerStateInfo.remove(brokerId)
     }catch {
-      case e: Throwable => error("Error while removing broker by the controller", e)
+      case NonFatal(e) => error("Error while removing broker by the controller", e)
     }
   }
 
@@ -133,7 +134,7 @@ class RequestSendThread(val controllerId: Int,
             receive = channel.receive()
             isSendSuccessful = true
           } catch {
-            case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
+            case NonFatal(e) => // if the send was not successful, reconnect to broker and resend the message
               warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
                 request.toString, toBroker.toString()), e)
@@ -161,7 +162,7 @@ class RequestSendThread(val controllerId: Int,
         }
       }
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         error("Controller %d fails to send a request to broker %s".format(controllerId, toBroker.toString()), e)
         // If there is any socket error (eg, socket timeout), the channel is no longer usable and needs to be recreated.
         channel.disconnect()
@@ -173,7 +174,7 @@ class RequestSendThread(val controllerId: Int,
       channel.connect()
       info("Controller %d connected to %s for sending state change requests".format(controllerId, broker.toString()))
     } catch {
-      case e: Throwable => {
+      case NonFatal(e) => {
         channel.disconnect()
         error("Controller %d's connection to broker %s was unsuccessful".format(controllerId, broker.toString()), e)
       }

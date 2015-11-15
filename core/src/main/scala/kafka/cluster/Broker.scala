@@ -24,6 +24,8 @@ import java.nio.ByteBuffer
 import kafka.common.{KafkaException, BrokerNotAvailableException}
 import org.apache.kafka.common.utils.Utils._
 
+import scala.util.control.NonFatal
+
 /**
  * A Kafka broker
  */
@@ -43,7 +45,7 @@ object Broker {
           throw new BrokerNotAvailableException("Broker id %d does not exist".format(id))
       }
     } catch {
-      case t: Throwable => throw new KafkaException("Failed to parse the broker info from zookeeper: " + brokerInfoString, t)
+      case NonFatal(t) => throw new KafkaException("Failed to parse the broker info from zookeeper: " + brokerInfoString, t)
     }
   }
 

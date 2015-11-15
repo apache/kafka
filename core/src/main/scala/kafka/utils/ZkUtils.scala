@@ -34,6 +34,7 @@ import scala.Some
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 import scala.collection
+import scala.util.control.NonFatal
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -243,7 +244,7 @@ object ZkUtils extends Logging {
           storedData = readData(client, path)._1
         } catch {
           case e1: ZkNoNodeException => // the node disappeared; treat as if node existed and let caller handles this
-          case e2: Throwable => throw e2
+          case NonFatal(e2) => throw e2
         }
         if (storedData == null || storedData != data) {
           info("conflict in " + path + " data: " + data + " stored data: " + storedData)
@@ -253,7 +254,7 @@ object ZkUtils extends Logging {
           info(path + " exists with value " + data + " during connection loss; this is ok")
         }
       }
-      case e2: Throwable => throw e2
+      case NonFatal(e2) => throw e2
     }
   }
 
@@ -293,7 +294,7 @@ object ZkUtils extends Logging {
             case None => // the node disappeared; retry creating the ephemeral node immediately
           }
         }
-        case e2: Throwable => throw e2
+        case NonFatal(e2) => throw e2
       }
     }
   }
@@ -332,10 +333,10 @@ object ZkUtils extends Logging {
         } catch {
           case e: ZkNodeExistsException =>
             client.writeData(path, data)
-          case e2: Throwable => throw e2
+          case NonFatal(e2) => throw e2
         }
       }
-      case e2: Throwable => throw e2
+      case NonFatal(e2) => throw e2
     }
   }
 
@@ -401,7 +402,7 @@ object ZkUtils extends Logging {
         createParentPath(client, path)
         client.createEphemeral(path, data)
       }
-      case e2: Throwable => throw e2
+      case NonFatal(e2) => throw e2
     }
   }
 
@@ -413,7 +414,7 @@ object ZkUtils extends Logging {
         // this can happen during a connection loss event, return normally
         info(path + " deleted during connection loss; this is ok")
         false
-      case e2: Throwable => throw e2
+      case NonFatal(e2) => throw e2
     }
   }
 
@@ -424,7 +425,7 @@ object ZkUtils extends Logging {
       case e: ZkNoNodeException =>
         // this can happen during a connection loss event, return normally
         info(path + " deleted during connection loss; this is ok")
-      case e2: Throwable => throw e2
+      case NonFatal(e2) => throw e2
     }
   }
 
@@ -434,7 +435,7 @@ object ZkUtils extends Logging {
       zk.deleteRecursive(dir)
       zk.close()
     } catch {
-      case _: Throwable => // swallow
+      case NonFatal(_) => // swallow
     }
   }
 
@@ -451,7 +452,7 @@ object ZkUtils extends Logging {
                       } catch {
                         case e: ZkNoNodeException =>
                           (None, stat)
-                        case e2: Throwable => throw e2
+                        case NonFatal(e2) => throw e2
                       }
     dataAndStat
   }
@@ -469,7 +470,7 @@ object ZkUtils extends Logging {
       client.getChildren(path)
     } catch {
       case e: ZkNoNodeException => return Nil
-      case e2: Throwable => throw e2
+      case NonFatal(e2) => throw e2
     }
   }
 
@@ -631,7 +632,7 @@ object ZkUtils extends Logging {
           case nne: ZkNoNodeException =>
             ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)
             debug("Created path %s with %s for partition reassignment".format(zkPath, jsonData))
-          case e2: Throwable => throw new AdminOperationException(e2.toString)
+          case NonFatal(e2) => throw new AdminOperationException(e2.toString)
         }
     }
   }

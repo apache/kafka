@@ -39,6 +39,8 @@ import scala.Some
 import org.I0Itec.zkclient.ZkClient
 import com.yammer.metrics.core.Gauge
 
+import scala.util.control.NonFatal
+
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
 }
@@ -267,7 +269,7 @@ class ReplicaManager(val config: KafkaConfig,
               warn("Fetch request with correlation id %d from client %s on partition [%s,%d] failed due to %s".format(
                 fetchRequest.correlationId, fetchRequest.clientId, topic, partition, nle.getMessage))
               new PartitionDataAndOffset(new FetchResponsePartitionData(ErrorMapping.codeFor(nle.getClass.asInstanceOf[Class[Throwable]]), -1L, MessageSet.Empty), LogOffsetMetadata.UnknownOffsetMetadata)
-            case t: Throwable =>
+            case NonFatal(t) =>
               BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
               BrokerTopicStats.getBrokerAllTopicsStats.failedFetchRequestRate.mark()
               error("Error when processing fetch request for partition [%s,%d] offset %d from %s with correlation id %d. Possible cause: %s"
@@ -427,7 +429,7 @@ class ReplicaManager(val config: KafkaConfig,
         partition.makeLeader(controllerId, partitionStateInfo, correlationId, offsetManager)}
 
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         partitionState.foreach { state =>
           val errorMsg = ("Error on broker %d while processing LeaderAndIsr request correlationId %d received from controller %d" +
             " epoch %d for partition %s").format(localBrokerId, correlationId, controllerId, epoch,
@@ -541,7 +543,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         val errorMsg = ("Error on broker %d while processing LeaderAndIsr request with correlationId %d received from controller %d " +
           "epoch %d").format(localBrokerId, correlationId, controllerId, epoch)
         stateChangeLogger.error(errorMsg, e)

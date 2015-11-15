@@ -21,6 +21,8 @@ import java.nio._
 import java.nio.channels._
 import kafka.utils._
 
+import scala.util.control.NonFatal
+
 /**
  * Represents a communication between the client and server
  * 
@@ -82,7 +84,7 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
       case e: OutOfMemoryError =>
         error("OOME with size " + size, e)
         throw e
-      case e2: Throwable =>
+      case NonFatal(e2) =>
         throw e2
     }
     buffer

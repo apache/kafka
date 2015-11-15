@@ -26,6 +26,8 @@ import kafka.common.{ErrorMapping, ReplicaNotAvailableException, LeaderNotAvaila
 import kafka.common.TopicAndPartition
 import kafka.controller.KafkaController.StateChangeLogger
 
+import scala.util.control.NonFatal
+
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
@@ -67,7 +69,7 @@ private[server] class MetadataCache {
                     isr.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
                 new PartitionMetadata(partitionId, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
               } catch {
-                case e: Throwable =>
+                case NonFatal(e) =>
                   debug("Error while fetching metadata for %s. Possible cause: %s".format(topicPartition, e.getMessage))
                   new PartitionMetadata(partitionId, leaderInfo, replicaInfo, isrInfo,
                     ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))

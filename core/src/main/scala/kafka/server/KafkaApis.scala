@@ -31,6 +31,8 @@ import scala.collection._
 
 import org.I0Itec.zkclient.ZkClient
 
+import scala.util.control.NonFatal
+
 /**
  * Logic to handle the various Kafka requests
  */
@@ -70,7 +72,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         request.requestObj.handleError(e, requestChannel, request)
         error("error when handling request %s".format(request.requestObj), e)
     } finally
@@ -94,7 +96,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               (topicAndPartition, ErrorMapping.NoError)
             }
           } catch {
-            case e: Throwable => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+            case NonFatal(e) => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
           }
         }
       }
@@ -328,7 +330,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
             producerRequest.correlationId, producerRequest.clientId, topicAndPartition, nere.getMessage))
           new ProduceResult(topicAndPartition, nere)
-        case e: Throwable =>
+        case NonFatal(e) =>
           BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicsStats.failedProduceRequestRate.mark()
           error("Error processing ProducerRequest with correlation id %d from client %s on partition %s"
@@ -434,7 +436,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           warn("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
                offsetRequest.correlationId, offsetRequest.clientId, topicAndPartition,nle.getMessage))
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(nle.getClass.asInstanceOf[Class[Throwable]]), Nil) )
-        case e: Throwable =>
+        case NonFatal(e) =>
           warn("Error while responding to offset request", e)
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), Nil) )
       }
@@ -567,7 +569,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               ErrorMapping.UnknownTopicOrPartitionCode))
           }
         } catch {
-          case e: Throwable =>
+          case NonFatal(e) =>
             (t, OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata,
               ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])))
         }

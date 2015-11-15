@@ -20,6 +20,8 @@ package kafka.server
 import kafka.common.AppInfo
 import kafka.utils.Logging
 
+import scala.util.control.NonFatal
+
 
 class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
   private val server = new KafkaServer(serverConfig)
@@ -30,7 +32,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
       AppInfo.registerInfo()
     }
     catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         fatal("Fatal error during KafkaServerStartable startup. Prepare to shutdown", e)
         // KafkaServer already calls shutdown() internally, so this is purely for logging & the exit code
         System.exit(1)
@@ -42,7 +44,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
       server.shutdown()
     }
     catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         fatal("Fatal error during KafkaServerStable shutdown. Prepare to halt", e)
         System.exit(1)
     }

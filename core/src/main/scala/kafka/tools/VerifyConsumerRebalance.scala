@@ -21,6 +21,8 @@ import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, ZKStringSerializer, CommandLineUtils}
 
+import scala.util.control.NonFatal
+
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
     val parser = new OptionParser()
@@ -59,7 +61,7 @@ object VerifyConsumerRebalance extends Logging {
         else
           println("Rebalance operation failed !")
       } catch {
-        case e2: Throwable => error("Error while verifying current rebalancing operation", e2)
+        case NonFatal(e2) => error("Error while verifying current rebalancing operation", e2)
       }
     }
     finally {

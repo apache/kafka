@@ -31,6 +31,8 @@ import kafka.consumer.Whitelist
 import kafka.server.OffsetManager
 import org.apache.kafka.common.utils.Utils.formatAddress
 
+import scala.util.control.NonFatal
+
 
 object TopicCommand {
 
@@ -62,7 +64,7 @@ object TopicCommand {
       else if(opts.options.has(opts.deleteOpt))
         deleteTopic(zkClient, opts)
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         println("Error while executing topic command " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
@@ -146,7 +148,7 @@ object TopicCommand {
       } catch {
         case e: ZkNodeExistsException =>
           println("Topic %s is already marked for deletion.".format(topic))
-        case e2: Throwable =>
+        case NonFatal(e2) =>
           throw new AdminOperationException("Error while deleting topic %s".format(topic))
       }    
     }

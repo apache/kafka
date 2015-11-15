@@ -31,6 +31,8 @@ import kafka.api.PartitionOffsetRequestInfo
 import scala.Some
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 
+import scala.util.control.NonFatal
+
 object ConsumerOffsetChecker extends Logging {
 
   private val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
@@ -54,7 +56,7 @@ object ConsumerOffsetChecker extends Logging {
           throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid))
       }
     } catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
         println("Could not parse broker info due to " + t.getCause)
         None
     }
@@ -204,7 +206,7 @@ object ConsumerOffsetChecker extends Logging {
         }
     }
     catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
         println("Exiting due to: %s.".format(t.getMessage))
     }
     finally {

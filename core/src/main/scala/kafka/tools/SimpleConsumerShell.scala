@@ -26,6 +26,8 @@ import kafka.cluster.Broker
 import scala.collection.JavaConversions._
 import kafka.common.TopicAndPartition
 
+import scala.util.control.NonFatal
+
 /**
  * Command line program to dump out messages to standard out using the simple consumer
  */
@@ -173,7 +175,7 @@ object SimpleConsumerShell extends Logging {
         startingOffset = simpleConsumer.earliestOrLatestOffset(TopicAndPartition(topic, partitionId), startingOffset,
                                                                Request.DebuggingConsumerId)
       } catch {
-        case t: Throwable =>
+        case NonFatal(t) =>
           System.err.println("Error in getting earliest or latest offset due to: " + Utils.stackTrace(t))
           System.exit(1)
       } finally {
@@ -216,7 +218,7 @@ object SimpleConsumerShell extends Logging {
                 formatter.writeTo(key, if(message.isNull) null else Utils.readBytes(message.payload), System.out)
                 numMessagesConsumed += 1
               } catch {
-                case e: Throwable =>
+                case NonFatal(e) =>
                   if (skipMessageOnError)
                     error("Error processing message, skipping this message: ", e)
                   else
@@ -232,7 +234,7 @@ object SimpleConsumerShell extends Logging {
             }
           }
         } catch {
-          case e: Throwable =>
+          case NonFatal(e) =>
             error("Error consuming topic, partition, replica (%s, %d, %d) with offset [%d]".format(topic, partitionId, replicaId, offset), e)
         }finally {
           info("Consumed " + numMessagesConsumed + " messages")

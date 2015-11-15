@@ -22,6 +22,8 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{Json, ZKGroupDirs, ZkUtils, Logging, Utils}
 import kafka.common.KafkaException
 
+import scala.util.control.NonFatal
+
 private[kafka] trait TopicCount {
 
   def getConsumerThreadIdsPerTopic: Map[String, Set[ConsumerThreadId]]
@@ -76,7 +78,7 @@ private[kafka] object TopicCount extends Logging {
         case None => throw new KafkaException("error constructing TopicCount : " + topicCountString)
       }
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         error("error parsing consumer json string " + topicCountString, e)
         throw e
     }

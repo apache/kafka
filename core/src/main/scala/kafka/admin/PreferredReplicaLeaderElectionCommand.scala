@@ -23,6 +23,7 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 import collection._
 import mutable.ListBuffer
+import scala.util.control.NonFatal
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
@@ -64,7 +65,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
       println("Successfully started preferred replica election for partitions %s".format(partitionsForPreferredReplicaElection))
     } catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         println("Failed to start preferred replica election")
         println(Utils.stackTrace(e))
     } finally {
@@ -109,7 +110,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
           PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(ZkUtils.readData(zkClient, zkPath)._1)
         throw new AdminOperationException("Preferred replica leader election currently in progress for " +
           "%s. Aborting operation".format(partitionsUndergoingPreferredReplicaElection))
-      case e2: Throwable => throw new AdminOperationException(e2.toString)
+      case NonFatal(e2) => throw new AdminOperationException(e2.toString)
     }
   }
 }
@@ -121,7 +122,7 @@ class PreferredReplicaLeaderElectionCommand(zkClient: ZkClient, partitions: scal
       val validPartitions = partitions.filter(p => validatePartition(zkClient, p.topic, p.partition))
       PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, validPartitions)
     } catch {
-      case e: Throwable => throw new AdminCommandFailedException("Admin command failed", e)
+      case NonFatal(e) => throw new AdminCommandFailedException("Admin command failed", e)
     }
   }
 

@@ -30,6 +30,8 @@ import java.util.Properties
 import kafka.common.KafkaException
 import kafka.common.KafkaStorageException
 
+import scala.util.control.NonFatal
+
 
 /**
  * General helper functions!
@@ -171,7 +173,7 @@ object Utils extends Logging {
     try {
       action
     } catch {
-      case e: Throwable => log(e.getMessage(), e)
+      case NonFatal(e) => log(e.getMessage(), e)
     }
   }
   

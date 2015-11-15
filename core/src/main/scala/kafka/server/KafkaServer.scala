@@ -34,6 +34,8 @@ import kafka.network.{Receive, BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 
+import scala.util.control.NonFatal
+
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
@@ -129,7 +131,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       info("started")
     }
     catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         fatal("Fatal error during KafkaServer startup. Prepare to shutdown", e)
         shutdown()
         throw e
@@ -293,7 +295,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       }
     }
     catch {
-      case e: Throwable =>
+      case NonFatal(e) =>
         fatal("Fatal error during KafkaServer shutdown.", e)
         throw e
     }

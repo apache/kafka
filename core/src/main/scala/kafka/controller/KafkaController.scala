@@ -41,6 +41,8 @@ import kafka.server._
 import scala.Some
 import kafka.common.TopicAndPartition
 
+import scala.util.control.NonFatal
+
 class ControllerContext(val zkClient: ZkClient,
                         val zkSessionTimeout: Int) {
   var controllerChannelManager: ControllerChannelManager = null
@@ -138,14 +140,14 @@ object KafkaController extends Logging {
         case None => throw new KafkaException("Failed to parse the controller info json [%s].".format(controllerInfoString))
       }
     } catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
         // It may be due to an incompatible controller register version
         warn("Failed to parse the controller info as json. "
           + "Probably this controller is still using the old format [%s] to store the broker id in zookeeper".format(controllerInfoString))
         try {
           return controllerInfoString.toInt
         } catch {
-          case t: Throwable => throw new KafkaException("Failed to parse the controller info: " + controllerInfoString + ". This is neither the new or the old format.", t)
+          case NonFatal(t) => throw new KafkaException("Failed to parse the controller info: " + controllerInfoString + ". This is neither the new or the old format.", t)
         }
     }
   }
@@ -617,7 +619,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
           .format(topicAndPartition))
       }
     } catch {
-      case e: Throwable => error("Error completing reassignment of partition %s".format(topicAndPartition), e)
+      case NonFatal(e) => error("Error completing reassignment of partition %s".format(topicAndPartition), e)
       // remove the partition from the admin path to unblock the admin client
       removePartitionFromReassignedPartitions(topicAndPartition)
     }
@@ -630,7 +632,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       deleteTopicManager.markTopicIneligibleForDeletion(partitions.map(_.topic))
       partitionStateMachine.handleStateChanges(partitions, OnlinePartition, preferredReplicaPartitionLeaderSelector)
     } catch {
-      case e: Throwable => error("Error completing preferred replica leader election for partitions %s".format(partitions.mkString(",")), e)
+      case NonFatal(e) => error("Error completing preferred replica leader election for partitions %s".format(partitions.mkString(",")), e)
     } finally {
       removePartitionsFromPreferredReplicaElection(partitions, isTriggeredByAutoRebalance)
       deleteTopicManager.resumeDeletionForTopics(partitions.map(_.topic))
@@ -691,9 +693,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
         } catch {
           case e: ZkNodeExistsException => throw new ControllerMovedException("Controller moved to another broker. " +
             "Aborting controller startup procedure")
-          case oe: Throwable => error("Error while incrementing controller epoch", oe)
+          case NonFatal(oe) => error("Error while incrementing controller epoch", oe)
         }
-      case oe: Throwable => error("Error while incrementing controller epoch", oe)
+      case NonFatal(oe) => error("Error while incrementing controller epoch", oe)
 
     }
     info("Controller %d incremented epoch to %d".format(config.brokerId, controllerContext.epoch))
@@ -944,7 +946,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionMap))
     } catch {
       case e: ZkNoNodeException => throw new IllegalStateException("Topic %s doesn't exist".format(topicAndPartition.topic))
-      case e2: Throwable => throw new KafkaException(e2.toString)
+      case NonFatal(e2) => throw new KafkaException(e2.toString)
     }
   }
 
@@ -1259,7 +1261,7 @@ class ReassignedPartitionsIsrChangeListener(controller: KafkaController, topic: 
           case None =>
         }
       } catch {
-        case e: Throwable => error("Error while handling partition reassignment", e)
+        case NonFatal(e) => error("Error while handling partition reassignment", e)
       }
     }
   }

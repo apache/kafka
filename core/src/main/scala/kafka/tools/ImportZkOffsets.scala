@@ -23,6 +23,8 @@ import joptsimple._
 import kafka.utils.{Logging, ZkUtils,ZKStringSerializer, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
 
+import scala.util.control.NonFatal
+
 
 /**
  *  A utility that updates the offset of broker partitions in ZK.
@@ -99,7 +101,7 @@ object ImportZkOffsets extends Logging {
       try {
         ZkUtils.updatePersistentPath(zkClient, partition, offset.toString)
       } catch {
-        case e: Throwable => e.printStackTrace()
+        case NonFatal(e) => e.printStackTrace()
       }
     }
   }

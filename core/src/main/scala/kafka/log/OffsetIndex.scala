@@ -27,6 +27,8 @@ import kafka.utils._
 import kafka.utils.Utils.inLock
 import kafka.common.InvalidOffsetException
 
+import scala.util.control.NonFatal
+
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
@@ -300,7 +302,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
       if(m.isInstanceOf[sun.nio.ch.DirectBuffer])
         (m.asInstanceOf[sun.nio.ch.DirectBuffer]).cleaner().clean()
     } catch {
-      case t: Throwable => warn("Error when freeing index buffer", t)
+      case NonFatal(t) => warn("Error when freeing index buffer", t)
     }
   }
   

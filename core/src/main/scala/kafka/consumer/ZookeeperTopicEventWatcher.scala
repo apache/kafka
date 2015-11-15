@@ -22,6 +22,8 @@ import kafka.utils.{ZkUtils, ZKStringSerializer, Logging}
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
+import scala.util.control.NonFatal
+
 class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
     val eventHandler: TopicEventHandler[String]) extends Logging {
 
@@ -70,7 +72,7 @@ class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
           }
         }
         catch {
-          case e: Throwable =>
+          case NonFatal(e) =>
             error("error in handling child changes", e)
         }
       }
