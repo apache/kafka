@@ -89,9 +89,7 @@ object ConsumerGroupCommand {
     def list(): Unit
 
     def describe() {
-      val group = opts.options.valueOf(opts.groupOpt)
-      println("GROUP, TOPIC, PARTITION, CURRENT OFFSET, LOG END OFFSET, LAG, OWNER")
-      describeGroup(group)
+      describeGroup(opts.options.valueOf(opts.groupOpt))
     }
 
     def close(): Unit
@@ -112,6 +110,10 @@ object ConsumerGroupCommand {
           describePartition(group, topicPartition.topic, topicPartition.partition, getPartitionOffset(topicPartition),
             getOwner(topicPartition))
         }
+    }
+
+    protected def printDescribeHeader() {
+      println("GROUP, TOPIC, PARTITION, CURRENT OFFSET, LOG END OFFSET, LAG, OWNER")
     }
 
     private def describePartition(group: String,
@@ -164,6 +166,7 @@ object ConsumerGroupCommand {
       val topics = zkUtils.getTopicsByConsumerGroup(group)
       if (topics.isEmpty)
         println("No topic available for consumer group provided")
+      printDescribeHeader()
       topics.foreach(topic => describeTopic(group, topic, channelSocketTimeoutMs, channelRetryBackoffMs))
     }
 
@@ -318,9 +321,10 @@ object ConsumerGroupCommand {
     protected def describeGroup(group: String) {
       val consumerSummaries = adminClient.describeConsumerGroup(group)
       if (consumerSummaries.isEmpty)
-        println(s"Consumer group, ${group}, does not exist or is rebalancing.")
+        println(s"Consumer group `${group}` does not exist or is rebalancing.")
       else {
-        val consumer = getConsumer
+        val consumer = getConsumer()
+        printDescribeHeader()
         consumerSummaries.foreach { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
           val partitionOffsets = topicPartitions.flatMap { topicPartition =>
@@ -431,12 +435,23 @@ object ConsumerGroupCommand {
       // check required args
       if (options.has(newConsumerOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
+
+        if (options.has(zkConnectOpt))
+          CommandLineUtils.printUsageAndDie(parser, s"Option $zkConnectOpt is not valid with $newConsumerOpt")
+
         if (options.has(deleteOpt))
-          CommandLineUtils.printUsageAndDie(parser, ("Option %s does not work with %s. Note that there's no need to " +
-            "delete group metadata for the new consumer as it is automatically deleted when the last member " +
-            "leaves").format(deleteOpt, newConsumerOpt))
-      } else
+          CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is not valid with $newConsumerOpt. Note that " +
+            "there's no need to delete group metadata for the new consumer as it is automatically deleted when the last " +
+            "member leaves")
+
+      } else {
         CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+
+        if (options.has(bootstrapServerOpt))
+          CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is only valid with $newConsumerOpt")
+
+      }
+
       if (options.has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
