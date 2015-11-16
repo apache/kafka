@@ -54,6 +54,10 @@ public class StreamingConfig extends AbstractConfig {
     public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
     private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
 
+    /** <code>num.stream.threads</code> */
+    public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
+    private static final String NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas for each task.";
+
     /** <code>buffered.records.per.partition</code> */
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "The maximum number of records to buffer per partition.";
@@ -136,6 +140,11 @@ public class StreamingConfig extends AbstractConfig {
                                         1,
                                         Importance.LOW,
                                         NUM_STREAM_THREADS_DOC)
+                                .define(NUM_STANDBY_REPLICAS_CONFIG,
+                                        Type.INT,
+                                        0,
+                                        Importance.LOW,
+                                        NUM_STANDBY_REPLICAS_DOC)
                                 .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                                         Type.INT,
                                         1000,
@@ -214,6 +223,7 @@ public class StreamingConfig extends AbstractConfig {
 
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread) {
         Map<String, Object> props = getConsumerConfigs();
+        props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
         props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
         return props;

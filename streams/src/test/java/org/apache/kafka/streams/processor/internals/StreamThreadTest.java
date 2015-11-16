@@ -167,7 +167,7 @@ public class StreamThreadTest {
             }
         };
 
-        initPartitionGrouper(thread);
+        initPartitionGrouper(config, thread);
 
         ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
 
@@ -292,7 +292,7 @@ public class StreamThreadTest {
                 }
             };
 
-            initPartitionGrouper(thread);
+            initPartitionGrouper(config, thread);
 
             ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
 
@@ -414,7 +414,7 @@ public class StreamThreadTest {
                 }
             };
 
-            initPartitionGrouper(thread);
+            initPartitionGrouper(config, thread);
 
             ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
 
@@ -467,13 +467,11 @@ public class StreamThreadTest {
         }
     }
 
-    private void initPartitionGrouper(StreamThread thread) {
+    private void initPartitionGrouper(StreamingConfig config, StreamThread thread) {
 
         KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
 
-        partitionAssignor.configure(
-                Collections.singletonMap(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, thread)
-        );
+        partitionAssignor.configure(config.getConsumerConfigs(thread));
 
         Map<String, PartitionAssignor.Assignment> assignments =
                 partitionAssignor.assign(metadata, Collections.singletonMap("client", subscription));
