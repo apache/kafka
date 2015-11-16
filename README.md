@@ -60,7 +60,7 @@ The release file can be found inside ./core/build/distributions/.
     ./gradlew -PscalaVersion=2.11.7 releaseTarGz
 
 ### Running a task for a specific project ###
-This is for 'core', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'examples' and 'clients'
+This is for 'core', 'examples' and 'clients'
     ./gradlew core:jar
     ./gradlew core:test
 

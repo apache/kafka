@@ -126,7 +126,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Unique identifier for the class of protocols implements (e.g. "consumer" or "copycat").
+     * Unique identifier for the class of protocols implements (e.g. "consumer" or "connect").
      * @return Non-null protocol type name
      */
     protected abstract String protocolType();
@@ -539,17 +539,20 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     @Override
     public void close() {
-        maybeLeaveGroup(true);
+        // we do not need to re-enable wakeups since we are closing already
+        client.disableWakeups();
+        maybeLeaveGroup();
     }
 
     /**
      * Leave the current group and reset local generation/memberId.
      */
-    public void maybeLeaveGroup(boolean awaitResponse) {
+    public void maybeLeaveGroup() {
+        client.unschedule(heartbeatTask);
         if (!coordinatorUnknown() && generation > 0) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
-            sendLeaveGroupRequest(awaitResponse);
+            sendLeaveGroupRequest();
         }
 
         this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
@@ -557,7 +560,7 @@ public abstract class AbstractCoordinator implements Closeable {
         rejoinNeeded = true;
     }
 
-    private void sendLeaveGroupRequest(boolean awaitResponse) {
+    private void sendLeaveGroupRequest() {
         LeaveGroupRequest request = new LeaveGroupRequest(groupId, memberId);
         RequestFuture<Void> future = client.send(coordinator, ApiKeys.LEAVE_GROUP, request)
                 .compose(new LeaveGroupResponseHandler());
@@ -572,10 +575,7 @@ public abstract class AbstractCoordinator implements Closeable {
             }
         });
 
-        if (awaitResponse)
-            client.poll(future);
-        else
-            client.poll(future, 0);
+        client.poll(future, 0);
     }
 
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {

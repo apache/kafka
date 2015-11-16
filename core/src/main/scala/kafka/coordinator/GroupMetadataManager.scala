@@ -46,6 +46,10 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.core.Gauge
 
+
+case class DelayedStore(messageSet: Map[TopicAndPartition, MessageSet],
+                        callback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
+
 class GroupMetadataManager(val brokerId: Int,
                            val config: OffsetConfig,
                            replicaManager: ReplicaManager,
@@ -58,7 +62,7 @@ class GroupMetadataManager(val brokerId: Int,
   /* group metadata cache */
   private val groupsCache = new Pool[String, GroupMetadata]
 
-  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE the group lock if needed */
+  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE offsetExpireLock and the group lock if needed */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
   /* partitions of consumer groups that are assigned, using the same loading partition lock */
@@ -66,9 +70,6 @@ class GroupMetadataManager(val brokerId: Int,
 
   /* lock for expiring stale offsets, it should be always called BEFORE the group lock if needed */
   private val offsetExpireLock = new ReentrantReadWriteLock()
-
-  /* lock for removing offsets of a range partition, it should be always called BEFORE the group lock if needed */
-  private val offsetRemoveLock = new ReentrantReadWriteLock()
 
   /* shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -116,12 +117,19 @@ class GroupMetadataManager(val brokerId: Int,
    * Add a group or get the group associated with the given groupId if it already exists
    */
   def addGroup(groupId: String, protocolType: String): GroupMetadata = {
-    addGroup(groupId, new GroupMetadata(groupId, protocolType))
+    val newGroup = new GroupMetadata(groupId, protocolType)
+    val currentGroup = groupsCache.putIfNotExists(groupId, newGroup)
+    if (currentGroup != null)
+      currentGroup
+    else
+      newGroup
   }
 
-  private def addGroup(groupId: String, group: GroupMetadata): GroupMetadata = {
-    groupsCache.putIfNotExists(groupId, group)
-    groupsCache.get(groupId)
+  /**
+   * Update the current cached metadata for the group with the given groupId or add the group if there is none.
+   */
+  private def updateGroup(groupId: String, group: GroupMetadata) {
+    groupsCache.put(groupId, group)
   }
 
   /**
@@ -161,9 +169,9 @@ class GroupMetadataManager(val brokerId: Int,
     }
   }
 
-  def storeGroup(group: GroupMetadata,
-                 groupAssignment: Map[String, Array[Byte]],
-                 responseCallback: Short => Unit) {
+  def prepareStoreGroup(group: GroupMetadata,
+                        groupAssignment: Map[String, Array[Byte]],
+                        responseCallback: Short => Unit): DelayedStore = {
     // construct the message to append
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
@@ -174,6 +182,8 @@ class GroupMetadataManager(val brokerId: Int,
 
     val groupMetadataMessageSet = Map(groupMetadataPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, message))
+
+    val generationId = group.generationId
 
     // set the callback function to insert the created group into cache after log append completed
     def putCacheCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
@@ -189,7 +199,7 @@ class GroupMetadataManager(val brokerId: Int,
       var responseCode = Errors.NONE.code
       if (status.error != ErrorMapping.NoError) {
         debug("Metadata from group %s with generation %d failed when appending to log due to %s"
-          .format(group.groupId, group.generationId, ErrorMapping.exceptionNameFor(status.error)))
+          .format(group.groupId, generationId, ErrorMapping.exceptionNameFor(status.error)))
 
         // transform the log append error code to the corresponding the commit status error code
         responseCode = if (status.error == ErrorMapping.UnknownTopicOrPartitionCode) {
@@ -201,13 +211,13 @@ class GroupMetadataManager(val brokerId: Int,
           || status.error == ErrorMapping.InvalidFetchSizeCode) {
 
           error("Appending metadata message for group %s generation %d failed due to %s, returning UNKNOWN error code to the client"
-            .format(group.groupId, group.generationId, ErrorMapping.exceptionNameFor(status.error)))
+            .format(group.groupId, generationId, ErrorMapping.exceptionNameFor(status.error)))
 
           Errors.UNKNOWN.code
         } else {
 
           error("Appending metadata message for group %s generation %d failed due to unexpected error: %s"
-            .format(group.groupId, group.generationId, status.error))
+            .format(group.groupId, generationId, status.error))
 
           status.error
         }
@@ -216,25 +226,27 @@ class GroupMetadataManager(val brokerId: Int,
       responseCallback(responseCode)
     }
 
+    DelayedStore(groupMetadataMessageSet, putCacheCallback)
+  }
+
+  def store(delayedAppend: DelayedStore) {
     // call replica manager to append the group message
     replicaManager.appendMessages(
       config.offsetCommitTimeoutMs.toLong,
       config.offsetCommitRequiredAcks,
       true, // allow appending to internal offset topic
-      groupMetadataMessageSet,
-      putCacheCallback)
+      delayedAppend.messageSet,
+      delayedAppend.callback)
   }
-
-
 
   /**
    * Store offsets by appending it to the replicated log and then inserting to cache
    */
-  def storeOffsets(groupId: String,
-                   consumerId: String,
-                   generationId: Int,
-                   offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
-                   responseCallback: immutable.Map[TopicAndPartition, Short] => Unit) {
+  def prepareStoreOffsets(groupId: String,
+                          consumerId: String,
+                          generationId: Int,
+                          offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
+                          responseCallback: immutable.Map[TopicAndPartition, Short] => Unit): DelayedStore = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (topicAndPartition, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -300,13 +312,7 @@ class GroupMetadataManager(val brokerId: Int,
       responseCallback(commitStatus)
     }
 
-    // call replica manager to append the offset messages
-    replicaManager.appendMessages(
-      config.offsetCommitTimeoutMs.toLong,
-      config.offsetCommitRequiredAcks,
-      true, // allow appending to internal offset topic
-      offsetsAndMetadataMessageSet,
-      putCacheCallback)
+    DelayedStore(offsetsAndMetadataMessageSet, putCacheCallback)
   }
 
   /**
@@ -401,8 +407,18 @@ class GroupMetadataManager(val brokerId: Int,
                     // load group metadata
                     val groupId = baseKey.key.asInstanceOf[String]
                     val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, msgAndOffset.message.payload)
-
-                    addGroup(groupId, groupMetadata)
+                    if (groupMetadata != null) {
+                      trace(s"Loaded group metadata for group ${groupMetadata.groupId} with generation ${groupMetadata.generationId}")
+                      updateGroup(groupId, groupMetadata)
+                    } else {
+                      // this is a tombstone mark, we need to delete the group from cache if it exists
+                      val group = groupsCache.remove(groupId)
+                      if (group != null) {
+                        group synchronized {
+                          group.transitionTo(Dead)
+                        }
+                      }
+                    }
                   }
 
                   currOffset = msgAndOffset.nextOffset
@@ -924,12 +940,34 @@ object GroupMetadataManager {
   // (specify --formatter "kafka.coordinator.GroupMetadataManager\$OffsetsMessageFormatter" when consuming __consumer_offsets)
   class OffsetsMessageFormatter extends MessageFormatter {
     def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
-      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key)).toString
-      val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
-      output.write(formattedKey.getBytes)
-      output.write("::".getBytes)
-      output.write(formattedValue.getBytes)
-      output.write("\n".getBytes)
+      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
+
+      // only print if the message is an offset record
+      if (formattedKey.isInstanceOf[OffsetKey]) {
+        val groupTopicPartition = formattedKey.asInstanceOf[OffsetKey].toString
+        val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value)).toString
+        output.write(groupTopicPartition.getBytes)
+        output.write("::".getBytes)
+        output.write(formattedValue.getBytes)
+        output.write("\n".getBytes)
+      }
+    }
+  }
+
+  // Formatter for use with tools to read group metadata history
+  class GroupMetadataMessageFormatter extends MessageFormatter {
+    def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
+      val formattedKey = if (key == null) "NULL" else GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))
+
+      // only print if the message is a group metadata record
+      if (formattedKey.isInstanceOf[GroupKey]) {
+        val groupId = formattedKey.asInstanceOf[GroupKey].key
+        val formattedValue = if (value == null) "NULL" else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value)).toString
+        output.write(groupId.getBytes)
+        output.write("::".getBytes)
+        output.write(formattedValue.getBytes)
+        output.write("\n".getBytes)
+      }
     }
   }
 }
@@ -948,7 +986,13 @@ trait BaseKey{
   def key: Object
 }
 
-case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey
+case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey {
 
-case class GroupKey(version: Short, key: String) extends BaseKey
+  override def toString = key.toString
+}
+
+case class GroupKey(version: Short, key: String) extends BaseKey {
+
+  override def toString = key
+}
 

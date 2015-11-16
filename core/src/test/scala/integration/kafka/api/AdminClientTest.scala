@@ -105,21 +105,14 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
       !consumers(0).assignment().isEmpty
     }, "Expected non-empty assignment")
 
-    val assignment = client.describeConsumerGroup(groupId)
-    assertEquals(1, assignment.size)
-    for (partitions <- assignment.values)
-      assertEquals(Set(tp, tp2), partitions.toSet)
+    val consumerSummaries = client.describeConsumerGroup(groupId)
+    assertEquals(1, consumerSummaries.size)
+    assertEquals(Set(tp, tp2), consumerSummaries.head.assignment.toSet)
   }
 
   @Test
   def testDescribeConsumerGroupForNonExistentGroup() {
     val nonExistentGroup = "non" + groupId
-    try {
-      client.describeConsumerGroup(nonExistentGroup)
-      fail("Should have failed for non existent group.")
-    } catch {
-      case ex: IllegalArgumentException => // Pass
-      case _: Throwable => fail("Should have failed for non existent group with IllegalArgumentException.")
-    }
+    assertTrue("Expected empty ConsumerSummary list", client.describeConsumerGroup(nonExistentGroup).isEmpty)
   }
 }

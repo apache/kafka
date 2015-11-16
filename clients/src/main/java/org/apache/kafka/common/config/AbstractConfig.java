@@ -16,6 +16,7 @@ import java.util.*;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,6 +96,10 @@ public class AbstractConfig {
         return (String) get(key);
     }
 
+    public Password getPassword(String key) {
+        return (Password) get(key);
+    }
+
     public Class<?> getClass(String key) {
         return (Class<?>) get(key);
     }
@@ -105,17 +110,24 @@ public class AbstractConfig {
         return keys;
     }
 
-    public Properties unusedProperties() {
-        Set<String> unusedKeys = this.unused();
-        Properties unusedProps = new Properties();
-        for (String key : unusedKeys)
-            unusedProps.put(key, this.originals.get(key));
-        return unusedProps;
-    }
-
     public Map<String, Object> originals() {
         Map<String, Object> copy = new RecordingMap<>();
         copy.putAll(originals);
+        return copy;
+    }
+
+    /**
+     * Get all the original settings, ensuring that all values are of type String.
+     * @return the original settings
+     * @throw ClassCastException if any of the values are not strings
+     */
+    public Map<String, String> originalsStrings() {
+        Map<String, String> copy = new RecordingMap<>();
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (!(entry.getValue() instanceof String))
+                throw new ClassCastException("Non-string value found in original settings");
+            copy.put(entry.getKey(), (String) entry.getValue());
+        }
         return copy;
     }
 

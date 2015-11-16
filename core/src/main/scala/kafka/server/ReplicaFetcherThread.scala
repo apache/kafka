@@ -40,6 +40,7 @@ import scala.collection.{JavaConverters, Map, mutable}
 import JavaConverters._
 
 class ReplicaFetcherThread(name: String,
+                           fetcherId: Int,
                            sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
                            replicaMgr: ReplicaManager,
@@ -65,8 +66,9 @@ class ReplicaFetcherThread(name: String,
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
-  // we need to include the full thread id composed of the broker and the thread index
-  // as the metrics tag to avoid metric name conflicts with more than one thread to the same broker
+  // we need to include both the broker id and the fetcher id
+  // as the metrics tag to avoid metric name conflicts with
+  // more than one fetcher thread to the same broker
   private val networkClient = {
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
@@ -74,7 +76,7 @@ class ReplicaFetcherThread(name: String,
       metrics,
       time,
       "replica-fetcher",
-      Map("thread-id" -> name).asJava,
+      Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
       ChannelBuilders.create(brokerConfig.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, brokerConfig.values)
     )
@@ -165,9 +167,9 @@ class ReplicaFetcherThread(name: String,
         Runtime.getRuntime.halt(1)
       }
 
-      replicaMgr.logManager.truncateTo(Map(topicAndPartition -> leaderEndOffset))
       warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's latest offset %d"
         .format(brokerConfig.brokerId, topicAndPartition, replica.logEndOffset.messageOffset, sourceBroker.id, leaderEndOffset))
+      replicaMgr.logManager.truncateTo(Map(topicAndPartition -> leaderEndOffset))
       leaderEndOffset
     } else {
       /**

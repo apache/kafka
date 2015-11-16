@@ -33,7 +33,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{Selector => KSelector, LoginType, Mode, ChannelBuilders, InvalidReceiveException}
+import org.apache.kafka.common.network.{Selector => KSelector, LoginType, Mode, ChannelBuilders}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
@@ -417,9 +417,6 @@ private[kafka] class Processor(val id: Int,
             swallow(closeAll())
             shutdownComplete()
             throw e
-          case e: InvalidReceiveException =>
-            // Log warning and continue since Selector already closed the connection
-            warn("Connection was closed due to invalid receive. Processor will continue handling other connections")
         }
         selector.completedReceives.asScala.foreach { receive =>
           try {

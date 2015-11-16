@@ -216,18 +216,15 @@ public final class RecordAccumulator {
                 Iterator<RecordBatch> batchIterator = dq.iterator();
                 while (batchIterator.hasNext()) {
                     RecordBatch batch = batchIterator.next();
-                    Node leader = cluster.leaderFor(topicAndPartition);
-                    if (leader == null) {
-                        // check if the batch is expired
-                        if (batch.maybeExpire(requestTimeout, now, this.lingerMs)) {
-                            expiredBatches.add(batch);
-                            count++;
-                            batchIterator.remove();
-                            deallocate(batch);
-                        } else {
-                            if (!batch.inRetry()) {
-                                break;
-                            }
+                    // check if the batch is expired
+                    if (batch.maybeExpire(requestTimeout, now, this.lingerMs)) {
+                        expiredBatches.add(batch);
+                        count++;
+                        batchIterator.remove();
+                        deallocate(batch);
+                    } else {
+                        if (!batch.inRetry()) {
+                            break;
                         }
                     }
                 }

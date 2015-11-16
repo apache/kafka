@@ -369,7 +369,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have end offset specified, but tried to seek to end");
         } else {
-            throw new NoOffsetForPartitionException("No offset available");
+            throw new NoOffsetForPartitionException(tp);
         }
         seek(tp, offset);
     }

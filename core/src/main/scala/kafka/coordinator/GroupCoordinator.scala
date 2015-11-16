@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError, TopicAndPartition}
 import kafka.log.LogConfig
-import kafka.message.UncompressedCodec
+import kafka.message.{Message, UncompressedCodec}
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.protocol.Errors
@@ -254,6 +254,8 @@ class GroupCoordinator(val brokerId: Int,
                           memberId: String,
                           groupAssignment: Map[String, Array[Byte]],
                           responseCallback: SyncCallback) {
+    var delayedGroupStore: Option[DelayedStore] = None
+
     group synchronized {
       if (!group.has(memberId)) {
         responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID.code)
@@ -273,28 +275,28 @@ class GroupCoordinator(val brokerId: Int,
 
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (memberId == group.leaderId) {
+              info(s"Assignment received from leader for group ${group.groupId} for generation ${group.generationId}")
 
               // fill any missing members with an empty assignment
               val missing = group.allMembers -- groupAssignment.keySet
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
-              // persist the group metadata and upon finish transition to stable and propagate the assignment
-              groupManager.storeGroup(group, assignment, (errorCode: Short) => {
+              delayedGroupStore = Some(groupManager.prepareStoreGroup(group, assignment, (errorCode: Short) => {
                 group synchronized {
                   // another member may have joined the group while we were awaiting this callback,
-                  // so we must ensure we are still in the AwaitingSync state when it gets invoked.
-                  // if we have transitioned to another state, then we shouldn't do anything
-                  if (group.is(AwaitingSync)) {
+                  // so we must ensure we are still in the AwaitingSync state and the same generation
+                  // when it gets invoked. if we have transitioned to another state, then do nothing
+                  if (group.is(AwaitingSync) && generationId == group.generationId) {
                     if (errorCode != Errors.NONE.code) {
                       resetAndPropagateAssignmentError(group, errorCode)
                       maybePrepareRebalance(group)
-                    } else if (group.is(AwaitingSync)) {
+                    } else {
                       setAndPropagateAssignment(group, assignment)
                       group.transitionTo(Stable)
                     }
                   }
                 }
-              })
+              }))
             }
 
           case Stable =>
@@ -305,6 +307,10 @@ class GroupCoordinator(val brokerId: Int,
         }
       }
     }
+
+    // store the group metadata without holding the group lock to avoid the potential
+    // for deadlock when the callback is invoked
+    delayedGroupStore.foreach(groupManager.store)
   }
 
   def handleLeaveGroup(groupId: String, consumerId: String, responseCallback: Short => Unit) {
@@ -383,6 +389,8 @@ class GroupCoordinator(val brokerId: Int,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
                           responseCallback: immutable.Map[TopicAndPartition, Short] => Unit) {
+    var delayedOffsetStore: Option[DelayedStore] = None
+
     if (!isActive.get) {
       responseCallback(offsetMetadata.mapValues(_ => Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code))
     } else if (!isCoordinatorForGroup(groupId)) {
@@ -394,7 +402,8 @@ class GroupCoordinator(val brokerId: Int,
       if (group == null) {
         if (generationId < 0)
           // the group is not relying on Kafka for partition management, so allow the commit
-          groupManager.storeOffsets(groupId, memberId, generationId, offsetMetadata, responseCallback)
+          delayedOffsetStore = Some(groupManager.prepareStoreOffsets(groupId, memberId, generationId, offsetMetadata,
+            responseCallback))
         else
           // the group has failed over to this coordinator (which will be handled in KAFKA-2017),
           // or this is a request coming from an older generation. either way, reject the commit
@@ -410,11 +419,15 @@ class GroupCoordinator(val brokerId: Int,
           } else if (generationId != group.generationId) {
             responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION.code))
           } else {
-            groupManager.storeOffsets(groupId, memberId, generationId, offsetMetadata, responseCallback)
+            delayedOffsetStore = Some(groupManager.prepareStoreOffsets(groupId, memberId, generationId,
+              offsetMetadata, responseCallback))
           }
         }
       }
     }
+
+    // store the offsets without holding the group lock
+    delayedOffsetStore.foreach(groupManager.store)
   }
 
   def handleFetchOffsets(groupId: String,
@@ -485,6 +498,12 @@ class GroupCoordinator(val brokerId: Int,
       if (member.awaitingSyncCallback != null) {
         member.awaitingSyncCallback(member.assignment, errorCode)
         member.awaitingSyncCallback = null
+
+        // reset the session timeout for members after propagating the member's assignment.
+        // This is because if any member's session expired while we were still awaiting either
+        // the leader sync group or the storage callback, its expiration will be ignored and no
+        // future heartbeat expectations will not be scheduled.
+        completeAndScheduleNextHeartbeatExpiration(group, member)
       }
     }
   }

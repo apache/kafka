@@ -14,3 +14,4 @@
 # limitations under the License.
 
 from kafka import KafkaService
+from util import TopicPartition

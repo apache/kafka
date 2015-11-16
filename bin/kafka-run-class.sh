@@ -72,14 +72,14 @@ do
   CLASSPATH=$CLASSPATH:$dir/*
 done
 
-for cc_pkg in "api" "runtime" "file" "json"
+for cc_pkg in "api" "runtime" "file" "json" "tools"
 do
-  for file in $base_dir/copycat/${cc_pkg}/build/libs/copycat-${cc_pkg}*.jar;
+  for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
     CLASSPATH=$CLASSPATH:$file
   done
-  if [ -d "$base_dir/copycat/${cc_pkg}/build/dependant-libs" ] ; then
-    CLASSPATH=$CLASSPATH:$base_dir/copycat/${cc_pkg}/build/dependant-libs/*
+  if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
+    CLASSPATH=$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*
   fi
 done
 

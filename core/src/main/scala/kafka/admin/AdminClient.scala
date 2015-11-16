@@ -19,9 +19,9 @@ import kafka.common.KafkaException
 import kafka.coordinator.{GroupOverview, GroupSummary, MemberSummary}
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.clients.consumer.internals.{SendFailedException, ConsumerProtocol, ConsumerNetworkClient, RequestFuture}
+import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, SendFailedException}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SaslConfigs, SslConfigs}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.DisconnectException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
-import org.apache.kafka.common.{TopicPartition, Cluster, Node}
+import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -138,27 +138,37 @@ class AdminClient(val time: Time,
       throw new KafkaException(s"Response from broker contained no metadata for group ${groupId}")
 
     Errors.forCode(metadata.errorCode()).maybeThrow()
-    val members = metadata.members().map {
-      case member =>
-        val metadata = Utils.readBytes(member.memberMetadata())
-        val assignment = Utils.readBytes(member.memberAssignment())
-        MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
+    val members = metadata.members().map { member =>
+      val metadata = Utils.readBytes(member.memberMetadata())
+      val assignment = Utils.readBytes(member.memberAssignment())
+      MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
     }.toList
     GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
   }
 
-  def describeConsumerGroup(groupId: String): Map[String, List[TopicPartition]] = {
+  case class ConsumerSummary(
+                              memberId: String,
+                              clientId: String,
+                              clientHost: String,
+                              assignment: List[TopicPartition])
+
+  def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
     val group = describeGroup(groupId)
+    if (group.state == "Dead")
+      return List.empty[ConsumerSummary]
+
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group ${groupId} is not a consumer group")
+      throw new IllegalArgumentException(s"Group ${groupId} with protocol type '${group.protocolType}' is not a valid consumer group")
 
-    group.members.map {
-      case member =>
+    if (group.state == "Stable") {
+      group.members.map { member =>
         val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
-        member.memberId -> assignment.partitions().asScala.toList
-    }.toMap
+        new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
+      }
+    } else {
+      List.empty
+    }
   }
-
 }
 
 object AdminClient {

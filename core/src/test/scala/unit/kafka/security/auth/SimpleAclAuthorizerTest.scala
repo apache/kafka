@@ -34,7 +34,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   val testHostName = "test.host.com"
   var session = new Session(testPrincipal, testHostName)
   var resource: Resource = null
-  val superUsers = "User:superuser1, User:superuser2"
+  val superUsers = "User:superuser1; User:superuser2"
   val username = "alice"
   var config: KafkaConfig = null
 
