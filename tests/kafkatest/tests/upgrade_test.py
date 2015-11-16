@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka.version import LATEST_0_8_2, TRUNK
@@ -22,7 +21,6 @@ from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.services.kafka import config_property
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 
-import time
 
 class TestUpgrade(ProduceConsumeValidateTest):
 
@@ -78,35 +76,3 @@ class TestUpgrade(ProduceConsumeValidateTest):
         """
 
         self.run_produce_consume_validate(core_test_action=self.perform_upgrade)
-
-class TestCompatibility(ProduceConsumeValidateTest):
-
-    def __init__(self, test_context):
-        super(TestCompatibility, self).__init__(test_context=test_context)
-
-    def setUp(self):
-        self.topic = "test_topic"
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, version=LATEST_0_8_2, topics={self.topic: {
-                                                                    "partitions": 3,
-                                                                    "replication-factor": 3,
-                                                                    "min.insync.replicas": 2}})
-        self.zk.start()
-        self.kafka.start()
-
-        # Producer and consumer
-        self.producer_throughput = 10000
-        self.num_producers = 1
-        self.num_consumers = 1
-        self.producer = VerifiableProducer(
-            self.test_context, self.num_producers, self.kafka, self.topic,
-            throughput=self.producer_throughput, version=TRUNK)
-
-        # TODO - reduce the timeout
-        self.consumer = ConsoleConsumer(
-            self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=False,
-            consumer_timeout_ms=30000, message_validator=is_int, version=TRUNK)
-
-    def test_compatibility(self):
-
-        self.run_produce_consume_validate(lambda: time.sleep(5))
