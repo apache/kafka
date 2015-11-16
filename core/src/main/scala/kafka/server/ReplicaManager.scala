@@ -664,7 +664,9 @@ class ReplicaManager(val config: KafkaConfig,
    * 3. Add these partitions to the leader partitions set
    *
    * If an unexpected error is thrown in this function, it will be propagated to KafkaApis where
-   * the error message will be set on each partition since we do not know which partition caused it
+   * the error message will be set on each partition since we do not know which partition caused it. Otherwise,
+   * return the set of partitions that are made leader due to this method
+   *
    *  TODO: the above may need to be fixed later
    */
   private def makeLeaders(controllerId: Int,
@@ -683,6 +685,8 @@ class ReplicaManager(val config: KafkaConfig,
     val partitionsToMakeLeaders: mutable.Set[Partition] = mutable.Set()
 
     try {
+      // First stop fetchers for all the partitions
+      replicaFetcherManager.removeFetcherForPartitions(partitionState.keySet.map(new TopicAndPartition(_)))
       // Update the partition information to be the leader
       partitionState.foreach{ case (partition, partitionStateInfo) =>
         if (partition.makeLeader(controllerId, partitionStateInfo, correlationId))
@@ -692,9 +696,6 @@ class ReplicaManager(val config: KafkaConfig,
             "controller %d epoch %d for partition %s since it is already the leader for the partition.")
             .format(localBrokerId, correlationId, controllerId, epoch, TopicAndPartition(partition.topic, partition.partitionId)));
       }
-
-      // Stop fetchers for all the partitions
-      replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeLeaders.map(new TopicAndPartition(_)))
       partitionsToMakeLeaders.foreach { partition =>
         stateChangeLogger.trace(("Broker %d stopped fetchers as part of become-leader request from controller " +
           "%d epoch %d with correlation id %d for partition %s")
@@ -718,7 +719,7 @@ class ReplicaManager(val config: KafkaConfig,
         .format(localBrokerId, correlationId, controllerId, epoch, TopicAndPartition(state._1.topic, state._1.partitionId)))
     }
 
-    partitionState.keySet
+    partitionsToMakeLeaders
   }
 
   /*
@@ -735,7 +736,8 @@ class ReplicaManager(val config: KafkaConfig,
    * are guaranteed to be flushed to disks
    *
    * If an unexpected error is thrown in this function, it will be propagated to KafkaApis where
-   * the error message will be set on each partition since we do not know which partition caused it
+   * the error message will be set on each partition since we do not know which partition caused it. Otherwise,
+   * return the set of partitions that are made follower due to this method
    */
   private def makeFollowers(controllerId: Int,
                             epoch: Int,
