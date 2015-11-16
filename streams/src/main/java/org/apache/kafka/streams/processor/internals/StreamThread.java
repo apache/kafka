@@ -542,7 +542,11 @@ public class StreamThread extends Thread {
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        return new StandbyTask(id, restoreConsumer, topology, config, sensors);
+        if (!topology.stateStoreSuppliers().isEmpty()) {
+            return new StandbyTask(id, restoreConsumer, topology, config, sensors);
+        } else {
+            return null;
+        }
     }
 
     private void addStandbyTasks() {
@@ -550,8 +554,10 @@ public class StreamThread extends Thread {
 
         for (TaskId taskId : partitionGrouper.standbyTasks()) {
             StandbyTask task = createStandbyTask(taskId);
-            standbyTasks.put(taskId, task);
-            checkpointedOffsets.putAll(task.checkpointedOffsets());
+            if (task != null) {
+                standbyTasks.put(taskId, task);
+                checkpointedOffsets.putAll(task.checkpointedOffsets());
+            }
         }
 
         restoreConsumer.assign(new ArrayList<>(checkpointedOffsets.keySet()));
