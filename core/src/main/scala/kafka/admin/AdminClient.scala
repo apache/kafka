@@ -146,11 +146,10 @@ class AdminClient(val time: Time,
     GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
   }
 
-  case class ConsumerSummary(
-                              memberId: String,
-                              clientId: String,
-                              clientHost: String,
-                              assignment: List[TopicPartition])
+  case class ConsumerSummary(memberId: String,
+                             clientId: String,
+                             clientHost: String,
+                             assignment: List[TopicPartition])
 
   def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
     val group = describeGroup(groupId)
@@ -169,6 +168,11 @@ class AdminClient(val time: Time,
       List.empty
     }
   }
+
+  def close() {
+    client.close()
+  }
+
 }
 
 object AdminClient {
