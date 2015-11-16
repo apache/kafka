@@ -385,7 +385,7 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Commit the state of an task
+     * Commit the state of a task
      */
     private void commitOne(AbstractTask task, long now) {
         try {
