@@ -33,7 +33,7 @@ object JaasTestUtils {
   val kafkaModule = "com.sun.security.auth.module.Krb5LoginModule"
   
   def genZkFile: String = {
-    val jaasFile = java.io.File.createTempFile("jaas", "conf")
+    val jaasFile = java.io.File.createTempFile("jaas", ".conf")
     val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
     writeZkToOutputStream(jaasOutputStream)
     jaasOutputStream.close()
