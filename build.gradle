@@ -230,7 +230,7 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
   }
 }
 
-def connectPkgs = ['connect-api', 'connect-runtime', 'connect-json', 'connect-file', 'connect-tools']
+def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file']
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams'] + connectPkgs
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
@@ -321,7 +321,7 @@ project(':core') {
     standardOutput = new File('docs/kafka_config.html').newOutputStream()
   }
 
-  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs', ':connect-runtime:genConnectConfigDocs'], type: Tar) {
+  task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs', ':connect:runtime:genConnectConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
@@ -342,16 +342,14 @@ project(':core') {
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
     from(project(':tools').configurations.runtime) { into("libs/") }
-    from(project(':connect-api').jar) { into("libs/") }
-    from(project(':connect-api').configurations.runtime) { into("libs/") }
-    from(project(':connect-runtime').jar) { into("libs/") }
-    from(project(':connect-runtime').configurations.runtime) { into("libs/") }
-    from(project(':connect-json').jar) { into("libs/") }
-    from(project(':connect-json').configurations.runtime) { into("libs/") }
-    from(project(':connect-file').jar) { into("libs/") }
-    from(project(':connect-file').configurations.runtime) { into("libs/") }
-    from(project(':connect-tools').jar) { into("libs/") }
-    from(project(':connect-tools').configurations.runtime) { into("libs/") }
+    from(project(':connect:api').jar) { into("libs/") }
+    from(project(':connect:api').configurations.runtime) { into("libs/") }
+    from(project(':connect:runtime').jar) { into("libs/") }
+    from(project(':connect:runtime').configurations.runtime) { into("libs/") }
+    from(project(':connect:json').jar) { into("libs/") }
+    from(project(':connect:json').configurations.runtime) { into("libs/") }
+    from(project(':connect:file').jar) { into("libs/") }
+    from(project(':connect:file').configurations.runtime) { into("libs/") }
   }
 
   jar {
@@ -638,7 +636,7 @@ project(':log4j-appender') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':connect-api') {
+project(':connect:api') {
   apply plugin: 'checkstyle'
   archivesBaseName = "connect-api"
 
@@ -695,12 +693,12 @@ project(':connect-api') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':connect-json') {
+project(':connect:json') {
   apply plugin: 'checkstyle'
   archivesBaseName = "connect-json"
 
   dependencies {
-    compile project(':connect-api')
+    compile project(':connect:api')
     compile "$slf4japi"
     compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
 
@@ -756,13 +754,14 @@ project(':connect-json') {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
 
-project(':connect-runtime') {
+project(':connect:runtime') {
   apply plugin: 'checkstyle'
   archivesBaseName = "connect-runtime"
 
   dependencies {
-    compile project(':connect-api')
+    compile project(':connect:api')
     compile project(':clients')
+    compile project(':tools')
     compile "$slf4japi"
 
     compile "org.eclipse.jetty:jetty-server:$jetty_version"
@@ -776,7 +775,7 @@ project(':connect-runtime') {
     testCompile "$powermock_easymock"
     testCompile project(':clients').sourceSets.test.output
     testRuntime "$slf4jlog4j"
-    testRuntime project(":connect-json")
+    testRuntime project(":connect:json")
   }
 
   task testJar(type: Jar) {
@@ -830,75 +829,13 @@ project(':connect-runtime') {
   }
 }
 
-project(':connect-file') {
+project(':connect:file') {
   apply plugin: 'checkstyle'
   archivesBaseName = "connect-file"
 
   dependencies {
-    compile project(':connect-api')
+    compile project(':connect:api')
     compile "$slf4japi"
-
-    testCompile "$junit"
-    testCompile "$easymock"
-    testCompile "$powermock"
-    testCompile "$powermock_easymock"
-    testRuntime "$slf4jlog4j"
-  }
-
-  task testJar(type: Jar) {
-    classifier = 'test'
-    from sourceSets.test.output
-  }
-
-  test {
-    testLogging {
-      events "passed", "skipped", "failed"
-      exceptionFormat = 'full'
-    }
-  }
-
-  javadoc {
-    include "**/org/apache/kafka/connect/*"
-  }
-
-  tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-    }
-    from (configurations.runtime) {
-      exclude('kafka-clients*')
-      exclude('connect-*')
-    }
-    into "$buildDir/dependant-libs"
-  }
-
-  jar {
-    dependsOn copyDependantLibs
-  }
-
-  artifacts {
-    archives testJar
-  }
-
-  configurations {
-    archives.extendsFrom(testCompile)
-  }
-
-  checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-  }
-  test.dependsOn('checkstyleMain', 'checkstyleTest')
-}
-
-project(':connect-tools') {
-  apply plugin: 'checkstyle'
-  archivesBaseName = "connect-tools"
-
-  dependencies {
-    compile project(':connect-api')
-    compile project(':tools')
-    compile "$slf4japi"
-    compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
 
     testCompile "$junit"
     testCompile "$easymock"
