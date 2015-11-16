@@ -363,8 +363,8 @@ class GroupMetadataManager(val brokerId: Int,
             val buffer = ByteBuffer.allocate(config.loadBufferSize)
             // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
             inWriteLock(offsetExpireLock) {
-              val loadedGroups: mutable.Map[String, GroupMetadata] = mutable.Map()
-              val removedGroups: mutable.Set[String] = mutable.Set()
+              val loadedGroups = mutable.Map[String, GroupMetadata]()
+              val removedGroups = mutable.Set[String]()
 
               while (currOffset < getHighWatermark(offsetsPartition) && !shuttingDown.get()) {
                 buffer.clear()
@@ -418,7 +418,7 @@ class GroupMetadataManager(val brokerId: Int,
               loadedGroups.values.foreach { group =>
                 val currentGroup = addGroup(group)
                 if (group != currentGroup)
-                  warn(s"Attempt to load group ${group.groupId} from log with generation ${group.generationId} failed " +
+                  debug(s"Attempt to load group ${group.groupId} from log with generation ${group.generationId} failed " +
                     s"because there is already a cached group with generation ${currentGroup.generationId}")
                 else
                   onGroupLoaded(group)

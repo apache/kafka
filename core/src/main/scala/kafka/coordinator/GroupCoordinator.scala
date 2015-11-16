@@ -473,7 +473,7 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  private def unloadGroup(groupEmigrating: Boolean)(group: GroupMetadata) {
+  private def onGroupUnloaded(groupEmigrating: Boolean)(group: GroupMetadata) {
     info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
     group synchronized {
       val previousState = group.currentState
@@ -512,16 +512,16 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  private def loadGroup(group: GroupMetadata) {
+  private def onGroupLoaded(group: GroupMetadata) {
     info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
   }
 
   def handleGroupImmigration(offsetTopicPartitionId: Int) = {
-    groupManager.loadGroupsForPartition(offsetTopicPartitionId, loadGroup, unloadGroup(false))
+    groupManager.loadGroupsForPartition(offsetTopicPartitionId, onGroupLoaded, onGroupUnloaded(groupEmigrating = false))
   }
 
   def handleGroupEmigration(offsetTopicPartitionId: Int) = {
-    groupManager.removeGroupsForPartition(offsetTopicPartitionId, unloadGroup(true))
+    groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded(groupEmigrating = true))
   }
 
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {
