@@ -157,18 +157,12 @@ class Partition(val topic: String,
   }
 
   /**
-   * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset from the time when this broker was the leader last time)
-   *  and setting the new leader and ISR
+   * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset
+   * from the time when this broker was the leader last time) and setting the new leader and ISR.
+   * If the leader replica id does not change, return false to indicate the replica manager.
    */
   def makeLeader(controllerId: Int, partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
-    val isNewLeader =
-      if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == localBrokerId) {
-        false
-      } else {
-        leaderReplicaIdOpt = Some(localBrokerId)
-        true
-      }
-    val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
+    val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
@@ -183,6 +177,13 @@ class Partition(val topic: String,
       inSyncReplicas = newInSyncReplicas
       leaderEpoch = leaderAndIsr.leaderEpoch
       zkVersion = leaderAndIsr.zkVersion
+      val isNewLeader =
+        if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == localBrokerId) {
+          false
+        } else {
+          leaderReplicaIdOpt = Some(localBrokerId)
+          true
+        }
       val leaderReplica = getReplica().get
       // we may need to increment high watermark since ISR could be down to 1
       if (isNewLeader) {
@@ -191,7 +192,7 @@ class Partition(val topic: String,
         // reset log end offset for remote replicas
         assignedReplicas.filter(_.brokerId != localBrokerId).foreach(_.updateLogReadResult(LogReadResult.UnknownLogReadResult))
       }
-      maybeIncrementLeaderHW(leaderReplica)
+      (maybeIncrementLeaderHW(leaderReplica), isNewLeader)
     }
     // some delayed operations may be unblocked after HW changed
     if (leaderHWIncremented)
