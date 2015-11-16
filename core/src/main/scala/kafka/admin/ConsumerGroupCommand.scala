@@ -26,6 +26,7 @@ import kafka.common.{TopicAndPartition, _}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNoNodeException
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.JaasUtils
@@ -352,8 +353,11 @@ object ConsumerGroupCommand {
       if (consumer != null) consumer.close()
     }
 
-    private def createAdminClient(): AdminClient =
-      AdminClient.createSimplePlaintext(opts.options.valueOf(opts.bootstrapServerOpt))
+    private def createAdminClient(): AdminClient = {
+      val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
+      props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+      AdminClient.create(scala.collection.JavaConversions.propertiesAsScalaMap(props).map(x => x._1 -> x._2).toMap)
+    }
 
     private def getConsumer() = {
       if (consumer == null)
@@ -371,6 +375,8 @@ object ConsumerGroupCommand {
       properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
       properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
       properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
+      if (opts.options.has(opts.commandConfigOpt)) properties.putAll(Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)))
+
       new KafkaConsumer(properties)
     }
 
@@ -402,6 +408,8 @@ object ConsumerGroupCommand {
       "for every consumer group. For instance --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer."
+    val CommandConfigDoc = s"Configs to be passed to Admin Client and Consumer." + nl +
+      "WARNING: Command config can not be used with old ZK-based consumer groups."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
@@ -427,6 +435,10 @@ object ConsumerGroupCommand {
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
     val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
+    val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
+                                  .withRequiredArg
+                                  .describedAs("command config file")
+                                  .ofType(classOf[String])
     val options = parser.parse(args : _*)
 
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt)
@@ -456,6 +468,8 @@ object ConsumerGroupCommand {
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))
+      if (options.has(commandConfigOpt) && !options.has(newConsumerOpt))
+        CommandLineUtils.printUsageAndDie(parser, "Option %s does not work without %s".format(commandConfigOpt, newConsumerOpt))
 
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt)
