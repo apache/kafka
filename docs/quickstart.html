@@ -5,9 +5,9 @@
  The ASF licenses this file to You under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
- 
+
     http://www.apache.org/licenses/LICENSE-2.0
- 
+
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,11 +15,11 @@
  limitations under the License.
 -->
 
-<h3><a id="quickstart">1.3 Quick Start</a></h3>
+<h3><a id="quickstart" href="#quickstart">1.3 Quick Start</a></h3>
 
 This tutorial assumes you are starting fresh and have no existing Kafka or ZooKeeper data.
 
-<h4> Step 1: Download the code </h4>
+<h4><a id="quickstart_download" href="#quickstart_download">Step 1: Download the code</a></h4>
 
 <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/0.9.0.0/kafka_2.11-0.9.0.0.tgz" title="Kafka downloads">Download</a> the 0.9.0.0 release and un-tar it.
 
@@ -28,7 +28,7 @@ This tutorial assumes you are starting fresh and have no existing Kafka or ZooKe
 &gt; <b>cd kafka_2.11-0.9.0.0</b>
 </pre>
 
-<h4>Step 2: Start the server</h4>
+<h4><a id="quickstart_startserver" href="#quickstart_startserver">Step 2: Start the server</a></h4>
 
 <p>
 Kafka uses ZooKeeper so you need to first start a ZooKeeper server if you don't already have one. You can use the convenience script packaged with kafka to get a quick-and-dirty single-node ZooKeeper instance.
@@ -47,7 +47,7 @@ Now start the Kafka server:
 ...
 </pre>
 
-<h4>Step 3: Create a topic</h4>
+<h4><a id="quickstart_createtopic" href="#quickstart_createtopic">Step 3: Create a topic</a></h4>
 
 Let's create a topic named "test" with a single partition and only one replica:
 <pre>
@@ -61,19 +61,19 @@ test
 </pre>
 Alternatively, instead of manually creating topics you can also configure your brokers to auto-create topics when a non-existent topic is published to.
 
-<h4>Step 4: Send some messages</h4>
+<h4><a id="quickstart_send" href="#quickstart_send">Step 4: Send some messages</a></h4>
 
 Kafka comes with a command line client that will take input from a file or from standard input and send it out as messages to the Kafka cluster. By default each line will be sent as a separate message.
 <p>
 Run the producer and then type a few messages into the console to send to the server.
 
 <pre>
-&gt; <b>bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test</b> 
+&gt; <b>bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test</b>
 <b>This is a message</b>
 <b>This is another message</b>
 </pre>
 
-<h4>Step 5: Start a consumer</h4>
+<h4><a id="quickstart_consume" href="#quickstart_consume">Step 5: Start a consumer</a></h4>
 
 Kafka also has a command line consumer that will dump out messages to standard output.
 
@@ -86,27 +86,27 @@ This is another message
 If you have each of the above commands running in a different terminal then you should now be able to type messages into the producer terminal and see them appear in the consumer terminal.
 </p>
 <p>
-All of the command line tools have additional options; running the command with no arguments will display usage information documenting them in more detail.	
+All of the command line tools have additional options; running the command with no arguments will display usage information documenting them in more detail.
 </p>
 
-<h4>Step 6: Setting up a multi-broker cluster</h4>
+<h4><a id="quickstart_multibroker" href="#quickstart_multibroker">Step 6: Setting up a multi-broker cluster</a></h4>
 
 So far we have been running against a single broker, but that's no fun. For Kafka, a single broker is just a cluster of size one, so nothing much changes other than starting a few more broker instances. But just to get feel for it, let's expand our cluster to three nodes (still all on our local machine).
 <p>
 First we make a config file for each of the brokers:
 <pre>
-&gt; <b>cp config/server.properties config/server-1.properties</b> 
+&gt; <b>cp config/server.properties config/server-1.properties</b>
 &gt; <b>cp config/server.properties config/server-2.properties</b>
 </pre>
 
 Now edit these new files and set the following properties:
 <pre>
- 
+
 config/server-1.properties:
     broker.id=1
     port=9093
     log.dir=/tmp/kafka-logs-1
- 
+
 config/server-2.properties:
     broker.id=2
     port=9094
@@ -138,7 +138,7 @@ Here is an explanation of output. The first line gives a summary of all the part
   <li>"leader" is the node responsible for all reads and writes for the given partition. Each node will be the leader for a randomly selected portion of the partitions.
   <li>"replicas" is the list of nodes that replicate the log for this partition regardless of whether they are the leader or even if they are currently alive.
   <li>"isr" is the set of "in-sync" replicas. This is the subset of the replicas list that is currently alive and caught-up to the leader.
-</ul> 
+</ul>
 Note that in my example node 1 is the leader for the only partition of the topic.
 <p>
 We can run the same command on the original topic we created to see where it is:
@@ -155,7 +155,7 @@ Let's publish a few messages to our new topic:
 ...
 <b>my test message 1</b>
 <b>my test message 2</b>
-<b>^C</b> 
+<b>^C</b>
 </pre>
 Now let's consume these messages:
 <pre>
@@ -189,7 +189,7 @@ my test message 2
 </pre>
 
 
-<h4>Step 7: Use Kafka Connect to import/export data</h4>
+<h4><a id="quickstart_kafkaconnect" href="#quickstart_kafkaconnect">Step 7: Use Kafka Connect to import/export data</a></h4>
 
 Writing data from the console and writing it back to the console is a convenient place to start, but you'll probably want
 to use data from other sources or export data from Kafka to other systems. For many systems, instead of writing custom

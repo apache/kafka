@@ -5,9 +5,9 @@
  The ASF licenses this file to You under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
- 
+
     http://www.apache.org/licenses/LICENSE-2.0
- 
+
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,11 +16,11 @@
 -->
 
 <!--#include virtual="../includes/header.html" -->
-<h2>Migrating from 0.7.x to 0.8</h2>
+<h2><a id="migration" href="#migration">Migrating from 0.7.x to 0.8</a></h2>
 
 0.8 is our first (and hopefully last) release with a non-backwards-compatible wire protocol, ZooKeeper     layout, and on-disk data format. This was a chance for us to clean up a lot of cruft and start fresh. This means performing a no-downtime upgrade is more painful than normal&mdash;you cannot just swap in the new code in-place.
 
-<h3>Migration Steps</h3>
+<h3><a id="migration_steps" href="#migration_steps">Migration Steps</a></h3>
 
 <ol>
     <li>Setup a new cluster running 0.8.
