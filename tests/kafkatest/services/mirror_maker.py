@@ -92,7 +92,7 @@ class MirrorMaker(Service):
             offset_commit_interval_ms:  how frequently the mirror maker consumer commits offsets
         """
         super(MirrorMaker, self).__init__(context, num_nodes=num_nodes)
-        self.log_level = "TRACE"
+        self.log_level = "DEBUG"
         self.new_consumer = new_consumer
         self.consumer_timeout_ms = consumer_timeout_ms
         self.num_streams = num_streams
