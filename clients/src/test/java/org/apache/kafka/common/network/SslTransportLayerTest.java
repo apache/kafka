@@ -42,6 +42,7 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
@@ -301,7 +302,7 @@ public class SslTransportLayerTest {
     @Test
     public void testInvalidKeyPassword() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "invalid");
+        sslServerConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("invalid"));
         createEchoServer(sslServerConfigs);        
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
@@ -463,11 +464,12 @@ public class SslTransportLayerTest {
             Mode mode = server ? Mode.SERVER : Mode.CLIENT;
             File truststoreFile = File.createTempFile(name + "TS", ".jks");
             sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name);
-            sslConfig.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+            if (server)
+                sslConfig.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         }
        
         private Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {
-            Map<String, Object> config = new HashMap<String, Object>(sslConfig);
+            Map<String, Object> config = new HashMap<>(sslConfig);
             config.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             config.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
             config.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG));

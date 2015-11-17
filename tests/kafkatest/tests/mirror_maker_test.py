@@ -47,7 +47,7 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
                                         whitelist=self.topic, offset_commit_interval_ms=1000)
         # This will consume from target kafka cluster
         self.consumer = ConsoleConsumer(test_context, num_nodes=1, kafka=self.target_kafka, topic=self.topic,
-                                        message_validator=is_int, consumer_timeout_ms=15000)
+                                        message_validator=is_int, consumer_timeout_ms=60000)
 
     def setUp(self):
         # Source cluster
