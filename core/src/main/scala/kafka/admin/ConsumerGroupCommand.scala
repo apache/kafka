@@ -76,15 +76,6 @@ object ConsumerGroupCommand {
     }
   }
 
-  private def parseConfigs(opts: ConsumerGroupCommandOptions): Properties = {
-    val configsToBeAdded = opts.options.valuesOf(opts.configOpt).asScala.map(_.split("""\s*=\s*"""))
-    require(configsToBeAdded.forall(config => config.length == 2),
-      "Invalid config: all configs to be added must be in the format \"key=val\".")
-    val props = new Properties
-    configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).trim))
-    props
-  }
-
   sealed trait ConsumerGroupService {
 
     def list(): Unit
@@ -161,9 +152,9 @@ object ConsumerGroupCommand {
     }
 
     protected def describeGroup(group: String) {
-      val configs = parseConfigs(opts)
-      val channelSocketTimeoutMs = configs.getProperty("channelSocketTimeoutMs", "600").toInt
-      val channelRetryBackoffMs = configs.getProperty("channelRetryBackoffMsOpt", "300").toInt
+      val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
+      val channelSocketTimeoutMs = props.getProperty("channelSocketTimeoutMs", "600").toInt
+      val channelRetryBackoffMs = props.getProperty("channelRetryBackoffMsOpt", "300").toInt
       val topics = zkUtils.getTopicsByConsumerGroup(group)
       if (topics.isEmpty)
         println("No topic available for consumer group provided")
@@ -356,7 +347,7 @@ object ConsumerGroupCommand {
     private def createAdminClient(): AdminClient = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-      AdminClient.create(scala.collection.JavaConversions.propertiesAsScalaMap(props).map(x => x._1 -> x._2).toMap)
+      AdminClient.create(props)
     }
 
     private def getConsumer() = {
@@ -408,7 +399,7 @@ object ConsumerGroupCommand {
       "for every consumer group. For instance --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer."
-    val CommandConfigDoc = s"Configs to be passed to Admin Client and Consumer." + nl +
+    val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer." + nl +
       "WARNING: Command config can not be used with old ZK-based consumer groups."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
@@ -437,7 +428,7 @@ object ConsumerGroupCommand {
     val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                   .withRequiredArg
-                                  .describedAs("command config file")
+                                  .describedAs("command config property file")
                                   .ofType(classOf[String])
     val options = parser.parse(args : _*)
 
@@ -474,7 +465,6 @@ object ConsumerGroupCommand {
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, allConsumerGroupLevelOpts - deleteOpt)
-      CommandLineUtils.checkInvalidArgs(parser, options, configOpt, allConsumerGroupLevelOpts - describeOpt)
     }
   }
 }

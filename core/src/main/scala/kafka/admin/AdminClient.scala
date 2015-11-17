@@ -13,6 +13,7 @@
 package kafka.admin
 
 import java.nio.ByteBuffer
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.common.KafkaException
@@ -208,6 +209,8 @@ object AdminClient {
     val config = Map(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG -> brokerUrl)
     create(new AdminConfig(config))
   }
+
+  def create(props: Properties): AdminClient = create(propertiesAsScalaMap(props).map(x => x._1 -> x._2).toMap)
 
   def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
 
