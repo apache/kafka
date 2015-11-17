@@ -113,4 +113,7 @@ private[coordinator] class MemberMetadata(val memberId: String,
     }
   }
 
+  override def toString = {
+    "[%s,%s,%s,%d]".format(memberId, clientId, clientHost, sessionTimeoutMs)
+  }
 }

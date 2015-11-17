@@ -422,6 +422,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 OffsetCommitRequest.DEFAULT_RETENTION_TIME,
                 offsetData);
 
+        log.trace("Sending offset-commit request with {} to {}", offsets, coordinator);
+
         return client.send(coordinator, ApiKeys.OFFSET_COMMIT, req)
                 .compose(new OffsetCommitResponseHandler(offsets));
     }

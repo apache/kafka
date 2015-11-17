@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.processor;
 
-public class TaskId {
+import java.nio.ByteBuffer;
+
+public class TaskId implements Comparable<TaskId> {
 
     public final int topicGroupId;
     public final int partition;
@@ -45,6 +47,15 @@ public class TaskId {
         }
     }
 
+    public void writeTo(ByteBuffer buf) {
+        buf.putInt(topicGroupId);
+        buf.putInt(partition);
+    }
+
+    public static TaskId readFrom(ByteBuffer buf) {
+        return new TaskId(buf.getInt(), buf.getInt());
+    }
+
     @Override
     public boolean equals(Object o) {
         if (o instanceof TaskId) {
@@ -59,6 +70,16 @@ public class TaskId {
     public int hashCode() {
         long n = ((long) topicGroupId << 32) | (long) partition;
         return (int) (n % 0xFFFFFFFFL);
+    }
+
+    @Override
+    public int compareTo(TaskId other) {
+        return
+            this.topicGroupId < other.topicGroupId ? -1 :
+                (this.topicGroupId > other.topicGroupId ? 1 :
+                    (this.partition < other.partition ? -1 :
+                        (this.partition > other.partition ? 1 :
+                            0)));
     }
 
     public static class TaskIdFormatException extends RuntimeException {

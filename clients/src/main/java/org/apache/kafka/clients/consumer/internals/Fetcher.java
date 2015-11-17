@@ -373,6 +373,10 @@ public class Fetcher<K, V> {
                     // this partition in the previous request at all
                     subscriptions.fetched(part.partition, consumed);
                 } else if (part.fetchOffset == consumed) {
+                    long nextOffset = part.records.get(part.records.size() - 1).offset() + 1;
+
+                    log.trace("Returning fetched records for assigned partition {} and update consumed position to {}", part.partition, nextOffset);
+
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
                     if (records == null) {
                         records = part.records;
@@ -380,7 +384,7 @@ public class Fetcher<K, V> {
                     } else {
                         records.addAll(part.records);
                     }
-                    subscriptions.consumed(part.partition, part.records.get(part.records.size() - 1).offset() + 1);
+                    subscriptions.consumed(part.partition, nextOffset);
                 } else {
                     // these records aren't next in line based on the last consumed position, ignore them
                     // they must be from an obsolete request
