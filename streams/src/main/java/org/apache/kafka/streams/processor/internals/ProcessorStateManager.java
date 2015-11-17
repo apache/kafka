@@ -35,6 +35,7 @@ import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ProcessorStateManager {
@@ -51,13 +52,17 @@ public class ProcessorStateManager {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Map<TopicPartition, Long> restoredOffsets;
     private final Map<TopicPartition, Long> checkpointedOffsets;
+    private final boolean isStandby;
+    private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks
 
-    public ProcessorStateManager(int partition, File baseDir, Consumer<byte[], byte[]> restoreConsumer) throws IOException {
+    public ProcessorStateManager(int partition, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
         this.partition = partition;
         this.baseDir = baseDir;
         this.stores = new HashMap<>();
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
+        this.isStandby = isStandby;
+        this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
 
         // create the state directory for this task if missing (we won't create the parent directory)
         createStateDirectory(baseDir);
@@ -103,8 +108,6 @@ public class ProcessorStateManager {
         if (this.stores.containsKey(store.name()))
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
-        // ---- register the store ---- //
-
         // check that the underlying change log topic exist or not
         if (restoreConsumer.listTopics().containsKey(store.name())) {
             boolean partitionNotFound = true;
@@ -124,48 +127,91 @@ public class ProcessorStateManager {
 
         this.stores.put(store.name(), store);
 
+        if (isStandby) {
+            if (store.persistent())
+                restoreCallbacks.put(store.name(), stateRestoreCallback);
+        } else {
+            restoreActiveState(store, stateRestoreCallback);
+        }
+    }
+
+    private void restoreActiveState(StateStore store, StateRestoreCallback stateRestoreCallback) {
+
+        if (store == null)
+            throw new IllegalArgumentException("Store " + store.name() + " has not been registered.");
+
         // ---- try to restore the state from change-log ---- //
 
         // subscribe to the store's partition
-        TopicPartition storePartition = new TopicPartition(store.name(), partition);
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
         }
+        TopicPartition storePartition = new TopicPartition(store.name(), partition);
         restoreConsumer.assign(Collections.singletonList(storePartition));
 
-        // calculate the end offset of the partition
-        // TODO: this is a bit hacky to first seek then position to get the end offset
-        restoreConsumer.seekToEnd(storePartition);
-        long endOffset = restoreConsumer.position(storePartition);
+        try {
+            // calculate the end offset of the partition
+            // TODO: this is a bit hacky to first seek then position to get the end offset
+            restoreConsumer.seekToEnd(storePartition);
+            long endOffset = restoreConsumer.position(storePartition);
 
-        // restore from the checkpointed offset of the change log if it is persistent and the offset exists;
-        // restore the state from the beginning of the change log otherwise
-        if (checkpointedOffsets.containsKey(storePartition) && store.persistent()) {
-            restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
-        } else {
-            restoreConsumer.seekToBeginning(storePartition);
-        }
-
-        // restore its state from changelog records; while restoring the log end offset
-        // should not change since it is only written by this thread.
-        while (true) {
-            for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100).records(storePartition)) {
-                stateRestoreCallback.restore(record.key(), record.value());
+            // restore from the checkpointed offset of the change log if it is persistent and the offset exists;
+            // restore the state from the beginning of the change log otherwise
+            if (checkpointedOffsets.containsKey(storePartition)) {
+                restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
+            } else {
+                restoreConsumer.seekToBeginning(storePartition);
             }
 
-            if (restoreConsumer.position(storePartition) == endOffset) {
-                break;
-            } else if (restoreConsumer.position(storePartition) > endOffset) {
-                throw new IllegalStateException("Log end offset should not change while restoring");
+            // restore its state from changelog records; while restoring the log end offset
+            // should not change since it is only written by this thread.
+            while (true) {
+                for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100).records(storePartition)) {
+                    stateRestoreCallback.restore(record.key(), record.value());
+                }
+
+                if (restoreConsumer.position(storePartition) == endOffset) {
+                    break;
+                } else if (restoreConsumer.position(storePartition) > endOffset) {
+                    throw new IllegalStateException("Log end offset should not change while restoring");
+                }
+            }
+
+            // record the restored offset for its change log partition
+            long newOffset = restoreConsumer.position(storePartition);
+            restoredOffsets.put(storePartition, newOffset);
+        } finally {
+            // un-assign the change log partition
+            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        }
+    }
+
+    public Map<TopicPartition, Long> checkpointedOffsets() {
+        Map<TopicPartition, Long> partitionsAndOffsets = new HashMap<>();
+
+        for (Map.Entry<String, StateRestoreCallback> entry : restoreCallbacks.entrySet()) {
+            String storeName = entry.getKey();
+            TopicPartition storePartition = new TopicPartition(storeName, partition);
+
+            if (checkpointedOffsets.containsKey(storePartition)) {
+                partitionsAndOffsets.put(storePartition, checkpointedOffsets.get(storePartition));
+            } else {
+                partitionsAndOffsets.put(storePartition, -1L);
             }
         }
+        return partitionsAndOffsets;
+    }
 
+    public void updateStandbyStates(TopicPartition storePartition, List<ConsumerRecord<byte[], byte[]>> records) {
+        // restore states from changelog records
+        StateRestoreCallback restoreCallback = restoreCallbacks.get(storePartition.topic());
+
+        for (ConsumerRecord<byte[], byte[]> record : records) {
+            restoreCallback.restore(record.key(), record.value());
+        }
         // record the restored offset for its change log partition
         long newOffset = restoreConsumer.position(storePartition);
         restoredOffsets.put(storePartition, newOffset);
-
-        // un-assign the change log partition
-        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
     }
 
     public StateStore getStore(String name) {
@@ -223,6 +269,9 @@ public class ProcessorStateManager {
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
             checkpoint.write(checkpointOffsets);
         }
+
+        // un-assign the change log partition
+        restoreConsumer.assign(Collections.<TopicPartition>emptyList());
 
         // release the state directory directoryLock
         directoryLock.release();

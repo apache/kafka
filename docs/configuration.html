@@ -17,7 +17,7 @@
 
 Kafka uses key-value pairs in the <a href="http://en.wikipedia.org/wiki/.properties">property file format</a> for configuration. These values can be supplied either from a file or programmatically.
 
-<h3><a id="brokerconfigs">3.1 Broker Configs</a></h3>
+<h3><a id="brokerconfigs" href="#brokerconfigs">3.1 Broker Configs</a></h3>
 
 The essential configurations are the following:
 <ul>
@@ -32,7 +32,7 @@ Topic-level configurations and defaults are discussed in more detail <a href="#t
 
 <p>More details about broker configuration can be found in the scala class <code>kafka.server.KafkaConfig</code>.</p>
 
-<a id="topic-config">Topic-level configuration</a>
+<a id="topic-config" href="#topic-config">Topic-level configuration</a>
 
 Configurations pertinent to topics have both a global default as well an optional per-topic override. If no per-topic configuration is given the global default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
 <pre>
@@ -147,7 +147,7 @@ The following are the topic-level configurations. The server's default configura
     </tr>
 </table>
 
-<h3><a id="producerconfigs">3.2 Producer Configs</a></h3>
+<h3><a id="producerconfigs" href="#producerconfigs">3.2 Producer Configs</a></h3>
 
 Below is the configuration of the Java producer:
 <!--#include virtual="producer_config.html" -->
@@ -157,7 +157,7 @@ Below is the configuration of the Java producer:
     here</a>.
 </p>
 
-<h3><a id="consumerconfigs">3.3 Consumer Configs</a></h3>
+<h3><a id="consumerconfigs" href="#consumerconfigs">3.3 Consumer Configs</a></h3>
 The essential consumer configurations are the following:
 <ul>
         <li><code>group.id</code>
@@ -327,9 +327,9 @@ The essential consumer configurations are the following:
 
 <p>More details about consumer configuration can be found in the scala class <code>kafka.consumer.ConsumerConfig</code>.</p>
 
-<h3><a id="newconsumerconfigs">3.4 New Consumer Configs</a></h3>
+<h3><a id="newconsumerconfigs" href="#newconsumerconfigs">3.4 New Consumer Configs</a></h3>
 Since 0.9.0.0 we have been working on a replacement for our existing simple and high-level consumers. The code can be considered beta quality. Below is the configuration for the new consumer:
 <!--#include virtual="consumer_config.html" -->
 
-<h3><a id="connectconfigs">3.5 Kafka Connect Configs</a></h3>
+<h3><a id="connectconfigs" href="#connectconfigs">3.5 Kafka Connect Configs</a></h3>
 <!--#include virtual="connect_config.html" -->

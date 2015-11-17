@@ -21,46 +21,37 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.StreamingMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
  */
-public class StreamTask implements Punctuator {
+public class StreamTask extends AbstractTask implements Punctuator {
 
     private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
 
-    private final TaskId id;
     private final int maxBufferedSize;
 
     private final Consumer consumer;
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
-    private final ProcessorContextImpl processorContext;
-    private final ProcessorTopology topology;
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
-    private final ProcessorStateManager stateMgr;
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
@@ -89,12 +80,10 @@ public class StreamTask implements Punctuator {
                       ProcessorTopology topology,
                       StreamingConfig config,
                       StreamingMetrics metrics) {
-
-        this.id = id;
+        super(id, restoreConsumer, topology, config, Collections.unmodifiableSet(new HashSet<>(partitions)));
         this.consumer = consumer;
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        this.topology = topology;
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
@@ -117,22 +106,11 @@ public class StreamTask implements Punctuator {
 
         log.info("Creating restoration consumer client for stream task #" + id());
 
-        // create the processor state manager
-        try {
-            File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), id.toString());
-            this.stateMgr = new ProcessorStateManager(id.partition, stateFile, restoreConsumer);
-        } catch (IOException e) {
-            throw new KafkaException("Error while creating the state manager", e);
-        }
-
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics);
 
         // initialize the state stores
-        for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
-            StateStore store = stateStoreSupplier.get();
-            store.init(this.processorContext);
-        }
+        initializeStateStores();
 
         // initialize the task by initializing all its processor nodes in the topology
         for (ProcessorNode node : this.topology.processors()) {
@@ -144,15 +122,7 @@ public class StreamTask implements Punctuator {
             }
         }
 
-        this.processorContext.initialized();
-    }
-
-    public TaskId id() {
-        return id;
-    }
-
-    public Set<TopicPartition> partitions() {
-        return this.partitionGroup.partitions();
+        ((ProcessorContextImpl) this.processorContext).initialized();
     }
 
     /**
@@ -261,10 +231,6 @@ public class StreamTask implements Punctuator {
         return this.currNode;
     }
 
-    public ProcessorTopology topology() {
-        return this.topology;
-    }
-
     /**
      * Commit the current task state
      */
@@ -335,11 +301,7 @@ public class StreamTask implements Punctuator {
         if (exception != null)
             throw exception;
 
-        try {
-            stateMgr.close(recordCollector.offsets());
-        } catch (IOException e) {
-            throw new KafkaException("Error while closing the state manager in processor context", e);
-        }
+        super.close();
     }
 
     private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
@@ -369,10 +331,6 @@ public class StreamTask implements Punctuator {
         } finally {
             currNode = thisNode;
         }
-    }
-
-    public ProcessorContext context() {
-        return processorContext;
     }
 
 }
