@@ -16,6 +16,7 @@
  */
 package kafka.security.auth
 
+import java.security.Principal
 import java.util
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
@@ -26,7 +27,7 @@ import kafka.network.RequestChannel.Session
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
+import org.I0Itec.zkclient.IZkStateListener
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
@@ -109,7 +110,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    val principal: KafkaPrincipal = session.principal
+    val principal = session.principal
     val host = session.host
     val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
 
@@ -135,21 +136,21 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     authorized
   }
 
-  def isEmptyAclAndAuthorized(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String, acls: Set[Acl]): Boolean = {
+  def isEmptyAclAndAuthorized(operation: Operation, resource: Resource, principal: Principal, host: String, acls: Set[Acl]): Boolean = {
     if (acls.isEmpty) {
       authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
       shouldAllowEveryoneIfNoAclIsFound
     } else false
   }
 
-  def isSuperUser(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String): Boolean = {
+  def isSuperUser(operation: Operation, resource: Resource, principal: Principal, host: String): Boolean = {
     if (superUsers.exists( _ == principal)) {
       authorizerLogger.debug(s"principal = $principal is a super user, allowing operation without checking acls.")
       true
     } else false
   }
 
-  private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
+  private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: Principal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
     acls.find ( acl =>
       acl.permissionType == permissionType
         && (acl.principal == principal || acl.principal == Acl.WildCardPrincipal)
@@ -214,7 +215,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     aclJson.map(Acl.fromJson).getOrElse(Set.empty)
   }
 
-  override def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
+  override def getAcls(principal: Principal): Map[Resource, Set[Acl]] = {
     aclCache.mapValues { acls =>
       acls.filter(_.principal == principal)
     }.filter { case (_, acls) =>
@@ -253,7 +254,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     SimpleAclAuthorizer.AclZkPath + "/" + resource.resourceType + "/" + resource.name
   }
 
-  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
+  private def logAuditMessage(principal: Principal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
     val permissionType = if (authorized) "Allowed" else "Denied"
     authorizerLogger.debug(s"Principal = $principal is $permissionType Operation = $operation from host = $host on resource = $resource")
   }
