@@ -66,6 +66,7 @@
     </subpackage>
 
     <subpackage name="security">
+      <allow pkg="org.apache.kafka.common.annotation" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.config" />
     </subpackage>

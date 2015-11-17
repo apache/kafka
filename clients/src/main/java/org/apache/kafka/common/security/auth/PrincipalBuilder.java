@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.KafkaException;
@@ -28,6 +29,7 @@ import java.security.Principal;
 /*
  * PrincipalBuilder for Authenticator
  */
+@InterfaceStability.Unstable
 public interface PrincipalBuilder extends Configurable {
 
     /**
