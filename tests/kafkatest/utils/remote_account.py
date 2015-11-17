@@ -45,7 +45,7 @@ def scp(source_node, source_path, target_node, target_path):
     try:
         local_temp_dir = tempfile.mkdtemp(dir=local_temp_dir)
     except OSError as e:
-        raise Exception("Failed to create temporary local directory to scp $s to %s: %s" % (source_path, target_path, e.strerror))
+        raise Exception("Failed to create temporary local directory to scp %s to %s: %s" % (source_path, target_path, e.strerror))
 
     local_temp_file = os.path.join(local_temp_dir, "tmpfile")
     source_node.account.scp_from(source_path, local_temp_file)
