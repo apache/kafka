@@ -473,28 +473,18 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  private def onGroupUnloaded(groupEmigrating: Boolean)(group: GroupMetadata) {
-    info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
+  private def onGroupUnloaded(group: GroupMetadata) {
     group synchronized {
+      info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
       val previousState = group.currentState
       group.transitionTo(Dead)
-
-      // if the group is moving to another coordinator, then we want to have members with pending
-      // requests find the new group coordinator. if the group is unloaded during immigration,
-      // however, then we want them to rejoin with UNKNOWN_MEMBER_ID set. this latter case
-      // shouldn't actually happen since we shouldn't have any cached group metadata for any
-      // groups transferred from another coordinator (because we remove cached entries on fail-over)
-      val errorCode = if (groupEmigrating)
-        Errors.NOT_COORDINATOR_FOR_GROUP.code
-      else
-        Errors.UNKNOWN_MEMBER_ID.code
 
       previousState match {
         case Dead =>
         case PreparingRebalance =>
           for (member <- group.allMemberMetadata) {
             if (member.awaitingJoinCallback != null) {
-              member.awaitingJoinCallback(joinError(member.memberId, errorCode))
+              member.awaitingJoinCallback(joinError(member.memberId, Errors.NOT_COORDINATOR_FOR_GROUP.code))
               member.awaitingJoinCallback = null
             }
           }
@@ -503,7 +493,7 @@ class GroupCoordinator(val brokerId: Int,
         case Stable | AwaitingSync =>
           for (member <- group.allMemberMetadata) {
             if (member.awaitingSyncCallback != null) {
-              member.awaitingSyncCallback(Array.empty[Byte], errorCode)
+              member.awaitingSyncCallback(Array.empty[Byte], Errors.NOT_COORDINATOR_FOR_GROUP.code)
               member.awaitingSyncCallback = null
             }
             heartbeatPurgatory.checkAndComplete(MemberKey(member.groupId, member.memberId))
@@ -513,15 +503,19 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def onGroupLoaded(group: GroupMetadata) {
-    info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
+    group synchronized {
+      info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
+      assert(group.is(Stable))
+      group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))
+    }
   }
 
   def handleGroupImmigration(offsetTopicPartitionId: Int) = {
-    groupManager.loadGroupsForPartition(offsetTopicPartitionId, onGroupLoaded, onGroupUnloaded(groupEmigrating = false))
+    groupManager.loadGroupsForPartition(offsetTopicPartitionId, onGroupLoaded)
   }
 
   def handleGroupEmigration(offsetTopicPartitionId: Int) = {
-    groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded(groupEmigrating = true))
+    groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded)
   }
 
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {

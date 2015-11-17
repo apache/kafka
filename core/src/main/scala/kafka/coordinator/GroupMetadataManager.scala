@@ -337,8 +337,7 @@ class GroupMetadataManager(val brokerId: Int,
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
   def loadGroupsForPartition(offsetsPartition: Int,
-                             onGroupLoaded: GroupMetadata => Unit,
-                             onGroupUnloaded: GroupMetadata => Unit) {
+                             onGroupLoaded: GroupMetadata => Unit) {
     val topicPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)
 
     loadingPartitions synchronized {
@@ -426,13 +425,9 @@ class GroupMetadataManager(val brokerId: Int,
 
               removedGroups.foreach { groupId =>
                 val group = groupsCache.get(groupId)
-                if (group != null) {
-                  // we shouldn't actually hit this case in practice because it would imply that
-                  // a tombstone was written by another broker while we were still the owner of the
-                  // group's partition
-                  onGroupUnloaded(group)
-                  groupsCache.remove(groupId, group)
-                }
+                if (group != null)
+                  throw new IllegalStateException(s"Unexpected unload of acitve group ${group.groupId} while " +
+                    s"loading partition ${topicPartition}")
               }
             }
 
