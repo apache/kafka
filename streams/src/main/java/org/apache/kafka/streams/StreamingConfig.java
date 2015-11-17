@@ -222,14 +222,23 @@ public class StreamingConfig extends AbstractConfig {
     }
 
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread) {
-        Map<String, Object> props = getConsumerConfigs();
+        Map<String, Object> props = getRestoreConsumerConfigs();
         props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
         props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
         return props;
     }
 
-    public Map<String, Object> getConsumerConfigs() {
+    public Map<String, Object> getRestoreConsumerConfigs() {
+        Map<String, Object> props = getBaseConsumerConfigs();
+
+        // no group id for a restore consumer
+        props.remove(ConsumerConfig.GROUP_ID_CONFIG);
+
+        return props;
+    }
+
+    private Map<String, Object> getBaseConsumerConfigs() {
         Map<String, Object> props = this.originals();
 
         // set consumer default property values
