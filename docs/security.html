@@ -1,4 +1,4 @@
-<!--
+
  Licensed to the Apache Software Foundation (ASF) under one or more
  contributor license agreements.  See the NOTICE file distributed with
  this work for additional information regarding copyright ownership.
@@ -265,6 +265,9 @@ Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementat
 <pre>allow.everyone.if.no.acl.found=true</pre>
 One can also add super users in broker.properties like the following.
 <pre>super.users=User:Bob;User:Alice</pre>
+By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting a customized PrincipalBuilder in broker.properties like the following.
+<pre>principal.builder.classs=CustomizedPrincipalBuilderClass</pre>
+By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in broker.properties.
 <h4><a id="security_authz_cli" href="#security_authz_cli">Command Line Interface</a></h4>
 Kafka Authorization management CLI can be found under bin directory with all the other CLIs. The CLI script is called <b>kafka-acls.sh</b>. Following lists all the options that the script supports:
 <p></p>
