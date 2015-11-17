@@ -274,29 +274,12 @@ class KafkaService(JmxMixin, Service):
         self.stop_node(node, clean_shutdown)
         self.start_node(node)
 
-    def query_zookeeper(self, zk_path):
-        """ Get info from zookeeper """
-        kafka_dir = KAFKA_TRUNK
-        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
-              (kafka_dir, self.zk.connect_setting(), zk_path)
-        self.logger.debug(cmd)
-
-        node = self.zk.nodes[0]
-        result = None
-        for line in node.account.ssh_capture(cmd):
-            # loop through all lines in the output, but only hold on to the first match
-            if result is None:
-                match = re.match("^({.+})$", line)
-                if match is not None:
-                    result = match.groups()[0]
-        return result
-
     def leader(self, topic, partition=0):
         """ Get the leader replica for the given topic and partition.
         """
         self.logger.debug("Querying zookeeper to find leader replica for topic: \n%s" % (topic))
         zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
-        partition_state = self.query_zookeeper(zk_path)
+        partition_state = self.zk.query(zk_path)
 
         if partition_state is None:
             raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
@@ -309,10 +292,10 @@ class KafkaService(JmxMixin, Service):
         return self.get_node(leader_idx)
 
     def controller(self):
-        """ Get the controller ID
+        """ Get the controller node
         """
         self.logger.debug("Querying zookeeper to find controller broker")
-        controller_info = self.query_zookeeper("/controller")
+        controller_info = self.zk.query("/controller")
 
         if controller_info is None:
             raise Exception("Error finding controller info")
