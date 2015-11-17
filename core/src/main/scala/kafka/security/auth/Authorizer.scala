@@ -17,9 +17,10 @@
 
 package kafka.security.auth
 
+import java.security.Principal
+
 import kafka.network.RequestChannel.Session
 import org.apache.kafka.common.Configurable
-import org.apache.kafka.common.security.auth.KafkaPrincipal
 
 /**
  * Top level interface that all plugable authorizer must implement. Kafka server will read "authorizer.class" config
@@ -75,7 +76,7 @@ trait Authorizer extends Configurable {
    * @param principal
    * @return empty Map if no acls exist for this principal, otherwise a map of resource -> acls for the principal.
    */
-  def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]]
+  def getAcls(principal: Principal): Map[Resource, Set[Acl]]
 
   /**
    * gets the map of resource to acls for all resources.
