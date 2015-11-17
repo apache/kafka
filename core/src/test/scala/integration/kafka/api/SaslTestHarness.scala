@@ -55,21 +55,6 @@ trait SaslTestHarness extends ZooKeeperTestHarness {
         JaasTestUtils.genKafkaFile(keytabFile.getAbsolutePath)
     val jaasFile = new File(jaasFileName)
 
-    //val writer = new BufferedWriter(new FileWriter(jaasFile))
-    //val inputStream = Thread.currentThread().getContextClassLoader.getResourceAsStream(jaasResourceName)
-    //if (inputStream == null)
-    //  throw new IllegalStateException(s"Could not find `$jaasResourceName`, make sure it is in the classpath")
-    //val source = io.Source.fromInputStream(inputStream, "UTF-8")
-
-    //for (line <- source.getLines) {
-    //  val replaced = line.replaceAll("\\$keytab-location", keytabFile.getAbsolutePath)
-    //  writer.write(replaced)
-    //  writer.newLine()
-    //}
-
-    //writer.close()
-    //source.close()
-
     (keytabFile, jaasFile)
   }
 
