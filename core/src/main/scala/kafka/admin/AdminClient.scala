@@ -210,7 +210,7 @@ object AdminClient {
     create(new AdminConfig(config))
   }
 
-  def create(props: Properties): AdminClient = create(propertiesAsScalaMap(props).map(x => x._1 -> x._2).toMap)
+  def create(props: Properties): AdminClient = create(props.asScala.toMap)
 
   def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
 

@@ -399,8 +399,7 @@ object ConsumerGroupCommand {
       "for every consumer group. For instance --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use new consumer."
-    val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer." + nl +
-      "WARNING: Command config can not be used with old ZK-based consumer groups."
+    val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
     val parser = new OptionParser
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
                              .withRequiredArg
@@ -459,8 +458,6 @@ object ConsumerGroupCommand {
         CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
       if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "Option %s either takes %s, %s, or both".format(deleteOpt, groupOpt, topicOpt))
-      if (options.has(commandConfigOpt) && !options.has(newConsumerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "Option %s does not work without %s".format(commandConfigOpt, newConsumerOpt))
 
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt)
