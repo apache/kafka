@@ -509,18 +509,12 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleGroupImmigration(offsetTopicPartitionId: Int,
-                             controllerEpoch: Int,
-                             leaderEpoch: Int) = {
-    val epoch = PartitionEpoch(controllerEpoch, leaderEpoch)
-    groupManager.loadGroupsForPartition(offsetTopicPartitionId, epoch, onGroupLoaded)
+  def handleGroupImmigration(offsetTopicPartitionId: Int) {
+    groupManager.loadGroupsForPartition(offsetTopicPartitionId, onGroupLoaded)
   }
 
-  def handleGroupEmigration(offsetTopicPartitionId: Int,
-                            controllerEpoch: Int,
-                            leaderEpoch: Int) = {
-    val epoch = PartitionEpoch(controllerEpoch, leaderEpoch)
-    groupManager.removeGroupsForPartition(offsetTopicPartitionId, epoch, onGroupUnloaded)
+  def handleGroupEmigration(offsetTopicPartitionId: Int) {
+    groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded)
   }
 
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {

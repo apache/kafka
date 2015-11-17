@@ -42,23 +42,13 @@ import scala.collection._
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Gauge
 
 
 case class DelayedStore(messageSet: Map[TopicAndPartition, MessageSet],
                         callback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
-
-case class PartitionEpoch(controllerEpoch: Int,
-                          leaderEpoch: Int) extends Ordered[PartitionEpoch] {
-  override def compare(that: PartitionEpoch): Int = {
-    if (controllerEpoch != that.controllerEpoch)
-      controllerEpoch - that.controllerEpoch
-    else
-      leaderEpoch - that.leaderEpoch
-  }
-}
 
 class GroupMetadataManager(val brokerId: Int,
                            val config: OffsetConfig,
@@ -86,8 +76,7 @@ class GroupMetadataManager(val brokerId: Int,
   /* number of partitions for the consumer metadata topic */
   private val groupMetadataTopicPartitionCount = getOffsetsTopicPartitionCount
 
-  private val partitionEpochs = mutable.Map[Int, PartitionEpoch]()
-
+  /* Single-thread scheduler to handling offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
 
   this.logIdent = "[Group Metadata Manager on Broker " + brokerId + "]: "
@@ -347,37 +336,18 @@ class GroupMetadataManager(val brokerId: Int,
     }
   }
 
-  private def updateEpoch(partition: Int, epoch: PartitionEpoch): Boolean = {
-    partitionEpochs synchronized {
-      if (partitionEpochs.contains(partition) && partitionEpochs(partition) < epoch) {
-        false
-      } else {
-        partitionEpochs.put(partition, epoch)
-        true
-      }
-    }
-  }
-
   /**
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
   def loadGroupsForPartition(offsetsPartition: Int,
-                             epoch: PartitionEpoch,
                              onGroupLoaded: GroupMetadata => Unit) {
-
-
     val topicPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)
     scheduler.schedule(topicPartition.toString, loadGroupsAndOffsets)
 
     def loadGroupsAndOffsets() {
-      if (!updateEpoch(offsetsPartition, epoch))
-        return
-
       info("Loading offsets and group metadata from " + topicPartition)
 
       loadingPartitions synchronized {
-        ownedPartitions.add(offsetsPartition)
-
         if (loadingPartitions.contains(offsetsPartition)) {
           info("Offset load from %s already in progress.".format(topicPartition))
           return
@@ -475,7 +445,10 @@ class GroupMetadataManager(val brokerId: Int,
           error("Error in loading offsets from " + topicPartition, t)
       }
       finally {
-        loadingPartitions synchronized loadingPartitions.remove(offsetsPartition)
+        loadingPartitions synchronized {
+          ownedPartitions.add(offsetsPartition)
+          loadingPartitions.remove(offsetsPartition)
+        }
       }
     }
   }
@@ -486,15 +459,11 @@ class GroupMetadataManager(val brokerId: Int,
    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
   def removeGroupsForPartition(offsetsPartition: Int,
-                               epoch: PartitionEpoch,
                                onGroupUnloaded: GroupMetadata => Unit) {
     val topicPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)
     scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
 
     def removeGroupsAndOffsets() {
-      if (!updateEpoch(offsetsPartition, epoch))
-        return
-
       var numOffsetsRemoved = 0
       var numGroupsRemoved = 0
 

@@ -22,6 +22,7 @@ import java.util
 
 import kafka.admin.AdminUtils
 import kafka.api._
+import kafka.cluster.Partition
 import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
@@ -112,38 +113,29 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizeClusterAction(request)
 
     try {
-      // call replica manager to handle updating partitions to become leader or follower
-      val result = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest, metadataCache)
-      val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.correlationId, result.responseMap, result.errorCode)
-      // for each new leader or follower, call coordinator to handle
-      // consumer group migration
-      result.updatedLeaders.foreach { case partition =>
-        if (partition.topic == GroupCoordinator.GroupMetadataTopicName) {
-          val (controllerEpoch, leaderEpoch) = controllerAndLeaderEpochs(partition.topic, partition.partitionId, leaderAndIsrRequest)
-          coordinator.handleGroupImmigration(partition.partitionId, controllerEpoch, leaderEpoch)
+      def onLeadershipChange(updatedLeaders: Iterable[Partition], updatedFollowers: Iterable[Partition]): Unit = {
+        // for each new leader or follower, call coordinator to handle consumer group migration.
+        // this callback is invoked under the replica state change lock to ensure proper order of
+        // leadership changes
+        updatedLeaders.foreach { partition =>
+          if (partition.topic == GroupCoordinator.GroupMetadataTopicName)
+            coordinator.handleGroupImmigration(partition.partitionId)
         }
-      }
-      result.updatedFollowers.foreach { case partition =>
-        partition.leaderReplicaIdOpt.foreach { leaderReplica =>
-          if (partition.topic == GroupCoordinator.GroupMetadataTopicName &&
-              leaderReplica == brokerId) {
-            val (controllerEpoch, leaderEpoch) = controllerAndLeaderEpochs(partition.topic, partition.partitionId, leaderAndIsrRequest)
-            coordinator.handleGroupEmigration(partition.partitionId, controllerEpoch, leaderEpoch)
-          }
+        updatedFollowers.foreach { partition =>
+          if (partition.topic == GroupCoordinator.GroupMetadataTopicName)
+            coordinator.handleGroupEmigration(partition.partitionId)
         }
       }
 
+      // call replica manager to handle updating partitions to become leader or follower
+      val result = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest, metadataCache, onLeadershipChange)
+      val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.correlationId, result.responseMap, result.errorCode)
       requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, leaderAndIsrResponse)))
     } catch {
       case e: KafkaStorageException =>
         fatal("Disk error during leadership change.", e)
         Runtime.getRuntime.halt(1)
     }
-  }
-
-  private def controllerAndLeaderEpochs(topic: String, partition: Int, request: LeaderAndIsrRequest): (Int, Int) = {
-    val leaderAndIsr = request.partitionStateInfos((topic, partition)).leaderIsrAndControllerEpoch
-    (leaderAndIsr.controllerEpoch, leaderAndIsr.leaderAndIsr.leaderEpoch)
   }
 
   def handleStopReplicaRequest(request: RequestChannel.Request) {
