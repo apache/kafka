@@ -15,7 +15,7 @@
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.security.security_config import SecurityConfig
+from kafkatest.services.kafka.version import TRUNK
 
 import os
 
@@ -69,7 +69,7 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, new_consumer=False, settings={}):
+    def __init__(self, context, num_nodes, kafka, topic, messages, version=TRUNK, new_consumer=False, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -85,6 +85,9 @@ class ConsumerPerformanceService(PerformanceService):
         self.num_fetch_threads = None
         self.group = None
         self.from_latest = None
+
+        for node in self.nodes:
+            node.version = version
 
     @property
     def args(self):

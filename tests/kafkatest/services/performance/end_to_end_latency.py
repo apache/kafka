@@ -17,6 +17,7 @@ from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 
 from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.services.kafka.version import TRUNK
 
 
 class EndToEndLatencyService(PerformanceService):
@@ -27,7 +28,7 @@ class EndToEndLatencyService(PerformanceService):
             "collect_default": True},
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, consumer_fetch_max_wait=100, acks=1):
+    def __init__(self, context, num_nodes, kafka, topic, num_records, version=TRUNK, consumer_fetch_max_wait=100, acks=1):
         super(EndToEndLatencyService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -38,6 +39,9 @@ class EndToEndLatencyService(PerformanceService):
             'acks': acks,
             'kafka_opts': self.security_config.kafka_opts
         }
+
+        for node in self.nodes:
+            node.version = version
 
     def _worker(self, idx, node):
         args = self.args.copy()

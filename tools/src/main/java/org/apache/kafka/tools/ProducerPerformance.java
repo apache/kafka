@@ -234,6 +234,13 @@ public class ProducerPerformance {
                               percs[1],
                               percs[2],
                               percs[3]);
+
+            /*      0: config.dateFormat.format(startMs), 1: config.dateFormat.format(endMs),
+      2: config.compressionCodec.codec, 3: config.messageSize, 4: config.batchSize, 5: totalMBSent,
+      6: mb/s, 7: totalMessagesSent.get, 8: msgs/sec))
+             * *
+             */
+            // 2015-11-17 03:46:42:901, 2015-11-17 03:46:43:158, 0, 100, 200, 0.00, 0.0037, 10, 38.9105\n',)}
         }
 
         private static int[] percentiles(int[] latencies, int count, double... percentiles) {

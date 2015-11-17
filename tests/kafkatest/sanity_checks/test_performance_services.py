@@ -1,0 +1,101 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from ducktape.tests.test import Test
+
+from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka.version import LATEST_0_8_2
+from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
+from kafkatest.services.performance import throughput, latency, compute_aggregate_throughput
+
+
+class ProducerPerformanceSanityTest(Test):
+    def __init__(self, test_context):
+        super(ProducerPerformanceSanityTest, self).__init__(test_context)
+        self.record_size = 100
+        self.num_records = 10
+        self.topic = "topic"
+
+        self.zk = ZookeeperService(test_context, 1)
+
+
+    def setUp(self):
+        self.zk.start()
+
+    def test_version(self, version=LATEST_0_8_2):
+        """
+        Sanity check out producer performance service - verify that we can run the service with a small
+        number of messages.
+        """
+        self.kafka = KafkaService(
+            self.test_context, 1,
+            self.zk, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=version)
+        self.kafka.start()
+
+        self.producer_perf = ProducerPerformanceService(
+            self.test_context, 1, self.kafka, topic=self.topic, throughput=10000, version=version,
+            num_records=self.num_records, record_size=self.record_size,
+            settings={
+                'acks': 1,
+                'batch.size': 8*1024,
+                'buffer.memory': 64*1024*1024})
+        self.producer_perf.run()
+        producer_perf_data = compute_aggregate_throughput(self.producer_perf)
+        return producer_perf_data
+
+        # self.consumer_perf = ConsumerPerformanceService(
+        #     self.test_context, 1, self.kafka,
+        #     topic=self.topic, messages=self.num_records, version=version)
+        # self.consumer_perf.group = "test-consumer-group"
+        # self.consumer_perf.run()
+        #
+        # self.end_to_end = EndToEndLatencyService(
+        #     self.test_context, 1, self.kafka,
+        #     topic=self.topic, num_records=10000, version=version)
+        # self.end_to_end.run()
+
+
+
+# class ConsumerPerformanceSanityTest(Test):
+#     def __init__(self, test_context):
+#         super(ConsumerPerformanceSanityTest, self).__init__(test_context)
+#         self.record_size = 100
+#         self.num_records = 10
+#         self.topic = "topic"
+#
+#         self.zk = ZookeeperService(test_context, 1)
+#
+#
+#     def setUp(self):
+#         self.zk.start()
+#
+#     def test_version(self, version=LATEST_0_8_2):
+#         """
+#         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
+#         (using new consumer iff new_consumer == True), and report throughput.
+#         """
+#         # seed kafka w/messages
+#         self.producer = ProducerPerformanceService(
+#             self.test_context, 1, self.kafka,
+#             topic=TOPIC_REP_THREE,
+#             num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1,
+#             settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
+#         )
+#         self.producer.run()
+#
+#         # consume
+
+

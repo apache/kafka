@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService
+from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
 
 
 TOPIC_REP_ONE = "topic-replication-factor-one"
@@ -226,28 +226,3 @@ class Benchmark(Test):
         self.consumer.group = "test-consumer-group"
         self.consumer.run()
         return compute_aggregate_throughput(self.consumer)
-
-
-def throughput(records_per_sec, mb_per_sec):
-    """Helper method to ensure uniform representation of throughput data"""
-    return {
-        "records_per_sec": records_per_sec,
-        "mb_per_sec": mb_per_sec
-    }
-
-
-def latency(latency_50th_ms, latency_99th_ms, latency_999th_ms):
-    """Helper method to ensure uniform representation of latency data"""
-    return {
-        "latency_50th_ms": latency_50th_ms,
-        "latency_99th_ms": latency_99th_ms,
-        "latency_999th_ms": latency_999th_ms
-    }
-
-
-def compute_aggregate_throughput(perf):
-    """Helper method for computing throughput after running a performance service."""
-    aggregate_rate = sum([r['records_per_sec'] for r in perf.results])
-    aggregate_mbps = sum([r['mbps'] for r in perf.results])
-
-    return throughput(aggregate_rate, aggregate_mbps)
