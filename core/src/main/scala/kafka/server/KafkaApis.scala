@@ -118,14 +118,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       // for each new leader or follower, call coordinator to handle
       // consumer group migration
       result.updatedLeaders.foreach { case partition =>
-        if (partition.topic == GroupCoordinator.GroupMetadataTopicName)
-          coordinator.handleGroupImmigration(partition.partitionId)
+        if (partition.topic == GroupCoordinator.GroupMetadataTopicName) {
+          val (controllerEpoch, leaderEpoch) = controllerAndLeaderEpochs(partition.topic, partition.partitionId, leaderAndIsrRequest)
+          coordinator.handleGroupImmigration(partition.partitionId, controllerEpoch, leaderEpoch)
+        }
       }
       result.updatedFollowers.foreach { case partition =>
         partition.leaderReplicaIdOpt.foreach { leaderReplica =>
           if (partition.topic == GroupCoordinator.GroupMetadataTopicName &&
-              leaderReplica == brokerId)
-            coordinator.handleGroupEmigration(partition.partitionId)
+              leaderReplica == brokerId) {
+            val (controllerEpoch, leaderEpoch) = controllerAndLeaderEpochs(partition.topic, partition.partitionId, leaderAndIsrRequest)
+            coordinator.handleGroupEmigration(partition.partitionId, controllerEpoch, leaderEpoch)
+          }
         }
       }
 
@@ -135,6 +139,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         fatal("Disk error during leadership change.", e)
         Runtime.getRuntime.halt(1)
     }
+  }
+
+  private def controllerAndLeaderEpochs(topic: String, partition: Int, request: LeaderAndIsrRequest): (Int, Int) = {
+    val leaderAndIsr = request.partitionStateInfos((topic, partition)).leaderIsrAndControllerEpoch
+    (leaderAndIsr.controllerEpoch, leaderAndIsr.leaderAndIsr.leaderEpoch)
   }
 
   def handleStopReplicaRequest(request: RequestChannel.Request) {

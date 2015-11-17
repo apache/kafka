@@ -187,7 +187,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         kafkaController.startup()
 
         /* start kafka coordinator */
-        consumerCoordinator = GroupCoordinator.create(config, zkUtils, replicaManager, kafkaScheduler)
+        consumerCoordinator = GroupCoordinator.create(config, zkUtils, replicaManager)
         consumerCoordinator.startup()
 
         /* Get the authorizer and initialize it if one is specified.*/

@@ -50,11 +50,20 @@ import com.yammer.metrics.core.Gauge
 case class DelayedStore(messageSet: Map[TopicAndPartition, MessageSet],
                         callback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
 
+case class PartitionEpoch(controllerEpoch: Int,
+                          leaderEpoch: Int) extends Ordered[PartitionEpoch] {
+  override def compare(that: PartitionEpoch): Int = {
+    if (controllerEpoch != that.controllerEpoch)
+      controllerEpoch - that.controllerEpoch
+    else
+      leaderEpoch - that.leaderEpoch
+  }
+}
+
 class GroupMetadataManager(val brokerId: Int,
                            val config: OffsetConfig,
                            replicaManager: ReplicaManager,
-                           zkUtils: ZkUtils,
-                           scheduler: Scheduler) extends Logging with KafkaMetricsGroup {
+                           zkUtils: ZkUtils) extends Logging with KafkaMetricsGroup {
 
   /* offsets cache */
   private val offsetsCache = new Pool[GroupTopicPartition, OffsetAndMetadata]
@@ -77,8 +86,13 @@ class GroupMetadataManager(val brokerId: Int,
   /* number of partitions for the consumer metadata topic */
   private val groupMetadataTopicPartitionCount = getOffsetsTopicPartitionCount
 
+  private val partitionEpochs = mutable.Map[Int, PartitionEpoch]()
+
+  private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
+
   this.logIdent = "[Group Metadata Manager on Broker " + brokerId + "]: "
 
+  scheduler.startup()
   scheduler.schedule(name = "delete-expired-consumer-offsets",
     fun = deleteExpiredOffsets,
     period = config.offsetsRetentionCheckIntervalMs,
@@ -333,26 +347,44 @@ class GroupMetadataManager(val brokerId: Int,
     }
   }
 
+  private def updateEpoch(partition: Int, epoch: PartitionEpoch): Boolean = {
+    partitionEpochs synchronized {
+      if (partitionEpochs.contains(partition) && partitionEpochs(partition) < epoch) {
+        false
+      } else {
+        partitionEpochs.put(partition, epoch)
+        true
+      }
+    }
+  }
+
   /**
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
   def loadGroupsForPartition(offsetsPartition: Int,
+                             epoch: PartitionEpoch,
                              onGroupLoaded: GroupMetadata => Unit) {
+
+
     val topicPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)
-
-    loadingPartitions synchronized {
-      ownedPartitions.add(offsetsPartition)
-
-      if (loadingPartitions.contains(offsetsPartition)) {
-        info("Offset load from %s already in progress.".format(topicPartition))
-      } else {
-        loadingPartitions.add(offsetsPartition)
-        scheduler.schedule(topicPartition.toString, loadGroupsAndOffsets)
-      }
-    }
+    scheduler.schedule(topicPartition.toString, loadGroupsAndOffsets)
 
     def loadGroupsAndOffsets() {
+      if (!updateEpoch(offsetsPartition, epoch))
+        return
+
       info("Loading offsets and group metadata from " + topicPartition)
+
+      loadingPartitions synchronized {
+        ownedPartitions.add(offsetsPartition)
+
+        if (loadingPartitions.contains(offsetsPartition)) {
+          info("Offset load from %s already in progress.".format(topicPartition))
+          return
+        } else {
+          loadingPartitions.add(offsetsPartition)
+        }
+      }
 
       val startMs = SystemTime.milliseconds
       try {
@@ -454,42 +486,51 @@ class GroupMetadataManager(val brokerId: Int,
    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
   def removeGroupsForPartition(offsetsPartition: Int,
+                               epoch: PartitionEpoch,
                                onGroupUnloaded: GroupMetadata => Unit) {
-    var numOffsetsRemoved = 0
-    var numGroupsRemoved = 0
+    val topicPartition = TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)
+    scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
 
-    loadingPartitions synchronized {
-      // we need to guard the group removal in cache in the loading partition lock
-      // to prevent coordinator's check-and-get-group race condition
-      ownedPartitions.remove(offsetsPartition)
+    def removeGroupsAndOffsets() {
+      if (!updateEpoch(offsetsPartition, epoch))
+        return
 
-      // clear the offsets for this partition in the cache
+      var numOffsetsRemoved = 0
+      var numGroupsRemoved = 0
 
-      /**
-       * NOTE: we need to put this in the loading partition lock as well to prevent race condition of the leader-is-local check
-       * in getOffsets to protects against fetching from an empty/cleared offset cache (i.e., cleared due to a leader->follower
-       * transition right after the check and clear the cache), causing offset fetch return empty offsets with NONE error code
-       */
-      offsetsCache.keys.foreach { key =>
-        if (partitionFor(key.group) == offsetsPartition) {
-          offsetsCache.remove(key)
-          numOffsetsRemoved += 1
+      loadingPartitions synchronized {
+        // we need to guard the group removal in cache in the loading partition lock
+        // to prevent coordinator's check-and-get-group race condition
+        ownedPartitions.remove(offsetsPartition)
+
+        // clear the offsets for this partition in the cache
+
+        /**
+         * NOTE: we need to put this in the loading partition lock as well to prevent race condition of the leader-is-local check
+         * in getOffsets to protects against fetching from an empty/cleared offset cache (i.e., cleared due to a leader->follower
+         * transition right after the check and clear the cache), causing offset fetch return empty offsets with NONE error code
+         */
+        offsetsCache.keys.foreach { key =>
+          if (partitionFor(key.group) == offsetsPartition) {
+            offsetsCache.remove(key)
+            numOffsetsRemoved += 1
+          }
+        }
+
+        // clear the groups for this partition in the cache
+        for (group <- groupsCache.values) {
+          onGroupUnloaded(group)
+          groupsCache.remove(group.groupId, group)
+          numGroupsRemoved += 1
         }
       }
 
-      // clear the groups for this partition in the cache
-      for (group <- groupsCache.values) {
-        onGroupUnloaded(group)
-        groupsCache.remove(group.groupId, group)
-        numGroupsRemoved += 1
-      }
+      if (numOffsetsRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
+        .format(numOffsetsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
+
+      if (numGroupsRemoved > 0) info("Removed %d cached groups for %s on follower transition."
+        .format(numGroupsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
     }
-
-    if (numOffsetsRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
-      .format(numOffsetsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
-
-    if (numGroupsRemoved > 0) info("Removed %d cached groups for %s on follower transition."
-      .format(numGroupsRemoved, TopicAndPartition(GroupCoordinator.GroupMetadataTopicName, offsetsPartition)))
   }
 
   /**
@@ -588,6 +629,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   def shutdown() {
     shuttingDown.set(true)
+    scheduler.shutdown()
 
     // TODO: clear the caches
   }

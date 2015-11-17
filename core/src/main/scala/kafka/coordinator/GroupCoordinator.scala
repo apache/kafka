@@ -63,9 +63,8 @@ class GroupCoordinator(val brokerId: Int,
            groupConfig: GroupConfig,
            offsetConfig: OffsetConfig,
            replicaManager: ReplicaManager,
-           zkUtils: ZkUtils,
-           scheduler: Scheduler) = this(brokerId, groupConfig, offsetConfig,
-    new GroupMetadataManager(brokerId, offsetConfig, replicaManager, zkUtils, scheduler))
+           zkUtils: ZkUtils) = this(brokerId, groupConfig, offsetConfig,
+    new GroupMetadataManager(brokerId, offsetConfig, replicaManager, zkUtils))
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -510,12 +509,18 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleGroupImmigration(offsetTopicPartitionId: Int) = {
-    groupManager.loadGroupsForPartition(offsetTopicPartitionId, onGroupLoaded)
+  def handleGroupImmigration(offsetTopicPartitionId: Int,
+                             controllerEpoch: Int,
+                             leaderEpoch: Int) = {
+    val epoch = PartitionEpoch(controllerEpoch, leaderEpoch)
+    groupManager.loadGroupsForPartition(offsetTopicPartitionId, epoch, onGroupLoaded)
   }
 
-  def handleGroupEmigration(offsetTopicPartitionId: Int) = {
-    groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded)
+  def handleGroupEmigration(offsetTopicPartitionId: Int,
+                            controllerEpoch: Int,
+                            leaderEpoch: Int) = {
+    val epoch = PartitionEpoch(controllerEpoch, leaderEpoch)
+    groupManager.removeGroupsForPartition(offsetTopicPartitionId, epoch, onGroupUnloaded)
   }
 
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {
@@ -732,8 +737,7 @@ object GroupCoordinator {
 
   def create(config: KafkaConfig,
              zkUtils: ZkUtils,
-             replicaManager: ReplicaManager,
-             scheduler: Scheduler): GroupCoordinator = {
+             replicaManager: ReplicaManager): GroupCoordinator = {
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
@@ -745,7 +749,7 @@ object GroupCoordinator {
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils, scheduler)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils)
   }
 
   def create(config: KafkaConfig,
