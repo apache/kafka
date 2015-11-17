@@ -15,9 +15,9 @@
  limitations under the License.
 -->
 
-<h3><a id="upgrade">1.5 Upgrading From Previous Versions</a></h3>
+<h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
-<h4>Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</h4>
+<h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>
 
 0.9.0.0 has an inter-broker protocol change from previous versions. For a rolling upgrade:
 <ol>
@@ -31,7 +31,7 @@ Note: If you are willing to accept downtime, you can simply take all the brokers
 
 Note: Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<h5>Potential breaking changes in 0.9.0.0</h5>
+<h5><a id="upgrade_9_breaking" href="#upgrade_9_breaking">Potential breaking changes in 0.9.0.0</a></h5>
 
 <ul>
     <li> Java 1.6 is no longer supported. </li>
@@ -52,14 +52,14 @@ Note: Bumping the protocol version and restarting can be done any time after the
     <li> The kafka.tools.ProducerPerformance class has been deprecated. Going forward, please use org.apache.kafka.tools.ProducerPerformance for this functionality (kafka-producer-perf-test.sh will also be changed to use the new class). </li>
 </ul>
 
-<h4>Upgrading from 0.8.1 to 0.8.2</h4>
+<h4><a id="upgrade_82" href="#upgrade_82">Upgrading from 0.8.1 to 0.8.2</a></h4>
 
 0.8.2 is fully compatible with 0.8.1. The upgrade can be done one broker at a time by simply bringing it down, updating the code, and restarting it.
 
-<h4>Upgrading from 0.8.0 to 0.8.1</h4>
+<h4><a id="upgrade_81" href="#upgrade_81">Upgrading from 0.8.0 to 0.8.1</a></h4>
 
 0.8.1 is fully compatible with 0.8. The upgrade can be done one broker at a time by simply bringing it down, updating the code, and restarting it.
 
-<h4>Upgrading from 0.7</h4>
+<h4><a id="upgrade_7" href="#upgrade_7">Upgrading from 0.7</a></h4>
 
 Release 0.7 is incompatible with newer releases. Major changes were made to the API, ZooKeeper data structures, and protocol, and configuration in order to add replication (Which was missing in 0.7). The upgrade from 0.7 to later versions requires a <a href="https://cwiki.apache.org/confluence/display/KAFKA/Migrating+from+0.7+to+0.8">special tool</a> for migration. This migration can be done without downtime.

@@ -17,12 +17,10 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -42,7 +40,6 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -110,26 +107,6 @@ public class KafkaStreamingPartitionAssignorTest {
         };
     }
 
-    private static class TestStreamTask extends StreamTask {
-        public boolean committed = false;
-
-        public TestStreamTask(TaskId id,
-                              Consumer<byte[], byte[]> consumer,
-                              Producer<byte[], byte[]> producer,
-                              Consumer<byte[], byte[]> restoreConsumer,
-                              Collection<TopicPartition> partitions,
-                              ProcessorTopology topology,
-                              StreamingConfig config) {
-            super(id, consumer, producer, restoreConsumer, partitions, topology, config, null);
-        }
-
-        @Override
-        public void commit() {
-            super.commit();
-            committed = true;
-        }
-    }
-
     private ByteArraySerializer serializer = new ByteArraySerializer();
 
     @SuppressWarnings("unchecked")
@@ -165,9 +142,7 @@ public class KafkaStreamingPartitionAssignorTest {
         };
 
         KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
-        partitionAssignor.configure(
-                Collections.singletonMap(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, thread)
-        );
+        partitionAssignor.configure(config.getConsumerConfigs(thread));
 
         PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1", "topic2"));
 
@@ -193,6 +168,8 @@ public class KafkaStreamingPartitionAssignorTest {
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        List<String> topics = Utils.mkList("topic1", "topic2");
+        Set<TaskId> allTasks = Utils.mkSet(task0, task1, task2);
 
         final Set<TaskId> prevTasks10 = Utils.mkSet(task0);
         final Set<TaskId> prevTasks11 = Utils.mkSet(task1);
@@ -207,17 +184,15 @@ public class KafkaStreamingPartitionAssignorTest {
         StreamThread thread10 = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", uuid1, new Metrics(), new SystemTime());
 
         KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
-        partitionAssignor.configure(
-                Collections.singletonMap(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, thread10)
-        );
+        partitionAssignor.configure(config.getConsumerConfigs(thread10));
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
-                new PartitionAssignor.Subscription(Utils.mkList("topic1", "topic2"), new SubscriptionInfo(uuid1, prevTasks10, standbyTasks10).encode()));
+                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks10, standbyTasks10).encode()));
         subscriptions.put("consumer11",
-                new PartitionAssignor.Subscription(Utils.mkList("topic1", "topic2"), new SubscriptionInfo(uuid1, prevTasks11, standbyTasks11).encode()));
+                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks11, standbyTasks11).encode()));
         subscriptions.put("consumer20",
-                new PartitionAssignor.Subscription(Utils.mkList("topic1", "topic2"), new SubscriptionInfo(uuid2, prevTasks20, standbyTasks20).encode()));
+                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid2, prevTasks20, standbyTasks20).encode()));
 
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
 
@@ -228,24 +203,149 @@ public class KafkaStreamingPartitionAssignorTest {
         assertEquals(Utils.mkSet(t1p2, t2p2), new HashSet<>(assignments.get("consumer20").partitions()));
 
         // check assignment info
+        Set<TaskId> allActiveTasks = new HashSet<>();
+        AssignmentInfo info;
 
         List<TaskId> activeTasks = new ArrayList<>();
         for (TopicPartition partition : assignments.get("consumer10").partitions()) {
             activeTasks.add(new TaskId(0, partition.partition()));
         }
-        assertEquals(activeTasks, AssignmentInfo.decode(assignments.get("consumer10").userData()).activeTasks);
+        info = AssignmentInfo.decode(assignments.get("consumer10").userData());
+        assertEquals(activeTasks, info.activeTasks);
+        assertEquals(2, info.activeTasks.size());
+        assertEquals(1, new HashSet<>(info.activeTasks).size());
+        assertEquals(0, info.standbyTasks.size());
+
+        allActiveTasks.addAll(info.activeTasks);
 
         activeTasks.clear();
         for (TopicPartition partition : assignments.get("consumer11").partitions()) {
             activeTasks.add(new TaskId(0, partition.partition()));
         }
-        assertEquals(activeTasks, AssignmentInfo.decode(assignments.get("consumer11").userData()).activeTasks);
+        info = AssignmentInfo.decode(assignments.get("consumer11").userData());
+        assertEquals(activeTasks, info.activeTasks);
+        assertEquals(2, info.activeTasks.size());
+        assertEquals(1, new HashSet<>(info.activeTasks).size());
+        assertEquals(0, info.standbyTasks.size());
+
+        allActiveTasks.addAll(info.activeTasks);
+
+        // check active tasks assigned to the first client
+        assertEquals(Utils.mkSet(task0, task1), new HashSet<>(allActiveTasks));
 
         activeTasks.clear();
         for (TopicPartition partition : assignments.get("consumer20").partitions()) {
             activeTasks.add(new TaskId(0, partition.partition()));
         }
-        assertEquals(activeTasks, AssignmentInfo.decode(assignments.get("consumer20").userData()).activeTasks);
+        info = AssignmentInfo.decode(assignments.get("consumer20").userData());
+        assertEquals(activeTasks, info.activeTasks);
+        assertEquals(2, info.activeTasks.size());
+        assertEquals(1, new HashSet<>(info.activeTasks).size());
+        assertEquals(0, info.standbyTasks.size());
+
+        allActiveTasks.addAll(info.activeTasks);
+
+        assertEquals(3, allActiveTasks.size());
+        assertEquals(allTasks, new HashSet<>(allActiveTasks));
+    }
+
+    @Test
+    public void testAssignWithStandbyReplicas() throws Exception {
+        Properties props = configProps();
+        props.setProperty(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
+        StreamingConfig config = new StreamingConfig(props);
+
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, serializer, serializer);
+        MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+
+        TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source1", "topic1");
+        builder.addSource("source2", "topic2");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        List<String> topics = Utils.mkList("topic1", "topic2");
+        Set<TaskId> allTasks = Utils.mkSet(task0, task1, task2);
+
+        final Set<TaskId> prevTasks10 = Utils.mkSet(task0);
+        final Set<TaskId> prevTasks11 = Utils.mkSet(task1);
+        final Set<TaskId> prevTasks20 = Utils.mkSet(task2);
+        final Set<TaskId> standbyTasks10 = Utils.mkSet(task1);
+        final Set<TaskId> standbyTasks11 = Utils.mkSet(task2);
+        final Set<TaskId> standbyTasks20 = Utils.mkSet(task0);
+
+        UUID uuid1 = UUID.randomUUID();
+        UUID uuid2 = UUID.randomUUID();
+
+        StreamThread thread10 = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", uuid1, new Metrics(), new SystemTime());
+
+        KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
+        partitionAssignor.configure(config.getConsumerConfigs(thread10));
+
+        Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        subscriptions.put("consumer10",
+                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks10, standbyTasks10).encode()));
+        subscriptions.put("consumer11",
+                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks11, standbyTasks11).encode()));
+        subscriptions.put("consumer20",
+                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid2, prevTasks20, standbyTasks20).encode()));
+
+        Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
+
+        // check assigned partitions
+
+        assertEquals(Utils.mkSet(Utils.mkSet(t1p0, t2p0), Utils.mkSet(t1p1, t2p1)),
+                Utils.mkSet(new HashSet<>(assignments.get("consumer10").partitions()), new HashSet<>(assignments.get("consumer11").partitions())));
+        assertEquals(Utils.mkSet(t1p2, t2p2), new HashSet<>(assignments.get("consumer20").partitions()));
+
+        // check assignment info
+        Set<TaskId> allActiveTasks = new HashSet<>();
+        Set<TaskId> allStandbyTasks = new HashSet<>();
+        AssignmentInfo info;
+
+        List<TaskId> activeTasks = new ArrayList<>();
+        for (TopicPartition partition : assignments.get("consumer10").partitions()) {
+            activeTasks.add(new TaskId(0, partition.partition()));
+        }
+        info = AssignmentInfo.decode(assignments.get("consumer10").userData());
+        assertEquals(activeTasks, info.activeTasks);
+        assertEquals(2, info.activeTasks.size());
+        assertEquals(1, new HashSet<>(info.activeTasks).size());
+
+        allActiveTasks.addAll(info.activeTasks);
+        allStandbyTasks.addAll(info.standbyTasks);
+
+        activeTasks.clear();
+        for (TopicPartition partition : assignments.get("consumer11").partitions()) {
+            activeTasks.add(new TaskId(0, partition.partition()));
+        }
+        info = AssignmentInfo.decode(assignments.get("consumer11").userData());
+        assertEquals(activeTasks, info.activeTasks);
+        assertEquals(2, info.activeTasks.size());
+        assertEquals(1, new HashSet<>(info.activeTasks).size());
+
+        allActiveTasks.addAll(info.activeTasks);
+        allStandbyTasks.addAll(info.standbyTasks);
+
+        // check tasks assigned to the first client
+        assertEquals(Utils.mkSet(task0, task1), new HashSet<>(allActiveTasks));
+
+        activeTasks.clear();
+        for (TopicPartition partition : assignments.get("consumer20").partitions()) {
+            activeTasks.add(new TaskId(0, partition.partition()));
+        }
+        info = AssignmentInfo.decode(assignments.get("consumer20").userData());
+        assertEquals(activeTasks, info.activeTasks);
+        assertEquals(2, info.activeTasks.size());
+        assertEquals(1, new HashSet<>(info.activeTasks).size());
+
+        allActiveTasks.addAll(info.activeTasks);
+        allStandbyTasks.addAll(info.standbyTasks);
+
+        assertEquals(3, allActiveTasks.size());
+        assertEquals(allTasks, new HashSet<>(allActiveTasks));
+
+        assertEquals(3, allStandbyTasks.size());
+        assertEquals(allTasks, new HashSet<>(allStandbyTasks));
     }
 
     @Test
@@ -266,9 +366,7 @@ public class KafkaStreamingPartitionAssignorTest {
         StreamThread thread = new StreamThread(builder, config, producer, consumer, mockRestoreConsumer, "test", uuid, new Metrics(), new SystemTime());
 
         KafkaStreamingPartitionAssignor partitionAssignor = new KafkaStreamingPartitionAssignor();
-        partitionAssignor.configure(
-                Collections.singletonMap(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, thread)
-        );
+        partitionAssignor.configure(config.getConsumerConfigs(thread));
 
         List<TaskId> activeTaskList = Utils.mkList(task0, task3);
         Set<TaskId> standbyTasks = Utils.mkSet(task1, task2);
