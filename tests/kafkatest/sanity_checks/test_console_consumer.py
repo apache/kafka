@@ -69,8 +69,7 @@ class ConsoleConsumerTest(Test):
         assert line_count(node, ConsoleConsumer.LOG_FILE) > 0
 
         # Verify no consumed messages
-        assert line_count(node, ConsoleConsumer.STDOUT_CAPTURE) == 0
-
+        assert len(self.consumer.messages_consumed[1]) == 0
         self.consumer.stop_node(node)
 
     def test_version(self):
