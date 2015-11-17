@@ -241,7 +241,7 @@ object ConsoleProducer {
             .withRequiredArg
             .describedAs("producer_prop")
             .ofType(classOf[String])
-    val producerConfigOpt = parser.accepts("producer.config", "Producer config properties file.")
+    val producerConfigOpt = parser.accepts("producer.config", s"Producer config properties file. Note that $producerPropertyOpt takes precedence over this config.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
