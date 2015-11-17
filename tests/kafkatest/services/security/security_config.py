@@ -16,6 +16,7 @@
 import os
 import subprocess
 from ducktape.template import TemplateRenderer
+from kafkatest.utils.remote_account import scp
 from kafkatest.services.security.minikdc import MiniKdc
 
 class Keytool(object):
@@ -127,8 +128,8 @@ class SecurityConfig(TemplateRenderer):
             jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk)
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             if self.has_sasl_kerberos:
-                node.account.scp_to(miniKdc.local_keytab_file, SecurityConfig.KEYTAB_PATH)
-                node.account.scp_to(miniKdc.local_krb5conf_file, SecurityConfig.KRB5CONF_PATH)
+                scp(miniKdc.nodes[0], MiniKdc.KEYTAB_FILE, node, SecurityConfig.KEYTAB_PATH)
+                scp(miniKdc.nodes[0], MiniKdc.KRB5CONF_FILE, node, SecurityConfig.KRB5CONF_PATH)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
