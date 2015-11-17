@@ -387,7 +387,6 @@ object ConsumerGroupCommand {
     val BootstrapServerDoc = "REQUIRED (only when using new-consumer): The server to connect to."
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted."
-    val ConfigDoc = "Configuration for timeouts. For instance --config channelSocketTimeoutMs=600"
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag related to given group."
     val nl = System.getProperty("line.separator")
@@ -417,10 +416,6 @@ object ConsumerGroupCommand {
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
-    val configOpt = parser.accepts("config", ConfigDoc)
-                          .withRequiredArg
-                          .describedAs("name=value")
-                          .ofType(classOf[String])
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
