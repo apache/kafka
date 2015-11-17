@@ -27,8 +27,6 @@ import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
 
 import org.slf4j.Logger;
@@ -57,8 +55,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         try {
             this.configs = configs;
             this.loginManager = LoginManager.acquireLoginManager(loginType, configs);
-            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
-            this.principalBuilder.configure(configs);
+            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs);
 
             String defaultRealm;
             try {
