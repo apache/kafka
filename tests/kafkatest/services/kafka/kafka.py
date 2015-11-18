@@ -34,17 +34,22 @@ import os.path
 class KafkaService(JmxMixin, Service):
 
     PERSISTENT_ROOT = "/mnt"
-    LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
+    STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "kafka.log")
+    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "kafka.log")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
+    # Logs such as controller.log, server.log, etc all go here
+    OPERATIONAL_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-operational-logs")
+    # Kafka log segments etc go here
+    DATA_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-data-logs")
+    CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
+
 
     logs = {
-        "kafka_log": {
-            "path": "/mnt/kafka.log",
-            "collect_default": True},
         "kafka_operational_logs": {
-            "path": "/mnt/kafka-operational-logs",
+            "path": OPERATIONAL_LOG_DIR,
             "collect_default": True},
         "kafka_data": {
-            "path": "/mnt/kafka-data-logs",
+            "path": DATA_LOG_DIR,
             "collect_default": False}
     }
 
@@ -107,24 +112,24 @@ class KafkaService(JmxMixin, Service):
 
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
-        cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
-        cmd += "export LOG_DIR=/mnt/kafka-operational-logs/; "
+        cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
+        cmd += "export LOG_DIR=%s; " % KafkaService.OPERATIONAL_LOG_DIR
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
-        cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
+        cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-server-start.sh %s 1>> %s 2>> %s &" % (KafkaService.CONFIG_FILE, KafkaService.STDOUT_CAPTURE, KafkaService.STDERR_CAPTURE)
         return cmd
 
     def start_node(self, node):
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
         self.logger.info(prop_file)
-        node.account.create_file("/mnt/kafka.properties", prop_file)
-        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('log4j.properties'))
+        node.account.create_file(KafkaService.CONFIG_FILE, prop_file)
+        node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
 
         self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
-        with node.account.monitor_log("/mnt/kafka.log") as monitor:
+        with node.account.monitor_log(KafkaService.STDOUT_CAPTURE) as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
 
