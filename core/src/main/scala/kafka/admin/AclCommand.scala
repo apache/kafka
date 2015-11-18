@@ -76,7 +76,7 @@ object AclCommand {
     val resourceToAcl = getResourceToAcls(opts)
 
     if (resourceToAcl.values.exists(_.isEmpty))
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principals, --deny-principals when trying to add acls.")
+      CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add acls.")
 
     for ((resource, acls) <- resourceToAcl) {
       val acls = resourceToAcl(resource)

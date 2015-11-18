@@ -1,4 +1,4 @@
-
+<!--
  Licensed to the Apache Software Foundation (ASF) under one or more
  contributor license agreements.  See the NOTICE file distributed with
  this work for additional information regarding copyright ownership.
@@ -266,7 +266,7 @@ Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementat
 One can also add super users in broker.properties like the following.
 <pre>super.users=User:Bob;User:Alice</pre>
 By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting a customized PrincipalBuilder in broker.properties like the following.
-<pre>principal.builder.classs=CustomizedPrincipalBuilderClass</pre>
+<pre>principal.builder.class=CustomizedPrincipalBuilderClass</pre>
 By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in broker.properties.
 <h4><a id="security_authz_cli" href="#security_authz_cli">Command Line Interface</a></h4>
 Kafka Authorization management CLI can be found under bin directory with all the other CLIs. The CLI script is called <b>kafka-acls.sh</b>. Following lists all the options that the script supports:
@@ -340,14 +340,14 @@ Kafka Authorization management CLI can be found under bin directory with all the
     </tr>
     <tr>
         <td>--allow-host</td>
-        <td>Host from which principals listed in --allow-principals will have access.</td>
-        <td> if --allow-principals is specified defaults to * which translates to "all hosts"</td>
+        <td>Host from which principals listed in --allow-principal will have access.</td>
+        <td> if --allow-principal is specified defaults to * which translates to "all hosts"</td>
         <td>Host</td>
     </tr>
     <tr>
         <td>--deny-host</td>
-        <td>Host from which principals listed in --deny-principals will be denied access.</td>
-        <td>if --deny-principals is specified defaults to * which translates to "all hosts"</td>
+        <td>Host from which principals listed in --deny-principal will be denied access.</td>
+        <td>if --deny-principal is specified defaults to * which translates to "all hosts"</td>
         <td>Host</td>
     </tr>
     <tr>
@@ -378,7 +378,7 @@ Kafka Authorization management CLI can be found under bin directory with all the
 Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from Host1 and Host2". You can do that by executing the CLI with following options:
         <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host Host1 --allow-host Host2 --operation Read --operation Write --topic Test-topic</pre>
         By default all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from host bad-host we can do so using following commands:
-        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-hosts * --deny-principal User:BadBob --deny-host bad-host --operation Read--topic Test-topic</pre>
+        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host bad-host --operation Read --topic Test-topic</pre>
         Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --consumer-group [group-name].</li>
 
     <li><b>Removing Acls</b><br>
