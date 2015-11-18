@@ -37,6 +37,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, Produce
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.errors.TopicAuthorizationException
 import org.junit.Assert._
 import org.junit.{Test, Before}
 
@@ -62,7 +63,13 @@ class EndToEndAuthorizationTest extends SecurityTestHarness {
                                           s"--add",
                                           s"--topic=$topic",
                                           s"--operations=Read,Write",
-                                          s"--allow-principal=$clientPrincipal")   
+                                          s"--allow-principal=$clientPrincipal")
+  def topicWriteAclArgs: Array[String] = Array("--authorizer-properties", 
+                                               s"zookeeper.connect=$zkConnect",
+                                               s"--add",
+                                               s"--topic=$topic",
+                                               s"--operations=Write",
+                                               s"--allow-principal=$clientPrincipal")
   def groupAclArgs: Array[String] = Array("--authorizer-properties", 
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
@@ -78,7 +85,7 @@ class EndToEndAuthorizationTest extends SecurityTestHarness {
   }
   
   @Test
-  def produceConsumeTest {
+  def testProduceConsume {
     AclCommand.main(topicAclArgs)
     AclCommand.main(groupAclArgs)
     //Produce records
@@ -89,6 +96,36 @@ class EndToEndAuthorizationTest extends SecurityTestHarness {
     consumers.head.assign(List(tp).asJava)
     consumeRecords(this.consumers.head)
     debug("Finished consuming")
+  }
+  
+  @Test
+  def testNotProduce {
+    //Produce records
+    debug("Starting to send records")
+    try{
+      sendRecords(numRecords, tp)
+      fail("Topic authorization exception expected")
+    } catch {
+      case e: TopicAuthorizationException => //expected
+    }
+  }
+  
+  @Test
+  def testNotConsume {
+    AclCommand.main(topicWriteAclArgs)
+    AclCommand.main(groupAclArgs)
+    //Produce records
+    debug("Starting to send records")
+    sendRecords(numRecords, tp)
+    //Consume records
+    debug("Finished sending and starting to consume records")
+    consumers.head.assign(List(tp).asJava)
+    try{
+      consumeRecords(this.consumers.head)
+      fail("Topic authorization exception expected")
+    } catch {
+      case e: TopicAuthorizationException => //expected
+    }
   }
   
   private def sendRecords(numRecords: Int, tp: TopicPartition) {
