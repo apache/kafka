@@ -25,7 +25,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Measurable;
@@ -387,6 +386,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             client.unschedule(this);
         }
 
+        private void reschedule(long at) {
+            if (enabled)
+                client.schedule(this, at);
+        }
+
         public void run(final long now) {
             if (!enabled)
                 return;
@@ -401,13 +405,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
                     if (exception == null) {
-                        client.schedule(AutoCommitTask.this, now + interval);
-                    } else if (exception instanceof RetriableException) {
-                        log.debug("Auto offset commit failed, will retry after backoff.", exception);
-                        client.schedule(AutoCommitTask.this, time.milliseconds() + retryBackoffMs);
+                        reschedule(now + interval);
+                    } else if (exception instanceof SendFailedException) {
+                        log.debug("Failed to send automatic offset commit, will retry immediately");
+                        reschedule(now);
                     } else {
                         log.warn("Auto offset commit failed: {}", exception.getMessage());
-                        client.schedule(AutoCommitTask.this, now + interval);
+                        reschedule(now + interval);
                     }
                 }
             });
