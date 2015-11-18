@@ -18,6 +18,7 @@
 package kafka.tools
 
 import java.io.PrintStream
+import java.util.concurrent.CountDownLatch
 import java.util.{Properties, Random}
 import joptsimple._
 import kafka.consumer._
@@ -35,6 +36,8 @@ import scala.collection.JavaConversions._
 object ConsoleConsumer extends Logging {
 
   var messageCount = 0
+
+  private val shutdownLatch = new CountDownLatch(1)
 
   def main(args: Array[String]) {
     val conf = new ConsumerConfig(args)
@@ -69,6 +72,8 @@ object ConsoleConsumer extends Logging {
       // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
       if (!conf.groupIdPassed)
         ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
+
+      shutdownLatch.countDown()
     }
   }
 
@@ -90,6 +95,8 @@ object ConsoleConsumer extends Logging {
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
         consumer.stop()
+
+        shutdownLatch.await()
       }
     })
   }
