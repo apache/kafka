@@ -401,7 +401,7 @@ project(':clients') {
   dependencies {
     compile "$slf4japi"
     compile 'org.xerial.snappy:snappy-java:1.1.2'
-    compile 'net.jpountz.lz4:lz4:1.3'
+    compile 'net.jpountz.lz4:lz4:1.2.0'
 
     testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
     testCompile "$junit"
