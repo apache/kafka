@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -85,11 +86,13 @@ public class KafkaStreaming {
     private final StreamThread[] threads;
 
     private String clientId;
+    private final UUID uuid;
     private final Metrics metrics;
 
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
         // create the metrics
         this.time = new SystemTime();
+        this.uuid = UUID.randomUUID();
 
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamingConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(StreamingConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
@@ -104,7 +107,7 @@ public class KafkaStreaming {
 
         this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, this.clientId, this.metrics, this.time);
+            this.threads[i] = new StreamThread(builder, config, this.clientId, this.uuid, this.metrics, this.time);
         }
     }
 

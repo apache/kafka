@@ -50,4 +50,8 @@ public abstract class PartitionGrouper {
         return partitionAssignor.taskIds(partition);
     }
 
+    public Set<TaskId> standbyTasks() {
+        return partitionAssignor.standbyTasks();
+    }
+
 }

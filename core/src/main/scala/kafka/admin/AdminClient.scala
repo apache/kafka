@@ -13,6 +13,7 @@
 package kafka.admin
 
 import java.nio.ByteBuffer
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.common.KafkaException
@@ -138,32 +139,41 @@ class AdminClient(val time: Time,
       throw new KafkaException(s"Response from broker contained no metadata for group ${groupId}")
 
     Errors.forCode(metadata.errorCode()).maybeThrow()
-    val members = metadata.members().map {
-      case member =>
-        val metadata = Utils.readBytes(member.memberMetadata())
-        val assignment = Utils.readBytes(member.memberAssignment())
-        MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
+    val members = metadata.members().map { member =>
+      val metadata = Utils.readBytes(member.memberMetadata())
+      val assignment = Utils.readBytes(member.memberAssignment())
+      MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
     }.toList
     GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
   }
 
-  case class ConsumerSummary(
-                              memberId: String,
-                              clientId: String,
-                              clientHost: String,
-                              assignment: List[TopicPartition])
+  case class ConsumerSummary(memberId: String,
+                             clientId: String,
+                             clientHost: String,
+                             assignment: List[TopicPartition])
 
   def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
     val group = describeGroup(groupId)
-    if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group ${groupId} is not a valid kafka consumer group but belongs to ${if (!group.protocolType.isEmpty) group.protocolType else "not exist"}")
+    if (group.state == "Dead")
+      return List.empty[ConsumerSummary]
 
-    group.members.map {
-      case member =>
+    if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
+      throw new IllegalArgumentException(s"Group ${groupId} with protocol type '${group.protocolType}' is not a valid consumer group")
+
+    if (group.state == "Stable") {
+      group.members.map { member =>
         val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
         new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
+      }
+    } else {
+      List.empty
     }
   }
+
+  def close() {
+    client.close()
+  }
+
 }
 
 object AdminClient {
@@ -199,6 +209,8 @@ object AdminClient {
     val config = Map(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG -> brokerUrl)
     create(new AdminConfig(config))
   }
+
+  def create(props: Properties): AdminClient = create(props.asScala.toMap)
 
   def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
 

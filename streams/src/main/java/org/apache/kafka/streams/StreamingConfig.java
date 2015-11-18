@@ -27,8 +27,8 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
-import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 
 import java.util.Map;
 
@@ -53,6 +53,10 @@ public class StreamingConfig extends AbstractConfig {
     /** <code>num.stream.threads</code> */
     public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
     private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
+
+    /** <code>num.stream.threads</code> */
+    public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
+    private static final String NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas for each task.";
 
     /** <code>buffered.records.per.partition</code> */
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
@@ -136,6 +140,11 @@ public class StreamingConfig extends AbstractConfig {
                                         1,
                                         Importance.LOW,
                                         NUM_STREAM_THREADS_DOC)
+                                .define(NUM_STANDBY_REPLICAS_CONFIG,
+                                        Type.INT,
+                                        0,
+                                        Importance.LOW,
+                                        NUM_STANDBY_REPLICAS_DOC)
                                 .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                                         Type.INT,
                                         1000,
@@ -205,16 +214,17 @@ public class StreamingConfig extends AbstractConfig {
     }
 
     public static class InternalConfig {
-        public static final String PARTITION_GROUPER_INSTANCE = "__partition.grouper.instance__";
+        public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
     }
 
     public StreamingConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 
-    public Map<String, Object> getConsumerConfigs(PartitionGrouper partitionGrouper) {
+    public Map<String, Object> getConsumerConfigs(StreamThread streamThread) {
         Map<String, Object> props = getConsumerConfigs();
-        props.put(StreamingConfig.InternalConfig.PARTITION_GROUPER_INSTANCE, partitionGrouper);
+        props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
+        props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
         return props;
     }

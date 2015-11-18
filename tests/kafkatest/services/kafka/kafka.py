@@ -29,9 +29,12 @@ import re
 import signal
 import subprocess
 import time
-
+import os.path
 
 class KafkaService(JmxMixin, Service):
+
+    PERSISTENT_ROOT = "/mnt"
+    LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
 
     logs = {
         "kafka_log": {
@@ -104,6 +107,7 @@ class KafkaService(JmxMixin, Service):
 
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
+        cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export LOG_DIR=/mnt/kafka-operational-logs/; "
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
@@ -114,6 +118,7 @@ class KafkaService(JmxMixin, Service):
         self.logger.info("kafka.properties:")
         self.logger.info(prop_file)
         node.account.create_file("/mnt/kafka.properties", prop_file)
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('log4j.properties'))
 
         self.security_config.setup_node(node)
 

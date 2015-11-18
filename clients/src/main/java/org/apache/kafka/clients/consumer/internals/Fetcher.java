@@ -340,6 +340,8 @@ public class Fetcher<K, V> {
     /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
+     * NOTE: returning empty records guarantees the consumed position are NOT updated.
+     *
      * @return The fetched records per partition
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
@@ -371,6 +373,10 @@ public class Fetcher<K, V> {
                     // this partition in the previous request at all
                     subscriptions.fetched(part.partition, consumed);
                 } else if (part.fetchOffset == consumed) {
+                    long nextOffset = part.records.get(part.records.size() - 1).offset() + 1;
+
+                    log.trace("Returning fetched records for assigned partition {} and update consumed position to {}", part.partition, nextOffset);
+
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
                     if (records == null) {
                         records = part.records;
@@ -378,7 +384,7 @@ public class Fetcher<K, V> {
                     } else {
                         records.addAll(part.records);
                     }
-                    subscriptions.consumed(part.partition, part.records.get(part.records.size() - 1).offset() + 1);
+                    subscriptions.consumed(part.partition, nextOffset);
                 } else {
                     // these records aren't next in line based on the last consumed position, ignore them
                     // they must be from an obsolete request

@@ -269,7 +269,7 @@ public class NetworkClient implements KafkaClient {
         try {
             this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
         } catch (IOException e) {
-            log.error("Unexpected error during I/O in producer network thread", e);
+            log.error("Unexpected error during I/O", e);
         }
 
         // process completed actions

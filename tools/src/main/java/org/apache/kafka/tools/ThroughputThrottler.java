@@ -46,6 +46,7 @@ public class ThroughputThrottler {
     long sleepDeficitNs = 0;
     long targetThroughput = -1;
     long startMs;
+    private boolean wakeup = false;
 
     /**
      * @param targetThroughput Can be messages/sec or bytes/sec
@@ -83,7 +84,11 @@ public class ThroughputThrottler {
     public void throttle() {
         if (targetThroughput == 0) {
             try {
-                Thread.sleep(Long.MAX_VALUE);
+                synchronized (this) {
+                    while (!wakeup) {
+                        this.wait();
+                    }
+                }
             } catch (InterruptedException e) {
                 // do nothing
             }
@@ -96,12 +101,21 @@ public class ThroughputThrottler {
 
         // If enough sleep deficit has accumulated, sleep a little
         if (sleepDeficitNs >= MIN_SLEEP_NS) {
-            long sleepMs = sleepDeficitNs / 1000000;
-            long sleepNs = sleepDeficitNs - sleepMs * 1000000;
-
             long sleepStartNs = System.nanoTime();
+            long currentTimeNs = sleepStartNs;
             try {
-                Thread.sleep(sleepMs, (int) sleepNs);
+                synchronized (this) {
+                    long elapsed = currentTimeNs - sleepStartNs;
+                    long remaining = sleepDeficitNs - elapsed;
+                    while (!wakeup && remaining > 0) {
+                        long sleepMs = remaining / 1000000;
+                        long sleepNs = remaining - sleepMs * 1000000;
+                        this.wait(sleepMs, (int) sleepNs);
+                        elapsed = System.nanoTime() - sleepStartNs;
+                        remaining = sleepDeficitNs - elapsed;
+                    }
+                    wakeup = false;
+                }
                 sleepDeficitNs = 0;
             } catch (InterruptedException e) {
                 // If sleep is cut short, reduce deficit by the amount of
@@ -111,6 +125,16 @@ public class ThroughputThrottler {
                     sleepDeficitNs -= sleepElapsedNs;
                 }
             }
+        }
+    }
+
+    /**
+     * Wakeup the throttler if its sleeping.
+     */
+    public void wakeup() {
+        synchronized (this) {
+            wakeup = true;
+            this.notifyAll();
         }
     }
 }

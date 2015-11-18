@@ -828,11 +828,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             do {
                 Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
                 if (!records.isEmpty()) {
-                    // if data is available, then return it, but first send off the
-                    // next round of fetches to enable pipelining while the user is
-                    // handling the fetched records.
+                    // before returning the fetched records, we can send off the next round of fetches
+                    // and avoid block waiting for their responses to enable pipelining while the user
+                    // is handling the fetched records.
+                    //
+                    // NOTE that in this case we need to disable wakeups for the non-blocking poll since
+                    // the consumed positions has already been updated and hence we must return these
+                    // records to users to process before being interrupted
                     fetcher.initFetches(metadata.fetch());
+                    client.disableWakeups();
                     client.poll(0);
+                    client.enableWakeups();
                     return new ConsumerRecords<>(records);
                 }
 
@@ -868,11 +874,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // init any new fetches (won't resend pending fetches)
         Cluster cluster = this.metadata.fetch();
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
-        // Avoid block waiting for response if we already have data available, e.g. from another API call to commit.
+
+        // if data is available already, e.g. from a previous network client poll() call to commit,
+        // then just return it immediately
         if (!records.isEmpty()) {
-            client.poll(0);
             return records;
         }
+
         fetcher.initFetches(cluster);
         client.poll(timeout);
         return fetcher.fetchedRecords();

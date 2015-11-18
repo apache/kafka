@@ -618,6 +618,7 @@ class ReplicaManager(val config: KafkaConfig,
                 "epoch %d for partition [%s,%d] as itself is not in assigned replica list %s")
                 .format(localBrokerId, controllerId, correlationId, leaderAndISRRequest.controllerEpoch,
                 topic, partition.partitionId, partitionStateInfo.allReplicas.mkString(",")))
+              responseMap.put((topic, partitionId), ErrorMapping.UnknownTopicOrPartitionCode)
             }
           } else {
             // Otherwise record the error code in response
@@ -663,7 +664,9 @@ class ReplicaManager(val config: KafkaConfig,
    * 3. Add these partitions to the leader partitions set
    *
    * If an unexpected error is thrown in this function, it will be propagated to KafkaApis where
-   * the error message will be set on each partition since we do not know which partition caused it
+   * the error message will be set on each partition since we do not know which partition caused it. Otherwise,
+   * return the set of partitions that are made leader due to this method
+   *
    *  TODO: the above may need to be fixed later
    */
   private def makeLeaders(controllerId: Int,
@@ -679,18 +682,25 @@ class ReplicaManager(val config: KafkaConfig,
     for (partition <- partitionState.keys)
       responseMap.put((partition.topic, partition.partitionId), ErrorMapping.NoError)
 
+    val partitionsToMakeLeaders: mutable.Set[Partition] = mutable.Set()
+
     try {
       // First stop fetchers for all the partitions
       replicaFetcherManager.removeFetcherForPartitions(partitionState.keySet.map(new TopicAndPartition(_)))
-      partitionState.foreach { state =>
-        stateChangeLogger.trace(("Broker %d stopped fetchers as part of become-leader request from controller " +
-          "%d epoch %d with correlation id %d for partition %s")
-          .format(localBrokerId, controllerId, epoch, correlationId, TopicAndPartition(state._1.topic, state._1.partitionId)))
-      }
       // Update the partition information to be the leader
       partitionState.foreach{ case (partition, partitionStateInfo) =>
-        partition.makeLeader(controllerId, partitionStateInfo, correlationId)}
-
+        if (partition.makeLeader(controllerId, partitionStateInfo, correlationId))
+          partitionsToMakeLeaders += partition
+        else
+          stateChangeLogger.info(("Broker %d skipped the become-leader state change after marking its partition as leader with correlation id %d from " +
+            "controller %d epoch %d for partition %s since it is already the leader for the partition.")
+            .format(localBrokerId, correlationId, controllerId, epoch, TopicAndPartition(partition.topic, partition.partitionId)));
+      }
+      partitionsToMakeLeaders.foreach { partition =>
+        stateChangeLogger.trace(("Broker %d stopped fetchers as part of become-leader request from controller " +
+          "%d epoch %d with correlation id %d for partition %s")
+          .format(localBrokerId, controllerId, epoch, correlationId, TopicAndPartition(partition.topic, partition.partitionId)))
+      }
     } catch {
       case e: Throwable =>
         partitionState.foreach { state =>
@@ -709,7 +719,7 @@ class ReplicaManager(val config: KafkaConfig,
         .format(localBrokerId, correlationId, controllerId, epoch, TopicAndPartition(state._1.topic, state._1.partitionId)))
     }
 
-    partitionState.keySet
+    partitionsToMakeLeaders
   }
 
   /*
@@ -726,7 +736,8 @@ class ReplicaManager(val config: KafkaConfig,
    * are guaranteed to be flushed to disks
    *
    * If an unexpected error is thrown in this function, it will be propagated to KafkaApis where
-   * the error message will be set on each partition since we do not know which partition caused it
+   * the error message will be set on each partition since we do not know which partition caused it. Otherwise,
+   * return the set of partitions that are made follower due to this method
    */
   private def makeFollowers(controllerId: Int,
                             epoch: Int,

@@ -66,6 +66,7 @@
     </subpackage>
 
     <subpackage name="security">
+      <allow pkg="org.apache.kafka.common.annotation" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.config" />
     </subpackage>
@@ -205,6 +206,11 @@
       <allow pkg="org.powermock" />
     </subpackage>
 
+    <subpackage name="tools">
+      <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.kafka.tools" />
+      <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
   </subpackage>
 
 </import-control>

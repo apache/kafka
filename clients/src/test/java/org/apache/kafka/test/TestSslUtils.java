@@ -33,6 +33,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
+import org.apache.kafka.common.config.types.Password;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -105,20 +106,20 @@ public class TestSslUtils {
     }
 
     private static void saveKeyStore(KeyStore ks, String filename,
-                                     String password) throws GeneralSecurityException, IOException {
+                                     Password password) throws GeneralSecurityException, IOException {
         FileOutputStream out = new FileOutputStream(filename);
         try {
-            ks.store(out, password.toCharArray());
+            ks.store(out, password.value().toCharArray());
         } finally {
             out.close();
         }
     }
 
     public static void createKeyStore(String filename,
-                                      String password, String alias,
+                                      Password password, String alias,
                                       Key privateKey, Certificate cert) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
-        ks.setKeyEntry(alias, privateKey, password.toCharArray(),
+        ks.setKeyEntry(alias, privateKey, password.value().toCharArray(),
                 new Certificate[]{cert});
         saveKeyStore(ks, filename, password);
     }
@@ -136,16 +137,16 @@ public class TestSslUtils {
      * @throws IOException if there is an I/O error saving the file
      */
     public static void createKeyStore(String filename,
-                                      String password, String keyPassword, String alias,
+                                      Password password, Password keyPassword, String alias,
                                       Key privateKey, Certificate cert) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
-        ks.setKeyEntry(alias, privateKey, keyPassword.toCharArray(),
+        ks.setKeyEntry(alias, privateKey, keyPassword.value().toCharArray(),
                 new Certificate[]{cert});
         saveKeyStore(ks, filename, password);
     }
 
     public static void createTrustStore(String filename,
-                                        String password, String alias,
+                                        Password password, String alias,
                                         Certificate cert) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
         ks.setCertificateEntry(alias, cert);
@@ -153,11 +154,11 @@ public class TestSslUtils {
     }
 
     public static <T extends Certificate> void createTrustStore(
-            String filename, String password, Map<String, T> certs) throws GeneralSecurityException, IOException {
+            String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
         try {
             FileInputStream in = new FileInputStream(filename);
-            ks.load(in, password.toCharArray());
+            ks.load(in, password.value().toCharArray());
             in.close();
         } catch (EOFException e) {
             ks = createEmptyKeyStore();
@@ -176,8 +177,8 @@ public class TestSslUtils {
         return certs;
     }
 
-    public static Map<String, Object> createSslConfig(Mode mode, File keyStoreFile, String password, String keyPassword,
-                                                      File trustStoreFile, String trustStorePassword) {
+    public static Map<String, Object> createSslConfig(Mode mode, File keyStoreFile, Password password, Password keyPassword,
+                                                      File trustStoreFile, Password trustStorePassword) {
         Map<String, Object> sslConfigs = new HashMap<>();
         sslConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
         sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
@@ -206,14 +207,14 @@ public class TestSslUtils {
         throws IOException, GeneralSecurityException {
         Map<String, X509Certificate> certs = new HashMap<String, X509Certificate>();
         File keyStoreFile;
-        String password;
+        Password password;
 
         if (mode == Mode.SERVER)
-            password = "ServerPassword";
+            password = new Password("ServerPassword");
         else
-            password = "ClientPassword";
+            password = new Password("ClientPassword");
 
-        String trustStorePassword = "TrustStorePassword";
+        Password trustStorePassword = new Password("TrustStorePassword");
 
         if (useClientCert) {
             keyStoreFile = File.createTempFile("clientKS", ".jks");

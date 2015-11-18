@@ -306,6 +306,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void close() {
+        // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
             if (autoCommitTask != null)
@@ -420,6 +421,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 this.memberId,
                 OffsetCommitRequest.DEFAULT_RETENTION_TIME,
                 offsetData);
+
+        log.trace("Sending offset-commit request with {} to {}", offsets, coordinator);
 
         return client.send(coordinator, ApiKeys.OFFSET_COMMIT, req)
                 .compose(new OffsetCommitResponseHandler(offsets));

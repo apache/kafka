@@ -230,6 +230,13 @@ class WorkerSinkTask implements WorkerTask {
         return workerConfig;
     }
 
+    @Override
+    public String toString() {
+        return "WorkerSinkTask{" +
+                "id=" + id +
+                '}';
+    }
+
     private KafkaConsumer<byte[], byte[]> createConsumer() {
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task

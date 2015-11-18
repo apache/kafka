@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -184,6 +185,13 @@ public class ConfigDef {
                         return value;
                     else
                         throw new ConfigException(name, value, "Expected value to be either true or false");
+                case PASSWORD:
+                    if (value instanceof Password)
+                        return value;
+                    else if (value instanceof String)
+                        return new Password(trimmed);
+                    else
+                        throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
                 case STRING:
                     if (value instanceof String)
                         return trimmed;
@@ -252,7 +260,7 @@ public class ConfigDef {
      * The config types
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS;
+        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
     }
 
     public enum Importance {
@@ -384,19 +392,22 @@ public class ConfigDef {
             }
         });
         StringBuilder b = new StringBuilder();
-        b.append("<table>\n");
+        b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
         b.append("<th>Name</th>\n");
+        b.append("<th>Description</th>\n");
         b.append("<th>Type</th>\n");
         b.append("<th>Default</th>\n");
         b.append("<th>Valid Values</th>\n");
         b.append("<th>Importance</th>\n");
-        b.append("<th>Description</th>\n");
         b.append("</tr>\n");
         for (ConfigKey def : configs) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append(def.name);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(def.documentation);
             b.append("</td>");
             b.append("<td>");
             b.append(def.type.toString().toLowerCase());
@@ -418,12 +429,9 @@ public class ConfigDef {
             b.append("<td>");
             b.append(def.importance.toString().toLowerCase());
             b.append("</td>");
-            b.append("<td>");
-            b.append(def.documentation);
-            b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>");
+        b.append("</tbody></table>");
         return b.toString();
     }
 }
