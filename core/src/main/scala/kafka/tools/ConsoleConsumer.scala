@@ -103,6 +103,8 @@ object ConsoleConsumer extends Logging {
     })
   }
 
+
+  var count = 0
   def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, skipMessageOnError: Boolean) {
     while (messageCount < maxMessages || maxMessages == -1) {
       messageCount += 1
@@ -123,6 +125,9 @@ object ConsoleConsumer extends Logging {
           return
       }
       try {
+        count += 1
+        if(count % 100 == 0)
+          logger.info("Current consumption count is "+count)
         formatter.writeTo(msg.key, msg.value, System.out)
       } catch {
         case e: Throwable =>

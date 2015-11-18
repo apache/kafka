@@ -223,9 +223,10 @@ class VerifiableConsumer(BackgroundThreadService):
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableConsumer" \
-              " --group-id %s --topic %s --broker-list %s --session-timeout %s %s" % \
-              (self.group_id, self.topic, self.kafka.bootstrap_servers(), self.session_timeout,
+              " --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
+              (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol), self.session_timeout,
                "--enable-autocommit" if self.enable_autocommit else "")
+
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
