@@ -372,9 +372,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         public void enable() {
-            this.enabled = true;
-            long now = time.milliseconds();
-            client.schedule(this, interval + now);
+            if (!enabled) {
+                // there shouldn't be any instances scheduled, but call unschedule anyway to ensure
+                // that this task is only ever scheduled once
+                client.unschedule(this);
+                this.enabled = true;
+                long now = time.milliseconds();
+                client.schedule(this, interval + now);
+            }
         }
 
         public void disable() {
