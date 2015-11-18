@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.kerberos;
 
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -42,18 +43,18 @@ public class KerberosNameTest {
         assertEquals("App.service-name", name.serviceName());
         assertEquals("example.com", name.hostName());
         assertEquals("REALM.COM", name.realm());
-        assertEquals("service-name", shortNamer.shortName(name));
+        assertEquals("service-name", shortNamer.toLocal(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, name.toString())).getName());
 
         name = KerberosName.parse("App.service-name@REALM.COM");
         assertEquals("App.service-name", name.serviceName());
         assertNull(name.hostName());
         assertEquals("REALM.COM", name.realm());
-        assertEquals("service-name", shortNamer.shortName(name));
+        assertEquals("service-name", shortNamer.toLocal(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, name.toString())).getName());
 
         name = KerberosName.parse("user/host@REALM.COM");
         assertEquals("user", name.serviceName());
         assertEquals("host", name.hostName());
         assertEquals("REALM.COM", name.realm());
-        assertEquals("user", shortNamer.shortName(name));
+        assertEquals("user", shortNamer.toLocal(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, name.toString())).getName());
     }
 }

@@ -15,13 +15,11 @@ package org.apache.kafka.common.network;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.auth.PrincipalToLocal;
 import org.apache.kafka.common.security.kerberos.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
@@ -45,7 +43,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private PrincipalBuilder principalBuilder;
     private SslFactory sslFactory;
     private Map<String, ?> configs;
-    private KerberosShortNamer kerberosShortNamer;
+    private PrincipalToLocal principalToLocal;
 
     public SaslChannelBuilder(Mode mode, LoginType loginType, SecurityProtocol securityProtocol) {
         this.mode = mode;
@@ -59,17 +57,8 @@ public class SaslChannelBuilder implements ChannelBuilder {
             this.loginManager = LoginManager.acquireLoginManager(loginType, configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
-
-            String defaultRealm;
-            try {
-                defaultRealm = JaasUtils.defaultRealm();
-            } catch (Exception ke) {
-                defaultRealm = "";
-            }
-
-            List<String> principalToLocalRules = (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES);
-            if (principalToLocalRules != null)
-                kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
+            principalToLocal = Utils.newInstance((String) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_CLASS_NAME), PrincipalToLocal.class);
+            this.principalToLocal.configure(configs);
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 this.sslFactory = new SslFactory(mode);
@@ -86,7 +75,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
             if (mode == Mode.SERVER)
-                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), kerberosShortNamer);
+                authenticator = new SaslServerAuthenticator(id, loginManager.subject(), principalToLocal);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName());

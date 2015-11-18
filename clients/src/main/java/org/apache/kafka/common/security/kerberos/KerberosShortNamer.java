@@ -18,19 +18,26 @@
 
 package org.apache.kafka.common.security.kerberos;
 
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.PrincipalToLocal;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.common.security.JaasUtils.defaultRealm;
 
 /**
  * This class implements parsing and handling of Kerberos principal names. In
  * particular, it splits them apart and translates them down into local
  * operating system names.
  */
-public class KerberosShortNamer {
+public class KerberosShortNamer implements PrincipalToLocal {
 
     /**
      * A pattern for parsing a auth_to_local rule.
@@ -38,15 +45,13 @@ public class KerberosShortNamer {
     private static final Pattern RULE_PARSER = Pattern.compile("((DEFAULT)|(RULE:\\[(\\d*):([^\\]]*)](\\(([^)]*)\\))?(s/([^/]*)/([^/]*)/(g)?)?))");
 
     /* Rules for the translation of the principal name into an operating system name */
-    private final List<KerberosRule> principalToLocalRules;
-
-    public KerberosShortNamer(List<KerberosRule> principalToLocalRules) {
-        this.principalToLocalRules = principalToLocalRules;
-    }
+    private List<KerberosRule> principalToLocalRules;
 
     public static KerberosShortNamer fromUnparsedRules(String defaultRealm, List<String> principalToLocalRules) {
         List<String> rules = principalToLocalRules == null ? Collections.singletonList("DEFAULT") : principalToLocalRules;
-        return new KerberosShortNamer(parseRules(defaultRealm, rules));
+        KerberosShortNamer shortNamer = new KerberosShortNamer();
+        shortNamer.principalToLocalRules = parseRules(defaultRealm, rules);
+        return shortNamer;
     }
 
     private static List<KerberosRule> parseRules(String defaultRealm, List<String> rules) {
@@ -80,12 +85,15 @@ public class KerberosShortNamer {
      * @return the short name
      * @throws IOException
      */
-    public String shortName(KerberosName kerberosName) throws IOException {
+
+    @Override
+    public KafkaPrincipal toLocal(KafkaPrincipal principal) throws IOException {
         String[] params;
+        KerberosName kerberosName = KerberosName.parse(principal.getName());
         if (kerberosName.hostName() == null) {
             // if it is already simple, just return it
             if (kerberosName.realm() == null)
-                return kerberosName.serviceName();
+                return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, kerberosName.serviceName());
             params = new String[]{kerberosName.realm(), kerberosName.serviceName()};
         } else {
             params = new String[]{kerberosName.realm(), kerberosName.serviceName(), kerberosName.hostName()};
@@ -93,9 +101,23 @@ public class KerberosShortNamer {
         for (KerberosRule r : principalToLocalRules) {
             String result = r.apply(params);
             if (result != null)
-                return result;
+                return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, result);
         }
         throw new NoMatchingRule("No rules applied to " + toString());
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs) {
+        String defaultRealm = "";
+        try {
+            defaultRealm = defaultRealm();
+        } catch (Exception e) {
+            //ignore exception.
+        }
+        List<String> rules = configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES) == null ?
+                Collections.singletonList("DEFAULT") : (List<String>) configs.get(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES);
+
+        this.principalToLocalRules = parseRules(defaultRealm, rules);
     }
 
 }

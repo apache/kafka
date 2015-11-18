@@ -13,6 +13,8 @@
 
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -49,12 +51,19 @@ public class SaslConfigs {
             "By default, principal names of the form <username>/<hostname>@<REALM> are mapped to <username>.";
     public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList("DEFAULT");
 
+    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_CLASS_NAME = "sasl.kerberos.principal.to.local.class.name";
+    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_CLASS_NAME_DOC = "FQCN of a class that implements org.apache.kafka.common.security.auth.PrincipalToLocal."
+            + " An instance of this class will be created and used to convert sals principal to a local user name (typically OS username)";
+    public static final String DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_CLASS_NAME = KerberosShortNamer.class.getName();
+
+
     public static void addClientSaslSupport(ConfigDef config) {
         config.define(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC)
                 .define(SaslConfigs.SASL_KERBEROS_KINIT_CMD, ConfigDef.Type.STRING, SaslConfigs.DEFAULT_KERBEROS_KINIT_CMD, ConfigDef.Importance.LOW, SaslConfigs.SASL_KERBEROS_KINIT_CMD_DOC)
                 .define(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR, ConfigDef.Type.DOUBLE, SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_WINDOW_FACTOR, ConfigDef.Importance.LOW, SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC)
                 .define(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER, ConfigDef.Type.DOUBLE, SaslConfigs.DEFAULT_KERBEROS_TICKET_RENEW_JITTER, ConfigDef.Importance.LOW, SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_DOC)
-                .define(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, ConfigDef.Type.LONG, SaslConfigs.DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN, ConfigDef.Importance.LOW, SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC);
+                .define(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, ConfigDef.Type.LONG, SaslConfigs.DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN, ConfigDef.Importance.LOW, SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC)
+                .define(SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_CLASS_NAME, ConfigDef.Type.STRING, SaslConfigs.DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_CLASS_NAME, ConfigDef.Importance.HIGH, SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_CLASS_NAME_DOC);
     }
 
 }

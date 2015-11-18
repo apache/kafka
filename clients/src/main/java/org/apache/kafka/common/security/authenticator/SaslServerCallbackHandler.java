@@ -20,7 +20,8 @@ package org.apache.kafka.common.security.authenticator;
 
 import java.io.IOException;
 
-import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.PrincipalToLocal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.security.auth.callback.Callback;
@@ -36,13 +37,13 @@ import org.apache.kafka.common.security.JaasUtils;
 
 public class SaslServerCallbackHandler implements CallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerCallbackHandler.class);
-    private final KerberosShortNamer kerberosShortNamer;
+    private final PrincipalToLocal principalToLocal;
 
-    public SaslServerCallbackHandler(Configuration configuration, KerberosShortNamer kerberosNameParser) throws IOException {
+    public SaslServerCallbackHandler(Configuration configuration, PrincipalToLocal principalToLocal) throws IOException {
         AppConfigurationEntry[] configurationEntries = configuration.getAppConfigurationEntry(JaasUtils.LOGIN_CONTEXT_SERVER);
         if (configurationEntries == null)
             throw new IOException("Could not find a 'KafkaServer' entry in this configuration: Kafka Server cannot start.");
-        this.kerberosShortNamer = kerberosNameParser;
+        this.principalToLocal = principalToLocal;
     }
 
     public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
@@ -70,10 +71,10 @@ public class SaslServerCallbackHandler implements CallbackHandler {
 
         KerberosName kerberosName = KerberosName.parse(authenticationID);
         try {
-            String userName = kerberosShortNamer.shortName(kerberosName);
+            String userName = principalToLocal.toLocal(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, kerberosName.toString())).getName();
             LOG.info("Setting authorizedID: {}", userName);
             ac.setAuthorizedID(userName);
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOG.error("Failed to set name based on Kerberos authentication rules.");
         }
     }
