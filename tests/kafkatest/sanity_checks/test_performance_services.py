@@ -14,10 +14,11 @@
 # limitations under the License.
 
 from ducktape.tests.test import Test
+from ducktape.mark import matrix
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.version import LATEST_0_8_2
+from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, KafkaVersion
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
 from kafkatest.services.performance import throughput, latency, compute_aggregate_throughput
 
@@ -31,30 +32,44 @@ class ProducerPerformanceSanityTest(Test):
 
         self.zk = ZookeeperService(test_context, 1)
 
-
     def setUp(self):
         self.zk.start()
 
-    def test_version(self, version=LATEST_0_8_2):
+    @matrix(version=[str(TRUNK), str(LATEST_0_8_2)])
+    def test_version(self, version=str(LATEST_0_8_2)):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
         number of messages.
         """
+        version = KafkaVersion(version)
         self.kafka = KafkaService(
             self.test_context, 1,
             self.zk, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=version)
         self.kafka.start()
 
+        # check basic run of producer performance
         self.producer_perf = ProducerPerformanceService(
-            self.test_context, 1, self.kafka, topic=self.topic, throughput=10000, version=version,
+            self.test_context, 1, self.kafka, topic=self.topic,
             num_records=self.num_records, record_size=self.record_size,
+            throughput=1000000000,  # Set impossibly for no throttling for equivalent behavior between 0.8.X and 0.9.X
+            version=version,
             settings={
                 'acks': 1,
                 'batch.size': 8*1024,
                 'buffer.memory': 64*1024*1024})
         self.producer_perf.run()
         producer_perf_data = compute_aggregate_throughput(self.producer_perf)
-        return producer_perf_data
+
+        # check basic run of end to end latency
+        self.end_to_end = EndToEndLatencyService(
+            self.test_context, 1, self.kafka,
+            topic=self.topic, num_records=self.num_records, version=version)
+        self.end_to_end.run()
+        return latency(self.end_to_end.results[0]['latency_50th_ms'],  self.end_to_end.results[0]['latency_99th_ms'], self.end_to_end.results[0]['latency_999th_ms'])
+
+
+
+
 
         # self.consumer_perf = ConsumerPerformanceService(
         #     self.test_context, 1, self.kafka,

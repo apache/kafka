@@ -65,12 +65,19 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             self.security_config.setup_node(node)
             if self.security_config.security_protocol != SecurityConfig.PLAINTEXT:
                 self.settings.update(self.security_config.properties)
+
             for key, value in self.settings.items():
                 cmd += " %s=%s" % (str(key), str(value))
         else:
-            # 0.8.X has different option names
+            # 0.8.X has a slightly different set of options. We'll attempt to use equivalent options
+            if self.args['throughput'] is not None and self.args['throughput'] >= 0:
+                self.logger.warn("Attempted to set throughput to %s messages per second, but 0.8.X producer performance does not support throughput throttling." % str(self.args['throughput']))
+
             cmd += "JMX_PORT=%(jmx_port)d /opt/%(kafka_directory)s/bin/kafka-producer-perf-test.sh " \
                   "--topic %(topic)s --messages %(num_records)d --message-size %(record_size)d --new-producer --broker-list %(bootstrap_servers)s" % args
+
+            if "acks" in self.settings:
+                cmd += " --request-num-acks %s" % str(self.settings["acks"])
 
         cmd += " | tee /mnt/producer-performance.log"
         return cmd
