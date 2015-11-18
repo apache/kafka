@@ -75,9 +75,7 @@ class TestRollingSSLUpgrade(ProduceConsumeValidateTest):
 
 
     def add_ssl_port(self):
-        self.kafka.interbroker_security_protocol = "PLAINTEXT"
         self.kafka.security_protocol = "SSL"
-        self.kafka.open_port("PLAINTEXT")
         self.kafka.open_port("SSL")
 
         for node in self.kafka.nodes:

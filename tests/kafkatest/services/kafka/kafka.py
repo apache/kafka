@@ -56,8 +56,6 @@ class KafkaService(JmxMixin, Service):
             "collect_default": False}
     }
 
-
-
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
         """
@@ -219,11 +217,11 @@ class KafkaService(JmxMixin, Service):
 
         cmd = "/opt/%s/bin/kafka-topics.sh " % kafka_dir(node)
         cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
-            'zk_connect': self.zk.connect_setting(),
-            'topic': topic_cfg.get("topic"),
-            'partitions': topic_cfg.get('partitions', 1),
-            'replication': topic_cfg.get('replication-factor', 1)
-        }
+                'zk_connect': self.zk.connect_setting(),
+                'topic': topic_cfg.get("topic"),
+                'partitions': topic_cfg.get('partitions', 1),
+                'replication': topic_cfg.get('replication-factor', 1)
+            }
 
         if "configs" in topic_cfg.keys() and topic_cfg["configs"] is not None:
             for config_name, config_value in topic_cfg["configs"].items():
@@ -319,7 +317,7 @@ class KafkaService(JmxMixin, Service):
         """ Get the leader replica for the given topic and partition.
         """
         kafka_dir = KAFKA_TRUNK
-        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " % \
+        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " %\
               (kafka_dir, self.zk.connect_setting())
         cmd += "get /brokers/topics/%s/partitions/%d/state" % (topic, partition)
         self.logger.debug(cmd)

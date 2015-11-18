@@ -41,8 +41,6 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Primarily intended for use with system testing, this producer prints metadata
@@ -58,7 +56,6 @@ import org.slf4j.LoggerFactory;
  * whether a given line is valid JSON.
  */
 public class VerifiableProducer {
-    private static final Logger log = LoggerFactory.getLogger(VerifiableProducer.class);
 
     String topic;
     private Producer<String, String> producer;
@@ -295,9 +292,6 @@ public class VerifiableProducer {
                 if (e == null) {
                     VerifiableProducer.this.numAcked++;
                     System.out.println(successString(recordMetadata, this.key, this.value, System.currentTimeMillis()));
-                    if(numAcked % 1000 == 0){
-                        log.warn("Current ack count: " + numAcked);
-                    }
                 } else {
                     System.out.println(errorString(e, this.key, this.value, System.currentTimeMillis()));
                 }
