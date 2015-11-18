@@ -21,6 +21,7 @@ import java.security.Principal;
 public class KafkaPrincipal implements Principal {
     public static final String SEPARATOR = ":";
     public static final String USER_TYPE = "User";
+    public static final String GROUP_TYPE = "Group";
     public final static KafkaPrincipal ANONYMOUS = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "ANONYMOUS");
 
     private String principalType;
