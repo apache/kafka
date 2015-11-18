@@ -15,6 +15,7 @@
 
 import os
 import tempfile
+import shutil
 
 def file_exists(node, file):
     """Quick and dirty check for existence of remote file."""
@@ -41,18 +42,15 @@ def scp(source_node, source_path, target_node, target_path):
     :param target_node: destination node
     :param target_path: path on the destination node to copy to
     """
-    local_temp_dir = "/tmp"
     try:
-        local_temp_dir = tempfile.mkdtemp(dir=local_temp_dir)
+        local_temp_dir = tempfile.mkdtemp(dir="/tmp")
     except OSError as e:
         raise Exception("Failed to create temporary local directory to scp %s to %s: %s" % (source_path, target_path, e.strerror))
 
     local_temp_file = os.path.join(local_temp_dir, "tmpfile")
-    source_node.account.scp_from(source_path, local_temp_file)
-    target_node.account.scp_to(local_temp_file, target_path)
 
-    # clean up temp dir/file
-    if os.path.exists(local_temp_file):
-        os.remove(local_temp_file)
-    if os.path.exists(local_temp_dir):
-        os.removedirs(local_temp_dir)
+    try:
+        source_node.account.scp_from(source_path, local_temp_file)
+        target_node.account.scp_to(local_temp_file, target_path)
+    finally:
+        shutil.rmtree(local_temp_dir, ignore_errors=True)
