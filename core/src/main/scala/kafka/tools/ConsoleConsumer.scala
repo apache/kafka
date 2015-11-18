@@ -27,6 +27,7 @@ import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConversions._
@@ -111,6 +112,10 @@ object ConsoleConsumer extends Logging {
         case nse: StreamEndException =>
           trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
           // Consumer is already closed
+          return
+        case nse: WakeupException =>
+          trace("Caught WakeupException because consumer is shutdown, ignore and terminate.")
+          // Consumer will be closed
           return
         case e: Throwable =>
           error("Error processing message, terminating consumer process: ", e)
