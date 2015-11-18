@@ -198,13 +198,48 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Can just use the same record for key and value
         records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD));
 
-        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord();
+        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
 
         PowerMock.replayAll();
 
-        Whitebox.invokeMethod(workerTask, "sendRecords", records);
+        Whitebox.setInternalState(workerTask, "toSend", records);
+        Whitebox.invokeMethod(workerTask, "sendRecords");
         assertEquals(SERIALIZED_KEY, sent.getValue().key());
         assertEquals(SERIALIZED_RECORD, sent.getValue().value());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSendRecordsRetries() throws Exception {
+        createWorkerTask();
+
+        // Differentiate only by Kafka partition so we can reuse conversion expectations
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        // First round
+        expectSendRecordOnce(false);
+        // Any Producer retriable exception should work here
+        expectSendRecordSyncFailure(new org.apache.kafka.common.errors.TimeoutException("retriable sync failure"));
+
+        // Second round
+        expectSendRecordOnce(true);
+        expectSendRecordOnce(false);
+
+        PowerMock.replayAll();
+
+        // Try to send 3, make first pass, second fail. Should save last two
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(true, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertEquals(Arrays.asList(record2, record3), Whitebox.getInternalState(workerTask, "toSend"));
+
+        // Next they all succeed
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertNull(Whitebox.getInternalState(workerTask, "toSend"));
 
         PowerMock.verifyAll();
     }
@@ -252,36 +287,79 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                     }
                 });
         // Fallout of the poll() call
-        expectSendRecord();
+        expectSendRecordAnyTimes();
         return latch;
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord() throws InterruptedException {
-        EasyMock.expect(keyConverter.fromConnectData(TOPIC, KEY_SCHEMA, KEY)).andStubReturn(SERIALIZED_KEY);
-        EasyMock.expect(valueConverter.fromConnectData(TOPIC, RECORD_SCHEMA, RECORD)).andStubReturn(SERIALIZED_RECORD);
+    private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
+        expectConvertKeyValue(false);
+
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall();
+
+        EasyMock.expect(
+                producer.send(EasyMock.anyObject(ProducerRecord.class),
+                        EasyMock.anyObject(org.apache.kafka.clients.producer.Callback.class)))
+                .andThrow(error);
+    }
+
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordAnyTimes() throws InterruptedException {
+        return expectSendRecord(true, false);
+    }
+
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordOnce(boolean isRetry) throws InterruptedException {
+        return expectSendRecord(false, isRetry);
+    }
+
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry) throws InterruptedException {
+        expectConvertKeyValue(anyTimes);
 
         Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
-        // 1. Converted data passed to the producer, which will need callbacks invoked for flush to work
-        EasyMock.expect(
+
+        // 1. Offset data is passed to the offset storage.
+        if (!isRetry) {
+            offsetWriter.offset(PARTITION, OFFSET);
+            if (anyTimes)
+                PowerMock.expectLastCall().anyTimes();
+            else
+                PowerMock.expectLastCall();
+        }
+
+        // 2. Converted data passed to the producer, which will need callbacks invoked for flush to work
+        IExpectationSetters<Future<RecordMetadata>> expect = EasyMock.expect(
                 producer.send(EasyMock.capture(sent),
-                        EasyMock.capture(producerCallbacks)))
-                .andStubAnswer(new IAnswer<Future<RecordMetadata>>() {
-                    @Override
-                    public Future<RecordMetadata> answer() throws Throwable {
-                        synchronized (producerCallbacks) {
-                            for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
-                                cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0), null);
-                            }
-                            producerCallbacks.reset();
-                        }
-                        return sendFuture;
+                        EasyMock.capture(producerCallbacks)));
+        IAnswer<Future<RecordMetadata>> expectResponse = new IAnswer<Future<RecordMetadata>>() {
+            @Override
+            public Future<RecordMetadata> answer() throws Throwable {
+                synchronized (producerCallbacks) {
+                    for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
+                        cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0), null);
                     }
-                });
-        // 2. Offset data is passed to the offset storage.
-        offsetWriter.offset(PARTITION, OFFSET);
-        PowerMock.expectLastCall().anyTimes();
+                    producerCallbacks.reset();
+                }
+                return sendFuture;
+            }
+        };
+        if (anyTimes)
+            expect.andStubAnswer(expectResponse);
+        else
+            expect.andAnswer(expectResponse);
 
         return sent;
+    }
+
+    private void expectConvertKeyValue(boolean anyTimes) {
+        IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(TOPIC, KEY_SCHEMA, KEY));
+        if (anyTimes)
+            convertKeyExpect.andStubReturn(SERIALIZED_KEY);
+        else
+            convertKeyExpect.andReturn(SERIALIZED_KEY);
+        IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(TOPIC, RECORD_SCHEMA, RECORD));
+        if (anyTimes)
+            convertValueExpect.andStubReturn(SERIALIZED_RECORD);
+        else
+            convertValueExpect.andReturn(SERIALIZED_RECORD);
     }
 
     private void awaitPolls(CountDownLatch latch) throws InterruptedException {
