@@ -124,8 +124,11 @@ class ReplicationTest(ProduceConsumeValidateTest):
 
 
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
-            broker_type=["leader", "controller"],
+            broker_type=["leader"],
             security_protocol=["PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"])
+    @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
+            broker_type=["controller"],
+            security_protocol=["PLAINTEXT", "SASL_SSL"])
     def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
