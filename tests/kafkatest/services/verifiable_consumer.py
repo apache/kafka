@@ -197,11 +197,11 @@ class VerifiableConsumer(BackgroundThreadService):
             tp = TopicPartition(consumed_partition["topic"], consumed_partition["partition"])
             if tp in self.global_committed:
                 # verify that the position never gets behind the current commit.
-                # it would be nice to also verify that the position increases monotonically
-                # without gaps, but we cannot generally guarantee this for hard client failures
                 assert self.global_committed[tp] <= consumed_partition["minOffset"], \
                     "Consumed position %d is behind the current committed offset %d" % (consumed_partition["minOffset"], self.global_committed[tp])
 
+            # the consumer cannot generally guarantee that the position increases monotonically
+            # without gaps in the face of hard failures, so we only log a warning when this happens
             if tp in self.global_position and self.global_position[tp] != consumed_partition["minOffset"]:
                 self.logger.warn("Expected next consumed offset of %d, but instead saw %d" %
                                  (self.global_position[tp], consumed_partition["minOffset"]))
