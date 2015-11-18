@@ -63,9 +63,8 @@ class GroupCoordinator(val brokerId: Int,
            groupConfig: GroupConfig,
            offsetConfig: OffsetConfig,
            replicaManager: ReplicaManager,
-           zkUtils: ZkUtils,
-           scheduler: Scheduler) = this(brokerId, groupConfig, offsetConfig,
-    new GroupMetadataManager(brokerId, offsetConfig, replicaManager, zkUtils, scheduler))
+           zkUtils: ZkUtils) = this(brokerId, groupConfig, offsetConfig,
+    new GroupMetadataManager(brokerId, offsetConfig, replicaManager, zkUtils))
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
@@ -132,7 +131,7 @@ class GroupCoordinator(val brokerId: Int,
         if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
           responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID.code))
         } else {
-          group = groupManager.addGroup(groupId, protocolType)
+          group = groupManager.addGroup(new GroupMetadata(groupId, protocolType))
           doJoinGroup(group, memberId, clientId, clientHost, sessionTimeoutMs, protocolType, protocols, responseCallback)
         }
       } else {
@@ -226,7 +225,7 @@ class GroupCoordinator(val brokerId: Int,
         }
 
         if (group.is(PreparingRebalance))
-          joinPurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+          joinPurgatory.checkAndComplete(GroupKey(group.groupId))
       }
     }
   }
@@ -473,12 +472,49 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleGroupImmigration(offsetTopicPartitionId: Int) = {
-    groupManager.loadGroupsForPartition(offsetTopicPartitionId)
+  private def onGroupUnloaded(group: GroupMetadata) {
+    group synchronized {
+      info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
+      val previousState = group.currentState
+      group.transitionTo(Dead)
+
+      previousState match {
+        case Dead =>
+        case PreparingRebalance =>
+          for (member <- group.allMemberMetadata) {
+            if (member.awaitingJoinCallback != null) {
+              member.awaitingJoinCallback(joinError(member.memberId, Errors.NOT_COORDINATOR_FOR_GROUP.code))
+              member.awaitingJoinCallback = null
+            }
+          }
+          joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+
+        case Stable | AwaitingSync =>
+          for (member <- group.allMemberMetadata) {
+            if (member.awaitingSyncCallback != null) {
+              member.awaitingSyncCallback(Array.empty[Byte], Errors.NOT_COORDINATOR_FOR_GROUP.code)
+              member.awaitingSyncCallback = null
+            }
+            heartbeatPurgatory.checkAndComplete(MemberKey(member.groupId, member.memberId))
+          }
+      }
+    }
   }
 
-  def handleGroupEmigration(offsetTopicPartitionId: Int) = {
-    groupManager.removeGroupsForPartition(offsetTopicPartitionId)
+  private def onGroupLoaded(group: GroupMetadata) {
+    group synchronized {
+      info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
+      assert(group.is(Stable))
+      group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))
+    }
+  }
+
+  def handleGroupImmigration(offsetTopicPartitionId: Int) {
+    groupManager.loadGroupsForPartition(offsetTopicPartitionId, onGroupLoaded)
+  }
+
+  def handleGroupEmigration(offsetTopicPartitionId: Int) {
+    groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded)
   }
 
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {
@@ -528,7 +564,7 @@ class GroupCoordinator(val brokerId: Int,
   private def completeAndScheduleNextHeartbeatExpiration(group: GroupMetadata, member: MemberMetadata) {
     // complete current heartbeat expectation
     member.latestHeartbeat = SystemTime.milliseconds
-    val memberKey = ConsumerKey(member.groupId, member.memberId)
+    val memberKey = MemberKey(member.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
 
     // reschedule the next heartbeat expiration deadline
@@ -539,8 +575,8 @@ class GroupCoordinator(val brokerId: Int,
 
   private def removeHeartbeatForLeavingMember(group: GroupMetadata, member: MemberMetadata) {
     member.isLeaving = true
-    val consumerKey = ConsumerKey(member.groupId, member.memberId)
-    heartbeatPurgatory.checkAndComplete(consumerKey)
+    val memberKey = MemberKey(member.groupId, member.memberId)
+    heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
   private def addMemberAndRebalance(sessionTimeoutMs: Int,
@@ -584,8 +620,8 @@ class GroupCoordinator(val brokerId: Int,
 
     val rebalanceTimeout = group.rebalanceTimeout
     val delayedRebalance = new DelayedJoin(this, group, rebalanceTimeout)
-    val consumerGroupKey = ConsumerGroupKey(group.groupId)
-    joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(consumerGroupKey))
+    val groupKey = GroupKey(group.groupId)
+    joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 
   private def onMemberFailure(group: GroupMetadata, member: MemberMetadata) {
@@ -594,7 +630,7 @@ class GroupCoordinator(val brokerId: Int,
     group.currentState match {
       case Dead =>
       case Stable | AwaitingSync => maybePrepareRebalance(group)
-      case PreparingRebalance => joinPurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+      case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
   }
 
@@ -621,6 +657,7 @@ class GroupCoordinator(val brokerId: Int,
 
         // TODO KAFKA-2720: only remove group in the background thread
         if (group.isEmpty) {
+          group.transitionTo(Dead)
           groupManager.removeGroup(group)
           info("Group %s generation %s is dead and removed".format(group.groupId, group.generationId))
         }
@@ -694,8 +731,7 @@ object GroupCoordinator {
 
   def create(config: KafkaConfig,
              zkUtils: ZkUtils,
-             replicaManager: ReplicaManager,
-             scheduler: Scheduler): GroupCoordinator = {
+             replicaManager: ReplicaManager): GroupCoordinator = {
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
@@ -707,7 +743,7 @@ object GroupCoordinator {
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils, scheduler)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkUtils)
   }
 
   def create(config: KafkaConfig,

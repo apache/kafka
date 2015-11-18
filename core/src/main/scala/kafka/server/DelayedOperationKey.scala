@@ -39,13 +39,13 @@ case class TopicPartitionOperationKey(topic: String, partition: Int) extends Del
 }
 
 /* used by delayed-join-group operations */
-case class ConsumerKey(groupId: String, consumerId: String) extends DelayedOperationKey {
+case class MemberKey(groupId: String, consumerId: String) extends DelayedOperationKey {
 
   override def keyLabel = "%s-%s".format(groupId, consumerId)
 }
 
 /* used by delayed-rebalance operations */
-case class ConsumerGroupKey(groupId: String) extends DelayedOperationKey {
+case class GroupKey(groupId: String) extends DelayedOperationKey {
 
   override def keyLabel = groupId
 }
