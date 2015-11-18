@@ -339,20 +339,20 @@ Kafka Authorization management CLI can be found under bin directory with all the
         <td>Principal</td>
     </tr>
     <tr>
-        <td>--allow-hosts</td>
-        <td>Comma separated list of hosts from which principals listed in --allow-principals will have access.</td>
+        <td>--allow-host</td>
+        <td>Host from which principals listed in --allow-principals will have access.</td>
         <td> if --allow-principals is specified defaults to * which translates to "all hosts"</td>
         <td>Host</td>
     </tr>
     <tr>
-        <td>--deny-hosts</td>
-        <td>Comma separated list of hosts from which principals listed in --deny-principals will be denied access.</td>
+        <td>--deny-host</td>
+        <td>Host from which principals listed in --deny-principals will be denied access.</td>
         <td>if --deny-principals is specified defaults to * which translates to "all hosts"</td>
         <td>Host</td>
     </tr>
     <tr>
-        <td>--operations</td>
-        <td>Comma separated list of operations.<br>
+        <td>--operation</td>
+        <td>Operation that will be allowed or denied.<br>
             Valid values are : Read, Write, Create, Delete, Alter, Describe, ClusterAction, All</td>
         <td>All</td>
         <td>Operation</td>
@@ -376,14 +376,14 @@ Kafka Authorization management CLI can be found under bin directory with all the
 <ul>
     <li><b>Adding Acls</b><br>
 Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from Host1 and Host2". You can do that by executing the CLI with following options:
-        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-hosts Host1,Host2 --operations Read,Write --topic Test-topic</pre>
-        By default all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principals and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from host bad-host we can do so using following commands:
-        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-hosts * --deny-principal User:BadBob --deny-hosts bad-host --operations Read--topic Test-topic</pre>
+        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host Host1 --allow-host Host2 --operation Read --operation Write --topic Test-topic</pre>
+        By default all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from host bad-host we can do so using following commands:
+        <pre>bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-hosts * --deny-principal User:BadBob --deny-host bad-host --operation Read--topic Test-topic</pre>
         Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --consumer-group [group-name].</li>
 
     <li><b>Removing Acls</b><br>
             Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
-           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-hosts Host1,Host2 --operations Read,Write --topic Test-topic </pre></li>
+           <pre> bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host Host1 --allow-host Host2 --operation Read --operation Write --topic Test-topic </pre></li>
 
     <li><b>List Acls</b><br>
             We can list acls for any resource by specifying the --list option with the resource. To list all acls for Test-topic we can execute the CLI with following options:

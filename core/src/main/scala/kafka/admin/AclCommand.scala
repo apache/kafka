@@ -27,7 +27,6 @@ import scala.collection.JavaConverters._
 
 object AclCommand {
 
-  val Delimiter = ','
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
     Topic -> Set(Read, Write, Describe, All),
@@ -244,7 +243,7 @@ object AclCommand {
     for ((resource, acls) <- resourceToAcls) {
       val validOps = ResourceTypeToValidOperations(resource.resourceType)
       if ((acls.map(_.operation) -- validOps).nonEmpty)
-        CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(Delimiter.toString)}")
+        CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(",")}")
     }
   }
 
@@ -262,31 +261,28 @@ object AclCommand {
       .describedAs("authorizer-properties")
       .ofType(classOf[String])
 
-    val topicOpt = parser.accepts("topic", "Comma separated list of topic to which acls should be added or removed. " +
+    val topicOpt = parser.accepts("topic", "topic to which acls should be added or removed. " +
       "A value of * indicates acl should apply to all topics.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(Delimiter)
 
     val clusterOpt = parser.accepts("cluster", "Add/Remove cluster acls.")
-    val groupOpt = parser.accepts("group", "Comma separated list of groups to which the acls should be added or removed. " +
+    val groupOpt = parser.accepts("group", "Consumer Group to which the acls should be added or removed. " +
       "A value of * indicates the acls should apply to all groups.")
       .withRequiredArg
       .describedAs("group")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(Delimiter)
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add acls.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove acls.")
     val listOpt = parser.accepts("list", "List acls for the specified resource, use --topic <topic> or --group <group> or --cluster to specify a resource.")
 
-    val operationsOpt = parser.accepts("operations", "Comma separated list of operations, default is All. Valid operation names are: " + Newline +
+    val operationsOpt = parser.accepts("operation", "Operation that is being allowed or denied. Valid operation names are: " + Newline +
       Operation.values.map("\t" + _).mkString(Newline) + Newline)
       .withRequiredArg
       .ofType(classOf[String])
       .defaultsTo(All.name)
-      .withValuesSeparatedBy(Delimiter)
 
     val allowPrincipalsOpt = parser.accepts("allow-principal", "principal is in principalType:name format." +
       " User:* is the wild card indicating all users.")
@@ -304,19 +300,17 @@ object AclCommand {
       .describedAs("deny-principal")
       .ofType(classOf[String])
 
-    val allowHostsOpt = parser.accepts("allow-hosts", "Comma separated list of hosts from which principals listed in --allow-principals will have access. " +
-      "If you have specified --allow-principals then the default for this option will be set to * which allows access from all hosts.")
+    val allowHostsOpt = parser.accepts("allow-host", "Host from which principals listed in --allow-principal will have access. " +
+      "If you have specified --allow-principal then the default for this option will be set to * which allows access from all hosts.")
       .withRequiredArg
-      .describedAs("allow-hosts")
+      .describedAs("allow-host")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(Delimiter)
 
-    val denyHostssOpt = parser.accepts("deny-hosts", "Comma separated list of hosts from which principals listed in --deny-principals will be denied access. " +
-      "If you have specified --deny-principals then the default for this option will be set to * which denies access from all hosts.")
+    val denyHostssOpt = parser.accepts("deny-host", "Host from which principals listed in --deny-principal will be denied access. " +
+      "If you have specified --deny-principal then the default for this option will be set to * which denies access from all hosts.")
       .withRequiredArg
-      .describedAs("deny-hosts")
+      .describedAs("deny-host")
       .ofType(classOf[String])
-      .withValuesSeparatedBy(Delimiter)
 
     val producerOpt = parser.accepts("producer", "Convenience option to add/remove acls for producer role. " +
       "This will generate acls that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")
