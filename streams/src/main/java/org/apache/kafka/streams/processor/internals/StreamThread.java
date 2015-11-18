@@ -182,7 +182,7 @@ public class StreamThread extends Thread {
 
     private Consumer<byte[], byte[]> createRestoreConsumer() {
         log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(),
+        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
