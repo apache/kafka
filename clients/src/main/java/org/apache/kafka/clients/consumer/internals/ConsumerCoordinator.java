@@ -69,7 +69,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
-    private DelayedTask autoCommitTask = null;
+    private final AutoCommitTask autoCommitTask;
 
     /**
      * Initialize the coordination manager.
@@ -112,9 +112,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         addMetadataListener();
 
-        if (autoCommitEnabled)
-            this.autoCommitTask = scheduleAutoCommitTask(autoCommitIntervalMs);
-
+        this.autoCommitTask = autoCommitEnabled ? new AutoCommitTask(autoCommitIntervalMs) : null;
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
     }
 
@@ -178,6 +176,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
+
+        // restart the autocommit task if needed
+        if (autoCommitEnabled)
+            autoCommitTask.enable();
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
@@ -308,8 +310,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public void close() {
         client.disableWakeups();
         try {
-            if (autoCommitTask != null)
-                client.unschedule(autoCommitTask);
             maybeAutoCommitOffsetsSync();
         } finally {
             super.close();
@@ -361,25 +361,74 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private DelayedTask scheduleAutoCommitTask(final long interval) {
-        DelayedTask task = new DelayedTask() {
-            public void run(long now) {
-                commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
-                    @Override
-                    public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                        if (exception != null)
-                            log.error("Auto offset commit failed.", exception);
-                    }
-                });
-                client.schedule(this, now + interval);
+    private class AutoCommitTask implements DelayedTask {
+        private final long interval;
+        private boolean enabled = false;
+        private boolean requestInFlight = false;
+
+        public AutoCommitTask(long interval) {
+            this.interval = interval;
+        }
+
+        public void enable() {
+            if (!enabled) {
+                // there shouldn't be any instances scheduled, but call unschedule anyway to ensure
+                // that this task is only ever scheduled once
+                client.unschedule(this);
+                this.enabled = true;
+
+                if (!requestInFlight) {
+                    long now = time.milliseconds();
+                    client.schedule(this, interval + now);
+                }
             }
-        };
-        client.schedule(task, time.milliseconds() + interval);
-        return task;
+        }
+
+        public void disable() {
+            this.enabled = false;
+            client.unschedule(this);
+        }
+
+        private void reschedule(long at) {
+            if (enabled)
+                client.schedule(this, at);
+        }
+
+        public void run(final long now) {
+            if (!enabled)
+                return;
+
+            if (coordinatorUnknown()) {
+                log.debug("Cannot auto-commit offsets now since the coordinator is unknown, will retry after backoff");
+                client.schedule(this, now + retryBackoffMs);
+                return;
+            }
+
+            requestInFlight = true;
+            commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
+                @Override
+                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                    requestInFlight = false;
+                    if (exception == null) {
+                        reschedule(now + interval);
+                    } else if (exception instanceof SendFailedException) {
+                        log.debug("Failed to send automatic offset commit, will retry immediately");
+                        reschedule(now);
+                    } else {
+                        log.warn("Auto offset commit failed: {}", exception.getMessage());
+                        reschedule(now + interval);
+                    }
+                }
+            });
+        }
     }
 
     private void maybeAutoCommitOffsetsSync() {
         if (autoCommitEnabled) {
+            // disable periodic commits prior to committing synchronously. note that they will
+            // be re-enabled after a rebalance completes
+            autoCommitTask.disable();
+
             try {
                 commitOffsetsSync(subscriptions.allConsumed());
             } catch (WakeupException e) {
@@ -387,7 +436,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw e;
             } catch (Exception e) {
                 // consistent with async auto-commit failures, we do not propagate the exception
-                log.error("Auto offset commit failed.", e);
+                log.warn("Auto offset commit failed: ", e.getMessage());
             }
         }
     }
