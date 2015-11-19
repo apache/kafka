@@ -95,7 +95,10 @@ object TestUtils extends Logging {
    */
   def tempRelativeDir(parent: String): File = {
     new File(parent).mkdirs()
-    val f: File = Iterator.continually(new File(parent, "kafka-" + random.nextInt(1000000))).find(_.mkdir()).get
+    val attempts = 1000
+    val f = Iterator.continually(new File(parent, "kafka-" + random.nextInt(1000000)))
+                    .take(attempts).find(_.mkdir())
+                    .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
     f.deleteOnExit()
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
