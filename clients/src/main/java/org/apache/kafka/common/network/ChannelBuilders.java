@@ -13,7 +13,11 @@
 
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.DefaultPrincipalBuilder;
+import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
 
@@ -55,6 +59,21 @@ public class ChannelBuilders {
 
         channelBuilder.configure(configs);
         return channelBuilder;
+    }
+
+    /**
+     * Returns a configured `PrincipalBuilder`.
+     */
+    static PrincipalBuilder createPrincipalBuilder(Map<String, ?> configs) {
+        // this is a server-only config so it will always be null on the client
+        Class<?> principalBuilderClass = (Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
+        PrincipalBuilder principalBuilder;
+        if (principalBuilderClass == null)
+            principalBuilder = new DefaultPrincipalBuilder();
+        else
+            principalBuilder = (PrincipalBuilder) Utils.newInstance(principalBuilderClass);
+        principalBuilder.configure(configs);
+        return principalBuilder;
     }
 
     private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {

@@ -242,12 +242,16 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private class HeartbeatTask implements DelayedTask {
 
+        private boolean requestInFlight = false;
+
         public void reset() {
             // start or restart the heartbeat task to be executed at the next chance
             long now = time.milliseconds();
             heartbeat.resetSessionTimeout(now);
             client.unschedule(this);
-            client.schedule(this, now);
+
+            if (!requestInFlight)
+                client.schedule(this, now);
         }
 
         @Override
@@ -270,10 +274,13 @@ public abstract class AbstractCoordinator implements Closeable {
                 client.schedule(this, now + heartbeat.timeToNextHeartbeat(now));
             } else {
                 heartbeat.sentHeartbeat(now);
+                requestInFlight = true;
+
                 RequestFuture<Void> future = sendHeartbeatRequest();
                 future.addListener(new RequestFutureListener<Void>() {
                     @Override
                     public void onSuccess(Void value) {
+                        requestInFlight = false;
                         long now = time.milliseconds();
                         heartbeat.receiveHeartbeat(now);
                         long nextHeartbeatTime = now + heartbeat.timeToNextHeartbeat(now);
@@ -282,6 +289,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                     @Override
                     public void onFailure(RuntimeException e) {
+                        requestInFlight = false;
                         client.schedule(HeartbeatTask.this, time.milliseconds() + retryBackoffMs);
                     }
                 });
