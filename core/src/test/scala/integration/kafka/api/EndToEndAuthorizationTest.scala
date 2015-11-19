@@ -43,7 +43,7 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val serverCount = 3
   val numRecords = 1
   val group = "group"
-  val topic = "topic"
+  val topic = "e2etopic"
   val part = 0
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = new TopicAndPartition(topic, part)
