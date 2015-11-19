@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.lang.reflect.Array;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 
 public class KStreamImpl<K, V> implements KStream<K, V> {
@@ -65,12 +66,12 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     public static final String JOINOTHER_NAME = "KAFKA-JOINOTHER-";
 
-    public static final String JOINMERGE_NAME = "KAFKA-JOINMERGE-";
+    public static final String MERGE_NAME = "KAFKA-MERGE-";
 
     public static final String SOURCE_NAME = "KAFKA-SOURCE-";
 
     protected final KStreamBuilder topology;
-    protected final String name;
+    public final String name;
     protected final Set<String> sourceNodes;
 
     public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes) {
@@ -159,6 +160,30 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
         }
 
         return branchChildren;
+    }
+
+    public static <K, V> KStream<K, V> merge(KStreamBuilder topology, KStream<K, V>[] streams) {
+        String name = topology.newName(MERGE_NAME);
+        String[] parentNames = new String[streams.length];
+        Set<String> allSourceNodes = new HashSet<>();
+
+        for (int i = 0; i < streams.length; i++) {
+            KStreamImpl stream = (KStreamImpl) streams[i];
+
+            parentNames[i] = stream.name;
+
+            if (allSourceNodes != null) {
+                if (stream.sourceNodes != null)
+                    allSourceNodes.addAll(stream.sourceNodes);
+                else
+                    allSourceNodes = null;
+            }
+
+        }
+
+        topology.addProcessor(name, new KStreamPassThrough<>(), parentNames);
+
+        return new KStreamImpl<>(topology, name, allSourceNodes);
     }
 
     @Override

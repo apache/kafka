@@ -55,7 +55,7 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
 
         String joinThisName = topology.newName(JOINTHIS_NAME);
         String joinOtherName = topology.newName(JOINOTHER_NAME);
-        String joinMergeName = topology.newName(JOINMERGE_NAME);
+        String joinMergeName = topology.newName(MERGE_NAME);
 
         topology.addProcessor(joinThisName, joinThis, this.name);
         topology.addProcessor(joinOtherName, joinOther, ((KStreamImpl) other).name);

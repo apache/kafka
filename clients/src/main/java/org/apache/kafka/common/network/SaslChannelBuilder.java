@@ -20,15 +20,12 @@ import java.util.Map;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.kerberos.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
 
 import org.slf4j.Logger;
@@ -42,7 +39,6 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private final LoginType loginType;
 
     private LoginManager loginManager;
-    private PrincipalBuilder principalBuilder;
     private SslFactory sslFactory;
     private Map<String, ?> configs;
     private KerberosShortNamer kerberosShortNamer;
@@ -57,8 +53,6 @@ public class SaslChannelBuilder implements ChannelBuilder {
         try {
             this.configs = configs;
             this.loginManager = LoginManager.acquireLoginManager(loginType, configs);
-            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
-            this.principalBuilder.configure(configs);
 
             String defaultRealm;
             try {
@@ -90,7 +84,8 @@ public class SaslChannelBuilder implements ChannelBuilder {
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName());
-            authenticator.configure(transportLayer, this.principalBuilder, this.configs);
+            // Both authenticators don't use `PrincipalBuilder`, so we pass `null` for now. Reconsider if this changes.
+            authenticator.configure(transportLayer, null, this.configs);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
@@ -99,7 +94,6 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     public void close()  {
-        this.principalBuilder.close();
         this.loginManager.release();
     }
 

@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka.version import LATEST_0_8_2, TRUNK
@@ -77,5 +76,3 @@ class TestUpgrade(ProduceConsumeValidateTest):
         """
 
         self.run_produce_consume_validate(core_test_action=self.perform_upgrade)
-
-
