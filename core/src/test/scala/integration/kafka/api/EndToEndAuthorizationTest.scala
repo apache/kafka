@@ -19,31 +19,23 @@ package kafka.api
 
 import java.io.File
 import java.util.ArrayList
-import java.util.Arrays
 import java.util.concurrent.ExecutionException
-import java.util.Properties
 
 import kafka.admin.AclCommand
-import kafka.cluster.EndPoint
-import kafka.common.{ErrorMapping, TopicAndPartition, KafkaException}
-import kafka.coordinator.GroupCoordinator
-import kafka.integration.{KafkaServerTestHarness, SecurityTestHarness}
+import kafka.common.{TopicAndPartition}
 import kafka.security.auth._
 import kafka.server._
 import kafka.utils._
-import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerRecord, ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, ProducerConfig}
-import org.apache.kafka.common.{PartitionInfo, TopicPartition}
+
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerConfig}
+import org.apache.kafka.clients.producer.{ProducerRecord, ProducerConfig}
+import org.apache.kafka.common.{TopicPartition}
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.errors.TopicAuthorizationException
 import org.junit.Assert._
 import org.junit.{Test, After, Before}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.collection.mutable.Buffer
 
 class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1

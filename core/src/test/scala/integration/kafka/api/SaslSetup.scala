@@ -17,11 +17,10 @@
 
 package kafka.api
 
-import java.io.{FileWriter, BufferedWriter, File}
+import java.io.{File}
 import javax.security.auth.login.Configuration
 
 import kafka.utils.{JaasTestUtils,TestUtils}
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.hadoop.minikdc.MiniKdc
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.kerberos.LoginManager
