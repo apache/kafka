@@ -14,20 +14,20 @@
 # limitations under the License.
 
 from ducktape.tests.test import Test
-from ducktape.mark import matrix
+from ducktape.mark import parametrize
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, KafkaVersion
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
-from kafkatest.services.performance import throughput, latency, compute_aggregate_throughput
+from kafkatest.services.performance import latency, compute_aggregate_throughput
 
 
-class ProducerPerformanceSanityTest(Test):
+class PerformanceServiceTest(Test):
     def __init__(self, test_context):
-        super(ProducerPerformanceSanityTest, self).__init__(test_context)
+        super(PerformanceServiceTest, self).__init__(test_context)
         self.record_size = 100
-        self.num_records = 10
+        self.num_records = 10000
         self.topic = "topic"
 
         self.zk = ZookeeperService(test_context, 1)
@@ -35,7 +35,8 @@ class ProducerPerformanceSanityTest(Test):
     def setUp(self):
         self.zk.start()
 
-    @matrix(version=[str(TRUNK), str(LATEST_0_8_2)])
+    @parametrize(version=str(LATEST_0_8_2))
+    @parametrize(version=str(TRUNK))
     def test_version(self, version=str(LATEST_0_8_2)):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
@@ -65,52 +66,18 @@ class ProducerPerformanceSanityTest(Test):
             self.test_context, 1, self.kafka,
             topic=self.topic, num_records=self.num_records, version=version)
         self.end_to_end.run()
-        return latency(self.end_to_end.results[0]['latency_50th_ms'],  self.end_to_end.results[0]['latency_99th_ms'], self.end_to_end.results[0]['latency_999th_ms'])
+        end_to_end_data = latency(self.end_to_end.results[0]['latency_50th_ms'],  self.end_to_end.results[0]['latency_99th_ms'], self.end_to_end.results[0]['latency_999th_ms'])
 
+        # check basic run of consumer performance service
+        self.consumer_perf = ConsumerPerformanceService(
+            self.test_context, 1, self.kafka,
+            topic=self.topic, version=version, messages=self.num_records)
+        self.consumer_perf.group = "test-consumer-group"
+        self.consumer_perf.run()
+        consumer_perf_data = compute_aggregate_throughput(self.consumer_perf)
 
-
-
-
-        # self.consumer_perf = ConsumerPerformanceService(
-        #     self.test_context, 1, self.kafka,
-        #     topic=self.topic, messages=self.num_records, version=version)
-        # self.consumer_perf.group = "test-consumer-group"
-        # self.consumer_perf.run()
-        #
-        # self.end_to_end = EndToEndLatencyService(
-        #     self.test_context, 1, self.kafka,
-        #     topic=self.topic, num_records=10000, version=version)
-        # self.end_to_end.run()
-
-
-
-# class ConsumerPerformanceSanityTest(Test):
-#     def __init__(self, test_context):
-#         super(ConsumerPerformanceSanityTest, self).__init__(test_context)
-#         self.record_size = 100
-#         self.num_records = 10
-#         self.topic = "topic"
-#
-#         self.zk = ZookeeperService(test_context, 1)
-#
-#
-#     def setUp(self):
-#         self.zk.start()
-#
-#     def test_version(self, version=LATEST_0_8_2):
-#         """
-#         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
-#         (using new consumer iff new_consumer == True), and report throughput.
-#         """
-#         # seed kafka w/messages
-#         self.producer = ProducerPerformanceService(
-#             self.test_context, 1, self.kafka,
-#             topic=TOPIC_REP_THREE,
-#             num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1,
-#             settings={'acks': 1, 'batch.size': self.batch_size, 'buffer.memory': self.buffer_memory}
-#         )
-#         self.producer.run()
-#
-#         # consume
-
-
+        return {
+            "producer_performance": producer_perf_data,
+            "end_to_end_latency": end_to_end_data,
+            "consumer_performance": consumer_perf_data
+        }

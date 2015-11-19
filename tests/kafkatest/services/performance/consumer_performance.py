@@ -15,7 +15,7 @@
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK
+from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 
 import os
 
@@ -130,14 +130,30 @@ class ConsumerPerformanceService(PerformanceService):
         cmd += " /opt/%s/bin/kafka-consumer-perf-test.sh" % kafka_dir(node)
         for key, value in self.args.items():
             cmd += " --%s %s" % (key, value)
-        cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
-        for key, value in self.settings.items():
-            cmd += " %s=%s" % (str(key), str(value))
+        if node.version > LATEST_0_8_2:
+            # This is only used for security settings
+            cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s" % {'stdout': ConsumerPerformanceService.STDOUT_CAPTURE,
                                                         'stderr': ConsumerPerformanceService.STDERR_CAPTURE}
         return cmd
+
+    def parse_results(self, line, version):
+        parts = line.split(',')
+        if version > LATEST_0_8_2:
+            result = {
+                'total_mb': float(parts[2]),
+                'mbps': float(parts[3]),
+                'records_per_sec': float(parts[5]),
+            }
+        else:
+            result = {
+                'total_mb': float(parts[3]),
+                'mbps': float(parts[4]),
+                'records_per_sec': float(parts[6]),
+            }
+        return result
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % ConsumerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
@@ -152,11 +168,6 @@ class ConsumerPerformanceService(PerformanceService):
         last = None
         for line in node.account.ssh_capture(cmd):
             last = line
-        # Parse and save the last line's information
-        parts = last.split(',')
 
-        self.results[idx-1] = {
-            'total_mb': float(parts[2]),
-            'mbps': float(parts[3]),
-            'records_per_sec': float(parts[5]),
-        }
+        # Parse and save the last line's information
+        self.results[idx-1] = self.parse_results(last, node.version)

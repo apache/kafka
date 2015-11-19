@@ -45,6 +45,7 @@ class EndToEndLatencyService(PerformanceService):
         for node in self.nodes:
             node.version = version
 
+    @property
     def security_config_file(self):
         if self.security_config.security_protocol != SecurityConfig.PLAINTEXT:
             security_config_file = SecurityConfig.CONFIG_DIR + "/security.properties"
