@@ -95,10 +95,7 @@ object TestUtils extends Logging {
    */
   def tempRelativeDir(parent: String): File = {
     new File(parent).mkdirs()
-    var f: File = null
-    do {
-      f = new File(parent, "kafka-" + random.nextInt(1000000))
-    } while (!f.mkdir())
+    val f: File = Iterator.continually(new File(parent, "kafka-" + random.nextInt(1000000))).find(_.mkdir()).get
     f.deleteOnExit()
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
