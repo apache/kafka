@@ -12,60 +12,21 @@
   */
 package kafka.api
 
-import java.io.{FileWriter, BufferedWriter, File}
-import javax.security.auth.login.Configuration
-
-import kafka.utils.{JaasTestUtils,TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.hadoop.minikdc.MiniKdc
-import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.security.kerberos.LoginManager
 import org.junit.{After, Before}
 
-trait SaslTestHarness extends ZooKeeperTestHarness {
-  protected val zkSaslEnabled: Boolean
-  private val workDir = new File(System.getProperty("test.dir", "target"))
-  private val kdcConf = MiniKdc.createConf()
-  private val kdc = new MiniKdc(kdcConf, workDir)
-  
+trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
   @Before
   override def setUp() {
     // Important if tests leak consumers, producers or brokers
-    LoginManager.closeAll()
-    val keytabFile = createKeytabAndSetConfiguration()
-    kdc.start()
-    kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
+    startSasl()
     super.setUp
-  }
-
-  protected def createKeytabAndSetConfiguration(): File = {
-    val (keytabFile, jaasFile) = createKeytabAndJaasFiles()
-    // This will cause a reload of the Configuration singleton when `getConfiguration` is called
-    Configuration.setConfiguration(null)
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
-    keytabFile
-  }
-
-  private def createKeytabAndJaasFiles(): (File, File) = {
-    val keytabFile = TestUtils.tempFile()
-    //val jaasFile = TestUtils.tempFile()
-    val jaasFileName = if (zkSaslEnabled)
-        JaasTestUtils.genSingleFile(keytabFile.getAbsolutePath)
-      else
-        JaasTestUtils.genKafkaFile(keytabFile.getAbsolutePath)
-    val jaasFile = new File(jaasFileName)
-
-    (keytabFile, jaasFile)
   }
 
   @After
   override def tearDown() {
     super.tearDown
-    kdc.stop()
-    // Important if tests leak consumers, producers or brokers
-    LoginManager.closeAll()
-    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-    Configuration.setConfiguration(null)
+    closeSasl()
   }
 
 }

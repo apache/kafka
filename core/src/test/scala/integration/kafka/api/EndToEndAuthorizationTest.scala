@@ -39,23 +39,27 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.errors.TopicAuthorizationException
 import org.junit.Assert._
-import org.junit.{Test, Before}
+import org.junit.{Test, After, Before}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
 
-class EndToEndAuthorizationTest extends SecurityTestHarness {
+class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
-  override val numRecords = 1
-  override val group = "group"
+  val numRecords = 1
+  val group = "group"
   val topic = "topic"
   val part = 0
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = new TopicAndPartition(topic, part)
-  
+
+  override protected val zkSaslEnabled = true
+  override protected def securityProtocol = SecurityProtocol.SASL_SSL
+  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
   def topicAclArgs: Array[String] = Array("--authorizer-properties", 
@@ -76,20 +80,36 @@ class EndToEndAuthorizationTest extends SecurityTestHarness {
                                           s"--group=$group",
                                           s"--operations=Read",
                                           s"--allow-principal=$clientPrincipal")
+  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+  this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
+  this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
   @Before
   override def setUp {
+    startSasl()
     super.setUp
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)
   }
   
+  @After
+  override def tearDown {
+    info("### Tearing down")
+    super.tearDown
+    closeSasl()
+  }
+  
   @Test
   def testProduceConsume {
+    topicAclArgs.foreach(str => info(s"### Setting topic ACL: $str"))
     AclCommand.main(topicAclArgs)
+    info(s"### Setting group ACL: $groupAclArgs")
     AclCommand.main(groupAclArgs)
     //Produce records
-    debug("Starting to send records")
+    info("### Starting to send records")
     sendRecords(numRecords, tp)
     //Consume records
     debug("Finished sending and starting to consume records")
@@ -149,6 +169,7 @@ class EndToEndAuthorizationTest extends SecurityTestHarness {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 50
     var iters = 0
+    info("### Consuming now")
     while (records.size < numRecords) {
       for (record <- consumer.poll(50).asScala) {
         records.add(record)

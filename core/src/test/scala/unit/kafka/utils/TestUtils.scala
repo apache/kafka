@@ -158,7 +158,11 @@ object TestUtils extends Logging {
   }
 
   def getBrokerListStrFromServers(servers: Seq[KafkaServer], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
-    servers.map(s => formatAddress(s.config.hostName, s.boundPort(protocol))).mkString(",")
+    servers.map(svr => { 
+      val x = formatAddress(svr.config.hostName, svr.boundPort(protocol))
+      val hname = svr.config.hostName
+      info(s"### Formatted address: $protocol, $hname, $x")
+      x}).mkString(",")
   }
 
   /**
@@ -432,8 +436,10 @@ object TestUtils extends Logging {
                               trustStoreFile: Option[File],
                               certAlias: String): Properties = {
     val props = new Properties
-    if (usesSslTransportLayer(securityProtocol))
+    if (usesSslTransportLayer(securityProtocol)) {
+      debug("Using SSL for transport")
       props.putAll(sslConfigs(mode, false, trustStoreFile, certAlias))
+    }
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
@@ -462,7 +468,7 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, metadataFetchTimeout.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
-
+        
     /* Only use these if not already set */
     val defaultProps = Map(
       ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> "100",
@@ -492,28 +498,34 @@ object TestUtils extends Logging {
    * Create a new consumer with a few pre-configured properties.
    */
   def createNewConsumer(brokerList: String,
-                        groupId: String,
+                        groupId: String = "group",
                         autoOffsetReset: String = "earliest",
                         partitionFetchSize: Long = 4096L,
                         partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
                         sessionTimeout: Int = 30000,
                         securityProtocol: SecurityProtocol,
-                        trustStoreFile: Option[File] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
+                        trustStoreFile: Option[File] = None,
+                        props: Option[Properties] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
 
-    val consumerProps= new Properties()
+    val consumerProps = props.getOrElse(new Properties())
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
     consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, partitionFetchSize.toString)
 
-    consumerProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
-    consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
-    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, partitionAssignmentStrategy)
-    consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeout.toString)
+    val defaultProps = Map(
+    ConsumerConfig.RETRY_BACKOFF_MS_CONFIG -> "100",
+    ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG -> "200",
+    ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
+    ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
+    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> partitionAssignmentStrategy,
+    ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG -> sessionTimeout.toString,
+    ConsumerConfig.GROUP_ID_CONFIG -> groupId)
 
+    defaultProps.foreach { case (key, value) =>
+      if (!consumerProps.containsKey(key)) consumerProps.put(key, value)
+    }
+    
     consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile))
 
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)

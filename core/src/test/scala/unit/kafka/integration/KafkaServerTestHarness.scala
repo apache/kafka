@@ -20,11 +20,13 @@ package kafka.integration
 import java.io.File
 import java.util.Arrays
 
+import kafka.admin.AclCommand
 import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{After, Before}
 
 import scala.collection.mutable.Buffer
@@ -37,7 +39,9 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   var servers: Buffer[KafkaServer] = null
   var brokerList: String = null
   var alive: Array[Boolean] = null
-
+  val kafkaPrincipalType = KafkaPrincipal.USER_TYPE
+  val clientPrincipal = s"$kafkaPrincipalType:client"
+  val kafkaPrincipal = s"$kafkaPrincipalType:kafka"
   /**
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
    * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
@@ -54,11 +58,19 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
   protected def trustStoreFile: Option[File] = None
+  def clusterAclArgs: Array[String] = Array("--authorizer-properties", 
+                                            s"zookeeper.connect=$zkConnect",
+                                            s"--add",
+                                            s"--cluster",
+                                            s"--allow-principal=$kafkaPrincipal")
 
   @Before
   override def setUp() {
     super.setUp
-    if(configs.size <= 0)
+    if ((securityProtocol == SecurityProtocol.SASL_PLAINTEXT) || 
+       (securityProtocol == SecurityProtocol.SASL_SSL))
+         AclCommand.main(clusterAclArgs)
+    if (configs.size <= 0)
       throw new KafkaException("Must supply at least one server config.")
     servers = configs.map(TestUtils.createServer(_)).toBuffer
     brokerList = TestUtils.getBrokerListStrFromServers(servers, securityProtocol)

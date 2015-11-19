@@ -105,7 +105,7 @@ trait SecurityTestHarness extends ZooKeeperTestHarness with SaslTestHarness{
     super.setUp()
     // Set the cluster acl so that we can start brokers
     AclCommand.main(clusterAclArgs)
-    // Starte brokers
+    // Start brokers
     if(configs.size <= 0)
       throw new KafkaException("Must supply at least one server config.")
     servers = configs.map(TestUtils.createServer(_)).toBuffer
