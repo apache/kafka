@@ -97,19 +97,16 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   
   @After
   override def tearDown {
-    info("### Tearing down")
     super.tearDown
     closeSasl()
   }
   
   @Test
   def testProduceConsume {
-    topicAclArgs.foreach(str => info(s"### Setting topic ACL: $str"))
     AclCommand.main(topicAclArgs)
-    info(s"### Setting group ACL: $groupAclArgs")
     AclCommand.main(groupAclArgs)
     //Produce records
-    info("### Starting to send records")
+    debug("Starting to send records")
     sendRecords(numRecords, tp)
     //Consume records
     debug("Finished sending and starting to consume records")
@@ -169,7 +166,6 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 50
     var iters = 0
-    info("### Consuming now")
     while (records.size < numRecords) {
       for (record <- consumer.poll(50).asScala) {
         records.add(record)

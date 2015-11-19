@@ -436,10 +436,8 @@ object TestUtils extends Logging {
                               trustStoreFile: Option[File],
                               certAlias: String): Properties = {
     val props = new Properties
-    if (usesSslTransportLayer(securityProtocol)) {
-      debug("Using SSL for transport")
+    if (usesSslTransportLayer(securityProtocol))
       props.putAll(sslConfigs(mode, false, trustStoreFile, certAlias))
-    }
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
