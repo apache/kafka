@@ -220,7 +220,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <pre>
     -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre>
         </li>
-        <li>Make sure the keytabs configured in the JAAS file are readable by the linux user who is starting kafka broker.</li>
+        <li>Make sure the keytabs configured in the JAAS file are readable by the operating system user who is starting kafka broker.</li>
         <li>Configure a SASL port in server.properties, by adding at least one of SASL_PLAINTEXT or SASL_SSL to the <i>listeners</i> parameter, which contains one or more comma-separated values:
         <pre>
     listeners=SASL_PLAINTEXT://host.name:port</pre>
@@ -266,7 +266,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <li>Pass the name of the JAAS file as a JVM parameter to the client JVM:
         <pre>
     -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
-            <li>Make sure the keytabs configured in the kafka_client_jaas.conf are readable by the linux user who is starting kafka client.</li>
+            <li>Make sure the keytabs configured in the kafka_client_jaas.conf are readable by the operating system user who is starting kafka client.</li>
             <li>Configure the following properties in producer.properties or consumer.properties:
                 <pre>
     security.protocol=SASL_PLAINTEXT (or SASL_SSL)
