@@ -17,7 +17,10 @@ from ducktape.services.service import Service
 from kafkatest.services.kafka.directory import kafka_dir
 
 import os
-
+from tempfile import mkstemp
+from shutil import move
+from os import remove, close
+from io import open
 
 class MiniKdc(Service):
 
@@ -38,6 +41,16 @@ class MiniKdc(Service):
     def __init__(self, context, kafka_nodes):
         super(MiniKdc, self).__init__(context, 1)
         self.kafka_nodes = kafka_nodes
+
+    def replace_in_file(self, file_path, pattern, subst):
+        fh, abs_path = mkstemp()
+        with open(abs_path, 'w') as new_file:
+            with open(file_path) as old_file:
+                for line in old_file:
+                    new_file.write(line.replace(pattern, subst))
+        close(fh)
+        remove(file_path)
+        move(abs_path, file_path)
 
 
     def start_node(self, node):
@@ -60,9 +73,12 @@ class MiniKdc(Service):
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("MiniKdc Running", timeout_sec=60, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
+
         node.account.scp_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
         node.account.scp_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
 
+        #KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
+        self.replace_in_file(MiniKdc.LOCAL_KRB5CONF_FILE, '0.0.0.0', node.account.hostname)
 
     def stop_node(self, node):
         self.logger.info("Stopping %s on %s" % (type(self).__name__, node.account.hostname))
