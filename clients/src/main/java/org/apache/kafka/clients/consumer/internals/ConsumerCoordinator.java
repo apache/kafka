@@ -365,6 +365,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private class AutoCommitTask implements DelayedTask {
         private final long interval;
         private boolean enabled = false;
+        private boolean requestInFlight = false;
 
         public AutoCommitTask(long interval) {
             this.interval = interval;
@@ -376,8 +377,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // that this task is only ever scheduled once
                 client.unschedule(this);
                 this.enabled = true;
-                long now = time.milliseconds();
-                client.schedule(this, interval + now);
+
+                if (!requestInFlight) {
+                    long now = time.milliseconds();
+                    client.schedule(this, interval + now);
+                }
             }
         }
 
@@ -401,9 +405,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return;
             }
 
+            requestInFlight = true;
             commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                    requestInFlight = false;
                     if (exception == null) {
                         reschedule(now + interval);
                     } else if (exception instanceof SendFailedException) {
