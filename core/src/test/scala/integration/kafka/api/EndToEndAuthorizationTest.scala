@@ -58,19 +58,20 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$topic",
-                                          s"--operations=Read,Write",
+                                          s"--operation=Read",
+                                          s"--operation=Write",
                                           s"--allow-principal=$clientPrincipal")
   def topicWriteAclArgs: Array[String] = Array("--authorizer-properties", 
                                                s"zookeeper.connect=$zkConnect",
                                                s"--add",
                                                s"--topic=$topic",
-                                               s"--operations=Write",
+                                               s"--operation=Write",
                                                s"--allow-principal=$clientPrincipal")
   def groupAclArgs: Array[String] = Array("--authorizer-properties", 
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--group=$group",
-                                          s"--operations=Read",
+                                          s"--operation=Read",
                                           s"--allow-principal=$clientPrincipal")
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
