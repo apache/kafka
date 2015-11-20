@@ -129,7 +129,8 @@ class SecurityConfig(TemplateRenderer):
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             if self.has_sasl_kerberos:
                 scp(miniKdc.nodes[0], MiniKdc.KEYTAB_FILE, node, SecurityConfig.KEYTAB_PATH)
-                scp(miniKdc.nodes[0], MiniKdc.KRB5CONF_FILE, node, SecurityConfig.KRB5CONF_PATH)
+                #KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
+                scp(miniKdc.nodes[0], MiniKdc.KRB5CONF_FILE, node, SecurityConfig.KRB5CONF_PATH, '0.0.0.0', miniKdc.nodes[0].account.hostname)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
