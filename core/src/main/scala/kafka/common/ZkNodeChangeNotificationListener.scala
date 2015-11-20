@@ -61,10 +61,6 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
     processAllNotifications()
   }
 
-  def close() {
-    zkUtils.zkClient.unsubscribeChildChanges(seqNodeRoot, NodeChangeListener)
-  }
-
   /**
    * Process all changes
    */
