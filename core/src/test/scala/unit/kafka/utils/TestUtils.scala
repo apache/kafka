@@ -158,11 +158,7 @@ object TestUtils extends Logging {
   }
 
   def getBrokerListStrFromServers(servers: Seq[KafkaServer], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
-    servers.map(svr => { 
-      val x = formatAddress(svr.config.hostName, svr.boundPort(protocol))
-      val hname = svr.config.hostName
-      info(s"### Formatted address: $protocol, $hname, $x")
-      x}).mkString(",")
+    servers.map(s => formatAddress(s.config.hostName, s.boundPort(protocol))).mkString(",")
   }
 
   /**
