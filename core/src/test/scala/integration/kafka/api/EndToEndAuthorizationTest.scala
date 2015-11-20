@@ -37,6 +37,27 @@ import org.junit.{Test, After, Before}
 
 import scala.collection.JavaConverters._
 
+
+/**
+  * The test cases here verify that a producer authorized to publish to a topic
+  * is able to, and that consumers in a group authorized to consume are able to
+  * to do so.
+  *
+  * This test relies on a chain of test harness traits to set up. It directly
+  * extends IntegrationTestHarness. IntegrationTestHarness creates producers and
+  * consumers, and it extends KafkaServerTestHarness. KafkaServerTestHarness starts
+  * brokers, but first it initializes a ZooKeeper server and client, which happens
+  * in ZooKeeperTestHarness.
+  *
+  * To start brokers when the security protocol is SASL_SSL, we need to set a cluster
+  * ACL, which happens optionally in KafkaServerTestHarness. If the security protocol
+  * is SSL or PLAINTEXT, then the ACL isn't set. The remaining ACLs to enable access
+  * to producers and consumers are set here. To set ACLs, we use AclCommand directly.
+  *
+  * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
+  * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
+  * would end up with ZooKeeperTestHarness.
+  */
 class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
@@ -54,6 +75,11 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
 
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
+
+  // Arguments to AclCommand to set ACLs. There are three definitions here:
+  // 1- Provides read and write access to topic
+  // 2- Provides only write access to topic
+  // 3- Provides read access to consumer group
   def topicAclArgs: Array[String] = Array("--authorizer-properties", 
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
@@ -73,13 +99,19 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                           s"--group=$group",
                                           s"--operation=Read",
                                           s"--allow-principal=$clientPrincipal")
+  // The next two configuration parameters enable ZooKeeper secure ACLs
+  // and sets the Kafka authorizer, both necessary to enable security.
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
+  // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
+  /**
+    * Starts MiniKDC and only then sets up the parent trait.
+    */
   @Before
   override def setUp {
     startSasl()
@@ -87,13 +119,19 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)
   }
-  
+
+  /**
+    * Closes MiniKDC last when tearing down.
+    */
   @After
   override def tearDown {
     super.tearDown
     closeSasl()
   }
-  
+
+  /**
+    * Tests the ability of producing and consuming with the appropriate ACLs set.
+    */
   @Test
   def testProduceConsume {
     AclCommand.main(topicAclArgs)
@@ -107,7 +145,11 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     consumeRecords(this.consumers.head)
     debug("Finished consuming")
   }
-  
+
+  /**
+    * Tests that a producer fails to publish messages when the appropriate ACL
+    * isn't set.
+    */
   @Test
   def testNotProduce {
     //Produce records
@@ -119,7 +161,11 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
       case e: TopicAuthorizationException => //expected
     }
   }
-  
+
+  /**
+    * Tests that a consumer fails to consume messages without the appropriate
+    * ACL set.
+    */
   @Test
   def testNotConsume {
     AclCommand.main(topicWriteAclArgs)
