@@ -32,7 +32,7 @@ class TestRollingSSLUpgrade(ProduceConsumeValidateTest):
 
     def setUp(self):
         self.topic = "test_topic"
-        self.producer_throughput = 10000
+        self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
