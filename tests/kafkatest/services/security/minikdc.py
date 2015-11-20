@@ -63,7 +63,6 @@ class MiniKdc(Service):
         self.logger.info("Stopping %s on %s" % (type(self).__name__, node.account.hostname))
         node.account.kill_process("apacheds", allow_fail=False)
 
-
     def clean_node(self, node):
         node.account.kill_process("apacheds", clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf " + MiniKdc.WORK_DIR, allow_fail=False)

@@ -19,7 +19,6 @@ from shutil import move, rmtree
 from os import remove, close
 from io import open
 
-
 def file_exists(node, file):
     """Quick and dirty check for existence of remote file."""
     try:
@@ -67,7 +66,7 @@ def scp(source_node, source_path, target_node, target_path, pattern=None, subst=
         source_node.account.scp_from(source_path, local_temp_file)
         if pattern is not None:
             if subst is None:
-                raise Exception("Substitute string must be specified if pattern is speficied")
+                raise Exception("Substitute string must be specified if pattern is specified")
             replace_in_file(local_temp_file, pattern, subst)
         target_node.account.scp_to(local_temp_file, target_path)
     finally:
