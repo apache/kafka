@@ -110,7 +110,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
     val principal: KafkaPrincipal = session.principal
-    val host = session.host
+    val host = session.clientAddress.getHostAddress
     val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
 
     //check if there is any Deny acl match that would disallow this operation.
