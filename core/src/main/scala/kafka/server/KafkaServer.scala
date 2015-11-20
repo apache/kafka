@@ -109,6 +109,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   val brokerState: BrokerState = new BrokerState
 
   var apis: KafkaApis = null
+  var authorizer: Option[Authorizer] = None
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
 
@@ -191,12 +192,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         consumerCoordinator.startup()
 
         /* Get the authorizer and initialize it if one is specified.*/
-        val authorizer: Option[Authorizer] = if (config.authorizerClassName != null && !config.authorizerClassName.isEmpty) {
-          val authZ: Authorizer = CoreUtils.createObject(config.authorizerClassName)
+        authorizer = Option(config.authorizerClassName).filter(_.nonEmpty).map { authorizerClassName =>
+          val authZ = CoreUtils.createObject[Authorizer](authorizerClassName)
           authZ.configure(config.originals())
-          Option(authZ)
-        } else {
-          None
+          authZ
         }
 
         /* start processing requests */
@@ -533,6 +532,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         CoreUtils.swallow(kafkaScheduler.shutdown())
         if(apis != null)
           CoreUtils.swallow(apis.close())
+        CoreUtils.swallow(authorizer.foreach(_.close()))
         if(replicaManager != null)
           CoreUtils.swallow(replicaManager.shutdown())
         if(logManager != null)

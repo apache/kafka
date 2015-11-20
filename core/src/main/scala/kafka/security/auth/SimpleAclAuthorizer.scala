@@ -109,7 +109,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    val principal: KafkaPrincipal = session.principal
+    val principal = session.principal
     val host = session.clientAddress.getHostAddress
     val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
 
@@ -224,6 +224,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def getAcls(): Map[Resource, Set[Acl]] = {
     aclCache.toMap
+  }
+
+  def close() {
+    if (zkUtils != null) zkUtils.close()
   }
 
   private def loadCache()  {

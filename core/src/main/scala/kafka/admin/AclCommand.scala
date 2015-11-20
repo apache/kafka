@@ -58,7 +58,7 @@ object AclCommand {
     }
   }
 
-  def getAuthorizer(opts: AclCommandOptions): Authorizer = {
+  def withAuthorizer(opts: AclCommandOptions)(f: Authorizer => Unit) {
     var authorizerProperties = Map.empty[String, Any]
     if (opts.options.has(opts.authorizerPropertiesOpt)) {
       val props = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala.map(_.split("="))
@@ -66,55 +66,59 @@ object AclCommand {
     }
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
-    val authZ: Authorizer = CoreUtils.createObject(authorizerClass)
+    val authZ = CoreUtils.createObject[Authorizer](authorizerClass)
     authZ.configure(authorizerProperties.asJava)
-    authZ
+    try f(authZ)
+    finally CoreUtils.swallow(authZ.close())
   }
 
   private def addAcl(opts: AclCommandOptions) {
-    val authZ: Authorizer = getAuthorizer(opts)
-    val resourceToAcl = getResourceToAcls(opts)
+    withAuthorizer(opts) { authorizer =>
+      val resourceToAcl = getResourceToAcls(opts)
 
-    if (resourceToAcl.values.exists(_.isEmpty))
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add acls.")
+      if (resourceToAcl.values.exists(_.isEmpty))
+        CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add acls.")
 
-    for ((resource, acls) <- resourceToAcl) {
-      val acls = resourceToAcl(resource)
-      println(s"Adding following acls for resource: $resource $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-      authZ.addAcls(acls, resource)
+      for ((resource, acls) <- resourceToAcl) {
+        val acls = resourceToAcl(resource)
+        println(s"Adding following acls for resource: $resource $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+        authorizer.addAcls(acls, resource)
+      }
+
+      listAcl(opts)
     }
-
-    listAcl(opts)
   }
 
   private def removeAcl(opts: AclCommandOptions) {
-    val authZ: Authorizer = getAuthorizer(opts)
-    val resourceToAcl = getResourceToAcls(opts)
+    withAuthorizer(opts) { authorizer =>
+      val resourceToAcl = getResourceToAcls(opts)
 
-    for ((resource, acls) <- resourceToAcl) {
-      if (acls.isEmpty) {
-        if (confirmAction(s"Are you sure you want to delete all acls for resource: $resource y/n?"))
-          authZ.removeAcls(resource)
-      } else {
-        if (confirmAction(s"Are you sure you want to remove acls: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource $resource y/n?"))
-          authZ.removeAcls(acls, resource)
+      for ((resource, acls) <- resourceToAcl) {
+        if (acls.isEmpty) {
+          if (confirmAction(s"Are you sure you want to delete all acls for resource: $resource y/n?"))
+            authorizer.removeAcls(resource)
+        } else {
+          if (confirmAction(s"Are you sure you want to remove acls: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource $resource y/n?"))
+            authorizer.removeAcls(acls, resource)
+        }
       }
-    }
 
-    listAcl(opts)
+      listAcl(opts)
+    }
   }
 
   private def listAcl(opts: AclCommandOptions) {
-    val authZ = getAuthorizer(opts)
-    val resources = getResource(opts, dieIfNoResourceFound = false)
+    withAuthorizer(opts) { authorizer =>
+      val resources = getResource(opts, dieIfNoResourceFound = false)
 
-    val resourceToAcls = if(resources.isEmpty)
-      authZ.getAcls()
-    else
-      resources.map(resource => (resource -> authZ.getAcls(resource)))
+      val resourceToAcls = if (resources.isEmpty)
+        authorizer.getAcls()
+      else
+        resources.map(resource => (resource -> authorizer.getAcls(resource)))
 
-    for ((resource, acls) <- resourceToAcls)
-      println(s"Following is list of acls for resource: $resource $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+      for ((resource, acls) <- resourceToAcls)
+        println(s"Following is list of acls for resource: $resource $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+    }
   }
 
   private def getResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
