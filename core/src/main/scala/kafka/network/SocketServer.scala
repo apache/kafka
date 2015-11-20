@@ -421,7 +421,8 @@ private[kafka] class Processor(val id: Int,
         selector.completedReceives.asScala.foreach { receive =>
           try {
             val channel = selector.channel(receive.source)
-            val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal().getName), channel.socketDescription)
+            val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
+              channel.socketAddress)
             val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
             requestChannel.sendRequest(req)
           } catch {
@@ -434,11 +435,11 @@ private[kafka] class Processor(val id: Int,
         }
 
         selector.completedSends.asScala.foreach { send =>
-          val resp = inflightResponses.remove(send.destination()).getOrElse {
+          val resp = inflightResponses.remove(send.destination).getOrElse {
             throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
           }
           resp.request.updateRequestMetrics()
-          selector.unmute(send.destination())
+          selector.unmute(send.destination)
         }
 
         selector.disconnected.asScala.foreach { connectionId =>

@@ -17,7 +17,7 @@
 # Use this template Vagrantfile.local for running system tests on aws 
 # To use it, move it to the base kafka directory and rename
 # it to Vagrantfile.local, and adjust variables as needed.
-ec3_instance_type = "m3.medium"
+ec2_instance_type = "m3.medium"
 num_zookeepers = 0
 num_brokers = 0
 num_workers = 9

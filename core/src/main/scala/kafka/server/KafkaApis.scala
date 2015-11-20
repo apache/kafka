@@ -791,12 +791,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       val protocols = joinGroupRequest.groupProtocols().map(protocol =>
         (protocol.name, Utils.toArray(protocol.metadata))).toList
       coordinator.handleJoinGroup(
-        joinGroupRequest.groupId(),
-        joinGroupRequest.memberId(),
-        request.header.clientId(),
-        request.session.host,
-        joinGroupRequest.sessionTimeout(),
-        joinGroupRequest.protocolType(),
+        joinGroupRequest.groupId,
+        joinGroupRequest.memberId,
+        request.header.clientId,
+        request.session.clientAddress.toString,
+        joinGroupRequest.sessionTimeout,
+        joinGroupRequest.protocolType,
         protocols,
         sendResponseCallback)
     }
