@@ -18,7 +18,7 @@
 package kafka.security.auth
 
 import kafka.network.RequestChannel.Session
-import org.apache.kafka.common.{KafkaException, Configurable}
+import org.apache.kafka.common.Configurable
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
 /**
