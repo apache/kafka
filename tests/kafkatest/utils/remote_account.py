@@ -47,8 +47,9 @@ def replace_in_file(file_path, pattern, subst):
     move(abs_path, file_path)
 
 def scp(source_node, source_path, target_node, target_path, pattern=None, subst=None):
-    """ Copy file from source node to destination node. Uses a temporary file
-    on local node, since there is no mechanism to copy directly between two remote nodes.
+    """ Copy file from source node to destination node. Optionally replaces 'pattern' in a file
+    with 'subst' durign the copy. Uses a temporary file on local node, since there is no mechanism
+    to copy directly between two remote nodes.
     :param source_node: source node to copy from
     :param source_path: path on the source node to copy from
     :param target_node: destination node
@@ -70,3 +71,4 @@ def scp(source_node, source_path, target_node, target_path, pattern=None, subst=
         target_node.account.scp_to(local_temp_file, target_path)
     finally:
         rmtree(local_temp_dir, ignore_errors=True)
+
