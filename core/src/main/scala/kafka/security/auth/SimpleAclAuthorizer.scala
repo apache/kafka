@@ -226,6 +226,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     aclCache.toMap
   }
 
+  def close() {
+    zkUtils.zkClient.unsubscribeStateChanges(ZkStateChangeListener)
+    aclChangeListener.close()
+  }
+
   private def loadCache()  {
     var acls = Set.empty[Acl]
     val resourceTypes = zkUtils.getChildren(SimpleAclAuthorizer.AclZkPath)

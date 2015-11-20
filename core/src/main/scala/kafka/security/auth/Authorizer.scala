@@ -18,7 +18,7 @@
 package kafka.security.auth
 
 import kafka.network.RequestChannel.Session
-import org.apache.kafka.common.Configurable
+import org.apache.kafka.common.{KafkaException, Configurable}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
 /**
@@ -81,5 +81,11 @@ trait Authorizer extends Configurable {
    * gets the map of resource to acls for all resources.
    */
   def getAcls(): Map[Resource, Set[Acl]]
+
+  /**
+   * Closes this instance.
+   */
+  def close(): Unit
+
 }
 
