@@ -18,7 +18,9 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.server.KafkaConfig
 
 class SaslSslConsumerTest extends BaseConsumerTest with SaslTestHarness {
-  override protected val zkSaslEnabled = false
+  override protected val zkSaslEnabled = true
+  System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
+  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   

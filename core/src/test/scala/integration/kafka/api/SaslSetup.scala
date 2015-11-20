@@ -51,7 +51,6 @@ protected val zkSaslEnabled: Boolean
 
   private def createKeytabAndJaasFiles(): (File, File) = {
     val keytabFile = TestUtils.tempFile()
-    //val jaasFile = TestUtils.tempFile()
     val jaasFileName = if (zkSaslEnabled)
         JaasTestUtils.genSingleFile(keytabFile.getAbsolutePath)
       else
