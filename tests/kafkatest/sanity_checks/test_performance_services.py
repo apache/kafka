@@ -36,11 +36,12 @@ class PerformanceServiceTest(Test):
         self.zk.start()
 
     @parametrize(version=str(LATEST_0_8_2))
-    @parametrize(version=str(TRUNK))
-    def test_version(self, version=str(LATEST_0_8_2)):
+    @parametrize(version=str(TRUNK), new_consumer=False)
+    @parametrize(version=str(TRUNK), new_consumer=True)
+    def test_version(self, version=str(LATEST_0_8_2), new_consumer=False):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
-        number of messages.
+        number of messages. The actual stats here are pretty meaningless since the number of messages is quite small.
         """
         version = KafkaVersion(version)
         self.kafka = KafkaService(
@@ -70,7 +71,7 @@ class PerformanceServiceTest(Test):
 
         # check basic run of consumer performance service
         self.consumer_perf = ConsumerPerformanceService(
-            self.test_context, 1, self.kafka,
+            self.test_context, 1, self.kafka, new_consumer=new_consumer,
             topic=self.topic, version=version, messages=self.num_records)
         self.consumer_perf.group = "test-consumer-group"
         self.consumer_perf.run()
