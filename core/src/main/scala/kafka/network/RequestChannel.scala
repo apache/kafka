@@ -17,6 +17,7 @@
 
 package kafka.network
 
+import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.security.Principal
 import java.util.concurrent._
@@ -35,7 +36,7 @@ import org.apache.log4j.Logger
 
 
 object RequestChannel extends Logging {
-  val AllDone = new Request(processor = 1, connectionId = "2", new Session(KafkaPrincipal.ANONYMOUS, ""), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone = new Request(processor = 1, connectionId = "2", new Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost()), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
 
   def getShutdownReceive() = {
     val emptyProducerRequest = new ProducerRequest(0, 0, "", 0, 0, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
@@ -46,7 +47,7 @@ object RequestChannel extends Logging {
     byteBuffer
   }
 
-  case class Session(principal: KafkaPrincipal, host: String)
+  case class Session(principal: KafkaPrincipal, clientAddress: InetAddress)
 
   case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
