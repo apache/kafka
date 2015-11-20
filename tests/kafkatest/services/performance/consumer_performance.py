@@ -15,7 +15,7 @@
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.kafka.directory import kafka_dir
-from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
+from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2, V_0_9_0_0
 
 import os
 
@@ -77,6 +77,11 @@ class ConsumerPerformanceService(PerformanceService):
         self.messages = messages
         self.new_consumer = new_consumer
         self.settings = settings
+
+        if version < V_0_9_0_0 and self.new_consumer:
+            self.logger.warn("Version is %s where new_consumer is not available, but new_consumer is set to True. "\
+                             "Overriding new_consumer flag to False..." % str(version))
+            self.new_consumer = False
 
         # These less-frequently used settings can be updated manually after instantiation
         self.fetch_size = None
