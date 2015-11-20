@@ -78,7 +78,9 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
         val (acls, cmd) = getAclToCommand(permissionType, operationToCmd._1)
           AclCommand.main(args ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
           for (resource <- resources) {
-            TestUtils.waitAndVerifyAcls(acls, getAuthorizer(brokerProps), resource)
+            withAuthorizer(brokerProps) { authorizer =>
+              TestUtils.waitAndVerifyAcls(acls, authorizer, resource)
+            }
           }
 
           testRemove(resources, resourceCmd, args, brokerProps)
@@ -97,7 +99,9 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       AclCommand.main(args ++ getCmd(Allow) ++ resourceCommand ++ cmd :+ "--add")
       for ((resources, acls) <- resourcesToAcls) {
         for (resource <- resources) {
-          TestUtils.waitAndVerifyAcls(acls, getAuthorizer(brokerProps), resource)
+          withAuthorizer(brokerProps) { authorizer =>
+            TestUtils.waitAndVerifyAcls(acls, authorizer, resource)
+          }
         }
       }
       testRemove(resourcesToAcls.keys.flatten.toSet, resourceCommand, args, brokerProps)
@@ -108,7 +112,9 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     for (resource <- resources) {
       Console.withIn(new StringReader(s"y${AclCommand.Newline}" * resources.size)) {
         AclCommand.main(args ++ resourceCmd :+ "--remove")
-        TestUtils.waitAndVerifyAcls(Set.empty[Acl], getAuthorizer(brokerProps), resource)
+        withAuthorizer(brokerProps) { authorizer =>
+          TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, resource)
+        }
       }
     }
   }
@@ -124,11 +130,12 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     Users.foldLeft(cmd) ((cmd, user) => cmd ++ Array(principalCmd, user.toString))
   }
 
-  def getAuthorizer(props: Properties): Authorizer = {
+  def withAuthorizer(props: Properties)(f: Authorizer => Unit) {
     val kafkaConfig = KafkaConfig.fromProps(props)
     val authZ = new SimpleAclAuthorizer
-    authZ.configure(kafkaConfig.originals)
-
-    authZ
+    try {
+      authZ.configure(kafkaConfig.originals)
+      f(authZ)
+    } finally authZ.close()
   }
 }
