@@ -59,6 +59,7 @@ class Benchmark(Test):
             self.test_context, self.num_brokers,
             self.zk, security_protocol=security_protocol,
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
+        self.kafka.log_level = "INFO"  # We don't DEBUG logging here
         self.kafka.start()
 
     @parametrize(acks=1, topic=TOPIC_REP_ONE)
