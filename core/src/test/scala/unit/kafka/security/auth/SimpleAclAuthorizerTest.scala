@@ -26,7 +26,7 @@ import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.{After, Before, Test}
 
 class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -49,6 +49,11 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     config = KafkaConfig.fromProps(props)
     simpleAclAuthorizer.configure(config.originals)
     resource = new Resource(Topic, UUID.randomUUID().toString)
+  }
+
+  @After
+  override def tearDown(): Unit = {
+    simpleAclAuthorizer.close()
   }
 
   @Test

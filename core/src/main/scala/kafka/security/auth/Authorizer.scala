@@ -81,5 +81,11 @@ trait Authorizer extends Configurable {
    * gets the map of resource to acls for all resources.
    */
   def getAcls(): Map[Resource, Set[Acl]]
+
+  /**
+   * Closes this instance.
+   */
+  def close(): Unit
+
 }
 
