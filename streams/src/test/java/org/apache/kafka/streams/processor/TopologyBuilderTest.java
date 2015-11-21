@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,23 +17,18 @@
 
 package org.apache.kafka.streams.processor;
 
-import static org.junit.Assert.assertEquals;
-
-import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.common.utils.Utils.mkList;
-
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Test;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
+import static org.apache.kafka.common.utils.Utils.mkList;
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class TopologyBuilderTest {
 
@@ -97,6 +92,38 @@ public class TopologyBuilderTest {
         final TopologyBuilder builder = new TopologyBuilder();
 
         builder.addSink("sink", "topic-2", "sink");
+    }
+
+    @Test
+    public void testAddSinkConnectedWithParent() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addSource("source", "source-topic");
+        builder.addSink("sink", "dest-topic", "source");
+
+        Map<Integer, Set<String>> nodeGroups = builder.nodeGroups();
+        Set<String> nodeGroup = nodeGroups.get(0);
+
+        assertTrue(nodeGroup.contains("sink"));
+        assertTrue(nodeGroup.contains("source"));
+
+    }
+
+    @Test
+    public void testAddSinkConnectedWithMultipleParent() {
+        final TopologyBuilder builder = new TopologyBuilder();
+
+        builder.addSource("source", "source-topic");
+        builder.addSource("sourceII", "source-topicII");
+        builder.addSink("sink", "dest-topic", "source", "sourceII");
+
+        Map<Integer, Set<String>> nodeGroups = builder.nodeGroups();
+        Set<String> nodeGroup = nodeGroups.get(0);
+
+        assertTrue(nodeGroup.contains("sink"));
+        assertTrue(nodeGroup.contains("source"));
+        assertTrue(nodeGroup.contains("sourceII"));
+
     }
 
     @Test
