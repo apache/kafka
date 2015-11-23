@@ -42,6 +42,10 @@ public class StreamingConfig extends AbstractConfig {
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
 
+    /** <code>zookeeper.connect<code/> */
+    public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
+    private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management.";
+
     /** <code>commit.interval.ms</code> */
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor.";
@@ -120,6 +124,11 @@ public class StreamingConfig extends AbstractConfig {
                                         "",
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(ZOOKEEPER_CONNECT_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.HIGH,
+                                        StreamingConfig.ZOOKEEPER_CONNECT_DOC)
                                 .define(STATE_DIR_CONFIG,
                                         Type.STRING,
                                         SYSTEM_TEMP_DIRECTORY,

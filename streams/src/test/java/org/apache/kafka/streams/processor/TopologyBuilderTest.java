@@ -23,12 +23,7 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Test;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -208,12 +203,12 @@ public class TopologyBuilderTest {
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
-        Map<Integer, Set<String>> topicGroups = builder.topicGroups();
+        Map<Integer, PartitionGrouper.TopicsInfo> topicGroups = builder.topicGroups();
 
-        Map<Integer, Set<String>> expectedTopicGroups = new HashMap<>();
-        expectedTopicGroups.put(0, mkSet("topic-1", "topic-1x", "topic-2"));
-        expectedTopicGroups.put(1, mkSet("topic-3", "topic-4"));
-        expectedTopicGroups.put(2, mkSet("topic-5"));
+        Map<Integer, PartitionGrouper.TopicsInfo> expectedTopicGroups = new HashMap<>();
+        expectedTopicGroups.put(0, new PartitionGrouper.TopicsInfo(mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String>emptySet()));
+        expectedTopicGroups.put(1, new PartitionGrouper.TopicsInfo(mkSet("topic-3", "topic-4"), Collections.<String>emptySet()));
+        expectedTopicGroups.put(2, new PartitionGrouper.TopicsInfo(mkSet("topic-5"), Collections.<String>emptySet()));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -235,18 +230,18 @@ public class TopologyBuilderTest {
 
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
-        builder.addStateStore(new MockStateStoreSupplier("strore-1", false), "processor-1", "processor-2");
+        builder.addStateStore(new MockStateStoreSupplier("store-1", false), "processor-1", "processor-2");
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
         builder.addProcessor("processor-4", new MockProcessorSupplier(), "source-4");
-        builder.addStateStore(new MockStateStoreSupplier("strore-2", false), "processor-3", "processor-4");
+        builder.addStateStore(new MockStateStoreSupplier("store-2", false), "processor-3", "processor-4");
 
-        Map<Integer, Set<String>> topicGroups = builder.topicGroups();
+        Map<Integer, PartitionGrouper.TopicsInfo> topicGroups = builder.topicGroups();
 
-        Map<Integer, Set<String>> expectedTopicGroups = new HashMap<>();
-        expectedTopicGroups.put(0, mkSet("topic-1", "topic-1x", "topic-2"));
-        expectedTopicGroups.put(1, mkSet("topic-3", "topic-4"));
-        expectedTopicGroups.put(2, mkSet("topic-5"));
+        Map<Integer, PartitionGrouper.TopicsInfo> expectedTopicGroups = new HashMap<>();
+        expectedTopicGroups.put(0, new PartitionGrouper.TopicsInfo(mkSet("topic-1", "topic-1x", "topic-2"), mkSet("store-1")));
+        expectedTopicGroups.put(1, new PartitionGrouper.TopicsInfo(mkSet("topic-3", "topic-4"), mkSet("store-2")));
+        expectedTopicGroups.put(2, new PartitionGrouper.TopicsInfo(mkSet("topic-5"), Collections.<String>emptySet()));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);

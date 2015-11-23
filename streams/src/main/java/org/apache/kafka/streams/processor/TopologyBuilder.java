@@ -334,20 +334,31 @@ public class TopologyBuilder {
      *
      * @return groups of topic names
      */
-    public Map<Integer, Set<String>> topicGroups() {
-        Map<Integer, Set<String>> topicGroups = new HashMap<>();
+    public Map<Integer, PartitionGrouper.TopicsInfo> topicGroups() {
+        Map<Integer, PartitionGrouper.TopicsInfo> topicGroups = new HashMap<>();
 
         if (nodeGroups == null)
             nodeGroups = makeNodeGroups();
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
-            Set<String> topicGroup = new HashSet<>();
+            Set<String> sourceTopics = new HashSet<>();
+            Set<String> stateTopics = new HashSet<>();
             for (String node : entry.getValue()) {
+                // if the node is a source node, add to the source topics
                 String[] topics = nodeToTopics.get(node);
                 if (topics != null)
-                    topicGroup.addAll(Arrays.asList(topics));
+                    sourceTopics.addAll(Arrays.asList(topics));
+
+                // if the node is connected to a state, add to the state topics
+                for (Map.Entry<String, Set<String>> stateUsers : stateStoreUsers.entrySet()) {
+                    if (stateUsers.getValue().contains(node)) {
+                        stateTopics.add(stateStores.get(stateUsers.getKey()).name());
+                    }
+                }
             }
-            topicGroups.put(entry.getKey(), Collections.unmodifiableSet(topicGroup));
+            topicGroups.put(entry.getKey(), new PartitionGrouper.TopicsInfo(
+                    Collections.unmodifiableSet(sourceTopics),
+                    Collections.unmodifiableSet(stateTopics)));
         }
 
         return Collections.unmodifiableMap(topicGroups);
