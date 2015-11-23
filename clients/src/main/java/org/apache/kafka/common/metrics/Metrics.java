@@ -130,6 +130,19 @@ public class Metrics implements Closeable {
         } else {
             this.metricsScheduler = null;
         }
+
+        this.sensor("metrics-total").add(new MetricName("count", "kafka-metrics-total", "total number of registered metrics", defaultConfig.tags()),
+            new MeasurableStat() {
+                @Override
+                public double measure(MetricConfig config, long now) {
+                    return metrics.size();
+                }
+
+                @Override
+                public void record(MetricConfig config, double value, long timeMs) {
+
+                }
+            });
     }
 
     /**

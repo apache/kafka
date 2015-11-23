@@ -141,6 +141,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
   )
 
+  newGauge(
+    "yammer-metrics-total",
+    new Gauge[Int] {
+      def value = {
+        import scala.collection.JavaConverters._
+        com.yammer.metrics.Metrics.defaultRegistry().groupedMetrics().asScala.foldLeft(0)(_ + _._2.size())
+      }
+    }
+  )
+
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers

@@ -111,6 +111,16 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private val zkCommitMeter = newMeter("ZooKeeperCommitsPerSec", "commits", TimeUnit.SECONDS, Map("clientId" -> config.clientId))
   private val rebalanceTimer = new KafkaTimer(newTimer("RebalanceRateAndTime", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, Map("clientId" -> config.clientId)))
 
+  newGauge(
+    "yammer-metrics-total",
+    new Gauge[Int] {
+      def value = {
+        import scala.collection.JavaConverters._
+        com.yammer.metrics.Metrics.defaultRegistry().groupedMetrics().asScala.foldLeft(0)(_ + _._2.size())
+      }
+    }
+  )
+
   val consumerIdString = {
     var consumerUuid : String = null
     config.consumerId match {
