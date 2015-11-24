@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -113,7 +114,7 @@ public class Fetcher<K, V> {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
 
-        this.records = new LinkedList<PartitionRecords<K, V>>();
+        this.records = new LinkedList<>();
         this.offsetOutOfRangePartitions = new HashMap<>();
         this.unauthorizedTopics = new HashSet<>();
         this.recordTooLargePartitions = new HashMap<>();
@@ -192,44 +193,49 @@ public class Fetcher<K, V> {
             return Collections.emptyMap();
 
         final HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
-        long startTime = time.milliseconds();
+        long start = time.milliseconds();
+        long remaining = timeout;
 
-        while (time.milliseconds() - startTime < timeout) {
-            RequestFuture<ClientResponse> requestFuture = sendMetadataRequest(topics);
-            if (requestFuture != null) {
-                client.poll(requestFuture);
+        do {
+            RequestFuture<ClientResponse> future = sendMetadataRequest(topics);
+            client.poll(future, remaining);
 
-                if (requestFuture.succeeded()) {
-                    MetadataResponse response =
-                        new MetadataResponse(requestFuture.value().responseBody());
+            if (future.failed() && !future.isRetriable())
+                throw future.exception();
 
-                    for (String topic : response.cluster().topics())
-                        topicsPartitionInfos.put(
-                            topic, response.cluster().availablePartitionsForTopic(topic));
+            if (future.succeeded() && !future.value().wasDisconnected()) {
+                MetadataResponse response = new MetadataResponse(future.value().responseBody());
+                for (String topic : response.cluster().topics())
+                    topicsPartitionInfos.put(topic, response.cluster().availablePartitionsForTopic(topic));
 
-                    return topicsPartitionInfos;
-                }
-
-                if (!requestFuture.isRetriable())
-                    throw requestFuture.exception();
+                return topicsPartitionInfos;
             }
 
-            Utils.sleep(retryBackoffMs);
-        }
+            long elapsed = time.milliseconds() - start;
+            remaining = timeout - elapsed;
 
-        return topicsPartitionInfos;
+            if (remaining > 0) {
+                long backoff = Math.min(remaining, retryBackoffMs);
+                time.sleep(backoff);
+                remaining -= backoff;
+            }
+        } while (remaining > 0);
+
+        throw new TimeoutException("Timeout expired while fetching topic metadata");
     }
 
     /**
      * Send Metadata Request to least loaded node in Kafka cluster asynchronously
      * @return A future that indicates result of sent metadata request
      */
-    public RequestFuture<ClientResponse> sendMetadataRequest(List<String> topics) {
+    private RequestFuture<ClientResponse> sendMetadataRequest(List<String> topics) {
         if (topics == null)
             topics = Collections.emptyList();
         final Node node = client.leastLoadedNode();
-        return node == null ? null :
-            client.send(node, ApiKeys.METADATA, new MetadataRequest(topics));
+        if (node == null)
+            return RequestFuture.noBrokersAvailable();
+        else
+            return client.send(node, ApiKeys.METADATA, new MetadataRequest(topics));
     }
 
     /**
