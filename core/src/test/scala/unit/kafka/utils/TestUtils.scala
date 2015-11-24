@@ -35,7 +35,6 @@ import org.apache.kafka.test.TestSslUtils
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
-
 import kafka.server._
 import kafka.producer._
 import kafka.message._
@@ -57,6 +56,7 @@ import org.apache.kafka.common.network.Mode
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
+import java.nio.file.Files
 
 /**
  * Utility functions to help with testing
@@ -94,11 +94,9 @@ object TestUtils extends Logging {
    * Create a temporary relative directory
    */
   def tempRelativeDir(parent: String): File = {
-    new File(parent).mkdirs()
-    val attempts = 1000
-    val f = Iterator.continually(new File(parent, "kafka-" + random.nextInt(1000000)))
-                    .take(attempts).find(_.mkdir())
-                    .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
+    val parentFile = new File(parent)
+    parentFile.mkdirs()
+    val f = Files.createTempDirectory(parentFile.toPath, "kafka-").toFile
     f.deleteOnExit()
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -107,6 +105,19 @@ object TestUtils extends Logging {
       }
     })
 
+    f
+  }
+  
+  /**
+   * Create a temporary directory in the format <string>-<int> used for Kafka partition logs
+   */
+  def tempPartitionLogDir(parentDir: File): File = {
+    val attempts = 100
+    val f = Iterator.continually(new File(parentDir, "kafka-" + random.nextInt(1000000)))
+                                  .take(attempts).find(_.mkdir())
+                                  .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
+    f.deleteOnExit()
+    // Shutdown hook is not necessary since shutdown hook of parent directory will clean up recursively
     f
   }
 
