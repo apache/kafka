@@ -471,8 +471,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a set of key-value pairs as configuration, a
-     * {@link ConsumerRebalanceListener} implementation, a key and a value {@link Deserializer}.
+     * A consumer is instantiated by providing a set of key-value pairs as configuration, and a key and a value {@link Deserializer}.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
      *
@@ -501,8 +500,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration and a
-     * {@link ConsumerRebalanceListener} implementation, a key and a value {@link Deserializer}.
+     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration, and a
+     * key and a value {@link Deserializer}.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
      *
