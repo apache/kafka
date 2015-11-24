@@ -60,7 +60,7 @@ public class Compressor {
     private static MemoizingConstructorSupplier lz4OutputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
         @Override
         public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.apache.kafka.common.message.KafkaLZ4BlockOutputStream")
+            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream")
                 .getConstructor(OutputStream.class);
         }
     });
@@ -76,7 +76,7 @@ public class Compressor {
     private static MemoizingConstructorSupplier lz4InputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
         @Override
         public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.apache.kafka.common.message.KafkaLZ4BlockInputStream")
+            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream")
                 .getConstructor(InputStream.class);
         }
     });
