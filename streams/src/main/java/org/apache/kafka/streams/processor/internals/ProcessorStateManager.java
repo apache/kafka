@@ -119,7 +119,7 @@ public class ProcessorStateManager {
 
         do {
             try {
-                Thread.sleep(500L);
+                Thread.sleep(50L);
             } catch (InterruptedException e) {
                 // ignore
             }
@@ -130,7 +130,7 @@ public class ProcessorStateManager {
                     break;
                 }
             }
-        } while (partitionNotFound && System.currentTimeMillis() > startTime + waitTime);
+        } while (partitionNotFound && System.currentTimeMillis() < startTime + waitTime);
 
         if (partitionNotFound)
             throw new IllegalStateException("Store " + store.name() + "'s change log does not contain partition " + partition);
@@ -258,7 +258,7 @@ public class ProcessorStateManager {
 
             Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
             for (String storeName : stores.keySet()) {
-                TopicPartition part = new TopicPartition(storeName, partition);
+                TopicPartition part = new TopicPartition(storeName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, partition);
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {

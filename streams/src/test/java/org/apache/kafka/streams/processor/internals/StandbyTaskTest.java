@@ -50,15 +50,18 @@ public class StandbyTaskTest {
 
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
 
-    private final TopicPartition partition1 = new TopicPartition("store1", 1);
-    private final TopicPartition partition2 = new TopicPartition("store2", 1);
+    private final String storeName1 = "store1";
+    private final String storeName2 = "store2";
+
+    private final TopicPartition partition1 = new TopicPartition(storeName1 + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1);
+    private final TopicPartition partition2 = new TopicPartition(storeName2 + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1);
 
     private final ProcessorTopology topology = new ProcessorTopology(
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
             Utils.<StateStoreSupplier>mkList(
-                    new MockStateStoreSupplier(partition1.topic(), false),
-                    new MockStateStoreSupplier(partition2.topic(), true)
+                    new MockStateStoreSupplier(storeName1, false),
+                    new MockStateStoreSupplier(storeName2, true)
             )
     );
 
@@ -85,22 +88,31 @@ public class StandbyTaskTest {
 
     @Before
     public void setup() {
+        String topicName1 = "store1" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+        String topicName2 = "store2" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+
         restoreStateConsumer.reset();
-        restoreStateConsumer.updatePartitions("store1", Utils.mkList(
-                new PartitionInfo("store1", 0, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo("store1", 1, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo("store1", 2, Node.noNode(), new Node[0], new Node[0])
+        restoreStateConsumer.updatePartitions(topicName1, Utils.mkList(
+                new PartitionInfo(topicName1, 0, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(topicName1, 1, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(topicName1, 2, Node.noNode(), new Node[0], new Node[0])
         ));
 
-        restoreStateConsumer.updatePartitions("store2", Utils.mkList(
-                new PartitionInfo("store2", 0, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo("store2", 1, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo("store2", 2, Node.noNode(), new Node[0], new Node[0])
+        System.out.println("added " + topicName1);
+
+        restoreStateConsumer.updatePartitions(topicName2, Utils.mkList(
+                new PartitionInfo(topicName2, 0, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(topicName2, 1, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(topicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
+
+        System.out.println("added " + topicName2);
     }
 
     @Test
     public void testStorePartitions() throws Exception {
+        System.out.println("STARTED");
+
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             StreamingConfig config = createConfig(baseDir);
@@ -163,9 +175,9 @@ public class StandbyTaskTest {
 
             StandbyContextImpl context = (StandbyContextImpl) task.context();
             MockStateStoreSupplier.MockStateStore store1 =
-                    (MockStateStoreSupplier.MockStateStore) context.getStateMgr().getStore(partition1.topic());
+                    (MockStateStoreSupplier.MockStateStore) context.getStateMgr().getStore(storeName1);
             MockStateStoreSupplier.MockStateStore store2 =
-                    (MockStateStoreSupplier.MockStateStore) context.getStateMgr().getStore(partition2.topic());
+                    (MockStateStoreSupplier.MockStateStore) context.getStateMgr().getStore(storeName2);
 
             assertEquals(Collections.emptyList(), store1.keys);
             assertEquals(Utils.mkList(1, 2, 3), store2.keys);
