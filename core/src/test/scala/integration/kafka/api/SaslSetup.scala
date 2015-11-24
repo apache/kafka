@@ -26,7 +26,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.kerberos.LoginManager
 
 trait SaslSetup {
-protected val zkSaslEnabled: Boolean
+  protected val zkSaslEnabled: Boolean
   private val workDir = new File(System.getProperty("test.dir", "target"))
   private val kdcConf = MiniKdc.createConf()
   private val kdc = new MiniKdc(kdcConf, workDir)
