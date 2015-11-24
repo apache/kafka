@@ -1136,6 +1136,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic
+     * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
+     *             expiration of the request timeout
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1160,6 +1162,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The map of topics and its partitions
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
+     *             expiration of the request timeout
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {

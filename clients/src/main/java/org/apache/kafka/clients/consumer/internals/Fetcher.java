@@ -27,7 +27,9 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -192,7 +194,6 @@ public class Fetcher<K, V> {
         if (topics != null && topics.isEmpty())
             return Collections.emptyMap();
 
-        final HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
         long start = time.milliseconds();
         long remaining = timeout;
 
@@ -205,10 +206,43 @@ public class Fetcher<K, V> {
 
             if (future.succeeded() && !future.value().wasDisconnected()) {
                 MetadataResponse response = new MetadataResponse(future.value().responseBody());
-                for (String topic : response.cluster().topics())
-                    topicsPartitionInfos.put(topic, response.cluster().availablePartitionsForTopic(topic));
+                Cluster cluster = response.cluster();
 
-                return topicsPartitionInfos;
+                Set<String> unauthorizedTopics = cluster.unauthorizedTopics();
+                if (!unauthorizedTopics.isEmpty())
+                    throw new TopicAuthorizationException(unauthorizedTopics);
+
+                boolean shouldRetry = false;
+                if (!response.errors().isEmpty()) {
+                    // if there were errors, we need to check whether they were fatal or whether
+                    // we should just retry
+
+                    log.debug("Topic metadata fetch included errors: {}", response.errors());
+
+                    for (Map.Entry<String, Errors> errorEntry : response.errors().entrySet()) {
+                        String topic = errorEntry.getKey();
+                        Errors error = errorEntry.getValue();
+
+                        if (error == Errors.INVALID_TOPIC_EXCEPTION)
+                            throw new InvalidTopicException("Topic '" + topic + "' is invalid");
+                        else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION)
+                            // if a requested topic is unknown, we just continue and let it be absent
+                            // in the returned map
+                            continue;
+                        else if (error.exception() instanceof RetriableException)
+                            shouldRetry = true;
+                        else
+                            throw new KafkaException("Unexpected error fetching metadata for topic " + topic,
+                                    error.exception());
+                    }
+                }
+
+                if (!shouldRetry) {
+                    HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
+                    for (String topic : cluster.topics())
+                        topicsPartitionInfos.put(topic, cluster.availablePartitionsForTopic(topic));
+                    return topicsPartitionInfos;
+                }
             }
 
             long elapsed = time.milliseconds() - start;

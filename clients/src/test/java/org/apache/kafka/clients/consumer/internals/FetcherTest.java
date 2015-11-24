@@ -29,6 +29,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -240,6 +241,8 @@ public class FetcherTest {
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
+
+
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L, 0));
         consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
@@ -411,16 +414,56 @@ public class FetcherTest {
         // first try gets a disconnect, next succeeds
         client.prepareResponse(null, true);
         client.prepareResponse(new MetadataResponse(cluster, Collections.<String, Errors>emptyMap()).toStruct());
-
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
-
         assertEquals(cluster.topics().size(), allTopics.size());
-        assertTrue(client.requests().isEmpty());
     }
 
     @Test(expected = TimeoutException.class)
     public void testGetAllTopicsTimeout() {
-        fetcher.getAllTopicMetadata(10L);
+        // since no response is prepared, the request should timeout
+        fetcher.getAllTopicMetadata(50L);
+    }
+
+    @Test
+    public void testGetAllTopicsUnauthorized() {
+        client.prepareResponse(new MetadataResponse(cluster,
+                Collections.singletonMap(topicName, Errors.TOPIC_AUTHORIZATION_FAILED)).toStruct());
+        try {
+            fetcher.getAllTopicMetadata(10L);
+            fail();
+        } catch (TopicAuthorizationException e) {
+            assertEquals(Collections.singleton(topicName), e.unauthorizedTopics());
+        }
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void testGetTopicMetadataInvalidTopic() {
+        client.prepareResponse(new MetadataResponse(cluster,
+                Collections.singletonMap(topicName, Errors.INVALID_TOPIC_EXCEPTION)).toStruct());
+        fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
+    }
+
+    @Test
+    public void testGetTopicMetadataUnknownTopic() {
+        Cluster emptyCluster = new Cluster(this.cluster.nodes(), Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet());
+        client.prepareResponse(new MetadataResponse(emptyCluster,
+                Collections.singletonMap(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION)).toStruct());
+
+        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
+        assertNull(topicMetadata.get(topicName));
+    }
+
+    @Test
+    public void testGetTopicMetadataLeaderNotAvailable() {
+        Cluster emptyCluster = new Cluster(this.cluster.nodes(), Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet());
+        client.prepareResponse(new MetadataResponse(emptyCluster,
+                Collections.singletonMap(topicName, Errors.LEADER_NOT_AVAILABLE)).toStruct());
+        client.prepareResponse(new MetadataResponse(this.cluster,
+                Collections.<String, Errors>emptyMap()).toStruct());
+        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
+        assertTrue(topicMetadata.containsKey(topicName));
     }
 
     /*
