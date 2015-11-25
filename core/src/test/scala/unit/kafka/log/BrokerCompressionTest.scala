@@ -35,14 +35,9 @@ import scala.collection.JavaConversions._
 class BrokerCompressionTest(messageCompression: String, brokerCompression: String) extends JUnitSuite {
 
   val tmpDir = TestUtils.tempDir()
-  var logDir: File = null
+  val logDir = TestUtils.tempPartitionLogDir(tmpDir)
   val time = new MockTime(0)
   val logConfig = LogConfig()
-
-  @Before
-  def setUp() {
-    logDir = TestUtils.tempPartitionLogDir(tmpDir)
-  }
 
   @After
   def tearDown() {

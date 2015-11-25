@@ -19,6 +19,7 @@ package kafka.utils
 
 import java.io._
 import java.nio._
+import java.nio.file.Files
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
@@ -56,7 +57,6 @@ import org.apache.kafka.common.network.Mode
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
-import java.nio.file.Files
 
 /**
  * Utility functions to help with testing
@@ -97,14 +97,7 @@ object TestUtils extends Logging {
     val parentFile = new File(parent)
     parentFile.mkdirs()
     val f = Files.createTempDirectory(parentFile.toPath, "kafka-").toFile
-    f.deleteOnExit()
-
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      override def run() = {
-        CoreUtils.rm(f)
-      }
-    })
-
+    deleteTempDirOnExit(f)
     f
   }
   
@@ -112,13 +105,22 @@ object TestUtils extends Logging {
    * Create a temporary directory in the format <string>-<int> used for Kafka partition logs
    */
   def tempPartitionLogDir(parentDir: File): File = {
-    val attempts = 100
+    val attempts = 1000
     val f = Iterator.continually(new File(parentDir, "kafka-" + random.nextInt(1000000)))
                                   .take(attempts).find(_.mkdir())
                                   .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
-    f.deleteOnExit()
-    // Shutdown hook is not necessary since shutdown hook of parent directory will clean up recursively
+    deleteTempDirOnExit(f)
     f
+  }
+
+  private def deleteTempDirOnExit(dir: File) {
+    dir.deleteOnExit()
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      override def run() = {
+        CoreUtils.rm(dir)
+      }
+    })
   }
 
 

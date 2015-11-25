@@ -31,14 +31,13 @@ import kafka.server.KafkaConfig
 class LogTest extends JUnitSuite {
   
   val tmpDir = TestUtils.tempDir()
-  var logDir: File = null
+  val logDir = TestUtils.tempPartitionLogDir(tmpDir)
   val time = new MockTime(0)
   var config: KafkaConfig = null
   val logConfig = LogConfig()  
 
   @Before
   def setUp() {
-    logDir = TestUtils.tempPartitionLogDir(tmpDir)
     val props = TestUtils.createBrokerConfig(0, "127.0.0.1:1", port = -1)
     config = KafkaConfig.fromProps(props)
   }
