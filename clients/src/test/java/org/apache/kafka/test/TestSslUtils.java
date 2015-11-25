@@ -55,25 +55,6 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class TestSslUtils {
-
-    /*
-     * Simulates a CA signing certificates
-     */
-    static KeyPair issuerKP;
-    static AsymmetricKeyParameter privateKeyAsymKeyParam;
-    static X509Certificate issuerCert;
-    static X500Name issuer = new X500Name("CN=localhost, O=CAroot");
-    static {
-        try{
-            issuerKP = generateKeyPair("RSA");
-            privateKeyAsymKeyParam = PrivateKeyFactory.createKey(issuerKP.getPrivate().getEncoded());
-            issuerCert = generateCertificate("CN=localhost, O=CAroot", issuerKP, 30,
-                    "SHA1withRSA", true);
-        } catch (Exception e) {
-            throw new java.lang.Error(e);
-        }
-    }
-
     /**
      * Create a self-signed X.509 Certificate.
      * From http://bfo.com/blog/2011/03/08/odds_and_ends_creating_a_new_x_509_certificate.html.
@@ -87,29 +68,22 @@ public class TestSslUtils {
      * @throws CertificateException thrown if a security error or an IO error ocurred.
      */
     public static X509Certificate generateCertificate(String dn, KeyPair pair,
-                                                      int days, String algorithm, boolean useCA)
+                                                      int days, String algorithm)
         throws  CertificateException {
 
         try {
             Security.addProvider(new BouncyCastleProvider());
             AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
             AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
+            AsymmetricKeyParameter privateKeyAsymKeyParam = PrivateKeyFactory.createKey(pair.getPrivate().getEncoded());
             SubjectPublicKeyInfo subPubKeyInfo = SubjectPublicKeyInfo.getInstance(pair.getPublic().getEncoded());
             X500Name name = new X500Name(dn);
             Date from = new Date();
             Date to = new Date(from.getTime() + days * 86400000L);
             BigInteger sn = new BigInteger(64, new SecureRandom());
 
-            ContentSigner sigGen;
-            X509v1CertificateBuilder v1CertGen;
-            if(!useCA) {
-                AsymmetricKeyParameter privateKeyAsymKeyParam = PrivateKeyFactory.createKey(pair.getPrivate().getEncoded());
-                sigGen = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(privateKeyAsymKeyParam);
-                v1CertGen = new X509v1CertificateBuilder(name, sn, from, to, name, subPubKeyInfo);
-            } else {
-                sigGen = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(privateKeyAsymKeyParam);
-                v1CertGen = new X509v1CertificateBuilder(issuer, sn, from, to, name, subPubKeyInfo);
-            }
+            ContentSigner sigGen = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(privateKeyAsymKeyParam);
+            X509v1CertificateBuilder v1CertGen = new X509v1CertificateBuilder(name, sn, from, to, name, subPubKeyInfo);
             X509CertificateHolder certificateHolder = v1CertGen.build(sigGen);
             return new JcaX509CertificateConverter().setProvider("BC").getCertificate(certificateHolder);
         } catch (CertificateException ce) {
@@ -198,7 +172,7 @@ public class TestSslUtils {
     public static Map<String, X509Certificate> createX509Certificates(KeyPair keyPair)
         throws GeneralSecurityException {
         Map<String, X509Certificate> certs = new HashMap<String, X509Certificate>();
-        X509Certificate cert = generateCertificate("CN=localhost, O=localhost", keyPair, 30, "SHA1withRSA", false);
+        X509Certificate cert = generateCertificate("CN=localhost, O=localhost", keyPair, 30, "SHA1withRSA");
         certs.put("localhost", cert);
         return certs;
     }
@@ -245,21 +219,19 @@ public class TestSslUtils {
         if (useClientCert) {
             keyStoreFile = File.createTempFile("clientKS", ".jks");
             KeyPair cKP = generateKeyPair("RSA");
-            X509Certificate cCert = generateCertificate("CN=localhost, O=client", cKP, 30, "SHA1withRSA", trustStore);
+            X509Certificate cCert = generateCertificate("CN=localhost, O=client", cKP, 30, "SHA1withRSA");
             createKeyStore(keyStoreFile.getPath(), password, "client", cKP.getPrivate(), cCert);
             certs.put(certAlias, cCert);
         } else {
             keyStoreFile = File.createTempFile("serverKS", ".jks");
             KeyPair sKP = generateKeyPair("RSA");
             X509Certificate sCert = generateCertificate("CN=localhost, O=server", sKP, 30,
-                                                        "SHA1withRSA", trustStore);
+                                                        "SHA1withRSA");
             createKeyStore(keyStoreFile.getPath(), password, password, "server", sKP.getPrivate(), sCert);
             certs.put(certAlias, sCert);
         }
 
         if (trustStore) {
-            // Adding CA certificate to truststore
-            certs.put("CARoot", issuerCert);
             createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
         }
 

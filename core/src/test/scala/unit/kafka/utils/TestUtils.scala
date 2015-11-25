@@ -475,7 +475,14 @@ object TestUtils extends Logging {
       if (!producerProps.containsKey(key)) producerProps.put(key, value)
     }
 
-    producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile))
+    /*
+     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determing if
+     * securityConfigs has been invoked already. For example, we need to
+     * invoke it before this call in IntegrationTestHarness, otherwise the
+     * SSL client auth fails.
+     */
+    if(!producerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
+      producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile))
 
     new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
   }
@@ -519,8 +526,15 @@ object TestUtils extends Logging {
     defaultProps.foreach { case (key, value) =>
       if (!consumerProps.containsKey(key)) consumerProps.put(key, value)
     }
-    
-    consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile))
+
+    /*
+     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determing if
+     * securityConfigs has been invoked already. For example, we need to
+     * invoke it before this call in IntegrationTestHarness, otherwise the
+     * SSL client auth fails.
+     */
+    if(!consumerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
+      consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile))
 
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
