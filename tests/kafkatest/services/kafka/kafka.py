@@ -97,14 +97,19 @@ class KafkaService(JmxMixin, Service):
     def close_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=False)
 
-    def start(self):
-        self.open_port(self.security_protocol)
-        self.open_port(self.interbroker_security_protocol)
-
+    def start_minikdc(self):
         if self.security_config.has_sasl_kerberos:
             if self.minikdc is None:
                 self.minikdc = MiniKdc(self.context, self.nodes)
                 self.minikdc.start()
+        else:
+            self.minikdc = None
+
+    def start(self):
+        self.open_port(self.security_protocol)
+        self.open_port(self.interbroker_security_protocol)
+
+        self.start_minikdc()
         Service.start(self)
 
         # Create topics if necessary
