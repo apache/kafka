@@ -19,6 +19,7 @@ package kafka.utils
 
 import java.io._
 import java.nio._
+import java.nio.file.Files
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
@@ -35,7 +36,6 @@ import org.apache.kafka.test.TestSslUtils
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
-
 import kafka.server._
 import kafka.producer._
 import kafka.message._
@@ -94,11 +94,9 @@ object TestUtils extends Logging {
    * Create a temporary relative directory
    */
   def tempRelativeDir(parent: String): File = {
-    new File(parent).mkdirs()
-    val attempts = 1000
-    val f = Iterator.continually(new File(parent, "kafka-" + random.nextInt(1000000)))
-                    .take(attempts).find(_.mkdir())
-                    .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
+    val parentFile = new File(parent)
+    parentFile.mkdirs()
+    val f = Files.createTempDirectory(parentFile.toPath, "kafka-").toFile
     f.deleteOnExit()
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -106,7 +104,19 @@ object TestUtils extends Logging {
         CoreUtils.rm(f)
       }
     })
-
+    f
+  }
+  
+  /**
+   * Create a random log directory in the format <string>-<int> used for Kafka partition logs.
+   * It is the responsibility of the caller to set up a shutdown hook for deletion of the directory.
+   */
+  def randomPartitionLogDir(parentDir: File): File = {
+    val attempts = 1000
+    val f = Iterator.continually(new File(parentDir, "kafka-" + random.nextInt(1000000)))
+                                  .take(attempts).find(_.mkdir())
+                                  .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
+    f.deleteOnExit()
     f
   }
 
