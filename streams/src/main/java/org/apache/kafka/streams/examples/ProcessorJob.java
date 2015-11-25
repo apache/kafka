@@ -104,7 +104,7 @@ public class ProcessorJob {
         builder.addSource("SOURCE", new StringDeserializer(), new StringDeserializer(), "topic-source");
 
         builder.addProcessor("PROCESS", new MyProcessorSupplier(), "SOURCE");
-        builder.addStateStore(Stores.create("local-state", config).withStringKeys().withIntegerValues().inMemory().build());
+        builder.addStateStore(Stores.create("local-state").withStringKeys().withIntegerValues().inMemory().build());
         builder.connectProcessorAndStateStores("local-state", "PROCESS");
 
         builder.addSink("SINK", "topic-sink", new StringSerializer(), new IntegerSerializer(), "PROCESS");
