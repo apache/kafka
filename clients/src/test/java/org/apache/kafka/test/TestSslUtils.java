@@ -64,8 +64,7 @@ public class TestSslUtils {
      * @param pair the KeyPair
      * @param days how many days from now the Certificate is valid for
      * @param algorithm the signing algorithm, eg "SHA1withRSA"
-     * @param useCA simulate CA to sign the certificate
-     * @return certificate, self-signed if useCA is false
+     * @return the self-signed certificate
      * @throws CertificateException thrown if a security error or an IO error ocurred.
      */
     public static X509Certificate generateCertificate(String dn, KeyPair pair,
