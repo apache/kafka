@@ -8,7 +8,7 @@ You need to have [gradle](http://www.gradle.org/installation) installed.
     cd kafka_source_dir
     gradle
 
-Now everything else will work
+Now everything else will work.
 
 ### Building a jar and running it ###
     ./gradlew jar  
