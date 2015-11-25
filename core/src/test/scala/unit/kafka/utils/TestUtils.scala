@@ -97,30 +97,27 @@ object TestUtils extends Logging {
     val parentFile = new File(parent)
     parentFile.mkdirs()
     val f = Files.createTempDirectory(parentFile.toPath, "kafka-").toFile
-    deleteTempDirOnExit(f)
+    f.deleteOnExit()
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      override def run() = {
+        CoreUtils.rm(f)
+      }
+    })
     f
   }
   
   /**
-   * Create a temporary directory in the format <string>-<int> used for Kafka partition logs
+   * Create a random log directory in the format <string>-<int> used for Kafka partition logs.
+   * It is the responsibility of the caller to set up a shutdown hook for deletion of the directory.
    */
-  def tempPartitionLogDir(parentDir: File): File = {
+  def randomPartitionLogDir(parentDir: File): File = {
     val attempts = 1000
     val f = Iterator.continually(new File(parentDir, "kafka-" + random.nextInt(1000000)))
                                   .take(attempts).find(_.mkdir())
                                   .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
-    deleteTempDirOnExit(f)
+    f.deleteOnExit()
     f
-  }
-
-  private def deleteTempDirOnExit(dir: File) {
-    dir.deleteOnExit()
-
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      override def run() = {
-        CoreUtils.rm(dir)
-      }
-    })
   }
 
 

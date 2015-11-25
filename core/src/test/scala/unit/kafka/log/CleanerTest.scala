@@ -38,7 +38,7 @@ import scala.collection._
 class CleanerTest extends JUnitSuite {
   
   val tmpdir = TestUtils.tempDir()
-  val dir = TestUtils.tempPartitionLogDir(tmpdir)
+  val dir = TestUtils.randomPartitionLogDir(tmpdir)
   val logProps = new Properties()
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)

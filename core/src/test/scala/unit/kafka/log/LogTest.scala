@@ -31,7 +31,7 @@ import kafka.server.KafkaConfig
 class LogTest extends JUnitSuite {
   
   val tmpDir = TestUtils.tempDir()
-  val logDir = TestUtils.tempPartitionLogDir(tmpDir)
+  val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime(0)
   var config: KafkaConfig = null
   val logConfig = LogConfig()  
