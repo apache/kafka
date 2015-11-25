@@ -20,7 +20,6 @@ trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
 
   @Before
   override def setUp() {
-    // Important if tests leak consumers, producers or brokers
     if(zkSaslEnabled)
       startSasl(Both)
     else
