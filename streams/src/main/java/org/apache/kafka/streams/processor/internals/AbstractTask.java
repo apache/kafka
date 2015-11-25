@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask {
@@ -84,10 +85,14 @@ public abstract class AbstractTask {
 
     public void close() {
         try {
-            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
+            stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {
             throw new KafkaException("Error while closing the state manager in processor context", e);
         }
+    }
+
+    protected Map<TopicPartition, Long> recordCollectorOffsets() {
+        return Collections.emptyMap();
     }
 
 }

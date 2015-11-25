@@ -304,6 +304,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
         super.close();
     }
 
+    protected Map<TopicPartition, Long> recordCollectorOffsets() {
+        return recordCollector.offsets();
+    }
+
     private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source) {
         return new RecordQueue(partition, source);
     }
