@@ -20,41 +20,51 @@ package kafka.api
 import java.io.{File}
 import javax.security.auth.login.Configuration
 
+import kafka.api.SaslSetupMode.SaslSetupMode
 import kafka.utils.{JaasTestUtils,TestUtils}
 import org.apache.hadoop.minikdc.MiniKdc
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.kerberos.LoginManager
 
+object SaslSetupMode extends Enumeration {
+  type SaslSetupMode = Value
+  val ZkSasl, KafkaSasl, Both = Value
+}
+
 trait SaslSetup {
-  protected val zkSaslEnabled: Boolean
+
   private val workDir = new File(System.getProperty("test.dir", "target"))
   private val kdcConf = MiniKdc.createConf()
   private val kdc = new MiniKdc(kdcConf, workDir)
 
-  def startSasl() {
+  def startSasl(mode: SaslSetupMode = SaslSetupMode.Both) {
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
-    val keytabFile = createKeytabAndSetConfiguration()
+    val keytabFile = createKeytabAndSetConfiguration(mode)
     kdc.start()
     kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
-    if (zkSaslEnabled)
+    if (mode == SaslSetupMode.Both || mode == SaslSetupMode.ZkSasl)
       System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
   }
 
-  protected def createKeytabAndSetConfiguration(): File = {
-    val (keytabFile, jaasFile) = createKeytabAndJaasFiles()
+  protected def createKeytabAndSetConfiguration(mode: SaslSetupMode): File = {
+    val (keytabFile, jaasFile) = createKeytabAndJaasFiles(mode)
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
     keytabFile
   }
 
-  private def createKeytabAndJaasFiles(): (File, File) = {
+  private def createKeytabAndJaasFiles(mode: SaslSetupMode): (File, File) = {
     val keytabFile = TestUtils.tempFile()
-    val jaasFileName = if (zkSaslEnabled)
-        JaasTestUtils.genSingleFile(keytabFile.getAbsolutePath)
-      else
+    val jaasFileName: String = mode match {
+      case SaslSetupMode.ZkSasl =>
+        JaasTestUtils.genZkFile
+      case SaslSetupMode.KafkaSasl =>
         JaasTestUtils.genKafkaFile(keytabFile.getAbsolutePath)
+      case _ =>
+        JaasTestUtils.genSingleFile(keytabFile.getAbsolutePath)
+    }
     val jaasFile = new File(jaasFileName)
 
     (keytabFile, jaasFile)

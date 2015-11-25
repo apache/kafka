@@ -67,8 +67,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp
-    if ((securityProtocol == SecurityProtocol.SASL_PLAINTEXT) || 
-       (securityProtocol == SecurityProtocol.SASL_SSL))
+    if (securityProtocol != SecurityProtocol.PLAINTEXT)
          AclCommand.main(clusterAclArgs)
     if (configs.size <= 0)
       throw new KafkaException("Must supply at least one server config.")

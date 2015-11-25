@@ -21,6 +21,7 @@ import java.io.File
 import java.util.ArrayList
 import java.util.concurrent.ExecutionException
 
+import kafka.api.SaslSetupMode._
 import kafka.admin.AclCommand
 import kafka.common.{TopicAndPartition}
 import kafka.security.auth._
@@ -58,7 +59,7 @@ import scala.collection.JavaConverters._
   * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
   * would end up with ZooKeeperTestHarness.
   */
-class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
+trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
@@ -69,8 +70,7 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = new TopicAndPartition(topic, part)
 
-  override protected val zkSaslEnabled = true
-  override protected def securityProtocol = SecurityProtocol.SASL_SSL
+  //override protected val zkSaslEnabled = true
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
   val topicResource = new Resource(Topic, topic)
@@ -114,7 +114,12 @@ class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     */
   @Before
   override def setUp {
-    startSasl()
+    securityProtocol match {
+      case SecurityProtocol.SSL =>
+        startSasl(SaslSetupMode.ZkSasl)
+      case _ =>
+        startSasl(SaslSetupMode.Both)
+    }
     super.setUp
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)

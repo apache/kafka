@@ -16,10 +16,15 @@ import kafka.zk.ZooKeeperTestHarness
 import org.junit.{After, Before}
 
 trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
+  protected val zkSaslEnabled: Boolean
+
   @Before
   override def setUp() {
     // Important if tests leak consumers, producers or brokers
-    startSasl()
+    if(zkSaslEnabled)
+      startSasl(SaslSetupMode.Both)
+    else
+      startSasl(SaslSetupMode.KafkaSasl)
     super.setUp
   }
 

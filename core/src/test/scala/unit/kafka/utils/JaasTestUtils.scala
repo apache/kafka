@@ -42,22 +42,22 @@ object JaasTestUtils {
   }
   
   def genKafkaFile(keytabLocation: String): String = {
-    val jaasFile = java.io.File.createTempFile("jaas", "conf")
+    val jaasFile = java.io.File.createTempFile("jaas", ".conf")
     val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
     writeKafkaToOutputStream(jaasOutputStream, keytabLocation)
     jaasOutputStream.close()
-    //jaasFile.deleteOnExit()
+    jaasFile.deleteOnExit()
     jaasFile.getCanonicalPath
   }
   
   def genSingleFile(keytabLocation: String): String = {
-    val jaasFile = java.io.File.createTempFile("jaas", "conf")
+    val jaasFile = java.io.File.createTempFile("jaas", ".conf")
     val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
     writeKafkaToOutputStream(jaasOutputStream, keytabLocation)
     jaasOutputStream.write("\n\n".getBytes)
     writeZkToOutputStream(jaasOutputStream)
     jaasOutputStream.close()
-    //jaasFile.deleteOnExit()
+    jaasFile.deleteOnExit()
     jaasFile.getCanonicalPath
   }
   

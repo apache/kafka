@@ -57,11 +57,9 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig.putAll(TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile))
     consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.putAll(TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile))
     for (i <- 0 until producerCount)
       producers += TestUtils.createNewProducer(brokerList, 
                                                acks = 1,

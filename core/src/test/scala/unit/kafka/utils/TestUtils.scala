@@ -206,7 +206,7 @@ object TestUtils extends Logging {
     props.put("controlled.shutdown.retry.backoff.ms", "100")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
-      props.putAll(sslConfigs(Mode.SERVER, true, trustStoreFile, s"server$nodeId"))
+      props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -433,7 +433,7 @@ object TestUtils extends Logging {
                               certAlias: String): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
-      props.putAll(sslConfigs(mode, false, trustStoreFile, certAlias))
+      props.putAll(sslConfigs(mode, true, trustStoreFile, certAlias))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
@@ -986,10 +986,7 @@ object TestUtils extends Logging {
 
 
     val sslConfigs = {
-      if (mode == Mode.SERVER)
-        TestSslUtils.createSslConfig(true, true, mode, trustStore, certAlias)
-      else
-        TestSslUtils.createSslConfig(clientCert, false, mode, trustStore, certAlias)
+      TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias)
     }
 
     val sslProps = new Properties()
