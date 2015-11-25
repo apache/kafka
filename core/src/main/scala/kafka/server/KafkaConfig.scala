@@ -340,9 +340,9 @@ object KafkaConfig {
   val ZkEnableSecureAclsDoc = "Set client to use secure ACLs"
   /** ********* General Configuration ***********/
   val MaxReservedBrokerIdDoc = "Max number that can be used for a broker.id"
-  val BrokerIdDoc = "The broker id for this server. " +
-  "To avoid conflicts between zookeeper generated brokerId and user's config.brokerId " +
-  "added MaxReservedBrokerId and zookeeper sequence starts from MaxReservedBrokerId + 1."
+  val BrokerIdDoc = "The broker id for this server. If unset, a unique broker id will be generated." +
+  "To avoid conflicts between zookeeper generated broker id's and user configured broker id's, generated broker ids" +
+  "start from " + MaxReservedBrokerIdProp + " + 1."
   val MessageMaxBytesDoc = "The maximum size of message that the server can receive"
   val NumNetworkThreadsDoc = "the number of network threads that the server uses for handling network requests"
   val NumIoThreadsDoc = "The number of io threads that the server uses for carrying out network requests"
