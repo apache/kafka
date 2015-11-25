@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class TestSslUtils {
+
     /**
      * Create a self-signed X.509 Certificate.
      * From http://bfo.com/blog/2011/03/08/odds_and_ends_creating_a_new_x_509_certificate.html.
@@ -77,12 +78,12 @@ public class TestSslUtils {
             AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
             AsymmetricKeyParameter privateKeyAsymKeyParam = PrivateKeyFactory.createKey(pair.getPrivate().getEncoded());
             SubjectPublicKeyInfo subPubKeyInfo = SubjectPublicKeyInfo.getInstance(pair.getPublic().getEncoded());
+            ContentSigner sigGen = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(privateKeyAsymKeyParam);
             X500Name name = new X500Name(dn);
             Date from = new Date();
             Date to = new Date(from.getTime() + days * 86400000L);
             BigInteger sn = new BigInteger(64, new SecureRandom());
 
-            ContentSigner sigGen = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(privateKeyAsymKeyParam);
             X509v1CertificateBuilder v1CertGen = new X509v1CertificateBuilder(name, sn, from, to, name, subPubKeyInfo);
             X509CertificateHolder certificateHolder = v1CertGen.build(sigGen);
             return new JcaX509CertificateConverter().setProvider("BC").getCertificate(certificateHolder);

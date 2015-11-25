@@ -20,7 +20,7 @@ trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
 
   @Before
   override def setUp() {
-    if(zkSaslEnabled)
+    if (zkSaslEnabled)
       startSasl(Both)
     else
       startSasl(KafkaSasl)
