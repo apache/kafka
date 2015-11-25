@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 
 class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SSL
-  this.serverConfig.setProperty(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "requested")
+  this.serverConfig.setProperty(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
   override val clientPrincipal = "User:O=client,CN=localhost"
   override val kafkaPrincipal = "User:O=server,CN=localhost"
 }
