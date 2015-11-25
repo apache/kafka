@@ -304,6 +304,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         super.close();
     }
 
+    @Override
     protected Map<TopicPartition, Long> recordCollectorOffsets() {
         return recordCollector.offsets();
     }
