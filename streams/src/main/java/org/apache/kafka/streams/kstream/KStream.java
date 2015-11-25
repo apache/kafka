@@ -30,7 +30,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 public interface KStream<K, V> {
 
     /**
-     * Creates a new stream consists of all elements of this stream which satisfy a predicate
+     * Creates a new instance of KStream consists of all elements of this stream which satisfy a predicate
      *
      * @param predicate the instance of Predicate
      * @return the stream with only those elements that satisfy the predicate
@@ -38,7 +38,7 @@ public interface KStream<K, V> {
     KStream<K, V> filter(Predicate<K, V> predicate);
 
     /**
-     * Creates a new stream consists all elements of this stream which do not satisfy a predicate
+     * Creates a new instance of KStream consists all elements of this stream which do not satisfy a predicate
      *
      * @param predicate the instance of Predicate
      * @return the stream with only those elements that do not satisfy the predicate
@@ -56,30 +56,30 @@ public interface KStream<K, V> {
     <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper);
 
     /**
-     * Creates a new stream by applying transforming each value in this stream into a different value in the new stream.
+     * Creates a new instance of KStream by applying transforming each value in this stream into a different value in the new stream.
      *
      * @param mapper the instance of ValueMapper
      * @param <V1>   the value type of the new stream
-     * @return the mapped stream
+     * @return the instance of KStream
      */
     <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
     /**
-     * Creates a new stream by applying transforming each element in this stream into zero or more elements in the new stream.
+     * Creates a new instance of KStream by applying transforming each element in this stream into zero or more elements in the new stream.
      *
      * @param mapper the instance of KeyValueMapper
      * @param <K1>   the key type of the new stream
      * @param <V1>   the value type of the new stream
-     * @return the mapped stream
+     * @return the instance of KStream
      */
     <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, Iterable<KeyValue<K1, V1>>> mapper);
 
     /**
-     * Creates a new stream by applying transforming each value in this stream into zero or more values in the new stream.
+     * Creates a new instance of KStream by applying transforming each value in this stream into zero or more values in the new stream.
      *
      * @param processor the instance of Processor
      * @param <V1>      the value type of the new stream
-     * @return the mapped stream
+     * @return the instance of KStream
      */
     <V1> KStream<K, V1> flatMapValues(ValueMapper<V, Iterable<V1>> processor);
 
@@ -98,7 +98,7 @@ public interface KStream<K, V> {
      * An element will be dropped if none of the predicates evaluate true.
      *
      * @param predicates the ordered list of Predicate instances
-     * @return the new streams that each contain those elements for which their Predicate evaluated to true.
+     * @return the instances of KStream that each contain those elements for which their Predicate evaluated to true.
      */
     KStream<K, V>[] branch(Predicate<K, V>... predicates);
 
@@ -107,14 +107,12 @@ public interface KStream<K, V> {
      * This is equivalent to calling to(topic) and from(topic).
      *
      * @param topic           the topic name
-     * @param <K1>            the key type of the new stream
-     * @param <V1>            the value type of the new stream
      * @return the new stream that consumes the given topic
      */
-    <K1, V1> KStream<K1, V1> through(String topic);
+    KStream<K, V> through(String topic);
 
     /**
-     * Sends key-value to a topic, also creates a new stream from the topic.
+     * Sends key-value to a topic, also creates a new instance of KStream from the topic.
      * This is equivalent to calling to(topic) and from(topic).
      *
      * @param topic           the topic name
@@ -126,11 +124,9 @@ public interface KStream<K, V> {
      *                        if not specified the default key deserializer defined in the configuration will be used
      * @param valDeserializer value deserializer used to create the new KStream,
      *                        if not specified the default value deserializer defined in the configuration will be used
-     * @param <K1>            the key type of the new stream
-     * @param <V1>            the value type of the new stream
      * @return the new stream that consumes the given topic
      */
-    <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer);
+    KStream<K, V> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
 
     /**
      * Sends key-value to a topic using default serializers specified in the config.
@@ -155,7 +151,7 @@ public interface KStream<K, V> {
      *
      * @param transformerSupplier the class of TransformerDef
      * @param stateStoreNames the names of the state store used by the processor
-     * @return KStream
+     * @return the instance of KStream that contains transformed keys and values
      */
     <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier, String... stateStoreNames);
 
@@ -164,7 +160,7 @@ public interface KStream<K, V> {
      *
      * @param valueTransformerSupplier the class of TransformerDef
      * @param stateStoreNames the names of the state store used by the processor
-     * @return KStream
+     * @return the instance of KStream that contains transformed keys and values
      */
     <R> KStream<K, R> transformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier, String... stateStoreNames);
 
@@ -173,7 +169,6 @@ public interface KStream<K, V> {
      *
      * @param processorSupplier the supplier of the Processor to use
      * @param stateStoreNames the names of the state store used by the processor
-     * @return the new stream containing the processed output
      */
     void process(ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames);
 
