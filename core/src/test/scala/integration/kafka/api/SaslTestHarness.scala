@@ -22,9 +22,9 @@ trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
   override def setUp() {
     // Important if tests leak consumers, producers or brokers
     if(zkSaslEnabled)
-      startSasl(SaslSetupMode.Both)
+      startSasl(Both)
     else
-      startSasl(SaslSetupMode.KafkaSasl)
+      startSasl(KafkaSasl)
     super.setUp
   }
 

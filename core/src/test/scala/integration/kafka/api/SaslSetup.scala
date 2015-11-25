@@ -20,16 +20,15 @@ package kafka.api
 import java.io.{File}
 import javax.security.auth.login.Configuration
 
-import kafka.api.SaslSetupMode.SaslSetupMode
 import kafka.utils.{JaasTestUtils,TestUtils}
 import org.apache.hadoop.minikdc.MiniKdc
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.kerberos.LoginManager
 
-object SaslSetupMode extends Enumeration {
-  type SaslSetupMode = Value
-  val ZkSasl, KafkaSasl, Both = Value
-}
+sealed trait SaslSetupMode
+case object ZkSasl extends SaslSetupMode
+case object KafkaSasl extends SaslSetupMode
+case object Both extends SaslSetupMode
 
 trait SaslSetup {
 
@@ -37,13 +36,13 @@ trait SaslSetup {
   private val kdcConf = MiniKdc.createConf()
   private val kdc = new MiniKdc(kdcConf, workDir)
 
-  def startSasl(mode: SaslSetupMode = SaslSetupMode.Both) {
+  def startSasl(mode: SaslSetupMode = Both) {
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
     val keytabFile = createKeytabAndSetConfiguration(mode)
     kdc.start()
     kdc.createPrincipal(keytabFile, "client", "kafka/localhost")
-    if (mode == SaslSetupMode.Both || mode == SaslSetupMode.ZkSasl)
+    if (mode == Both || mode == ZkSasl)
       System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
   }
 
@@ -58,9 +57,9 @@ trait SaslSetup {
   private def createKeytabAndJaasFiles(mode: SaslSetupMode): (File, File) = {
     val keytabFile = TestUtils.tempFile()
     val jaasFileName: String = mode match {
-      case SaslSetupMode.ZkSasl =>
+      case ZkSasl =>
         JaasTestUtils.genZkFile
-      case SaslSetupMode.KafkaSasl =>
+      case KafkaSasl =>
         JaasTestUtils.genKafkaFile(keytabFile.getAbsolutePath)
       case _ =>
         JaasTestUtils.genSingleFile(keytabFile.getAbsolutePath)

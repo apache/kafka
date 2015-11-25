@@ -21,7 +21,6 @@ import java.io.File
 import java.util.ArrayList
 import java.util.concurrent.ExecutionException
 
-import kafka.api.SaslSetupMode._
 import kafka.admin.AclCommand
 import kafka.common.{TopicAndPartition}
 import kafka.security.auth._
@@ -70,7 +69,6 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = new TopicAndPartition(topic, part)
 
-  //override protected val zkSaslEnabled = true
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
   val topicResource = new Resource(Topic, topic)
@@ -116,9 +114,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override def setUp {
     securityProtocol match {
       case SecurityProtocol.SSL =>
-        startSasl(SaslSetupMode.ZkSasl)
+        startSasl(ZkSasl)
       case _ =>
-        startSasl(SaslSetupMode.Both)
+        startSasl(Both)
     }
     super.setUp
     // create the test topic with all the brokers as replicas

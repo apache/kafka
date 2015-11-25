@@ -985,9 +985,7 @@ object TestUtils extends Logging {
     }
 
 
-    val sslConfigs = {
-      TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias)
-    }
+    val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias)
 
     val sslProps = new Properties()
     sslConfigs.foreach { case (k, v) => sslProps.put(k, v) }

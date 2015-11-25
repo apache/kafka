@@ -70,7 +70,7 @@ public class TestSslUtils {
             issuerCert = generateCertificate("CN=localhost, O=CAroot", issuerKP, 30,
                     "SHA1withRSA", true);
         } catch (Exception e) {
-
+            throw new java.lang.Error(e);
         }
     }
 
@@ -228,7 +228,7 @@ public class TestSslUtils {
 
         return sslConfigs;
     }
-    static int i = 0;
+
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore, Mode mode, File trustStoreFile, String certAlias)
         throws IOException, GeneralSecurityException {
         Map<String, X509Certificate> certs = new HashMap<String, X509Certificate>();
