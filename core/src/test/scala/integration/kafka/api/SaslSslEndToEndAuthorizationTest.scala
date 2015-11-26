@@ -20,6 +20,6 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 
 class SaslSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
-  override val clientPrincipal = s"$kafkaPrincipalType:client"
-  override val kafkaPrincipal = s"$kafkaPrincipalType:kafka"
+  override val clientPrincipal = "client"
+  override val kafkaPrincipal = "kafka"
 }

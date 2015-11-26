@@ -29,6 +29,7 @@ import kafka.utils._
 
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerConfig}
 import org.apache.kafka.clients.producer.{ProducerRecord, ProducerConfig}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException,TopicAuthorizationException}
@@ -85,26 +86,31 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                             s"zookeeper.connect=$zkConnect",
                                             s"--add",
                                             s"--cluster",
-                                            s"--allow-principal=$kafkaPrincipal")
+                                            s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
   def produceAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$topic",
                                           s"--producer",
-                                          s"--allow-principal=$clientPrincipal")
+                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
   def consumeAclArgs: Array[String] = Array("--authorizer-properties",
                                                s"zookeeper.connect=$zkConnect",
                                                s"--add",
                                                s"--topic=$topic",
                                                s"--group=$group",
                                                s"--consumer",
-                                               s"--allow-principal=$clientPrincipal")
+                                               s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
   def groupAclArgs: Array[String] = Array("--authorizer-properties", 
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--group=$group",
                                           s"--operation=Read",
-                                          s"--allow-principal=$clientPrincipal")
+                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
+  def ClusterAcl =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
+  def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
+  def TopicDescribeAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Describe))
   // The next two configuration parameters enable ZooKeeper secure ACLs
   // and sets the Kafka authorizer, both necessary to enable security.
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
@@ -147,6 +153,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   def testProduceConsume {
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
+    TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+    TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
@@ -181,6 +189,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   def testNoConsumeAcl {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
+    TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+    TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
@@ -202,6 +212,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   @Test
   def testNoGroupAcl {
     AclCommand.main(produceAclArgs)
+    TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
