@@ -68,6 +68,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   val part = 0
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = new TopicAndPartition(topic, part)
+  val clientPrincipal: String
+  val kafkaPrincipal: String
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
@@ -78,6 +80,11 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   // 1- Provides read and write access to topic
   // 2- Provides only write access to topic
   // 3- Provides read access to consumer group
+  def clusterAclArgs: Array[String] = Array("--authorizer-properties",
+                                            s"zookeeper.connect=$zkConnect",
+                                            s"--add",
+                                            s"--cluster",
+                                            s"--allow-principal=$kafkaPrincipal")
   def topicAclArgs: Array[String] = Array("--authorizer-properties", 
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
@@ -131,6 +138,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override def tearDown {
     super.tearDown
     closeSasl()
+  }
+
+  override def setClusterAcl: Unit = {
+    AclCommand.main(clusterAclArgs)
   }
 
   /**
