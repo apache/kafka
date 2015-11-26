@@ -40,6 +40,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   var brokerList: String = null
   var alive: Array[Boolean] = null
   val kafkaPrincipalType = KafkaPrincipal.USER_TYPE
+  val setClusterAcl: Option[() => Unit] = None
 
   /**
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
@@ -65,7 +66,10 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
     // if the test case requires setting up a cluster ACL,
     // then it needs to be implemented. Check EndToEndAuthorizationTest
     // for an example.
-    setClusterAcl
+    setClusterAcl match {
+      case Some(f) => f()
+      case None => // Nothing to do
+    }
     if (configs.size <= 0)
       throw new KafkaException("Must supply at least one server config.")
     servers = configs.map(TestUtils.createServer(_)).toBuffer
@@ -104,6 +108,4 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
       alive(i) = true
     }
   }
-
-  def setClusterAcl: Unit = {}
 }

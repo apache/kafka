@@ -62,6 +62,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
+  override val setClusterAcl = Some(() => AclCommand.main(clusterAclArgs))
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
@@ -85,19 +86,18 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                             s"--add",
                                             s"--cluster",
                                             s"--allow-principal=$kafkaPrincipal")
-  def topicAclArgs: Array[String] = Array("--authorizer-properties", 
+  def produceAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$topic",
-                                          s"--group=$group",
                                           s"--producer",
-                                          s"--consumer",
                                           s"--allow-principal=$clientPrincipal")
-  def topicWriteAclArgs: Array[String] = Array("--authorizer-properties", 
+  def consumeAclArgs: Array[String] = Array("--authorizer-properties",
                                                s"zookeeper.connect=$zkConnect",
                                                s"--add",
                                                s"--topic=$topic",
-                                               s"--producer",
+                                               s"--group=$group",
+                                               s"--consumer",
                                                s"--allow-principal=$clientPrincipal")
   def groupAclArgs: Array[String] = Array("--authorizer-properties", 
                                           s"zookeeper.connect=$zkConnect",
@@ -140,16 +140,13 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     closeSasl()
   }
 
-  override def setClusterAcl: Unit = {
-    AclCommand.main(clusterAclArgs)
-  }
-
   /**
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
   @Test
   def testProduceConsume {
-    AclCommand.main(topicAclArgs)
+    AclCommand.main(produceAclArgs)
+    AclCommand.main(consumeAclArgs)
     AclCommand.main(groupAclArgs)
     //Produce records
     debug("Starting to send records")
@@ -183,7 +180,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     */
   @Test
   def testNoConsumeAcl {
-    AclCommand.main(topicWriteAclArgs)
+    AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
     //Produce records
     debug("Starting to send records")
