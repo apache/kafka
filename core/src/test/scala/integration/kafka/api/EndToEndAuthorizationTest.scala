@@ -56,7 +56,7 @@ import scala.collection.JavaConverters._
   *
   * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
   * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
-  * would end up with ZooKeeperTestHarness.
+  * would end up with ZooKeeperTestHarness twice.
   */
 trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
@@ -82,14 +82,15 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$topic",
-                                          s"--operation=Read",
-                                          s"--operation=Write",
+                                          s"--group=$group",
+                                          s"--producer",
+                                          s"--consumer",
                                           s"--allow-principal=$clientPrincipal")
   def topicWriteAclArgs: Array[String] = Array("--authorizer-properties", 
                                                s"zookeeper.connect=$zkConnect",
                                                s"--add",
                                                s"--topic=$topic",
-                                               s"--operation=Write",
+                                               s"--producer",
                                                s"--allow-principal=$clientPrincipal")
   def groupAclArgs: Array[String] = Array("--authorizer-properties", 
                                           s"zookeeper.connect=$zkConnect",
@@ -154,7 +155,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     * isn't set.
     */
   @Test
-  def testNotProduce {
+  def testNoProduceAcl {
     //Produce records
     debug("Starting to send records")
     try{
@@ -170,7 +171,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     * ACL set.
     */
   @Test
-  def testNotConsume {
+  def testNoConsumeAcl {
     AclCommand.main(topicWriteAclArgs)
     AclCommand.main(groupAclArgs)
     //Produce records

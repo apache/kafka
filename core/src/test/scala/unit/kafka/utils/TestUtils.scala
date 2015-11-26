@@ -28,13 +28,10 @@ import charset.Charset
 
 import kafka.security.auth.{Resource, Authorizer, Acl}
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.ssl.SslFactory
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.TestSslUtils
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
-import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 
 import kafka.server._
 import kafka.producer._
@@ -476,7 +473,7 @@ object TestUtils extends Logging {
     }
 
     /*
-     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determing if
+     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determine whether
      * securityConfigs has been invoked already. For example, we need to
      * invoke it before this call in IntegrationTestHarness, otherwise the
      * SSL client auth fails.
@@ -528,7 +525,7 @@ object TestUtils extends Logging {
     }
 
     /*
-     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determing if
+     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determine whether
      * securityConfigs has been invoked already. For example, we need to
      * invoke it before this call in IntegrationTestHarness, otherwise the
      * SSL client auth fails.

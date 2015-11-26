@@ -25,13 +25,20 @@ import org.apache.hadoop.minikdc.MiniKdc
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.kerberos.LoginManager
 
+/*
+ * Implements an enumeration for the modes enabled here:
+ * zk only, kafka only, both.
+ */
 sealed trait SaslSetupMode
 case object ZkSasl extends SaslSetupMode
 case object KafkaSasl extends SaslSetupMode
 case object Both extends SaslSetupMode
 
+/*
+ * Trait used in SaslTestHarness and EndToEndAuthorizationTest
+ * currently to setup a keytab and jaas files.
+ */
 trait SaslSetup {
-
   private val workDir = new File(System.getProperty("test.dir", "target"))
   private val kdcConf = MiniKdc.createConf()
   private val kdc = new MiniKdc(kdcConf, workDir)
@@ -62,7 +69,7 @@ trait SaslSetup {
       case KafkaSasl =>
         JaasTestUtils.genKafkaFile(keytabFile.getAbsolutePath)
       case _ =>
-        JaasTestUtils.genSingleFile(keytabFile.getAbsolutePath)
+        JaasTestUtils.genZkAndKafkaFile(keytabFile.getAbsolutePath)
     }
     val jaasFile = new File(jaasFileName)
 

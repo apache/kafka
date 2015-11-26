@@ -50,7 +50,7 @@ object JaasTestUtils {
     jaasFile.getCanonicalPath
   }
   
-  def genSingleFile(keytabLocation: String): String = {
+  def genZkAndKafkaFile(keytabLocation: String): String = {
     val jaasFile = java.io.File.createTempFile("jaas", ".conf")
     val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
     writeKafkaToOutputStream(jaasOutputStream, keytabLocation)
