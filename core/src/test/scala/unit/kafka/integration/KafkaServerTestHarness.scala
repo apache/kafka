@@ -40,8 +40,9 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   var brokerList: String = null
   var alive: Array[Boolean] = null
   val kafkaPrincipalType = KafkaPrincipal.USER_TYPE
-  val clientPrincipal = s"$kafkaPrincipalType:client"
-  val kafkaPrincipal = s"$kafkaPrincipalType:kafka"
+  val clientPrincipal = ""
+  val kafkaPrincipal = ""
+
   /**
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
    * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
