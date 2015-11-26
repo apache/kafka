@@ -243,8 +243,7 @@ import java.util.regex.Pattern;
  *     String topic = &quot;foo&quot;;
  *     TopicPartition partition0 = new TopicPartition(topic, 0);
  *     TopicPartition partition1 = new TopicPartition(topic, 1);
- *     consumer.assign(partition0);
- *     consumer.assign(partition1);
+ *     consumer.assign(Arrays.asList(partition0, partition1));
  * </pre>
  *
  * The group that the consumer specifies is still used for committing offsets, but now the set of partitions will only
