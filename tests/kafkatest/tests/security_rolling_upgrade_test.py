@@ -43,6 +43,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
             "min.insync.replicas": 2}})
         self.zk.start()
 
+        #reduce replica.lag.time.max.ms due to KAFKA-2827
+        self.kafka.replica_lag = 2000
 
     def create_producer_and_consumer(self):
         self.producer = VerifiableProducer(
@@ -57,12 +59,11 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
 
     def bounce(self):
-        replica_lag = 10000 #replica.lag.time.max.ms due to KAFKA-2827
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
-            time.sleep(replica_lag)
+            time.sleep(self.kafka.replica_lag/1000)
             self.kafka.start_node(node)
-            time.sleep(replica_lag)
+            time.sleep(self.kafka.replica_lag/1000)
 
     def roll_in_secured_settings(self, upgrade_protocol):
         self.kafka.interbroker_security_protocol = upgrade_protocol
@@ -79,9 +80,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
     def open_secured_port(self, upgrade_protocol):
         self.kafka.security_protocol = upgrade_protocol
         self.kafka.open_port(upgrade_protocol)
-
         self.kafka.start_minikdc()
-
         self.bounce()
 
 
