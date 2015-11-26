@@ -22,7 +22,7 @@ import java.util.ArrayList
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
-import kafka.common.{TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.security.auth._
 import kafka.server._
 import kafka.utils._
@@ -31,7 +31,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerConf
 import org.apache.kafka.clients.producer.{ProducerRecord, ProducerConfig}
 import org.apache.kafka.common.{TopicPartition}
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.errors.TopicAuthorizationException
+import org.apache.kafka.common.errors.{GroupAuthorizationException,TopicAuthorizationException}
 import org.junit.Assert._
 import org.junit.{Test, After, Before}
 
@@ -147,7 +147,6 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   def testProduceConsume {
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
-    AclCommand.main(groupAclArgs)
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
@@ -193,6 +192,27 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
       fail("Topic authorization exception expected")
     } catch {
       case e: TopicAuthorizationException => //expected
+    }
+  }
+
+  /**
+    * Tests that a consumer fails to consume messages without the appropriate
+    * ACL set.
+    */
+  @Test
+  def testNoGroupAcl {
+    AclCommand.main(produceAclArgs)
+    //Produce records
+    debug("Starting to send records")
+    sendRecords(numRecords, tp)
+    //Consume records
+    debug("Finished sending and starting to consume records")
+    consumers.head.assign(List(tp).asJava)
+    try{
+      consumeRecords(this.consumers.head)
+      fail("Topic authorization exception expected")
+    } catch {
+      case e: GroupAuthorizationException => //expected
     }
   }
   
