@@ -26,7 +26,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 /**
@@ -40,7 +39,7 @@ public class Stores {
      * @param name the name of the store
      * @return the factory that can be used to specify other options or configurations for the store; never null
      */
-    public static StoreFactory create(final String name, final StreamingConfig config) {
+    public static StoreFactory create(final String name) {
         return new StoreFactory() {
             @Override
             public <K> ValueFactory<K> withKeys(final Serializer<K> keySerializer, final Deserializer<K> keyDeserializer) {
@@ -49,7 +48,7 @@ public class Stores {
                     public <V> KeyValueFactory<K, V> withValues(final Serializer<V> valueSerializer,
                                                                 final Deserializer<V> valueDeserializer) {
                         final Serdes<K, V> serdes =
-                                new Serdes<>(name, keySerializer, keyDeserializer, valueSerializer, valueDeserializer, config);
+                                new Serdes<>(name, keySerializer, keyDeserializer, valueSerializer, valueDeserializer);
                         return new KeyValueFactory<K, V>() {
                             @Override
                             public InMemoryKeyValueFactory<K, V> inMemory() {

@@ -32,43 +32,42 @@ import org.apache.kafka.streams.kstream.WindowSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.lang.reflect.Array;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
 public class KStreamImpl<K, V> implements KStream<K, V> {
 
-    private static final String FILTER_NAME = "KAFKA-FILTER-";
+    private static final String FILTER_NAME = "KSTREAM-FILTER-";
 
-    private static final String MAP_NAME = "KAFKA-MAP-";
+    private static final String MAP_NAME = "KSTREAM-MAP-";
 
-    private static final String MAPVALUES_NAME = "KAFKA-MAPVALUES-";
+    private static final String MAPVALUES_NAME = "KSTREAM-MAPVALUES-";
 
-    private static final String FLATMAP_NAME = "KAFKA-FLATMAP-";
+    private static final String FLATMAP_NAME = "KSTREAM-FLATMAP-";
 
-    private static final String FLATMAPVALUES_NAME = "KAFKA-FLATMAPVALUES-";
+    private static final String FLATMAPVALUES_NAME = "KSTREAM-FLATMAPVALUES-";
 
-    private static final String TRANSFORM_NAME = "KAFKA-TRANSFORM-";
+    private static final String TRANSFORM_NAME = "KSTREAM-TRANSFORM-";
 
-    private static final String TRANSFORMVALUES_NAME = "KAFKA-TRANSFORMVALUES-";
+    private static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
 
-    private static final String PROCESSOR_NAME = "KAFKA-PROCESSOR-";
+    private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
 
-    private static final String BRANCH_NAME = "KAFKA-BRANCH-";
+    private static final String BRANCH_NAME = "KSTREAM-BRANCH-";
 
-    private static final String BRANCHCHILD_NAME = "KAFKA-BRANCHCHILD-";
+    private static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
 
-    private static final String WINDOWED_NAME = "KAFKA-WINDOWED-";
+    private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
-    private static final String SINK_NAME = "KAFKA-SINK-";
+    private static final String SINK_NAME = "KSTREAM-SINK-";
 
-    public static final String JOINTHIS_NAME = "KAFKA-JOINTHIS-";
+    public static final String JOINTHIS_NAME = "KSTREAM-JOINTHIS-";
 
-    public static final String JOINOTHER_NAME = "KAFKA-JOINOTHER-";
+    public static final String JOINOTHER_NAME = "KSTREAM-JOINOTHER-";
 
-    public static final String MERGE_NAME = "KAFKA-MERGE-";
+    public static final String MERGE_NAME = "KSTREAM-MERGE-";
 
-    public static final String SOURCE_NAME = "KAFKA-SOURCE-";
+    public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
 
     protected final KStreamBuilder topology;
     public final String name;
@@ -187,25 +186,21 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> through(String topic,
-                                            Serializer<K> keySerializer,
-                                            Serializer<V> valSerializer,
-                                            Deserializer<K1> keyDeserializer,
-                                            Deserializer<V1> valDeserializer) {
+    public KStream<K, V> through(String topic,
+                                 Serializer<K> keySerializer,
+                                 Serializer<V> valSerializer,
+                                 Deserializer<K> keyDeserializer,
+                                 Deserializer<V> valDeserializer) {
         String sendName = topology.newName(SINK_NAME);
 
         topology.addSink(sendName, topic, keySerializer, valSerializer, this.name);
 
-        String sourceName = topology.newName(SOURCE_NAME);
-
-        topology.addSource(sourceName, keyDeserializer, valDeserializer, topic);
-
-        return new KStreamImpl<>(topology, sourceName, Collections.singleton(sourceName));
+        return topology.from(keyDeserializer, valDeserializer, topic);
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> through(String topic) {
-        return through(topic, (Serializer<K>) null, (Serializer<V>) null, (Deserializer<K1>) null, (Deserializer<V1>) null);
+    public KStream<K, V> through(String topic) {
+        return through(topic, null, null, null, null);
     }
 
     @Override

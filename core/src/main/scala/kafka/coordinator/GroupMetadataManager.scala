@@ -199,6 +199,8 @@ class GroupMetadataManager(val brokerId: Int,
           Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
         } else if (status.error == ErrorMapping.NotLeaderForPartitionCode) {
           Errors.NOT_COORDINATOR_FOR_GROUP.code
+        } else if (status.error == ErrorMapping.RequestTimedOutCode) {
+          Errors.REBALANCE_IN_PROGRESS.code
         } else if (status.error == ErrorMapping.MessageSizeTooLargeCode
           || status.error == ErrorMapping.MessageSetSizeTooLargeCode
           || status.error == ErrorMapping.InvalidFetchSizeCode) {
@@ -208,7 +210,6 @@ class GroupMetadataManager(val brokerId: Int,
 
           Errors.UNKNOWN.code
         } else {
-
           error("Appending metadata message for group %s generation %d failed due to unexpected error: %s"
             .format(group.groupId, generationId, status.error))
 

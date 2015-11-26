@@ -71,6 +71,7 @@ class KafkaService(JmxMixin, Service):
         self.interbroker_security_protocol = interbroker_security_protocol
         self.sasl_mechanism = sasl_mechanism
         self.topics = topics
+        self.minikdc = None
 
         for node in self.nodes:
             node.version = version
@@ -82,10 +83,9 @@ class KafkaService(JmxMixin, Service):
 
     def start(self):
         if self.security_config.has_sasl_kerberos:
-            self.minikdc = MiniKdc(self.context, self.nodes)
-            self.minikdc.start()
-        else:
-            self.minikdc = None
+            if self.minikdc is None:
+                self.minikdc = MiniKdc(self.context, self.nodes)
+                self.minikdc.start()
         Service.start(self)
 
         # Create topics if necessary

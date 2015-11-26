@@ -203,7 +203,7 @@ class WorkerSourceTask implements WorkerTask {
             removed = outstandingMessagesBacklog.remove(record);
         // But if neither one had it, something is very wrong
         if (removed == null) {
-            log.error("Saw callback for record that was not present in the outstanding message set: "
+            log.error("CRITICAL Saw callback for record that was not present in the outstanding message set: "
                     + "{}", record);
         } else if (flushing && outstandingMessages.isEmpty()) {
             // flush thread may be waiting on the outstanding messages to clear
@@ -231,19 +231,25 @@ class WorkerSourceTask implements WorkerTask {
             // to persistent storage
 
             // Next we need to wait for all outstanding messages to finish sending
+            log.debug("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
                     if (timeoutMs <= 0) {
                         log.error(
                                 "Failed to flush {}, timed out while waiting for producer to flush outstanding "
-                                        + "messages", this.toString());
+                                        + "messages, {} left ({})", this, outstandingMessages.size(), outstandingMessages);
                         finishFailedFlush();
                         return false;
                     }
                     this.wait(timeoutMs);
                 } catch (InterruptedException e) {
-                    // ignore
+                    // We can get interrupted if we take too long committing when the work thread shutdown is requested,
+                    // requiring a forcible shutdown. Give up since we can't safely commit any offsets, but also need
+                    // to stop immediately
+                    log.error("{} Interrupted while flushing messages, offsets will not be committed", this);
+                    finishFailedFlush();
+                    return false;
                 }
             }
 
@@ -309,7 +315,7 @@ class WorkerSourceTask implements WorkerTask {
         flushing = false;
     }
 
-    private void finishSuccessfulFlush() {
+    private synchronized void finishSuccessfulFlush() {
         // If we were successful, we can just swap instead of replacing items back into the original map
         IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> temp = outstandingMessages;
         outstandingMessages = outstandingMessagesBacklog;
