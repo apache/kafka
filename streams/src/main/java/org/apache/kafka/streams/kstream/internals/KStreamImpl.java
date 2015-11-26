@@ -32,7 +32,6 @@ import org.apache.kafka.streams.kstream.WindowSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.lang.reflect.Array;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -187,25 +186,21 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> through(String topic,
-                                            Serializer<K> keySerializer,
-                                            Serializer<V> valSerializer,
-                                            Deserializer<K1> keyDeserializer,
-                                            Deserializer<V1> valDeserializer) {
+    public KStream<K, V> through(String topic,
+                                 Serializer<K> keySerializer,
+                                 Serializer<V> valSerializer,
+                                 Deserializer<K> keyDeserializer,
+                                 Deserializer<V> valDeserializer) {
         String sendName = topology.newName(SINK_NAME);
 
         topology.addSink(sendName, topic, keySerializer, valSerializer, this.name);
 
-        String sourceName = topology.newName(SOURCE_NAME);
-
-        topology.addSource(sourceName, keyDeserializer, valDeserializer, topic);
-
-        return new KStreamImpl<>(topology, sourceName, Collections.singleton(sourceName));
+        return topology.from(keyDeserializer, valDeserializer, topic);
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> through(String topic) {
-        return through(topic, (Serializer<K>) null, (Serializer<V>) null, (Deserializer<K1>) null, (Deserializer<V1>) null);
+    public KStream<K, V> through(String topic) {
+        return through(topic, null, null, null, null);
     }
 
     @Override
