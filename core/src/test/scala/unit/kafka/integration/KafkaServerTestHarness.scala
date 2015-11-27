@@ -71,10 +71,18 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
     brokerList = TestUtils.getBrokerListStrFromServers(servers, securityProtocol)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
+    // We need to set a cluster ACL in some cases here
+    // because of the topic creation in the setup of
+    // IntegrationTestHarness. If we don't, then tests
+    // fail with a cluster action authorization exception
+    // when processing an update metadata request
+    // (controller -> broker).
+    //
     // The following method does nothing by default, but
     // if the test case requires setting up a cluster ACL,
-    // then it needs to be implemented. Check EndToEndAuthorizationTest
-    // for an example.
+    // then it needs to be implemented. We also need a couple
+    // more fields to wait and verify the ACL: an ACL object
+    // and an cluster resource object. See EndToEndAuthorizationTest.
     setClusterAcl match {
       case Some(f) =>
         f()
