@@ -77,6 +77,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
 
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
+  override val clusterResource = Resource.ClusterResource
 
   // Arguments to AclCommand to set ACLs. There are three definitions here:
   // 1- Provides read and write access to topic
@@ -86,6 +87,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                             s"zookeeper.connect=$zkConnect",
                                             s"--add",
                                             s"--cluster",
+                                            s"--operation=ClusterAction",
                                             s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
   def produceAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
@@ -106,8 +108,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                           s"--group=$group",
                                           s"--operation=Read",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  override def ClusterActionAcl:Set[Acl] =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
   def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
-  def ClusterAcl =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, ClusterAction))
   def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
   def TopicDescribeAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Describe))
