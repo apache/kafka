@@ -31,6 +31,9 @@ if [ -z "$SCALA_BINARY_VERSION" ]; then
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
+
+CLASSPATH=$CLASSPATH:$base_dir/build/dependant-libs/*
+
 shopt -s nullglob
 for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
 do
