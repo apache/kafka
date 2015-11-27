@@ -71,7 +71,9 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
   def get(key: K): V = pool.get(key)
   
   def remove(key: K): V = pool.remove(key)
-  
+
+  def remove(key: K, value: V): Boolean = pool.remove(key, value)
+
   def keys: mutable.Set[K] = {
     import JavaConversions._
     pool.keySet()

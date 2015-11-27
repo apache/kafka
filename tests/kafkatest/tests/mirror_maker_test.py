@@ -21,6 +21,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.mirror_maker import MirrorMaker
+from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 
 import time
@@ -39,7 +40,6 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
         self.target_kafka = KafkaService(test_context, num_nodes=1, zk=self.target_zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
-
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.source_kafka, topic=self.topic,
                                            throughput=1000)
@@ -52,10 +52,21 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
     def setUp(self):
         # Source cluster
         self.source_zk.start()
-        self.source_kafka.start()
 
         # Target cluster
         self.target_zk.start()
+
+    def start_kafka(self, security_protocol):
+        self.source_kafka.security_protocol = security_protocol
+        self.source_kafka.interbroker_security_protocol = security_protocol
+        self.target_kafka.security_protocol = security_protocol
+        self.target_kafka.interbroker_security_protocol = security_protocol
+        if self.source_kafka.security_config.has_sasl_kerberos:
+            minikdc = MiniKdc(self.source_kafka.context, self.source_kafka.nodes + self.target_kafka.nodes)
+            self.source_kafka.minikdc = minikdc
+            self.target_kafka.minikdc = minikdc
+            minikdc.start()
+        self.source_kafka.start()
         self.target_kafka.start()
 
     def bounce(self, clean_shutdown=True):
@@ -98,9 +109,9 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         wait_until(lambda: self.producer.num_acked > n_messages, timeout_sec=10,
                      err_msg="Producer failed to produce %d messages in a reasonable amount of time." % n_messages)
 
-    @parametrize(new_consumer=True)
-    @parametrize(new_consumer=False)
-    def test_simple_end_to_end(self, new_consumer):
+    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
+    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'], new_consumer=[True])
+    def test_simple_end_to_end(self, security_protocol, new_consumer):
         """
         Test end-to-end behavior under non-failure conditions.
 
@@ -112,6 +123,9 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         - Consume messages from target.
         - Verify that number of consumed messages matches the number produced.
         """
+        self.start_kafka(security_protocol)
+        self.consumer.new_consumer = new_consumer
+
         self.mirror_maker.new_consumer = new_consumer
         self.mirror_maker.start()
 
@@ -126,8 +140,8 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         self.mirror_maker.stop()
 
     @matrix(offsets_storage=["kafka", "zookeeper"], new_consumer=[False], clean_shutdown=[True, False])
-    @matrix(new_consumer=[True], clean_shutdown=[True, False])
-    def test_bounce(self, offsets_storage="kafka", new_consumer=True, clean_shutdown=True):
+    @matrix(new_consumer=[True], clean_shutdown=[True, False], security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'])
+    def test_bounce(self, offsets_storage="kafka", new_consumer=True, clean_shutdown=True, security_protocol='PLAINTEXT'):
         """
         Test end-to-end behavior under failure conditions.
 
@@ -144,6 +158,9 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
             # during hard bounce. This is because the restarted mirror maker consumer won't be able to rejoin
             # the group until the previous session times out
             self.consumer.consumer_timeout_ms = 60000
+
+        self.start_kafka(security_protocol)
+        self.consumer.new_consumer = new_consumer
 
         self.mirror_maker.offsets_storage = offsets_storage
         self.mirror_maker.new_consumer = new_consumer

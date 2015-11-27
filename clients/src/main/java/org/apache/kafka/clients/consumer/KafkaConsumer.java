@@ -243,8 +243,7 @@ import java.util.regex.Pattern;
  *     String topic = &quot;foo&quot;;
  *     TopicPartition partition0 = new TopicPartition(topic, 0);
  *     TopicPartition partition1 = new TopicPartition(topic, 1);
- *     consumer.assign(partition0);
- *     consumer.assign(partition1);
+ *     consumer.assign(Arrays.asList(partition0, partition1));
  * </pre>
  *
  * The group that the consumer specifies is still used for committing offsets, but now the set of partitions will only
@@ -471,8 +470,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a set of key-value pairs as configuration, a
-     * {@link ConsumerRebalanceListener} implementation, a key and a value {@link Deserializer}.
+     * A consumer is instantiated by providing a set of key-value pairs as configuration, and a key and a value {@link Deserializer}.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
      *
@@ -501,8 +499,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration and a
-     * {@link ConsumerRebalanceListener} implementation, a key and a value {@link Deserializer}.
+     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration, and a
+     * key and a value {@link Deserializer}.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
      *

@@ -17,7 +17,6 @@ from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
-from kafkatest.services.security.security_config import SecurityConfig
 
 import json
 import os
@@ -56,15 +55,15 @@ class VerifiableProducer(BackgroundThreadService):
             node.version = version
         self.acked_values = []
         self.not_acked_values = []
-
         self.prop_file = ""
-        self.security_config = kafka.security_config.client_config(self.prop_file)
-        self.prop_file += str(self.security_config)
+
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % VerifiableProducer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
+        self.security_config = self.kafka.security_config.client_config(self.prop_file)
+        self.prop_file += str(self.security_config)
         log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 

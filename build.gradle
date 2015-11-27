@@ -29,12 +29,12 @@ buildscript {
 
 def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
 def slf4japi="org.slf4j:slf4j-api:1.7.6"
-def junit='junit:junit:4.11'
-def easymock='org.easymock:easymock:3.3.1'
-def powermock='org.powermock:powermock-module-junit4:1.6.2'
-def powermock_easymock='org.powermock:powermock-api-easymock:1.6.2'
-def jackson_version = '2.5.4'
-def jetty_version = '9.2.12.v20150709'
+def junit='junit:junit:4.12'
+def easymock='org.easymock:easymock:3.4'
+def powermock='org.powermock:powermock-module-junit4:1.6.3'
+def powermock_easymock='org.powermock:powermock-api-easymock:1.6.3'
+def jackson_version = '2.6.3'
+def jetty_version = '9.2.14.v20151106'
 def jersey_version = '2.22.1'
 
 allprojects {
@@ -45,7 +45,7 @@ allprojects {
 }
 
 ext {
-    gradleVersion = "2.8"
+    gradleVersion = "2.9"
     buildVersionFileName = "kafka-version.properties"
 
     userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -190,7 +190,7 @@ subprojects {
   }
 }
 
-for ( sv in ['2_10_5', '2_11_7'] ) {
+for ( sv in ['2_10', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
@@ -217,6 +217,12 @@ for ( sv in ['2_10_5', '2_11_7'] ) {
     startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
+  tasks.create(name: "install_${sv}", type: GradleBuild) {
+    buildFile = './build.gradle'
+    tasks = ['install']
+    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+  }
+
   tasks.create(name: "releaseTarGz_${sv}", type: GradleBuild) {
     buildFile = './build.gradle'
     tasks = ['releaseTarGz']
@@ -234,22 +240,23 @@ def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:fi
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams'] + connectPkgs
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10_5', 'jar_core_2_11_7'] + pkgs.collect { it + ":jar" }) { }
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10', 'jar_core_2_11'] + pkgs.collect { it + ":jar" }) { }
 
-tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10_5', 'srcJar_2_11_7'] + pkgs.collect { it + ":srcJar" }) { }
+tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10', 'srcJar_2_11'] + pkgs.collect { it + ":srcJar" }) { }
 
-tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10_5', 'docsJar_2_11_7'] + pkgs.collect { it + ":docsJar" }) { }
+tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10', 'docsJar_2_11'] + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: ['test_core_2_10_5', 'test_core_2_11_7'] + pkgs.collect { it + ":test" }) { }
+tasks.create(name: "testAll", dependsOn: ['test_core_2_10', 'test_core_2_11'] + pkgs.collect { it + ":test" }) { }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10_5', 'releaseTarGz_2_11_7']) {
-}
+tasks.create(name: "installAll", dependsOn: ['install_2_10', 'install_2_11'] + pkgs.collect { it + ":install" }) { }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10_5', 'uploadCoreArchives_2_11_7'] + pkgs.collect { it + ":uploadArchives" }) { }
+tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10', 'releaseTarGz_2_11']) { }
+
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10', 'uploadCoreArchives_2_11'] + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
-  println "Building project 'core' with Scala version $scalaVersion"
+  println "Building project 'core' with Scala version $resolvedScalaVersion"
 
   apply plugin: 'scala'
   archivesBaseName = "kafka_${baseScalaVersion}"
@@ -257,20 +264,19 @@ project(':core') {
   dependencies {
     compile project(':clients')
     compile "$slf4jlog4j"
-    compile "org.scala-lang:scala-library:$scalaVersion"
+    compile "org.scala-lang:scala-library:$resolvedScalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
     compile 'com.101tec:zkclient:0.7'
     compile 'com.yammer.metrics:metrics-core:2.2.0'
-    compile 'net.sf.jopt-simple:jopt-simple:3.2'
-    if (scalaVersion.startsWith('2.11')) {
+    compile 'net.sf.jopt-simple:jopt-simple:4.9'
+    if (baseScalaVersion == '2.11') {
       compile 'org.scala-lang.modules:scala-xml_2.11:1.0.4'
       compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.4'
     }
 
     testCompile "$junit"
     testCompile "$easymock"
-    testCompile 'org.objenesis:objenesis:1.2'
-    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
+    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.53'
     testCompile "org.scalatest:scalatest_$baseScalaVersion:2.2.5"
     testCompile project(':clients')
     testCompile project(':clients').sourceSets.test.output
@@ -300,7 +306,7 @@ project(':core') {
     from (configurations.runtime) {
       exclude('kafka-clients*')
     }
-    into "$buildDir/dependant-libs-${scalaVersion}"
+    into "$buildDir/dependant-libs-${resolvedScalaVersion}"
   }
 
   tasks.create(name: "genProducerConfigDocs", dependsOn:jar, type: JavaExec) {
@@ -401,7 +407,7 @@ project(':clients') {
 
   dependencies {
     compile "$slf4japi"
-    compile 'org.xerial.snappy:snappy-java:1.1.1.7'
+    compile 'org.xerial.snappy:snappy-java:1.1.2'
     compile 'net.jpountz.lz4:lz4:1.2.0'
 
     testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
@@ -524,7 +530,7 @@ project(':tools') {
         from (configurations.runtime) {
             exclude('kafka-clients*')
         }
-        into "$buildDir/dependant-libs-${scalaVersion}"
+        into "$buildDir/dependant-libs-${resolvedScalaVersion}"
     }
 
     jar {
@@ -581,7 +587,7 @@ project(':streams') {
         from (configurations.runtime) {
             exclude('kafka-clients*')
         }
-        into "$buildDir/dependant-libs-${scalaVersion}"
+        into "$buildDir/dependant-libs-${resolvedScalaVersion}"
     }
 
     jar {

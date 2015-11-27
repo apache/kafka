@@ -13,6 +13,7 @@
 package kafka.admin
 
 import java.nio.ByteBuffer
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.common.KafkaException
@@ -146,11 +147,10 @@ class AdminClient(val time: Time,
     GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
   }
 
-  case class ConsumerSummary(
-                              memberId: String,
-                              clientId: String,
-                              clientHost: String,
-                              assignment: List[TopicPartition])
+  case class ConsumerSummary(memberId: String,
+                             clientId: String,
+                             clientHost: String,
+                             assignment: List[TopicPartition])
 
   def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
     val group = describeGroup(groupId)
@@ -169,6 +169,11 @@ class AdminClient(val time: Time,
       List.empty
     }
   }
+
+  def close() {
+    client.close()
+  }
+
 }
 
 object AdminClient {
@@ -204,6 +209,8 @@ object AdminClient {
     val config = Map(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG -> brokerUrl)
     create(new AdminConfig(config))
   }
+
+  def create(props: Properties): AdminClient = create(props.asScala.toMap)
 
   def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
 

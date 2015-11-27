@@ -157,12 +157,12 @@ class Partition(val topic: String,
   }
 
   /**
-   * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset from the time when this broker was the leader last time)
-   *  and setting the new leader and ISR
+   * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset
+   * from the time when this broker was the leader last time) and setting the new leader and ISR.
+   * If the leader replica id does not change, return false to indicate the replica manager.
    */
-  def makeLeader(controllerId: Int,
-                 partitionStateInfo: PartitionStateInfo, correlationId: Int) {
-    val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
+  def makeLeader(controllerId: Int, partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
+    val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
@@ -177,29 +177,34 @@ class Partition(val topic: String,
       inSyncReplicas = newInSyncReplicas
       leaderEpoch = leaderAndIsr.leaderEpoch
       zkVersion = leaderAndIsr.zkVersion
-      leaderReplicaIdOpt = Some(localBrokerId)
-      // construct the high watermark metadata for the new leader replica
-      val newLeaderReplica = getReplica().get
-      newLeaderReplica.convertHWToLocalOffsetMetadata()
-      // reset log end offset for remote replicas
-      assignedReplicas.foreach(r =>
-        if (r.brokerId != localBrokerId) r.updateLogReadResult(LogReadResult.UnknownLogReadResult))
+      val isNewLeader =
+        if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == localBrokerId) {
+          false
+        } else {
+          leaderReplicaIdOpt = Some(localBrokerId)
+          true
+        }
+      val leaderReplica = getReplica().get
       // we may need to increment high watermark since ISR could be down to 1
-      maybeIncrementLeaderHW(newLeaderReplica)
+      if (isNewLeader) {
+        // construct the high watermark metadata for the new leader replica
+        leaderReplica.convertHWToLocalOffsetMetadata()
+        // reset log end offset for remote replicas
+        assignedReplicas.filter(_.brokerId != localBrokerId).foreach(_.updateLogReadResult(LogReadResult.UnknownLogReadResult))
+      }
+      (maybeIncrementLeaderHW(leaderReplica), isNewLeader)
     }
-
     // some delayed operations may be unblocked after HW changed
     if (leaderHWIncremented)
       tryCompleteDelayedRequests()
+    isNewLeader
   }
 
   /**
    *  Make the local replica the follower by setting the new leader and ISR to empty
    *  If the leader replica id does not change, return false to indicate the replica manager
    */
-  def makeFollower(controllerId: Int,
-                   partitionStateInfo: PartitionStateInfo,
-                   correlationId: Int): Boolean = {
+  def makeFollower(controllerId: Int, partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch

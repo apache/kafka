@@ -464,11 +464,12 @@ public class SslTransportLayerTest {
             Mode mode = server ? Mode.SERVER : Mode.CLIENT;
             File truststoreFile = File.createTempFile(name + "TS", ".jks");
             sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name);
-            sslConfig.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+            if (server)
+                sslConfig.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         }
        
         private Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {
-            Map<String, Object> config = new HashMap<String, Object>(sslConfig);
+            Map<String, Object> config = new HashMap<>(sslConfig);
             config.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             config.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
             config.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG));

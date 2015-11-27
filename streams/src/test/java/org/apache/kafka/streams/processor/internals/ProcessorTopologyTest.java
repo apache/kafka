@@ -204,7 +204,7 @@ public class ProcessorTopologyTest {
         return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC)
                                     .addProcessor("processor", define(new StatefulProcessor(storeName)), "source")
                                     .addStateStore(
-                                            Stores.create(storeName, config).withStringKeys().withStringValues().inMemory().build(),
+                                            Stores.create(storeName).withStringKeys().withStringValues().inMemory().build(),
                                             "processor"
                                     )
                                     .addSink("counts", OUTPUT_TOPIC_1, "processor");

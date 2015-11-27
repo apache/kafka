@@ -230,6 +230,8 @@ public class TopologyBuilder {
         }
 
         nodeFactories.put(name, new SinkNodeFactory(name, parentNames, topic, keySerializer, valSerializer));
+        nodeGrouper.add(name);
+        nodeGrouper.unite(name, parentNames);
         return this;
     }
 

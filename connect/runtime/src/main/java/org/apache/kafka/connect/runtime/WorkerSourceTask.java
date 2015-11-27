@@ -17,11 +17,14 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -35,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +49,8 @@ import java.util.concurrent.TimeoutException;
  */
 class WorkerSourceTask implements WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);
+
+    private static final long SEND_FAILED_BACKOFF_MS = 100;
 
     private final ConnectorTaskId id;
     private final SourceTask task;
@@ -57,12 +63,15 @@ class WorkerSourceTask implements WorkerTask {
     private final WorkerConfig workerConfig;
     private final Time time;
 
+    private List<SourceRecord> toSend;
+    private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
     // Use IdentityHashMap to ensure correctness with duplicate records. This is a HashMap because
     // there is no IdentityHashSet.
     private IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> outstandingMessages;
     // A second buffer is used while an offset flush is running
     private IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> outstandingMessagesBacklog;
     private boolean flushing;
+    private CountDownLatch stopRequestedLatch;
 
     public WorkerSourceTask(ConnectorTaskId id, SourceTask task,
                             Converter keyConverter, Converter valueConverter,
@@ -79,9 +88,12 @@ class WorkerSourceTask implements WorkerTask {
         this.workerConfig = workerConfig;
         this.time = time;
 
+        this.toSend = null;
+        this.lastSendFailed = false;
         this.outstandingMessages = new IdentityHashMap<>();
         this.outstandingMessagesBacklog = new IdentityHashMap<>();
         this.flushing = false;
+        this.stopRequestedLatch = new CountDownLatch(1);
     }
 
     @Override
@@ -92,8 +104,10 @@ class WorkerSourceTask implements WorkerTask {
 
     @Override
     public void stop() {
-        if (workThread != null)
+        if (workThread != null) {
             workThread.startGracefulShutdown();
+            stopRequestedLatch.countDown();
+        }
     }
 
     @Override
@@ -117,47 +131,69 @@ class WorkerSourceTask implements WorkerTask {
     }
 
     /**
-     * Send a batch of records. This is atomic up to the point of getting the messages into the
-     * Producer and recorded in our set of outstanding messages, so either all or none will be sent
-     * @param records
+     * Try to send a batch of records. If a send fails and is retriable, this saves the remainder of the batch so it can
+     * be retried after backing off. If a send fails and is not retriable, this will throw a ConnectException.
+     * @return true if all messages were sent, false if some need to be retried
      */
-    private synchronized void sendRecords(List<SourceRecord> records) {
-        for (final SourceRecord record : records) {
+    private boolean sendRecords() {
+        int processed = 0;
+        for (final SourceRecord record : toSend) {
             byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
             byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
             final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(), key, value);
             log.trace("Appending record with key {}, value {}", record.key(), record.value());
-            if (!flushing) {
-                outstandingMessages.put(producerRecord, producerRecord);
-            } else {
-                outstandingMessagesBacklog.put(producerRecord, producerRecord);
+            // We need this queued first since the callback could happen immediately (even synchronously in some cases).
+            // Because of this we need to be careful about handling retries -- we always save the previously attempted
+            // record as part of toSend and need to use a flag to track whether we should actually add it to the outstanding
+            // messages and update the offsets.
+            synchronized (this) {
+                if (!lastSendFailed) {
+                    if (!flushing) {
+                        outstandingMessages.put(producerRecord, producerRecord);
+                    } else {
+                        outstandingMessagesBacklog.put(producerRecord, producerRecord);
+                    }
+                    // Offsets are converted & serialized in the OffsetWriter
+                    offsetWriter.offset(record.sourcePartition(), record.sourceOffset());
+                }
             }
-            producer.send(
-                    producerRecord,
-                    new Callback() {
-                        @Override
-                        public void onCompletion(RecordMetadata recordMetadata, Exception e) {
-                            if (e != null) {
-                                // Given the default settings for zero data loss, this should basically never happen --
-                                // between "infinite" retries, indefinite blocking on full buffers, and "infinite" request
-                                // timeouts, callbacks with exceptions should never be invoked in practice. If the
-                                // user overrode these settings, the best we can do is notify them of the failure via
-                                // logging.
-                                log.error("{} failed to send record to {}: {}", id, record.topic(), e);
-                                log.debug("Failed record: topic {}, Kafka partition {}, key {}, value {}, source offset {}, source partition {}",
-                                        record.topic(), record.kafkaPartition(), record.key(), record.value(),
-                                        record.sourceOffset(), record.sourcePartition());
-                            } else {
-                                log.trace("Wrote record successfully: topic {} partition {} offset {}",
-                                        recordMetadata.topic(), recordMetadata.partition(),
-                                        recordMetadata.offset());
+            try {
+                producer.send(
+                        producerRecord,
+                        new Callback() {
+                            @Override
+                            public void onCompletion(RecordMetadata recordMetadata, Exception e) {
+                                if (e != null) {
+                                    // Given the default settings for zero data loss, this should basically never happen --
+                                    // between "infinite" retries, indefinite blocking on full buffers, and "infinite" request
+                                    // timeouts, callbacks with exceptions should never be invoked in practice. If the
+                                    // user overrode these settings, the best we can do is notify them of the failure via
+                                    // logging.
+                                    log.error("{} failed to send record to {}: {}", id, record.topic(), e);
+                                    log.debug("Failed record: topic {}, Kafka partition {}, key {}, value {}, source offset {}, source partition {}",
+                                            record.topic(), record.kafkaPartition(), record.key(), record.value(),
+                                            record.sourceOffset(), record.sourcePartition());
+                                } else {
+                                    log.trace("Wrote record successfully: topic {} partition {} offset {}",
+                                            recordMetadata.topic(), recordMetadata.partition(),
+                                            recordMetadata.offset());
+                                }
+                                recordSent(producerRecord);
                             }
-                            recordSent(producerRecord);
-                        }
-                    });
-            // Offsets are converted & serialized in the OffsetWriter
-            offsetWriter.offset(record.sourcePartition(), record.sourceOffset());
+                        });
+                lastSendFailed = false;
+            } catch (RetriableException e) {
+                log.warn("Failed to send {}, backing off before retrying:", producerRecord, e);
+                toSend = toSend.subList(processed, toSend.size());
+                lastSendFailed = true;
+                return false;
+            } catch (KafkaException e) {
+                throw new ConnectException("Unrecoverable exception trying to send", e);
+            }
+            processed++;
         }
+        toSend = null;
+        return true;
     }
 
     private synchronized void recordSent(final ProducerRecord<byte[], byte[]> record) {
@@ -167,7 +203,7 @@ class WorkerSourceTask implements WorkerTask {
             removed = outstandingMessagesBacklog.remove(record);
         // But if neither one had it, something is very wrong
         if (removed == null) {
-            log.error("Saw callback for record that was not present in the outstanding message set: "
+            log.error("CRITICAL Saw callback for record that was not present in the outstanding message set: "
                     + "{}", record);
         } else if (flushing && outstandingMessages.isEmpty()) {
             // flush thread may be waiting on the outstanding messages to clear
@@ -195,19 +231,25 @@ class WorkerSourceTask implements WorkerTask {
             // to persistent storage
 
             // Next we need to wait for all outstanding messages to finish sending
+            log.debug("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
                     if (timeoutMs <= 0) {
                         log.error(
                                 "Failed to flush {}, timed out while waiting for producer to flush outstanding "
-                                        + "messages", this.toString());
+                                        + "messages, {} left ({})", this, outstandingMessages.size(), outstandingMessages);
                         finishFailedFlush();
                         return false;
                     }
                     this.wait(timeoutMs);
                 } catch (InterruptedException e) {
-                    // ignore
+                    // We can get interrupted if we take too long committing when the work thread shutdown is requested,
+                    // requiring a forcible shutdown. Give up since we can't safely commit any offsets, but also need
+                    // to stop immediately
+                    log.error("{} Interrupted while flushing messages, offsets will not be committed", this);
+                    finishFailedFlush();
+                    return false;
                 }
             }
 
@@ -273,7 +315,7 @@ class WorkerSourceTask implements WorkerTask {
         flushing = false;
     }
 
-    private void finishSuccessfulFlush() {
+    private synchronized void finishSuccessfulFlush() {
         // If we were successful, we can just swap instead of replacing items back into the original map
         IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> temp = outstandingMessages;
         outstandingMessages = outstandingMessagesBacklog;
@@ -309,10 +351,12 @@ class WorkerSourceTask implements WorkerTask {
                 }
 
                 while (getRunning()) {
-                    List<SourceRecord> records = task.poll();
-                    if (records == null)
+                    if (toSend == null)
+                        toSend = task.poll();
+                    if (toSend == null)
                         continue;
-                    sendRecords(records);
+                    if (!sendRecords())
+                        stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
                 }
             } catch (InterruptedException e) {
                 // Ignore and allow to exit.

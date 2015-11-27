@@ -118,6 +118,8 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         public void init(ProcessorContext context) {
+            serdes.init(context);
+
             this.context = context;
             this.partition = context.id().partition;
             this.dbName = this.topic + "." + this.partition;

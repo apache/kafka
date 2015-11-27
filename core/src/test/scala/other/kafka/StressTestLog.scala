@@ -32,7 +32,7 @@ object StressTestLog {
   val running = new AtomicBoolean(true)
   
   def main(args: Array[String]) {
-    val dir = TestUtils.tempDir()
+    val dir = TestUtils.randomPartitionLogDir(TestUtils.tempDir())
     val time = new MockTime
     val logProprties = new Properties()
     logProprties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)

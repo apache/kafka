@@ -16,23 +16,24 @@
  */
 package kafka.security.auth
 
+import java.net.InetAddress
 import java.util.UUID
 
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
 import kafka.server.KafkaConfig
-import kafka.utils.{ZkUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.{After, Before, Test}
 
 class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
-  var simpleAclAuthorizer = new SimpleAclAuthorizer
+  val simpleAclAuthorizer = new SimpleAclAuthorizer
   val testPrincipal = Acl.WildCardPrincipal
-  val testHostName = "test.host.com"
-  var session = new Session(testPrincipal, testHostName)
+  val testHostName = InetAddress.getByName("192.168.0.1")
+  val session = new Session(testPrincipal, testHostName)
   var resource: Resource = null
   val superUsers = "User:superuser1; User:superuser2"
   val username = "alice"
@@ -50,23 +51,28 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     resource = new Resource(Topic, UUID.randomUUID().toString)
   }
 
+  @After
+  override def tearDown(): Unit = {
+    simpleAclAuthorizer.close()
+  }
+
   @Test
   def testTopicAcl() {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
     val user3 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "batman")
-    val host1 = "host1"
-    val host2 = "host2"
+    val host1 = InetAddress.getByName("192.168.1.1")
+    val host2 = InetAddress.getByName("192.168.1.2")
 
     //user1 has READ access from host1 and host2.
-    val acl1 = new Acl(user1, Allow, host1, Read)
-    val acl2 = new Acl(user1, Allow, host2, Read)
+    val acl1 = new Acl(user1, Allow, host1.getHostAddress, Read)
+    val acl2 = new Acl(user1, Allow, host2.getHostAddress, Read)
 
     //user1 does not have  READ access from host1.
-    val acl3 = new Acl(user1, Deny, host1, Read)
+    val acl3 = new Acl(user1, Deny, host1.getHostAddress, Read)
 
     //user1 has Write access from host1 only.
-    val acl4 = new Acl(user1, Allow, host1, Write)
+    val acl4 = new Acl(user1, Allow, host1.getHostAddress, Write)
 
     //user1 has DESCRIBE access from all hosts.
     val acl5 = new Acl(user1, Allow, WildCardHost, Describe)
@@ -105,11 +111,11 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testDenyTakesPrecedence() {
     val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val host = "random-host"
+    val host = InetAddress.getByName("192.168.2.1")
     val session = new Session(user, host)
 
     val allowAll = Acl.AllowAllAcl
-    val denyAcl = new Acl(user, Deny, host, All)
+    val denyAcl = new Acl(user, Deny, host.getHostAddress, All)
     val acls = Set[Acl](allowAll, denyAcl)
 
     changeAclAndVerify(Set.empty[Acl], acls, Set.empty[Acl])
@@ -123,7 +129,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     changeAclAndVerify(Set.empty[Acl], Set[Acl](allowAllAcl), Set.empty[Acl])
 
-    val session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "random"), "random.host")
+    val session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "random"), InetAddress.getByName("192.0.4.4"))
     assertTrue("allow all acl should allow access to all.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
 
@@ -133,8 +139,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     changeAclAndVerify(Set.empty[Acl], Set[Acl](denyAllAcl), Set.empty[Acl])
 
-    val session1 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), "random.host")
-    val session2 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser2"), "random.host")
+    val session1 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), InetAddress.getByName("192.0.4.4"))
+    val session2 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser2"), InetAddress.getByName("192.0.4.4"))
 
     assertTrue("superuser always has access, no matter what acls.", simpleAclAuthorizer.authorize(session1, Read, resource))
     assertTrue("superuser always has access, no matter what acls.", simpleAclAuthorizer.authorize(session2, Read, resource))
@@ -145,8 +151,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     assertFalse("when acls = [],  authorizer should fail close.", simpleAclAuthorizer.authorize(session, Read, resource))
 
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val host1 = "host1"
-    val readAcl = new Acl(user1, Allow, host1, Read)
+    val host1 = InetAddress.getByName("192.168.3.1")
+    val readAcl = new Acl(user1, Allow, host1.getHostAddress, Read)
     val wildCardResource = new Resource(resource.resourceType, Resource.WildCardResource)
 
     val acls = changeAclAndVerify(Set.empty[Acl], Set[Acl](readAcl), Set.empty[Acl], wildCardResource)
@@ -155,11 +161,11 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     assertTrue("User1 should have Read access from host1", simpleAclAuthorizer.authorize(host1Session, Read, resource))
 
     //allow Write to specific topic.
-    val writeAcl = new Acl(user1, Allow, host1, Write)
+    val writeAcl = new Acl(user1, Allow, host1.getHostAddress, Write)
     changeAclAndVerify(Set.empty[Acl], Set[Acl](writeAcl), Set.empty[Acl])
 
     //deny Write to wild card topic.
-    val denyWriteOnWildCardResourceAcl = new Acl(user1, Deny, host1, Write)
+    val denyWriteOnWildCardResourceAcl = new Acl(user1, Deny, host1.getHostAddress, Write)
     changeAclAndVerify(acls, Set[Acl](denyWriteOnWildCardResourceAcl), Set.empty[Acl], wildCardResource)
 
     assertFalse("User1 should not have Write access from host1", simpleAclAuthorizer.authorize(host1Session, Write, resource))

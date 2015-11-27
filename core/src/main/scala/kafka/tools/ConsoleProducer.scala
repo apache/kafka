@@ -28,6 +28,7 @@ import java.io._
 
 import joptsimple._
 import org.apache.kafka.clients.producer.ProducerConfig
+import org.apache.kafka.common.utils.Utils
 
 object ConsoleProducer {
 
@@ -76,10 +77,7 @@ object ConsoleProducer {
   }
 
   def getOldProducerProps(config: ProducerConfig): Properties = {
-
-    val props = new Properties
-
-    props.putAll(config.extraProducerProps)
+    val props = producerProps(config)
 
     props.put("metadata.broker.list", config.brokerList)
     props.put("compression.codec", config.compressionCodec)
@@ -101,11 +99,17 @@ object ConsoleProducer {
     props
   }
 
-  def getNewProducerProps(config: ProducerConfig): Properties = {
-
-    val props = new Properties
-
+  private def producerProps(config: ProducerConfig): Properties = {
+    val props =
+      if (config.options.has(config.producerConfigOpt))
+        Utils.loadProps(config.options.valueOf(config.producerConfigOpt))
+      else new Properties
     props.putAll(config.extraProducerProps)
+    props
+  }
+
+  def getNewProducerProps(config: ProducerConfig): Properties = {
+    val props = producerProps(config)
 
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
@@ -237,6 +241,10 @@ object ConsoleProducer {
             .withRequiredArg
             .describedAs("producer_prop")
             .ofType(classOf[String])
+    val producerConfigOpt = parser.accepts("producer.config", s"Producer config properties file. Note that $producerPropertyOpt takes precedence over this config.")
+      .withRequiredArg
+      .describedAs("config file")
+      .ofType(classOf[String])
     val useOldProducerOpt = parser.accepts("old-producer", "Use the old producer implementation.")
 
     val options = parser.parse(args : _*)

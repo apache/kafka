@@ -46,11 +46,14 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     private static final Logger log = LoggerFactory.getLogger(KafkaStreamingPartitionAssignor.class);
 
     private StreamThread streamThread;
+    private int numStandbyReplicas;
     private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
     private Set<TaskId> standbyTasks;
 
     @Override
     public void configure(Map<String, ?> configs) {
+        numStandbyReplicas = (Integer) configs.get(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG);
+
         Object o = configs.get(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
             KafkaException ex = new KafkaException("StreamThread is not specified");
@@ -99,7 +102,6 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         //    - We try not to assign the same set of tasks to two different clients
         //    We do the assignment in one-pass. The result may not satisfy above all.
         // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
-
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
 
@@ -132,7 +134,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         // Get partition groups from the partition grouper
         Map<TaskId, Set<TopicPartition>> partitionGroups = streamThread.partitionGrouper.partitionGroups(metadata);
 
-        states = TaskAssignor.assign(states, partitionGroups.keySet(), 0); // TODO: enable standby tasks
+        states = TaskAssignor.assign(states, partitionGroups.keySet(), numStandbyReplicas);
         Map<String, Assignment> assignment = new HashMap<>();
 
         for (Map.Entry<UUID, Set<String>> entry : consumersByClient.entrySet()) {
