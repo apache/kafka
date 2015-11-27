@@ -33,7 +33,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
     def setUp(self):
         self.topic = "test_topic"
-        self.producer_throughput = 1000
+        self.producer_throughput = 100
         self.num_producers = 1
         self.num_consumers = 1
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
@@ -53,17 +53,17 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         self.consumer = ConsoleConsumer(
             self.test_context, self.num_consumers, self.kafka, self.topic,
-            consumer_timeout_ms=30000, message_validator=is_int, new_consumer=True)
+            consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True)
 
         self.consumer.group_id = "unique-test-group-" + str(random.random())
 
-
     def bounce(self):
+        #Sleeps reduce the intermittent failures reported in KAFKA-2891. Should be removed once resolved.
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
-            time.sleep(self.kafka.replica_lag/1000)
+            time.sleep(10)
             self.kafka.start_node(node)
-            time.sleep(self.kafka.replica_lag/1000)
+            time.sleep(10)
 
     def roll_in_secured_settings(self, upgrade_protocol):
         self.kafka.interbroker_security_protocol = upgrade_protocol
@@ -76,13 +76,11 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.close_port('PLAINTEXT')
         self.bounce()
 
-
     def open_secured_port(self, upgrade_protocol):
         self.kafka.security_protocol = upgrade_protocol
         self.kafka.open_port(upgrade_protocol)
         self.kafka.start_minikdc()
         self.bounce()
-
 
     @matrix(upgrade_protocol=["SSL", "SASL_PLAINTEXT", "SASL_SSL"])
     def test_rolling_upgrade_phase_one(self, upgrade_protocol):
@@ -104,7 +102,6 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.security_protocol = upgrade_protocol
         self.create_producer_and_consumer()
         self.run_produce_consume_validate(lambda: time.sleep(1))
-
 
     @matrix(upgrade_protocol=["SSL", "SASL_PLAINTEXT", "SASL_SSL"])
     def test_rolling_upgrade_phase_two(self, upgrade_protocol):

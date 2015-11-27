@@ -556,7 +556,7 @@ class ReplicaManager(val config: KafkaConfig,
           case e: Throwable =>
             BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
             BrokerTopicStats.getBrokerAllTopicsStats().failedFetchRequestRate.mark()
-            error("Error processing fetch operation on partition [%s,%d] offset %d".format(topic, partition, offset), e)
+            error("Error processing fetch operation on partition [%s,%d] offset %d".format(topic, partition, offset))
             LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, fetchSize, false, Some(e))
         }
       (TopicAndPartition(topic, partition), partitionDataAndOffsetInfo)
