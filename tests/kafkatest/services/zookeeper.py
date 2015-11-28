@@ -53,7 +53,7 @@ class ZookeeperService(Service):
         self.logger.info(config_file)
         node.account.create_file("/mnt/zookeeper.properties", config_file)
 
-        if not ZookeeperService.KAFKA_OPTS:
+        if ZookeeperService.KAFKA_OPTS:
             start_cmd = "export KAFKA_OPTS=\"%s\";" % ZookeeperService.KAFKA_OPTS
         else:
             start_cmd = ""  
@@ -93,14 +93,17 @@ class ZookeeperService(Service):
     def set_kafka_opts(self, options):
         ZookeeperService.KAFKA_OPTS = options
 
-    def zookeeper_migration(self, zk_acl):
-        la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, connect_setting)
+    def zookeeper_migration(self, node, zk_acl):
+        la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
         time.sleep(5)
 
-    def gen_jaas_login_digest(node):
-        node.account.ssh("mkdir -p %s" % self.SECURITY_DIR, allow_fail=False)
+    def gen_jaas_login_digest(self, nodes):
         jaas_file = self.render('zk_jaas_digest.login')
         self.logger.info("zk_jaas_digest.login:")
         self.logger.info(jaas_file)
-        node.account.create_file("%s/zk_jaas_digest.login" % SecurityConfig.CONFIG_DIR, jaas_file)
+        for node in nodes:
+            node.account.ssh("mkdir -p %s" % self.SECURITY_DIR, allow_fail=False)
+            node.account.create_file("%s/zk_jaas_digest.login" % self.SECURITY_DIR, jaas_file)
+
+        return "%s/zk_jaas_digest.login" % self.SECURITY_DIR 

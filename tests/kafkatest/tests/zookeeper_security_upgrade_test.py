@@ -56,11 +56,12 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
     def zk_migration(self):
         # generate jaas login file
-        jaas_login = self.zk.gen_jaas_login_digest()
+        jaas_login = self.zk.gen_jaas_login_digest(self.zk.nodes)
+        self.logger.warn("Login file: %s" % jaas_login)
+        self.zk.gen_jaas_login_digest(self.kafka.nodes)
 
         # change zk config (auth provider + jaas login)
-        self.zk.set_kafka_options("-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider" +
-                                    " -Djava.security.auth.login.config=%s" % jaas_login)
+        self.zk.set_kafka_opts("-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider -Djava.security.auth.login.config=%s" % jaas_login)
         
         # restart zk
         for node in self.zk.nodes:
@@ -69,15 +70,16 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         
         # restart broker with jaas login
         for node in self.kafka.nodes:
-            self.kafka.security_config.kafka_opts += " -Djava.security.auth.login.config=%s" % jaas_login
+            self.kafka.security_config.set_zk_jaas_login(jaas_login)
             self.kafka.stop_node(node)
             self.kafka.start_node(node)
 
         # run migration tool
-        self.zk.zookeeper_migration("secure")
+        for node in self.zk.nodes:
+            self.zk.zookeeper_migration(node, "secure")
 
         # restart broker with zookeeper.set.acl=true
-        self.kafka.zk_sasl_enabled = true
+        self.kafka.zk_sasl_enabled = "true"
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
             self.kafka.start_node(node)

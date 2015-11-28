@@ -71,6 +71,7 @@ class SecurityConfig(TemplateRenderer):
     JAAS_CONF_PATH = "/mnt/security/jaas.conf"
     KRB5CONF_PATH = "/mnt/security/krb5.conf"
     KEYTAB_PATH = "/mnt/security/keytab"
+    ZK_JAAS_LOGIN = ""
 
     ssl_stores = Keytool.generate_keystore_truststore('.')
 
@@ -166,10 +167,14 @@ class SecurityConfig(TemplateRenderer):
 
     @property
     def kafka_opts(self):
+        if SecurityConfig.ZK_JAAS_LOGIN:
+            return "\"-Djava.security.auth.login.config=%s\"" % SecurityConfig.ZK_JAAS_LOGIN
         if self.has_sasl:
             return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
-        else:
-            return ""
+        return ""
+
+    def set_zk_jaas_login(self, login):
+        SecurityConfig.ZK_JAAS_LOGIN = login
 
     def __str__(self):
         """
