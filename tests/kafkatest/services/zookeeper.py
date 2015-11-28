@@ -99,7 +99,7 @@ class ZookeeperService(Service):
         time.sleep(5)
 
     def gen_jaas_login_digest(node):
-        node.account.ssh("mkdir -p %s" % SECURITY_DIR, allow_fail=False)
+        node.account.ssh("mkdir -p %s" % self.SECURITY_DIR, allow_fail=False)
         jaas_file = self.render('zk_jaas_digest.login')
         self.logger.info("zk_jaas_digest.login:")
         self.logger.info(jaas_file)
