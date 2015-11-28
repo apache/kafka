@@ -142,11 +142,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   )
 
   newGauge(
-    "yammer-metrics-total",
+    "yammer-metrics-count",
     new Gauge[Int] {
       def value = {
-        import scala.collection.JavaConverters._
-        com.yammer.metrics.Metrics.defaultRegistry().groupedMetrics().asScala.foldLeft(0)(_ + _._2.size())
+        com.yammer.metrics.Metrics.defaultRegistry().allMetrics().size()
       }
     }
   )
