@@ -63,7 +63,11 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
-  override val setClusterAcl = Some(() => AclCommand.main(clusterAclArgs))
+  override val setClusterAcl = Some(() =>
+    { AclCommand.main(clusterAclArgs)
+      TestUtils.waitAndVerifyAcls(ClusterActionAcl, servers.head.apis.authorizer.get, clusterResource)
+    } : Unit
+  )
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
@@ -77,7 +81,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
 
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
-  override val clusterResource = Resource.ClusterResource
+  val clusterResource = Resource.ClusterResource
 
   // Arguments to AclCommand to set ACLs. There are three definitions here:
   // 1- Provides read and write access to topic
@@ -108,7 +112,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                           s"--group=$group",
                                           s"--operation=Read",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  override def ClusterActionAcl:Set[Acl] =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def ClusterActionAcl:Set[Acl] =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
   def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
