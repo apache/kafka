@@ -34,7 +34,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.num_producers = 1
         self.num_consumers = 1
 
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
+        self.zk = ZookeeperService(self.test_context, num_nodes=3)
 
 
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
