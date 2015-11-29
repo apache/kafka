@@ -43,7 +43,7 @@ public interface Converter {
      * @param topic the topic associated with the data
      * @param schema the schema for the value
      * @param value the value to convert
-     * @return
+     * @return the serialized value
      */
     byte[] fromConnectData(String topic, Schema schema, Object value);
 
