@@ -17,6 +17,7 @@
 package org.apache.kafka.common.metrics;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -39,7 +40,7 @@ public class MetricConfig {
         this.eventWindow = Long.MAX_VALUE;
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
         this.unit = TimeUnit.SECONDS;
-        this.tags = new HashMap<String, String>();
+        this.tags = new LinkedHashMap<>();
     }
 
     public Quota quota() {

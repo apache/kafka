@@ -15,6 +15,8 @@ package org.apache.kafka.common.metrics;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -140,20 +142,38 @@ public class Metrics implements Closeable {
             this.metricsScheduler = null;
         }
 
-        addMetric(new MetricName("count", "kafka-metrics-count", "total number of registered metrics", defaultConfig.tags()),
-          new MeasurableStat() {
+        addMetric(metricName("count", "kafka-metrics-count", "total number of registered metrics"),
+          new Measurable() {
             @Override
             public double measure(MetricConfig config, long now) {
               return metrics.size();
             }
-
-            @Override
-            public void record(MetricConfig config, double value, long timeMs) {
-
-            }
           });
     }
 
+    /**
+     * Create a metricName with the given name, group, description and tags, plus default tags specified in the metric
+     * configuration. Tag in tags takes precedence if the same tag key is specified in the metric configuration.
+     *
+     * @param name        The name of the metric
+     * @param group       logical group name of the metrics to which this metric belongs
+     * @param description A human-readable description to include in the metric
+     * @param tags        additional key/value attributes of the metric
+     */
+    public MetricName metricName(String name, String group, String description, Map<String, String> tags) {
+        Map<String, String> combinedTag = new LinkedHashMap<>(config.tags());
+        combinedTag.putAll(tags);
+        return new MetricName(name, group, description, combinedTag);
+    }
+
+    /**
+     * Create a metricName with the given name, group, description, and default tags
+     * specified in the metric configuration.
+     *
+     * @param name        The name of the metric
+     * @param group       logical group name of the metrics to which this metric belongs
+     * @param description A human-readable description to include in the metric
+     */
     public MetricName metricName(String name, String group, String description) {
         return new MetricName(name, group, description, config.tags());
     }

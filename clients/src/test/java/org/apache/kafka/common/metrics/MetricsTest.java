@@ -68,7 +68,7 @@ public class MetricsTest {
 
         try {
             new MetricName("name", "group", "description", "key1");
-            fail("Creating MetricName with an old number of keyValue should fail");
+            fail("Creating MetricName with an odd number of keyValue should fail");
         } catch (IllegalArgumentException e) {
             // this is expected
         }
