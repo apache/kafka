@@ -131,7 +131,7 @@ public class Metrics implements Closeable {
             this.metricsScheduler = null;
         }
 
-        this.sensor("metrics-count").add(new MetricName("count", "kafka-metrics-count", "total number of registered metrics", defaultConfig.tags()),
+        addMetric(new MetricName("count", "kafka-metrics-count", "total number of registered metrics", defaultConfig.tags()),
             new MeasurableStat() {
                 @Override
                 public double measure(MetricConfig config, long now) {
