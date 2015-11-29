@@ -316,7 +316,7 @@ public class Fetcher<K, V> {
             if (future.exception() instanceof InvalidMetadataException)
                 client.awaitMetadataUpdate();
             else
-                Utils.sleep(retryBackoffMs);
+                time.sleep(retryBackoffMs);
         }
     }
 
