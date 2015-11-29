@@ -17,6 +17,7 @@ package org.apache.kafka.common.errors;
  * Server disconnected before a request could be completed.
  */
 public class DisconnectException extends RetriableException {
+    public static final DisconnectException INSTANCE = new DisconnectException();
 
     private static final long serialVersionUID = 1L;
 
