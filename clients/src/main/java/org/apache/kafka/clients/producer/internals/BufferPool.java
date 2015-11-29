@@ -62,9 +62,8 @@ public final class BufferPool {
      * @param metrics instance of Metrics
      * @param time time instance
      * @param metricGrpName logical group name for metrics
-     * @param metricTags additional key/val attributes for metrics
      */
-    public BufferPool(long memory, int poolableSize, Metrics metrics, Time time , String metricGrpName , Map<String, String> metricTags) {
+    public BufferPool(long memory, int poolableSize, Metrics metrics, Time time , String metricGrpName) {
         this.poolableSize = poolableSize;
         this.lock = new ReentrantLock();
         this.free = new ArrayDeque<ByteBuffer>();
@@ -74,10 +73,9 @@ public final class BufferPool {
         this.metrics = metrics;
         this.time = time;
         this.waitTime = this.metrics.sensor("bufferpool-wait-time");
-        MetricName metricName = new MetricName("bufferpool-wait-ratio",
-                                               metricGrpName,
-                                               "The fraction of time an appender waits for space allocation.",
-                                               metricTags);
+        MetricName metricName = metrics.metricName("bufferpool-wait-ratio",
+                                                   metricGrpName,
+                                                   "The fraction of time an appender waits for space allocation.");
         this.waitTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
     }
 

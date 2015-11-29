@@ -89,7 +89,6 @@ public class ConsumerCoordinatorTest {
     private SubscriptionState subscriptions;
     private Metadata metadata;
     private Metrics metrics;
-    private Map<String, String> metricTags = new LinkedHashMap<>();
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
     private MockCommitCallback defaultOffsetCommitCallback;
@@ -109,7 +108,6 @@ public class ConsumerCoordinatorTest {
         this.partitionAssignor.clear();
 
         client.setNode(node);
-
         this.coordinator = buildCoordinator(metrics, assignors);
     }
 

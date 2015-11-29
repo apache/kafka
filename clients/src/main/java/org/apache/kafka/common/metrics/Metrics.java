@@ -81,6 +81,15 @@ public class Metrics implements Closeable {
     }
 
     /**
+     * Create a metrics repository with no metric reporters and the given default configuration.
+     * Expiration of Sensors is disabled.
+     */
+    public Metrics(MetricConfig defaultConfig, Time time) {
+      this(defaultConfig, new ArrayList<MetricsReporter>(0), time);
+    }
+
+
+  /**
      * Create a metrics repository with no reporters and the given default config. This config will be used for any
      * metric that doesn't override its own config. Expiration of Sensors is disabled.
      * @param defaultConfig The default config to use for all metrics that don't override their config
@@ -132,17 +141,25 @@ public class Metrics implements Closeable {
         }
 
         addMetric(new MetricName("count", "kafka-metrics-count", "total number of registered metrics", defaultConfig.tags()),
-            new MeasurableStat() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    return metrics.size();
-                }
+          new MeasurableStat() {
+            @Override
+            public double measure(MetricConfig config, long now) {
+              return metrics.size();
+            }
 
-                @Override
-                public void record(MetricConfig config, double value, long timeMs) {
+            @Override
+            public void record(MetricConfig config, double value, long timeMs) {
 
-                }
-            });
+            }
+          });
+    }
+
+    public MetricName metricName(String name, String group, String description) {
+        return new MetricName(name, group, description, config.tags());
+    }
+
+    public MetricConfig config() {
+      return config;
     }
 
     /**

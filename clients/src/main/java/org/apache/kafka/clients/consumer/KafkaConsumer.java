@@ -550,7 +550,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             String metricGrpPrefix = "consumer";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, metricsTags, channelBuilder),
+                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice
@@ -573,7 +573,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.subscriptions,
                     metrics,
                     metricGrpPrefix,
-                    metricsTags,
                     this.time,
                     retryBackoffMs,
                     new ConsumerCoordinator.DefaultOffsetCommitCallback(),
@@ -606,7 +605,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.subscriptions,
                     metrics,
                     metricGrpPrefix,
-                    metricsTags,
                     this.time,
                     this.retryBackoffMs);
 
