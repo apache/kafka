@@ -15,7 +15,6 @@ package org.apache.kafka.common.metrics;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -143,12 +142,12 @@ public class Metrics implements Closeable {
         }
 
         addMetric(metricName("count", "kafka-metrics-count", "total number of registered metrics"),
-          new Measurable() {
-            @Override
-            public double measure(MetricConfig config, long now) {
-              return metrics.size();
-            }
-          });
+            new Measurable() {
+                @Override
+                public double measure(MetricConfig config, long now) {
+                    return metrics.size();
+                }
+            });
     }
 
     /**
@@ -179,7 +178,7 @@ public class Metrics implements Closeable {
     }
 
     public MetricConfig config() {
-      return config;
+        return config;
     }
 
     /**
