@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
@@ -305,15 +304,12 @@ public class StreamThread extends Thread {
                     }
 
                     maybePunctuate();
-                    maybeCommit();
                 } else {
                     // even when no task is assigned, we must poll to get a task.
                     requiresPoll = true;
                 }
-
-                if (!standbyTasks.isEmpty()) {
-                    updateStandbyTasks();
-                }
+                maybeCommit();
+                maybeUpdateStandbyTasks();
 
                 maybeClean();
             }
@@ -322,48 +318,40 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void updateStandbyTasks() {
-        if (processStandbyRecords) {
-            updateStandbyPartitionOffsetLimits();
-            if (!standbyRecords.isEmpty()) {
-                for (StandbyTask task : standbyTasks.values()) {
-                    for (TopicPartition partition : task.changeLogPartitions()) {
-                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.remove(partition);
-                        if (remaining != null) {
-                            remaining = task.update(partition, remaining);
+    private void maybeUpdateStandbyTasks() {
+        if (!standbyTasks.isEmpty()) {
+            if (processStandbyRecords) {
+                if (!standbyRecords.isEmpty()) {
+                    for (StandbyTask task : standbyTasks.values()) {
+                        for (TopicPartition partition : task.changeLogPartitions()) {
+                            List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.remove(partition);
                             if (remaining != null) {
-                                standbyRecords.put(partition, remaining);
-                            } else {
-                                restoreConsumer.resume(partition);
+                                remaining = task.update(partition, remaining);
+                                if (remaining != null) {
+                                    standbyRecords.put(partition, remaining);
+                                } else {
+                                    restoreConsumer.resume(partition);
+                                }
                             }
                         }
                     }
                 }
+                processStandbyRecords = false;
             }
-            processStandbyRecords = false;
-        }
 
-        ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
+            ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
 
-        if (!records.isEmpty()) {
-            for (StandbyTask task : standbyTasks.values()) {
-                for (TopicPartition partition : task.changeLogPartitions()) {
-                    List<ConsumerRecord<byte[], byte[]>> remaining = null;
-
-                    remaining = task.update(partition, records.records(partition));
-                    if (remaining != null) {
-                        restoreConsumer.pause(partition);
-                        standbyRecords.put(partition, remaining);
+            if (!records.isEmpty()) {
+                for (StandbyTask task : standbyTasks.values()) {
+                    for (TopicPartition partition : task.changeLogPartitions()) {
+                        List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
+                        if (remaining != null) {
+                            restoreConsumer.pause(partition);
+                            standbyRecords.put(partition, remaining);
+                        }
                     }
                 }
             }
-        }
-    }
-
-    private void updateStandbyPartitionOffsetLimits() {
-        for (TopicPartition partition : standbyPartitions) {
-            OffsetAndMetadata metadata = consumer.committed(partition);
-            metadata.offset();
         }
     }
 
@@ -404,6 +392,8 @@ public class StreamThread extends Thread {
 
             commitAll();
             lastCommit = now;
+
+            processStandbyRecords = true;
         } else {
             for (StreamTask task : activeTasks.values()) {
                 try {
@@ -415,8 +405,6 @@ public class StreamThread extends Thread {
                 }
             }
         }
-
-        processStandbyRecords = true;
     }
 
     /**
