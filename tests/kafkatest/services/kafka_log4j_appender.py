@@ -45,7 +45,7 @@ class KafkaLog4jAppender(BackgroundThreadService):
     def start_cmd(self, node):
         cmd = "/opt/%s/bin/" % kafka_dir(node)
         cmd += "kafka-run-class.sh org.apache.kafka.tools.VerifiableLog4jAppender"
-        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers())
+        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
 
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
