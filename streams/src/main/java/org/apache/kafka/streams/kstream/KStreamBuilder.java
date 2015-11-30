@@ -69,7 +69,7 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * Creates a KStream instance for the specified topic.
+     * Creates a KTable instance for the specified topic.
      * The default deserializers specified in the config are used.
      *
      * @param topic          the topic name
@@ -80,7 +80,7 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * Creates a KStream instance for the specified topic.
+     * Creates a KTable instance for the specified topic.
      *
      * @param keySerializer   key serializer used to send key-value pairs,
      *                        if not specified the default key serializer defined in the configuration will be used
