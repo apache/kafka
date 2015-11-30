@@ -32,10 +32,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 
-/**
- * Created by bbejeck on 11/27/15.
- * Test for StreamingConfig
- */
+
 public class StreamingConfigTest {
 
     private Properties props = new Properties();
