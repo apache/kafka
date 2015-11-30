@@ -23,7 +23,6 @@ import time
 
 
 class ZookeeperService(Service):
-    SECURITY_DIR = "/mnt/security"
     KAFKA_OPTS = ""
 
     logs = {
@@ -90,20 +89,10 @@ class ZookeeperService(Service):
     def connect_setting(self):
         return ','.join([node.account.hostname + ':2181' for node in self.nodes])
 
-    def set_kafka_opts(self, options):
+    def set_cmd_opts(self, options):
         ZookeeperService.KAFKA_OPTS = options
 
     def zookeeper_migration(self, node, zk_acl):
         la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
         time.sleep(5)
-
-    def gen_jaas_login_digest(self, nodes):
-        jaas_file = self.render('zk_jaas_digest.login')
-        self.logger.info("zk_jaas_digest.login:")
-        self.logger.info(jaas_file)
-        for node in nodes:
-            node.account.ssh("mkdir -p %s" % self.SECURITY_DIR, allow_fail=False)
-            node.account.create_file("%s/zk_jaas_digest.login" % self.SECURITY_DIR, jaas_file)
-
-        return "%s/zk_jaas_digest.login" % self.SECURITY_DIR 

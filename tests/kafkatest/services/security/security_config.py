@@ -173,6 +173,14 @@ class SecurityConfig(TemplateRenderer):
             return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
         return ""
 
+    def gen_jaas_login_digest(self, nodes):
+        jaas_file = self.render('zk_jaas_digest.login')
+        for node in nodes:
+            node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
+            node.account.create_file("%s/zk_jaas_digest.login" % SecurityConfig.CONFIG_DIR, jaas_file)
+
+        return "%s/zk_jaas_digest.login" % SecurityConfig.CONFIG_DIR
+
     def set_zk_jaas_login(self, login):
         SecurityConfig.ZK_JAAS_LOGIN = login
 

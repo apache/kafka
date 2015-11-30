@@ -56,12 +56,12 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
     def zk_migration(self):
         # generate jaas login file
-        jaas_login = self.zk.gen_jaas_login_digest(self.zk.nodes)
-        self.logger.warn("Login file: %s" % jaas_login)
-        self.zk.gen_jaas_login_digest(self.kafka.nodes)
+        jaas_login = self.kafka.security_config.gen_jaas_login_digest(self.zk.nodes)
+        self.logger.info("Login file name: %s" % jaas_login)
+        self.kafka.security_config.gen_jaas_login_digest(self.kafka.nodes)
 
         # change zk config (auth provider + jaas login)
-        self.zk.set_kafka_opts("-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider -Djava.security.auth.login.config=%s" % jaas_login)
+        self.zk.set_cmd_opts("-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider -Djava.security.auth.login.config=%s" % jaas_login)
         
         # restart zk
         for node in self.zk.nodes:
