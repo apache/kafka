@@ -56,7 +56,7 @@ class ConsumerEventHandler(object):
                 tp = TopicPartition(topic, partition)
                 offset = offset_commit["offset"]
                 assert tp in self.assignment, "Committed offsets for a partition not assigned"
-                assert self.position[tp] <= offset, "The committed offset was greater than the current position"
+                assert self.position[tp] >= offset, "The committed offset was greater than the current position"
                 self.committed[tp] = offset
 
     def handle_records_consumed(self, event):
