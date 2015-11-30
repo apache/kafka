@@ -290,7 +290,7 @@ import java.util.regex.Pattern;
  * and {@link #subscribe(Pattern, ConsumerRebalanceListener)}.
  * For example, when partitions are taken from a consumer the consumer will want to commit its offset for those partitions by
  * implementing {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}. When partitions are assigned to a
- * consumer, the consumer will want to look up the offset for those new partitions an correctly initialize the consumer
+ * consumer, the consumer will want to look up the offset for those new partitions and correctly initialize the consumer
  * to that position by implementing {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}.
  * <p>
  * Another common use for {@link ConsumerRebalanceListener} is to flush any caches the application maintains for
