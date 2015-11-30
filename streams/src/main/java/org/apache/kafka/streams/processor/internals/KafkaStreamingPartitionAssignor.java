@@ -48,7 +48,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     private StreamThread streamThread;
     private int numStandbyReplicas;
     private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
-    private Set<TaskId> standbyTasks;
+    private Map<TaskId, Set<TopicPartition>> standbyTasks;
 
     @Override
     public void configure(Map<String, ?> configs) {
@@ -154,28 +154,32 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
             final int numConsumers = consumers.size();
             List<TaskId> active = new ArrayList<>();
-            Set<TaskId> standby = new HashSet<>();
+            Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
 
             int i = 0;
             for (String consumer : consumers) {
-                List<TopicPartition> partitions = new ArrayList<>();
+                List<TopicPartition> activePartitions = new ArrayList<>();
 
                 final int numTaskIds = taskIds.size();
                 for (int j = i; j < numTaskIds; j += numConsumers) {
                     TaskId taskId = taskIds.get(j);
                     if (j < numActiveTasks) {
                         for (TopicPartition partition : partitionGroups.get(taskId)) {
-                            partitions.add(partition);
+                            activePartitions.add(partition);
                             active.add(taskId);
                         }
                     } else {
-                        // no partition to a standby task
-                        standby.add(taskId);
+                        Set<TopicPartition> standbyPartitions = standby.get(taskId);
+                        if (standbyPartitions == null) {
+                            standbyPartitions = new HashSet<>();
+                            standby.put(taskId, standbyPartitions);
+                        }
+                        standbyPartitions.addAll(partitionGroups.get(taskId));
                     }
                 }
 
                 AssignmentInfo data = new AssignmentInfo(active, standby);
-                assignment.put(consumer, new Assignment(partitions, data.encode()));
+                assignment.put(consumer, new Assignment(activePartitions, data.encode()));
                 i++;
 
                 active.clear();
@@ -220,7 +224,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         return partitionToTaskIds.get(partition);
     }
 
-    public Set<TaskId> standbyTasks() {
+    public Map<TaskId, Set<TopicPartition>> standbyTasks() {
         return standbyTasks;
     }
 }

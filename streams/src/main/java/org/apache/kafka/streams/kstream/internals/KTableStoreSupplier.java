@@ -15,29 +15,35 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.MeteredKeyValueStore;
+import org.apache.kafka.streams.state.RocksDBStore;
+import org.apache.kafka.streams.state.Serdes;
 
 /**
- * A {@link KeyValueStore} that stores all entries in a local RocksDB database.
+ * A KTable storage. It stores all entries in a local RocksDB database.
  *
  * @param <K> the type of keys
  * @param <V> the type of values
- *
- * @see Stores#create(String)
  */
-public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
+public class KTableStoreSupplier<K, V> implements StateStoreSupplier {
 
     private final String name;
-    private final Serdes serdes;
+    private final Serdes<K, V> serdes;
     private final Time time;
 
-    protected RocksDBKeyValueStoreSupplier(String name, Serdes<K, V> serdes, Time time) {
+    protected KTableStoreSupplier(String name,
+                                  Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
+                                  Serializer<V> valSerializer, Deserializer<V> valDeserializer,
+                                  Time time) {
         this.name = name;
-        this.serdes = serdes;
+        this.serdes = new Serdes<>(name, keySerializer, keyDeserializer, valSerializer, valDeserializer);
         this.time = time;
     }
 
@@ -46,7 +52,7 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new RocksDBStore<K, V>(name, serdes), serdes, "rocksdb-state", time);
+        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, serdes), serdes, "rocksdb-state", time).disableLogging();
     }
 
 }

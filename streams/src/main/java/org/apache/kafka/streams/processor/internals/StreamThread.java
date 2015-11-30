@@ -19,8 +19,10 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
@@ -73,6 +75,7 @@ public class StreamThread extends Thread {
 
     protected final StreamingConfig config;
     protected final TopologyBuilder builder;
+    protected final Set<String> sourceTopics;
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
@@ -93,6 +96,10 @@ public class StreamThread extends Thread {
     private long lastClean;
     private long lastCommit;
     private long recordsProcessed;
+
+    private final Set<TopicPartition> standbyPartitions;
+    private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
+    private boolean processStandbyRecords = false;
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
@@ -133,6 +140,7 @@ public class StreamThread extends Thread {
 
         this.config = config;
         this.builder = builder;
+        this.sourceTopics = builder.sourceTopics();
         this.clientId = clientId;
         this.clientUUID = clientUUID;
         this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
@@ -147,6 +155,10 @@ public class StreamThread extends Thread {
         this.activeTasks = new HashMap<>();
         this.standbyTasks = new HashMap<>();
         this.prevTasks = new HashSet<>();
+
+        // standby ktables
+        this.standbyPartitions = new HashSet<>();
+        this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
         this.stateDir = new File(this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
@@ -256,7 +268,7 @@ public class StreamThread extends Thread {
 
             ensureCopartitioning(builder.copartitionGroups());
 
-            consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceListener);
+            consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
 
             while (stillRunning()) {
                 // try to fetch some records if necessary
@@ -311,14 +323,47 @@ public class StreamThread extends Thread {
     }
 
     private void updateStandbyTasks() {
+        if (processStandbyRecords) {
+            updateStandbyPartitionOffsetLimits();
+            if (!standbyRecords.isEmpty()) {
+                for (StandbyTask task : standbyTasks.values()) {
+                    for (TopicPartition partition : task.changeLogPartitions()) {
+                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.remove(partition);
+                        if (remaining != null) {
+                            remaining = task.update(partition, remaining);
+                            if (remaining != null) {
+                                standbyRecords.put(partition, remaining);
+                            } else {
+                                restoreConsumer.resume(partition);
+                            }
+                        }
+                    }
+                }
+            }
+            processStandbyRecords = false;
+        }
+
         ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
 
         if (!records.isEmpty()) {
             for (StandbyTask task : standbyTasks.values()) {
                 for (TopicPartition partition : task.changeLogPartitions()) {
-                    task.update(partition, records.records(partition));
+                    List<ConsumerRecord<byte[], byte[]>> remaining = null;
+
+                    remaining = task.update(partition, records.records(partition));
+                    if (remaining != null) {
+                        restoreConsumer.pause(partition);
+                        standbyRecords.put(partition, remaining);
+                    }
                 }
             }
+        }
+    }
+
+    private void updateStandbyPartitionOffsetLimits() {
+        for (TopicPartition partition : standbyPartitions) {
+            OffsetAndMetadata metadata = consumer.committed(partition);
+            metadata.offset();
         }
     }
 
@@ -370,6 +415,8 @@ public class StreamThread extends Thread {
                 }
             }
         }
+
+        processStandbyRecords = true;
     }
 
     /**
@@ -478,12 +525,12 @@ public class StreamThread extends Thread {
         return tasks;
     }
 
-    protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
+    protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, topology, config, sensors);
+        return new StreamTask(id, partitions, topology, consumer, producer, restoreConsumer, config, sensors);
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
@@ -501,7 +548,7 @@ public class StreamThread extends Thread {
             }
         }
 
-        // create the tasks
+        // create the active tasks
         for (TaskId taskId : partitionsForTask.keySet()) {
             try {
                 activeTasks.put(taskId, createStreamTask(taskId, partitionsForTask.get(taskId)));
@@ -510,8 +557,6 @@ public class StreamThread extends Thread {
                 throw e;
             }
         }
-
-        lastClean = time.milliseconds();
     }
 
     private void removeStreamTasks() {
@@ -537,25 +582,32 @@ public class StreamThread extends Thread {
         sensors.taskDestructionSensor.record();
     }
 
-    protected StandbyTask createStandbyTask(TaskId id) {
+    protected StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStoreSuppliers().isEmpty()) {
-            return new StandbyTask(id, restoreConsumer, topology, config, sensors);
+            return new StandbyTask(id, partitions, topology, consumer, restoreConsumer, config, sensors);
         } else {
             return null;
         }
     }
 
     private void addStandbyTasks() {
+        standbyPartitions.clear();
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
-        for (TaskId taskId : partitionGrouper.standbyTasks()) {
-            StandbyTask task = createStandbyTask(taskId);
+        // create the standby tasks
+        for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionGrouper.standbyTasks().entrySet()) {
+            TaskId taskId = entry.getKey();
+            Set<TopicPartition> partitions = entry.getValue();
+            StandbyTask task = createStandbyTask(taskId, partitions);
             if (task != null) {
                 standbyTasks.put(taskId, task);
+                standbyPartitions.addAll(partitions);
+                // collect checked pointed offsets to position the restore consumer
+                // this include all partitions from which we restore states
                 checkpointedOffsets.putAll(task.checkpointedOffsets());
             }
         }

@@ -30,9 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +43,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private final int maxBufferedSize;
 
-    private final Consumer consumer;
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
@@ -73,15 +70,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param metrics               the {@link StreamingMetrics} created by the thread
      */
     public StreamTask(TaskId id,
+                      Collection<TopicPartition> partitions,
+                      ProcessorTopology topology,
                       Consumer<byte[], byte[]> consumer,
                       Producer<byte[], byte[]> producer,
                       Consumer<byte[], byte[]> restoreConsumer,
-                      Collection<TopicPartition> partitions,
-                      ProcessorTopology topology,
                       StreamingConfig config,
                       StreamingMetrics metrics) {
-        super(id, restoreConsumer, topology, config, Collections.unmodifiableSet(new HashSet<>(partitions)));
-        this.consumer = consumer;
+        super(id, partitions, topology, consumer, restoreConsumer, config, false);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
@@ -98,7 +94,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
-        // initialize the consumed and produced offset cache
+        // initialize the consumed offset cache
         this.consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
@@ -245,7 +241,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
         if (commitOffsetNeeded) {
             Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-                consumedOffsetsAndMetadata.put(entry.getKey(), new OffsetAndMetadata(entry.getValue() + 1L));
+                TopicPartition partition = entry.getKey();
+                long offset = entry.getValue() + 1;
+                consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
+                stateMgr.putOffsetLimit(partition, offset);
             }
             consumer.commitSync(consumedOffsetsAndMetadata);
             commitOffsetNeeded = false;
@@ -280,6 +279,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }
 
+    @Override
     public void close() {
         this.partitionGroup.close();
         this.consumedOffsets.clear();

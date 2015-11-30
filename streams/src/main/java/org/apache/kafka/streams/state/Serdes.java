@@ -28,7 +28,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-final class Serdes<K, V> {
+public final class Serdes<K, V> {
 
     public static <K, V> Serdes<K, V> withBuiltinTypes(String topic, Class<K> keyClass, Class<V> valueClass) {
         Serializer<K> keySerializer = serializer(keyClass);
@@ -73,6 +73,7 @@ final class Serdes<K, V> {
      * @param valueSerializer the serializer for values; may be null
      * @param valueDeserializer the deserializer for values; may be null
      */
+    @SuppressWarnings("unchecked")
     public Serdes(String topic,
             Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
             Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
