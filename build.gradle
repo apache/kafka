@@ -312,19 +312,19 @@ project(':core') {
   tasks.create(name: "genProducerConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.producer.ProducerConfig'
-    standardOutput = new File('docs/producer_config.html').newOutputStream()
+    standardOutput = new File("$rootDir/docs/producer_config.html").newOutputStream()
   }
 
   tasks.create(name: "genConsumerConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.consumer.ConsumerConfig'
-    standardOutput = new File('docs/consumer_config.html').newOutputStream()
+    standardOutput = new File("$rootDir/docs/consumer_config.html").newOutputStream()
   }
 
   tasks.create(name: "genKafkaConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'kafka.server.KafkaConfig'
-    standardOutput = new File('docs/kafka_config.html').newOutputStream()
+    standardOutput = new File("$rootDir/docs/kafka_config.html").newOutputStream()
   }
 
   task siteDocsTar(dependsOn: ['genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs', ':connect:runtime:genConnectConfigDocs'], type: Tar) {
@@ -488,6 +488,7 @@ project(':clients') {
 
   checkstyle {
      configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
@@ -547,6 +548,7 @@ project(':tools') {
 
     checkstyle {
         configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+        configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
     }
     test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
@@ -604,6 +606,7 @@ project(':streams') {
 
     checkstyle {
         configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+        configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
     }
     test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
@@ -638,6 +641,7 @@ project(':log4j-appender') {
 
   checkstyle {
      configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
@@ -695,6 +699,7 @@ project(':connect:api') {
 
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
@@ -756,6 +761,7 @@ project(':connect:json') {
 
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
@@ -825,13 +831,14 @@ project(':connect:runtime') {
 
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
   tasks.create(name: "genConnectConfigDocs", dependsOn:jar, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
-    standardOutput = new File('docs/connect_config.html').newOutputStream()
+    standardOutput = new File("$rootDir/docs/connect_config.html").newOutputStream()
   }
 }
 
@@ -891,6 +898,7 @@ project(':connect:file') {
 
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }
