@@ -96,7 +96,6 @@ public class StreamThread extends Thread {
     private long lastCommit;
     private long recordsProcessed;
 
-    private final Set<TopicPartition> standbyPartitions;
     private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
@@ -156,7 +155,6 @@ public class StreamThread extends Thread {
         this.prevTasks = new HashSet<>();
 
         // standby ktables
-        this.standbyPartitions = new HashSet<>();
         this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
@@ -583,7 +581,6 @@ public class StreamThread extends Thread {
     }
 
     private void addStandbyTasks() {
-        standbyPartitions.clear();
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
         // create the standby tasks
@@ -593,7 +590,6 @@ public class StreamThread extends Thread {
             StandbyTask task = createStandbyTask(taskId, partitions);
             if (task != null) {
                 standbyTasks.put(taskId, task);
-                standbyPartitions.addAll(partitions);
                 // collect checked pointed offsets to position the restore consumer
                 // this include all partitions from which we restore states
                 checkpointedOffsets.putAll(task.checkpointedOffsets());

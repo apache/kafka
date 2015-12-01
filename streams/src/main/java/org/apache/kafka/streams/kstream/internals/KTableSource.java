@@ -46,8 +46,8 @@ public class KTableSource<K, V> extends KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public KTableValueGetterSupplier<K, V> view(KTableValueGetterSupplier<K, V> valueGetterSupplier) {
-        throw new IllegalStateException();
+    public KTableValueGetterSupplier<K, V> view(KTableValueGetterSupplier<K, V> parentValueGetterSupplier) {
+        throw new IllegalStateException("a view cannot be define on the ktable source");
     }
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {

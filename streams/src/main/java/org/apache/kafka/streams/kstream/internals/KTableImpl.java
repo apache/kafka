@@ -28,6 +28,12 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 import java.util.Collections;
 
+/**
+ * The implementation class of KTable
+ * @param <K> the key type
+ * @param <S> the source's (parent's) value type
+ * @param <V> the value type
+ */
 public class KTableImpl<K, S, V> implements KTable<K, V> {
 
     private static final String FILTER_NAME = "KTABLE-FILTER-";

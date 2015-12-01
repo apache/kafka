@@ -38,8 +38,7 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
 
         @SuppressWarnings("unchecked")
         public void init(ProcessorContext context) {
-            if (store == null)
-                store = (KeyValueStore<K, V>) context.getStateStore(topic);
+            store = (KeyValueStore<K, V>) context.getStateStore(topic);
         }
 
         public V get(K key) {

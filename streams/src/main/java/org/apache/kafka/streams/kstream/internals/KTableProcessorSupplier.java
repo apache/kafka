@@ -21,6 +21,6 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 public abstract class KTableProcessorSupplier<K, V, T> implements ProcessorSupplier<K, V> {
 
-    public abstract KTableValueGetterSupplier<K, T> view(KTableValueGetterSupplier<K, V> valueGetterFactory);
+    public abstract KTableValueGetterSupplier<K, T> view(KTableValueGetterSupplier<K, V> parentValueGetterFactory);
 
 }
