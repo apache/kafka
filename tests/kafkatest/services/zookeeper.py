@@ -17,13 +17,13 @@
 from ducktape.services.service import Service
 
 from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.services.security.security_config import SecurityConfig
 
 import subprocess
 import time
 
 
 class ZookeeperService(Service):
-    KAFKA_OPTS = ""
 
     logs = {
         "zk_log": {
@@ -34,11 +34,18 @@ class ZookeeperService(Service):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes):
+    def __init__(self, context, num_nodes, zk_sasl = False):
         """
         :type context
         """
+        self.kafka_opts = ""
+        self.zk_sasl = zk_sasl
         super(ZookeeperService, self).__init__(context, num_nodes)
+
+    @property
+    def security_config(self):
+        return SecurityConfig(zk_sasl=self.zk_sasl, sasl_mechanism='PLAIN')
+
 
     def start_node(self, node):
         idx = self.idx(node)
@@ -47,15 +54,13 @@ class ZookeeperService(Service):
         node.account.ssh("mkdir -p /mnt/zookeeper")
         node.account.ssh("echo %d > /mnt/zookeeper/myid" % idx)
 
+        self.security_config.setup_node(node)
         config_file = self.render('zookeeper.properties')
         self.logger.info("zookeeper.properties:")
         self.logger.info(config_file)
         node.account.create_file("/mnt/zookeeper.properties", config_file)
 
-        if ZookeeperService.KAFKA_OPTS:
-            start_cmd = "export KAFKA_OPTS=\"%s\";" % ZookeeperService.KAFKA_OPTS
-        else:
-            start_cmd = ""  
+        start_cmd = "export KAFKA_OPTS=\"%s\";" % self.kafka_opts 
         start_cmd += "/opt/%s/bin/zookeeper-server-start.sh " % kafka_dir(node)
         start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
         node.account.ssh(start_cmd)
@@ -88,9 +93,6 @@ class ZookeeperService(Service):
 
     def connect_setting(self):
         return ','.join([node.account.hostname + ':2181' for node in self.nodes])
-
-    def set_cmd_opts(self, options):
-        ZookeeperService.KAFKA_OPTS = options
 
     def zookeeper_migration(self, node, zk_acl):
         la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, self.connect_setting())

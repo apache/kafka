@@ -17,7 +17,9 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
+from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
+
 import time
 
 
@@ -36,7 +38,6 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
         self.zk = ZookeeperService(self.test_context, num_nodes=3)
 
-
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
             "partitions": 3,
             "replication-factor": 3,
@@ -54,24 +55,26 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
         self.consumer.group_id = "group"
 
-    def zk_migration(self):
+    def run_zk_migration(self):
         # generate jaas login file
-        jaas_login = self.kafka.security_config.gen_jaas_login_digest(self.zk.nodes)
-        self.logger.info("Login file name: %s" % jaas_login)
-        self.kafka.security_config.gen_jaas_login_digest(self.kafka.nodes)
+        #jaas_login = self.kafka.security_config.gen_jaas_login_digest(self.zk.nodes)
+        #self.logger.info("Login file name: %s" % jaas_login)
+        #self.kafka.security_config.gen_jaas_login_digest(self.kafka.nodes)
 
         # change zk config (auth provider + jaas login)
-        self.zk.set_cmd_opts("-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider -Djava.security.auth.login.config=%s" % jaas_login)
+        self.zk.kafka_opts = "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider -Djava.security.auth.login.config=%s" % SecurityConfig.JAAS_CONF_PATH
         
         # restart zk
         for node in self.zk.nodes:
             self.zk.stop_node(node)
+            self.zk.zk_sasl = True
             self.zk.start_node(node)
         
         # restart broker with jaas login
         for node in self.kafka.nodes:
-            self.kafka.security_config.set_zk_jaas_login(jaas_login)
+            #self.kafka.security_config.set_zk_jaas_login(jaas_login)
             self.kafka.stop_node(node)
+            self.kafka.sasl_mechanism = 'PLAIN'
             self.kafka.start_node(node)
 
         # run migration tool
@@ -79,9 +82,10 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
             self.zk.zookeeper_migration(node, "secure")
 
         # restart broker with zookeeper.set.acl=true
-        self.kafka.zk_sasl_enabled = "true"
+        self.kafka.zk_set_acl = "true"
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
+            self.kafka.sasl_mechanism = 'PLAIN'
             self.kafka.start_node(node)
 
     def test_zk_security_upgrade(self):
@@ -93,4 +97,4 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.create_producer_and_consumer()
 
         #Roll in the security protocol. Disable Plaintext. Ensure we can produce and Consume throughout
-        self.run_produce_consume_validate(self.zk_migration)
+        self.run_produce_consume_validate(self.run_zk_migration)
