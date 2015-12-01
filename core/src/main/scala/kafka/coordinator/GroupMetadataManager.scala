@@ -489,9 +489,11 @@ class GroupMetadataManager(val brokerId: Int,
 
         // clear the groups for this partition in the cache
         for (group <- groupsCache.values) {
-          onGroupUnloaded(group)
-          groupsCache.remove(group.groupId, group)
-          numGroupsRemoved += 1
+          if (partitionFor(group.groupId) == offsetsPartition) {
+            onGroupUnloaded(group)
+            groupsCache.remove(group.groupId, group)
+            numGroupsRemoved += 1
+          }
         }
       }
 
