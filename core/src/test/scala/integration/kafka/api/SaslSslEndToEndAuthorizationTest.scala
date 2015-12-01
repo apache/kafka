@@ -6,7 +6,7 @@
   * (the "License"); you may not use this file except in compliance with
   * the License.  You may obtain a copy of the License at
   *
-  *    http://www.apache.org/licenses/LICENSE-2.0
+  * http://www.apache.org/licenses/LICENSE-2.0
   *
   * Unless required by applicable law or agreed to in writing, software
   * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,16 +14,12 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
+package kafka.api
 
-package kafka.server
-
-import java.io.File
-
-import kafka.api.SaslTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 
-class SaslSslReplicaFetchTest extends BaseReplicaFetchTest with SaslTestHarness {
-  override protected val zkSaslEnabled = false
-  protected def securityProtocol = SecurityProtocol.SASL_SSL
-  protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+class SaslSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
+  override protected def securityProtocol = SecurityProtocol.SASL_SSL
+  override val clientPrincipal = "client"
+  override val kafkaPrincipal = "kafka"
 }

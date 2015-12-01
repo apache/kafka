@@ -667,7 +667,7 @@ project(':connect:api') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/connect/*"
+    options.links "http://docs.oracle.com/javase/7/docs/api/"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -728,7 +728,7 @@ project(':connect:json') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/connect/*"
+    enabled = false
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -797,7 +797,7 @@ project(':connect:runtime') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/connect/*"
+    enabled = false
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -863,7 +863,7 @@ project(':connect:file') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/connect/*"
+    enabled = false
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
