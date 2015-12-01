@@ -128,6 +128,8 @@ class SecurityConfig(TemplateRenderer):
             jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk)
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             if self.has_sasl_kerberos:
+                if miniKdc is None:
+                    raise Exception("miniKdc must be not None when has_sasl_kerberos is true")
                 scp(miniKdc.nodes[0], MiniKdc.KEYTAB_FILE, node, SecurityConfig.KEYTAB_PATH)
                 #KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
                 scp(miniKdc.nodes[0], MiniKdc.KRB5CONF_FILE, node, SecurityConfig.KRB5CONF_PATH, '0.0.0.0', miniKdc.nodes[0].account.hostname)

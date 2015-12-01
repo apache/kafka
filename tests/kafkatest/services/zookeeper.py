@@ -86,6 +86,9 @@ class ZookeeperService(Service):
         return ','.join([node.account.hostname + ':2181' for node in self.nodes])
 
     def query(self, path):
+        """
+        Queries zookeeper for data associated with 'path' and returns all fields in the schema
+        """
         kafka_dir = KAFKA_TRUNK
         cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
               (kafka_dir, self.connect_setting(), path)
