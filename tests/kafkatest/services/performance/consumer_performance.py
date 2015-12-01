@@ -96,7 +96,7 @@ class ConsumerPerformanceService(PerformanceService):
 
         if self.new_consumer:
             args['new-consumer'] = ""
-            args['broker-list'] = self.kafka.bootstrap_servers()
+            args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         else:
             args['zookeeper'] = self.kafka.zk.connect_setting()
 

@@ -57,13 +57,13 @@ class ProduceConsumeValidateTest(Test):
         self.producer.stop()
         self.consumer.wait()
 
-    def run_produce_consume_validate(self, core_test_action=None):
+    def run_produce_consume_validate(self, core_test_action=None, *args):
         """Top-level template for simple produce/consume/validate tests."""
 
         self.start_producer_and_consumer()
 
         if core_test_action is not None:
-            core_test_action()
+            core_test_action(*args)
 
         self.stop_producer_and_consumer()
         self.validate()
