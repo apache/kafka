@@ -40,7 +40,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
             "partitions": 3,
             "replication-factor": 3,
-            "min.insync.replicas": 2}})
+            'configs': {"min.insync.replicas": 2}}})
         self.zk.start()
 
         #reduce replica.lag.time.max.ms due to KAFKA-2827
