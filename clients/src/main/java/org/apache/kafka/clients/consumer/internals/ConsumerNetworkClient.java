@@ -364,7 +364,7 @@ public class ConsumerNetworkClient implements Closeable {
                 int correlation = send.header().correlationId();
                 log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
                         api, request, correlation, send.destination());
-                raise(new DisconnectException());
+                raise(DisconnectException.INSTANCE);
             } else {
                 complete(response);
             }
