@@ -56,11 +56,6 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.consumer.group_id = "group"
 
     def run_zk_migration(self):
-        # generate jaas login file
-        #jaas_login = self.kafka.security_config.gen_jaas_login_digest(self.zk.nodes)
-        #self.logger.info("Login file name: %s" % jaas_login)
-        #self.kafka.security_config.gen_jaas_login_digest(self.kafka.nodes)
-
         # change zk config (auth provider + jaas login)
         self.zk.kafka_opts = "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider -Djava.security.auth.login.config=%s" % SecurityConfig.JAAS_CONF_PATH
         
@@ -72,7 +67,6 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         
         # restart broker with jaas login
         for node in self.kafka.nodes:
-            #self.kafka.security_config.set_zk_jaas_login(jaas_login)
             self.kafka.stop_node(node)
             self.kafka.sasl_mechanism = 'PLAIN'
             self.kafka.start_node(node)
