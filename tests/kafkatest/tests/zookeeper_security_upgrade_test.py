@@ -65,10 +65,10 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
             self.zk.zk_sasl = True
             self.zk.start_node(node)
         
+        self.kafka.start_minikdc()
         # restart broker with jaas login
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
-            self.kafka.sasl_mechanism = 'PLAIN'
             self.kafka.start_node(node)
 
         # run migration tool
@@ -79,7 +79,6 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         self.kafka.zk_set_acl = "true"
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
-            self.kafka.sasl_mechanism = 'PLAIN'
             self.kafka.start_node(node)
 
     def test_zk_security_upgrade(self):
