@@ -241,8 +241,6 @@ public class FetcherTest {
         subscriptions.seek(tp, 0);
 
         fetcher.initFetches(cluster);
-
-
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L, 0));
         consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
