@@ -58,14 +58,13 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
     def run_zk_migration(self):
         # change zk config (auth provider + jaas login)
         self.zk.kafka_opts = "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider -Djava.security.auth.login.config=%s" % SecurityConfig.JAAS_CONF_PATH
-        
+        self.zk.zk_sasl = True
+        self.kafka.start_minikdc()
         # restart zk
         for node in self.zk.nodes:
             self.zk.stop_node(node)
-            self.zk.zk_sasl = True
             self.zk.start_node(node)
         
-        self.kafka.start_minikdc()
         # restart broker with jaas login
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
@@ -83,11 +82,10 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
     def test_zk_security_upgrade(self):
         self.zk.start()
-        #kafka has the correct sasl options hacked in
         self.kafka.start()
 
-        #Create Secured Producer and Consumer
+        #Create Producer and Consumer
         self.create_producer_and_consumer()
 
-        #Roll in the security protocol. Disable Plaintext. Ensure we can produce and Consume throughout
+        #Run upgrade
         self.run_produce_consume_validate(self.run_zk_migration)

@@ -44,8 +44,7 @@ class ZookeeperService(Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(zk_sasl=self.zk_sasl, sasl_mechanism='PLAIN')
-
+        return SecurityConfig(zk_sasl=self.zk_sasl)
 
     def start_node(self, node):
         idx = self.idx(node)
