@@ -93,9 +93,9 @@ class ReplicationTest(ProduceConsumeValidateTest):
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
                                                                     "partitions": 3,
                                                                     "replication-factor": 3,
-                                                                    "min.insync.replicas": 2}
+                                                                    'configs': {"min.insync.replicas": 2}}
                                                                 })
-        self.producer_throughput = 10000
+        self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
 
@@ -123,10 +123,11 @@ class ReplicationTest(ProduceConsumeValidateTest):
             - Validate that every acked message was consumed
         """
 
-        self.kafka.security_protocol = 'PLAINTEXT'
+        self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
+        new_consumer = False if  self.kafka.security_protocol == "PLAINTEXT" else True
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=60000, message_validator=is_int)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
         self.kafka.start()
         
         self.run_produce_consume_validate(core_test_action=lambda: failures[failure_mode](self))
