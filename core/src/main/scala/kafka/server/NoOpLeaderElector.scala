@@ -18,18 +18,26 @@ package kafka.server
 
 import kafka.utils.Logging
 
-/**
- * This trait defines a leader elector If the existing leader is dead, this class will handle automatic
- * re-election and if it succeeds, it invokes the leader state change callback
- */
-trait LeaderElector extends Logging {
-  def startup
+class NoOpLeaderElector extends LeaderElector with Logging {
+  override def startup: Unit = {
+    trace("Broker is started in non-controller mode - leader elector will take no actions upon startup")
+  }
 
-  def amILeader : Boolean
+  override def elect: Boolean = {
+    trace("Broker is started in non-controller mode - leader elector will take no actions upon election")
+    false
+  }
 
-  def elect: Boolean
+  override def close: Unit = {
+    trace("Broker is started in non-controller mode - leader elector will take no actions upon closing")
+  }
 
-  def resign(): Unit
+  override def amILeader: Boolean = {
+    trace("Broker is started in non-controller mode")
+    false
+  }
 
-  def close
+  override def resign(): Unit = {
+    trace("Broker is started in non-controller mode - it cannot resign from leadership")
+  }
 }

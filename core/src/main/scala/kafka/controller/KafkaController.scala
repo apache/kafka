@@ -160,8 +160,16 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
   val controllerContext = new ControllerContext(zkUtils, config.zkSessionTimeoutMs)
   val partitionStateMachine = new PartitionStateMachine(this)
   val replicaStateMachine = new ReplicaStateMachine(this)
-  private val controllerElector = new ZookeeperLeaderElector(controllerContext, ZkUtils.ControllerPath, onControllerFailover,
-    onControllerResignation, config.brokerId)
+
+  private val controllerElector =
+    if (config.controllerEligibility) {
+      new ZookeeperLeaderElector(controllerContext, ZkUtils.ControllerPath, onControllerFailover,
+        onControllerResignation, config.brokerId)
+    } else {
+      info("This broker is started in a non-controller mode - it will never be elected controller")
+      new NoOpLeaderElector
+    }
+
   // have a separate scheduler for the controller to be able to start and stop independently of the
   // kafka server
   private val autoRebalanceScheduler = new KafkaScheduler(1)
