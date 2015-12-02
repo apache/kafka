@@ -499,6 +499,20 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     this.consumers.head.position(tp)
   }
 
+  @Test
+  def testListOffsetsWithNoTopicAccess() {
+    val e = intercept[TopicAuthorizationException] {
+      this.consumers.head.partitionsFor(topic);
+    }
+    assertEquals(Set(topic), e.unauthorizedTopics().asScala)
+  }
+
+  @Test
+  def testListOfsetsWithTopicDescribe() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
+    this.consumers.head.partitionsFor(topic);
+  }
+
   def removeAllAcls() = {
     servers.head.apis.authorizer.get.getAcls().keys.foreach { resource =>
       servers.head.apis.authorizer.get.removeAcls(resource)

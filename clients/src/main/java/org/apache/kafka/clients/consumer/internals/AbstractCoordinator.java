@@ -43,7 +43,6 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -235,7 +234,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
-                Utils.sleep(retryBackoffMs);
+                time.sleep(retryBackoffMs);
             }
         }
     }
@@ -484,11 +483,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private void handleGroupMetadataResponse(ClientResponse resp, RequestFuture<Void> future) {
         log.debug("Group metadata response {}", resp);
 
-        // parse the response to get the coordinator info if it is not disconnected,
-        // otherwise we need to request metadata update
-        if (resp.wasDisconnected()) {
-            future.raise(new DisconnectException());
-        } else if (!coordinatorUnknown()) {
+        if (!coordinatorUnknown()) {
             // We already found the coordinator, so ignore the request
             future.complete(null);
         } else {
@@ -661,25 +656,19 @@ public abstract class AbstractCoordinator implements Closeable {
         public abstract void handle(R response, RequestFuture<T> future);
 
         @Override
-        public void onSuccess(ClientResponse clientResponse, RequestFuture<T> future) {
-            this.response = clientResponse;
-
-            if (clientResponse.wasDisconnected()) {
-                int correlation = response.request().request().header().correlationId();
-                log.debug("Cancelled request {} with correlation id {} due to coordinator {} being disconnected",
-                        response.request(),
-                        correlation,
-                        response.request().request().destination());
-
-                // mark the coordinator as dead
+        public void onFailure(RuntimeException e, RequestFuture<T> future) {
+            // mark the coordinator as dead
+            if (e instanceof DisconnectException)
                 coordinatorDead();
-                future.raise(new DisconnectException());
-                return;
-            }
+            future.raise(e);
+        }
 
+        @Override
+        public void onSuccess(ClientResponse clientResponse, RequestFuture<T> future) {
             try {
-                R response = parse(clientResponse);
-                handle(response, future);
+                this.response = clientResponse;
+                R responseObj = parse(clientResponse);
+                handle(responseObj, future);
             } catch (RuntimeException e) {
                 if (!future.isDone())
                     future.raise(e);
