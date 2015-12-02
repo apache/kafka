@@ -17,6 +17,7 @@ from ducktape.services.service import Service
 from kafkatest.services.kafka.directory import kafka_dir
 
 import os
+import uuid
 
 
 class MiniKdc(Service):
@@ -32,8 +33,8 @@ class MiniKdc(Service):
     KEYTAB_FILE = "/mnt/minikdc/keytab"
     KRB5CONF_FILE = "/mnt/minikdc/krb5.conf"
     LOG_FILE = "/mnt/minikdc/minikdc.log"
-    LOCAL_KEYTAB_FILE = "/tmp/keytab"
-    LOCAL_KRB5CONF_FILE = "/tmp/krb5.conf"
+    LOCAL_KEYTAB_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_keytab"
+    LOCAL_KRB5CONF_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_krb5.conf"
 
     def __init__(self, context, kafka_nodes):
         super(MiniKdc, self).__init__(context, 1)
