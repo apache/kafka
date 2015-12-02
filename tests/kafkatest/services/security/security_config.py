@@ -16,6 +16,7 @@
 import os
 import subprocess
 from ducktape.template import TemplateRenderer
+from kafkatest.utils.remote_account import scp
 from kafkatest.services.security.minikdc import MiniKdc
 
 class Keytool(object):
@@ -110,7 +111,7 @@ class SecurityConfig(TemplateRenderer):
     def client_config(self, template_props=""):
         return SecurityConfig(self.security_protocol, sasl_mechanism=self.sasl_mechanism, template_props=template_props)
 
-    def setup_node(self, node):
+    def setup_node(self, node, miniKdc=None):
         if self.has_ssl:
             node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
             node.account.scp_to(SecurityConfig.ssl_stores['ssl.keystore.location'], SecurityConfig.KEYSTORE_PATH)
@@ -127,8 +128,12 @@ class SecurityConfig(TemplateRenderer):
             jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk)
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             if self.has_sasl_kerberos:
-                node.account.scp_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
-                node.account.scp_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
+                if miniKdc is None:
+                   raise Exception("miniKdc must be not None when has_sasl_kerberos is true")
+                scp(miniKdc.nodes[0], MiniKdc.KEYTAB_FILE, node, SecurityConfig.KEYTAB_PATH)
+                #KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
+                scp(miniKdc.nodes[0], MiniKdc.KRB5CONF_FILE, node, SecurityConfig.KRB5CONF_PATH, '0.0.0.0', miniKdc.nodes[0].account.hostname)
+
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
