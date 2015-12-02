@@ -16,6 +16,7 @@ import java.util.*;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +63,10 @@ public class AbstractConfig {
         return values.get(key);
     }
 
+    public void ignore(String key) {
+        used.add(key);
+    }
+
     public Short getShort(String key) {
         return (Short) get(key);
     }
@@ -91,27 +96,38 @@ public class AbstractConfig {
         return (String) get(key);
     }
 
+    public Password getPassword(String key) {
+        return (Password) get(key);
+    }
+
     public Class<?> getClass(String key) {
         return (Class<?>) get(key);
     }
 
     public Set<String> unused() {
-        Set<String> keys = new HashSet<String>(originals.keySet());
+        Set<String> keys = new HashSet<>(originals.keySet());
         keys.removeAll(used);
         return keys;
     }
 
-    public Properties unusedProperties() {
-        Set<String> unusedKeys = this.unused();
-        Properties unusedProps = new Properties();
-        for (String key : unusedKeys)
-            unusedProps.put(key, this.originals().get(key));
-        return unusedProps;
+    public Map<String, Object> originals() {
+        Map<String, Object> copy = new RecordingMap<>();
+        copy.putAll(originals);
+        return copy;
     }
 
-    public Map<String, Object> originals() {
-        Map<String, Object> copy = new HashMap<String, Object>();
-        copy.putAll(originals);
+    /**
+     * Get all the original settings, ensuring that all values are of type String.
+     * @return the original settings
+     * @throw ClassCastException if any of the values are not strings
+     */
+    public Map<String, String> originalsStrings() {
+        Map<String, String> copy = new RecordingMap<>();
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (!(entry.getValue() instanceof String))
+                throw new ClassCastException("Non-string value found in original settings");
+            copy.put(entry.getKey(), (String) entry.getValue());
+        }
         return copy;
     }
 
@@ -122,7 +138,7 @@ public class AbstractConfig {
      * @return a Map containing the settings with the prefix
      */
     public Map<String, Object> originalsWithPrefix(String prefix) {
-        Map<String, Object> result = new HashMap<String, Object>();
+        Map<String, Object> result = new RecordingMap<>();
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
                 result.put(entry.getKey().substring(prefix.length()), entry.getValue());
@@ -131,7 +147,7 @@ public class AbstractConfig {
     }
 
     public Map<String, ?> values() {
-        return new HashMap<String, Object>(values);
+        return new RecordingMap<>(values);
     }
 
     private void logAll() {
@@ -181,17 +197,14 @@ public class AbstractConfig {
         List<String> klasses = getList(key);
         List<T> objects = new ArrayList<T>();
         for (String klass : klasses) {
-            Class<?> c;
+            Object o;
             try {
-                c = Class.forName(klass);
+                o = Utils.newInstance(klass, t);
             } catch (ClassNotFoundException e) {
-                throw new ConfigException(key, klass, "Class " + klass + " could not be found.");
+                throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
             }
-            if (c == null)
-                return null;
-            Object o = Utils.newInstance(c);
             if (!t.isInstance(o))
-                throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
+                throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)
                 ((Configurable) o).configure(this.originals);
             objects.add(t.cast(o));
@@ -212,5 +225,25 @@ public class AbstractConfig {
     @Override
     public int hashCode() {
         return originals.hashCode();
+    }
+
+    /**
+     * Marks keys retrieved via `get` as used. This is needed because `Configurable.configure` takes a `Map` instead
+     * of an `AbstractConfig` and we can't change that without breaking public API like `Partitioner`.
+     */
+    private class RecordingMap<V> extends HashMap<String, V> {
+
+        RecordingMap() {}
+
+        RecordingMap(Map<String, ? extends V> m) {
+            super(m);
+        }
+
+        @Override
+        public V get(Object key) {
+            if (key instanceof String)
+                ignore((String) key);
+            return super.get(key);
+        }
     }
 }

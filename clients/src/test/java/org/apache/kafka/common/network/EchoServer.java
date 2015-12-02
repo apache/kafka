@@ -13,7 +13,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.ssl.SSLFactory;
+import org.apache.kafka.common.security.ssl.SslFactory;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
@@ -38,14 +38,14 @@ class EchoServer extends Thread {
     private final List<Thread> threads;
     private final List<Socket> sockets;
     private SecurityProtocol protocol = SecurityProtocol.PLAINTEXT;
-    private SSLFactory sslFactory;
+    private SslFactory sslFactory;
     private final AtomicBoolean renegotiate = new AtomicBoolean();
 
     public EchoServer(Map<String, ?> configs) throws Exception {
         this.protocol =  configs.containsKey("security.protocol") ?
             SecurityProtocol.valueOf((String) configs.get("security.protocol")) : SecurityProtocol.PLAINTEXT;
         if (protocol == SecurityProtocol.SSL) {
-            this.sslFactory = new SSLFactory(SSLFactory.Mode.SERVER);
+            this.sslFactory = new SslFactory(Mode.SERVER);
             this.sslFactory.configure(configs);
             SSLContext sslContext = this.sslFactory.sslContext();
             this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);

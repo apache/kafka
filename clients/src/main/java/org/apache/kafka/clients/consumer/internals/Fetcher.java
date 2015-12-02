@@ -17,14 +17,18 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -51,11 +55,11 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 
 /**
  * This class manage the fetching process with the brokers.
@@ -77,6 +81,10 @@ public class Fetcher<K, V> {
     private final List<PartitionRecords<K, V>> records;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
+
+    private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
+    private final Set<String> unauthorizedTopics;
+    private final Map<TopicPartition, Long> recordTooLargePartitions;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -106,6 +114,9 @@ public class Fetcher<K, V> {
         this.valueDeserializer = valueDeserializer;
 
         this.records = new LinkedList<PartitionRecords<K, V>>();
+        this.offsetOutOfRangePartitions = new HashMap<>();
+        this.unauthorizedTopics = new HashSet<>();
+        this.recordTooLargePartitions = new HashMap<>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
         this.retryBackoffMs = retryBackoffMs;
@@ -137,6 +148,7 @@ public class Fetcher<K, V> {
     /**
      * Update the fetch positions for the provided partitions.
      * @param partitions
+     * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no reset policy is available
      */
     public void updateFetchPositions(Set<TopicPartition> partitions) {
         // reset the fetch position to the committed position
@@ -152,27 +164,38 @@ public class Fetcher<K, V> {
                 subscriptions.needOffsetReset(tp);
                 resetOffset(tp);
             } else {
-                log.debug("Resetting offset for partition {} to the committed offset {}",
-                        tp, subscriptions.committed(tp));
-                subscriptions.seek(tp, subscriptions.committed(tp));
+                long committed = subscriptions.committed(tp).offset();
+                log.debug("Resetting offset for partition {} to the committed offset {}", tp, committed);
+                subscriptions.seek(tp, committed);
             }
         }
     }
 
-
+    /**
+     * Get topic metadata for all topics in the cluster
+     * @param timeout time for which getting topic metadata is attempted
+     * @return The map of topics with their partition information
+     */
+    public Map<String, List<PartitionInfo>> getAllTopicMetadata(long timeout) {
+        return getTopicMetadata(null, timeout);
+    }
 
     /**
      * Get metadata for all topics present in Kafka cluster
      *
-     * @param timeout time for which getting all topics is attempted
-     * @return The map of topics and its partitions
+     * @param topics The list of topics to fetch or null to fetch all
+     * @param timeout time for which getting topic metadata is attempted
+     * @return The map of topics with their partition information
      */
-    public Map<String, List<PartitionInfo>> getAllTopics(long timeout) {
+    public Map<String, List<PartitionInfo>> getTopicMetadata(List<String> topics, long timeout) {
+        if (topics != null && topics.isEmpty())
+            return Collections.emptyMap();
+
         final HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
         long startTime = time.milliseconds();
 
         while (time.milliseconds() - startTime < timeout) {
-            RequestFuture<ClientResponse> requestFuture = sendMetadataRequest();
+            RequestFuture<ClientResponse> requestFuture = sendMetadataRequest(topics);
             if (requestFuture != null) {
                 client.poll(requestFuture);
 
@@ -201,11 +224,12 @@ public class Fetcher<K, V> {
      * Send Metadata Request to least loaded node in Kafka cluster asynchronously
      * @return A future that indicates result of sent metadata request
      */
-    public RequestFuture<ClientResponse> sendMetadataRequest() {
+    public RequestFuture<ClientResponse> sendMetadataRequest(List<String> topics) {
+        if (topics == null)
+            topics = Collections.emptyList();
         final Node node = client.leastLoadedNode();
         return node == null ? null :
-            client.send(
-                node, ApiKeys.METADATA, new MetadataRequest(Collections.<String>emptyList()));
+            client.send(node, ApiKeys.METADATA, new MetadataRequest(topics));
     }
 
     /**
@@ -222,7 +246,7 @@ public class Fetcher<K, V> {
         else if (strategy == OffsetResetStrategy.LATEST)
             timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
         else
-            throw new NoOffsetForPartitionException("No offset is set and no reset policy is defined");
+            throw new NoOffsetForPartitionException(partition);
 
         log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase());
         long offset = listOffset(partition, timestamp);
@@ -258,23 +282,101 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * If any partition from previous fetchResponse contains OffsetOutOfRange error and
+     * the defaultResetPolicy is NONE, throw OffsetOutOfRangeException
+     *
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse
+     */
+    private void throwIfOffsetOutOfRange() throws OffsetOutOfRangeException {
+        Map<TopicPartition, Long> currentOutOfRangePartitions = new HashMap<>();
+
+        // filter offsetOutOfRangePartitions to retain only the fetchable partitions
+        for (Map.Entry<TopicPartition, Long> entry: this.offsetOutOfRangePartitions.entrySet()) {
+            if (!subscriptions.isFetchable(entry.getKey())) {
+                log.debug("Ignoring fetched records for {} since it is no longer fetchable", entry.getKey());
+                continue;
+            }
+            Long consumed = subscriptions.consumed(entry.getKey());
+            // ignore partition if its consumed offset != offset in fetchResponse, e.g. after seek()
+            if (consumed != null && entry.getValue().equals(consumed))
+                currentOutOfRangePartitions.put(entry.getKey(), entry.getValue());
+        }
+        this.offsetOutOfRangePartitions.clear();
+        if (!currentOutOfRangePartitions.isEmpty())
+            throw new OffsetOutOfRangeException(currentOutOfRangePartitions);
+    }
+
+    /**
+     * If any topic from previous fetchResponse contains an Authorization error, raise an exception
+     * @throws TopicAuthorizationException
+     */
+    private void throwIfUnauthorizedTopics() throws TopicAuthorizationException {
+        if (!unauthorizedTopics.isEmpty()) {
+            Set<String> topics = new HashSet<>(unauthorizedTopics);
+            unauthorizedTopics.clear();
+            throw new TopicAuthorizationException(topics);
+        }
+    }
+
+    /**
+     * If any partition from previous fetchResponse gets a RecordTooLarge error, throw RecordTooLargeException
+     *
+     * @throws RecordTooLargeException If there is a message larger than fetch size and hence cannot be ever returned
+     */
+    private void throwIfRecordTooLarge() throws RecordTooLargeException {
+        Map<TopicPartition, Long> copiedRecordTooLargePartitions = new HashMap<>(this.recordTooLargePartitions);
+        this.recordTooLargePartitions.clear();
+
+        if (!copiedRecordTooLargePartitions.isEmpty())
+            throw new RecordTooLargeException("There are some messages at [Partition=Offset]: "
+                + copiedRecordTooLargePartitions
+                + " whose size is larger than the fetch size "
+                + this.fetchSize
+                + " and hence cannot be ever returned."
+                + " Increase the fetch size, or decrease the maximum message size the broker will allow.",
+                copiedRecordTooLargePartitions);
+    }
+
+    /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
+     * NOTE: returning empty records guarantees the consumed position are NOT updated.
+     *
      * @return The fetched records per partition
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         if (this.subscriptions.partitionAssignmentNeeded()) {
             return Collections.emptyMap();
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
+            throwIfOffsetOutOfRange();
+            throwIfUnauthorizedTopics();
+            throwIfRecordTooLarge();
+
             for (PartitionRecords<K, V> part : this.records) {
-                if (!subscriptions.isFetchable(part.partition)) {
-                    log.debug("Ignoring fetched records for {} since it is no longer fetchable", part.partition);
+                if (!subscriptions.isAssigned(part.partition)) {
+                    // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
+                    log.debug("Not returning fetched records for partition {} since it is no longer assigned", part.partition);
                     continue;
                 }
 
-                Long consumed = subscriptions.consumed(part.partition);
-                if (consumed != null && part.fetchOffset == consumed) {
+                // note that the consumed position should always be available
+                // as long as the partition is still assigned
+                long consumed = subscriptions.consumed(part.partition);
+                if (!subscriptions.isFetchable(part.partition)) {
+                    // this can happen when a partition consumption paused before fetched records are returned to the consumer's poll call
+                    log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", part.partition);
+
+                    // we also need to reset the fetch positions to pretend we did not fetch
+                    // this partition in the previous request at all
+                    subscriptions.fetched(part.partition, consumed);
+                } else if (part.fetchOffset == consumed) {
+                    long nextOffset = part.records.get(part.records.size() - 1).offset() + 1;
+
+                    log.trace("Returning fetched records for assigned partition {} and update consumed position to {}", part.partition, nextOffset);
+
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
                     if (records == null) {
                         records = part.records;
@@ -282,7 +384,7 @@ public class Fetcher<K, V> {
                     } else {
                         records.addAll(part.records);
                     }
-                    subscriptions.consumed(part.partition, part.records.get(part.records.size() - 1).offset() + 1);
+                    subscriptions.consumed(part.partition, nextOffset);
                 } else {
                     // these records aren't next in line based on the last consumed position, ignore them
                     // they must be from an obsolete request
@@ -378,8 +480,11 @@ public class Fetcher<K, V> {
                     fetchable.put(node, fetch);
                 }
 
-                long offset = this.subscriptions.fetched(partition);
-                fetch.put(partition, new FetchRequest.PartitionData(offset, this.fetchSize));
+                long fetched = this.subscriptions.fetched(partition);
+                long consumed = this.subscriptions.consumed(partition);
+                // Only fetch data for partitions whose previously fetched data has been consumed
+                if (consumed == fetched)
+                    fetch.put(partition, new FetchRequest.PartitionData(fetched, this.fetchSize));
             }
         }
 
@@ -408,8 +513,10 @@ public class Fetcher<K, V> {
             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 FetchResponse.PartitionData partition = entry.getValue();
-                if (!subscriptions.assignedPartitions().contains(tp)) {
-                    log.debug("Ignoring fetched data for partition {} which is no longer assigned.", tp);
+                if (!subscriptions.isFetchable(tp)) {
+                    // this can happen when a rebalance happened or a partition consumption paused
+                    // while fetch is still in-flight
+                    log.debug("Ignoring fetched records for partition {} since it is no longer fetchable", tp);
                 } else if (partition.errorCode == Errors.NONE.code()) {
                     long fetchOffset = request.fetchData().get(tp).offset;
 
@@ -434,12 +541,19 @@ public class Fetcher<K, V> {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
                     }
+
                     if (!parsed.isEmpty()) {
                         ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                         this.subscriptions.fetched(tp, record.offset() + 1);
-                        this.records.add(new PartitionRecords<K, V>(fetchOffset, tp, parsed));
+                        this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                         this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
+                    } else if (buffer.limit() > 0) {
+                        // we did not read a single message from a non-empty buffer
+                        // because that message's size is larger than fetch size, in this case
+                        // record this exception
+                        this.recordTooLargePartitions.put(tp, fetchOffset);
                     }
+
                     this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
                     totalBytes += bytes;
                     totalCount += parsed.size();
@@ -447,9 +561,15 @@ public class Fetcher<K, V> {
                     || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                     this.metadata.requestUpdate();
                 } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                    // TODO: this could be optimized by grouping all out-of-range partitions
+                    long fetchOffset = request.fetchData().get(tp).offset;
+                    if (subscriptions.hasDefaultOffsetResetPolicy())
+                        subscriptions.needOffsetReset(tp);
+                    else
+                        this.offsetOutOfRangePartitions.put(tp, fetchOffset);
                     log.info("Fetch offset {} is out of range, resetting offset", subscriptions.fetched(tp));
-                    subscriptions.needOffsetReset(tp);
+                } else if (partition.errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
+                    log.warn("Not authorized to read from topic {}.", tp.topic());
+                    unauthorizedTopics.add(tp.topic());
                 } else if (partition.errorCode == Errors.UNKNOWN.code()) {
                     log.warn("Unknown error fetching data for topic-partition {}", tp);
                 } else {
@@ -467,16 +587,21 @@ public class Fetcher<K, V> {
      * Parse the record entry, deserializing the key / value fields if necessary
      */
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition, LogEntry logEntry) {
-        if (this.checkCrcs)
-            logEntry.record().ensureValid();
+        try {
+            if (this.checkCrcs)
+                logEntry.record().ensureValid();
+            long offset = logEntry.offset();
+            ByteBuffer keyBytes = logEntry.record().key();
+            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), Utils.toArray(keyBytes));
+            ByteBuffer valueBytes = logEntry.record().value();
+            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), Utils.toArray(valueBytes));
 
-        long offset = logEntry.offset();
-        ByteBuffer keyBytes = logEntry.record().key();
-        K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), Utils.toArray(keyBytes));
-        ByteBuffer valueBytes = logEntry.record().value();
-        V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), Utils.toArray(valueBytes));
-
-        return new ConsumerRecord<K, V>(partition.topic(), partition.partition(), offset, key, value);
+            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset, key, value);
+        } catch (KafkaException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new KafkaException("Error deserializing key/value for partition " + partition + " at offset " + logEntry.offset(), e);
+        }
     }
 
     private static class PartitionRecords<K, V> {

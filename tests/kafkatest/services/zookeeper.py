@@ -16,6 +16,8 @@
 
 from ducktape.services.service import Service
 
+from kafkatest.services.kafka.directory import kafka_dir
+
 import subprocess
 import time
 
@@ -25,7 +27,10 @@ class ZookeeperService(Service):
     logs = {
         "zk_log": {
             "path": "/mnt/zk.log",
-            "collect_default": True}
+            "collect_default": True},
+        "zk_data": {
+            "path": "/mnt/zookeeper",
+            "collect_default": False}
     }
 
     def __init__(self, context, num_nodes):
@@ -46,9 +51,9 @@ class ZookeeperService(Service):
         self.logger.info(config_file)
         node.account.create_file("/mnt/zookeeper.properties", config_file)
 
-        node.account.ssh(
-            "/opt/kafka/bin/zookeeper-server-start.sh /mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &"
-            % self.logs["zk_log"])
+        start_cmd = "/opt/%s/bin/zookeeper-server-start.sh " % kafka_dir(node)
+        start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
+        node.account.ssh(start_cmd)
 
         time.sleep(5)  # give it some time to start
 

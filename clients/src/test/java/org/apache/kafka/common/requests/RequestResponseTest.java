@@ -28,10 +28,11 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -43,9 +44,9 @@ public class RequestResponseTest {
         List<AbstractRequestResponse> requestResponseList = Arrays.asList(
                 createRequestHeader(),
                 createResponseHeader(),
-                createConsumerMetadataRequest(),
-                createConsumerMetadataRequest().getErrorResponse(0, new UnknownServerException()),
-                createConsumerMetadataResponse(),
+                createGroupCoordinatorRequest(),
+                createGroupCoordinatorRequest().getErrorResponse(0, new UnknownServerException()),
+                createGroupCoordinatorResponse(),
                 createControlledShutdownRequest(),
                 createControlledShutdownResponse(),
                 createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
@@ -58,6 +59,15 @@ public class RequestResponseTest {
                 createJoinGroupRequest(),
                 createJoinGroupRequest().getErrorResponse(0, new UnknownServerException()),
                 createJoinGroupResponse(),
+                createLeaveGroupRequest(),
+                createLeaveGroupRequest().getErrorResponse(0, new UnknownServerException()),
+                createLeaveGroupResponse(),
+                createListGroupsRequest(),
+                createListGroupsRequest().getErrorResponse(0, new UnknownServerException()),
+                createListGroupsResponse(),
+                createDescribeGroupRequest(),
+                createDescribeGroupRequest().getErrorResponse(0, new UnknownServerException()),
+                createDescribeGroupResponse(),
                 createListOffsetRequest(),
                 createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
                 createListOffsetResponse(),
@@ -147,12 +157,12 @@ public class RequestResponseTest {
         return new ResponseHeader(10);
     }
 
-    private AbstractRequest createConsumerMetadataRequest() {
-        return new ConsumerMetadataRequest("test-group");
+    private AbstractRequest createGroupCoordinatorRequest() {
+        return new GroupCoordinatorRequest("test-group");
     }
 
-    private AbstractRequestResponse createConsumerMetadataResponse() {
-        return new ConsumerMetadataResponse((short) 1, new Node(10, "host1", 2014));
+    private AbstractRequestResponse createGroupCoordinatorResponse() {
+        return new GroupCoordinatorResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
     }
 
     private AbstractRequest createFetchRequest() {
@@ -177,11 +187,49 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createJoinGroupRequest() {
-        return new JoinGroupRequest("group1", 30000, Arrays.asList("topic1"), "consumer1", "strategy1");
+        ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
+        List<JoinGroupRequest.GroupProtocol> protocols = new ArrayList<>();
+        protocols.add(new JoinGroupRequest.GroupProtocol("consumer-range", metadata));
+        return new JoinGroupRequest("group1", 30000, "consumer1", "consumer", protocols);
     }
 
     private AbstractRequestResponse createJoinGroupResponse() {
-        return new JoinGroupResponse(Errors.NONE.code(), 1, "consumer1", Arrays.asList(new TopicPartition("test11", 1), new TopicPartition("test2", 1)));
+        Map<String, ByteBuffer> members = new HashMap<>();
+        members.put("consumer1", ByteBuffer.wrap(new byte[]{}));
+        members.put("consumer2", ByteBuffer.wrap(new byte[]{}));
+        return new JoinGroupResponse(Errors.NONE.code(), 1, "range", "consumer1", "leader", members);
+    }
+
+    private AbstractRequest createListGroupsRequest() {
+        return new ListGroupsRequest();
+    }
+
+    private AbstractRequestResponse createListGroupsResponse() {
+        List<ListGroupsResponse.Group> groups = Arrays.asList(new ListGroupsResponse.Group("test-group", "consumer"));
+        return new ListGroupsResponse(Errors.NONE.code(), groups);
+    }
+
+    private AbstractRequest createDescribeGroupRequest() {
+        return new DescribeGroupsRequest(Collections.singletonList("test-group"));
+    }
+
+    private AbstractRequestResponse createDescribeGroupResponse() {
+        String clientId = "consumer-1";
+        String clientHost = "localhost";
+        ByteBuffer empty = ByteBuffer.allocate(0);
+        DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
+                clientId, clientHost, empty, empty);
+        DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE.code(),
+                "STABLE", "consumer", "roundrobin", Arrays.asList(member));
+        return new DescribeGroupsResponse(Collections.singletonMap("test-group", metadata));
+    }
+
+    private AbstractRequest createLeaveGroupRequest() {
+        return new LeaveGroupRequest("group1", "consumer1");
+    }
+
+    private AbstractRequestResponse createLeaveGroupResponse() {
+        return new LeaveGroupResponse(Errors.NONE.code());
     }
 
     private AbstractRequest createListOffsetRequest() {
@@ -206,7 +254,8 @@ public class RequestResponseTest {
         replicas[0] = node;
         Node[] isr = new Node[1];
         isr[0] = node;
-        Cluster cluster = new Cluster(Arrays.asList(node), Arrays.asList(new PartitionInfo("topic1", 1, node, replicas, isr)));
+        Cluster cluster = new Cluster(Arrays.asList(node), Arrays.asList(new PartitionInfo("topic1", 1, node, replicas, isr)),
+                Collections.<String>emptySet());
 
         Map<String, Errors> errors = new HashMap<String, Errors>();
         errors.put("topic2", Errors.LEADER_NOT_AVAILABLE);

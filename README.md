@@ -35,9 +35,8 @@ Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
     ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
 ### Running a particular test method within a unit test ###
-    ./gradlew core:test --tests kafka.api.test.ProducerFailureHandlingTest.testCannotSendToInternalTopic
-    ./gradlew clients:test --tests org.apache.kafka.clients.producer.MetadataTest.testMetadataUpdateWaitTime
-    
+    ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
+    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
 
 ### Running a particular unit test with log4j output ###
     change the log4j setting in either clients/src/test/resources/log4j.properties or core/src/test/resources/log4j.properties
@@ -54,14 +53,15 @@ The release file can be found inside ./core/build/distributions/.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task on a particular version of Scala (either 2.10.5 or 2.11.7) ###
+### Running a task on a particular version of Scala (either 2.10.6 or 2.11.7) ###
 #### (If building a jar with a version other than 2.10, need to set SCALA_BINARY_VERSION variable or change it in bin/kafka-run-class.sh to run quick start.) ####
-    ./gradlew -PscalaVersion=2.11.7 jar
-    ./gradlew -PscalaVersion=2.11.7 test
-    ./gradlew -PscalaVersion=2.11.7 releaseTarGz
+You can pass either the major version (eg 2.11) or the full version (eg 2.11.7):
+    ./gradlew -PscalaVersion=2.11 jar
+    ./gradlew -PscalaVersion=2.11 test
+    ./gradlew -PscalaVersion=2.11 releaseTarGz
 
 ### Running a task for a specific project ###
-This is for 'core', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'examples' and 'clients'
+This is for 'core', 'examples' and 'clients'
     ./gradlew core:jar
     ./gradlew core:test
 
@@ -104,6 +104,12 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
 	
 ### Running checkstyle on the java code ###
     ./gradlew checkstyleMain checkstyleTest
+
+### Limit the number of processes for each task ###
+    ./gradlew -Dorg.gradle.project.maxParallelForks=1 test
+
+This will most commonly be useful for automated builds where the full resources of the host running the build and tests
+may not be dedicated to Kafka's build.
 
 ### Running in Vagrant ###
 

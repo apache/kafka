@@ -20,6 +20,7 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 
+import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
 
@@ -60,11 +61,9 @@ public class KafkaChannel {
     }
 
     /**
-     * Does handshake of transportLayer and Authentication using configured authenticator
+     * Does handshake of transportLayer and authentication using configured authenticator
      */
     public void prepare() throws IOException {
-        if (transportLayer.ready() && authenticator.complete())
-            return;
         if (!transportLayer.ready())
             transportLayer.handshake();
         if (transportLayer.ready() && !authenticator.complete())
@@ -108,14 +107,21 @@ public class KafkaChannel {
         return send != null;
     }
 
+    /**
+     * Returns the address to which this channel's socket is connected or `null` if the socket has never been connected.
+     *
+     * If the socket was connected prior to being closed, then this method will continue to return the
+     * connected address after the socket is closed.
+     */
+    public InetAddress socketAddress() {
+        return transportLayer.socketChannel().socket().getInetAddress();
+    }
+
     public String socketDescription() {
         Socket socket = transportLayer.socketChannel().socket();
-        if (socket == null)
-            return "[unconnected socket]";
-        else if (socket.getInetAddress() != null)
-            return socket.getInetAddress().toString();
-        else
+        if (socket.getInetAddress() == null)
             return socket.getLocalAddress().toString();
+        return socket.getInetAddress().toString();
     }
 
     public void setSend(Send send) {
@@ -132,7 +138,7 @@ public class KafkaChannel {
             receive = new NetworkReceive(maxReceiveSize, id);
         }
 
-        long x = receive(receive);
+        receive(receive);
         if (receive.complete()) {
             receive.payload().rewind();
             result = receive;

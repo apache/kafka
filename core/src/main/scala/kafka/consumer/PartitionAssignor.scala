@@ -41,19 +41,19 @@ object PartitionAssignor {
   }
 }
 
-class AssignmentContext(group: String, val consumerId: String, excludeInternalTopics: Boolean, zkClient: ZkClient) {
+class AssignmentContext(group: String, val consumerId: String, excludeInternalTopics: Boolean, zkUtils: ZkUtils) {
   val myTopicThreadIds: collection.Map[String, collection.Set[ConsumerThreadId]] = {
-    val myTopicCount = TopicCount.constructTopicCount(group, consumerId, zkClient, excludeInternalTopics)
+    val myTopicCount = TopicCount.constructTopicCount(group, consumerId, zkUtils, excludeInternalTopics)
     myTopicCount.getConsumerThreadIdsPerTopic
   }
 
   val partitionsForTopic: collection.Map[String, Seq[Int]] =
-    ZkUtils.getPartitionsForTopics(zkClient, myTopicThreadIds.keySet.toSeq)
+    zkUtils.getPartitionsForTopics(myTopicThreadIds.keySet.toSeq)
 
   val consumersForTopic: collection.Map[String, List[ConsumerThreadId]] =
-    ZkUtils.getConsumersPerTopic(zkClient, group, excludeInternalTopics)
+    zkUtils.getConsumersPerTopic(group, excludeInternalTopics)
 
-  val consumers: Seq[String] = ZkUtils.getConsumersInGroup(zkClient, group).sorted
+  val consumers: Seq[String] = zkUtils.getConsumersInGroup(group).sorted
 }
 
 /**

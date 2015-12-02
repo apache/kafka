@@ -13,14 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+ext.defaultScala210Version = '2.10.6'
+ext.defaultScala211Version = '2.11.7'
 if (!hasProperty('scalaVersion')) {
-  ext.scalaVersion = '2.10.5'
+  ext.scalaVersion = defaultScala210Version
 }
-ext.defaultScalaVersion = '2.10.5'
+ext.defaultScalaVersion = defaultScala210Version
+
 if (scalaVersion.startsWith('2.10')) {
     ext.baseScalaVersion = '2.10'
+    setResolvedScalaVersion(defaultScala210Version)
 } else if (scalaVersion.startsWith('2.11')) {
     ext.baseScalaVersion = '2.11'
+    setResolvedScalaVersion(defaultScala211Version)
 } else {
     ext.baseScalaVersion = scalaVersion
 }
+
+def setResolvedScalaVersion(defaultFullScalaVersion) {
+    if (scalaVersion == ext.baseScalaVersion) {
+        ext.resolvedScalaVersion = defaultFullScalaVersion
+    }
+    else {
+        ext.resolvedScalaVersion = scalaVersion
+    }
+}
+

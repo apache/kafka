@@ -23,8 +23,9 @@ import org.apache.kafka.common.requests.{StopReplicaResponse, AbstractRequestRes
 
 import collection.mutable
 import collection.JavaConverters._
-import kafka.utils.{ShutdownableThread, Logging, ZkUtils}
+import kafka.utils.{ShutdownableThread, Logging}
 import kafka.utils.CoreUtils._
+import kafka.utils.ZkUtils._
 import collection.Set
 import kafka.common.TopicAndPartition
 import java.util.concurrent.locks.ReentrantLock
@@ -288,9 +289,10 @@ class TopicDeletionManager(controller: KafkaController,
     partitionStateMachine.handleStateChanges(partitionsForDeletedTopic, NonExistentPartition)
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
-    controllerContext.zkClient.deleteRecursive(ZkUtils.getTopicPath(topic))
-    controllerContext.zkClient.deleteRecursive(ZkUtils.getEntityConfigPath(ConfigType.Topic, topic))
-    controllerContext.zkClient.delete(ZkUtils.getDeleteTopicPath(topic))
+    val zkUtils = controllerContext.zkUtils
+    zkUtils.zkClient.deleteRecursive(getTopicPath(topic))
+    zkUtils.zkClient.deleteRecursive(getEntityConfigPath(ConfigType.Topic, topic))
+    zkUtils.zkClient.delete(getDeleteTopicPath(topic))
     controllerContext.removeTopic(topic)
   }
 
@@ -385,7 +387,7 @@ class TopicDeletionManager(controller: KafkaController,
   }
 
   class DeleteTopicsThread() extends ShutdownableThread(name = "delete-topics-thread-" + controller.config.brokerId, isInterruptible = false) {
-    val zkClient = controllerContext.zkClient
+    val zkUtils = controllerContext.zkUtils
     override def doWork() {
       awaitTopicDeletionNotification()
 

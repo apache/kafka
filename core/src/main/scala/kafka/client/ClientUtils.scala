@@ -27,7 +27,7 @@ import kafka.utils.{CoreUtils, Logging}
 import java.util.Properties
 import util.Random
 import kafka.network.BlockingChannel
-import kafka.utils.ZkUtils._
+import kafka.utils.ZkUtils
 import org.I0Itec.zkclient.ZkClient
 import java.io.IOException
 
@@ -108,11 +108,11 @@ object ClientUtils extends Logging{
    /**
     * Creates a blocking channel to a random broker
     */
-   def channelToAnyBroker(zkClient: ZkClient, socketTimeoutMs: Int = 3000) : BlockingChannel = {
+   def channelToAnyBroker(zkUtils: ZkUtils, socketTimeoutMs: Int = 3000) : BlockingChannel = {
      var channel: BlockingChannel = null
      var connected = false
      while (!connected) {
-       val allBrokers = getAllBrokerEndPointsForChannel(zkClient, SecurityProtocol.PLAINTEXT)
+       val allBrokers = zkUtils.getAllBrokerEndPointsForChannel(SecurityProtocol.PLAINTEXT)
        Random.shuffle(allBrokers).find { broker =>
          trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
          try {
@@ -137,8 +137,8 @@ object ClientUtils extends Logging{
    /**
     * Creates a blocking channel to the offset manager of the given group
     */
-   def channelToOffsetManager(group: String, zkClient: ZkClient, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
-     var queryChannel = channelToAnyBroker(zkClient)
+   def channelToOffsetManager(group: String, zkUtils: ZkUtils, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
+     var queryChannel = channelToAnyBroker(zkUtils)
 
      var offsetManagerChannelOpt: Option[BlockingChannel] = None
 
@@ -149,11 +149,11 @@ object ClientUtils extends Logging{
        while (!coordinatorOpt.isDefined) {
          try {
            if (!queryChannel.isConnected)
-             queryChannel = channelToAnyBroker(zkClient)
+             queryChannel = channelToAnyBroker(zkUtils)
            debug("Querying %s:%d to locate offset manager for %s.".format(queryChannel.host, queryChannel.port, group))
-           queryChannel.send(ConsumerMetadataRequest(group))
+           queryChannel.send(GroupCoordinatorRequest(group))
            val response = queryChannel.receive()
-           val consumerMetadataResponse =  ConsumerMetadataResponse.readFrom(response.payload())
+           val consumerMetadataResponse =  GroupCoordinatorResponse.readFrom(response.payload())
            debug("Consumer metadata response: " + consumerMetadataResponse.toString)
            if (consumerMetadataResponse.errorCode == ErrorMapping.NoError)
              coordinatorOpt = consumerMetadataResponse.coordinatorOpt

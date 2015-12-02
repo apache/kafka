@@ -18,13 +18,16 @@
 package kafka.tools
 
 import java.io.PrintStream
+import java.util.concurrent.CountDownLatch
 import java.util.{Properties, Random}
 import joptsimple._
+import kafka.common.StreamEndException
 import kafka.consumer._
 import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConversions._
@@ -36,16 +39,25 @@ object ConsoleConsumer extends Logging {
 
   var messageCount = 0
 
+  private val shutdownLatch = new CountDownLatch(1)
+
   def main(args: Array[String]) {
     val conf = new ConsumerConfig(args)
-    run(conf)
+    try {
+      run(conf)
+    } catch {
+      case e: Throwable =>
+        error("Unknown error when running consumer: ", e)
+        System.exit(1);
+    }
   }
 
   def run(conf: ConsumerConfig) {
 
     val consumer =
       if (conf.useNewConsumer) {
-        new NewShinyConsumer(conf.topicArg, getNewConsumerProps(conf))
+        val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+        new NewShinyConsumer(Option(conf.topicArg), Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
       } else {
         checkZk(conf)
         new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
@@ -62,6 +74,8 @@ object ConsoleConsumer extends Logging {
       // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
       if (!conf.groupIdPassed)
         ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
+
+      shutdownLatch.countDown()
     }
   }
 
@@ -83,6 +97,8 @@ object ConsoleConsumer extends Logging {
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
         consumer.stop()
+
+        shutdownLatch.await()
       }
     })
   }
@@ -93,11 +109,18 @@ object ConsoleConsumer extends Logging {
       val msg: BaseConsumerRecord = try {
         consumer.receive()
       } catch {
-        case e: Throwable => {
-          error("Error processing message, stopping consumer: ", e)
-          consumer.stop()
+        case nse: StreamEndException =>
+          trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
+          // Consumer is already closed
           return
-        }
+        case nse: WakeupException =>
+          trace("Caught WakeupException because consumer is shutdown, ignore and terminate.")
+          // Consumer will be closed
+          return
+        case e: Throwable =>
+          error("Error processing message, terminating consumer process: ", e)
+          // Consumer will be closed
+          return
       }
       try {
         formatter.writeTo(msg.key, msg.value, System.out)
@@ -106,7 +129,7 @@ object ConsoleConsumer extends Logging {
           if (skipMessageOnError) {
             error("Error processing message, skipping this message: ", e)
           } else {
-            consumer.stop()
+            // Consumer will be closed
             throw e
           }
       }
@@ -143,6 +166,8 @@ object ConsoleConsumer extends Logging {
 
     if (config.options.has(config.deleteConsumerOffsetsOpt))
       ZkUtils.maybeDeletePath(config.options.valueOf(config.zkConnectOpt), "/consumers/" + config.consumerProps.getProperty("group.id"))
+    if (config.timeoutMs >= 0)
+      props.put("consumer.timeout.ms", config.timeoutMs.toString)
 
     props
   }
@@ -153,7 +178,7 @@ object ConsoleConsumer extends Logging {
     props.putAll(config.consumerProps)
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (config.options.has(config.resetBeginningOpt)) "earliest" else "latest")
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, if (config.keyDeserializer != null) config.keyDeserializer else "org.apache.kafka.common.serialization.StringDeserializer")
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, if (config.keyDeserializer != null) config.keyDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, if (config.valueDeserializer != null) config.valueDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
 
     props
@@ -198,6 +223,10 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("num_messages")
       .ofType(classOf[java.lang.Integer])
+    val timeoutMsOpt = parser.accepts("timeout-ms", "If specified, exit if no message is available for consumption for the specified interval.")
+      .withRequiredArg
+      .describedAs("timeout_ms")
+      .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
     val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
@@ -226,10 +255,25 @@ object ConsoleConsumer extends Logging {
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
     val useNewConsumer = options.has(useNewConsumerOpt)
-    val filterOpt = List(whitelistOpt, blacklistOpt).filter(options.has)
-    val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
-    val topicArg = options.valueOf(topicOrFilterOpt.head)
-    val filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
+
+    // If using old consumer, exactly one of whitelist/blacklist/topic is required.
+    // If using new consumer, topic must be specified.
+    var topicArg: String = null
+    var whitelistArg: String = null
+    var filterSpec: TopicFilter = null
+    if (useNewConsumer) {
+      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
+      if (topicOrFilterOpt.size != 1)
+        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
+      topicArg = options.valueOf(topicIdOpt)
+      whitelistArg = options.valueOf(whitelistOpt)
+    } else {
+      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
+      if (topicOrFilterOpt.size != 1)
+        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
+      topicArg = options.valueOf(topicOrFilterOpt.head)
+      filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
+    }
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
@@ -240,6 +284,7 @@ object ConsoleConsumer extends Logging {
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
     val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
+    val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
@@ -247,9 +292,6 @@ object ConsoleConsumer extends Logging {
     formatter.init(formatterArgs)
 
     CommandLineUtils.checkRequiredArgs(parser, options, if (useNewConsumer) bootstrapServerOpt else zkConnectOpt)
-
-    if (!useNewConsumer && topicOrFilterOpt.size != 1)
-      CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
 
     if (options.has(csvMetricsReporterEnabledOpt)) {
       val csvReporterProps = new Properties()

@@ -8,7 +8,7 @@ result reporter and utilities to pull up and tear down services.)
 
 Local Quickstart
 ----------------
-This quickstart will help you run the Kafka system tests on your local machine.
+This quickstart will help you run the Kafka system tests on your local machine. Note this requires bringing up a cluster of virtual machines on your local computer, which is memory intensive; it currently requires around 10G RAM.
 For a tutorial on how to setup and run the Kafka system tests, see 
 https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafka+system+tests+with+ducktape
 
@@ -16,7 +16,9 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 * Install Vagrant >= 1.6.4 from [http://www.vagrantup.com/](http://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
 * Install system test dependiences, including ducktape, a command-line tool and library for testing distributed systems.
 
-        $ python tests/setup.py develop
+        $ cd kafka/tests
+        $ python setup.py develop
+        $ cd ..  # back to base kafka directory
 
 * Run the bootstrap script to set up Vagrant for testing
 
@@ -30,12 +32,11 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
        
         $ git checkout $BRANCH
         $ gradle  # (only if necessary)
-        $ ./gradlew jar
+        $ ./gradlew systemTestLibs
      
 * Run the system tests using ducktape:
 
-        $ cd tests
-        $ ducktape kafkatest/tests
+        $ ducktape tests/kafkatest/tests
 
 EC2 Quickstart
 --------------

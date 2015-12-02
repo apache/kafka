@@ -31,11 +31,10 @@ object DeleteZKPath {
 
     val config = new ConsumerConfig(Utils.loadProps(args(0)))
     val zkPath = args(1)
-
-    val zkClient = ZkUtils.createZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
+    val zkUtils = ZkUtils(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
 
     try {
-      ZkUtils.deletePathRecursive(zkClient, zkPath);
+      zkUtils.deletePathRecursive(zkPath);
       System.out.println(zkPath + " is deleted")
     } catch {
       case e: Exception => System.err.println("Path not deleted " + e.printStackTrace())

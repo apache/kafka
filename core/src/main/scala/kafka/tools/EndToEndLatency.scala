@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.util.{Arrays, Properties}
 
-import org.apache.kafka.clients.consumer.{CommitType, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.utils.Utils
 
@@ -41,7 +41,6 @@ object EndToEndLatency {
   private val timeout: Long = 60000
 
   def main(args: Array[String]) {
-    println(args.length)
     if (args.length != 5 && args.length != 6) {
       System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] ssl_properties_file")
       System.exit(1)

@@ -18,16 +18,16 @@
 package kafka.api
 
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import java.util.Properties
-import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import kafka.server.{OffsetManager, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
+
 import org.junit.{After, Before}
 import scala.collection.mutable.Buffer
-import kafka.coordinator.ConsumerCoordinator
+import kafka.coordinator.GroupCoordinator
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
@@ -41,32 +41,42 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   lazy val consumerConfig = new Properties
   lazy val serverConfig = new Properties
 
-  var consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-  var producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+  val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   override def generateConfigs() = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect)
+    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile)
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
   }
 
   @Before
   override def setUp() {
+    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile)
+    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile)
     super.setUp()
-    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.bootstrapUrl)
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.bootstrapUrl)
+    producerConfig.putAll(producerSecurityProps)
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range")
-    for(i <- 0 until producerCount)
-      producers += new KafkaProducer(producerConfig)
-    for(i <- 0 until consumerCount)
-      consumers += new KafkaConsumer(consumerConfig)
+    consumerConfig.putAll(consumerSecurityProps)
+    for (i <- 0 until producerCount)
+      producers += TestUtils.createNewProducer(brokerList, 
+                                               acks = 1,
+                                               securityProtocol = this.securityProtocol,
+                                               trustStoreFile = this.trustStoreFile,
+                                               props = Some(producerConfig))
+    for (i <- 0 until consumerCount) {
+      consumers += TestUtils.createNewConsumer(brokerList,
+                                               securityProtocol = this.securityProtocol,
+                                               trustStoreFile = this.trustStoreFile,
+                                               props = Some(consumerConfig))
+    }
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkClient, ConsumerCoordinator.OffsetsTopicName,
+    TestUtils.createTopic(zkUtils, GroupCoordinator.GroupMetadataTopicName,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,

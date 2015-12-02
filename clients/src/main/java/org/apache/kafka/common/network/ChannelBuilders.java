@@ -13,8 +13,11 @@
 
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.ssl.SSLFactory;
+import org.apache.kafka.common.security.auth.DefaultPrincipalBuilder;
+import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
 
@@ -24,19 +27,27 @@ public class ChannelBuilders {
 
     /**
      * @param securityProtocol the securityProtocol
-     * @param mode the SSL mode, it must be non-null if `securityProcol` is `SSL` and it is ignored otherwise
+     * @param mode the mode, it must be non-null if `securityProtocol` is not `PLAINTEXT`;
+     *             it is ignored otherwise
+     * @param loginType the loginType, it must be non-null if `securityProtocol` is SASL_*; it is ignored otherwise
      * @param configs client/server configs
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
-    public static ChannelBuilder create(SecurityProtocol securityProtocol, SSLFactory.Mode mode, Map<String, ?> configs) {
-        ChannelBuilder channelBuilder = null;
+    public static ChannelBuilder create(SecurityProtocol securityProtocol, Mode mode, LoginType loginType, Map<String, ?> configs) {
+        ChannelBuilder channelBuilder;
 
         switch (securityProtocol) {
             case SSL:
-                if (mode == null)
-                    throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `SSL`");
-                channelBuilder = new SSLChannelBuilder(mode);
+                requireNonNullMode(mode, securityProtocol);
+                channelBuilder = new SslChannelBuilder(mode);
+                break;
+            case SASL_SSL:
+            case SASL_PLAINTEXT:
+                requireNonNullMode(mode, securityProtocol);
+                if (loginType == null)
+                    throw new IllegalArgumentException("`loginType` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+                channelBuilder = new SaslChannelBuilder(mode, loginType, securityProtocol);
                 break;
             case PLAINTEXT:
             case TRACE:
@@ -49,4 +60,25 @@ public class ChannelBuilders {
         channelBuilder.configure(configs);
         return channelBuilder;
     }
+
+    /**
+     * Returns a configured `PrincipalBuilder`.
+     */
+    static PrincipalBuilder createPrincipalBuilder(Map<String, ?> configs) {
+        // this is a server-only config so it will always be null on the client
+        Class<?> principalBuilderClass = (Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
+        PrincipalBuilder principalBuilder;
+        if (principalBuilderClass == null)
+            principalBuilder = new DefaultPrincipalBuilder();
+        else
+            principalBuilder = (PrincipalBuilder) Utils.newInstance(principalBuilderClass);
+        principalBuilder.configure(configs);
+        return principalBuilder;
+    }
+
+    private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {
+        if (mode == null)
+            throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
+    }
+
 }

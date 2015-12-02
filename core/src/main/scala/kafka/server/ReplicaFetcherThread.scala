@@ -23,23 +23,24 @@ import kafka.admin.AdminUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogConfig
 import kafka.message.ByteBufferMessageSet
-import kafka.api.KAFKA_083
+import kafka.api.KAFKA_090
 import kafka.common.{KafkaStorageException, TopicAndPartition}
 import ReplicaFetcherThread._
 import org.apache.kafka.clients.{ManualMetadataUpdater, NetworkClient, ClientRequest, ClientResponse}
-import org.apache.kafka.common.network.{Selectable, ChannelBuilders, NetworkReceive, Selector}
+import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
 import org.apache.kafka.common.requests.{ListOffsetResponse, FetchResponse, RequestSend, AbstractRequest, ListOffsetRequest}
 import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest}
+import org.apache.kafka.common.security.ssl.SslFactory
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{Errors, ApiKeys}
-import org.apache.kafka.common.security.ssl.SSLFactory
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{JavaConverters, Map, mutable}
 import JavaConverters._
 
 class ReplicaFetcherThread(name: String,
+                           fetcherId: Int,
                            sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
                            replicaMgr: ReplicaManager,
@@ -54,7 +55,7 @@ class ReplicaFetcherThread(name: String,
   type REQ = FetchRequest
   type PD = PartitionData
 
-  private val fetchRequestVersion: Short = if (brokerConfig.interBrokerProtocolVersion.onOrAfter(KAFKA_083)) 1 else 0
+  private val fetchRequestVersion: Short = if (brokerConfig.interBrokerProtocolVersion.onOrAfter(KAFKA_090)) 1 else 0
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
   private val replicaId = brokerConfig.brokerId
   private val maxWait = brokerConfig.replicaFetchWaitMaxMs
@@ -65,6 +66,9 @@ class ReplicaFetcherThread(name: String,
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
+  // we need to include both the broker id and the fetcher id
+  // as the metrics tag to avoid metric name conflicts with
+  // more than one fetcher thread to the same broker
   private val networkClient = {
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
@@ -72,9 +76,9 @@ class ReplicaFetcherThread(name: String,
       metrics,
       time,
       "replica-fetcher",
-      Map("broker-id" -> sourceBroker.id.toString).asJava,
+      Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
-      ChannelBuilders.create(brokerConfig.interBrokerSecurityProtocol, SSLFactory.Mode.CLIENT, brokerConfig.channelConfigs)
+      ChannelBuilders.create(brokerConfig.interBrokerSecurityProtocol, Mode.CLIENT, LoginType.SERVER, brokerConfig.values)
     )
     new NetworkClient(
       selector,
@@ -83,7 +87,9 @@ class ReplicaFetcherThread(name: String,
       1,
       0,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
-      brokerConfig.replicaSocketReceiveBufferBytes
+      brokerConfig.replicaSocketReceiveBufferBytes,
+      brokerConfig.requestTimeoutMs,
+      time
     )
   }
 
@@ -98,6 +104,7 @@ class ReplicaFetcherThread(name: String,
       val TopicAndPartition(topic, partitionId) = topicAndPartition
       val replica = replicaMgr.getReplica(topic, partitionId).get
       val messageSet = partitionData.toByteBufferMessageSet
+      warnIfMessageOversized(messageSet)
 
       if (fetchOffset != replica.logEndOffset.messageOffset)
         throw new RuntimeException("Offset mismatch: fetched offset = %d, log end offset = %d.".format(fetchOffset, replica.logEndOffset.messageOffset))
@@ -118,6 +125,14 @@ class ReplicaFetcherThread(name: String,
         fatal("Disk error while replicating data.", e)
         Runtime.getRuntime.halt(1)
     }
+  }
+
+  def warnIfMessageOversized(messageSet: ByteBufferMessageSet): Unit = {
+    if (messageSet.sizeInBytes > 0 && messageSet.validBytes <= 0)
+      error("Replication is failing due to a message that is greater than replica.fetch.max.bytes. This " +
+        "generally occurs when the max.message.bytes has been overridden to exceed this value and a suitably large " +
+        "message has also been sent. To fix this problem increase replica.fetch.max.bytes in your broker config to be " +
+        "equal or larger than your settings for max.message.bytes, both at a broker and topic level.")
   }
 
   /**
@@ -143,7 +158,7 @@ class ReplicaFetcherThread(name: String,
       // Prior to truncating the follower's log, ensure that doing so is not disallowed by the configuration for unclean leader election.
       // This situation could only happen if the unclean election configuration for a topic changes while a replica is down. Otherwise,
       // we should never encounter this situation since a non-ISR leader cannot be elected if disallowed by the broker configuration.
-      if (!LogConfig.fromProps(brokerConfig.originals, AdminUtils.fetchEntityConfig(replicaMgr.zkClient,
+      if (!LogConfig.fromProps(brokerConfig.originals, AdminUtils.fetchEntityConfig(replicaMgr.zkUtils,
         ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
         // Log a fatal error and shutdown the broker to ensure that data loss does not unexpectedly occur.
         fatal("Halting because log truncation is not allowed for topic %s,".format(topicAndPartition.topic) +
@@ -152,9 +167,9 @@ class ReplicaFetcherThread(name: String,
         Runtime.getRuntime.halt(1)
       }
 
-      replicaMgr.logManager.truncateTo(Map(topicAndPartition -> leaderEndOffset))
       warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's latest offset %d"
         .format(brokerConfig.brokerId, topicAndPartition, replica.logEndOffset.messageOffset, sourceBroker.id, leaderEndOffset))
+      replicaMgr.logManager.truncateTo(Map(topicAndPartition -> leaderEndOffset))
       leaderEndOffset
     } else {
       /**

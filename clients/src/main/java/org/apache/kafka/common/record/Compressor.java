@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import java.lang.reflect.Constructor;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 
@@ -45,6 +46,40 @@ public class Compressor {
             TYPE_TO_RATE[type.id] = type.rate;
         }
     }
+
+    // dynamically load the snappy and lz4 classes to avoid runtime dependency if we are not using compression
+    // caching constructors to avoid invoking of Class.forName method for each batch
+    private static MemoizingConstructorSupplier snappyOutputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
+        @Override
+        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
+            return Class.forName("org.xerial.snappy.SnappyOutputStream")
+                .getConstructor(OutputStream.class, Integer.TYPE);
+        }
+    });
+
+    private static MemoizingConstructorSupplier lz4OutputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
+        @Override
+        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
+            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream")
+                .getConstructor(OutputStream.class);
+        }
+    });
+
+    private static MemoizingConstructorSupplier snappyInputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
+        @Override
+        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
+            return Class.forName("org.xerial.snappy.SnappyInputStream")
+                .getConstructor(InputStream.class);
+        }
+    });
+
+    private static MemoizingConstructorSupplier lz4InputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
+        @Override
+        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
+            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream")
+                .getConstructor(InputStream.class);
+        }
+    });
 
     private final CompressionType type;
     private final DataOutputStream appendStream;
@@ -79,7 +114,7 @@ public class Compressor {
     public ByteBuffer buffer() {
         return bufferStream.buffer();
     }
-    
+
     public double compressionRate() {
         ByteBuffer buffer = bufferStream.buffer();
         if (this.writtenUncompressed == 0)
@@ -186,6 +221,10 @@ public class Compressor {
         writtenUncompressed += size;
     }
 
+    public long numRecordsWritten() {
+        return numRecords;
+    }
+
     public long estimatedBytesWritten() {
         if (type == CompressionType.NONE) {
             return bufferStream.buffer().position();
@@ -205,21 +244,15 @@ public class Compressor {
                 case GZIP:
                     return new DataOutputStream(new GZIPOutputStream(buffer, bufferSize));
                 case SNAPPY:
-                    // dynamically load the snappy class to avoid runtime dependency
-                    // on snappy if we are not using it
                     try {
-                        Class<?> outputStreamClass = Class.forName("org.xerial.snappy.SnappyOutputStream");
-                        OutputStream stream = (OutputStream) outputStreamClass.getConstructor(OutputStream.class, Integer.TYPE)
-                            .newInstance(buffer, bufferSize);
+                        OutputStream stream = (OutputStream) snappyOutputStreamSupplier.get().newInstance(buffer, bufferSize);
                         return new DataOutputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
                     }
                 case LZ4:
                     try {
-                        Class<?> outputStreamClass = Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream");
-                        OutputStream stream = (OutputStream) outputStreamClass.getConstructor(OutputStream.class)
-                            .newInstance(buffer);
+                        OutputStream stream = (OutputStream) lz4OutputStreamSupplier.get().newInstance(buffer);
                         return new DataOutputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
@@ -240,22 +273,15 @@ public class Compressor {
                 case GZIP:
                     return new DataInputStream(new GZIPInputStream(buffer));
                 case SNAPPY:
-                    // dynamically load the snappy class to avoid runtime dependency
-                    // on snappy if we are not using it
                     try {
-                        Class<?> inputStreamClass = Class.forName("org.xerial.snappy.SnappyInputStream");
-                        InputStream stream = (InputStream) inputStreamClass.getConstructor(InputStream.class)
-                            .newInstance(buffer);
+                        InputStream stream = (InputStream) snappyInputStreamSupplier.get().newInstance(buffer);
                         return new DataInputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
                     }
                 case LZ4:
-                    // dynamically load LZ4 class to avoid runtime dependency
                     try {
-                        Class<?> inputStreamClass = Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream");
-                        InputStream stream = (InputStream) inputStreamClass.getConstructor(InputStream.class)
-                            .newInstance(buffer);
+                        InputStream stream = (InputStream) lz4InputStreamSupplier.get().newInstance(buffer);
                         return new DataInputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
@@ -265,6 +291,35 @@ public class Compressor {
             }
         } catch (IOException e) {
             throw new KafkaException(e);
+        }
+    }
+
+    private interface ConstructorSupplier {
+        Constructor get() throws ClassNotFoundException, NoSuchMethodException;
+    }
+
+    // this code is based on Guava's @see{com.google.common.base.Suppliers.MemoizingSupplier}
+    private static class MemoizingConstructorSupplier {
+        final ConstructorSupplier delegate;
+        transient volatile boolean initialized;
+        transient Constructor value;
+
+        public MemoizingConstructorSupplier(ConstructorSupplier delegate) {
+            this.delegate = delegate;
+        }
+
+        public Constructor get() throws NoSuchMethodException, ClassNotFoundException {
+            if (!initialized) {
+                synchronized (this) {
+                    if (!initialized) {
+                        Constructor constructor = delegate.get();
+                        value = constructor;
+                        initialized = true;
+                        return constructor;
+                    }
+                }
+            }
+            return value;
         }
     }
 }

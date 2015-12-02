@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -69,31 +70,14 @@ public class ConfigDef {
      * @param validator     A validator to use in checking the correctness of the config
      * @param importance    The importance of this config: is this something you will likely need to change.
      * @param documentation The documentation string for the config
-     * @param required      Should the config fail if given property is not set and doesn't have default value specified
-     * @return This ConfigDef so you can chain calls
-     */
-    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
-                            boolean required) {
-        if (configKeys.containsKey(name))
-            throw new ConfigException("Configuration " + name + " is defined twice.");
-        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
-        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, required));
-        return this;
-    }
-
-    /**
-     * Define a new required configuration
-     *
-     * @param name          The name of the config parameter
-     * @param type          The type of the config
-     * @param defaultValue  The default value to use if this config isn't present
-     * @param validator     A validator to use in checking the correctness of the config
-     * @param importance    The importance of this config: is this something you will likely need to change.
-     * @param documentation The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
-        return define(name, type, defaultValue, validator, importance, documentation, true);
+        if (configKeys.containsKey(name))
+            throw new ConfigException("Configuration " + name + " is defined twice.");
+        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation));
+        return this;
     }
 
     /**
@@ -107,25 +91,11 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation) {
-        return define(name, type, defaultValue, null, importance, documentation, true);
+        return define(name, type, defaultValue, null, importance, documentation);
     }
 
     /**
-     * Define a required parameter with no default value
-     *
-     * @param name          The name of the config parameter
-     * @param type          The type of the config
-     * @param validator     A validator to use in checking the correctness of the config
-     * @param importance    The importance of this config: is this something you will likely need to change.
-     * @param documentation The documentation string for the config
-     * @return This ConfigDef so you can chain calls
-     */
-    public ConfigDef define(String name, Type type, Validator validator, Importance importance, String documentation) {
-        return define(name, type, NO_DEFAULT_VALUE, validator, importance, documentation, true);
-    }
-
-    /**
-     * Define a required parameter with no default value and no special validation logic
+     * Define a new configuration with no default value and no special validation logic
      *
      * @param name          The name of the config parameter
      * @param type          The type of the config
@@ -134,23 +104,26 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, true);
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation);
     }
 
     /**
-     * Define a required parameter with no default value and no special validation logic
-     *
-     * @param name          The name of the config parameter
-     * @param type          The type of the config
-     * @param importance    The importance of this config: is this something you will likely need to change.
-     * @param documentation The documentation string for the config
-     * @param required      Should the config fail if given property is not set and doesn't have default value specified
-     * @return This ConfigDef so you can chain calls
+     * Add standard SSL client configuration options.
+     * @return this
      */
-    public ConfigDef define(String name, Type type, Importance importance, String documentation, boolean required) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, required);
+    public ConfigDef withClientSslSupport() {
+        SslConfigs.addClientSslSupport(this);
+        return this;
     }
 
+    /**
+     * Add standard SASL client configuration options.
+     * @return this
+     */
+    public ConfigDef withClientSaslSupport() {
+        SaslConfigs.addClientSaslSupport(this);
+        return this;
+    }
 
     /**
      * Parse and validate configs against this configuration definition. The input is a map of configs. It is expected
@@ -170,13 +143,10 @@ public class ConfigDef {
             // props map contains setting - assign ConfigKey value
             if (props.containsKey(key.name))
                 value = parseType(key.name, props.get(key.name), key.type);
-                // props map doesn't contain setting, the key is required and no default value specified - its an error
-            else if (key.defaultValue == NO_DEFAULT_VALUE && key.required)
+            // props map doesn't contain setting, the key is required because no default value specified - its an error
+            else if (key.defaultValue == NO_DEFAULT_VALUE)
                 throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
-                // props map doesn't contain setting, no default value specified and the key is not required - assign it to null
-            else if (!key.hasDefault() && !key.required)
-                value = null;
-                // otherwise assign setting its default value
+            // otherwise assign setting its default value
             else
                 value = key.defaultValue;
             if (key.validator != null)
@@ -196,9 +166,12 @@ public class ConfigDef {
      */
     private Object parseType(String name, Object value, Type type) {
         try {
+            if (value == null) return null;
+
             String trimmed = null;
             if (value instanceof String)
                 trimmed = ((String) value).trim();
+
             switch (type) {
                 case BOOLEAN:
                     if (value instanceof String) {
@@ -212,6 +185,13 @@ public class ConfigDef {
                         return value;
                     else
                         throw new ConfigException(name, value, "Expected value to be either true or false");
+                case PASSWORD:
+                    if (value instanceof Password)
+                        return value;
+                    else if (value instanceof String)
+                        return new Password(trimmed);
+                    else
+                        throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
                 case STRING:
                     if (value instanceof String)
                         return trimmed;
@@ -263,7 +243,7 @@ public class ConfigDef {
                     if (value instanceof Class)
                         return (Class<?>) value;
                     else if (value instanceof String)
-                        return Class.forName(trimmed);
+                        return Class.forName(trimmed, true, Utils.getContextOrKafkaClassLoader());
                     else
                         throw new ConfigException(name, value, "Expected a Class instance or class name.");
                 default:
@@ -280,7 +260,7 @@ public class ConfigDef {
      * The config types
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS;
+        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
     }
 
     public enum Importance {
@@ -372,9 +352,8 @@ public class ConfigDef {
         public final Object defaultValue;
         public final Validator validator;
         public final Importance importance;
-        public final boolean required;
 
-        public ConfigKey(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation, boolean required) {
+        public ConfigKey(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
             super();
             this.name = name;
             this.type = type;
@@ -384,7 +363,6 @@ public class ConfigDef {
             if (this.validator != null)
                 this.validator.ensureValid(name, defaultValue);
             this.documentation = documentation;
-            this.required = required;
         }
 
         public boolean hasDefault() {
@@ -398,7 +376,7 @@ public class ConfigDef {
         List<ConfigDef.ConfigKey> configs = new ArrayList<ConfigDef.ConfigKey>(this.configKeys.values());
         Collections.sort(configs, new Comparator<ConfigDef.ConfigKey>() {
             public int compare(ConfigDef.ConfigKey k1, ConfigDef.ConfigKey k2) {
-                // first take anything with no default value
+                // first take anything with no default value (therefore required)
                 if (!k1.hasDefault() && k2.hasDefault())
                     return -1;
                 else if (!k2.hasDefault() && k1.hasDefault())
@@ -414,13 +392,14 @@ public class ConfigDef {
             }
         });
         StringBuilder b = new StringBuilder();
-        b.append("<table>\n");
+        b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
         b.append("<th>Name</th>\n");
+        b.append("<th>Description</th>\n");
         b.append("<th>Type</th>\n");
         b.append("<th>Default</th>\n");
+        b.append("<th>Valid Values</th>\n");
         b.append("<th>Importance</th>\n");
-        b.append("<th>Description</th>\n");
         b.append("</tr>\n");
         for (ConfigKey def : configs) {
             b.append("<tr>\n");
@@ -428,20 +407,31 @@ public class ConfigDef {
             b.append(def.name);
             b.append("</td>");
             b.append("<td>");
+            b.append(def.documentation);
+            b.append("</td>");
+            b.append("<td>");
             b.append(def.type.toString().toLowerCase());
             b.append("</td>");
             b.append("<td>");
-            b.append(def.defaultValue == null ? "" : def.defaultValue);
+            if (def.hasDefault()) {
+                if (def.defaultValue == null)
+                    b.append("null");
+                else if (def.type == Type.STRING && def.defaultValue.toString().isEmpty())
+                    b.append("\"\"");
+                else
+                    b.append(def.defaultValue);
+            } else
+                b.append("");
+            b.append("</td>");
+            b.append("<td>");
+            b.append(def.validator != null ? def.validator.toString() : "");
             b.append("</td>");
             b.append("<td>");
             b.append(def.importance.toString().toLowerCase());
             b.append("</td>");
-            b.append("<td>");
-            b.append(def.documentation);
-            b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>");
+        b.append("</tbody></table>");
         return b.toString();
     }
 }

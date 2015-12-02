@@ -16,22 +16,20 @@ import java.nio.channels.SelectionKey;
 import java.util.Map;
 
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.config.SSLConfigs;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 public class PlaintextChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
     private PrincipalBuilder principalBuilder;
+    private Map<String, ?> configs;
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
-            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
-            this.principalBuilder.configure(configs);
+            this.configs = configs;
+            principalBuilder = ChannelBuilders.createPrincipalBuilder(configs);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -42,7 +40,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         try {
             PlaintextTransportLayer transportLayer = new PlaintextTransportLayer(key);
             Authenticator authenticator = new DefaultAuthenticator();
-            authenticator.configure(transportLayer, this.principalBuilder);
+            authenticator.configure(transportLayer, this.principalBuilder, this.configs);
             channel = new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
         } catch (Exception e) {
             log.warn("Failed to create channel due to ", e);

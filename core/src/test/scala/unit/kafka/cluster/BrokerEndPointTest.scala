@@ -98,6 +98,11 @@ class BrokerEndPointTest extends Logging {
     endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
     assert(endpoint.host == "::1")
     assert(endpoint.port == 9092)
+    // add test for uppercase in hostname
+    connectionString = "MyHostname:9092"
+    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
+    assert(endpoint.host == "MyHostname")
+    assert(endpoint.port == 9092)
   }
 
   @Test

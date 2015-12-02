@@ -149,12 +149,25 @@ class LogCleaner(val config: CleanerConfig,
   }
 
   /**
-   * For testing, a way to know when work has completed. This method blocks until the
+   * For testing, a way to know when work has completed. This method waits until the
    * cleaner has processed up to the given offset on the specified topic/partition
+   *
+   * @param topic The Topic to be cleaned
+   * @param part The partition of the topic to be cleaned
+   * @param offset The first dirty offset that the cleaner doesn't have to clean
+   * @param maxWaitMs The maximum time in ms to wait for cleaner
+   *
+   * @return A boolean indicating whether the work has completed before timeout
    */
-  def awaitCleaned(topic: String, part: Int, offset: Long, timeout: Long = 30000L): Unit = {
-    while(!cleanerManager.allCleanerCheckpoints.contains(TopicAndPartition(topic, part)))
-      Thread.sleep(10)
+  def awaitCleaned(topic: String, part: Int, offset: Long, maxWaitMs: Long = 60000L): Boolean = {
+    def isCleaned = cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part)).fold(false)(_ >= offset)
+    var remainingWaitMs = maxWaitMs
+    while (!isCleaned && remainingWaitMs > 0) {
+      val sleepTime = math.min(100, remainingWaitMs)
+      Thread.sleep(sleepTime)
+      remainingWaitMs -= sleepTime
+    }
+    isCleaned
   }
   
   /**
@@ -261,9 +274,12 @@ class LogCleaner(val config: CleanerConfig,
  * This class holds the actual logic for cleaning a log
  * @param id An identifier used for logging
  * @param offsetMap The map used for deduplication
- * @param bufferSize The size of the buffers to use. Memory usage will be 2x this number as there is a read and write buffer.
+ * @param ioBufferSize The size of the buffers to use. Memory usage will be 2x this number as there is a read and write buffer.
+ * @param maxIoBufferSize The maximum size of a message that can appear in the log
+ * @param dupBufferLoadFactor The maximum percent full for the deduplication buffer
  * @param throttler The throttler instance to use for limiting I/O rate.
  * @param time The time instance
+ * @param checkDone Check if the cleaning for a partition is finished or aborted.
  */
 private[log] class Cleaner(val id: Int,
                            val offsetMap: OffsetMap,
@@ -528,8 +544,8 @@ private[log] class Cleaner(val id: Int,
       var indexSize = segs.head.index.sizeInBytes
       segs = segs.tail
       while(!segs.isEmpty &&
-            logSize + segs.head.size < maxSize &&
-            indexSize + segs.head.index.sizeInBytes < maxIndexSize &&
+            logSize + segs.head.size <= maxSize &&
+            indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             segs.head.index.lastOffset - group.last.index.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
@@ -673,7 +689,7 @@ private case class CleanerStats(time: Time = SystemTime) {
  * Helper class for a log, its topic/partition, and the last clean position
  */
 private case class LogToClean(topicPartition: TopicAndPartition, log: Log, firstDirtyOffset: Long) extends Ordered[LogToClean] {
-  val cleanBytes = log.logSegments(-1, firstDirtyOffset-1).map(_.size).sum
+  val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size).sum
   val dirtyBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, log.activeSegment.baseOffset)).map(_.size).sum
   val cleanableRatio = dirtyBytes / totalBytes.toDouble
   def totalBytes = cleanBytes + dirtyBytes

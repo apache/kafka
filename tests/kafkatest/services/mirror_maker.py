@@ -17,6 +17,9 @@
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
+from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.services.security.security_config import SecurityConfig
+
 import os
 import subprocess
 
@@ -63,7 +66,6 @@ class MirrorMaker(Service):
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     PRODUCER_CONFIG = os.path.join(PERSISTENT_ROOT, "producer.properties")
     CONSUMER_CONFIG = os.path.join(PERSISTENT_ROOT, "consumer.properties")
-    KAFKA_HOME = "/opt/kafka/"
 
     logs = {
         "mirror_maker_log": {
@@ -71,7 +73,9 @@ class MirrorMaker(Service):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1, consumer_timeout_ms=None):
+    def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1,
+                 new_consumer=False, consumer_timeout_ms=None, offsets_storage="kafka",
+                 offset_commit_interval_ms=60000):
         """
         MirrorMaker mirrors messages from one or more source clusters to a single destination cluster.
 
@@ -85,9 +89,12 @@ class MirrorMaker(Service):
                                             one value per node, allowing num_streams to be the same for each node,
                                             or configured independently per-node
             consumer_timeout_ms:        consumer stops if t > consumer_timeout_ms elapses between consecutive messages
+            offsets_storage:            used for consumer offsets.storage property
+            offset_commit_interval_ms:  how frequently the mirror maker consumer commits offsets
         """
         super(MirrorMaker, self).__init__(context, num_nodes=num_nodes)
-
+        self.log_level = "DEBUG"
+        self.new_consumer = new_consumer
         self.consumer_timeout_ms = consumer_timeout_ms
         self.num_streams = num_streams
         if not isinstance(num_streams, int):
@@ -98,12 +105,20 @@ class MirrorMaker(Service):
         self.source = source
         self.target = target
 
+        self.offsets_storage = offsets_storage.lower()
+        if not (self.offsets_storage in ["kafka", "zookeeper"]):
+            raise Exception("offsets_storage should be 'kafka' or 'zookeeper'. Instead found %s" % self.offsets_storage)
+
+        self.offset_commit_interval_ms = offset_commit_interval_ms
+
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % MirrorMaker.LOG4J_CONFIG
-        cmd += " %s/bin/kafka-run-class.sh kafka.tools.MirrorMaker" % MirrorMaker.KAFKA_HOME
+        cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+        cmd += " /opt/%s/bin/kafka-run-class.sh kafka.tools.MirrorMaker" % kafka_dir(node)
         cmd += " --consumer.config %s" % MirrorMaker.CONSUMER_CONFIG
         cmd += " --producer.config %s" % MirrorMaker.PRODUCER_CONFIG
+        cmd += " --offset.commit.interval.ms %s" % str(self.offset_commit_interval_ms)
         if isinstance(self.num_streams, int):
             cmd += " --num.streams %d" % self.num_streams
         else:
@@ -113,6 +128,9 @@ class MirrorMaker(Service):
             cmd += " --whitelist=\"%s\"" % self.whitelist
         if self.blacklist is not None:
             cmd += " --blacklist=\"%s\"" % self.blacklist
+        if self.new_consumer:
+            cmd += " --new.consumer"
+
         cmd += " 1>> %s 2>> %s &" % (MirrorMaker.LOG_FILE, MirrorMaker.LOG_FILE)
         return cmd
 
@@ -131,14 +149,22 @@ class MirrorMaker(Service):
         node.account.ssh("mkdir -p %s" % MirrorMaker.PERSISTENT_ROOT, allow_fail=False)
         node.account.ssh("mkdir -p %s" % MirrorMaker.LOG_DIR, allow_fail=False)
 
+        self.security_config = self.source.security_config.client_config()
+        self.security_config.setup_node(node)
+
         # Create, upload one consumer config file for source cluster
-        consumer_props = self.render('consumer.properties', zookeeper_connect=self.source.zk.connect_setting())
+        consumer_props = self.render("mirror_maker_consumer.properties")
+        consumer_props += str(self.security_config)
+
         node.account.create_file(MirrorMaker.CONSUMER_CONFIG, consumer_props)
+        self.logger.info("Mirrormaker consumer props:\n" + consumer_props)
 
         # Create, upload producer properties file for target cluster
-        producer_props = self.render('producer.properties',  broker_list=self.target.bootstrap_servers(),
-                                     producer_type="async")
+        producer_props = self.render('mirror_maker_producer.properties')
+        producer_props += str(self.security_config)
+        self.logger.info("Mirrormaker producer props:\n" + producer_props)
         node.account.create_file(MirrorMaker.PRODUCER_CONFIG, producer_props)
+
 
         # Create and upload log properties
         log_config = self.render('tools_log4j.properties', log_file=MirrorMaker.LOG_FILE)
@@ -152,8 +178,8 @@ class MirrorMaker(Service):
                    err_msg="Mirror maker took to long to start.")
         self.logger.debug("Mirror maker is alive")
 
-    def stop_node(self, node):
-        node.account.kill_process("java", allow_fail=True)
+    def stop_node(self, node, clean_shutdown=True):
+        node.account.kill_process("java", allow_fail=True, clean_shutdown=clean_shutdown)
         wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.5,
                    err_msg="Mirror maker took to long to stop.")
 
@@ -163,3 +189,4 @@ class MirrorMaker(Service):
                              (self.__class__.__name__, node.account))
         node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf %s" % MirrorMaker.PERSISTENT_ROOT, allow_fail=False)
+        self.security_config.clean_node(node)

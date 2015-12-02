@@ -90,6 +90,23 @@ public class ProtocolSerializationTest {
         struct.validate(); // should be valid even with missing value
     }
 
+    @Test
+    public void testArray() {
+        Type type = new ArrayOf(Type.INT8);
+        int size = 10;
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size);
+        invalidBuffer.putInt(Integer.MAX_VALUE);
+        for (int i = 0; i < size; i++)
+            invalidBuffer.put((byte) i);
+        invalidBuffer.rewind();
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
     private Object roundtrip(Type type, Object obj) {
         ByteBuffer buffer = ByteBuffer.allocate(type.sizeOf(obj));
         type.write(buffer, obj);

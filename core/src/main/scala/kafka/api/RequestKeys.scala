@@ -33,10 +33,17 @@ object RequestKeys {
   val ControlledShutdownKey: Short = 7
   val OffsetCommitKey: Short = 8
   val OffsetFetchKey: Short = 9
-  val ConsumerMetadataKey: Short = 10
+  val GroupCoordinatorKey: Short = 10
   val JoinGroupKey: Short = 11
   val HeartbeatKey: Short = 12
+  val LeaveGroupKey: Short = 13
+  val SyncGroupKey: Short = 14
+  val DescribeGroupsKey: Short = 15
+  val ListGroupsKey: Short = 16
 
+  // NOTE: this map only includes the server-side request/response handlers. Newer
+  // request types should only use the client-side versions which are parsed with
+  // o.a.k.common.requests.AbstractRequest.getRequest()
   val keyToNameAndDeserializerMap: Map[Short, (String, (ByteBuffer) => RequestOrResponse)]=
     Map(ProduceKey -> ("Produce", ProducerRequest.readFrom),
         FetchKey -> ("Fetch", FetchRequest.readFrom),
@@ -47,8 +54,7 @@ object RequestKeys {
         UpdateMetadataKey -> ("UpdateMetadata", UpdateMetadataRequest.readFrom),
         ControlledShutdownKey -> ("ControlledShutdown", ControlledShutdownRequest.readFrom),
         OffsetCommitKey -> ("OffsetCommit", OffsetCommitRequest.readFrom),
-        OffsetFetchKey -> ("OffsetFetch", OffsetFetchRequest.readFrom),
-        ConsumerMetadataKey -> ("ConsumerMetadata", ConsumerMetadataRequest.readFrom)
+        OffsetFetchKey -> ("OffsetFetch", OffsetFetchRequest.readFrom)
     )
 
   def nameForKey(key: Short): String = {

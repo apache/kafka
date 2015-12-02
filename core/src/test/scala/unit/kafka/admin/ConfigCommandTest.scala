@@ -37,7 +37,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
                                                 "--entity-name", "x",
                                                 "--entity-type", "clients",
                                                 "--alter",
-                                                "--added-config", "a=b,c=d"))
+                                                "--add-config", "a=b,c=d"))
     createOpts.checkArgs()
 
     // For alter and deleted config
@@ -45,7 +45,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
                                                 "--entity-name", "x",
                                                 "--entity-type", "clients",
                                                 "--alter",
-                                                "--deleted-config", "a,b,c"))
+                                                "--delete-config", "a,b,c"))
     createOpts.checkArgs()
 
     // For alter and both added, deleted config
@@ -53,8 +53,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
                                                 "--entity-name", "x",
                                                 "--entity-type", "clients",
                                                 "--alter",
-                                                "--added-config", "a=b,c=d",
-                                                "--deleted-config", "a"))
+                                                "--add-config", "a=b,c=d",
+                                                "--delete-config", "a"))
     createOpts.checkArgs()
     val addedProps = ConfigCommand.parseConfigsToBeAdded(createOpts)
     assertEquals(2, addedProps.size())

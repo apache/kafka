@@ -14,9 +14,12 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -159,8 +162,21 @@ public class MetadataResponse extends AbstractRequestResponse {
                 errors.put(topic, Errors.forCode(topicError));
             }
         }
+
         this.errors = errors;
-        this.cluster = new Cluster(brokers.values(), partitions);
+        this.cluster = new Cluster(brokers.values(), partitions, unauthorizedTopics(errors));
+    }
+
+    private Set<String> unauthorizedTopics(Map<String, Errors> topicErrors) {
+        if (topicErrors.isEmpty())
+            return Collections.emptySet();
+
+        Set<String> unauthorizedTopics = new HashSet<>();
+        for (Map.Entry<String, Errors> topicErrorEntry : topicErrors.entrySet()) {
+            if (topicErrorEntry.getValue() == Errors.TOPIC_AUTHORIZATION_FAILED)
+                unauthorizedTopics.add(topicErrorEntry.getKey());
+        }
+        return unauthorizedTopics;
     }
 
     public Map<String, Errors> errors() {

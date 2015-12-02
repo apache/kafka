@@ -28,7 +28,7 @@ popd
 set CLASSPATH=
 
 IF ["%SCALA_VERSION%"] EQU [""] (
-  set SCALA_VERSION=2.10.5
+  set SCALA_VERSION=2.10.6
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
@@ -109,7 +109,7 @@ IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
 
 rem JVM performance options
 IF ["%KAFKA_JVM_PERFORMANCE_OPTS%"] EQU [""] (
-	set KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseCompressedOops -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true
+	set KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true
 )
 
 IF ["%CLASSPATH%"] EQU [""] (

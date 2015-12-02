@@ -17,6 +17,7 @@
 
 package kafka.network
 
+import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.security.Principal
 import java.util.concurrent._
@@ -35,7 +36,7 @@ import org.apache.log4j.Logger
 
 
 object RequestChannel extends Logging {
-  val AllDone = new Request(processor = 1, connectionId = "2", new Session(KafkaPrincipal.ANONYMOUS, ""), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone = new Request(processor = 1, connectionId = "2", new Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost()), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
 
   def getShutdownReceive() = {
     val emptyProducerRequest = new ProducerRequest(0, 0, "", 0, 0, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
@@ -46,13 +47,17 @@ object RequestChannel extends Logging {
     byteBuffer
   }
 
-  case class Session(principal: Principal, host: String)
+  case class Session(principal: KafkaPrincipal, clientAddress: InetAddress)
 
   case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
+    // These need to be volatile because the readers are in the network thread and the writers are in the request
+    // handler threads or the purgatory threads
     @volatile var requestDequeueTimeMs = -1L
     @volatile var apiLocalCompleteTimeMs = -1L
     @volatile var responseCompleteTimeMs = -1L
     @volatile var responseDequeueTimeMs = -1L
+    @volatile var apiRemoteCompleteTimeMs = -1L
+
     val requestId = buffer.getShort()
     // for server-side request / response format
     // TODO: this will be removed once we migrated to client-side format
@@ -61,7 +66,8 @@ object RequestChannel extends Logging {
         RequestKeys.deserializerForKey(requestId)(buffer)
       else
         null
-    // for client-side request / response format
+    // if we failed to find a server-side mapping, then try using the
+    // client-side request / response format
     val header: RequestHeader =
       if (requestObj == null) {
         buffer.rewind
@@ -88,13 +94,21 @@ object RequestChannel extends Logging {
 
     def updateRequestMetrics() {
       val endTimeMs = SystemTime.milliseconds
-      // In some corner cases, apiLocalCompleteTimeMs may not be set when the request completes since the remote
-      // processing time is really small. In this case, use responseCompleteTimeMs as apiLocalCompleteTimeMs.
+      // In some corner cases, apiLocalCompleteTimeMs may not be set when the request completes if the remote
+      // processing time is really small. This value is set in KafkaApis from a request handling thread.
+      // This may be read in a network thread before the actual update happens in KafkaApis which will cause us to
+      // see a negative value here. In that case, use responseCompleteTimeMs as apiLocalCompleteTimeMs.
       if (apiLocalCompleteTimeMs < 0)
         apiLocalCompleteTimeMs = responseCompleteTimeMs
+      // If the apiRemoteCompleteTimeMs is not set (i.e., for requests that do not go through a purgatory), then it is
+      // the same as responseCompleteTimeMs.
+      if (apiRemoteCompleteTimeMs < 0)
+        apiRemoteCompleteTimeMs = responseCompleteTimeMs
+
       val requestQueueTime = (requestDequeueTimeMs - startTimeMs).max(0L)
       val apiLocalTime = (apiLocalCompleteTimeMs - requestDequeueTimeMs).max(0L)
-      val apiRemoteTime = (responseCompleteTimeMs - apiLocalCompleteTimeMs).max(0L)
+      val apiRemoteTime = (apiRemoteCompleteTimeMs - apiLocalCompleteTimeMs).max(0L)
+      val apiThrottleTime = (responseCompleteTimeMs - apiRemoteCompleteTimeMs).max(0L)
       val responseQueueTime = (responseDequeueTimeMs - responseCompleteTimeMs).max(0L)
       val responseSendTime = (endTimeMs - responseDequeueTimeMs).max(0L)
       val totalTime = endTimeMs - startTimeMs
@@ -111,6 +125,7 @@ object RequestChannel extends Logging {
              m.requestQueueTimeHist.update(requestQueueTime)
              m.localTimeHist.update(apiLocalTime)
              m.remoteTimeHist.update(apiRemoteTime)
+             m.throttleTimeHist.update(apiThrottleTime)
              m.responseQueueTimeHist.update(responseQueueTime)
              m.responseSendTimeHist.update(responseSendTime)
              m.totalTimeHist.update(totalTime)
@@ -234,8 +249,10 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val requestQueueTimeHist = newHistogram("RequestQueueTimeMs", biased = true, tags)
   // time a request takes to be processed at the local broker
   val localTimeHist = newHistogram("LocalTimeMs", biased = true, tags)
-  // time a request takes to wait on remote brokers (only relevant to fetch and produce requests)
+  // time a request takes to wait on remote brokers (currently only relevant to fetch and produce requests)
   val remoteTimeHist = newHistogram("RemoteTimeMs", biased = true, tags)
+  // time a request is throttled (only relevant to fetch and produce requests)
+  val throttleTimeHist = newHistogram("ThrottleTimeMs", biased = true, tags)
   // time a response spent in a response queue
   val responseQueueTimeHist = newHistogram("ResponseQueueTimeMs", biased = true, tags)
   // time to send the response to the requester

@@ -16,27 +16,28 @@
  */
 package kafka.security.auth
 
-import kafka.common.KafkaException
+import kafka.common.{ErrorMapping, BaseEnum, KafkaException}
 
 /**
  * ResourceTypes.
  */
 
 
-sealed trait ResourceType {
-  def name: String
-}
+sealed trait ResourceType extends BaseEnum { def errorCode: Short }
 
 case object Cluster extends ResourceType {
   val name = "Cluster"
+  val errorCode = ErrorMapping.ClusterAuthorizationCode
 }
 
 case object Topic extends ResourceType {
   val name = "Topic"
+  val errorCode = ErrorMapping.TopicAuthorizationCode
 }
 
-case object ConsumerGroup extends ResourceType {
-  val name = "ConsumerGroup"
+case object Group extends ResourceType {
+  val name = "Group"
+  val errorCode = ErrorMapping.GroupAuthorizationCode
 }
 
 
@@ -47,5 +48,5 @@ object ResourceType {
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
   }
 
-  def values: Seq[ResourceType] = List(Cluster, Topic, ConsumerGroup)
+  def values: Seq[ResourceType] = List(Cluster, Topic, Group)
 }

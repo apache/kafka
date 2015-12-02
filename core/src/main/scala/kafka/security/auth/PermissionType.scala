@@ -16,16 +16,14 @@
  */
 package kafka.security.auth
 
-import kafka.common.KafkaException
+import kafka.common.{BaseEnum, KafkaException}
 
 /**
  * PermissionType.
  */
 
 
-sealed trait PermissionType {
-  def name: String
-}
+sealed trait PermissionType extends BaseEnum
 
 case object Allow extends PermissionType {
   val name = "Allow"

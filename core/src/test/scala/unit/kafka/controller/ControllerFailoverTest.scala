@@ -41,6 +41,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val msgQueueSize = 1
   val topic = "topic1"
   val overridingProps = new Properties()
+  val metrics = new Metrics()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
 
   override def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect)
@@ -54,6 +55,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   @After
   override def tearDown() {
     super.tearDown()
+    this.metrics.close()
   }
 
   /**
@@ -73,7 +75,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
       }
     }
     // Create topic with one partition
-    kafka.admin.AdminUtils.createTopic(controller.zkClient, topic, 1, 1)
+    kafka.admin.AdminUtils.createTopic(controller.zkUtils, topic, 1, 1)
     val topicPartition = TopicAndPartition("topic1", 0)
     var partitions = controller.kafkaController.partitionStateMachine.partitionsInState(OnlinePartition)
     while (!partitions.contains(topicPartition)) {
@@ -83,7 +85,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     // Replace channel manager with our mock manager
     controller.kafkaController.controllerContext.controllerChannelManager.shutdown()
     val channelManager = new MockChannelManager(controller.kafkaController.controllerContext, 
-                                                  controller.kafkaController.config)
+                                                  controller.kafkaController.config, metrics)
     channelManager.startup()
     controller.kafkaController.controllerContext.controllerChannelManager = channelManager
     channelManager.shrinkBlockingQueue(0)
@@ -149,8 +151,8 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   }
 }
 
-class MockChannelManager(private val controllerContext: ControllerContext, config: KafkaConfig)
-  extends ControllerChannelManager(controllerContext, config, new SystemTime, new Metrics) {
+class MockChannelManager(private val controllerContext: ControllerContext, config: KafkaConfig, metrics: Metrics)
+  extends ControllerChannelManager(controllerContext, config, new SystemTime, metrics) {
 
   def stopSendThread(brokerId: Int) {
     val requestThread = brokerStateInfo(brokerId).requestSendThread

@@ -111,6 +111,9 @@ public class MetadataTest {
         assertEquals(100, metadata.timeToNextUpdate(1100));
         assertEquals(100, metadata.lastSuccessfulUpdate());
 
+        metadata.needMetadataForAllTopics(true);
+        metadata.update(null, time);
+        assertEquals(100, metadata.timeToNextUpdate(1000));
     }
 
     @Test
@@ -125,7 +128,8 @@ public class MetadataTest {
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
-                    new PartitionInfo("topic1", 0, null, null, null))),
+                    new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet()),
             100);
 
         assertArrayEquals("Metadata got updated with wrong set of topics.",
@@ -151,7 +155,8 @@ public class MetadataTest {
                 Arrays.asList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
-                    new PartitionInfo("topic1", 0, null, null, null))),
+                    new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet()),
             100);
 
         assertEquals("Listener did not update topics list correctly",
@@ -176,7 +181,8 @@ public class MetadataTest {
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
-                    new PartitionInfo("topic1", 0, null, null, null))),
+                    new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet()),
             100);
 
         metadata.removeListener(listener);
@@ -185,13 +191,13 @@ public class MetadataTest {
                 Arrays.asList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic2", 0, null, null, null),
-                    new PartitionInfo("topic3", 0, null, null, null))),
+                    new PartitionInfo("topic3", 0, null, null, null)),
+                Collections.<String>emptySet()),
             100);
 
         assertEquals("Listener did not update topics list correctly",
             new HashSet<>(Arrays.asList("topic", "topic1")), topics);
     }
-
 
     private Thread asyncFetch(final String topic) {
         Thread thread = new Thread() {
