@@ -321,21 +321,9 @@ class KafkaService(JmxMixin, Service):
     def leader(self, topic, partition=0):
         """ Get the leader replica for the given topic and partition.
         """
-        kafka_dir = KAFKA_TRUNK
-        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " %\
-              (kafka_dir, self.zk.connect_setting())
-        cmd += "get /brokers/topics/%s/partitions/%d/state" % (topic, partition)
-        self.logger.debug(cmd)
-
-        node = self.zk.nodes[0]
-        self.logger.debug("Querying zookeeper to find leader replica for topic %s: \n%s" % (cmd, topic))
-        partition_state = None
-        for line in node.account.ssh_capture(cmd):
-            # loop through all lines in the output, but only hold on to the first match
-            if partition_state is None:
-                match = re.match("^({.+})$", line)
-                if match is not None:
-                    partition_state = match.groups()[0]
+        self.logger.debug("Querying zookeeper to find leader replica for topic: \n%s" % (topic))
+        zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
+        partition_state = self.zk.query(zk_path)
 
         if partition_state is None:
             raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
@@ -359,3 +347,19 @@ class KafkaService(JmxMixin, Service):
             raise ValueError("We are retrieving bootstrap servers for the port: %s which is not currently open. - " % str(port_mapping))
 
         return ','.join([node.account.hostname + ":" + str(port_mapping.number) for node in self.nodes])
+
+    def controller(self):
+        """ Get the controller node
+        """
+        self.logger.debug("Querying zookeeper to find controller broker")
+        controller_info = self.zk.query("/controller")
+
+        if controller_info is None:
+            raise Exception("Error finding controller info")
+
+        controller_info = json.loads(controller_info)
+        self.logger.debug(controller_info)
+
+        controller_idx = int(controller_info["brokerid"])
+        self.logger.info("Controller's ID: %d" % (controller_idx))
+        return self.get_node(controller_idx)
