@@ -97,4 +97,3 @@ class ZookeeperService(Service):
     def zookeeper_migration(self, node, zk_acl):
         la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
-        time.sleep(5)
