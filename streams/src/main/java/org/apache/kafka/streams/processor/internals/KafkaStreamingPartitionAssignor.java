@@ -66,6 +66,58 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
     private Set<TaskId> standbyTasks;
 
+    public static class TopicsInfo {
+        public Set<String> sourceTopics;
+        public Set<String> stateTopics;
+
+        public TopicsInfo(Set<String> sourceTopics, Set<String> stateTopics) {
+            this.sourceTopics = sourceTopics;
+            this.stateTopics = stateTopics;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o instanceof TopicsInfo) {
+                TopicsInfo other = (TopicsInfo) o;
+                return other.sourceTopics.equals(this.sourceTopics) && other.stateTopics.equals(this.stateTopics);
+            } else {
+                return false;
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            long n = ((long) sourceTopics.hashCode() << 32) | (long) stateTopics.hashCode();
+            return (int) (n % 0xFFFFFFFFL);
+        }
+    }
+
+    public static class TasksInfo {
+        public Map<TaskId, Set<TopicPartition>> partitionsForTask;
+        public Map<String, Set<TaskId>> tasksForState;
+
+        public TasksInfo(Map<TaskId, Set<TopicPartition>> partitionsForTask, Map<String, Set<TaskId>> tasksForState) {
+            this.partitionsForTask = partitionsForTask;
+            this.tasksForState = tasksForState;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o instanceof TasksInfo) {
+                TasksInfo other = (TasksInfo) o;
+                return other.partitionsForTask.equals(this.partitionsForTask) && other.tasksForState.equals(this.tasksForState);
+            } else {
+                return false;
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            long n = ((long) partitionsForTask.hashCode() << 32) | (long) tasksForState.hashCode();
+            return (int) (n % 0xFFFFFFFFL);
+        }
+    }
+
     // TODO: the following ZK dependency should be removed after KIP-4
     private static final String ZK_TOPIC_PATH = "/brokers/topics";
     private static final String ZK_BROKER_PATH = "/brokers/ids";
@@ -322,7 +374,13 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
             for (Map.Entry<String, Set<TaskId>> entry : tasksInfo.tasksForState.entrySet()) {
                 String topic = entry.getKey() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
-                int numTasks = entry.getValue().size();
+
+                // the expected number of partitions is the max value of TaskId.partition + 1
+                int numPartitions = 0;
+                for (TaskId task : entry.getValue()) {
+                    if (numPartitions < task.partition + 1)
+                        numPartitions = task.partition + 1;
+                }
 
                 boolean topicNotReady = true;
 
@@ -332,22 +390,22 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
                     // if topic does not exist, create it
                     if (topicMetadata == null) {
                         try {
-                            createTopic(topic, numTasks);
+                            createTopic(topic, numPartitions);
                         } catch (ZkNodeExistsException e) {
                             // ignore and continue
                         }
                     } else {
-                        if (topicMetadata.size() > numTasks) {
+                        if (topicMetadata.size() > numPartitions) {
                             // else if topic exists with more #.partitions than needed, delete in order to re-create it
                             try {
                                 deleteTopic(topic);
                             } catch (ZkNodeExistsException e) {
                                 // ignore and continue
                             }
-                        } else if (topicMetadata.size() < numTasks) {
+                        } else if (topicMetadata.size() < numPartitions) {
                             // else if topic exists with less #.partitions than needed, add partitions
                             try {
-                                addPartitions(topic, numTasks - topicMetadata.size(), topicMetadata);
+                                addPartitions(topic, numPartitions - topicMetadata.size(), topicMetadata);
                             } catch (ZkNoNodeException e) {
                                 // ignore and continue
                             }
@@ -361,7 +419,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
                 List<PartitionInfo> partitions;
                 do {
                     partitions = streamThread.restoreConsumer.partitionsFor(topic);
-                } while (partitions == null || partitions.size() != numTasks);
+                } while (partitions == null || partitions.size() != numPartitions);
             }
         }
 
