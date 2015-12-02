@@ -18,12 +18,15 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -45,6 +48,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * How we do this may depend on KAFKA-2120, so for now, we retain the simplistic behavior.
  */
 public class ConsumerNetworkClient implements Closeable {
+    private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
+
     private final KafkaClient client;
     private final AtomicBoolean wakeup = new AtomicBoolean(false);
     private final DelayedTaskQueue delayedTasks = new DelayedTaskQueue();
@@ -88,7 +93,9 @@ public class ConsumerNetworkClient implements Closeable {
      * Send a new request. Note that the request is not actually transmitted on the
      * network until one of the {@link #poll(long)} variants is invoked. At this
      * point the request will either be transmitted successfully or will fail.
-     * Use the returned future to obtain the result of the send.
+     * Use the returned future to obtain the result of the send. Note that there is no
+     * need to check for disconnects explicitly on the {@link ClientResponse} object;
+     * instead, the future will be failed with a {@link DisconnectException}.
      * @param node The destination of the request
      * @param api The Kafka API call
      * @param request The request payload
@@ -258,7 +265,7 @@ public class ConsumerNetworkClient implements Closeable {
                 for (ClientRequest request : requestEntry.getValue()) {
                     RequestFutureCompletionHandler handler =
                             (RequestFutureCompletionHandler) request.callback();
-                    handler.complete(new ClientResponse(request, now, true, null));
+                    handler.onComplete(new ClientResponse(request, now, true, null));
                 }
                 iterator.remove();
             }
@@ -350,7 +357,17 @@ public class ConsumerNetworkClient implements Closeable {
 
         @Override
         public void onComplete(ClientResponse response) {
-            complete(response);
+            if (response.wasDisconnected()) {
+                ClientRequest request = response.request();
+                RequestSend send = request.request();
+                ApiKeys api = ApiKeys.forId(send.header().apiKey());
+                int correlation = send.header().correlationId();
+                log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
+                        api, request, correlation, send.destination());
+                raise(DisconnectException.INSTANCE);
+            } else {
+                complete(response);
+            }
         }
     }
 }
