@@ -47,6 +47,12 @@ class ZookeeperService(Service):
     def security_config(self):
         return SecurityConfig(zk_sasl=self.zk_sasl)
 
+    @property
+    def security_system_properties(self):
+        return "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider " \
+               "-Djava.security.auth.login.config=%s " \
+               "-Djava.security.krb5.conf=%s " % (self.security_config.JAAS_CONF_PATH, self.security_config.KRB5CONF_PATH)
+
     def start_node(self, node):
         idx = self.idx(node)
         self.logger.info("Starting ZK node %d on %s", idx, node.account.hostname)

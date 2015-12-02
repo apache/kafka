@@ -56,9 +56,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
     def run_zk_migration(self):
         # change zk config (auth provider + jaas login)
-        self.zk.kafka_opts = "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider " \
-                             "-Djava.security.auth.login.config=%s " \
-                             "-Djava.security.krb5.conf=%s " % (self.zk.security_config.JAAS_CONF_PATH, self.zk.security_config.KRB5CONF_PATH)
+        self.zk.kafka_opts = self.zk.security_system_properties
         self.zk.zk_sasl = True
         self.kafka.start_minikdc(self.zk.zk_principals)
         # restart zk
