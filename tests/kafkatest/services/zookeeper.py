@@ -41,6 +41,7 @@ class ZookeeperService(Service):
         self.kafka_opts = ""
         self.zk_sasl = zk_sasl
         super(ZookeeperService, self).__init__(context, num_nodes)
+        self.zk_principals = "zkclient "  + ' '.join(['zookeeper/' + zk_node.account.hostname for zk_node in self.nodes])
 
     @property
     def security_config(self):
@@ -93,6 +94,10 @@ class ZookeeperService(Service):
     def connect_setting(self):
         return ','.join([node.account.hostname + ':2181' for node in self.nodes])
 
+    #
+    # This call is used to simulate a rolling upgrade to enable/disable
+    # the use of ZooKeeper ACLs.
+    #
     def zookeeper_migration(self, node, zk_acl):
         la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)

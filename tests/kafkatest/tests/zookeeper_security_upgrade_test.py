@@ -43,7 +43,6 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
             "replication-factor": 3,
             'configs': {"min.insync.replicas": 2}}})
 
-
     def create_producer_and_consumer(self):
         self.producer = VerifiableProducer(
             self.test_context, self.num_producers, self.kafka, self.topic,
@@ -57,9 +56,11 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
     def run_zk_migration(self):
         # change zk config (auth provider + jaas login)
-        self.zk.kafka_opts = "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider -Djava.security.auth.login.config=%s" % SecurityConfig.JAAS_CONF_PATH
+        self.zk.kafka_opts = "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider " \
+                             "-Djava.security.auth.login.config=%s " \
+                             "-Djava.security.krb5.conf=%s " % (self.zk.security_config.JAAS_CONF_PATH, self.zk.security_config.KRB5CONF_PATH)
         self.zk.zk_sasl = True
-        self.kafka.start_minikdc()
+        self.kafka.start_minikdc(self.zk.zk_principals)
         # restart zk
         for node in self.zk.nodes:
             self.zk.stop_node(node)

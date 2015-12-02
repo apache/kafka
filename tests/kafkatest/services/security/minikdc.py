@@ -63,7 +63,7 @@ class MiniKdc(Service):
         self.logger.info(props_file)
 
         kafka_principals = ' '.join(['kafka/' + kafka_node.account.hostname for kafka_node in self.kafka_nodes])
-        principals = 'client ' + kafka_principals + self.extra_principals
+        principals = 'client ' + kafka_principals + ' ' + self.extra_principals
         self.logger.info("Starting MiniKdc with principals " + principals)
 
         lib_dir = "/opt/%s/core/build/dependant-testlibs" % kafka_dir(node)
