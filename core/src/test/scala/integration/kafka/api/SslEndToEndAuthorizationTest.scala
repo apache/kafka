@@ -15,15 +15,15 @@
   * limitations under the License.
   */
 
-package kafka.server
+package kafka.api
 
-import java.io.File
-
-import kafka.api.SaslTestHarness
+import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.protocol.SecurityProtocol
 
-class SaslSslReplicaFetchTest extends BaseReplicaFetchTest with SaslTestHarness {
-  override protected val zkSaslEnabled = false
-  protected def securityProtocol = SecurityProtocol.SASL_SSL
-  protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+
+class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
+  override protected def securityProtocol = SecurityProtocol.SSL
+  this.serverConfig.setProperty(SslConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
+  override val clientPrincipal = "O=client,CN=localhost"
+  override val kafkaPrincipal = "O=server,CN=localhost"
 }

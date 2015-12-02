@@ -76,7 +76,7 @@ import org.slf4j.LoggerFactory;
  * props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  * props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  *
- * Producer<String, String> producer = new KafkaProducer(props);
+ * Producer<String, String> producer = new KafkaProducer<>(props);
  * for(int i = 0; i < 100; i++)
  *     producer.send(new ProducerRecord<String, String>("my-topic", Integer.toString(i), Integer.toString(i)));
  *

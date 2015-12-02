@@ -53,19 +53,26 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
 
   @Before
   override def setUp() {
+    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile)
+    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile)
     super.setUp()
-    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig.putAll(TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile))
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerConfig.putAll(producerSecurityProps)
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.putAll(TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile))
+    consumerConfig.putAll(consumerSecurityProps)
     for (i <- 0 until producerCount)
-      producers += new KafkaProducer(producerConfig)
+      producers += TestUtils.createNewProducer(brokerList, 
+                                               acks = 1,
+                                               securityProtocol = this.securityProtocol,
+                                               trustStoreFile = this.trustStoreFile,
+                                               props = Some(producerConfig))
     for (i <- 0 until consumerCount) {
-      consumers += new KafkaConsumer(consumerConfig)
+      consumers += TestUtils.createNewConsumer(brokerList,
+                                               securityProtocol = this.securityProtocol,
+                                               trustStoreFile = this.trustStoreFile,
+                                               props = Some(consumerConfig))
     }
 
     // create the consumer offset topic

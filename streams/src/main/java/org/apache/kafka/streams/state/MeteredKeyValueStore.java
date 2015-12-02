@@ -91,6 +91,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.flushTime = this.metrics.addLatencySensor(metricGrp, name, "flush", "store-name", name);
         this.restoreTime = this.metrics.addLatencySensor(metricGrp, name, "restore", "store-name", name);
 
+        serialization.init(context);
         this.context = context;
         this.partition = context.id().partition;
 

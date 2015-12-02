@@ -362,15 +362,6 @@ public class KeyValueStoreTestDriver<K, V> {
     }
 
     /**
-     * Get the streaming config that should be supplied to a {@link Serdes}'s constructor.
-     *
-     * @return the streaming config; never null
-     */
-    public StreamingConfig config() {
-        return config;
-    }
-
-    /**
      * Get the context that should be supplied to a {@link KeyValueStore}'s constructor. This context records any messages
      * written by the store to the Kafka topic, making them available via the {@link #flushedEntryStored(Object)} and
      * {@link #flushedEntryRemoved(Object)} methods.

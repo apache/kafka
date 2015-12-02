@@ -26,11 +26,12 @@ import org.junit.Test;
 
 public class InMemoryLRUCacheStoreTest {
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testPutGetRange() {
         // Create the test driver ...
         KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create();
-        StateStoreSupplier supplier = Stores.create("my-store", driver.config())
+        StateStoreSupplier supplier = Stores.create("my-store")
                                                      .withIntegerKeys().withStringValues()
                                                      .inMemory().maxEntries(3)
                                                      .build();
@@ -82,7 +83,7 @@ public class InMemoryLRUCacheStoreTest {
         Deserializer<Integer> keyDeser = (Deserializer<Integer>) driver.context().keyDeserializer();
         Serializer<String> valSer = (Serializer<String>) driver.context().valueSerializer();
         Deserializer<String> valDeser = (Deserializer<String>) driver.context().valueDeserializer();
-        StateStoreSupplier supplier = Stores.create("my-store", driver.config())
+        StateStoreSupplier supplier = Stores.create("my-store")
                                                      .withKeys(keySer, keyDeser)
                                                      .withValues(valSer, valDeser)
                                                      .inMemory().maxEntries(3)
@@ -138,7 +139,7 @@ public class InMemoryLRUCacheStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        StateStoreSupplier supplier = Stores.create("my-store", driver.config())
+        StateStoreSupplier supplier = Stores.create("my-store")
                                                      .withIntegerKeys().withStringValues()
                                                      .inMemory().maxEntries(3)
                                                      .build();

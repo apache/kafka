@@ -43,11 +43,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * @return KStream
      */
     public <K, V> KStream<K, V> from(String... topics) {
-        String name = newName(KStreamImpl.SOURCE_NAME);
-
-        addSource(name, topics);
-
-        return new KStreamImpl<>(this, name, Collections.singleton(name));
+        return from(null, null, topics);
     }
 
     /**
@@ -60,7 +56,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param topics          the topic names, if empty default to all the topics in the config
      * @return KStream
      */
-    public <K, V> KStream<K, V> from(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer, String... topics) {
+    public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
         String name = newName(KStreamImpl.SOURCE_NAME);
 
         addSource(name, keyDeserializer, valDeserializer, topics);

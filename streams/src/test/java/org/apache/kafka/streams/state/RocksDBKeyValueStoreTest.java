@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
@@ -27,7 +26,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(
-            StreamingConfig config,
             ProcessorContext context,
             Class<K> keyClass,
             Class<V> valueClass,
@@ -39,9 +37,9 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
             Deserializer<K> keyDeser = (Deserializer<K>) context.keyDeserializer();
             Serializer<V> valSer = (Serializer<V>) context.valueSerializer();
             Deserializer<V> valDeser = (Deserializer<V>) context.valueDeserializer();
-            supplier = Stores.create("my-store", config).withKeys(keySer, keyDeser).withValues(valSer, valDeser).localDatabase().build();
+            supplier = Stores.create("my-store").withKeys(keySer, keyDeser).withValues(valSer, valDeser).localDatabase().build();
         } else {
-            supplier = Stores.create("my-store", config).withKeys(keyClass).withValues(valueClass).localDatabase().build();
+            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).localDatabase().build();
         }
 
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();

@@ -38,9 +38,10 @@ class MiniKdc(Service):
     LOCAL_KEYTAB_FILE = "/tmp/keytab"
     LOCAL_KRB5CONF_FILE = "/tmp/krb5.conf"
 
-    def __init__(self, context, kafka_nodes):
+    def __init__(self, context, kafka_nodes, extra_principals = ""):
         super(MiniKdc, self).__init__(context, 1)
         self.kafka_nodes = kafka_nodes
+        self.extra_principals = extra_principals
 
     def replace_in_file(self, file_path, pattern, subst):
         fh, abs_path = mkstemp()
@@ -62,7 +63,7 @@ class MiniKdc(Service):
         self.logger.info(props_file)
 
         kafka_principals = ' '.join(['kafka/' + kafka_node.account.hostname for kafka_node in self.kafka_nodes])
-        principals = 'client ' + kafka_principals
+        principals = 'client ' + kafka_principals + self.extra_principals
         self.logger.info("Starting MiniKdc with principals " + principals)
 
         lib_dir = "/opt/%s/core/build/dependant-testlibs" % kafka_dir(node)

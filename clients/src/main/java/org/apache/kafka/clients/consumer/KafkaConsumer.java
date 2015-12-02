@@ -243,8 +243,7 @@ import java.util.regex.Pattern;
  *     String topic = &quot;foo&quot;;
  *     TopicPartition partition0 = new TopicPartition(topic, 0);
  *     TopicPartition partition1 = new TopicPartition(topic, 1);
- *     consumer.assign(partition0);
- *     consumer.assign(partition1);
+ *     consumer.assign(Arrays.asList(partition0, partition1));
  * </pre>
  *
  * The group that the consumer specifies is still used for committing offsets, but now the set of partitions will only
@@ -291,7 +290,7 @@ import java.util.regex.Pattern;
  * and {@link #subscribe(Pattern, ConsumerRebalanceListener)}.
  * For example, when partitions are taken from a consumer the consumer will want to commit its offset for those partitions by
  * implementing {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}. When partitions are assigned to a
- * consumer, the consumer will want to look up the offset for those new partitions an correctly initialize the consumer
+ * consumer, the consumer will want to look up the offset for those new partitions and correctly initialize the consumer
  * to that position by implementing {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}.
  * <p>
  * Another common use for {@link ConsumerRebalanceListener} is to flush any caches the application maintains for
@@ -471,8 +470,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a set of key-value pairs as configuration, a
-     * {@link ConsumerRebalanceListener} implementation, a key and a value {@link Deserializer}.
+     * A consumer is instantiated by providing a set of key-value pairs as configuration, and a key and a value {@link Deserializer}.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
      *
@@ -501,8 +499,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration and a
-     * {@link ConsumerRebalanceListener} implementation, a key and a value {@link Deserializer}.
+     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration, and a
+     * key and a value {@link Deserializer}.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
      *

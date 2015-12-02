@@ -164,7 +164,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
         args['kafka_dir'] = kafka_dir(node)
-        args['broker_list'] = self.kafka.bootstrap_servers()
+        args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         args['kafka_opts'] = self.security_config.kafka_opts
 
         cmd = "export JMX_PORT=%(jmx_port)s; " \

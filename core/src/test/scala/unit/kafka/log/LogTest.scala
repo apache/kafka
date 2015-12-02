@@ -30,21 +30,21 @@ import kafka.server.KafkaConfig
 
 class LogTest extends JUnitSuite {
   
-  var logDir: File = null
+  val tmpDir = TestUtils.tempDir()
+  val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime(0)
   var config: KafkaConfig = null
   val logConfig = LogConfig()  
 
   @Before
   def setUp() {
-    logDir = TestUtils.tempDir()
     val props = TestUtils.createBrokerConfig(0, "127.0.0.1:1", port = -1)
     config = KafkaConfig.fromProps(props)
   }
 
   @After
   def tearDown() {
-    CoreUtils.rm(logDir)
+    CoreUtils.rm(tmpDir)
   }
   
   def createEmptyLogs(dir: File, offsets: Int*) {

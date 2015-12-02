@@ -18,6 +18,7 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.services.security.security_config import SecurityConfig
 
 import os
 import subprocess
@@ -113,6 +114,7 @@ class MirrorMaker(Service):
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % MirrorMaker.LOG4J_CONFIG
+        cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " /opt/%s/bin/kafka-run-class.sh kafka.tools.MirrorMaker" % kafka_dir(node)
         cmd += " --consumer.config %s" % MirrorMaker.CONSUMER_CONFIG
         cmd += " --producer.config %s" % MirrorMaker.PRODUCER_CONFIG
@@ -147,15 +149,22 @@ class MirrorMaker(Service):
         node.account.ssh("mkdir -p %s" % MirrorMaker.PERSISTENT_ROOT, allow_fail=False)
         node.account.ssh("mkdir -p %s" % MirrorMaker.LOG_DIR, allow_fail=False)
 
+        self.security_config = self.source.security_config.client_config()
+        self.security_config.setup_node(node)
+
         # Create, upload one consumer config file for source cluster
         consumer_props = self.render("mirror_maker_consumer.properties")
+        consumer_props += str(self.security_config)
+
         node.account.create_file(MirrorMaker.CONSUMER_CONFIG, consumer_props)
         self.logger.info("Mirrormaker consumer props:\n" + consumer_props)
 
         # Create, upload producer properties file for target cluster
         producer_props = self.render('mirror_maker_producer.properties')
+        producer_props += str(self.security_config)
         self.logger.info("Mirrormaker producer props:\n" + producer_props)
         node.account.create_file(MirrorMaker.PRODUCER_CONFIG, producer_props)
+
 
         # Create and upload log properties
         log_config = self.render('tools_log4j.properties', log_file=MirrorMaker.LOG_FILE)
@@ -180,3 +189,4 @@ class MirrorMaker(Service):
                              (self.__class__.__name__, node.account))
         node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf %s" % MirrorMaker.PERSISTENT_ROOT, allow_fail=False)
+        self.security_config.clean_node(node)
