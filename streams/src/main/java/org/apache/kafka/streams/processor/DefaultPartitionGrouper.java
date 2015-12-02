@@ -31,42 +31,28 @@ import java.util.Set;
 
 public class DefaultPartitionGrouper extends PartitionGrouper {
 
-    public TasksInfo partitionGroups(Cluster metadata) {
-        Map<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
-        Map<String, Set<TaskId>> tasksForState = new HashMap<>();
+    public Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata) {
+        Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
 
-        for (Map.Entry<Integer, TopicsInfo> entry : topicGroups.entrySet()) {
+        for (Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
             Integer topicGroupId = entry.getKey();
-            Set<String> topicGroup = entry.getValue().sourceTopics;
+            Set<String> topicGroup = entry.getValue();
 
             int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
 
             for (int partitionId = 0; partitionId < maxNumPartitions; partitionId++) {
-                Set<TopicPartition> sourcePartitions = new HashSet<>(topicGroup.size());
+                Set<TopicPartition> group = new HashSet<>(topicGroup.size());
 
                 for (String topic : topicGroup) {
                     if (partitionId < metadata.partitionsForTopic(topic).size()) {
-                        sourcePartitions.add(new TopicPartition(topic, partitionId));
+                        group.add(new TopicPartition(topic, partitionId));
                     }
                 }
-
-                TaskId task = new TaskId(topicGroupId, partitionId);
-
-                partitionsForTask.put(task, Collections.unmodifiableSet(sourcePartitions));
-
-                for (String topic : entry.getValue().stateTopics) {
-                    Set<TaskId> tasks = tasksForState.get(topic);
-                    if (tasks == null) {
-                        tasks = new HashSet<>();
-                        tasksForState.put(topic, tasks);
-                    }
-
-                    tasks.add(task);
-                }
+                groups.put(new TaskId(topicGroupId, partitionId), Collections.unmodifiableSet(group));
             }
         }
 
-        return new TasksInfo(Collections.unmodifiableMap(partitionsForTask), Collections.unmodifiableMap(tasksForState));
+        return Collections.unmodifiableMap(groups);
     }
 
     protected int maxNumPartitions(Cluster metadata, Set<String> topics) {
@@ -85,3 +71,6 @@ public class DefaultPartitionGrouper extends PartitionGrouper {
     }
 
 }
+
+
+

@@ -26,84 +26,12 @@ import java.util.Set;
 
 public abstract class PartitionGrouper {
 
-    public static class TopicsInfo {
-        public Set<String> sourceTopics;
-        public Set<String> stateTopics;
-
-        public TopicsInfo(Set<String> sourceTopics, Set<String> stateTopics) {
-            this.sourceTopics = sourceTopics;
-            this.stateTopics = stateTopics;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (o instanceof TopicsInfo) {
-                TopicsInfo other = (TopicsInfo) o;
-                return other.sourceTopics.equals(this.sourceTopics) && other.stateTopics.equals(this.stateTopics);
-            } else {
-                return false;
-            }
-        }
-
-        @Override
-        public int hashCode() {
-            long n = ((long) sourceTopics.hashCode() << 32) | (long) stateTopics.hashCode();
-            return (int) (n % 0xFFFFFFFFL);
-        }
-    }
-
-    public static class TasksInfo {
-        public Map<TaskId, Set<TopicPartition>> partitionsForTask;
-        public Map<String, Set<TaskId>> tasksForState;
-
-        public TasksInfo(Map<TaskId, Set<TopicPartition>> partitionsForTask, Map<String, Set<TaskId>> tasksForState) {
-            this.partitionsForTask = partitionsForTask;
-            this.tasksForState = tasksForState;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (o instanceof TasksInfo) {
-                TasksInfo other = (TasksInfo) o;
-                return other.partitionsForTask.equals(this.partitionsForTask) && other.tasksForState.equals(this.tasksForState);
-            } else {
-                return false;
-            }
-        }
-
-        @Override
-        public int hashCode() {
-            long n = ((long) partitionsForTask.hashCode() << 32) | (long) tasksForState.hashCode();
-            return (int) (n % 0xFFFFFFFFL);
-        }
-    }
-
-    protected Map<Integer, TopicsInfo> topicGroups;
-
-    private KafkaStreamingPartitionAssignor partitionAssignor = null;
-
     /**
-     * Returns generated tasks information.
+     * Returns a map of task ids to groups of partitions.
      *
-     * @param metadata of the cluster
-     * @return tasks information
+     * @param topicGroups The subscribed topic groups
+     * @param metadata Metadata of the consuming cluster
+     * @return a map of task ids to groups of partitions
      */
-    public abstract TasksInfo partitionGroups(Cluster metadata);
-
-    public void topicGroups(Map<Integer, TopicsInfo> topicGroups) {
-        this.topicGroups = topicGroups;
-    }
-
-    public void partitionAssignor(KafkaStreamingPartitionAssignor partitionAssignor) {
-        this.partitionAssignor = partitionAssignor;
-    }
-
-    public Set<TaskId> taskIds(TopicPartition partition) {
-        return partitionAssignor.taskIds(partition);
-    }
-
-    public Set<TaskId> standbyTasks() {
-        return partitionAssignor.standbyTasks();
-    }
-
+    public abstract Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata);
 }

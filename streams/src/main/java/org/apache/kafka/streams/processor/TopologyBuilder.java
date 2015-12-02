@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
@@ -334,8 +335,8 @@ public class TopologyBuilder {
      *
      * @return groups of topic names
      */
-    public Map<Integer, PartitionGrouper.TopicsInfo> topicGroups() {
-        Map<Integer, PartitionGrouper.TopicsInfo> topicGroups = new HashMap<>();
+    public Map<Integer, KafkaStreamingPartitionAssignor.TopicsInfo> topicGroups() {
+        Map<Integer, KafkaStreamingPartitionAssignor.TopicsInfo> topicGroups = new HashMap<>();
 
         if (nodeGroups == null)
             nodeGroups = makeNodeGroups();
@@ -356,7 +357,7 @@ public class TopologyBuilder {
                     }
                 }
             }
-            topicGroups.put(entry.getKey(), new PartitionGrouper.TopicsInfo(
+            topicGroups.put(entry.getKey(), new KafkaStreamingPartitionAssignor.TopicsInfo(
                     Collections.unmodifiableSet(sourceTopics),
                     Collections.unmodifiableSet(stateTopics)));
         }

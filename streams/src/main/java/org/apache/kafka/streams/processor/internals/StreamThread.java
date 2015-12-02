@@ -90,6 +90,8 @@ public class StreamThread extends Thread {
     private final long totalRecordsToProcess;
     private final StreamingMetricsImpl sensors;
 
+    private KafkaStreamingPartitionAssignor partitionAssignor = null;
+
     private long lastClean;
     private long lastCommit;
     private long recordsProcessed;
@@ -136,7 +138,6 @@ public class StreamThread extends Thread {
         this.clientId = clientId;
         this.clientUUID = clientUUID;
         this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
-        this.partitionGrouper.topicGroups(builder.topicGroups());
 
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
@@ -164,6 +165,10 @@ public class StreamThread extends Thread {
         this.sensors = new StreamingMetricsImpl(metrics);
 
         this.running = new AtomicBoolean(true);
+    }
+
+    public void partitionAssignor(KafkaStreamingPartitionAssignor partitionAssignor) {
+        this.partitionAssignor = partitionAssignor;
     }
 
     private Producer<byte[], byte[]> createProducer() {
@@ -487,10 +492,13 @@ public class StreamThread extends Thread {
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
+        if (partitionAssignor == null)
+            throw new KafkaException("Partition assignor has not been initialized while adding stream tasks: this should not happen.");
+
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
         for (TopicPartition partition : assignment) {
-            Set<TaskId> taskIds = partitionGrouper.taskIds(partition);
+            Set<TaskId> taskIds = partitionAssignor.taskIds(partition);
             for (TaskId taskId : taskIds) {
                 Set<TopicPartition> partitions = partitionsForTask.get(taskId);
                 if (partitions == null) {
@@ -550,9 +558,12 @@ public class StreamThread extends Thread {
     }
 
     private void addStandbyTasks() {
+        if (partitionAssignor == null)
+            throw new KafkaException("Partition assignor has not been initialized while adding standby tasks: this should not happen.");
+
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
-        for (TaskId taskId : partitionGrouper.standbyTasks()) {
+        for (TaskId taskId : partitionAssignor.standbyTasks()) {
             StandbyTask task = createStandbyTask(taskId);
             if (task != null) {
                 standbyTasks.put(taskId, task);

@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamingConfig;
-import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
@@ -62,9 +61,11 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     private static final Logger log = LoggerFactory.getLogger(KafkaStreamingPartitionAssignor.class);
 
     private StreamThread streamThread;
+
     private int numStandbyReplicas;
-    private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
     private Set<TaskId> standbyTasks;
+    private Map<Integer, TopicsInfo> topicGroups;
+    private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
 
     public static class TopicsInfo {
         public Set<String> sourceTopics;
@@ -88,32 +89,6 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         @Override
         public int hashCode() {
             long n = ((long) sourceTopics.hashCode() << 32) | (long) stateTopics.hashCode();
-            return (int) (n % 0xFFFFFFFFL);
-        }
-    }
-
-    public static class TasksInfo {
-        public Map<TaskId, Set<TopicPartition>> partitionsForTask;
-        public Map<String, Set<TaskId>> tasksForState;
-
-        public TasksInfo(Map<TaskId, Set<TopicPartition>> partitionsForTask, Map<String, Set<TaskId>> tasksForState) {
-            this.partitionsForTask = partitionsForTask;
-            this.tasksForState = tasksForState;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (o instanceof TasksInfo) {
-                TasksInfo other = (TasksInfo) o;
-                return other.partitionsForTask.equals(this.partitionsForTask) && other.tasksForState.equals(this.tasksForState);
-            } else {
-                return false;
-            }
-        }
-
-        @Override
-        public int hashCode() {
-            long n = ((long) partitionsForTask.hashCode() << 32) | (long) tasksForState.hashCode();
             return (int) (n % 0xFFFFFFFFL);
         }
     }
@@ -233,6 +208,11 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         }
     }
 
+    /**
+     * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
+     * since the former needs later's cached metadata while sending subscriptions,
+     * and the latter needs former's returned assignment when adding tasks.
+     */
     @Override
     public void configure(Map<String, ?> configs) {
         numStandbyReplicas = (Integer) configs.get(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG);
@@ -251,7 +231,9 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         }
 
         streamThread = (StreamThread) o;
-        streamThread.partitionGrouper.partitionAssignor(this);
+        streamThread.partitionAssignor(this);
+
+        this.topicGroups = streamThread.builder.topicGroups();
 
         if (configs.containsKey(StreamingConfig.ZOOKEEPER_CONNECT_CONFIG))
             zkClient = new ZkClient((String) configs.get(StreamingConfig.ZOOKEEPER_CONNECT_CONFIG), 30 * 1000, 30 * 1000, new ZKStringSerializer());
@@ -317,10 +299,29 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
             state.capacity = state.capacity + 1d;
         }
 
-        // Get partition groups from the partition grouper
-        PartitionGrouper.TasksInfo tasksInfo = streamThread.partitionGrouper.partitionGroups(metadata);
+        // get the tasks as partition groups from the partition grouper
+        Map<Integer, Set<String>> sourceTopicGroups = new HashMap<>();
+        for (Map.Entry<Integer, TopicsInfo> entry : topicGroups.entrySet()) {
+            sourceTopicGroups.put(entry.getKey(), entry.getValue().sourceTopics);
+        }
+        Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(sourceTopicGroups, metadata);
 
-        states = TaskAssignor.assign(states, tasksInfo.partitionsForTask.keySet(), numStandbyReplicas);
+        // add tasks to state topic subscribers
+        Map<String, Set<TaskId>> tasksForState = new HashMap<>();
+        for (TaskId task : partitionsForTask.keySet()) {
+            for (String topic : topicGroups.get(task.topicGroupId).stateTopics) {
+                Set<TaskId> tasks = tasksForState.get(topic);
+                if (tasks == null) {
+                    tasks = new HashSet<>();
+                    tasksForState.put(topic, tasks);
+                }
+
+                tasks.add(task);
+            }
+        }
+
+        // assign tasks to clients
+        states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
         Map<String, Assignment> assignment = new HashMap<>();
 
         for (Map.Entry<UUID, Set<String>> entry : consumersByClient.entrySet()) {
@@ -350,7 +351,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
                 for (int j = i; j < numTaskIds; j += numConsumers) {
                     TaskId taskId = taskIds.get(j);
                     if (j < numActiveTasks) {
-                        for (TopicPartition partition : tasksInfo.partitionsForTask.get(taskId)) {
+                        for (TopicPartition partition : partitionsForTask.get(taskId)) {
                             partitions.add(partition);
                             active.add(taskId);
                         }
@@ -369,10 +370,10 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
             }
         }
 
-        // If ZK is specified, get the tasks for each state topic and validate the topic partitions
+        // if ZK is specified, get the tasks for each state topic and validate the topic partitions
         if (zkClient != null) {
 
-            for (Map.Entry<String, Set<TaskId>> entry : tasksInfo.tasksForState.entrySet()) {
+            for (Map.Entry<String, Set<TaskId>> entry : tasksForState.entrySet()) {
                 String topic = entry.getKey() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
 
                 // the expected number of partitions is the max value of TaskId.partition + 1
