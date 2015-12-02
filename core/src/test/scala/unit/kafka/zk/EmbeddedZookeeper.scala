@@ -37,6 +37,8 @@ class EmbeddedZookeeper() {
   factory.startup(zookeeper)
   val port = zookeeper.getClientPort()
 
+  println("Starting embedded zookeeper on port " + port + " using directories " + snapshotDir + "," + logDir)
+
   def shutdown() {
     CoreUtils.swallow(zookeeper.shutdown())
     CoreUtils.swallow(factory.shutdown())
