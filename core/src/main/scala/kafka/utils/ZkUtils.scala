@@ -66,9 +66,9 @@ object ZkUtils {
   val IsrChangeNotificationPath = "/isr_change_notification"
   val EntityConfigPath = "/config"
   val EntityConfigChangesPath = "/config/changes"
-  
-  def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
-    val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
+
+  def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean, operationRetryTimeoutInMillis: Long = -1): ZkUtils = {
+    val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout, operationRetryTimeoutInMillis)
     new ZkUtils(zkClient, zkConnection, isZkSecurityEnabled)
   }
   
@@ -84,9 +84,9 @@ object ZkUtils {
     zkClient
   }
 
-  def createZkClientAndConnection(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int): (ZkClient, ZkConnection) = {
+  def createZkClientAndConnection(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, operationRetryTimeoutInMillis: Long = -1): (ZkClient, ZkConnection) = {
     val zkConnection = new ZkConnection(zkUrl, sessionTimeout)
-    val zkClient = new ZkClient(zkConnection, connectionTimeout, ZKStringSerializer)
+    val zkClient = new ZkClient(zkConnection, connectionTimeout, ZKStringSerializer, operationRetryTimeoutInMillis)
     (zkClient, zkConnection)
   }
   
