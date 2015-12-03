@@ -21,6 +21,7 @@ from tempfile import mkstemp
 from shutil import move
 from os import remove, close
 from io import open
+import uuid
 
 class MiniKdc(Service):
 
@@ -35,8 +36,8 @@ class MiniKdc(Service):
     KEYTAB_FILE = "/mnt/minikdc/keytab"
     KRB5CONF_FILE = "/mnt/minikdc/krb5.conf"
     LOG_FILE = "/mnt/minikdc/minikdc.log"
-    LOCAL_KEYTAB_FILE = "/tmp/keytab"
-    LOCAL_KRB5CONF_FILE = "/tmp/krb5.conf"
+    LOCAL_KEYTAB_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_keytab"
+    LOCAL_KRB5CONF_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_krb5.conf"
 
     def __init__(self, context, kafka_nodes, extra_principals = ""):
         super(MiniKdc, self).__init__(context, 1)
