@@ -91,7 +91,6 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
     def test_zk_security_upgrade(self, security_protocol):
         self.zk.start()
         self.kafka.security_protocol = security_protocol
-        #self.kafka.start(self.zk.zk_principals)
         if(self.no_sasl):
             self.kafka.start()
         else:

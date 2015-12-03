@@ -76,6 +76,17 @@ class KafkaService(JmxMixin, Service):
         self.sasl_mechanism = sasl_mechanism
         self.topics = topics
         self.minikdc = None
+        #
+        # In a heavily loaded and not very fast machine, it is
+        # sometimes necessary to give more time for the zk client
+        # to have its session established, especially if the client
+        # is authenticating and waiting for the SaslAuthenticated
+        # in addition to the SyncConnected event.
+        #
+        # The defaut value for zookeeper.connect.timeout.ms is
+        # 2 seconds and here we increase it to 5 seconds, but
+        # it can be overriden by setting the corresponding parameter
+        # for this constructor.
         self.zk_connect_timeout = zk_connect_timeout
 
         self.port_mappings = {
