@@ -43,7 +43,7 @@ class ZookeeperService(Service):
         super(ZookeeperService, self).__init__(context, num_nodes)
         if zk_sasl:
             self.zk_principals = " zkclient "  + ' '.join(['zookeeper/' + zk_node.account.hostname for zk_node in self.nodes])
-        else
+        else:
             self.zk_principals = ""
 
     @property
