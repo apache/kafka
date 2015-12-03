@@ -82,22 +82,17 @@ public class KafkaStreaming {
 
     private final StreamThread[] threads;
 
-    private String jobId;
-    private String clientId;
-    private final Metrics metrics;
-    private final Time time;
-
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
         // create the metrics
-        this.time = new SystemTime();
+        Time time = new SystemTime();
 
-        jobId = config.getString(StreamingConfig.JOB_ID_CONFIG);
+        String jobId = config.getString(StreamingConfig.JOB_ID_CONFIG);
         if (jobId.length() <= 0)
-            jobId = "Kafka-Streams-Job";
+            jobId = "kafka-streams";
 
-        clientId = config.getString(StreamingConfig.CLIENT_ID_CONFIG);
+        String clientId = config.getString(StreamingConfig.CLIENT_ID_CONFIG);
         if (clientId.length() <= 0)
-            clientId = jobId + "_" + STREAMING_CLIENT_ID_SEQUENCE.getAndIncrement();
+            clientId = jobId + "-" + STREAMING_CLIENT_ID_SEQUENCE.getAndIncrement();
 
         List<MetricsReporter> reporters = config.getConfiguredInstances(StreamingConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
@@ -107,11 +102,11 @@ public class KafkaStreaming {
             .timeWindow(config.getLong(StreamingConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
 
-        this.metrics = new Metrics(metricConfig, reporters, time);
+        Metrics metrics = new Metrics(metricConfig, reporters, time);
 
         this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, this.clientId, this.metrics, this.time);
+            this.threads[i] = new StreamThread(builder, config, jobId, clientId, metrics, time);
         }
     }
 

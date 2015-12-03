@@ -55,7 +55,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Configurable {
 
@@ -107,16 +106,43 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         }
         Collections.sort(brokers);
 
+        log.debug("Read brokers {} from ZK in partition assignor.", brokers);
+
         return brokers;
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<Integer, List<Integer>> getTopicMetadata(String topic) {
+        String data = zkClient.readData(ZK_TOPIC_PATH + "/" + topic, true);
+
+        if (data == null) return null;
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+
+            Map<String, Object> dataMap = mapper.readValue(data, new TypeReference<Map<String, Object>>() {
+
+            });
+
+            Map<Integer, List<Integer>> partitions = (Map<Integer, List<Integer>>) dataMap.get("partitions");
+
+            log.debug("Read partitions {} for topic {} from ZK in partition assignor.", partitions, topic);
+
+            return partitions;
+        } catch (IOException e) {
+            throw new KafkaException(e);
+        }
+    }
+
     private void createTopic(String topic, int numPartitions) throws ZkNodeExistsException {
+        log.debug("Creating topic {} with {} partitions from ZK in partition assignor.", topic, numPartitions);
+
         // we always assign leaders to brokers starting at the first one with replication factor 1
         List<Integer> brokers = getBrokers();
 
         Map<Integer, List<Integer>> assignment = new HashMap<>();
-        for (int i = 1; i <= numPartitions; i++) {
-            assignment.put(1, Collections.singletonList(brokers.get((i - 1) % brokers.size())));
+        for (int i = 0; i < numPartitions; i++) {
+            assignment.put(i, Collections.singletonList(brokers.get(i % brokers.size())));
         }
 
         // try to write to ZK with open ACL
@@ -135,10 +161,14 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     }
 
     private void deleteTopic(String topic) throws ZkNodeExistsException {
+        log.debug("Deleting topic {} from ZK in partition assignor.", topic);
+
         zkClient.createPersistent(ZK_DELETE_TOPIC_PATH + "/" + topic, "", ZooDefs.Ids.OPEN_ACL_UNSAFE);
     }
 
     private void addPartitions(String topic, int numPartitions, Map<Integer, List<Integer>> existingAssignment) {
+        log.debug("Adding {} partitions topic {} from ZK with existing partitions assigned as {} in partition assignor.", topic, numPartitions, existingAssignment);
+
         // we always assign new leaders to brokers starting at the last broker of the existing assignment with replication factor 1
         List<Integer> brokers = getBrokers();
 
@@ -146,8 +176,8 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
         Map<Integer, List<Integer>> newAssignment = new HashMap<>(existingAssignment);
 
-        for (int i = 1; i < numPartitions; i++) {
-            newAssignment.put(i + startIndex, Collections.singletonList(brokers.get(i + startIndex - 1) % brokers.size()));
+        for (int i = 0; i < numPartitions; i++) {
+            newAssignment.put(i + startIndex, Collections.singletonList(brokers.get(i + startIndex) % brokers.size()));
         }
 
         // try to write to ZK with open ACL
@@ -161,25 +191,6 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
             zkClient.writeData(ZK_TOPIC_PATH + "/" + topic, data);
         } catch (JsonProcessingException e) {
-            throw new KafkaException(e);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<Integer, List<Integer>> getTopicMetadata(String topic) {
-        String data = zkClient.readData(ZK_TOPIC_PATH + "/" + topic, true);
-
-        if (data == null) return null;
-
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-
-            Map<String, Object> dataMap = mapper.readValue(data, new TypeReference<Map<String, Object>>() {
-
-            });
-
-            return (Map<Integer, List<Integer>>) dataMap.get("partitions");
-        } catch (IOException e) {
             throw new KafkaException(e);
         }
     }
@@ -348,6 +359,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
         // if ZK is specified, get the tasks for each state topic and validate the topic partitions
         if (zkClient != null) {
+            log.debug("Starting to validate changelog topics in partition assignor.");
 
             for (Map.Entry<String, Set<TaskId>> entry : stateTopicToTaskIds.entrySet()) {
                 String topic = entry.getKey() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
@@ -398,6 +410,8 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
                     partitions = streamThread.restoreConsumer.partitionsFor(topic);
                 } while (partitions == null || partitions.size() != numPartitions);
             }
+
+            log.info("Completed validating changelog topics in partition assignor.");
         }
 
         return assignment;

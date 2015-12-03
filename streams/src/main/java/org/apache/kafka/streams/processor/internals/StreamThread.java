@@ -68,6 +68,7 @@ public class StreamThread extends Thread {
     private static final AtomicInteger STREAMING_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
+    public final String jobId;
     public final String clientId;
 
     protected final StreamingConfig config;
@@ -113,10 +114,11 @@ public class StreamThread extends Thread {
 
     public StreamThread(TopologyBuilder builder,
                         StreamingConfig config,
+                        String jobId,
                         String clientId,
                         Metrics metrics,
                         Time time) throws Exception {
-        this(builder, config, null , null, null, clientId, metrics, time);
+        this(builder, config, null , null, null, jobId, clientId, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
@@ -124,11 +126,13 @@ public class StreamThread extends Thread {
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
+                 String jobId,
                  String clientId,
                  Metrics metrics,
                  Time time) throws Exception {
         super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
 
+        this.jobId = jobId;
         this.config = config;
         this.builder = builder;
         this.clientId = clientId;
@@ -168,7 +172,7 @@ public class StreamThread extends Thread {
 
     private Producer<byte[], byte[]> createProducer() {
         log.info("Creating producer client for stream thread [" + this.getName() + "]");
-        return new KafkaProducer<>(config.getProducerConfigs(),
+        return new KafkaProducer<>(config.getProducerConfigs(this),
                 new ByteArraySerializer(),
                 new ByteArraySerializer());
     }
@@ -182,7 +186,7 @@ public class StreamThread extends Thread {
 
     private Consumer<byte[], byte[]> createRestoreConsumer() {
         log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(),
+        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }

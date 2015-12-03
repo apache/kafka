@@ -47,7 +47,7 @@ public class SubscriptionInfo {
 
     public ByteBuffer encode() {
         if (version == 1) {
-            ByteBuffer buf = ByteBuffer.allocate(4 + 16 + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
+            ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 4 + clientId.length() /* client id */ + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
             // version
             buf.putInt(1);
             // encode client id
