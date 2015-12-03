@@ -21,7 +21,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
@@ -128,9 +127,37 @@ public class TopologyBuilder {
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
         }
+
+        @SuppressWarnings("unchecked")
         @Override
         public ProcessorNode build() {
             return new SinkNode(name, topic, keySerializer, valSerializer);
+        }
+    }
+
+    public static class TopicsInfo {
+        public Set<String> sourceTopics;
+        public Set<String> stateTopics;
+
+        public TopicsInfo(Set<String> sourceTopics, Set<String> stateTopics) {
+            this.sourceTopics = sourceTopics;
+            this.stateTopics = stateTopics;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o instanceof TopicsInfo) {
+                TopicsInfo other = (TopicsInfo) o;
+                return other.sourceTopics.equals(this.sourceTopics) && other.stateTopics.equals(this.stateTopics);
+            } else {
+                return false;
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            long n = ((long) sourceTopics.hashCode() << 32) | (long) stateTopics.hashCode();
+            return (int) (n % 0xFFFFFFFFL);
         }
     }
 
@@ -335,8 +362,8 @@ public class TopologyBuilder {
      *
      * @return groups of topic names
      */
-    public Map<Integer, KafkaStreamingPartitionAssignor.TopicsInfo> topicGroups() {
-        Map<Integer, KafkaStreamingPartitionAssignor.TopicsInfo> topicGroups = new HashMap<>();
+    public Map<Integer, TopicsInfo> topicGroups() {
+        Map<Integer, TopicsInfo> topicGroups = new HashMap<>();
 
         if (nodeGroups == null)
             nodeGroups = makeNodeGroups();
@@ -357,7 +384,7 @@ public class TopologyBuilder {
                     }
                 }
             }
-            topicGroups.put(entry.getKey(), new KafkaStreamingPartitionAssignor.TopicsInfo(
+            topicGroups.put(entry.getKey(), new TopicsInfo(
                     Collections.unmodifiableSet(sourceTopics),
                     Collections.unmodifiableSet(stateTopics)));
         }

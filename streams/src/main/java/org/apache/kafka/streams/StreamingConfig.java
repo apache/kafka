@@ -87,8 +87,9 @@ public class StreamingConfig extends AbstractConfig {
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>PartitionGrouper</code> interface.";
 
-    /** <code>client.id</code> */
-    public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
+    /** <code>job.id</code> */
+    public static final String JOB_ID_CONFIG = "job.id";
+    public static final String JOB_ID_DOC = "An id string to identify for the stream job. It is used both as the default client-id prefix as well as the group-id for membership management.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -111,15 +112,21 @@ public class StreamingConfig extends AbstractConfig {
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
-    /**
-     * <code>bootstrap.servers</code>
-     */
+    /** <code>bootstrap.servers</code> */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+
+    /** <code>client.id</code> */
+    public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
     private static final String SYSTEM_TEMP_DIRECTORY = System.getProperty("java.io.tmpdir");
 
     static {
-        CONFIG = new ConfigDef().define(CLIENT_ID_CONFIG,
+        CONFIG = new ConfigDef().define(JOB_ID_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.MEDIUM,
+                                        StreamingConfig.JOB_ID_DOC)
+                                .define(CLIENT_ID_CONFIG,
                                         Type.STRING,
                                         "",
                                         Importance.MEDIUM,
@@ -232,8 +239,8 @@ public class StreamingConfig extends AbstractConfig {
 
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread) {
         Map<String, Object> props = getRestoreConsumerConfigs();
-        props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
         props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
+        props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
         return props;
     }
@@ -257,6 +264,7 @@ public class StreamingConfig extends AbstractConfig {
         props.remove(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG);
         props.remove(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG);
         props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
         return props;
     }

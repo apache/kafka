@@ -59,7 +59,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -69,7 +68,7 @@ public class StreamThread extends Thread {
     private static final AtomicInteger STREAMING_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
-    public final UUID clientUUID;
+    public final String clientId;
 
     protected final StreamingConfig config;
     protected final TopologyBuilder builder;
@@ -81,7 +80,6 @@ public class StreamThread extends Thread {
     private final Map<TaskId, StreamTask> activeTasks;
     private final Map<TaskId, StandbyTask> standbyTasks;
     private final Set<TaskId> prevTasks;
-    private final String clientId;
     private final Time time;
     private final File stateDir;
     private final long pollTimeMs;
@@ -116,10 +114,9 @@ public class StreamThread extends Thread {
     public StreamThread(TopologyBuilder builder,
                         StreamingConfig config,
                         String clientId,
-                        UUID clientUUID,
                         Metrics metrics,
                         Time time) throws Exception {
-        this(builder, config, null , null, null, clientId, clientUUID, metrics, time);
+        this(builder, config, null , null, null, clientId, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
@@ -128,7 +125,6 @@ public class StreamThread extends Thread {
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
                  String clientId,
-                 UUID clientUUID,
                  Metrics metrics,
                  Time time) throws Exception {
         super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
@@ -136,7 +132,6 @@ public class StreamThread extends Thread {
         this.config = config;
         this.builder = builder;
         this.clientId = clientId;
-        this.clientUUID = clientUUID;
         this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
 
         // set the producer and consumer clients
@@ -498,7 +493,7 @@ public class StreamThread extends Thread {
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
         for (TopicPartition partition : assignment) {
-            Set<TaskId> taskIds = partitionAssignor.taskIds(partition);
+            Set<TaskId> taskIds = partitionAssignor.tasksForPartition(partition);
             for (TaskId taskId : taskIds) {
                 Set<TopicPartition> partitions = partitionsForTask.get(taskId);
                 if (partitions == null) {
