@@ -830,13 +830,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.
                     //
-                    // NOTE that in this case we need to disable wakeups for the non-blocking poll since
-                    // the consumed positions has already been updated and hence we must return these
-                    // records to users to process before being interrupted
+                    // NOTE that we use quickPoll() in this case which disables wakeups and delayed
+                    // task execution since the consumed positions has already been updated and we
+                    // must return these records to users to process before being interrupted or
+                    // auto-committing offsets
                     fetcher.initFetches(metadata.fetch());
-                    client.disableWakeups();
-                    client.poll(0);
-                    client.enableWakeups();
+                    client.quickPoll();
                     return new ConsumerRecords<>(records);
                 }
 
