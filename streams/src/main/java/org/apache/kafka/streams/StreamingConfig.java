@@ -222,7 +222,7 @@ public class StreamingConfig extends AbstractConfig {
     }
 
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread) {
-        Map<String, Object> props = getRestoreConsumerConfigs();
+        Map<String, Object> props = getBaseConsumerConfigs();
         props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
         props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());

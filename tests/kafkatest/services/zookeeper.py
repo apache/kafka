@@ -18,9 +18,11 @@ from ducktape.services.service import Service
 
 from kafkatest.services.kafka.directory import kafka_dir
 from kafkatest.services.security.security_config import SecurityConfig
+from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 
 import subprocess
 import time
+import re
 
 
 class ZookeeperService(Service):
@@ -111,3 +113,22 @@ class ZookeeperService(Service):
     def zookeeper_migration(self, node, zk_acl):
         la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, self.connect_setting())
         node.account.ssh(la_migra_cmd)
+
+    def query(self, path):
+        """
+        Queries zookeeper for data associated with 'path' and returns all fields in the schema
+        """
+        kafka_dir = KAFKA_TRUNK
+        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
+              (kafka_dir, self.connect_setting(), path)
+        self.logger.debug(cmd)
+
+        node = self.nodes[0]
+        result = None
+        for line in node.account.ssh_capture(cmd):
+            # loop through all lines in the output, but only hold on to the first match
+            if result is None:
+                match = re.match("^({.+})$", line)
+                if match is not None:
+                    result = match.groups()[0]
+        return result
