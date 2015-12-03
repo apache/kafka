@@ -42,7 +42,6 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -294,7 +293,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!future.isRetriable())
                 throw future.exception();
 
-            Utils.sleep(retryBackoffMs);
+            time.sleep(retryBackoffMs);
         }
     }
 
@@ -358,7 +357,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!future.isRetriable())
                 throw future.exception();
 
-            Utils.sleep(retryBackoffMs);
+            time.sleep(retryBackoffMs);
         }
     }
 
