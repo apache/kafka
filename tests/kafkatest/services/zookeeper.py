@@ -41,10 +41,6 @@ class ZookeeperService(Service):
         self.kafka_opts = ""
         self.zk_sasl = zk_sasl
         super(ZookeeperService, self).__init__(context, num_nodes)
-        if zk_sasl:
-            self.zk_principals = " zkclient "  + ' '.join(['zookeeper/' + zk_node.account.hostname for zk_node in self.nodes])
-        else:
-            self.zk_principals = ""
 
     @property
     def security_config(self):
@@ -55,6 +51,10 @@ class ZookeeperService(Service):
         return "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider " \
                "-Djava.security.auth.login.config=%s " \
                "-Djava.security.krb5.conf=%s " % (self.security_config.JAAS_CONF_PATH, self.security_config.KRB5CONF_PATH)
+
+    @property
+    def zk_principals(self):
+        return " zkclient "  + ' '.join(['zookeeper/' + zk_node.account.hostname for zk_node in self.nodes])
 
     def start_node(self, node):
         idx = self.idx(node)
