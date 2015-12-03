@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -82,9 +83,17 @@ public class KafkaStreaming {
 
     private final StreamThread[] threads;
 
+    // processId is expected to be unique across JVMs and to be used
+    // in userData of the subscription request to allow assignor be aware
+    // of the co-location of stream thread's consumers. It is for internal
+    // usage only and should not be exposed to users at all.
+    private final UUID processId;
+
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
         // create the metrics
         Time time = new SystemTime();
+
+        this.processId = UUID.randomUUID();
 
         String jobId = config.getString(StreamingConfig.JOB_ID_CONFIG);
         if (jobId.length() <= 0)
@@ -106,7 +115,7 @@ public class KafkaStreaming {
 
         this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, jobId, clientId, metrics, time);
+            this.threads[i] = new StreamThread(builder, config, jobId, clientId, processId, metrics, time);
         }
     }
 

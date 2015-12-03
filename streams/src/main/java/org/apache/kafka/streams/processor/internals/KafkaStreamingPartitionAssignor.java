@@ -55,6 +55,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Configurable {
 
@@ -241,7 +242,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         Set<TaskId> prevTasks = streamThread.prevTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
         standbyTasks.removeAll(prevTasks);
-        SubscriptionInfo data = new SubscriptionInfo(streamThread.clientId, prevTasks, standbyTasks);
+        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks);
 
         return new Subscription(new ArrayList<>(topics), data.encode());
     }
@@ -257,8 +258,8 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         //    - We try not to assign the same set of tasks to two different clients
         //    We do the assignment in one-pass. The result may not satisfy above all.
         // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
-        Map<String, Set<String>> consumersByClient = new HashMap<>();
-        Map<String, ClientState<TaskId>> states = new HashMap<>();
+        Map<UUID, Set<String>> consumersByClient = new HashMap<>();
+        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
 
         // Decode subscription info
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
@@ -267,17 +268,17 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
 
-            Set<String> consumers = consumersByClient.get(info.clientId);
+            Set<String> consumers = consumersByClient.get(info.processId);
             if (consumers == null) {
                 consumers = new HashSet<>();
-                consumersByClient.put(info.clientId, consumers);
+                consumersByClient.put(info.processId, consumers);
             }
             consumers.add(consumerId);
 
-            ClientState<TaskId> state = states.get(info.clientId);
+            ClientState<TaskId> state = states.get(info.processId);
             if (state == null) {
                 state = new ClientState<>();
-                states.put(info.clientId, state);
+                states.put(info.processId, state);
             }
 
             state.prevActiveTasks.addAll(info.prevTasks);
@@ -311,10 +312,10 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
         Map<String, Assignment> assignment = new HashMap<>();
 
-        for (Map.Entry<String, Set<String>> entry : consumersByClient.entrySet()) {
-            String clientId = entry.getKey();
+        for (Map.Entry<UUID, Set<String>> entry : consumersByClient.entrySet()) {
+            UUID processId = entry.getKey();
             Set<String> consumers = entry.getValue();
-            ClientState<TaskId> state = states.get(clientId);
+            ClientState<TaskId> state = states.get(processId);
 
             ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTasks.size());
             final int numActiveTasks = state.activeTasks.size();

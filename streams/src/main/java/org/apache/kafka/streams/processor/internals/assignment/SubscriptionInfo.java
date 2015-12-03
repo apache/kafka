@@ -24,35 +24,38 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 public class SubscriptionInfo {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
 
+    private static final int CURRENT_VERSION = 1;
+
     public final int version;
-    public final String clientId;
+    public final UUID processId;
     public final Set<TaskId> prevTasks;
     public final Set<TaskId> standbyTasks;
 
-    public SubscriptionInfo(String clientId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks) {
-        this(1, clientId, prevTasks, standbyTasks);
+    public SubscriptionInfo(UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks) {
+        this(CURRENT_VERSION, processId, prevTasks, standbyTasks);
     }
 
-    private SubscriptionInfo(int version, String clientId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks) {
+    private SubscriptionInfo(int version, UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks) {
         this.version = version;
-        this.clientId = clientId;
+        this.processId = processId;
         this.prevTasks = prevTasks;
         this.standbyTasks = standbyTasks;
     }
 
     public ByteBuffer encode() {
-        if (version == 1) {
-            ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 4 + clientId.length() /* client id */ + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
+        if (version == CURRENT_VERSION) {
+            ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
             // version
-            buf.putInt(1);
-            // encode client id
-            buf.putInt(clientId.length());
-            buf.put(clientId.getBytes());
+            buf.putInt(version);
+            // encode client UUID
+            buf.putLong(processId.getMostSignificantBits());
+            buf.putLong(processId.getLeastSignificantBits());
             // encode ids of previously running tasks
             buf.putInt(prevTasks.size());
             for (TaskId id : prevTasks) {
@@ -80,12 +83,9 @@ public class SubscriptionInfo {
 
         // Decode version
         int version = data.getInt();
-        if (version == 1) {
-            // Decode client id
-            int len = data.getInt();
-            byte[] bytes = new byte[len];
-            data.get(bytes);
-            String clientId  = new String(bytes);
+        if (version == CURRENT_VERSION) {
+            // Decode client UUID
+            UUID processId = new UUID(data.getLong(), data.getLong());
             // Decode previously active tasks
             Set<TaskId> prevTasks = new HashSet<>();
             int numPrevs = data.getInt();
@@ -100,7 +100,7 @@ public class SubscriptionInfo {
                 standbyTasks.add(TaskId.readFrom(data));
             }
 
-            return new SubscriptionInfo(version, clientId, prevTasks, standbyTasks);
+            return new SubscriptionInfo(version, processId, prevTasks, standbyTasks);
 
         } else {
             TaskAssignmentException ex = new TaskAssignmentException("unable to decode subscription data: version=" + version);
@@ -111,7 +111,7 @@ public class SubscriptionInfo {
 
     @Override
     public int hashCode() {
-        return version ^ clientId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
+        return version ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
     }
 
     @Override
@@ -119,7 +119,7 @@ public class SubscriptionInfo {
         if (o instanceof SubscriptionInfo) {
             SubscriptionInfo other = (SubscriptionInfo) o;
             return this.version == other.version &&
-                    this.clientId.equals(other.clientId) &&
+                    this.processId.equals(other.processId) &&
                     this.prevTasks.equals(other.prevTasks) &&
                     this.standbyTasks.equals(other.standbyTasks);
         } else {

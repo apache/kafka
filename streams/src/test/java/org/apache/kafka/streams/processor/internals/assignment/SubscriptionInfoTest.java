@@ -23,6 +23,7 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
 
@@ -30,12 +31,14 @@ public class SubscriptionInfoTest {
 
     @Test
     public void testEncodeDecode() {
+        UUID processId = UUID.randomUUID();
+
         Set<TaskId> activeTasks =
                 new HashSet<>(Arrays.asList(new TaskId(0, 0), new TaskId(0, 1), new TaskId(1, 0)));
         Set<TaskId> standbyTasks =
                 new HashSet<>(Arrays.asList(new TaskId(1, 1), new TaskId(2, 0)));
 
-        SubscriptionInfo info = new SubscriptionInfo("client-id", activeTasks, standbyTasks);
+        SubscriptionInfo info = new SubscriptionInfo(processId, activeTasks, standbyTasks);
         SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
 
         assertEquals(info, decoded);

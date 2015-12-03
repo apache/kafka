@@ -59,6 +59,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -70,6 +71,7 @@ public class StreamThread extends Thread {
     public final PartitionGrouper partitionGrouper;
     public final String jobId;
     public final String clientId;
+    public final UUID processId;
 
     protected final StreamingConfig config;
     protected final TopologyBuilder builder;
@@ -116,9 +118,10 @@ public class StreamThread extends Thread {
                         StreamingConfig config,
                         String jobId,
                         String clientId,
+                        UUID processId,
                         Metrics metrics,
                         Time time) throws Exception {
-        this(builder, config, null , null, null, jobId, clientId, metrics, time);
+        this(builder, config, null , null, null, jobId, clientId, processId, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
@@ -128,6 +131,7 @@ public class StreamThread extends Thread {
                  Consumer<byte[], byte[]> restoreConsumer,
                  String jobId,
                  String clientId,
+                 UUID processId,
                  Metrics metrics,
                  Time time) throws Exception {
         super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
@@ -136,6 +140,7 @@ public class StreamThread extends Thread {
         this.config = config;
         this.builder = builder;
         this.clientId = clientId;
+        this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
 
         // set the producer and consumer clients
