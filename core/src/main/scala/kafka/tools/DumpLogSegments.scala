@@ -135,12 +135,12 @@ object DumpLogSegments {
     }
   }
 
-  private trait MessageParser {
-    def parse(message: Message): (Option[_], Option[_])
+  private trait MessageParser[K, V] {
+    def parse(message: Message): (Option[K], Option[V])
   }
 
-  private class DecoderMessageParser(keyDecoder: Decoder[_], valueDecoder: Decoder[_]) extends MessageParser {
-    override def parse(message: Message): (Option[_], Option[_]) = {
+  private class DecoderMessageParser[K, V](keyDecoder: Decoder[K], valueDecoder: Decoder[V]) extends MessageParser[K, V] {
+    override def parse(message: Message): (Option[K], Option[V]) = {
       if (message.isNull) {
         (None, None)
       } else {
@@ -156,7 +156,7 @@ object DumpLogSegments {
     }
   }
 
-  private class OffsetsMessageParser extends MessageParser {
+  private class OffsetsMessageParser extends MessageParser[String, String] {
     private def parseOffsets(offsetKey: OffsetKey, payload: ByteBuffer) = {
       val group = offsetKey.key.group
       val (topic, partition)  = offsetKey.key.topicPartition.asTuple
@@ -200,7 +200,7 @@ object DumpLogSegments {
                       nonConsecutivePairsForLogFilesMap: mutable.HashMap[String, List[(Long, Long)]],
                       isDeepIteration: Boolean,
                       maxMessageSize: Int,
-                      parser: MessageParser) {
+                      parser: MessageParser[_, _]) {
     val startOffset = file.getName().split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
     val messageSet = new FileMessageSet(file, false)
