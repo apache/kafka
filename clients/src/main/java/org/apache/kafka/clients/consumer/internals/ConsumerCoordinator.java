@@ -37,6 +37,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -50,7 +51,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,7 +62,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
-    private final Map<String, PartitionAssignor> protocolMap;
+    private final List<PartitionAssignor> assignors;
     private final org.apache.kafka.clients.Metadata metadata;
     private final MetadataSnapshot metadataSnapshot;
     private final ConsumerCoordinatorMetrics sensors;
@@ -105,10 +105,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
         this.autoCommitEnabled = autoCommitEnabled;
-
-        this.protocolMap = new HashMap<>();
-        for (PartitionAssignor assignor : assignors)
-            this.protocolMap.put(assignor.name(), assignor);
+        this.assignors = assignors;
 
         addMetadataListener();
 
@@ -122,13 +119,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    public LinkedHashMap<String, ByteBuffer> metadata() {
-        LinkedHashMap<String, ByteBuffer> metadata = new LinkedHashMap<>();
-        for (PartitionAssignor assignor : protocolMap.values()) {
+    public List<ProtocolMetadata> metadata() {
+        List<ProtocolMetadata> metadataList = new ArrayList<>();
+        for (PartitionAssignor assignor : assignors) {
             Subscription subscription = assignor.subscription(subscriptions.subscription());
-            metadata.put(assignor.name(), ConsumerProtocol.serializeSubscription(subscription));
+            ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
+            metadataList.add(new ProtocolMetadata(assignor.name(), metadata));
         }
-        return metadata;
+        return metadataList;
     }
 
     private void addMetadataListener() {
@@ -157,12 +155,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
     }
 
+    private PartitionAssignor lookupAssignor(String name) {
+        for (PartitionAssignor assignor : this.assignors) {
+            if (assignor.name().equals(name))
+                return assignor;
+        }
+        return null;
+    }
+
     @Override
     protected void onJoinComplete(int generation,
                                   String memberId,
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
-        PartitionAssignor assignor = protocolMap.get(assignmentStrategy);
+        PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
@@ -199,7 +205,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
                                                         Map<String, ByteBuffer> allSubscriptions) {
-        PartitionAssignor assignor = protocolMap.get(protocol);
+        PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 

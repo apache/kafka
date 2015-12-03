@@ -188,8 +188,8 @@ public class RequestResponseTest {
 
     private AbstractRequest createJoinGroupRequest() {
         ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
-        List<JoinGroupRequest.GroupProtocol> protocols = new ArrayList<>();
-        protocols.add(new JoinGroupRequest.GroupProtocol("consumer-range", metadata));
+        List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
+        protocols.add(new JoinGroupRequest.ProtocolMetadata("consumer-range", metadata));
         return new JoinGroupRequest("group1", 30000, "consumer1", "consumer", protocols);
     }
 

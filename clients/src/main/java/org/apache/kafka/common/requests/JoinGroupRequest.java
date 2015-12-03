@@ -40,13 +40,13 @@ public class JoinGroupRequest extends AbstractRequest {
     private final int sessionTimeout;
     private final String memberId;
     private final String protocolType;
-    private final List<GroupProtocol> groupProtocols;
+    private final List<ProtocolMetadata> groupProtocols;
 
-    public static class GroupProtocol {
+    public static class ProtocolMetadata {
         private final String name;
         private final ByteBuffer metadata;
 
-        public GroupProtocol(String name, ByteBuffer metadata) {
+        public ProtocolMetadata(String name, ByteBuffer metadata) {
             this.name = name;
             this.metadata = metadata;
         }
@@ -64,7 +64,7 @@ public class JoinGroupRequest extends AbstractRequest {
                             int sessionTimeout,
                             String memberId,
                             String protocolType,
-                            List<GroupProtocol> groupProtocols) {
+                            List<ProtocolMetadata> groupProtocols) {
         super(new Struct(CURRENT_SCHEMA));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
@@ -72,7 +72,7 @@ public class JoinGroupRequest extends AbstractRequest {
         struct.set(PROTOCOL_TYPE_KEY_NAME, protocolType);
 
         List<Struct> groupProtocolsList = new ArrayList<>();
-        for (GroupProtocol protocol : groupProtocols) {
+        for (ProtocolMetadata protocol : groupProtocols) {
             Struct protocolStruct = struct.instance(GROUP_PROTOCOLS_KEY_NAME);
             protocolStruct.set(PROTOCOL_NAME_KEY_NAME, protocol.name);
             protocolStruct.set(PROTOCOL_METADATA_KEY_NAME, protocol.metadata);
@@ -99,7 +99,7 @@ public class JoinGroupRequest extends AbstractRequest {
             Struct groupProtocolStruct = (Struct) groupProtocolObj;
             String name = groupProtocolStruct.getString(PROTOCOL_NAME_KEY_NAME);
             ByteBuffer metadata = groupProtocolStruct.getBytes(PROTOCOL_METADATA_KEY_NAME);
-            groupProtocols.add(new GroupProtocol(name, metadata));
+            groupProtocols.add(new ProtocolMetadata(name, metadata));
         }
     }
 
@@ -132,7 +132,7 @@ public class JoinGroupRequest extends AbstractRequest {
         return memberId;
     }
 
-    public List<GroupProtocol> groupProtocols() {
+    public List<ProtocolMetadata> groupProtocols() {
         return groupProtocols;
     }
 
