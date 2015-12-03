@@ -41,7 +41,10 @@ class ZookeeperService(Service):
         self.kafka_opts = ""
         self.zk_sasl = zk_sasl
         super(ZookeeperService, self).__init__(context, num_nodes)
-        self.zk_principals = "zkclient "  + ' '.join(['zookeeper/' + zk_node.account.hostname for zk_node in self.nodes])
+        if zk_sasl:
+            self.zk_principals = " zkclient "  + ' '.join(['zookeeper/' + zk_node.account.hostname for zk_node in self.nodes])
+        else
+            self.zk_principals = ""
 
     @property
     def security_config(self):

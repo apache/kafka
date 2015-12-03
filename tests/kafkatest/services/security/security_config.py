@@ -169,7 +169,8 @@ class SecurityConfig(TemplateRenderer):
     def kafka_opts(self):
         if self.has_sasl:
             return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
-        return ""
+        else:
+            return ""
 
     def __str__(self):
         """
