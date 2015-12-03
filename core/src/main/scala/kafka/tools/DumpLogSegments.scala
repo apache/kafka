@@ -18,9 +18,12 @@
 package kafka.tools
 
 import java.io._
+import java.nio.ByteBuffer
+import kafka.coordinator.{GroupMetadataKey, OffsetKey, GroupMetadataManager}
 import kafka.message._
 import kafka.log._
 import kafka.utils._
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import collection.mutable
 import joptsimple.OptionParser
 import kafka.serializer.Decoder
@@ -51,6 +54,8 @@ object DumpLogSegments {
                                .withOptionalArg()
                                .ofType(classOf[java.lang.String])
                                .defaultsTo("kafka.serializer.StringDecoder")
+    val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from __consumer_offsets topic")
+
 
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
@@ -65,8 +70,13 @@ object DumpLogSegments {
     val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
     val isDeepIteration = if(options.has(deepIterationOpt)) true else false
   
-    val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
-    val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
+    val messageParser = if (options.has(offsetsOpt)) {
+      new OffsetsMessageParser
+    } else {
+      val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
+      val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
+      new DecoderMessageParser(keyDecoder, valueDecoder)
+    }
 
     val misMatchesForIndexFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
     val nonConsecutivePairsForLogFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
@@ -75,7 +85,7 @@ object DumpLogSegments {
       val file = new File(arg)
       if(file.getName.endsWith(Log.LogFileSuffix)) {
         println("Dumping " + file)
-        dumpLog(file, print, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , valueDecoder, keyDecoder)
+        dumpLog(file, print, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , messageParser)
       } else if(file.getName.endsWith(Log.IndexFileSuffix)) {
         println("Dumping " + file)
         dumpIndex(file, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
@@ -124,15 +134,73 @@ object DumpLogSegments {
         println("offset: %d position: %d".format(entry.offset + index.baseOffset, entry.position))
     }
   }
-  
+
+  private trait MessageParser {
+    def parse(message: Message): (Option[_], Option[_])
+  }
+
+  private class DecoderMessageParser(keyDecoder: Decoder[_], valueDecoder: Decoder[_]) extends MessageParser {
+    override def parse(message: Message): (Option[_], Option[_]) = {
+      if (message.isNull) {
+        (None, None)
+      } else {
+        val key = if (message.hasKey)
+          Some(keyDecoder.fromBytes(Utils.readBytes(message.key)))
+        else
+          None
+
+        val payload = Some(valueDecoder.fromBytes(Utils.readBytes(message.payload)))
+
+        (key, payload)
+      }
+    }
+  }
+
+  private class OffsetsMessageParser extends MessageParser {
+    private def parseOffsets(offsetKey: OffsetKey, payload: ByteBuffer) = {
+      val group = offsetKey.key.group
+      val (topic, partition)  = offsetKey.key.topicPartition.asTuple
+      val offset = GroupMetadataManager.readOffsetMessageValue(payload)
+      (Some(s"offset::${group}:${topic}:${partition}"), Some(s"${offset.offset}:${offset.metadata}"))
+    }
+
+    private def parseGroupMetadata(groupMetadataKey: GroupMetadataKey, payload: ByteBuffer) = {
+      val groupId = groupMetadataKey.key
+      val group = GroupMetadataManager.readGroupMessageValue(groupId, payload)
+      val protocolType = group.protocolType
+
+      val assignment = group.allMemberMetadata.map { member =>
+        if (protocolType == ConsumerProtocol.PROTOCOL_TYPE) {
+          val partitions = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment)).partitions()
+          s"${member.memberId}=${partitions}"
+        } else {
+          s"${member.memberId}=${String.format("%x", BigInt(1, member.assignment))}"
+        }
+      }.mkString("{", ",", "}")
+
+      (Some(s"metadata::${groupId}"), Some(s"${protocolType}:${group.protocol}:${group.generationId}:${assignment}"))
+    }
+
+    override def parse(message: Message): (Option[String], Option[String]) = {
+      if (message.isNull || !message.hasKey) {
+        (None, None)
+      } else {
+        GroupMetadataManager.readMessageKey(message.key) match {
+          case offsetKey: OffsetKey => parseOffsets(offsetKey, message.payload)
+          case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, message.payload)
+          case _ => (None, None)
+        }
+      }
+    }
+  }
+
   /* print out the contents of the log */
   private def dumpLog(file: File,
                       printContents: Boolean,
                       nonConsecutivePairsForLogFilesMap: mutable.HashMap[String, List[(Long, Long)]],
                       isDeepIteration: Boolean,
                       maxMessageSize: Int,
-                      valueDecoder: Decoder[_],
-                      keyDecoder: Decoder[_]) {
+                      parser: MessageParser) {
     val startOffset = file.getName().split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
     val messageSet = new FileMessageSet(file, false)
@@ -160,10 +228,9 @@ object DumpLogSegments {
         if(msg.hasKey)
           print(" keysize: " + msg.keySize)
         if(printContents) {
-          if(msg.hasKey)
-            print(" key: " + keyDecoder.fromBytes(Utils.readBytes(messageAndOffset.message.key)))
-          val payload = if(messageAndOffset.message.isNull) null else valueDecoder.fromBytes(Utils.readBytes(messageAndOffset.message.payload))
-          print(" payload: " + payload)
+          val (key, payload) = parser.parse(msg)
+          key.map(key => print(s" key: ${key}"))
+          payload.map(payload => print(s" payload: ${payload}"))
         }
         println()
       }
