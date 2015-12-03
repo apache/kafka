@@ -13,19 +13,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
-import itertools
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 
+import itertools
+import os
+
+
 class ProducerPerformanceService(JmxMixin, PerformanceService):
 
+    PERSISTENT_ROOT = "/mnt/producer_performance"
+    STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "producer_performance.stdout")
+    LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
+    LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+
     logs = {
-        "producer_performance_log": {
-            "path": "/mnt/producer-performance.log",
+        "producer_performance_stdout": {
+            "path": STDOUT_CAPTURE,
             "collect_default": True},
+        "producer_performance_log": {
+            "path": LOG_FILE,
+            "collect_default": True
+        }
     }
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=TRUNK, settings={},
@@ -66,6 +80,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             cmd += "for file in /opt/%s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
             cmd += "export CLASSPATH; "
 
+        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
         cmd += "JMX_PORT=%(jmx_port)d KAFKA_OPTS=%(kafka_opts)s /opt/%(kafka_directory)s/bin/kafka-run-class.sh org.apache.kafka.tools.ProducerPerformance " \
               "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
 
@@ -76,10 +91,16 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
 
-        cmd += " | tee /mnt/producer-performance.log"
+        cmd += " | tee %s" % ProducerPerformanceService.STDOUT_CAPTURE
         return cmd
 
     def _worker(self, idx, node):
+
+        node.account.ssh("mkdir -p %s" % ProducerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
+
+        # Create and upload log properties
+        log_config = self.render('tools_log4j.properties', log_file=ProducerPerformanceService.LOG_FILE)
+        node.account.create_file(ProducerPerformanceService.LOG4J_CONFIG, log_config)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Producer performance %d command: %s", idx, cmd)
