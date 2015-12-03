@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
+
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
@@ -54,11 +56,17 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
         self.consumer.group_id = "group"
 
+
+    @property
+    def no_sasl(self):
+        return self.kafka.security_protocol == "PLAINTEXT" or self.kafka.security_protocol == "SSL"
+
     def run_zk_migration(self):
         # change zk config (auth provider + jaas login)
         self.zk.kafka_opts = self.zk.security_system_properties
         self.zk.zk_sasl = True
-        self.kafka.start_minikdc(self.zk.zk_principals)
+        if(self.no_sasl):
+            self.kafka.start_minikdc(self.zk.zk_principals)
         # restart zk
         for node in self.zk.nodes:
             self.zk.stop_node(node)
@@ -79,9 +87,15 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
             self.kafka.stop_node(node)
             self.kafka.start_node(node)
 
-    def test_zk_security_upgrade(self):
+    @matrix(security_protocol=["SASL_SSL","SSL","SASL_PLAINTEXT","PLAINTEXT"])
+    def test_zk_security_upgrade(self, security_protocol):
         self.zk.start()
-        self.kafka.start()
+        self.kafka.security_protocol = security_protocol
+        #self.kafka.start(self.zk.zk_principals)
+        if(self.no_sasl):
+            self.kafka.start()
+        else:
+            self.kafka.start(self.zk.zk_principals)
 
         #Create Producer and Consumer
         self.create_producer_and_consumer()

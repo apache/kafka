@@ -57,7 +57,8 @@ class KafkaService(JmxMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
+                 jmx_attributes=[], zk_connect_timeout=5000):
         """
         :type context
         :type zk: ZookeeperService
@@ -75,6 +76,7 @@ class KafkaService(JmxMixin, Service):
         self.sasl_mechanism = sasl_mechanism
         self.topics = topics
         self.minikdc = None
+        self.zk_connect_timeout = zk_connect_timeout
 
         self.port_mappings = {
             'PLAINTEXT': Port('PLAINTEXT', 9092, False),
@@ -105,11 +107,11 @@ class KafkaService(JmxMixin, Service):
         else:
             self.minikdc = None
 
-    def start(self):
+    def start(self, add_principals=""):
         self.open_port(self.security_protocol)
         self.open_port(self.interbroker_security_protocol)
 
-        self.start_minikdc()
+        self.start_minikdc(add_principals)
         Service.start(self)
 
         # Create topics if necessary
