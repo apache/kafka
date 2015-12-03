@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.utils.util import wait_until
 
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
@@ -22,6 +23,7 @@ from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 
 import itertools
 import os
+import subprocess
 
 
 class ProducerPerformanceService(JmxMixin, PerformanceService):
@@ -94,6 +96,17 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         cmd += " | tee %s" % ProducerPerformanceService.STDOUT_CAPTURE
         return cmd
 
+    def pids(self, node):
+        try:
+            cmd = "jps | grep -i ProducerPerformance | awk '{print $1}'"
+            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
+            return pid_arr
+        except (subprocess.CalledProcessError, ValueError) as e:
+            return []
+
+    def alive(self, node):
+        return len(self.pids(node)) > 0
+
     def _worker(self, idx, node):
 
         node.account.ssh("mkdir -p %s" % ProducerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
@@ -105,26 +118,34 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         cmd = self.start_cmd(node)
         self.logger.debug("Producer performance %d command: %s", idx, cmd)
 
-        last = None
+        # start ProducerPerformance process
         producer_output = node.account.ssh_capture(cmd)
+        wait_until(lambda: self.alive(node), timeout_sec=20, err_msg="ProducerPerformance failed to start")
+        # block until there is at least one line of output
         first_line = next(producer_output, None)
+        if first_line is None:
+            raise Exception("No output from ProducerPerformance")
 
-        if first_line is not None:
-            self.start_jmx_tool(idx, node)
-            for line in itertools.chain([first_line], producer_output):
-                if self.intermediate_stats:
-                    try:
-                        self.stats[idx-1].append(self.parse_stats(line))
-                    except:
-                        # Sometimes there are extraneous log messages
-                        pass
+        self.start_jmx_tool(idx, node)
+        wait_until(lambda: not self.alive(node), timeout_sec=1200, err_msg="ProducerPerformance failed to finish")
+        self.read_jmx_output(idx, node)
 
-                last = line
-            try:
-                self.results[idx-1] = self.parse_stats(last)
-            except:
-                raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
-            self.read_jmx_output(idx, node)
+        # parse producer output from file
+        last = None
+        producer_output = node.account.ssh_capture("cat %s" % ProducerPerformanceService.STDOUT_CAPTURE)
+        for line in producer_output:
+            if self.intermediate_stats:
+                try:
+                    self.stats[idx-1].append(self.parse_stats(line))
+                except:
+                    # Sometimes there are extraneous log messages
+                    pass
+
+            last = line
+        try:
+            self.results[idx-1] = self.parse_stats(last)
+        except:
+            raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
 
     def parse_stats(self, line):
 
