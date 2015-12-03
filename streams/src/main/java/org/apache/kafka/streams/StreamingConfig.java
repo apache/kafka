@@ -237,11 +237,11 @@ public class StreamingConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    public Map<String, Object> getConsumerConfigs(StreamThread streamThread) {
-        Map<String, Object> props = getRestoreConsumerConfigs(streamThread);
+    public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) {
+        Map<String, Object> props = getBaseConsumerConfigs();
 
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, streamThread.jobId);
-        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, streamThread.clientId + "-consumer");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
         props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
 
@@ -250,17 +250,18 @@ public class StreamingConfig extends AbstractConfig {
         return props;
     }
 
-    public Map<String, Object> getRestoreConsumerConfigs(StreamThread streamThread) {
-        Map<String, Object> props = getBaseConsumerConfigs(streamThread);
+    public Map<String, Object> getRestoreConsumerConfigs(String clientId) {
+        Map<String, Object> props = getBaseConsumerConfigs();
 
         // no need to set group id for a restore consumer
+        props.remove(ConsumerConfig.GROUP_ID_CONFIG);
 
-        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, streamThread.clientId + "-restore-consumer");
+        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-restore-consumer");
 
         return props;
     }
 
-    private Map<String, Object> getBaseConsumerConfigs(StreamThread streamThread) {
+    private Map<String, Object> getBaseConsumerConfigs() {
         Map<String, Object> props = this.originals();
 
         // set consumer default property values
@@ -275,7 +276,7 @@ public class StreamingConfig extends AbstractConfig {
         return props;
     }
 
-    public Map<String, Object> getProducerConfigs(StreamThread streamThread) {
+    public Map<String, Object> getProducerConfigs(String clientId) {
         Map<String, Object> props = this.originals();
 
         // set producer default property values
@@ -286,7 +287,7 @@ public class StreamingConfig extends AbstractConfig {
         props.remove(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
         props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
 
-        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, streamThread.clientId + "-producer");
+        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
     }
