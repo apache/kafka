@@ -105,7 +105,6 @@ object ConsoleConsumer extends Logging {
 
   def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, skipMessageOnError: Boolean) {
     while (messageCount < maxMessages || maxMessages == -1) {
-      messageCount += 1
       val msg: BaseConsumerRecord = try {
         consumer.receive()
       } catch {
@@ -122,6 +121,7 @@ object ConsoleConsumer extends Logging {
           // Consumer will be closed
           return
       }
+      messageCount += 1
       try {
         formatter.writeTo(msg.key, msg.value, System.out)
       } catch {
