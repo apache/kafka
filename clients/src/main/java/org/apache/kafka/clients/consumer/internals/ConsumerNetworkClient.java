@@ -175,7 +175,7 @@ public class ConsumerNetworkClient implements Closeable {
         long remaining = timeout;
         long now = begin;
         do {
-            poll(remaining, now);
+            poll(remaining, now, true);
             now = time.milliseconds();
             long elapsed = now - begin;
             remaining = timeout - elapsed;
@@ -190,10 +190,20 @@ public class ConsumerNetworkClient implements Closeable {
      * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public void poll(long timeout) {
-        poll(timeout, time.milliseconds());
+        poll(timeout, time.milliseconds(), true);
     }
 
-    private void poll(long timeout, long now) {
+    /**
+     * Poll for network IO and return immediately. This will not trigger wakeups,
+     * nor will it execute any delayed tasks.
+     */
+    public void quickPoll() {
+        disableWakeups();
+        poll(0, time.milliseconds(), false);
+        enableWakeups();
+    }
+
+    private void poll(long timeout, long now, boolean executeDelayedTasks) {
         // send all the requests we can send now
         trySend(now);
 
@@ -209,7 +219,8 @@ public class ConsumerNetworkClient implements Closeable {
         checkDisconnects(now);
 
         // execute scheduled tasks
-        delayedTasks.poll(now);
+        if (executeDelayedTasks)
+            delayedTasks.poll(now);
 
         // try again to send requests since buffer space may have been
         // cleared or a connect finished in the poll
