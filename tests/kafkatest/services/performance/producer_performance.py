@@ -17,7 +17,7 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
 import itertools
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 
 class ProducerPerformanceService(JmxMixin, PerformanceService):
@@ -58,26 +58,23 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             })
 
         cmd = ""
-        if node.version > LATEST_0_8_2:
-            cmd += "JMX_PORT=%(jmx_port)d KAFKA_OPTS=%(kafka_opts)s /opt/%(kafka_directory)s/bin/kafka-producer-perf-test.sh " \
-                  "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
 
-            self.security_config.setup_node(node)
-            if self.security_config.security_protocol != SecurityConfig.PLAINTEXT:
-                self.settings.update(self.security_config.properties)
+        if node.version <= LATEST_0_8_2:
+            # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
+            # the tools jar from trunk to the classpath
+            cmd += "for file in /opt/%s/tools/build/libs/kafka-tools*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
+            cmd += "for file in /opt/%s/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar; do CLASSPATH=$CLASSPATH:$file; done; " % KAFKA_TRUNK
+            cmd += "export CLASSPATH; "
 
-            for key, value in self.settings.items():
-                cmd += " %s=%s" % (str(key), str(value))
-        else:
-            # 0.8.X has a slightly different set of options. We'll attempt to use equivalent options
-            if self.args['throughput'] is not None and self.args['throughput'] >= 0:
-                self.logger.warn("Attempted to set throughput to %s messages per second, but 0.8.X producer performance does not support throughput throttling." % str(self.args['throughput']))
+        cmd += "JMX_PORT=%(jmx_port)d KAFKA_OPTS=%(kafka_opts)s /opt/%(kafka_directory)s/bin/kafka-run-class.sh org.apache.kafka.tools.ProducerPerformance " \
+              "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
 
-            cmd += "JMX_PORT=%(jmx_port)d /opt/%(kafka_directory)s/bin/kafka-producer-perf-test.sh " \
-                  "--topic %(topic)s --messages %(num_records)d --message-size %(record_size)d --new-producer --broker-list %(bootstrap_servers)s" % args
+        self.security_config.setup_node(node)
+        if self.security_config.security_protocol != SecurityConfig.PLAINTEXT:
+            self.settings.update(self.security_config.properties)
 
-            if "acks" in self.settings:
-                cmd += " --request-num-acks %s" % str(self.settings["acks"])
+        for key, value in self.settings.items():
+            cmd += " %s=%s" % (str(key), str(value))
 
         cmd += " | tee /mnt/producer-performance.log"
         return cmd
@@ -96,36 +93,29 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             for line in itertools.chain([first_line], producer_output):
                 if self.intermediate_stats:
                     try:
-                        self.stats[idx-1].append(self.parse_stats(line, node.version))
+                        self.stats[idx-1].append(self.parse_stats(line))
                     except:
                         # Sometimes there are extraneous log messages
                         pass
 
                 last = line
             try:
-                self.results[idx-1] = self.parse_stats(last, node.version)
+                self.results[idx-1] = self.parse_stats(last)
             except:
                 raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
             self.read_jmx_output(idx, node)
 
-    def parse_stats(self, line, version=TRUNK):
+    def parse_stats(self, line):
 
-        if version > LATEST_0_8_2:
-            parts = line.split(',')
-            return {
-                'records': int(parts[0].split()[0]),
-                'records_per_sec': float(parts[1].split()[0]),
-                'mbps': float(parts[1].split('(')[1].split()[0]),
-                'latency_avg_ms': float(parts[2].split()[0]),
-                'latency_max_ms': float(parts[3].split()[0]),
-                'latency_50th_ms': float(parts[4].split()[0]),
-                'latency_95th_ms': float(parts[5].split()[0]),
-                'latency_99th_ms': float(parts[6].split()[0]),
-                'latency_999th_ms': float(parts[7].split()[0]),
-            }
-        else:
-            parts = line.split(',')
-            return {
-                'records_per_sec': float(parts[8].split()[0]),
-                'mbps': float(parts[6].split()[0])
-            }
+        parts = line.split(',')
+        return {
+            'records': int(parts[0].split()[0]),
+            'records_per_sec': float(parts[1].split()[0]),
+            'mbps': float(parts[1].split('(')[1].split()[0]),
+            'latency_avg_ms': float(parts[2].split()[0]),
+            'latency_max_ms': float(parts[3].split()[0]),
+            'latency_50th_ms': float(parts[4].split()[0]),
+            'latency_95th_ms': float(parts[5].split()[0]),
+            'latency_99th_ms': float(parts[6].split()[0]),
+            'latency_999th_ms': float(parts[7].split()[0]),
+        }
