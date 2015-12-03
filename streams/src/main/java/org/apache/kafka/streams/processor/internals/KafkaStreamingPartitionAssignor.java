@@ -363,7 +363,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
             log.debug("Starting to validate changelog topics in partition assignor.");
 
             for (Map.Entry<String, Set<TaskId>> entry : stateTopicToTaskIds.entrySet()) {
-                String topic = entry.getKey() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+                String topic = streamThread.jobId + "-" + entry.getKey() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
 
                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = 0;

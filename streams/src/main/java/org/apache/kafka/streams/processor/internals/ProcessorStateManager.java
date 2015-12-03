@@ -47,6 +47,7 @@ public class ProcessorStateManager {
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     public static final String LOCK_FILE_NAME = ".lock";
 
+    private final String jobId;
     private final int partition;
     private final File baseDir;
     private final FileLock directoryLock;
@@ -57,7 +58,8 @@ public class ProcessorStateManager {
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
 
-    public ProcessorStateManager(int partition, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+    public ProcessorStateManager(String jobId, int partition, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+        this.jobId = jobId;
         this.partition = partition;
         this.baseDir = baseDir;
         this.stores = new HashMap<>();
@@ -89,6 +91,10 @@ public class ProcessorStateManager {
         }
     }
 
+    public String storeChangelogTopic(String storeName) {
+        return jobId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+    }
+
     public static FileLock lockStateDirectory(File stateDir) throws IOException {
         File lockFile = new File(stateDir, ProcessorStateManager.LOCK_FILE_NAME);
         FileChannel channel = new RandomAccessFile(lockFile, "rw").getChannel();
@@ -111,7 +117,7 @@ public class ProcessorStateManager {
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
         // check that the underlying change log topic exist or not
-        String topic = store.name() + STATE_CHANGELOG_TOPIC_SUFFIX;
+        String topic = storeChangelogTopic(store.name());
 
         // block until the partition is ready for this state changelog topic or time has elapsed
         boolean partitionNotFound = true;
@@ -147,17 +153,13 @@ public class ProcessorStateManager {
     }
 
     private void restoreActiveState(StateStore store, StateRestoreCallback stateRestoreCallback) {
-
-        if (store == null)
-            throw new IllegalArgumentException("Store " + store.name() + " has not been registered.");
-
         // ---- try to restore the state from change-log ---- //
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
         }
-        TopicPartition storePartition = new TopicPartition(store.name() + STATE_CHANGELOG_TOPIC_SUFFIX, partition);
+        TopicPartition storePartition = new TopicPartition(storeChangelogTopic(store.name()), partition);
         restoreConsumer.assign(Collections.singletonList(storePartition));
 
         try {
@@ -259,7 +261,7 @@ public class ProcessorStateManager {
 
             Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
             for (String storeName : stores.keySet()) {
-                TopicPartition part = new TopicPartition(storeName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, partition);
+                TopicPartition part = new TopicPartition(storeChangelogTopic(storeName), partition);
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {

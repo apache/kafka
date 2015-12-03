@@ -44,17 +44,19 @@ public class StandbyTask extends AbstractTask {
      * Create {@link StandbyTask} with its assigned partitions
      *
      * @param id                    the ID of this task
+     * @param jobId                 the ID of the job
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param topology              the instance of {@link ProcessorTopology}
      * @param config                the {@link StreamingConfig} specified by the user
      * @param metrics               the {@link StreamingMetrics} created by the thread
      */
     public StandbyTask(TaskId id,
+                       String jobId,
                        Consumer<byte[], byte[]> restoreConsumer,
                        ProcessorTopology topology,
                        StreamingConfig config,
                        StreamingMetrics metrics) {
-        super(id, restoreConsumer, topology, config, null);
+        super(id, jobId, restoreConsumer, topology, config, null);
 
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);

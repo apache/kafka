@@ -50,11 +50,14 @@ public class StandbyTaskTest {
 
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
 
+    private final String jobId = "test-job";
     private final String storeName1 = "store1";
     private final String storeName2 = "store2";
+    private final String storeChangelogTopicName1 = jobId + "-" + storeName1 + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+    private final String storeChangelogTopicName2 = jobId + "-" + storeName2 + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
 
-    private final TopicPartition partition1 = new TopicPartition(storeName1 + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1);
-    private final TopicPartition partition2 = new TopicPartition(storeName2 + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1);
+    private final TopicPartition partition1 = new TopicPartition(storeChangelogTopicName1, 1);
+    private final TopicPartition partition2 = new TopicPartition(storeChangelogTopicName2, 1);
 
     private final ProcessorTopology topology = new ProcessorTopology(
             Collections.<ProcessorNode>emptyList(),
@@ -88,25 +91,22 @@ public class StandbyTaskTest {
 
     @Before
     public void setup() {
-        String topicName1 = "store1" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
-        String topicName2 = "store2" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
-
         restoreStateConsumer.reset();
-        restoreStateConsumer.updatePartitions(topicName1, Utils.mkList(
-                new PartitionInfo(topicName1, 0, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo(topicName1, 1, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo(topicName1, 2, Node.noNode(), new Node[0], new Node[0])
+        restoreStateConsumer.updatePartitions(storeChangelogTopicName1, Utils.mkList(
+                new PartitionInfo(storeChangelogTopicName1, 0, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(storeChangelogTopicName1, 1, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(storeChangelogTopicName1, 2, Node.noNode(), new Node[0], new Node[0])
         ));
 
-        System.out.println("added " + topicName1);
+        System.out.println("added " + storeChangelogTopicName1);
 
-        restoreStateConsumer.updatePartitions(topicName2, Utils.mkList(
-                new PartitionInfo(topicName2, 0, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo(topicName2, 1, Node.noNode(), new Node[0], new Node[0]),
-                new PartitionInfo(topicName2, 2, Node.noNode(), new Node[0], new Node[0])
+        restoreStateConsumer.updatePartitions(storeChangelogTopicName2, Utils.mkList(
+                new PartitionInfo(storeChangelogTopicName2, 0, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(storeChangelogTopicName2, 1, Node.noNode(), new Node[0], new Node[0]),
+                new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
 
-        System.out.println("added " + topicName2);
+        System.out.println("added " + storeChangelogTopicName2);
     }
 
     @Test
@@ -116,7 +116,7 @@ public class StandbyTaskTest {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             StreamingConfig config = createConfig(baseDir);
-            StandbyTask task = new StandbyTask(taskId, restoreStateConsumer, topology, config, null);
+            StandbyTask task = new StandbyTask(taskId, jobId, restoreStateConsumer, topology, config, null);
 
             assertEquals(Utils.mkSet(partition2), new HashSet<>(task.changeLogPartitions()));
 
@@ -131,7 +131,7 @@ public class StandbyTaskTest {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             StreamingConfig config = createConfig(baseDir);
-            StandbyTask task = new StandbyTask(taskId, restoreStateConsumer, topology, config, null);
+            StandbyTask task = new StandbyTask(taskId, jobId, restoreStateConsumer, topology, config, null);
 
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 
@@ -150,7 +150,7 @@ public class StandbyTaskTest {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             StreamingConfig config = createConfig(baseDir);
-            StandbyTask task = new StandbyTask(taskId, restoreStateConsumer, topology, config, null);
+            StandbyTask task = new StandbyTask(taskId, jobId, restoreStateConsumer, topology, config, null);
 
             restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
 

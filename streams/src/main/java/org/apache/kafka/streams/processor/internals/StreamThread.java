@@ -492,7 +492,7 @@ public class StreamThread extends Thread {
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, topology, config, sensors);
+        return new StreamTask(id, jobId, consumer, producer, restoreConsumer, partitionsForTask, topology, config, sensors);
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
@@ -555,7 +555,7 @@ public class StreamThread extends Thread {
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStoreSuppliers().isEmpty()) {
-            return new StandbyTask(id, restoreConsumer, topology, config, sensors);
+            return new StandbyTask(id, jobId, restoreConsumer, topology, config, sensors);
         } else {
             return null;
         }

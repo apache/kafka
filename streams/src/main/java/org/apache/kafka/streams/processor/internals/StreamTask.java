@@ -64,6 +64,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * Create {@link StreamTask} with its assigned partitions
      *
      * @param id                    the ID of this task
+     * @param jobId                 the ID of the job
      * @param consumer              the instance of {@link Consumer}
      * @param producer              the instance of {@link Producer}
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
@@ -73,6 +74,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param metrics               the {@link StreamingMetrics} created by the thread
      */
     public StreamTask(TaskId id,
+                      String jobId,
                       Consumer<byte[], byte[]> consumer,
                       Producer<byte[], byte[]> producer,
                       Consumer<byte[], byte[]> restoreConsumer,
@@ -80,7 +82,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       ProcessorTopology topology,
                       StreamingConfig config,
                       StreamingMetrics metrics) {
-        super(id, restoreConsumer, topology, config, Collections.unmodifiableSet(new HashSet<>(partitions)));
+        super(id, jobId, restoreConsumer, topology, config, Collections.unmodifiableSet(new HashSet<>(partitions)));
         this.consumer = consumer;
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);

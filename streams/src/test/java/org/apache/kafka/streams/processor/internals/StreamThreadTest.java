@@ -133,7 +133,7 @@ public class StreamThreadTest {
                               Collection<TopicPartition> partitions,
                               ProcessorTopology topology,
                               StreamingConfig config) {
-            super(id, consumer, producer, restoreConsumer, partitions, topology, config, null);
+            super(id, "jobId", consumer, producer, restoreConsumer, partitions, topology, config, null);
         }
 
         @Override

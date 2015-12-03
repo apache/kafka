@@ -186,7 +186,7 @@ public class ProcessorStateManagerTest {
             FileLock lock;
 
             // the state manager locks the directory
-            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, new MockRestoreConsumer(), false);
+            ProcessorStateManager stateMgr = new ProcessorStateManager("test-job", 1, baseDir, new MockRestoreConsumer(), false);
 
             try {
                 // this should not get the lock
@@ -215,7 +215,7 @@ public class ProcessorStateManagerTest {
         try {
             MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore("mockStore", false);
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, new MockRestoreConsumer(), false);
+            ProcessorStateManager stateMgr = new ProcessorStateManager("test-job", 1, baseDir, new MockRestoreConsumer(), false);
             try {
                 stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
             } finally {
@@ -232,28 +232,28 @@ public class ProcessorStateManagerTest {
         try {
             long lastCheckpointedOffset = 10L;
             String persistentStoreName = "persistentStore";
-            String persistentStoreTopicName = persistentStoreName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+            String persistentStoreTopicName = "test-job-" + persistentStoreName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
 
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(baseDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
             checkpoint.write(Collections.singletonMap(new TopicPartition(persistentStoreTopicName, 2), lastCheckpointedOffset));
 
             MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
+            ProcessorStateManager stateMgr = new ProcessorStateManager("test-job", 2, baseDir, restoreConsumer, false);
+
             restoreConsumer.updatePartitions(persistentStoreTopicName, Utils.mkList(
                     new PartitionInfo(persistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0]),
                     new PartitionInfo(persistentStoreTopicName, 2, Node.noNode(), new Node[0], new Node[0])
             ));
 
-            TopicPartition partition = new TopicPartition("persistentStore", 2);
+            TopicPartition partition = new TopicPartition(persistentStoreTopicName, 2);
             restoreConsumer.updateEndOffsets(Collections.singletonMap(partition, 13L));
 
             MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore(persistentStoreName, true); // persistent store
-
-            ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer, false);
             try {
                 restoreConsumer.reset();
 
                 ArrayList<Integer> expectedKeys = new ArrayList<>();
-                long offset = -1L;
+                long offset;
                 for (int i = 1; i <= 3; i++) {
                     offset = (long) i;
                     int key = i * 10;
@@ -286,14 +286,16 @@ public class ProcessorStateManagerTest {
         try {
             long lastCheckpointedOffset = 10L;
             String persistentStoreName = "persistentStore";
-            String persistentStoreTopicName = persistentStoreName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
             String nonPersistentStoreName = "nonPersistentStore";
-            String nonPersistentStoreTopicName = nonPersistentStoreName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+
+            MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
+            ProcessorStateManager stateMgr = new ProcessorStateManager("test-job", 2, baseDir, restoreConsumer, false);
+            String persistentStoreTopicName = stateMgr.storeChangelogTopic(persistentStoreName);
+            String nonPersistentStoreTopicName = stateMgr.storeChangelogTopic(nonPersistentStoreName);
 
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(baseDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
             checkpoint.write(Collections.singletonMap(new TopicPartition(persistentStoreTopicName, 2), lastCheckpointedOffset));
 
-            MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
             restoreConsumer.updatePartitions(nonPersistentStoreTopicName, Utils.mkList(
                     new PartitionInfo(nonPersistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0]),
                     new PartitionInfo(nonPersistentStoreTopicName, 2, Node.noNode(), new Node[0], new Node[0])
@@ -304,7 +306,6 @@ public class ProcessorStateManagerTest {
 
             MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false); // non persistent store
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(2, baseDir, restoreConsumer, false);
             try {
                 restoreConsumer.reset();
 
@@ -340,19 +341,24 @@ public class ProcessorStateManagerTest {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             long lastCheckpointedOffset = 10L;
+            String storeTopicName1 = "test-job-store1" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+            String storeTopicName2 = "test-job-store2" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
+
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(baseDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
-            checkpoint.write(Collections.singletonMap(new TopicPartition("store1" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 0), lastCheckpointedOffset));
+            checkpoint.write(Collections.singletonMap(new TopicPartition(storeTopicName1, 0), lastCheckpointedOffset));
 
             MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
-            restoreConsumer.updatePartitions("store1" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, Utils.mkList(
-                    new PartitionInfo("store1" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 0, Node.noNode(), new Node[0], new Node[0])
+            ProcessorStateManager stateMgr = new ProcessorStateManager("test-job", 0, baseDir, restoreConsumer, true); // standby
+
+            restoreConsumer.updatePartitions(storeTopicName1, Utils.mkList(
+                    new PartitionInfo(storeTopicName1, 0, Node.noNode(), new Node[0], new Node[0])
             ));
-            restoreConsumer.updatePartitions("store2" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, Utils.mkList(
-                    new PartitionInfo("store2" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 0, Node.noNode(), new Node[0], new Node[0])
+            restoreConsumer.updatePartitions(storeTopicName2, Utils.mkList(
+                    new PartitionInfo(storeTopicName2, 0, Node.noNode(), new Node[0], new Node[0])
             ));
 
-            TopicPartition partition1 = new TopicPartition("store1" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 0);
-            TopicPartition partition2 = new TopicPartition("store2" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 0);
+            TopicPartition partition1 = new TopicPartition(storeTopicName1, 0);
+            TopicPartition partition2 = new TopicPartition(storeTopicName2, 0);
 
             Map<TopicPartition, Long> endOffsets = new HashMap<>();
             endOffsets.put(partition1, 13L);
@@ -362,7 +368,6 @@ public class ProcessorStateManagerTest {
             MockStateStoreSupplier.MockStateStore store1 = new MockStateStoreSupplier.MockStateStore("store1", true);
             MockStateStoreSupplier.MockStateStore store2 = new MockStateStoreSupplier.MockStateStore("store2", true);
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(0, baseDir, restoreConsumer, true); // standby
             try {
                 restoreConsumer.reset();
 
@@ -391,13 +396,15 @@ public class ProcessorStateManagerTest {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
-            restoreConsumer.updatePartitions("mockStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, Utils.mkList(
-                    new PartitionInfo("mockStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1, Node.noNode(), new Node[0], new Node[0])
+            ProcessorStateManager stateMgr = new ProcessorStateManager("test-job", 1, baseDir, restoreConsumer, false);
+            String storeTopicName = stateMgr.storeChangelogTopic("mockStore");
+
+            restoreConsumer.updatePartitions(storeTopicName, Utils.mkList(
+                    new PartitionInfo(storeTopicName, 1, Node.noNode(), new Node[0], new Node[0])
             ));
 
             MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore("mockStore", false);
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer, false);
             try {
                 stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
 
@@ -422,23 +429,27 @@ public class ProcessorStateManagerTest {
             oldCheckpoint.write(Collections.<TopicPartition, Long>emptyMap());
 
             MockRestoreConsumer restoreConsumer = new MockRestoreConsumer();
-            restoreConsumer.updatePartitions("persistentStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, Utils.mkList(
-                    new PartitionInfo("persistentStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1, Node.noNode(), new Node[0], new Node[0])
+            ProcessorStateManager stateMgr = new ProcessorStateManager("test-job", 1, baseDir, restoreConsumer, false);
+            String persistentStoreTopicName = stateMgr.storeChangelogTopic("persistentStore");
+            String nonPersistentStoreTopicName = stateMgr.storeChangelogTopic("nonPersistentStore");
+
+
+            restoreConsumer.updatePartitions(persistentStoreTopicName, Utils.mkList(
+                    new PartitionInfo(persistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0])
             ));
-            restoreConsumer.updatePartitions("nonPersistentStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, Utils.mkList(
-                    new PartitionInfo("nonPersistentStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1, Node.noNode(), new Node[0], new Node[0])
+            restoreConsumer.updatePartitions(nonPersistentStoreTopicName, Utils.mkList(
+                    new PartitionInfo(nonPersistentStoreTopicName, 1, Node.noNode(), new Node[0], new Node[0])
             ));
 
             // set up ack'ed offsets
             HashMap<TopicPartition, Long> ackedOffsets = new HashMap<>();
-            ackedOffsets.put(new TopicPartition("persistentStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1), 123L);
-            ackedOffsets.put(new TopicPartition("nonPersistentStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1), 456L);
-            ackedOffsets.put(new TopicPartition("otherTopic" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1), 789L);
+            ackedOffsets.put(new TopicPartition(persistentStoreTopicName, 1), 123L);
+            ackedOffsets.put(new TopicPartition(nonPersistentStoreTopicName, 1), 456L);
+            ackedOffsets.put(new TopicPartition(stateMgr.storeChangelogTopic("otherTopic"), 1), 789L);
 
             MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore("persistentStore", true);
             MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore("nonPersistentStore", false);
 
-            ProcessorStateManager stateMgr = new ProcessorStateManager(1, baseDir, restoreConsumer, false);
             try {
                 // make sure the checkpoint file is deleted
                 assertFalse(checkpointFile.exists());
@@ -464,7 +475,7 @@ public class ProcessorStateManagerTest {
             OffsetCheckpoint newCheckpoint = new OffsetCheckpoint(checkpointFile);
             Map<TopicPartition, Long> checkpointedOffsets = newCheckpoint.read();
             assertEquals(1, checkpointedOffsets.size());
-            assertEquals(new Long(123L + 1L), checkpointedOffsets.get(new TopicPartition("persistentStore" + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX, 1)));
+            assertEquals(new Long(123L + 1L), checkpointedOffsets.get(new TopicPartition(persistentStoreTopicName, 1)));
         } finally {
             Utils.delete(baseDir);
         }
