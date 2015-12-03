@@ -216,7 +216,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
     };</pre>
 
         </li>
-        <li>Pass the JAAS and krb5 file locations as JVM parameters to each Kafka broker:
+        <li>Pass the JAAS and optionally the krb5 file locations as JVM parameters to each Kafka broker (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
             <pre>
     -Djava.security.krb5.conf=/etc/kafka/krb5.conf
     -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre>
@@ -264,7 +264,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         useTicketCache=true;
     };</pre>
             </li>
-            <li>Pass the JAAS and krb5 file locations as JVM parameters to each Client JVM:
+            <li>Pass the JAAS and optionally krb5 file locations as JVM parameters to each Client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
             <pre>
     -Djava.security.krb5.conf=/etc/kafka/krb5.conf
     -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
@@ -275,6 +275,24 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
     sasl.kerberos.service.name="kafka"</pre>
             </li>
         </ol></li>
+
+    <li><h4><a id="security_rolling_upgrade" href="#security_rolling_upgrade">Incorporating Security Features in a Running Cluster</a></h4>
+        You can secure a running cluster via one or more of the supported protocols discussed previously. This is done in two phases:
+        <ul>
+            <li>Incrementally bounce the cluster nodes to open an additional, secured port.</li>
+            <li>Incrementally bounce again to close the plaintext port.</li>
+        </ul>
+        The steps for configuring SSL or SASL are described in sections <a href="#security_ssl">7.2</a> and <a href="#security_sasl">7.3</a>. Follow these steps to open an additional, secured port in Kafka. The plaintext port must be left open so brokers can communicate during the rolling bounce.
+        So for example when adding SSL, in the first incremental bounce, the secured port is opened by configuring an additional listener on each broker:
+        <pre>
+        listeners=PLAINTEXT://host.name:port,SSL://host.name:port
+        </pre>
+        In the second incremental bounce the plaintext port is closed by removing it from the listeners config:
+        <pre>
+        listeners=SSL://host.name:port
+        </pre>
+        Zookeeper can be secured independently of the Kafka cluster. The steps for doing this are covered in section <a href="#zk_authz_migration">7.5.2</a>.
+    </li>
 </ol>
 
 <h3><a id="security_authz" href="#security_authz">7.4 Authorization and ACLs</a></h3>
