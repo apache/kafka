@@ -216,8 +216,9 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
     };</pre>
 
         </li>
-        <li>Pass the name of the JAAS file as a JVM parameter to each Kafka broker:
+        <li>Pass the JAAS and krb5 file locations as JVM parameters to each Kafka broker:
             <pre>
+    -Djava.security.krb5.conf=/etc/kafka/krb5.conf
     -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre>
         </li>
         <li>Make sure the keytabs configured in the JAAS file are readable by the operating system user who is starting kafka broker.</li>
@@ -263,8 +264,9 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         useTicketCache=true;
     };</pre>
             </li>
-            <li>Pass the name of the JAAS file as a JVM parameter to the client JVM:
-        <pre>
+            <li>Pass the JAAS and krb5 file locations as JVM parameters to each Client JVM:
+            <pre>
+    -Djava.security.krb5.conf=/etc/kafka/krb5.conf
     -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
             <li>Make sure the keytabs configured in the kafka_client_jaas.conf are readable by the operating system user who is starting kafka client.</li>
             <li>Configure the following properties in producer.properties or consumer.properties:
