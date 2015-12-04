@@ -158,11 +158,11 @@ public class ProcessorTopologyTestDriver {
         }
 
         task = new StreamTask(id,
+            partitionsByTopic.values(),
+            topology,
             consumer,
             producer,
             restoreStateConsumer,
-            partitionsByTopic.values(),
-            topology,
             config,
             new StreamingMetrics() {
                 @Override
