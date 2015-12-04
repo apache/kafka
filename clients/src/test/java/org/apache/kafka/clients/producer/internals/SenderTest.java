@@ -58,25 +58,29 @@ public class SenderTest {
     private int batchSize = 16 * 1024;
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
     private Cluster cluster = TestUtils.singletonCluster("test", 1);
-    Map<String, String> metricTags = new LinkedHashMap<String, String>();
-    private MetricConfig metricConfig = new MetricConfig().tags(metricTags);
-    private Metrics metrics = new Metrics(metricConfig, time);
-    private RecordAccumulator accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time);
-    private Sender sender = new Sender(client,
-                                       metadata,
-                                       this.accumulator,
-                                       MAX_REQUEST_SIZE,
-                                       ACKS_ALL,
-                                       MAX_RETRIES,
-                                       metrics,
-                                       time,
-                                       CLIENT_ID,
-                                       REQUEST_TIMEOUT);
+    private Metrics metrics = null;
+    private RecordAccumulator accumulator = null;
+    private Sender sender = null;
 
     @Before
     public void setup() {
-        metadata.update(cluster, time.milliseconds());
+        Map<String, String> metricTags = new LinkedHashMap<String, String>();
         metricTags.put("client-id", CLIENT_ID);
+        MetricConfig metricConfig = new MetricConfig().tags(metricTags);
+        metrics = new Metrics(metricConfig, time);
+        accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time);
+        sender = new Sender(client,
+                            metadata,
+                            this.accumulator,
+                            MAX_REQUEST_SIZE,
+                            ACKS_ALL,
+                            MAX_RETRIES,
+                            metrics,
+                            time,
+                            CLIENT_ID,
+                            REQUEST_TIMEOUT);
+
+        metadata.update(cluster, time.milliseconds());
     }
 
     @After
