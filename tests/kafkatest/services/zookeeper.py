@@ -16,6 +16,8 @@
 
 from ducktape.services.service import Service
 
+from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 
 import subprocess
@@ -34,11 +36,28 @@ class ZookeeperService(Service):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes):
+    def __init__(self, context, num_nodes, zk_sasl = False):
         """
         :type context
         """
+        self.kafka_opts = ""
+        self.zk_sasl = zk_sasl
         super(ZookeeperService, self).__init__(context, num_nodes)
+
+    @property
+    def security_config(self):
+        return SecurityConfig(zk_sasl=self.zk_sasl)
+
+    @property
+    def security_system_properties(self):
+        return "-Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider " \
+               "-DjaasLoginRenew=3600000 " \
+               "-Djava.security.auth.login.config=%s " \
+               "-Djava.security.krb5.conf=%s " % (self.security_config.JAAS_CONF_PATH, self.security_config.KRB5CONF_PATH)
+
+    @property
+    def zk_principals(self):
+        return " zkclient "  + ' '.join(['zookeeper/' + zk_node.account.hostname for zk_node in self.nodes])
 
     def start_node(self, node):
         idx = self.idx(node)
@@ -47,12 +66,14 @@ class ZookeeperService(Service):
         node.account.ssh("mkdir -p /mnt/zookeeper")
         node.account.ssh("echo %d > /mnt/zookeeper/myid" % idx)
 
+        self.security_config.setup_node(node)
         config_file = self.render('zookeeper.properties')
         self.logger.info("zookeeper.properties:")
         self.logger.info(config_file)
         node.account.create_file("/mnt/zookeeper.properties", config_file)
 
-        start_cmd = "/opt/%s/bin/zookeeper-server-start.sh " % kafka_dir(node)
+        start_cmd = "export KAFKA_OPTS=\"%s\";" % self.kafka_opts 
+        start_cmd += "/opt/%s/bin/zookeeper-server-start.sh " % kafka_dir(node)
         start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
         node.account.ssh(start_cmd)
 
@@ -84,6 +105,14 @@ class ZookeeperService(Service):
 
     def connect_setting(self):
         return ','.join([node.account.hostname + ':2181' for node in self.nodes])
+
+    #
+    # This call is used to simulate a rolling upgrade to enable/disable
+    # the use of ZooKeeper ACLs.
+    #
+    def zookeeper_migration(self, node, zk_acl):
+        la_migra_cmd = "/opt/%s/bin/zookeeper-security-migration.sh --zookeeper.acl=%s --zookeeper.connect=%s" % (kafka_dir(node), zk_acl, self.connect_setting())
+        node.account.ssh(la_migra_cmd)
 
     def query(self, path):
         """

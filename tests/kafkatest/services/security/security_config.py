@@ -74,7 +74,7 @@ class SecurityConfig(TemplateRenderer):
 
     ssl_stores = Keytool.generate_keystore_truststore('.')
 
-    def __init__(self, security_protocol, interbroker_security_protocol=None, sasl_mechanism=SASL_MECHANISM_GSSAPI, template_props=""):
+    def __init__(self, security_protocol=None, interbroker_security_protocol=None, sasl_mechanism=SASL_MECHANISM_GSSAPI, zk_sasl=False, template_props=""):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -93,8 +93,9 @@ class SecurityConfig(TemplateRenderer):
         if interbroker_security_protocol is None:
             interbroker_security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
-        self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol)
+        self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl
         self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
+        self.zk_sasl = zk_sasl
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
