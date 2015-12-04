@@ -25,41 +25,55 @@ from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 
 import signal
 
+def broker_node(test, broker_type):
+    """ Discover node of requested type. For leader type, discovers leader for our topic and partition 0
+    """
+    if broker_type == "leader":
+        node = test.kafka.leader(test.topic, partition=0)
+    elif broker_type == "controller":
+        node = test.kafka.controller()
+    else:
+        raise Exception("Unexpected broker type %s." % (broker_type))
 
-def clean_shutdown(test):
-    """Discover leader node for our topic and shut it down cleanly."""
-    test.kafka.signal_leader(test.topic, partition=0, sig=signal.SIGTERM)
+    return node
+
+def clean_shutdown(test, broker_type):
+    """Discover broker node of requested type and shut it down cleanly.
+    """
+    node = broker_node(test, broker_type)
+    test.kafka.signal_node(node, sig=signal.SIGTERM)
 
 
-def hard_shutdown(test):
-    """Discover leader node for our topic and shut it down with a hard kill."""
-    test.kafka.signal_leader(test.topic, partition=0, sig=signal.SIGKILL)
+def hard_shutdown(test, broker_type):
+    """Discover broker node of requested type and shut it down with a hard kill."""
+    node = broker_node(test, broker_type)
+    test.kafka.signal_node(node, sig=signal.SIGKILL)
 
 
-def clean_bounce(test):
+def clean_bounce(test, broker_type):
     """Chase the leader of one partition and restart it cleanly."""
     for i in range(5):
-        prev_leader_node = test.kafka.leader(topic=test.topic, partition=0)
-        test.kafka.restart_node(prev_leader_node, clean_shutdown=True)
+        prev_broker_node = broker_node(test, broker_type)
+        test.kafka.restart_node(prev_broker_node, clean_shutdown=True)
 
 
-def hard_bounce(test):
+def hard_bounce(test, broker_type):
     """Chase the leader and restart it with a hard kill."""
     for i in range(5):
-        prev_leader_node = test.kafka.leader(topic=test.topic, partition=0)
-        test.kafka.signal_node(prev_leader_node, sig=signal.SIGKILL)
+        prev_broker_node = broker_node(test, broker_type)
+        test.kafka.signal_node(prev_broker_node, sig=signal.SIGKILL)
 
         # Since this is a hard kill, we need to make sure the process is down and that
-        # zookeeper and the broker cluster have registered the loss of the leader.
-        # Waiting for a new leader to be elected on the topic-partition is a reasonable heuristic for this.
+        # zookeeper and the broker cluster have registered the loss of the leader/controller.
+        # Waiting for a new leader for the topic-partition/controller to be elected is a reasonable heuristic for this.
 
-        def leader_changed():
-            current_leader = test.kafka.leader(topic=test.topic, partition=0)
-            return current_leader is not None and current_leader != prev_leader_node
+        def role_reassigned():
+            current_elected_broker = broker_node(test, broker_type)
+            return current_elected_broker is not None and current_elected_broker != prev_broker_node
 
-        wait_until(lambda: len(test.kafka.pids(prev_leader_node)) == 0, timeout_sec=5)
-        wait_until(leader_changed, timeout_sec=10, backoff_sec=.5)
-        test.kafka.start_node(prev_leader_node)
+        wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0, timeout_sec=5)
+        wait_until(role_reassigned, timeout_sec=10, backoff_sec=.5)
+        test.kafka.start_node(prev_broker_node)
 
 failures = {
     "clean_shutdown": clean_shutdown,
@@ -93,9 +107,9 @@ class ReplicationTest(ProduceConsumeValidateTest):
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
                                                                     "partitions": 3,
                                                                     "replication-factor": 3,
-                                                                    "min.insync.replicas": 2}
+                                                                    'configs': {"min.insync.replicas": 2}}
                                                                 })
-        self.producer_throughput = 10000
+        self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
 
@@ -108,8 +122,12 @@ class ReplicationTest(ProduceConsumeValidateTest):
 
 
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
+            broker_type=["leader"],
             security_protocol=["PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"])
-    def test_replication_with_broker_failure(self, failure_mode, security_protocol):
+    @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
+            broker_type=["controller"],
+            security_protocol=["PLAINTEXT", "SASL_SSL"])
+    def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
@@ -123,10 +141,11 @@ class ReplicationTest(ProduceConsumeValidateTest):
             - Validate that every acked message was consumed
         """
 
-        self.kafka.security_protocol = 'PLAINTEXT'
+        self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
+        new_consumer = False if  self.kafka.security_protocol == "PLAINTEXT" else True
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=60000, message_validator=is_int)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
         self.kafka.start()
         
-        self.run_produce_consume_validate(core_test_action=lambda: failures[failure_mode](self))
+        self.run_produce_consume_validate(core_test_action=lambda: failures[failure_mode](self, broker_type))

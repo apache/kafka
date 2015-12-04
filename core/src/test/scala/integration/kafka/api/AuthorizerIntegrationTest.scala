@@ -191,7 +191,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
 
   private def createJoinGroupRequest = {
     new JoinGroupRequest(group, 30000, "", "consumer",
-      List( new JoinGroupRequest.GroupProtocol("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
+      List( new JoinGroupRequest.ProtocolMetadata("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
   }
 
   private def createSyncGroupRequest = {
@@ -497,6 +497,20 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
     this.consumers.head.position(tp)
+  }
+
+  @Test
+  def testListOffsetsWithNoTopicAccess() {
+    val e = intercept[TopicAuthorizationException] {
+      this.consumers.head.partitionsFor(topic);
+    }
+    assertEquals(Set(topic), e.unauthorizedTopics().asScala)
+  }
+
+  @Test
+  def testListOfsetsWithTopicDescribe() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
+    this.consumers.head.partitionsFor(topic);
   }
 
   def removeAllAcls() = {

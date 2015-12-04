@@ -830,13 +830,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.
                     //
-                    // NOTE that in this case we need to disable wakeups for the non-blocking poll since
-                    // the consumed positions has already been updated and hence we must return these
-                    // records to users to process before being interrupted
+                    // NOTE that we use quickPoll() in this case which disables wakeups and delayed
+                    // task execution since the consumed positions has already been updated and we
+                    // must return these records to users to process before being interrupted or
+                    // auto-committing offsets
                     fetcher.initFetches(metadata.fetch());
-                    client.disableWakeups();
-                    client.poll(0);
-                    client.enableWakeups();
+                    client.quickPoll();
                     return new ConsumerRecords<>(records);
                 }
 
@@ -1136,6 +1135,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic
+     * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
+     *             expiration of the configured request timeout
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1160,6 +1162,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The map of topics and its partitions
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
+     *             expiration of the configured request timeout
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {

@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -43,15 +44,12 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -133,14 +131,14 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Get the current list of protocols and their associated metadata supported
-     * by the local member. The order of the protocols in the map indicates the preference
+     * by the local member. The order of the protocols in the list indicates the preference
      * of the protocol (the first entry is the most preferred). The coordinator takes this
      * preference into account when selecting the generation protocol (generally more preferred
      * protocols will be selected as long as all members support them and there is no disagreement
      * on the preference).
      * @return Non-empty map of supported protocols and metadata
      */
-    protected abstract LinkedHashMap<String, ByteBuffer> metadata();
+    protected abstract List<ProtocolMetadata> metadata();
 
     /**
      * Invoked prior to each group join or rejoin. This is typically used to perform any
@@ -235,7 +233,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
-                Utils.sleep(retryBackoffMs);
+                time.sleep(retryBackoffMs);
             }
         }
     }
@@ -309,17 +307,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
         // send a join group request to the coordinator
         log.debug("(Re-)joining group {}", groupId);
-
-        List<JoinGroupRequest.GroupProtocol> protocols = new ArrayList<>();
-        for (Map.Entry<String, ByteBuffer> metadataEntry : metadata().entrySet())
-            protocols.add(new JoinGroupRequest.GroupProtocol(metadataEntry.getKey(), metadataEntry.getValue()));
-
         JoinGroupRequest request = new JoinGroupRequest(
                 groupId,
                 this.sessionTimeoutMs,
                 this.memberId,
                 protocolType(),
-                protocols);
+                metadata());
 
         // create the request for the coordinator
         log.debug("Issuing request ({}: {}) to coordinator {}", ApiKeys.JOIN_GROUP, request, this.coordinator.id());
@@ -484,11 +477,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private void handleGroupMetadataResponse(ClientResponse resp, RequestFuture<Void> future) {
         log.debug("Group metadata response {}", resp);
 
-        // parse the response to get the coordinator info if it is not disconnected,
-        // otherwise we need to request metadata update
-        if (resp.wasDisconnected()) {
-            future.raise(new DisconnectException());
-        } else if (!coordinatorUnknown()) {
+        if (!coordinatorUnknown()) {
             // We already found the coordinator, so ignore the request
             future.complete(null);
         } else {
@@ -661,25 +650,19 @@ public abstract class AbstractCoordinator implements Closeable {
         public abstract void handle(R response, RequestFuture<T> future);
 
         @Override
-        public void onSuccess(ClientResponse clientResponse, RequestFuture<T> future) {
-            this.response = clientResponse;
-
-            if (clientResponse.wasDisconnected()) {
-                int correlation = response.request().request().header().correlationId();
-                log.debug("Cancelled request {} with correlation id {} due to coordinator {} being disconnected",
-                        response.request(),
-                        correlation,
-                        response.request().request().destination());
-
-                // mark the coordinator as dead
+        public void onFailure(RuntimeException e, RequestFuture<T> future) {
+            // mark the coordinator as dead
+            if (e instanceof DisconnectException)
                 coordinatorDead();
-                future.raise(new DisconnectException());
-                return;
-            }
+            future.raise(e);
+        }
 
+        @Override
+        public void onSuccess(ClientResponse clientResponse, RequestFuture<T> future) {
             try {
-                R response = parse(clientResponse);
-                handle(response, future);
+                this.response = clientResponse;
+                R responseObj = parse(clientResponse);
+                handle(responseObj, future);
             } catch (RuntimeException e) {
                 if (!future.isDone())
                     future.raise(e);

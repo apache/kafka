@@ -57,7 +57,8 @@ class KafkaService(JmxMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
+                 jmx_attributes=[], zk_connect_timeout=5000):
         """
         :type context
         :type zk: ZookeeperService
@@ -75,6 +76,18 @@ class KafkaService(JmxMixin, Service):
         self.sasl_mechanism = sasl_mechanism
         self.topics = topics
         self.minikdc = None
+        #
+        # In a heavily loaded and not very fast machine, it is
+        # sometimes necessary to give more time for the zk client
+        # to have its session established, especially if the client
+        # is authenticating and waiting for the SaslAuthenticated
+        # in addition to the SyncConnected event.
+        #
+        # The defaut value for zookeeper.connect.timeout.ms is
+        # 2 seconds and here we increase it to 5 seconds, but
+        # it can be overriden by setting the corresponding parameter
+        # for this constructor.
+        self.zk_connect_timeout = zk_connect_timeout
 
         self.port_mappings = {
             'PLAINTEXT': Port('PLAINTEXT', 9092, False),
@@ -89,7 +102,7 @@ class KafkaService(JmxMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, sasl_mechanism=self.sasl_mechanism)
+        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, zk_sasl = self.zk.zk_sasl , sasl_mechanism=self.sasl_mechanism)
 
     def open_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=True)
@@ -97,19 +110,19 @@ class KafkaService(JmxMixin, Service):
     def close_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=False)
 
-    def start_minikdc(self):
+    def start_minikdc(self, add_principals=""):
         if self.security_config.has_sasl_kerberos:
             if self.minikdc is None:
-                self.minikdc = MiniKdc(self.context, self.nodes)
+                self.minikdc = MiniKdc(self.context, self.nodes, extra_principals = add_principals)
                 self.minikdc.start()
         else:
             self.minikdc = None
 
-    def start(self):
+    def start(self, add_principals=""):
         self.open_port(self.security_protocol)
         self.open_port(self.interbroker_security_protocol)
 
-        self.start_minikdc()
+        self.start_minikdc(add_principals)
         Service.start(self)
 
         # Create topics if necessary
@@ -321,21 +334,9 @@ class KafkaService(JmxMixin, Service):
     def leader(self, topic, partition=0):
         """ Get the leader replica for the given topic and partition.
         """
-        kafka_dir = KAFKA_TRUNK
-        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " %\
-              (kafka_dir, self.zk.connect_setting())
-        cmd += "get /brokers/topics/%s/partitions/%d/state" % (topic, partition)
-        self.logger.debug(cmd)
-
-        node = self.zk.nodes[0]
-        self.logger.debug("Querying zookeeper to find leader replica for topic %s: \n%s" % (cmd, topic))
-        partition_state = None
-        for line in node.account.ssh_capture(cmd):
-            # loop through all lines in the output, but only hold on to the first match
-            if partition_state is None:
-                match = re.match("^({.+})$", line)
-                if match is not None:
-                    partition_state = match.groups()[0]
+        self.logger.debug("Querying zookeeper to find leader replica for topic: \n%s" % (topic))
+        zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
+        partition_state = self.zk.query(zk_path)
 
         if partition_state is None:
             raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
@@ -359,3 +360,19 @@ class KafkaService(JmxMixin, Service):
             raise ValueError("We are retrieving bootstrap servers for the port: %s which is not currently open. - " % str(port_mapping))
 
         return ','.join([node.account.hostname + ":" + str(port_mapping.number) for node in self.nodes])
+
+    def controller(self):
+        """ Get the controller node
+        """
+        self.logger.debug("Querying zookeeper to find controller broker")
+        controller_info = self.zk.query("/controller")
+
+        if controller_info is None:
+            raise Exception("Error finding controller info")
+
+        controller_info = json.loads(controller_info)
+        self.logger.debug(controller_info)
+
+        controller_idx = int(controller_info["brokerid"])
+        self.logger.info("Controller's ID: %d" % (controller_idx))
+        return self.get_node(controller_idx)
