@@ -21,7 +21,6 @@ from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.kafka.version import TRUNK, LATEST_0_8_2
 
-import itertools
 import os
 import subprocess
 
@@ -30,6 +29,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
 
     PERSISTENT_ROOT = "/mnt/producer_performance"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "producer_performance.stdout")
+    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "producer_performance.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
@@ -37,6 +37,9 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
     logs = {
         "producer_performance_stdout": {
             "path": STDOUT_CAPTURE,
+            "collect_default": True},
+        "producer_performance_stderr": {
+            "path": STDERR_CAPTURE,
             "collect_default": True},
         "producer_performance_log": {
             "path": LOG_FILE,
@@ -93,7 +96,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
 
-        cmd += " | tee %s" % ProducerPerformanceService.STDOUT_CAPTURE
+        cmd += " 2>>%s | tee %s" % (ProducerPerformanceService.STDERR_CAPTURE, ProducerPerformanceService.STDOUT_CAPTURE)
         return cmd
 
     def pids(self, node):
