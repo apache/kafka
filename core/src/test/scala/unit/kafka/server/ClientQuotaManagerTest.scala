@@ -79,7 +79,7 @@ class ClientQuotaManagerTest {
   def testQuotaViolation() {
     val metrics = newMetrics
     val clientMetrics = new ClientQuotaManager(config, metrics, "producer", time)
-    val queueSizeMetric = metrics.metrics().get(new MetricName("queue-size", "producer", ""))
+    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "producer", ""))
     try {
       /* We have 10 second windows. Make sure that there is no quota violation
        * if we produce under the quota

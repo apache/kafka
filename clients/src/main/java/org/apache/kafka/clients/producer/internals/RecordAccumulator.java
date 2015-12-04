@@ -118,7 +118,7 @@ public final class RecordAccumulator {
         };
         metrics.addMetric(metricName, waitingThreads);
 
-        metricName = new MetricName("buffer-total-bytes", metricGrpName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
+        metricName = metrics.metricName("buffer-total-bytes", metricGrpName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
         Measurable totalBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.totalMemory();
@@ -126,7 +126,7 @@ public final class RecordAccumulator {
         };
         metrics.addMetric(metricName, totalBytes);
 
-        metricName = new MetricName("buffer-available-bytes", metricGrpName, "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
+        metricName = metrics.metricName("buffer-available-bytes", metricGrpName, "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
         Measurable availableBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.availableMemory();
@@ -135,7 +135,7 @@ public final class RecordAccumulator {
         metrics.addMetric(metricName, availableBytes);
 
         Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
-        metricName = new MetricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
+        metricName = metrics.metricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
         bufferExhaustedRecordSensor.add(metricName, new Rate());
     }
 

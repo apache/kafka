@@ -119,7 +119,7 @@ public class Selector implements Selectable {
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
     }
 
     /**
@@ -637,7 +637,7 @@ public class Selector implements Selectable {
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);
-                    MetricName metricName = metrics.metricName("outgoing-byte-rate", metricGrpName, "", tags);
+                    MetricName metricName = metrics.metricName("outgoing-byte-rate", metricGrpName, tags);
                     nodeRequest.add(metricName, new Rate());
                     metricName = metrics.metricName("request-rate", metricGrpName, "The average number of requests sent per second.", tags);
                     nodeRequest.add(metricName, new Rate(new Count()));
@@ -648,16 +648,16 @@ public class Selector implements Selectable {
 
                     String nodeResponseName = "node-" + connectionId + ".bytes-received";
                     Sensor nodeResponse = sensor(nodeResponseName);
-                    metricName = metrics.metricName("incoming-byte-rate", metricGrpName, "", tags);
+                    metricName = metrics.metricName("incoming-byte-rate", metricGrpName, tags);
                     nodeResponse.add(metricName, new Rate());
                     metricName = metrics.metricName("response-rate", metricGrpName, "The average number of responses received per second.", tags);
                     nodeResponse.add(metricName, new Rate(new Count()));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
                     Sensor nodeRequestTime = sensor(nodeTimeName);
-                    metricName = metrics.metricName("request-latency-avg", metricGrpName, "", tags);
+                    metricName = metrics.metricName("request-latency-avg", metricGrpName, tags);
                     nodeRequestTime.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-latency-max", metricGrpName, "", tags);
+                    metricName = metrics.metricName("request-latency-max", metricGrpName, tags);
                     nodeRequestTime.add(metricName, new Max());
                 }
             }
