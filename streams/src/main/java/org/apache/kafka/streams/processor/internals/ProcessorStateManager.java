@@ -34,6 +34,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -46,7 +47,8 @@ public class ProcessorStateManager {
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     public static final String LOCK_FILE_NAME = ".lock";
 
-    private final int partition;
+    private final int defaultPartition;
+    private final Map<String, TopicPartition> partitionForTopic;
     private final File baseDir;
     private final FileLock directoryLock;
     private final Map<String, StateStore> stores;
@@ -57,8 +59,12 @@ public class ProcessorStateManager {
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks
 
-    public ProcessorStateManager(int partition, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
-        this.partition = partition;
+    public ProcessorStateManager(int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+        this.defaultPartition = defaultPartition;
+        this.partitionForTopic = new HashMap<>();
+        for (TopicPartition source : sources) {
+            this.partitionForTopic.put(source.topic(), source);
+        }
         this.baseDir = baseDir;
         this.stores = new HashMap<>();
         this.restoreConsumer = restoreConsumer;
@@ -113,6 +119,7 @@ public class ProcessorStateManager {
 
         // check that the underlying change log topic exist or not
         if (restoreConsumer.listTopics().containsKey(store.name())) {
+            int partition = getPartition(store.name());
             boolean partitionNotFound = true;
             for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(store.name())) {
                 if (partitionInfo.partition() == partition) {
@@ -149,7 +156,7 @@ public class ProcessorStateManager {
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
         }
-        TopicPartition storePartition = new TopicPartition(store.name(), partition);
+        TopicPartition storePartition = new TopicPartition(store.name(), getPartition(store.name()));
         restoreConsumer.assign(Collections.singletonList(storePartition));
 
         try {
@@ -196,6 +203,7 @@ public class ProcessorStateManager {
 
         for (Map.Entry<String, StateRestoreCallback> entry : restoreCallbacks.entrySet()) {
             String storeName = entry.getKey();
+            int partition = getPartition(storeName);
             TopicPartition storePartition = new TopicPartition(storeName, partition);
 
             if (checkpointedOffsets.containsKey(storePartition)) {
@@ -276,7 +284,7 @@ public class ProcessorStateManager {
 
             Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
             for (String storeName : stores.keySet()) {
-                TopicPartition part = new TopicPartition(storeName, partition);
+                TopicPartition part = new TopicPartition(storeName, getPartition(storeName));
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {
@@ -306,4 +314,9 @@ public class ProcessorStateManager {
         directoryLock.release();
     }
 
+    private int getPartition(String topic) {
+        TopicPartition partition = partitionForTopic.get(topic);
+
+        return partition == null ? defaultPartition : partition.partition();
+    }
 }

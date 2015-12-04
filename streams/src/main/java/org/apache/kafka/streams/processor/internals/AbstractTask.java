@@ -58,7 +58,7 @@ public abstract class AbstractTask {
         try {
             File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), id.toString());
             // if partitions is null, this is a standby task
-            this.stateMgr = new ProcessorStateManager(id.partition, stateFile, restoreConsumer, isStandby);
+            this.stateMgr = new ProcessorStateManager(id.partition, partitions, stateFile, restoreConsumer, isStandby);
         } catch (IOException e) {
             throw new KafkaException("Error while creating the state manager", e);
         }
