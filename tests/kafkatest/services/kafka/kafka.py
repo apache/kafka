@@ -57,7 +57,8 @@ class KafkaService(JmxMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
+                 jmx_attributes=[], zk_connect_timeout=5000):
         """
         :type context
         :type zk: ZookeeperService
@@ -75,6 +76,18 @@ class KafkaService(JmxMixin, Service):
         self.sasl_mechanism = sasl_mechanism
         self.topics = topics
         self.minikdc = None
+        #
+        # In a heavily loaded and not very fast machine, it is
+        # sometimes necessary to give more time for the zk client
+        # to have its session established, especially if the client
+        # is authenticating and waiting for the SaslAuthenticated
+        # in addition to the SyncConnected event.
+        #
+        # The defaut value for zookeeper.connect.timeout.ms is
+        # 2 seconds and here we increase it to 5 seconds, but
+        # it can be overriden by setting the corresponding parameter
+        # for this constructor.
+        self.zk_connect_timeout = zk_connect_timeout
 
         self.port_mappings = {
             'PLAINTEXT': Port('PLAINTEXT', 9092, False),
@@ -89,7 +102,7 @@ class KafkaService(JmxMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, sasl_mechanism=self.sasl_mechanism)
+        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, zk_sasl = self.zk.zk_sasl , sasl_mechanism=self.sasl_mechanism)
 
     def open_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=True)
@@ -97,19 +110,19 @@ class KafkaService(JmxMixin, Service):
     def close_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=False)
 
-    def start_minikdc(self):
+    def start_minikdc(self, add_principals=""):
         if self.security_config.has_sasl_kerberos:
             if self.minikdc is None:
-                self.minikdc = MiniKdc(self.context, self.nodes)
+                self.minikdc = MiniKdc(self.context, self.nodes, extra_principals = add_principals)
                 self.minikdc.start()
         else:
             self.minikdc = None
 
-    def start(self):
+    def start(self, add_principals=""):
         self.open_port(self.security_protocol)
         self.open_port(self.interbroker_security_protocol)
 
-        self.start_minikdc()
+        self.start_minikdc(add_principals)
         Service.start(self)
 
         # Create topics if necessary

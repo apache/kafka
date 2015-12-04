@@ -34,6 +34,7 @@ import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -55,6 +56,7 @@ public class ProcessorStateManager {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Map<TopicPartition, Long> restoredOffsets;
     private final Map<TopicPartition, Long> checkpointedOffsets;
+    private final Map<TopicPartition, Long> offsetLimits;
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
 
@@ -67,6 +69,7 @@ public class ProcessorStateManager {
         this.restoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
         this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
+        this.offsetLimits = new HashMap<>();
 
         // create the state directory for this task if missing (we won't create the parent directory)
         createStateDirectory(baseDir);
@@ -178,8 +181,10 @@ public class ProcessorStateManager {
 
             // restore its state from changelog records; while restoring the log end offset
             // should not change since it is only written by this thread.
+            long limit = offsetLimit(storePartition);
             while (true) {
                 for (ConsumerRecord<byte[], byte[]> record : restoreConsumer.poll(100).records(storePartition)) {
+                    if (record.offset() >= limit) break;
                     stateRestoreCallback.restore(record.key(), record.value());
                 }
 
@@ -191,7 +196,7 @@ public class ProcessorStateManager {
             }
 
             // record the restored offset for its change log partition
-            long newOffset = restoreConsumer.position(storePartition);
+            long newOffset = Math.min(limit, restoreConsumer.position(storePartition));
             restoredOffsets.put(storePartition, newOffset);
         } finally {
             // un-assign the change log partition
@@ -215,17 +220,41 @@ public class ProcessorStateManager {
         return partitionsAndOffsets;
     }
 
-    public void updateStandbyStates(TopicPartition storePartition, List<ConsumerRecord<byte[], byte[]>> records) {
+    public List<ConsumerRecord<byte[], byte[]>> updateStandbyStates(TopicPartition storePartition, List<ConsumerRecord<byte[], byte[]>> records) {
+        long limit = offsetLimit(storePartition);
+        List<ConsumerRecord<byte[], byte[]>> remainingRecords = null;
+
         // restore states from changelog records
 
         StateRestoreCallback restoreCallback = restoreCallbacks.get(storePartition.topic());
 
+        long lastOffset = -1L;
+        int count = 0;
         for (ConsumerRecord<byte[], byte[]> record : records) {
-            restoreCallback.restore(record.key(), record.value());
+            if (record.offset() < limit) {
+                restoreCallback.restore(record.key(), record.value());
+                lastOffset = record.offset();
+            } else {
+                if (remainingRecords == null)
+                    remainingRecords = new ArrayList<>(records.size() - count);
+
+                remainingRecords.add(record);
+            }
+            count++;
         }
         // record the restored offset for its change log partition
-        long newOffset = restoreConsumer.position(storePartition);
-        restoredOffsets.put(storePartition, newOffset);
+        restoredOffsets.put(storePartition, lastOffset + 1);
+
+        return remainingRecords;
+    }
+
+    public void putOffsetLimit(TopicPartition partition, long limit) {
+        offsetLimits.put(partition, limit);
+    }
+
+    private long offsetLimit(TopicPartition partition) {
+        Long limit = offsetLimits.get(partition);
+        return limit != null ? limit : Long.MAX_VALUE;
     }
 
     public StateStore getStore(String name) {
@@ -267,14 +296,14 @@ public class ProcessorStateManager {
                 if (stores.get(storeName).persistent()) {
                     Long offset = ackedOffsets.get(part);
 
-                    if (offset == null) {
-                        // if no record was produced. we need to check the restored offset.
-                        offset = restoredOffsets.get(part);
-                    }
-
                     if (offset != null) {
                         // store the last offset + 1 (the log position after restoration)
                         checkpointOffsets.put(part, offset + 1);
+                    } else {
+                        // if no record was produced. we need to check the restored offset.
+                        offset = restoredOffsets.get(part);
+                        if (offset != null)
+                            checkpointOffsets.put(part, offset);
                     }
                 }
             }

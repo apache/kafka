@@ -64,6 +64,8 @@ public class KafkaStreamingPartitionAssignorTest {
     private TopicPartition t3p2 = new TopicPartition("topic3", 2);
     private TopicPartition t3p3 = new TopicPartition("topic3", 3);
 
+    private Set<String> allTopics = Utils.mkSet("topic1", "topic2");
+
     private List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
             new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
@@ -196,46 +198,25 @@ public class KafkaStreamingPartitionAssignorTest {
         assertEquals(Utils.mkSet(t1p2, t2p2), new HashSet<>(assignments.get("consumer20").partitions()));
 
         // check assignment info
+
         Set<TaskId> allActiveTasks = new HashSet<>();
-        AssignmentInfo info;
 
-        List<TaskId> activeTasks = new ArrayList<>();
-        for (TopicPartition partition : assignments.get("consumer10").partitions()) {
-            activeTasks.add(new TaskId(0, partition.partition()));
-        }
-        info = AssignmentInfo.decode(assignments.get("consumer10").userData());
-        assertEquals(activeTasks, info.activeTasks);
-        assertEquals(2, info.activeTasks.size());
-        assertEquals(1, new HashSet<>(info.activeTasks).size());
-        assertEquals(0, info.standbyTasks.size());
+        // the first consumer
+        AssignmentInfo info10 = checkAssignment(assignments.get("consumer10"));
+        allActiveTasks.addAll(info10.activeTasks);
 
-        allActiveTasks.addAll(info.activeTasks);
-
-        activeTasks.clear();
-        for (TopicPartition partition : assignments.get("consumer11").partitions()) {
-            activeTasks.add(new TaskId(0, partition.partition()));
-        }
-        info = AssignmentInfo.decode(assignments.get("consumer11").userData());
-        assertEquals(activeTasks, info.activeTasks);
-        assertEquals(2, info.activeTasks.size());
-        assertEquals(1, new HashSet<>(info.activeTasks).size());
-        assertEquals(0, info.standbyTasks.size());
-
-        allActiveTasks.addAll(info.activeTasks);
+        // the second consumer
+        AssignmentInfo info11 = checkAssignment(assignments.get("consumer11"));
+        allActiveTasks.addAll(info11.activeTasks);
 
         assertEquals(Utils.mkSet(task0, task1), allActiveTasks);
 
-        activeTasks.clear();
-        for (TopicPartition partition : assignments.get("consumer20").partitions()) {
-            activeTasks.add(new TaskId(0, partition.partition()));
-        }
-        info = AssignmentInfo.decode(assignments.get("consumer20").userData());
-        assertEquals(activeTasks, info.activeTasks);
-        assertEquals(2, info.activeTasks.size());
-        assertEquals(1, new HashSet<>(info.activeTasks).size());
-        assertEquals(0, info.standbyTasks.size());
+        // the third consumer
+        AssignmentInfo info20 = checkAssignment(assignments.get("consumer20"));
+        allActiveTasks.addAll(info20.activeTasks);
 
-        allActiveTasks.addAll(info.activeTasks);
+        assertEquals(3, allActiveTasks.size());
+        assertEquals(allTasks, new HashSet<>(allActiveTasks));
 
         assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, allActiveTasks);
@@ -386,6 +367,7 @@ public class KafkaStreamingPartitionAssignorTest {
         List<String> topics = Utils.mkList("topic1", "topic2");
         Set<TaskId> allTasks = Utils.mkSet(task0, task1, task2);
 
+
         final Set<TaskId> prevTasks10 = Utils.mkSet(task0);
         final Set<TaskId> prevTasks11 = Utils.mkSet(task1);
         final Set<TaskId> prevTasks20 = Utils.mkSet(task2);
@@ -413,61 +395,77 @@ public class KafkaStreamingPartitionAssignorTest {
 
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
 
-        // check assigned partitions
-
-        assertEquals(Utils.mkSet(Utils.mkSet(t1p0, t2p0), Utils.mkSet(t1p1, t2p1)),
-                Utils.mkSet(new HashSet<>(assignments.get("consumer10").partitions()), new HashSet<>(assignments.get("consumer11").partitions())));
-        assertEquals(Utils.mkSet(t1p2, t2p2), new HashSet<>(assignments.get("consumer20").partitions()));
-
-        // check assignment info
         Set<TaskId> allActiveTasks = new HashSet<>();
         Set<TaskId> allStandbyTasks = new HashSet<>();
-        AssignmentInfo info;
 
-        List<TaskId> activeTasks = new ArrayList<>();
-        for (TopicPartition partition : assignments.get("consumer10").partitions()) {
-            activeTasks.add(new TaskId(0, partition.partition()));
-        }
-        info = AssignmentInfo.decode(assignments.get("consumer10").userData());
-        assertEquals(activeTasks, info.activeTasks);
-        assertEquals(2, info.activeTasks.size());
-        assertEquals(1, new HashSet<>(info.activeTasks).size());
+        // the first consumer
+        AssignmentInfo info10 = checkAssignment(assignments.get("consumer10"));
+        allActiveTasks.addAll(info10.activeTasks);
+        allStandbyTasks.addAll(info10.standbyTasks.keySet());
 
-        allActiveTasks.addAll(info.activeTasks);
-        allStandbyTasks.addAll(info.standbyTasks);
+        // the second consumer
+        AssignmentInfo info11 = checkAssignment(assignments.get("consumer11"));
+        allActiveTasks.addAll(info11.activeTasks);
+        allStandbyTasks.addAll(info11.standbyTasks.keySet());
 
-        activeTasks.clear();
-        for (TopicPartition partition : assignments.get("consumer11").partitions()) {
-            activeTasks.add(new TaskId(0, partition.partition()));
-        }
-        info = AssignmentInfo.decode(assignments.get("consumer11").userData());
-        assertEquals(activeTasks, info.activeTasks);
-        assertEquals(2, info.activeTasks.size());
-        assertEquals(1, new HashSet<>(info.activeTasks).size());
+        // check active tasks assigned to the first client
+        assertEquals(Utils.mkSet(task0, task1), new HashSet<>(allActiveTasks));
+        assertEquals(Utils.mkSet(task2), new HashSet<>(allStandbyTasks));
 
-        allActiveTasks.addAll(info.activeTasks);
-        allStandbyTasks.addAll(info.standbyTasks);
+        // the third consumer
+        AssignmentInfo info20 = checkAssignment(assignments.get("consumer20"));
+        allActiveTasks.addAll(info20.activeTasks);
+        allStandbyTasks.addAll(info20.standbyTasks.keySet());
 
-        // check tasks assigned to the first client
-        assertEquals(Utils.mkSet(task0, task1), allActiveTasks);
-
-        activeTasks.clear();
-        for (TopicPartition partition : assignments.get("consumer20").partitions()) {
-            activeTasks.add(new TaskId(0, partition.partition()));
-        }
-        info = AssignmentInfo.decode(assignments.get("consumer20").userData());
-        assertEquals(activeTasks, info.activeTasks);
-        assertEquals(2, info.activeTasks.size());
-        assertEquals(1, new HashSet<>(info.activeTasks).size());
-
-        allActiveTasks.addAll(info.activeTasks);
-        allStandbyTasks.addAll(info.standbyTasks);
+        // all task ids are in the active tasks and also in the standby tasks
 
         assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, allActiveTasks);
 
         assertEquals(3, allStandbyTasks.size());
         assertEquals(allTasks, allStandbyTasks);
+    }
+
+    private AssignmentInfo checkAssignment(PartitionAssignor.Assignment assignment) {
+
+        // This assumed 1) DefaultPartitionGrouper is used, and 2) there is a only one topic group.
+
+        AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
+
+        // check if the number of assigned partitions == the size of active task id list
+        assertEquals(assignment.partitions().size(), info.activeTasks.size());
+
+        // check if active tasks are consistent
+        List<TaskId> activeTasks = new ArrayList<>();
+        Set<String> activeTopics = new HashSet<>();
+        for (TopicPartition partition : assignment.partitions()) {
+            // since default grouper, taskid.partition == partition.partition()
+            activeTasks.add(new TaskId(0, partition.partition()));
+            activeTopics.add(partition.topic());
+        }
+        assertEquals(activeTasks, info.activeTasks);
+
+        // check if active partitions cover all topics
+        assertEquals(allTopics, activeTopics);
+
+        // check if standby tasks are consistent
+        Set<String> standbyTopics = new HashSet<>();
+        for (Map.Entry<TaskId, Set<TopicPartition>> entry : info.standbyTasks.entrySet()) {
+            TaskId id = entry.getKey();
+            Set<TopicPartition> partitions = entry.getValue();
+            for (TopicPartition partition : partitions) {
+                // since default grouper, taskid.partition == partition.partition()
+                assertEquals(id.partition, partition.partition());
+
+                standbyTopics.add(partition.topic());
+            }
+        }
+
+        if (info.standbyTasks.size() > 0)
+            // check if standby partitions cover all topics
+            assertEquals(allTopics, standbyTopics);
+
+        return info;
     }
 
     @Test
@@ -494,7 +492,10 @@ public class KafkaStreamingPartitionAssignorTest {
         partitionAssignor.configure(config.getConsumerConfigs(thread, "test", client1));
 
         List<TaskId> activeTaskList = Utils.mkList(task0, task3);
-        Set<TaskId> standbyTasks = Utils.mkSet(task1, task2);
+        Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+        standbyTasks.put(task1, Utils.mkSet(new TopicPartition("t1", 0)));
+        standbyTasks.put(task2, Utils.mkSet(new TopicPartition("t2", 0)));
+
         AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks);
         PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(Utils.mkList(t1p0, t2p3), info.encode());
         partitionAssignor.onAssignment(assignment);

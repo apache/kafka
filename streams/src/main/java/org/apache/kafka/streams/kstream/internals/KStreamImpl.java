@@ -59,7 +59,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
-    private static final String SINK_NAME = "KSTREAM-SINK-";
+    public static final String SINK_NAME = "KSTREAM-SINK-";
 
     public static final String JOINTHIS_NAME = "KSTREAM-JOINTHIS-";
 
