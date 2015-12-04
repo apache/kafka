@@ -909,7 +909,6 @@ public class ConsumerCoordinatorTest {
                 subscriptions,
                 metrics,
                 "consumer" + groupId,
-                metricTags,
                 time,
                 retryBackoffMs,
                 defaultOffsetCommitCallback,
