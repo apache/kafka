@@ -23,7 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Map;
 import java.util.Set;
 
-public abstract class PartitionGrouper {
+public interface PartitionGrouper {
 
     /**
      * Returns a map of task ids to groups of partitions.
@@ -32,5 +32,5 @@ public abstract class PartitionGrouper {
      * @param metadata Metadata of the consuming cluster
      * @return a map of task ids to groups of partitions
      */
-    public abstract Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata);
+    Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata);
 }
