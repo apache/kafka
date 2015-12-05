@@ -43,8 +43,12 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             "collect_default": True},
         "producer_performance_log": {
             "path": LOG_FILE,
+            "collect_default": True},
+        "jmx_log": {
+            "path": "/mnt/jmx_tool.log",
             "collect_default": True
         }
+
     }
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=TRUNK, settings={},
