@@ -94,11 +94,11 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                             s"--operation=ClusterAction",
                                             s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
   def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
-                                                  s"zookeeper.connect=$zkConnect",
-                                                  s"--add",
-                                                  s"--topic=$topic",
-                                                  s"--operation=Read",
-                                                  s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
+                                                    s"zookeeper.connect=$zkConnect",
+                                                    s"--add",
+                                                    s"--topic=$topic",
+                                                    s"--operation=Read",
+                                                    s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
   def produceAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
