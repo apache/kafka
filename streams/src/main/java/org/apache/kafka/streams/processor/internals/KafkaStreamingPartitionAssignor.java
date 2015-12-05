@@ -66,7 +66,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     private int numStandbyReplicas;
     private Map<Integer, TopologyBuilder.TopicsInfo> topicGroups;
     private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
-    private Map<String, Set<TaskId>> stateTopicToTaskIds;
+    private Map<String, Set<TaskId>> stateNameToTaskIds;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
 
 
@@ -296,13 +296,13 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(sourceTopicGroups, metadata);
 
         // add tasks to state topic subscribers
-        stateTopicToTaskIds = new HashMap<>();
+        stateNameToTaskIds = new HashMap<>();
         for (TaskId task : partitionsForTask.keySet()) {
-            for (String topic : topicGroups.get(task.topicGroupId).stateTopics) {
-                Set<TaskId> tasks = stateTopicToTaskIds.get(topic);
+            for (String stateName : topicGroups.get(task.topicGroupId).stateNames) {
+                Set<TaskId> tasks = stateNameToTaskIds.get(stateName);
                 if (tasks == null) {
                     tasks = new HashSet<>();
-                    stateTopicToTaskIds.put(topic, tasks);
+                    stateNameToTaskIds.put(stateName, tasks);
                 }
 
                 tasks.add(task);
@@ -367,7 +367,7 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
         if (zkClient != null) {
             log.debug("Starting to validate changelog topics in partition assignor.");
 
-            for (Map.Entry<String, Set<TaskId>> entry : stateTopicToTaskIds.entrySet()) {
+            for (Map.Entry<String, Set<TaskId>> entry : stateNameToTaskIds.entrySet()) {
                 String topic = streamThread.jobId + "-" + entry.getKey() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
 
                 // the expected number of partitions is the max value of TaskId.partition + 1
@@ -454,8 +454,8 @@ public class KafkaStreamingPartitionAssignor implements PartitionAssignor, Confi
     }
 
     /* For Test Only */
-    public Set<TaskId> tasksForState(String stateTopic) {
-        return stateTopicToTaskIds.get(stateTopic);
+    public Set<TaskId> tasksForState(String stateName) {
+        return stateNameToTaskIds.get(stateName);
     }
 
     public Set<TaskId> tasksForPartition(TopicPartition partition) {

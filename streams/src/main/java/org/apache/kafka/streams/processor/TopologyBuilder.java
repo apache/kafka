@@ -53,6 +53,9 @@ public class TopologyBuilder {
     // node factories in a topological order
     private final LinkedHashMap<String, NodeFactory> nodeFactories = new LinkedHashMap<>();
 
+    // state factories
+    private final Map<String, StateStoreFactory> stateFactories = new HashMap<>();
+
     private final Set<String> sourceTopicNames = new HashSet<>();
 
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
@@ -60,8 +63,18 @@ public class TopologyBuilder {
     private final HashMap<String, String[]> nodeToTopics = new HashMap<>();
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    private Map<String, StateStoreSupplier> stateStores = new HashMap<>();
-    private Map<String, Set<String>> stateStoreUsers = new HashMap<>();
+    private static class StateStoreFactory {
+        public final Set<String> users;
+
+        public final boolean isInternal;
+        public final StateStoreSupplier supplier;
+
+        StateStoreFactory(boolean isInternal, StateStoreSupplier supplier) {
+            this.isInternal = isInternal;
+            this.supplier = supplier;
+            this.users = new HashSet<>();
+        }
+    }
 
     private static abstract class NodeFactory {
         public final String name;
@@ -137,18 +150,18 @@ public class TopologyBuilder {
 
     public static class TopicsInfo {
         public Set<String> sourceTopics;
-        public Set<String> stateTopics;
+        public Set<String> stateNames;
 
-        public TopicsInfo(Set<String> sourceTopics, Set<String> stateTopics) {
+        public TopicsInfo(Set<String> sourceTopics, Set<String> stateNames) {
             this.sourceTopics = sourceTopics;
-            this.stateTopics = stateTopics;
+            this.stateNames = stateNames;
         }
 
         @Override
         public boolean equals(Object o) {
             if (o instanceof TopicsInfo) {
                 TopicsInfo other = (TopicsInfo) o;
-                return other.sourceTopics.equals(this.sourceTopics) && other.stateTopics.equals(this.stateTopics);
+                return other.sourceTopics.equals(this.sourceTopics) && other.stateNames.equals(this.stateNames);
             } else {
                 return false;
             }
@@ -156,7 +169,7 @@ public class TopologyBuilder {
 
         @Override
         public int hashCode() {
-            long n = ((long) sourceTopics.hashCode() << 32) | (long) stateTopics.hashCode();
+            long n = ((long) sourceTopics.hashCode() << 32) | (long) stateNames.hashCode();
             return (int) (n % 0xFFFFFFFFL);
         }
     }
@@ -301,12 +314,12 @@ public class TopologyBuilder {
      * @param supplier the supplier used to obtain this state store {@link StateStore} instance
      * @return this builder instance so methods can be chained together; never null
      */
-    public final TopologyBuilder addStateStore(StateStoreSupplier supplier, String... processorNames) {
-        if (stateStores.containsKey(supplier.name())) {
+    public final TopologyBuilder addStateStore(StateStoreSupplier supplier, boolean isInternal, String... processorNames) {
+        if (stateFactories.containsKey(supplier.name())) {
             throw new TopologyException("StateStore " + supplier.name() + " is already added.");
         }
-        stateStores.put(supplier.name(), supplier);
-        stateStoreUsers.put(supplier.name(), new HashSet<String>());
+
+        stateFactories.put(supplier.name(), new StateStoreFactory(isInternal, supplier));
 
         if (processorNames != null) {
             for (String processorName : processorNames) {
@@ -315,6 +328,16 @@ public class TopologyBuilder {
         }
 
         return this;
+    }
+
+    /**
+     * Adds a state store
+     *
+     * @param supplier the supplier used to obtain this state store {@link StateStore} instance
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder addStateStore(StateStoreSupplier supplier, String... processorNames) {
+        return this.addStateStore(supplier, true, processorNames);
     }
 
     /**
@@ -335,22 +358,22 @@ public class TopologyBuilder {
     }
 
     private void connectProcessorAndStateStore(String processorName, String stateStoreName) {
-        if (!stateStores.containsKey(stateStoreName))
+        if (!stateFactories.containsKey(stateStoreName))
             throw new TopologyException("StateStore " + stateStoreName + " is not added yet.");
         if (!nodeFactories.containsKey(processorName))
             throw new TopologyException("Processor " + processorName + " is not added yet.");
 
-        Set<String> users = stateStoreUsers.get(stateStoreName);
-        Iterator<String> iter = users.iterator();
+        StateStoreFactory stateStoreFactory = stateFactories.get(stateStoreName);
+        Iterator<String> iter = stateStoreFactory.users.iterator();
         if (iter.hasNext()) {
             String user = iter.next();
             nodeGrouper.unite(user, processorName);
         }
-        users.add(processorName);
+        stateStoreFactory.users.add(processorName);
 
-        NodeFactory factory = nodeFactories.get(processorName);
-        if (factory instanceof ProcessorNodeFactory) {
-            ((ProcessorNodeFactory) factory).addStateStore(stateStoreName);
+        NodeFactory nodeFactory = nodeFactories.get(processorName);
+        if (nodeFactory instanceof ProcessorNodeFactory) {
+            ((ProcessorNodeFactory) nodeFactory).addStateStore(stateStoreName);
         } else {
             throw new TopologyException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
         }
@@ -370,7 +393,7 @@ public class TopologyBuilder {
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> sourceTopics = new HashSet<>();
-            Set<String> stateTopics = new HashSet<>();
+            Set<String> stateNames = new HashSet<>();
             for (String node : entry.getValue()) {
                 // if the node is a source node, add to the source topics
                 String[] topics = nodeToTopics.get(node);
@@ -378,15 +401,16 @@ public class TopologyBuilder {
                     sourceTopics.addAll(Arrays.asList(topics));
 
                 // if the node is connected to a state, add to the state topics
-                for (Map.Entry<String, Set<String>> stateUsers : stateStoreUsers.entrySet()) {
-                    if (stateUsers.getValue().contains(node)) {
-                        stateTopics.add(stateStores.get(stateUsers.getKey()).name());
+                for (StateStoreFactory stateFactory : stateFactories.values()) {
+
+                    if (stateFactory.isInternal && stateFactory.users.contains(node)) {
+                        stateNames.add(stateFactory.supplier.name());
                     }
                 }
             }
             topicGroups.put(entry.getKey(), new TopicsInfo(
                     Collections.unmodifiableSet(sourceTopics),
-                    Collections.unmodifiableSet(stateTopics)));
+                    Collections.unmodifiableSet(stateNames)));
         }
 
         return Collections.unmodifiableMap(topicGroups);
@@ -508,7 +532,7 @@ public class TopologyBuilder {
                         }
                         for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
                             if (!stateStoreMap.containsKey(stateStoreName)) {
-                                stateStoreMap.put(stateStoreName, stateStores.get(stateStoreName));
+                                stateStoreMap.put(stateStoreName, stateFactories.get(stateStoreName).supplier);
                             }
                         }
                     } else if (factory instanceof SourceNodeFactory) {
