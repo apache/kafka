@@ -65,7 +65,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val serverCount = 3
   override val setClusterAcl = Some(() =>
     { AclCommand.main(clusterAclArgs)
-      TestUtils.waitAndVerifyAcls(ClusterActionAcl, servers.head.apis.authorizer.get, clusterResource)
+      servers.foreach( s =>
+        TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, clusterResource)
+      )
     } : Unit
   )
   val numRecords = 1
@@ -118,8 +120,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                           s"--group=$group",
                                           s"--operation=Read",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def ClusterActionAcl =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
-  def TopicBrokerReadAcl =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
+  def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
   def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
@@ -131,7 +133,6 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-  this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
   /**
@@ -167,8 +168,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     AclCommand.main(topicBrokerReadAclArgs)
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
-    TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicBrokerReadAcl, servers.head.apis.authorizer.get, topicResource)
-    TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    servers.foreach(s => {
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicBrokerReadAcl, s.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
+    })
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
