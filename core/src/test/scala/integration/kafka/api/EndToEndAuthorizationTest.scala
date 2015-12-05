@@ -93,6 +93,12 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                             s"--cluster",
                                             s"--operation=ClusterAction",
                                             s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
+  def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
+                                                  s"zookeeper.connect=$zkConnect",
+                                                  s"--add",
+                                                  s"--topic=$topic",
+                                                  s"--operation=Read",
+                                                  s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
   def produceAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
@@ -106,13 +112,14 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                                                s"--group=$group",
                                                s"--consumer",
                                                s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def groupAclArgs: Array[String] = Array("--authorizer-properties", 
+  def groupAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--group=$group",
                                           s"--operation=Read",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def ClusterActionAcl:Set[Acl] =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def ClusterActionAcl =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def TopicBrokerReadAcl =  Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
   def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
@@ -140,7 +147,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     }
     super.setUp
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)
+    TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
   }
 
   /**
@@ -157,9 +164,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     */
   @Test
   def testProduceConsume {
+    AclCommand.main(topicBrokerReadAclArgs)
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
-    TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+    TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicBrokerReadAcl, servers.head.apis.authorizer.get, topicResource)
     TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
     //Produce records
     debug("Starting to send records")
