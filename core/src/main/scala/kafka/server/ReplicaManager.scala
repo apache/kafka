@@ -38,7 +38,7 @@ import scala.collection._
 /*
  * Result metadata of a log append operation on the log
  */
-case class LogAppendResult(info: LogAppendInfo, error: Option[Throwable] = None) {
+case class LogAppendResult(info: LogAppendInfo, error: Option[Throwable] = None, leaderEpoch: Option[Int] = None) {
   def errorCode = error match {
     case None => ErrorMapping.NoError
     case Some(e) => ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
@@ -326,7 +326,9 @@ class ReplicaManager(val config: KafkaConfig,
         topicAndPartition ->
                 ProducePartitionStatus(
                   result.info.lastOffset + 1, // required offset
-                  ProducerResponseStatus(result.errorCode, result.info.firstOffset)) // response status
+                  ProducerResponseStatus(result.errorCode, result.info.firstOffset),
+                  result.leaderEpoch// get leader epoch from LogAppendResult
+                ) // response status
       }
 
       if (delayedRequestRequired(requiredAcks, messagesPerPartition, localProduceResults)) {
@@ -392,13 +394,15 @@ class ReplicaManager(val config: KafkaConfig,
 
         (topicAndPartition, LogAppendResult(
           LogAppendInfo.UnknownLogAppendInfo,
-          Some(new InvalidTopicException("Cannot append to internal topic %s".format(topicAndPartition.topic)))))
+          Some(new InvalidTopicException("Cannot append to internal topic %s".format(topicAndPartition.topic))),
+          None))
       } else {
         try {
           val partitionOpt = getPartition(topicAndPartition.topic, topicAndPartition.partition)
-          val info = partitionOpt match {
+          val (info, leaderEpoch) = partitionOpt match {
             case Some(partition) =>
-              partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet], requiredAcks)
+              (partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet], requiredAcks), partition
+                .getLeaderEpoch())
             case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
               .format(topicAndPartition, localBrokerId))
           }
@@ -417,7 +421,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
             .format(messages.sizeInBytes, topicAndPartition.topic, topicAndPartition.partition, info.firstOffset, info.lastOffset))
-          (topicAndPartition, LogAppendResult(info))
+          (topicAndPartition, LogAppendResult(info, None, Some(leaderEpoch)))
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
           // it is supposed to indicate un-expected failures of a broker in handling a produce request

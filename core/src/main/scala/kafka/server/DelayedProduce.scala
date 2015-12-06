@@ -29,11 +29,13 @@ import kafka.utils.Pool
 
 import scala.collection._
 
-case class ProducePartitionStatus(requiredOffset: Long, responseStatus: ProducerResponseStatus) {
+case class ProducePartitionStatus(requiredOffset: Long,
+                                  responseStatus: ProducerResponseStatus,
+                                  leaderEpoch: Option[Int]) {
   @volatile var acksPending = false
 
-  override def toString = "[acksPending: %b, error: %d, startOffset: %d, requiredOffset: %d]"
-    .format(acksPending, responseStatus.error, responseStatus.offset, requiredOffset)
+  override def toString = "[acksPending: %b, error: %d, startOffset: %d, requiredOffset: %d, leaderEpoch: %s]"
+    .format(acksPending, responseStatus.error, responseStatus.offset, requiredOffset, leaderEpoch.map(_.toString).getOrElse("null"))
 }
 
 /**
@@ -77,7 +79,8 @@ class DelayedProduce(delayMs: Long,
    * Case B: This broker is the leader:
    *   B.1 - If there was a local error thrown while checking if at least requiredAcks
    *         replicas have caught up to this operation: set an error in response
-   *   B.2 - Otherwise, set the response with no error.
+   *   B.2 - If leader epoch has been changed since this delayed produce was delayed: set an error in response
+   *   B.3 - Otherwise, set the response with no error.
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
@@ -89,17 +92,22 @@ class DelayedProduce(delayMs: Long,
         val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
         val (hasEnough, errorCode) = partitionOpt match {
           case Some(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
+            if(status.leaderEpoch.get < partition.getLeaderEpoch()) {
+              warn("A replica may endured a leader-follower-leader change, so complete its delayed produce with error")
+              (false, ErrorMapping.StaleLeaderEpochCode)
+            }
+            else
+              partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>
             // Case A
             (false, ErrorMapping.UnknownTopicOrPartitionCode)
         }
         if (errorCode != ErrorMapping.NoError) {
-          // Case B.1
+          // Case B.1 or B.2
           status.acksPending = false
           status.responseStatus.error = errorCode
         } else if (hasEnough) {
-          // Case B.2
+          // Case B.3
           status.acksPending = false
           status.responseStatus.error = ErrorMapping.NoError
         }
