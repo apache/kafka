@@ -206,8 +206,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   def testNoConsumeAcl {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
-    TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
-    TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    servers.foreach(s => {
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    })
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
@@ -229,7 +231,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   @Test
   def testNoGroupAcl {
     AclCommand.main(produceAclArgs)
-    TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+    servers.foreach(s =>
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+    )
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
