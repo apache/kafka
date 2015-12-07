@@ -75,7 +75,7 @@ case class LogAppendInfo(var firstOffset: Long,
  *
  */
 @threadsafe
-class Log(val dir: File,
+class Log(@volatile var dir: File,
           @volatile var config: LogConfig,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
@@ -922,6 +922,9 @@ object Log {
   /** TODO: Get rid of CleanShutdownFile in 0.8.2 */
   val CleanShutdownFile = ".kafka_cleanshutdown"
 
+  /** a directory that is scheduled to be deleted */
+  val DeleteDirSuffix = ".delete"
+
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
    * so that ls sorts the files numerically.
@@ -961,14 +964,21 @@ object Log {
     if (name == null || name.isEmpty || !name.contains('-')) {
       throwException(dir)
     }
-    val index = name.lastIndexOf('-')
+    val index = name.indexOf('-')
     val topic: String = name.substring(0, index)
-    val partition: String = name.substring(index + 1)
+    val partition = if(name.endsWith(DeleteDirSuffix)) {
+      val partitionIndex = name.indexOf(".")
+      name.substring(index + 1, partitionIndex)
+    } else {
+      name.substring(index + 1)
+    }
+
     if (topic.length < 1 || partition.length < 1) {
       throwException(dir)
     }
     TopicAndPartition(topic, partition.toInt)
   }
+
 
   def throwException(dir: File) {
     throw new KafkaException("Found directory " + dir.getCanonicalPath + ", " +

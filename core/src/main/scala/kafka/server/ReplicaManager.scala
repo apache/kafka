@@ -233,7 +233,7 @@ class ReplicaManager(val config: KafkaConfig,
           val topicAndPartition = TopicAndPartition(topic, partitionId)
 
           if(logManager.getLog(topicAndPartition).isDefined) {
-              logManager.deleteLog(topicAndPartition)
+              logManager.markLogForDeletion(topicAndPartition)
           }
         }
         stateChangeLogger.trace("Broker %d ignoring stop replica (delete=%s) for partition [%s,%d] as replica doesn't exist on broker"

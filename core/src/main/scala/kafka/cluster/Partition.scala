@@ -147,7 +147,7 @@ class Partition(val topic: String,
       inSyncReplicas = Set.empty[Replica]
       leaderReplicaIdOpt = None
       try {
-        logManager.deleteLog(TopicAndPartition(topic, partitionId))
+        logManager.markLogForDeletion(TopicAndPartition(topic, partitionId))
         removePartitionMetrics()
       } catch {
         case e: IOException =>
