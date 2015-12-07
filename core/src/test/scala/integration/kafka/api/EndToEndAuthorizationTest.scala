@@ -134,6 +134,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
   /**
@@ -211,7 +212,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
     servers.foreach(s => {
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
     })
     //Produce records
@@ -236,7 +237,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   def testNoGroupAcl {
     AclCommand.main(produceAclArgs)
     servers.foreach(s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, servers.head.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
     )
     //Produce records
     debug("Starting to send records")
