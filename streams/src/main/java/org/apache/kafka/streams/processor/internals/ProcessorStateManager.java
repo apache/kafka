@@ -19,10 +19,11 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.OffsetCheckpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,9 +44,11 @@ public class ProcessorStateManager {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorStateManager.class);
 
+    public static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     public static final String LOCK_FILE_NAME = ".lock";
 
+    private final String jobId;
     private final int partition;
     private final File baseDir;
     private final FileLock directoryLock;
@@ -55,9 +58,10 @@ public class ProcessorStateManager {
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<TopicPartition, Long> offsetLimits;
     private final boolean isStandby;
-    private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks
+    private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
 
-    public ProcessorStateManager(int partition, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+    public ProcessorStateManager(String jobId, int partition, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+        this.jobId = jobId;
         this.partition = partition;
         this.baseDir = baseDir;
         this.stores = new HashMap<>();
@@ -90,6 +94,10 @@ public class ProcessorStateManager {
         }
     }
 
+    public static String storeChangelogTopic(String jobId, String storeName) {
+        return jobId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
+    }
+
     public static FileLock lockStateDirectory(File stateDir) throws IOException {
         File lockFile = new File(stateDir, ProcessorStateManager.LOCK_FILE_NAME);
         FileChannel channel = new RandomAccessFile(lockFile, "rw").getChannel();
@@ -104,7 +112,7 @@ public class ProcessorStateManager {
         return this.baseDir;
     }
 
-    public void register(StateStore store, StateRestoreCallback stateRestoreCallback) {
+    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
@@ -112,44 +120,52 @@ public class ProcessorStateManager {
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
         // check that the underlying change log topic exist or not
-        if (restoreConsumer.listTopics().containsKey(store.name())) {
-            boolean partitionNotFound = true;
-            for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(store.name())) {
+        String topic;
+        if (loggingEnabled)
+            topic = storeChangelogTopic(this.jobId, store.name());
+        else topic = store.name();
+
+        // block until the partition is ready for this state changelog topic or time has elapsed
+        boolean partitionNotFound = true;
+        long startTime = System.currentTimeMillis();
+        long waitTime = 5000L;      // hard-code the value since we should not block after KIP-4
+
+        do {
+            try {
+                Thread.sleep(50L);
+            } catch (InterruptedException e) {
+                // ignore
+            }
+
+            for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(topic)) {
                 if (partitionInfo.partition() == partition) {
                     partitionNotFound = false;
                     break;
                 }
             }
+        } while (partitionNotFound && System.currentTimeMillis() < startTime + waitTime);
 
-            if (partitionNotFound)
-                throw new IllegalStateException("Store " + store.name() + "'s change log does not contain the partition " + partition);
-
-        } else {
-            throw new IllegalStateException("Change log topic for store " + store.name() + " does not exist yet");
-        }
+        if (partitionNotFound)
+            throw new KafkaException("Store " + store.name() + "'s change log does not contain partition " + partition);
 
         this.stores.put(store.name(), store);
 
         if (isStandby) {
             if (store.persistent())
-                restoreCallbacks.put(store.name(), stateRestoreCallback);
+                restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
             restoreActiveState(store, stateRestoreCallback);
         }
     }
 
     private void restoreActiveState(StateStore store, StateRestoreCallback stateRestoreCallback) {
-
-        if (store == null)
-            throw new IllegalArgumentException("Store " + store.name() + " has not been registered.");
-
         // ---- try to restore the state from change-log ---- //
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
         }
-        TopicPartition storePartition = new TopicPartition(store.name(), partition);
+        TopicPartition storePartition = new TopicPartition(storeChangelogTopic(this.jobId, store.name()), partition);
         restoreConsumer.assign(Collections.singletonList(storePartition));
 
         try {
@@ -195,8 +211,8 @@ public class ProcessorStateManager {
         Map<TopicPartition, Long> partitionsAndOffsets = new HashMap<>();
 
         for (Map.Entry<String, StateRestoreCallback> entry : restoreCallbacks.entrySet()) {
-            String storeName = entry.getKey();
-            TopicPartition storePartition = new TopicPartition(storeName, partition);
+            String topicName = entry.getKey();
+            TopicPartition storePartition = new TopicPartition(topicName, partition);
 
             if (checkpointedOffsets.containsKey(storePartition)) {
                 partitionsAndOffsets.put(storePartition, checkpointedOffsets.get(storePartition));
@@ -212,6 +228,7 @@ public class ProcessorStateManager {
         List<ConsumerRecord<byte[], byte[]>> remainingRecords = null;
 
         // restore states from changelog records
+
         StateRestoreCallback restoreCallback = restoreCallbacks.get(storePartition.topic());
 
         long lastOffset = -1L;
@@ -276,7 +293,7 @@ public class ProcessorStateManager {
 
             Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
             for (String storeName : stores.keySet()) {
-                TopicPartition part = new TopicPartition(storeName, partition);
+                TopicPartition part = new TopicPartition(storeChangelogTopic(jobId, storeName), partition);
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {

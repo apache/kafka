@@ -177,7 +177,8 @@ public class KTableImpl<K, S, V> implements KTable<K, V> {
                 if (!source.isMaterialized()) {
                     StateStoreSupplier storeSupplier =
                             new KTableStoreSupplier(topic, keySerializer, keyDeserializer, valSerializer, valDeserializer, null);
-                    topology.addStateStore(storeSupplier, name);
+                    // mark this state is non internal hence it is read directly from a user topic
+                    topology.addStateStore(storeSupplier, false, name);
                     source.materialize();
                 }
             }
