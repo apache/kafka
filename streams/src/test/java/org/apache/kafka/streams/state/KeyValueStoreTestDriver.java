@@ -269,7 +269,7 @@ public class KeyValueStoreTestDriver<K, V> {
             }
 
             @Override
-            public void register(StateStore store, StateRestoreCallback func) {
+            public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback func) {
                 storeMap.put(store.name(), store);
                 restoreEntries(func);
             }

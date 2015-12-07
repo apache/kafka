@@ -56,7 +56,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private Serdes<K, V> serdes;
     private ProcessorContext context;
-    private String dbName;
     private String dirName;
     private RocksDB db;
 

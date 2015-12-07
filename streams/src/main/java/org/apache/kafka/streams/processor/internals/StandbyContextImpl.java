@@ -110,11 +110,11 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     }
 
     @Override
-    public void register(StateStore store, StateRestoreCallback stateRestoreCallback) {
+    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
             throw new KafkaException("Can only create state stores during initialization.");
 
-        stateMgr.register(store, stateRestoreCallback);
+        stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
 
     @Override

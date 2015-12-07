@@ -88,7 +88,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             final Deserializer<K> keyDeserializer = serialization.keyDeserializer();
             final Deserializer<V> valDeserializer = serialization.valueDeserializer();
 
-            context.register(this, new StateRestoreCallback() {
+            context.register(this, loggingEnabled, new StateRestoreCallback() {
                 @Override
                 public void restore(byte[] key, byte[] value) {
                     inner.put(keyDeserializer.deserialize(name, key),

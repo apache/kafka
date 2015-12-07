@@ -127,7 +127,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public void register(StateStore store, StateRestoreCallback func) {
+    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback func) {
         storeMap.put(store.name(), store);
     }
 

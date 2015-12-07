@@ -94,7 +94,7 @@ public class ProcessorStateManager {
         }
     }
 
-    public String storeChangelogTopic(String storeName) {
+    public static String storeChangelogTopic(String jobId, String storeName) {
         return jobId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
@@ -112,7 +112,7 @@ public class ProcessorStateManager {
         return this.baseDir;
     }
 
-    public void register(StateStore store, StateRestoreCallback stateRestoreCallback) {
+    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
@@ -120,7 +120,10 @@ public class ProcessorStateManager {
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
         // check that the underlying change log topic exist or not
-        String topic = storeChangelogTopic(store.name());
+        String topic;
+        if (loggingEnabled)
+            topic = storeChangelogTopic(this.jobId, store.name());
+        else topic = store.name();
 
         // block until the partition is ready for this state changelog topic or time has elapsed
         boolean partitionNotFound = true;
@@ -162,7 +165,7 @@ public class ProcessorStateManager {
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
         }
-        TopicPartition storePartition = new TopicPartition(storeChangelogTopic(store.name()), partition);
+        TopicPartition storePartition = new TopicPartition(storeChangelogTopic(this.jobId, store.name()), partition);
         restoreConsumer.assign(Collections.singletonList(storePartition));
 
         try {
@@ -290,7 +293,7 @@ public class ProcessorStateManager {
 
             Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
             for (String storeName : stores.keySet()) {
-                TopicPartition part = new TopicPartition(storeChangelogTopic(storeName), partition);
+                TopicPartition part = new TopicPartition(storeChangelogTopic(jobId, storeName), partition);
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {
