@@ -73,6 +73,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
+  val topicWildcard = "*"
   val part = 0
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = new TopicAndPartition(topic, part)
@@ -98,7 +99,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
                                                     s"zookeeper.connect=$zkConnect",
                                                     s"--add",
-                                                    s"--topic=$topic",
+                                                    s"--topic=$topicWildcard",
                                                     s"--operation=Read",
                                                     s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
   def produceAclArgs: Array[String] = Array("--authorizer-properties",
@@ -147,6 +148,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
         startSasl(Both)
     }
     super.setUp
+    AclCommand.main(topicBrokerReadAclArgs)
+    servers.foreach( s =>
+      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
+    )
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
   }
@@ -165,11 +170,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     */
   @Test
   def testProduceConsume {
-    AclCommand.main(topicBrokerReadAclArgs)
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
     servers.foreach(s => {
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicBrokerReadAcl, s.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     })
     //Produce records
