@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -39,6 +40,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +48,7 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class StandbyTaskTest {
 
@@ -72,6 +75,15 @@ public class StandbyTaskTest {
             )
     );
 
+    private final TopicPartition ktable = new TopicPartition("ktable1", 0);
+    private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
+    private final ProcessorTopology ktableTopology = new ProcessorTopology(
+            Collections.<ProcessorNode>emptyList(),
+            Collections.<String, SourceNode>emptyMap(),
+            Utils.<StateStoreSupplier>mkList(
+                    new MockStateStoreSupplier(ktable.topic(), true, false)
+            )
+    );
 
     private StreamingConfig createConfig(final File baseDir) throws Exception {
         return new StreamingConfig(new Properties() {
@@ -116,8 +128,6 @@ public class StandbyTaskTest {
 
     @Test
     public void testStorePartitions() throws Exception {
-        System.out.println("STARTED");
-
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
             StreamingConfig config = createConfig(baseDir);
@@ -195,6 +205,104 @@ public class StandbyTaskTest {
 
             assertEquals(1, offsets.size());
             assertEquals(new Long(30L + 1L), offsets.get(partition2));
+
+        } finally {
+            Utils.delete(baseDir);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testUpdateKTable() throws Exception {
+        File baseDir = Files.createTempDirectory("test").toFile();
+        try {
+            consumer.assign(Utils.mkList(ktable));
+            Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
+            committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(0L));
+            consumer.commitSync(committedOffsets);
+
+            restoreStateConsumer.updatePartitions("ktable1", Utils.mkList(
+                    new PartitionInfo("ktable1", 0, Node.noNode(), new Node[0], new Node[0]),
+                    new PartitionInfo("ktable1", 1, Node.noNode(), new Node[0], new Node[0]),
+                    new PartitionInfo("ktable1", 2, Node.noNode(), new Node[0], new Node[0])
+            ));
+
+            StreamingConfig config = createConfig(baseDir);
+            StandbyTask task = new StandbyTask(taskId, jobId, ktablePartitions, ktableTopology, consumer, restoreStateConsumer, config, null);
+
+            restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
+
+            for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 10, 1, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 20, 2, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 30, 3, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 40, 4, 100),
+                    new ConsumerRecord<>(ktable.topic(), ktable.partition(), 50, 5, 100))) {
+                restoreStateConsumer.bufferRecord(record);
+            }
+
+            for (Map.Entry<TopicPartition, Long> entry : task.checkpointedOffsets().entrySet()) {
+                TopicPartition partition = entry.getKey();
+                long offset = entry.getValue();
+                if (offset >= 0) {
+                    restoreStateConsumer.seek(partition, offset);
+                } else {
+                    restoreStateConsumer.seekToBeginning(partition);
+                }
+            }
+
+            // The commit offset is at 0L. Records should not be processed
+            List<ConsumerRecord<byte[], byte[]>> remaining = task.update(ktable, restoreStateConsumer.poll(100).records(ktable));
+            assertEquals(5, remaining.size());
+
+            committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(10L));
+            consumer.commitSync(committedOffsets);
+            task.commit(); // update offset limits
+
+            // The commit offset has not reached, yet.
+            remaining = task.update(ktable, remaining);
+            assertEquals(5, remaining.size());
+
+            committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(11L));
+            consumer.commitSync(committedOffsets);
+            task.commit(); // update offset limits
+
+            // one record should be processed.
+            remaining = task.update(ktable, remaining);
+            assertEquals(4, remaining.size());
+
+            committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(45L));
+            consumer.commitSync(committedOffsets);
+            task.commit(); // update offset limits
+
+            // The commit offset is now 45. All record except for the last one should be processed.
+            remaining = task.update(ktable, remaining);
+            assertEquals(1, remaining.size());
+
+            committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(50L));
+            consumer.commitSync(committedOffsets);
+            task.commit(); // update offset limits
+
+            // The commit offset is now 50. Still the last record remains.
+            remaining = task.update(ktable, remaining);
+            assertEquals(1, remaining.size());
+
+            committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(60L));
+            consumer.commitSync(committedOffsets);
+            task.commit(); // update offset limits
+
+            // The commit offset is now 60. No record should be left.
+            remaining = task.update(ktable, remaining);
+            assertNull(remaining);
+
+            task.close();
+
+            File taskDir = new File(baseDir, taskId.toString());
+            OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
+            Map<TopicPartition, Long> offsets = checkpoint.read();
+
+            assertEquals(1, offsets.size());
+            assertEquals(new Long(51L), offsets.get(ktable));
 
         } finally {
             Utils.delete(baseDir);
