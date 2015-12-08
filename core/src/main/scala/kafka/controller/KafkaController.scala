@@ -18,6 +18,7 @@ package kafka.controller
 
 import java.util
 
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse}
 
@@ -229,7 +230,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
    * @param id Id of the broker to shutdown.
    * @return The number of partitions that the broker still leads.
    */
-  def shutdownBroker(id: Int) : Set[TopicAndPartition] = {
+  def shutdownBroker(id: Int) : Set[TopicPartition] = {
 
     if (!isActive()) {
       throw new ControllerMovedException("Controller moved to another broker. Aborting controlled shutdown")
@@ -295,7 +296,9 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
         controllerContext.partitionLeadershipInfo.filter {
           case (topicAndPartition, leaderIsrAndControllerEpoch) =>
             leaderIsrAndControllerEpoch.leaderAndIsr.leader == id && controllerContext.partitionReplicaAssignment(topicAndPartition).size > 1
-        }.map(_._1)
+        }.map { case (topicAndPartition, _) =>
+          new TopicPartition(topicAndPartition.topic, topicAndPartition.partition)
+        }
       }
       replicatedPartitionsBrokerLeads().toSet
     }

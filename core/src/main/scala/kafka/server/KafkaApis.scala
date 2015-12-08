@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
+import java.util
 
 import kafka.admin.AdminUtils
 import kafka.api._
@@ -33,11 +34,15 @@ import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, 
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse, DescribeGroupsRequest,
+DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse,
+ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse, ControlledShutdownRequest, ControlledShutdownResponse}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.Node
+import org.apache.kafka.common.{TopicPartition, Node}
 
 import scala.collection._
+import scala.collection.JavaConverters._
+
 /**
  * Logic to handle the various Kafka requests
  */
@@ -163,19 +168,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleControlledShutdownRequest(request: RequestChannel.Request) {
-    // ensureTopicExists is only for client facing requests
-    // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
-    // stop serving data to clients for the topic being deleted
-    val controlledShutdownRequest = request.requestObj.asInstanceOf[ControlledShutdownRequest]
+    val controlledShutdownRequest = request.body.asInstanceOf[ControlledShutdownRequest]
 
-    authorizeClusterAction(request)
-
+    val responseHeader = new ResponseHeader(request.header.correlationId)
+    val controlledShutdownResponse =
+      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
     val partitionsRemaining = controller.shutdownBroker(controlledShutdownRequest.brokerId)
-    val controlledShutdownResponse = new ControlledShutdownResponse(controlledShutdownRequest.correlationId,
-      ErrorMapping.NoError, partitionsRemaining)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, controlledShutdownResponse)))
+        new ControlledShutdownResponse(Errors.NONE.code, partitionsRemaining.asJava)
+      } else {
+        new ControlledShutdownResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code, Set[TopicPartition]().asJava)
   }
 
+    requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, responseHeader, controlledShutdownResponse)))
+  }
 
   /**
    * Handle an offset commit request
@@ -720,8 +725,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeGroupRequest(request: RequestChannel.Request) {
-    import JavaConverters._
-
     val describeRequest = request.body.asInstanceOf[DescribeGroupsRequest]
     val responseHeader = new ResponseHeader(request.header.correlationId)
 
@@ -746,8 +749,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request) {
-    import JavaConverters._
-
     val responseHeader = new ResponseHeader(request.header.correlationId)
     val responseBody = if (!authorize(request.session, Describe, Resource.ClusterResource)) {
       ListGroupsResponse.fromError(Errors.CLUSTER_AUTHORIZATION_FAILED)
