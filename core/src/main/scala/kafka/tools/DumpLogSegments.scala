@@ -24,6 +24,7 @@ import kafka.message._
 import kafka.log._
 import kafka.utils._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.common.KafkaException
 import collection.mutable
 import joptsimple.OptionParser
 import kafka.serializer.Decoder
@@ -157,11 +158,25 @@ object DumpLogSegments {
   }
 
   private class OffsetsMessageParser extends MessageParser[String, String] {
+    private def hex(bytes: Array[Byte]): String = {
+      if (bytes.isEmpty)
+        ""
+      else
+        String.format("%X", BigInt(1, bytes))
+    }
+
     private def parseOffsets(offsetKey: OffsetKey, payload: ByteBuffer) = {
       val group = offsetKey.key.group
       val (topic, partition)  = offsetKey.key.topicPartition.asTuple
       val offset = GroupMetadataManager.readOffsetMessageValue(payload)
-      (Some(s"offset::${group}:${topic}:${partition}"), Some(s"${offset.offset}:${offset.metadata}"))
+
+      val keyString = s"offset::${group}:${topic}:${partition}"
+      val valueString = if (offset.metadata.isEmpty)
+        String.valueOf(offset.offset)
+      else
+        s"${offset.offset}:${offset.metadata}"
+
+      (Some(keyString), Some(valueString))
     }
 
     private def parseGroupMetadata(groupMetadataKey: GroupMetadataKey, payload: ByteBuffer) = {
@@ -171,24 +186,34 @@ object DumpLogSegments {
 
       val assignment = group.allMemberMetadata.map { member =>
         if (protocolType == ConsumerProtocol.PROTOCOL_TYPE) {
-          val partitions = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment)).partitions()
-          s"${member.memberId}=${partitions}"
+          val partitionAssignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
+          val userData = hex(Utils.toArray(partitionAssignment.userData()))
+
+          if (userData.isEmpty)
+            s"${member.memberId}=${partitionAssignment.partitions()}"
+          else
+            s"${member.memberId}=${partitionAssignment.partitions()}:${userData}"
         } else {
-          s"${member.memberId}=${String.format("%x", BigInt(1, member.assignment))}"
+          s"${member.memberId}=${hex(member.assignment)}"
         }
       }.mkString("{", ",", "}")
 
-      (Some(s"metadata::${groupId}"), Some(s"${protocolType}:${group.protocol}:${group.generationId}:${assignment}"))
+      val keyString = s"metadata::${groupId}"
+      val valueString = s"${protocolType}:${group.protocol}:${group.generationId}:${assignment}"
+
+      (Some(keyString), Some(valueString))
     }
 
     override def parse(message: Message): (Option[String], Option[String]) = {
-      if (message.isNull || !message.hasKey) {
+      if (message.isNull)
         (None, None)
+      else if (!message.hasKey) {
+        throw new KafkaException("Failed to decode message using offset topic decoder (message had a missing key)")
       } else {
         GroupMetadataManager.readMessageKey(message.key) match {
           case offsetKey: OffsetKey => parseOffsets(offsetKey, message.payload)
           case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, message.payload)
-          case _ => (None, None)
+          case _ => throw new KafkaException("Failed to decode message using offset topic decoder (message had an invalid key)")
         }
       }
     }
