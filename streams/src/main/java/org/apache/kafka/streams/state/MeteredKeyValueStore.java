@@ -31,7 +31,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     protected final KeyValueStore<K, V> inner;
     protected final Serdes<K, V> serialization;
-    protected final String metricGrp;
+    protected final String metricScope;
     protected final Time time;
 
     private Sensor putTime;
@@ -48,10 +48,10 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private KeyValueStoreChangeLogger<K, V> changeLogger = null;
 
     // always wrap the store with the metered store
-    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, Serdes<K, V> serialization, String metricGrp, Time time) {
+    public MeteredKeyValueStore(final KeyValueStore<K, V> inner, Serdes<K, V> serialization, String metricScope, Time time) {
         this.inner = inner;
         this.serialization = serialization;
-        this.metricGrp = metricGrp;
+        this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
     }
 
@@ -69,14 +69,14 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public void init(ProcessorContext context) {
         final String name = name();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricGrp, name, "put", "store-name", name);
-        this.getTime = this.metrics.addLatencySensor(metricGrp, name, "get", "store-name", name);
-        this.deleteTime = this.metrics.addLatencySensor(metricGrp, name, "delete", "store-name", name);
-        this.putAllTime = this.metrics.addLatencySensor(metricGrp, name, "put-all", "store-name", name);
-        this.allTime = this.metrics.addLatencySensor(metricGrp, name, "all", "store-name", name);
-        this.rangeTime = this.metrics.addLatencySensor(metricGrp, name, "range", "store-name", name);
-        this.flushTime = this.metrics.addLatencySensor(metricGrp, name, "flush", "store-name", name);
-        this.restoreTime = this.metrics.addLatencySensor(metricGrp, name, "restore", "store-name", name);
+        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put");
+        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get");
+        this.deleteTime = this.metrics.addLatencySensor(metricScope, name, "delete");
+        this.putAllTime = this.metrics.addLatencySensor(metricScope, name, "put-all");
+        this.allTime = this.metrics.addLatencySensor(metricScope, name, "all");
+        this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range");
+        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush");
+        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
 
         serialization.init(context);
         this.changeLogger = this.loggingEnabled ? new KeyValueStoreChangeLogger<>(name, context, serialization) : null;

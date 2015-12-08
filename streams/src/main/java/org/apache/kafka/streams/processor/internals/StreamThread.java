@@ -721,23 +721,25 @@ public class StreamThread extends Thread {
             for (int i = 0; i < tags.length; i += 2)
                 tagMap.put(tags[i], tags[i + 1]);
 
+            String metricGroupName = "streaming-" + scopeName + "-metrics";
+
             // first add the global operation metrics if not yet, with the global tags only
-            Sensor parent = metrics.sensor(operationName);
-            addLatencyMetrics(this.metricGrpName, parent, "all", operationName, this.metricTags);
+            Sensor parent = metrics.sensor(scopeName + "-" + operationName);
+            addLatencyMetrics(metricGroupName, parent, "all", operationName, this.metricTags);
 
             // add the store operation metrics with additional tags
-            Sensor sensor = metrics.sensor(entityName + "-" + operationName, parent);
-            addLatencyMetrics("streaming-" + scopeName + "-metrics", sensor, entityName, operationName, tagMap);
+            Sensor sensor = metrics.sensor(scopeName + "-" + entityName + "-" + operationName, parent);
+            addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
 
             return sensor;
         }
 
         private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-            maybeAddMetric(sensor, new MetricName(opName + "-avg-latency-ms", metricGrpName,
+            maybeAddMetric(sensor, new MetricName(entityName + "-" + opName + "-avg-latency-ms", metricGrpName,
                 "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
-            maybeAddMetric(sensor, new MetricName(opName + "-max-latency-ms", metricGrpName,
+            maybeAddMetric(sensor, new MetricName(entityName + "-" + opName + "-max-latency-ms", metricGrpName,
                 "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
-            maybeAddMetric(sensor, new MetricName(opName + "-qps", metricGrpName,
+            maybeAddMetric(sensor, new MetricName(entityName + "-" + opName + "-qps", metricGrpName,
                 "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
         }
 
