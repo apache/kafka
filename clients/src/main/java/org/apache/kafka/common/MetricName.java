@@ -76,6 +76,9 @@ public final class MetricName {
     }
 
     /**
+     * @deprecated This method will be removed in a future release.
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String, String...)}
+     *
      * @param name          The name of the metric
      * @param group         logical group name of the metrics to which this metric belongs
      * @param description   A human-readable description to include in the metric
@@ -98,6 +101,9 @@ public final class MetricName {
     }
 
     /**
+     * @deprecated This method will be removed in a future release.
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, Map<String, String>)}
+     *
      * @param name  The name of the metric
      * @param group logical group name of the metrics to which this metric belongs
      * @param tags  key/value attributes of the metric
@@ -108,6 +114,9 @@ public final class MetricName {
     }
 
     /**
+     * @deprecated This method will be removed in a future release.
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String)}
+     *
      * @param name        The name of the metric
      * @param group       logical group name of the metrics to which this metric belongs
      * @param description A human-readable description to include in the metric
@@ -118,6 +127,9 @@ public final class MetricName {
     }
 
     /**
+     * @deprecated This method will be removed in a future release.
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String)}
+     *
      * @param name  The name of the metric
      * @param group logical group name of the metrics to which this metric belongs
      */
