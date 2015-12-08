@@ -19,17 +19,18 @@ package kafka.tools
 
 import java.io._
 import java.nio.ByteBuffer
-import kafka.coordinator.{GroupMetadataKey, OffsetKey, GroupMetadataManager}
-import kafka.message._
+
+import joptsimple.OptionParser
+import kafka.coordinator.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.log._
-import kafka.utils._
+import kafka.message._
+import kafka.serializer.Decoder
+import kafka.utils.{VerifiableProperties, _}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.KafkaException
-import collection.mutable
-import joptsimple.OptionParser
-import kafka.serializer.Decoder
-import kafka.utils.VerifiableProperties
 import org.apache.kafka.common.utils.Utils
+
+import scala.collection.mutable
 
 object DumpLogSegments {
 
