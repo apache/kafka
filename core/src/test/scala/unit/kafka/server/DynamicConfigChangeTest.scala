@@ -18,8 +18,8 @@ package kafka.server
 
 import java.util.Properties
 
+import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
-import kafka.api.RequestKeys
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.{Capture, EasyMock}
 import org.junit.Test
@@ -69,8 +69,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     TestUtils.retry(10000) {
       val configHandler = this.servers(0).dynamicConfigHandlers(ConfigType.Client).asInstanceOf[ClientIdConfigHandler]
       val quotaManagers: Map[Short, ClientQuotaManager] = servers(0).apis.quotaManagers
-      val overrideProducerQuota = quotaManagers.get(RequestKeys.ProduceKey).get.quota(clientId)
-      val overrideConsumerQuota = quotaManagers.get(RequestKeys.FetchKey).get.quota(clientId)
+      val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(clientId)
+      val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(clientId)
 
       assertEquals(s"ClientId $clientId must have overridden producer quota of 1000",
         Quota.upperBound(1000), overrideProducerQuota)
