@@ -105,4 +105,37 @@ public interface KTable<K, V> {
      */
     KStream<K, V> toStream();
 
+    /**
+     * Combines values of this KTable with another KTable using Inner Join.
+     *
+     * @param other the instance of KTable joined with this stream
+     * @param joiner ValueJoiner
+     * @param <V1>   the value type of the other stream
+     * @param <V2>   the value type of the new stream
+     * @return the instance og KStream
+     */
+    <V1, V2> KTable<K, V2> join(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+
+    /**
+     * Combines values of this KTable with another KTable using Outer Join.
+     *
+     * @param other the instance of KTable joined with this stream
+     * @param joiner ValueJoiner
+     * @param <V1>   the value type of the other stream
+     * @param <V2>   the value type of the new stream
+     * @return the instance og KStream
+     */
+    <V1, V2> KTable<K, V2> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+
+    /**
+     * Combines values of this KTable with another KTable using Left Join.
+     *
+     * @param other the instance of KTable joined with this stream
+     * @param joiner ValueJoiner
+     * @param <V1>   the value type of the other stream
+     * @param <V2>   the value type of the new stream
+     * @return the instance og KStream
+     */
+    <V1, V2> KTable<K, V2> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
+
 }
