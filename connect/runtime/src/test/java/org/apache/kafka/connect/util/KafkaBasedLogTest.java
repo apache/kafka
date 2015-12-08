@@ -309,10 +309,32 @@ public class KafkaBasedLogTest {
         readEndFutureCallback.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(getInvoked.get());
         assertEquals(4, consumedRecords.size());
-        assertEquals(TP0_VALUE, consumedRecords.get(0).value());
-        assertEquals(TP0_VALUE_NEW, consumedRecords.get(1).value());
-        assertEquals(TP1_VALUE, consumedRecords.get(2).value());
-        assertEquals(TP1_VALUE_NEW, consumedRecords.get(3).value());
+        int tp0ValueIndex = -1;
+        int tp0ValueNewIndex = -1;
+        int tp1ValueIndex = -1;
+        int tp1ValueNewIndex = -1;
+        for (int i = 0; i < consumedRecords.size(); i++) {
+            switch (consumedRecords.get(i).value()) {
+                case TP0_VALUE:
+                    tp0ValueIndex = i;
+                    break;
+                case TP0_VALUE_NEW:
+                    tp0ValueNewIndex = i;
+                    break;
+                case TP1_VALUE:
+                    tp1ValueIndex = i;
+                    break;
+                case TP1_VALUE_NEW:
+                    tp1ValueNewIndex = i;
+                    break;
+            }
+        }
+        assertTrue(tp0ValueIndex != -1);
+        assertTrue(tp0ValueNewIndex != -1);
+        assertTrue(tp1ValueIndex != -1);
+        assertTrue(tp1ValueNewIndex != -1);
+        assertTrue(tp0ValueIndex < tp0ValueNewIndex);
+        assertTrue(tp1ValueIndex < tp1ValueNewIndex);
 
         // Cleanup
         store.stop();
