@@ -70,7 +70,9 @@ public class StreamThread extends Thread {
     private static final AtomicInteger STREAMING_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
-    public final UUID clientUUID;
+    public final String jobId;
+    public final String clientId;
+    public final UUID processId;
 
     protected final StreamingConfig config;
     protected final TopologyBuilder builder;
@@ -83,7 +85,6 @@ public class StreamThread extends Thread {
     private final Map<TaskId, StreamTask> activeTasks;
     private final Map<TaskId, StandbyTask> standbyTasks;
     private final Set<TaskId> prevTasks;
-    private final String clientId;
     private final Time time;
     private final File stateDir;
     private final long pollTimeMs;
@@ -91,6 +92,8 @@ public class StreamThread extends Thread {
     private final long commitTimeMs;
     private final long totalRecordsToProcess;
     private final StreamingMetricsImpl sensors;
+
+    private KafkaStreamingPartitionAssignor partitionAssignor = null;
 
     private long lastClean;
     private long lastCommit;
@@ -118,11 +121,12 @@ public class StreamThread extends Thread {
 
     public StreamThread(TopologyBuilder builder,
                         StreamingConfig config,
+                        String jobId,
                         String clientId,
-                        UUID clientUUID,
+                        UUID processId,
                         Metrics metrics,
                         Time time) throws Exception {
-        this(builder, config, null , null, null, clientId, clientUUID, metrics, time);
+        this(builder, config, null , null, null, jobId, clientId, processId, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
@@ -130,19 +134,20 @@ public class StreamThread extends Thread {
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
+                 String jobId,
                  String clientId,
-                 UUID clientUUID,
+                 UUID processId,
                  Metrics metrics,
                  Time time) throws Exception {
         super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
 
+        this.jobId = jobId;
         this.config = config;
         this.builder = builder;
         this.sourceTopics = builder.sourceTopics();
         this.clientId = clientId;
-        this.clientUUID = clientUUID;
+        this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
-        this.partitionGrouper.topicGroups(builder.topicGroups());
 
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
@@ -175,23 +180,27 @@ public class StreamThread extends Thread {
         this.running = new AtomicBoolean(true);
     }
 
+    public void partitionAssignor(KafkaStreamingPartitionAssignor partitionAssignor) {
+        this.partitionAssignor = partitionAssignor;
+    }
+
     private Producer<byte[], byte[]> createProducer() {
         log.info("Creating producer client for stream thread [" + this.getName() + "]");
-        return new KafkaProducer<>(config.getProducerConfigs(),
+        return new KafkaProducer<>(config.getProducerConfigs(this.clientId),
                 new ByteArraySerializer(),
                 new ByteArraySerializer());
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
         log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(this),
+        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
 
     private Consumer<byte[], byte[]> createRestoreConsumer() {
         log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(),
+        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
@@ -516,14 +525,17 @@ public class StreamThread extends Thread {
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        return new StreamTask(id, partitions, topology, consumer, producer, restoreConsumer, config, sensors);
+        return new StreamTask(id, jobId, partitions, topology, consumer, producer, restoreConsumer, config, sensors);
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
+        if (partitionAssignor == null)
+            throw new KafkaException("Partition assignor has not been initialized while adding stream tasks: this should not happen.");
+
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
         for (TopicPartition partition : assignment) {
-            Set<TaskId> taskIds = partitionGrouper.taskIds(partition);
+            Set<TaskId> taskIds = partitionAssignor.tasksForPartition(partition);
             for (TaskId taskId : taskIds) {
                 Set<TopicPartition> partitions = partitionsForTask.get(taskId);
                 if (partitions == null) {
@@ -574,17 +586,20 @@ public class StreamThread extends Thread {
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStoreSuppliers().isEmpty()) {
-            return new StandbyTask(id, partitions, topology, consumer, restoreConsumer, config, sensors);
+            return new StandbyTask(id, jobId, partitions, topology, consumer, restoreConsumer, config, sensors);
         } else {
             return null;
         }
     }
 
     private void addStandbyTasks() {
+        if (partitionAssignor == null)
+            throw new KafkaException("Partition assignor has not been initialized while adding standby tasks: this should not happen.");
+
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
         // create the standby tasks
-        for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionGrouper.standbyTasks().entrySet()) {
+        for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
             TaskId taskId = entry.getKey();
             Set<TopicPartition> partitions = entry.getValue();
             StandbyTask task = createStandbyTask(taskId, partitions);
