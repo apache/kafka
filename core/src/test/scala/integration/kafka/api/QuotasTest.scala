@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.{Quota, KafkaMetric}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.{After, Before, Test}
@@ -125,7 +126,7 @@ class QuotasTest extends KafkaServerTestHarness {
     produce(producers.head, numRecords)
 
     val producerMetricName = new MetricName("throttle-time",
-                                    RequestKeys.nameForKey(RequestKeys.ProduceKey),
+                                    ApiKeys.PRODUCE.name,
                                     "Tracking throttle-time per client",
                                     "client-id", producerId1)
     assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
@@ -136,7 +137,7 @@ class QuotasTest extends KafkaServerTestHarness {
     val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
     replicaConsumers.head.fetch(request)
     val consumerMetricName = new MetricName("throttle-time",
-                                            RequestKeys.nameForKey(RequestKeys.FetchKey),
+                                            ApiKeys.FETCH.name,
                                             "Tracking throttle-time per client",
                                             "client-id", consumerId1)
     assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
@@ -154,8 +155,8 @@ class QuotasTest extends KafkaServerTestHarness {
 
     TestUtils.retry(10000) {
       val quotaManagers: Map[Short, ClientQuotaManager] = leaderNode.apis.quotaManagers
-      val overrideProducerQuota = quotaManagers.get(RequestKeys.ProduceKey).get.quota(producerId2)
-      val overrideConsumerQuota = quotaManagers.get(RequestKeys.FetchKey).get.quota(consumerId2)
+      val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(producerId2)
+      val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(consumerId2)
 
       assertEquals(s"ClientId $producerId2 must have unlimited producer quota", Quota.upperBound(Long.MaxValue), overrideProducerQuota)
       assertEquals(s"ClientId $consumerId2 must have unlimited consumer quota", Quota.upperBound(Long.MaxValue), overrideConsumerQuota)
@@ -166,7 +167,7 @@ class QuotasTest extends KafkaServerTestHarness {
     val numRecords = 1000
     produce(producers(1), numRecords)
     val producerMetricName = new MetricName("throttle-time",
-                                            RequestKeys.nameForKey(RequestKeys.ProduceKey),
+                                            ApiKeys.PRODUCE.name,
                                             "Tracking throttle-time per client",
                                             "client-id", producerId2)
     assertEquals("Should not have been throttled", 0.0, allMetrics(producerMetricName).value(), 0.0)
@@ -177,7 +178,7 @@ class QuotasTest extends KafkaServerTestHarness {
     val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
     replicaConsumers(1).fetch(request)
     val consumerMetricName = new MetricName("throttle-time",
-                                            RequestKeys.nameForKey(RequestKeys.FetchKey),
+                                            ApiKeys.FETCH.name,
                                             "Tracking throttle-time per client",
                                             "client-id", consumerId2)
     assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value(), 0.0)

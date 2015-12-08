@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -24,6 +24,7 @@ import kafka.common._
 import kafka.message._
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
+import org.apache.kafka.common.protocol.ApiKeys
 
 object ProducerRequest {
   val CurrentVersion = 1.shortValue
@@ -59,7 +60,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
                            requiredAcks: Short,
                            ackTimeoutMs: Int,
                            data: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet])
-    extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
+    extends RequestOrResponse(Some(ApiKeys.PRODUCE.id)) {
 
   /**
    * Partitions the data into a map of maps (one for each topic).
