@@ -152,7 +152,7 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Create a metricName with the given name, group, description and tags, plus default tags specified in the metric
+     * Create a MetricName with the given name, group, description and tags, plus default tags specified in the metric
      * configuration. Tag in tags takes precedence if the same tag key is specified in the default metric configuration.
      *
      * @param name        The name of the metric
@@ -167,7 +167,7 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Create a metricName with the given name, group, description, and default tags
+     * Create a MetricName with the given name, group, description, and default tags
      * specified in the metric configuration.
      *
      * @param name        The name of the metric
@@ -179,7 +179,7 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Create a metricName with the given name, group and default tags specified in the metric configuration.
+     * Create a MetricName with the given name, group and default tags specified in the metric configuration.
      *
      * @param name        The name of the metric
      * @param group       logical group name of the metrics to which this metric belongs
@@ -189,7 +189,7 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Create a metricName with the given name, group, description, and keyValue as tags,  plus default tags specified in the metric
+     * Create a MetricName with the given name, group, description, and keyValue as tags,  plus default tags specified in the metric
      * configuration. Tag in keyValue takes precedence if the same tag key is specified in the default metric configuration.
      *
      * @param name          The name of the metric
@@ -202,7 +202,7 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Create a metricName with the given name, group and tags, plus default tags specified in the metric
+     * Create a MetricName with the given name, group and tags, plus default tags specified in the metric
      * configuration. Tag in tags takes precedence if the same tag key is specified in the default metric configuration.
      *
      * @param name  The name of the metric
