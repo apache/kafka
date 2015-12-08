@@ -175,7 +175,7 @@ public interface KStream<K, V> {
     /**
      * Combines values of this stream with KTable using Left Join.
      *
-     * @param ktable the instance ogf KTable joined with this stream
+     * @param ktable the instance of KTable joined with this stream
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
      * @param <V2>   the value type of the new stream

@@ -112,7 +112,7 @@ public interface KTable<K, V> {
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
      * @param <V2>   the value type of the new stream
-     * @return the instance og KStream
+     * @return the instance of KStream
      */
     <V1, V2> KTable<K, V2> join(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
 
@@ -123,7 +123,7 @@ public interface KTable<K, V> {
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
      * @param <V2>   the value type of the new stream
-     * @return the instance og KStream
+     * @return the instance of KStream
      */
     <V1, V2> KTable<K, V2> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
 
@@ -134,7 +134,7 @@ public interface KTable<K, V> {
      * @param joiner ValueJoiner
      * @param <V1>   the value type of the other stream
      * @param <V2>   the value type of the new stream
-     * @return the instance og KStream
+     * @return the instance of KStream
      */
     <V1, V2> KTable<K, V2> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
 
