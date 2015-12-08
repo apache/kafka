@@ -114,7 +114,7 @@ class KafkaService(JmxMixin, Service):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=False)
 
     def start_minikdc(self, add_principals=""):
-        if self.security_config.has_sasl_kerberos:
+        if self.security_config.has_sasl:
             if self.minikdc is None:
                 self.minikdc = MiniKdc(self.context, self.nodes, extra_principals = add_principals)
                 self.minikdc.start()
