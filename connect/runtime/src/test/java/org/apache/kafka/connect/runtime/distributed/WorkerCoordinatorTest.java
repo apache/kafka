@@ -47,7 +47,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -75,7 +74,6 @@ public class WorkerCoordinatorTest {
     private Node node = cluster.nodes().get(0);
     private Metadata metadata;
     private Metrics metrics;
-    private Map<String, String> metricTags = new LinkedHashMap<>();
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
     @Mock private KafkaConfigStorage configStorage;
@@ -103,7 +101,6 @@ public class WorkerCoordinatorTest {
                 heartbeatIntervalMs,
                 metrics,
                 "consumer" + groupId,
-                metricTags,
                 time,
                 retryBackoffMs,
                 LEADER_URL,

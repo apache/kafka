@@ -27,9 +27,9 @@ It also meant the system would have to handle low-latency delivery to handle mor
 <p>
 We wanted to support partitioned, distributed, real-time processing of these feeds to create new, derived feeds. This motivated our partitioning and consumer model.
 <p>
-Finally in cases where the stream is fed into other data systems for serving we knew the system would have to be able to guarantee fault-tolerance in the presence of machine failures.
+Finally in cases where the stream is fed into other data systems for serving, we knew the system would have to be able to guarantee fault-tolerance in the presence of machine failures.
 <p>
-Supporting these uses led use to a design with a number of unique elements, more akin to a database log then a traditional messaging system. We will outline some elements of the design in the following sections.
+Supporting these uses led us to a design with a number of unique elements, more akin to a database log than a traditional messaging system. We will outline some elements of the design in the following sections.
 
 <h3><a id="persistence" href="#persistence">4.2 Persistence</a></h3>
 <h4><a id="design_filesystem" href="#design_filesystem">Don't fear the filesystem!</a></h4>
