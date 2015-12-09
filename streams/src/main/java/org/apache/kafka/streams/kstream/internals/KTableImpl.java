@@ -57,7 +57,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public static final String LEFTJOIN_NAME = "KTABLE-LEFTJOIN-";
 
-    public static final String MERGE_NAME = "KSTREAM-MERGE-";
+    public static final String MERGE_NAME = "KTABLE-MERGE-";
 
     public final KTableProcessorSupplier<K, S, V> processorSupplier;
 
