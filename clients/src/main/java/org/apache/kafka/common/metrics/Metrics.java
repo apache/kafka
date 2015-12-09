@@ -285,7 +285,7 @@ public class Metrics implements Closeable {
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
-                    List<Sensor> children = childrenSensors.get(parent.name());
+                    List<Sensor> children = childrenSensors.get(parent);
                     if (children == null) {
                         children = new ArrayList<>();
                         childrenSensors.put(parent, children);
