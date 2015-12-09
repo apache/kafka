@@ -847,7 +847,7 @@ object GroupMetadataManager {
    * @param buffer input byte-buffer
    * @return an GroupTopicPartition object
    */
-  private def readMessageKey(buffer: ByteBuffer): BaseKey = {
+  def readMessageKey(buffer: ByteBuffer): BaseKey = {
     val version = buffer.getShort
     val keySchema = schemaForKey(version)
     val key = keySchema.read(buffer).asInstanceOf[Struct]
@@ -876,7 +876,7 @@ object GroupMetadataManager {
    * @param buffer input byte-buffer
    * @return an offset-metadata object from the message
    */
-  private def readOffsetMessageValue(buffer: ByteBuffer): OffsetAndMetadata = {
+  def readOffsetMessageValue(buffer: ByteBuffer): OffsetAndMetadata = {
     if(buffer == null) { // tombstone
       null
     } else {
@@ -909,7 +909,7 @@ object GroupMetadataManager {
    * @param buffer input byte-buffer
    * @return a group metadata object from the message
    */
-  private def readGroupMessageValue(groupId: String, buffer: ByteBuffer): GroupMetadata = {
+  def readGroupMessageValue(groupId: String, buffer: ByteBuffer): GroupMetadata = {
     if(buffer == null) { // tombstone
       null
     } else {

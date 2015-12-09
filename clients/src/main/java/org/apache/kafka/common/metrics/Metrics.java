@@ -15,6 +15,8 @@ package org.apache.kafka.common.metrics;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -81,6 +83,15 @@ public class Metrics implements Closeable {
     }
 
     /**
+     * Create a metrics repository with no metric reporters and the given default configuration.
+     * Expiration of Sensors is disabled.
+     */
+    public Metrics(MetricConfig defaultConfig, Time time) {
+      this(defaultConfig, new ArrayList<MetricsReporter>(0), time);
+    }
+
+
+  /**
      * Create a metrics repository with no reporters and the given default config. This config will be used for any
      * metric that doesn't override its own config. Expiration of Sensors is disabled.
      * @param defaultConfig The default config to use for all metrics that don't override their config
@@ -130,6 +141,90 @@ public class Metrics implements Closeable {
         } else {
             this.metricsScheduler = null;
         }
+
+        addMetric(metricName("count", "kafka-metrics-count", "total number of registered metrics"),
+            new Measurable() {
+                @Override
+                public double measure(MetricConfig config, long now) {
+                    return metrics.size();
+                }
+            });
+    }
+
+    /**
+     * Create a MetricName with the given name, group, description and tags, plus default tags specified in the metric
+     * configuration. Tag in tags takes precedence if the same tag key is specified in the default metric configuration.
+     *
+     * @param name        The name of the metric
+     * @param group       logical group name of the metrics to which this metric belongs
+     * @param description A human-readable description to include in the metric
+     * @param tags        additional key/value attributes of the metric
+     */
+    public MetricName metricName(String name, String group, String description, Map<String, String> tags) {
+        Map<String, String> combinedTag = new LinkedHashMap<>(config.tags());
+        combinedTag.putAll(tags);
+        return new MetricName(name, group, description, combinedTag);
+    }
+
+    /**
+     * Create a MetricName with the given name, group, description, and default tags
+     * specified in the metric configuration.
+     *
+     * @param name        The name of the metric
+     * @param group       logical group name of the metrics to which this metric belongs
+     * @param description A human-readable description to include in the metric
+     */
+    public MetricName metricName(String name, String group, String description) {
+        return metricName(name, group, description, new HashMap<String, String>());
+    }
+
+    /**
+     * Create a MetricName with the given name, group and default tags specified in the metric configuration.
+     *
+     * @param name        The name of the metric
+     * @param group       logical group name of the metrics to which this metric belongs
+     */
+    public MetricName metricName(String name, String group) {
+        return metricName(name, group, "", new HashMap<String, String>());
+    }
+
+    /**
+     * Create a MetricName with the given name, group, description, and keyValue as tags,  plus default tags specified in the metric
+     * configuration. Tag in keyValue takes precedence if the same tag key is specified in the default metric configuration.
+     *
+     * @param name          The name of the metric
+     * @param group         logical group name of the metrics to which this metric belongs
+     * @param description   A human-readable description to include in the metric
+     * @param keyValue      additional key/value attributes of the metric (must come in pairs)
+     */
+    public MetricName metricName(String name, String group, String description, String... keyValue) {
+        return metricName(name, group, description, getTags(keyValue));
+    }
+
+    /**
+     * Create a MetricName with the given name, group and tags, plus default tags specified in the metric
+     * configuration. Tag in tags takes precedence if the same tag key is specified in the default metric configuration.
+     *
+     * @param name  The name of the metric
+     * @param group logical group name of the metrics to which this metric belongs
+     * @param tags  key/value attributes of the metric
+     */
+    public MetricName metricName(String name, String group, Map<String, String> tags) {
+        return metricName(name, group, "", tags);
+    }
+
+    private static Map<String, String> getTags(String... keyValue) {
+        if ((keyValue.length % 2) != 0)
+            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
+        Map<String, String> tags = new HashMap<String, String>();
+
+        for (int i = 0; i < keyValue.length; i += 2)
+            tags.put(keyValue[i], keyValue[i + 1]);
+        return tags;
+    }
+
+    public MetricConfig config() {
+        return config;
     }
 
     /**

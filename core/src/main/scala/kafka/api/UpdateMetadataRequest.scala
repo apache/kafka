@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -23,7 +23,7 @@ import kafka.cluster.{Broker, BrokerEndPoint}
 import kafka.common.{ErrorMapping, KafkaException, TopicAndPartition}
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 
 import scala.collection.Set
 
@@ -70,7 +70,7 @@ case class UpdateMetadataRequest (versionId: Short,
                                   controllerEpoch: Int,
                                   partitionStateInfos: Map[TopicAndPartition, PartitionStateInfo],
                                   aliveBrokers: Set[Broker])
-  extends RequestOrResponse(Some(RequestKeys.UpdateMetadataKey)) {
+  extends RequestOrResponse(Some(ApiKeys.UPDATE_METADATA_KEY.id)) {
 
   def this(controllerId: Int, controllerEpoch: Int, correlationId: Int, clientId: String,
            partitionStateInfos: Map[TopicAndPartition, PartitionStateInfo], aliveBrokers: Set[Broker]) = {

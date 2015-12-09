@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -24,6 +24,7 @@ import kafka.common.{ErrorMapping, OffsetAndMetadata, TopicAndPartition}
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
+import org.apache.kafka.common.protocol.ApiKeys
 
 import scala.collection._
 
@@ -40,7 +41,7 @@ object OffsetCommitRequest extends Logging {
     val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
 
-    // Read the OffsetRequest 
+    // Read the OffsetRequest
     val groupId = readShortString(buffer)
 
     // version 1 and 2 specific fields
@@ -95,7 +96,7 @@ case class OffsetCommitRequest(groupId: String,
                                groupGenerationId: Int = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID,
                                memberId: String =  org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_MEMBER_ID,
                                retentionMs: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME)
-    extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey)) {
+    extends RequestOrResponse(Some(ApiKeys.OFFSET_COMMIT.id)) {
 
   assert(versionId == 0 || versionId == 1 || versionId == 2,
          "Version " + versionId + " is invalid for OffsetCommitRequest. Valid versions are 0, 1 or 2.")

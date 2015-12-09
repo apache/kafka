@@ -561,6 +561,8 @@ project(':streams') {
         compile project(':clients')
         compile "$slf4jlog4j"
         compile 'org.rocksdb:rocksdbjni:3.10.1'
+        compile 'com.101tec:zkclient:0.7' // this dependency should be removed after KIP-4
+        compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"  // this dependency should be removed after KIP-4
 
         testCompile "$junit"
         testCompile project(path: ':clients', configuration: 'archives')

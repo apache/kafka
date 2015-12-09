@@ -20,8 +20,10 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamWindowed;
@@ -35,7 +37,7 @@ import java.lang.reflect.Array;
 import java.util.HashSet;
 import java.util.Set;
 
-public class KStreamImpl<K, V> implements KStream<K, V> {
+public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V> {
 
     private static final String FILTER_NAME = "KSTREAM-FILTER-";
 
@@ -59,24 +61,20 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
-    private static final String SINK_NAME = "KSTREAM-SINK-";
+    public static final String SINK_NAME = "KSTREAM-SINK-";
 
     public static final String JOINTHIS_NAME = "KSTREAM-JOINTHIS-";
 
     public static final String JOINOTHER_NAME = "KSTREAM-JOINOTHER-";
 
+    public static final String LEFTJOIN_NAME = "KSTREAM-LEFTJOIN-";
+
     public static final String MERGE_NAME = "KSTREAM-MERGE-";
 
     public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
 
-    protected final KStreamBuilder topology;
-    public final String name;
-    protected final Set<String> sourceNodes;
-
     public KStreamImpl(KStreamBuilder topology, String name, Set<String> sourceNodes) {
-        this.topology = topology;
-        this.name = name;
-        this.sourceNodes = sourceNodes;
+        super(topology, name, sourceNodes);
     }
 
     @Override
@@ -191,9 +189,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
                                  Serializer<V> valSerializer,
                                  Deserializer<K> keyDeserializer,
                                  Deserializer<V> valDeserializer) {
-        String sendName = topology.newName(SINK_NAME);
-
-        topology.addSink(sendName, topic, keySerializer, valSerializer, this.name);
+        to(topic, keySerializer, valSerializer);
 
         return topology.from(keyDeserializer, valDeserializer, topic);
     }
@@ -205,9 +201,7 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
 
     @Override
     public void to(String topic) {
-        String name = topology.newName(SINK_NAME);
-
-        topology.addSink(name, topic, this.name);
+        to(topic, null, null);
     }
 
     @Override
@@ -244,4 +238,17 @@ public class KStreamImpl<K, V> implements KStream<K, V> {
         topology.addProcessor(name, processorSupplier, this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
     }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <V1, R> KStream<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
+        Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
+
+        String name = topology.newName(LEFTJOIN_NAME);
+
+        topology.addProcessor(name, new KStreamKTableLeftJoin<>((KTableImpl<K, ?, V1>) other, joiner), this.name);
+
+        return new KStreamImpl<>(topology, name, allSourceNodes);
+    }
+
 }

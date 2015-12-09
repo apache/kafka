@@ -81,13 +81,4 @@ class KStreamJoin<K, V, V1, V2> implements ProcessorSupplier<K, V1> {
         }
     }
 
-    public static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
-        return new ValueJoiner<T2, T1, R>() {
-            @Override
-            public R apply(T2 value2, T1 value1) {
-                return joiner.apply(value1, value2);
-            }
-        };
-    }
-
 }
