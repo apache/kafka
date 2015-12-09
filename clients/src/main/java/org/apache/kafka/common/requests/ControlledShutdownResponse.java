@@ -52,6 +52,7 @@ public class ControlledShutdownResponse extends AbstractRequestResponse {
             Struct topicPartitionStruct = struct.instance(PARTITIONS_REMAINING_KEY_NAME);
             topicPartitionStruct.set(TOPIC_KEY_NAME, topicPartition.topic());
             topicPartitionStruct.set(PARTITION_KEY_NAME, topicPartition.partition());
+            partitionsRemainingList.add(topicPartitionStruct);
         }
         struct.set(PARTITIONS_REMAINING_KEY_NAME, partitionsRemainingList.toArray());
 
