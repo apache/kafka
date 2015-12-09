@@ -1113,6 +1113,37 @@ public class ConsumerCoordinatorTest {
         }
     }
 
+    @Test
+    public void testMetadataTopicExpiry() {
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
+        HashSet<String> topics = new HashSet<>();
+        topics.add(topicName);
+        metadata.setTopics(topics);
+        subscriptions.needReassignment();
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorReady();
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(tp), Errors.NONE.code()));
+        coordinator.ensurePartitionAssignment();
+
+        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
+        assertTrue("Topic not found in metadata", metadata.containsTopic(topicName));
+        time.sleep(Metadata.TOPIC_EXPIRY_MILLIS * 2);
+        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
+        assertTrue("Topic expired", metadata.containsTopic(topicName));
+        metadata.handleUnknownTopic(topicName);
+        metadata.update(Cluster.empty(), time.milliseconds());
+        assertTrue("Topic expired", metadata.containsTopic(topicName));
+
+        assertTrue(subscriptions.partitionAssignmentNeeded());
+        metadata.update(TestUtils.singletonCluster(topicName, 2), time.milliseconds());
+        assertTrue(subscriptions.partitionAssignmentNeeded());
+    }
+
     private ConsumerCoordinator buildCoordinator(Metrics metrics,
                                                  List<PartitionAssignor> assignors,
                                                  boolean excludeInternalTopics,

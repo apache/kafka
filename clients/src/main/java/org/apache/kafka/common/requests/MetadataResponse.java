@@ -236,6 +236,18 @@ public class MetadataResponse extends AbstractRequestResponse {
     }
 
     /**
+     * Returns the set of topics with the specified error
+     */
+    public Set<String> topicsByError(Errors error) {
+        Set<String> errorTopics = new HashSet<>();
+        for (TopicMetadata metadata : topicMetadata) {
+            if (metadata.error == error)
+                errorTopics.add(metadata.topic());
+        }
+        return errorTopics;
+    }
+
+    /**
      * Get a snapshot of the cluster metadata from this response
      * @return the cluster snapshot
      */
@@ -256,7 +268,7 @@ public class MetadataResponse extends AbstractRequestResponse {
             }
         }
 
-        return new Cluster(this.brokers, partitions, unauthorizedTopics);
+        return new Cluster(this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED));
     }
 
     /**

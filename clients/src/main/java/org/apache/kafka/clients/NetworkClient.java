@@ -607,6 +607,8 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
                 this.metadata.failedUpdate(now);
             }
+            for (String topic : response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+                this.metadata.handleUnknownTopic(topic);
         }
 
         /**

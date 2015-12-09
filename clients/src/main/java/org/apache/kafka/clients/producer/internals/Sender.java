@@ -175,8 +175,16 @@ public class Sender implements Runnable {
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
         // if there are any partitions whose leaders are not known yet, force metadata update
-        if (result.unknownLeadersExist)
+        if (!result.unknownLeaderTopics.isEmpty()) {
+            // The set of topics with unknown leader contains topics with leader election pending as well as
+            // topics which returned UNKNOWN_TOPIC_OR_PARTITION. The latter are removed from the metadata to
+            // avoid unnecessary metadata fetch for deleted topics which are no longer in use. Add the topic
+            // again to metadata to ensure it is included and request metadata update, since there are messages
+            // to send to the topic.
+            for (String topic : result.unknownLeaderTopics)
+                this.metadata.add(topic);
             this.metadata.requestUpdate();
+        }
 
         // remove any nodes we aren't ready to send to
         Iterator<Node> iter = result.readyNodes.iterator();
