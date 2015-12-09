@@ -442,27 +442,27 @@ public class Sender implements Runnable {
                 String metricGrpName = "producer-topic-metrics";
 
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);
-                MetricName m = this.metrics.metricName("record-send-rate", metricGrpName , metricTags);
+                MetricName m = this.metrics.metricName("record-send-rate", metricGrpName, metricTags);
                 topicRecordCount.add(m, new Rate());
 
                 String topicByteRateName = "topic." + topic + ".bytes";
                 Sensor topicByteRate = this.metrics.sensor(topicByteRateName);
-                m = this.metrics.metricName("byte-rate", metricGrpName , metricTags);
+                m = this.metrics.metricName("byte-rate", metricGrpName, metricTags);
                 topicByteRate.add(m, new Rate());
 
                 String topicCompressionRateName = "topic." + topic + ".compression-rate";
                 Sensor topicCompressionRate = this.metrics.sensor(topicCompressionRateName);
-                m = this.metrics.metricName("compression-rate", metricGrpName , metricTags);
+                m = this.metrics.metricName("compression-rate", metricGrpName, metricTags);
                 topicCompressionRate.add(m, new Avg());
 
                 String topicRetryName = "topic." + topic + ".record-retries";
                 Sensor topicRetrySensor = this.metrics.sensor(topicRetryName);
-                m = this.metrics.metricName("record-retry-rate", metricGrpName , metricTags);
+                m = this.metrics.metricName("record-retry-rate", metricGrpName, metricTags);
                 topicRetrySensor.add(m, new Rate());
 
                 String topicErrorName = "topic." + topic + ".record-errors";
                 Sensor topicErrorSensor = this.metrics.sensor(topicErrorName);
-                m = this.metrics.metricName("record-error-rate", metricGrpName , metricTags);
+                m = this.metrics.metricName("record-error-rate", metricGrpName, metricTags);
                 topicErrorSensor.add(m, new Rate());
             }
         }
