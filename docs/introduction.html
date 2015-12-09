@@ -72,7 +72,7 @@ If all the consumer instances have the same consumer group, then this works just
 <p>
 If all the consumer instances have different consumer groups, then this works like publish-subscribe and all messages are broadcast to all consumers.
 <p>
-More commonly, however, we have found that topics have a small number of consumer groups, one for each "logical subscriber". Each group is composed of many consumer instances for scalability and fault tolerance. This is nothing more than publish-subscribe semantics where the subscriber is cluster of consumers instead of a single process.
+More commonly, however, we have found that topics have a small number of consumer groups, one for each "logical subscriber". Each group is composed of many consumer instances for scalability and fault tolerance. This is nothing more than publish-subscribe semantics where the subscriber is a cluster of consumers instead of a single process.
 <p>
 
 <div style="float: right; margin: 20px; width: 500px" class="caption">
