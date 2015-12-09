@@ -268,7 +268,7 @@ public class SelectorTest {
         while (true) {
             selector.poll(1000L);
             for (NetworkReceive receive : selector.completedReceives())
-                if (receive.source() == node)
+                if (receive.source().equals(node))
                     return asString(receive);
         }
     }
