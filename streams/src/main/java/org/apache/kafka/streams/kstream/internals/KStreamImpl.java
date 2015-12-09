@@ -246,7 +246,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         String name = topology.newName(LEFTJOIN_NAME);
 
-        topology.addProcessor(name, new KStreamKTableLeftJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(), joiner), this.name);
+        topology.addProcessor(name, new KStreamKTableLeftJoin<>((KTableImpl<K, ?, V1>) other, joiner), this.name);
 
         return new KStreamImpl<>(topology, name, allSourceNodes);
     }
