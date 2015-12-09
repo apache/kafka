@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public abstract class KTableProcessorSupplier<K, V, T> implements ProcessorSupplier<K, V> {
+public interface KTableProcessorSupplier<K, V, T> extends ProcessorSupplier<K, V> {
 
-    public abstract KTableValueGetterSupplier<K, T> view(KTableValueGetterSupplier<K, V> parentValueGetterFactory);
+    KTableValueGetterSupplier<K, T> view();
 
 }

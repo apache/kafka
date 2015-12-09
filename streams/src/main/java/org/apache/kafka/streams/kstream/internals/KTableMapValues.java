@@ -22,11 +22,13 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-class KTableMapValues<K1, V1, V2> extends KTableProcessorSupplier<K1, V1, V2> {
+class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2> {
 
+    private final KTableImpl<K1, ?, V1> parent;
     private final ValueMapper<V1, V2> mapper;
 
-    public KTableMapValues(ValueMapper<V1, V2> mapper) {
+    public KTableMapValues(KTableImpl<K1, ?, V1> parent, ValueMapper<V1, V2> mapper) {
+        this.parent = parent;
         this.mapper = mapper;
     }
 
@@ -36,8 +38,10 @@ class KTableMapValues<K1, V1, V2> extends KTableProcessorSupplier<K1, V1, V2> {
     }
 
     @Override
-    public KTableValueGetterSupplier<K1, V2> view(KTableValueGetterSupplier<K1, V1> parentValueGetterSupplier) {
-        return new KTableDerivedValueGetterSupplier<K1, V1, V2>(parentValueGetterSupplier) {
+    public KTableValueGetterSupplier<K1, V2> view() {
+        final KTableValueGetterSupplier<K1, V1> parentValueGetterSupplier = parent.valueGetterSupplier();
+
+        return new KTableValueGetterSupplier<K1, V2>() {
 
             public KTableValueGetter<K1, V2> get() {
                 return new KTableMapValuesValueGetter(parentValueGetterSupplier.get());
@@ -72,10 +76,12 @@ class KTableMapValues<K1, V1, V2> extends KTableProcessorSupplier<K1, V1, V2> {
             this.parentGetter = parentGetter;
         }
 
+        @Override
         public void init(ProcessorContext context) {
             parentGetter.init(context);
         }
 
+        @Override
         public V2 get(K1 key) {
             return computeNewValue(parentGetter.get(key));
         }
