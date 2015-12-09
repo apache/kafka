@@ -43,6 +43,10 @@ public class KStreamTestDriver {
         this(builder, null, null, null, null, null);
     }
 
+    public KStreamTestDriver(KStreamBuilder builder, File stateDir) {
+        this(builder, stateDir, null, null, null, null);
+    }
+
     public KStreamTestDriver(KStreamBuilder builder,
                              File stateDir,
                              Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
