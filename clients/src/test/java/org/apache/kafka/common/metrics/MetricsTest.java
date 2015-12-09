@@ -155,6 +155,9 @@ public class MetricsTest {
         assertEquals(1.0, c2, EPS);
         assertEquals(1.0 + c1, p2, EPS);
         assertEquals(1.0 + c1 + c2, p1, EPS);
+        assertEquals(Arrays.asList(child1, child2), metrics.childrenSensors().get(parent1));
+        assertEquals(Arrays.asList(child1), metrics.childrenSensors().get(parent2));
+        assertNull(metrics.childrenSensors().get(grandchild));
     }
 
     @Test(expected = IllegalArgumentException.class)
