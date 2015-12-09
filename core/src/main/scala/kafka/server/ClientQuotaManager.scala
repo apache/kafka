@@ -76,7 +76,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   throttledRequestReaper.start()
 
   private val delayQueueSensor = metrics.sensor(apiKey + "-delayQueue")
-  delayQueueSensor.add(new MetricName("queue-size",
+  delayQueueSensor.add(metrics.metricName("queue-size",
                                       apiKey,
                                       "Tracks the size of the delay queue"), new Total())
 
@@ -206,7 +206,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
           throttleTimeSensor = metrics.sensor(throttleTimeSensorName,
                                               null,
                                               ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds)
-          throttleTimeSensor.add(new MetricName("throttle-time",
+          throttleTimeSensor.add(metrics.metricName("throttle-time",
                                                 apiKey,
                                                 "Tracking average throttle-time per client",
                                                 "client-id",
@@ -271,7 +271,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   private def clientRateMetricName(clientId: String): MetricName = {
-    new MetricName("byte-rate", apiKey,
+    metrics.metricName("byte-rate", apiKey,
                    "Tracking byte-rate per client",
                    "client-id", clientId)
   }

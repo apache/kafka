@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -99,7 +98,6 @@ public class Fetcher<K, V> {
                    SubscriptionState subscriptions,
                    Metrics metrics,
                    String metricGrpPrefix,
-                   Map<String, String> metricTags,
                    Time time,
                    long retryBackoffMs) {
 
@@ -120,7 +118,7 @@ public class Fetcher<K, V> {
         this.unauthorizedTopics = new HashSet<>();
         this.recordTooLargePartitions = new HashMap<>();
 
-        this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
+        this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
     }
 
@@ -656,64 +654,53 @@ public class Fetcher<K, V> {
         public final Sensor fetchThrottleTimeSensor;
 
 
-        public FetchManagerMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> tags) {
+        public FetchManagerMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-fetch-manager-metrics";
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
-            this.bytesFetched.add(new MetricName("fetch-size-avg",
+            this.bytesFetched.add(metrics.metricName("fetch-size-avg",
                 this.metricGrpName,
-                "The average number of bytes fetched per request",
-                tags), new Avg());
-            this.bytesFetched.add(new MetricName("fetch-size-max",
+                "The average number of bytes fetched per request"), new Avg());
+            this.bytesFetched.add(metrics.metricName("fetch-size-max",
                 this.metricGrpName,
-                "The maximum number of bytes fetched per request",
-                tags), new Max());
-            this.bytesFetched.add(new MetricName("bytes-consumed-rate",
+                "The maximum number of bytes fetched per request"), new Max());
+            this.bytesFetched.add(metrics.metricName("bytes-consumed-rate",
                 this.metricGrpName,
-                "The average number of bytes consumed per second",
-                tags), new Rate());
+                "The average number of bytes consumed per second"), new Rate());
 
             this.recordsFetched = metrics.sensor("records-fetched");
-            this.recordsFetched.add(new MetricName("records-per-request-avg",
+            this.recordsFetched.add(metrics.metricName("records-per-request-avg",
                 this.metricGrpName,
-                "The average number of records in each request",
-                tags), new Avg());
-            this.recordsFetched.add(new MetricName("records-consumed-rate",
+                "The average number of records in each request"), new Avg());
+            this.recordsFetched.add(metrics.metricName("records-consumed-rate",
                 this.metricGrpName,
-                "The average number of records consumed per second",
-                tags), new Rate());
+                "The average number of records consumed per second"), new Rate());
 
             this.fetchLatency = metrics.sensor("fetch-latency");
-            this.fetchLatency.add(new MetricName("fetch-latency-avg",
+            this.fetchLatency.add(metrics.metricName("fetch-latency-avg",
                 this.metricGrpName,
-                "The average time taken for a fetch request.",
-                tags), new Avg());
-            this.fetchLatency.add(new MetricName("fetch-latency-max",
+                "The average time taken for a fetch request."), new Avg());
+            this.fetchLatency.add(metrics.metricName("fetch-latency-max",
                 this.metricGrpName,
-                "The max time taken for any fetch request.",
-                tags), new Max());
-            this.fetchLatency.add(new MetricName("fetch-rate",
+                "The max time taken for any fetch request."), new Max());
+            this.fetchLatency.add(metrics.metricName("fetch-rate",
                 this.metricGrpName,
-                "The number of fetch requests per second.",
-                tags), new Rate(new Count()));
+                "The number of fetch requests per second."), new Rate(new Count()));
 
             this.recordsFetchLag = metrics.sensor("records-lag");
-            this.recordsFetchLag.add(new MetricName("records-lag-max",
+            this.recordsFetchLag.add(metrics.metricName("records-lag-max",
                 this.metricGrpName,
-                "The maximum lag in terms of number of records for any partition in this window",
-                tags), new Max());
+                "The maximum lag in terms of number of records for any partition in this window"), new Max());
 
             this.fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-            this.fetchThrottleTimeSensor.add(new MetricName("fetch-throttle-time-avg",
+            this.fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-avg",
                                                          this.metricGrpName,
-                                                         "The average throttle time in ms",
-                                                         tags), new Avg());
+                                                         "The average throttle time in ms"), new Avg());
 
-            this.fetchThrottleTimeSensor.add(new MetricName("fetch-throttle-time-max",
+            this.fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-max",
                                                          this.metricGrpName,
-                                                         "The maximum throttle time in ms",
-                                                         tags), new Max());
+                                                         "The maximum throttle time in ms"), new Max());
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {

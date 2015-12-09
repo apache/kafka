@@ -226,7 +226,6 @@ object AdminClient {
       metrics,
       time,
       "admin",
-      Map[String, String](),
       channelBuilder)
 
     val networkClient = new NetworkClient(
