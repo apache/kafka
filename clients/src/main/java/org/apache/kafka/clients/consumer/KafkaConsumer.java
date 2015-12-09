@@ -1006,7 +1006,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void seek(TopicPartition partition, long offset) {
         if (offset < 0) {
-            throw new IllegalArgumentException("offset for seek must not be a negative number");
+            throw new IllegalArgumentException("seek offset must not be a negative number");
         }
         acquire();
         try {

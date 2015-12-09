@@ -94,7 +94,7 @@ public class KafkaConsumerTest {
         try {
             consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
         } catch (IllegalArgumentException e) {
-            Assert.assertEquals("offset for seek must not be a negative number", e.getMessage());
+            Assert.assertEquals("seek offset must not be a negative number", e.getMessage());
             return;
         }
         Assert.fail("should have caught an exception and returned");
