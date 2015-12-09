@@ -125,10 +125,10 @@ class QuotasTest extends KafkaServerTestHarness {
     val numRecords = 1000
     produce(producers.head, numRecords)
 
-    val producerMetricName = new MetricName("throttle-time",
-                                    ApiKeys.PRODUCE.name,
-                                    "Tracking throttle-time per client",
-                                    "client-id", producerId1)
+    val producerMetricName = leaderNode.metrics.metricName("throttle-time",
+                                                           ApiKeys.PRODUCE.name,
+                                                           "Tracking throttle-time per client",
+                                                           "client-id", producerId1)
     assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
 
     // Consumer should read in a bursty manner and get throttled immediately
@@ -136,10 +136,10 @@ class QuotasTest extends KafkaServerTestHarness {
     // The replica consumer should not be throttled also. Create a fetch request which will exceed the quota immediately
     val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
     replicaConsumers.head.fetch(request)
-    val consumerMetricName = new MetricName("throttle-time",
-                                            ApiKeys.FETCH.name,
-                                            "Tracking throttle-time per client",
-                                            "client-id", consumerId1)
+    val consumerMetricName = leaderNode.metrics.metricName("throttle-time",
+                                                           ApiKeys.FETCH.name,
+                                                           "Tracking throttle-time per client",
+                                                           "client-id", consumerId1)
     assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
   }
 
@@ -166,10 +166,10 @@ class QuotasTest extends KafkaServerTestHarness {
     val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
     val numRecords = 1000
     produce(producers(1), numRecords)
-    val producerMetricName = new MetricName("throttle-time",
-                                            ApiKeys.PRODUCE.name,
-                                            "Tracking throttle-time per client",
-                                            "client-id", producerId2)
+    val producerMetricName = leaderNode.metrics.metricName("throttle-time",
+                                                           ApiKeys.PRODUCE.name,
+                                                           "Tracking throttle-time per client",
+                                                           "client-id", producerId2)
     assertEquals("Should not have been throttled", 0.0, allMetrics(producerMetricName).value(), 0.0)
 
     // The "client" consumer does not get throttled.
@@ -177,10 +177,10 @@ class QuotasTest extends KafkaServerTestHarness {
     // The replica consumer should not be throttled also. Create a fetch request which will exceed the quota immediately
     val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
     replicaConsumers(1).fetch(request)
-    val consumerMetricName = new MetricName("throttle-time",
-                                            ApiKeys.FETCH.name,
-                                            "Tracking throttle-time per client",
-                                            "client-id", consumerId2)
+    val consumerMetricName = leaderNode.metrics.metricName("throttle-time",
+                                                           ApiKeys.FETCH.name,
+                                                           "Tracking throttle-time per client",
+                                                           "client-id", consumerId2)
     assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value(), 0.0)
   }
 
