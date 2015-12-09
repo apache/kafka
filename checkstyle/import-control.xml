@@ -129,6 +129,14 @@
     <subpackage name="state">
       <allow pkg="org.rocksdb" />
     </subpackage>
+
+    <subpackage name="processor">
+      <subpackage name="internals">
+        <allow pkg="org.I0Itec.zkclient" />
+        <allow pkg="com.fasterxml.jackson" />
+        <allow pkg="org.apache.zookeeper" />
+      </subpackage>
+    </subpackage>
   </subpackage>
 
   <subpackage name="log4jappender">

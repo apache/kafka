@@ -73,9 +73,7 @@ public class KafkaStreaming {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
     private static final AtomicInteger STREAMING_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
-    private static final String JMX_PREFIX = "kafka.streaming";
-
-    private final Time time;
+    private static final String JMX_PREFIX = "kafka.streams";
 
     // container states
     private static final int CREATED = 0;
@@ -85,29 +83,39 @@ public class KafkaStreaming {
 
     private final StreamThread[] threads;
 
-    private String clientId;
-    private final UUID uuid;
-    private final Metrics metrics;
+    // processId is expected to be unique across JVMs and to be used
+    // in userData of the subscription request to allow assignor be aware
+    // of the co-location of stream thread's consumers. It is for internal
+    // usage only and should not be exposed to users at all.
+    private final UUID processId;
 
     public KafkaStreaming(TopologyBuilder builder, StreamingConfig config) throws Exception {
         // create the metrics
-        this.time = new SystemTime();
-        this.uuid = UUID.randomUUID();
+        Time time = new SystemTime();
+
+        this.processId = UUID.randomUUID();
+
+        String jobId = config.getString(StreamingConfig.JOB_ID_CONFIG);
+        if (jobId.length() <= 0)
+            jobId = "kafka-streams";
+
+        String clientId = config.getString(StreamingConfig.CLIENT_ID_CONFIG);
+        if (clientId.length() <= 0)
+            clientId = jobId + "-" + STREAMING_CLIENT_ID_SEQUENCE.getAndIncrement();
+
+        List<MetricsReporter> reporters = config.getConfiguredInstances(StreamingConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                MetricsReporter.class);
+        reporters.add(new JmxReporter(JMX_PREFIX));
 
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamingConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(StreamingConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
-        clientId = config.getString(StreamingConfig.CLIENT_ID_CONFIG);
-        if (clientId.length() <= 0)
-            clientId = "streaming-" + STREAMING_CLIENT_ID_SEQUENCE.getAndIncrement();
-        List<MetricsReporter> reporters = config.getConfiguredInstances(StreamingConfig.METRIC_REPORTER_CLASSES_CONFIG,
-            MetricsReporter.class);
-        reporters.add(new JmxReporter(JMX_PREFIX));
-        this.metrics = new Metrics(metricConfig, reporters, time);
+
+        Metrics metrics = new Metrics(metricConfig, reporters, time);
 
         this.threads = new StreamThread[config.getInt(StreamingConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, this.clientId, this.uuid, this.metrics, this.time);
+            this.threads[i] = new StreamThread(builder, config, jobId, clientId, processId, metrics, time);
         }
     }
 
