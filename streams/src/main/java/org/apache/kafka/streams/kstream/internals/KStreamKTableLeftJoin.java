@@ -17,61 +17,45 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KTableSource<K, V> implements KTableProcessorSupplier<K, V, V> {
+class KStreamKTableLeftJoin<K, V, V1, V2> implements ProcessorSupplier<K, V1> {
 
-    public final String topic;
+    private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
+    private final ValueJoiner<V1, V2, V> joiner;
 
-    private boolean materialized = false;
-
-    public KTableSource(String topic) {
-        this.topic = topic;
+    KStreamKTableLeftJoin(KTableImpl<K, ?, V2> table, ValueJoiner<V1, V2, V> joiner) {
+        this.valueGetterSupplier = table.valueGetterSupplier();
+        this.joiner = joiner;
     }
 
     @Override
-    public Processor<K, V> get() {
-        return materialized ? new MaterializedKTableSourceProcessor() : new KTableSourceProcessor();
+    public Processor<K, V1> get() {
+        return new KStreamKTableLeftJoinProcessor(valueGetterSupplier.get());
     }
 
-    public void materialize() {
-        materialized = true;
-    }
+    private class KStreamKTableLeftJoinProcessor extends AbstractProcessor<K, V1> {
 
-    public boolean isMaterialized() {
-        return materialized;
-    }
+        private final KTableValueGetter<K, V2> valueGetter;
 
-    @Override
-    public KTableValueGetterSupplier<K, V> view() {
-        throw new IllegalStateException("a view cannot be define on the ktable source");
-    }
-
-    private class KTableSourceProcessor extends AbstractProcessor<K, V> {
-        @Override
-        public void process(K key, V value) {
-            context().forward(key, value);
+        public KStreamKTableLeftJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
+            this.valueGetter = valueGetter;
         }
-    }
-
-    private class MaterializedKTableSourceProcessor extends AbstractProcessor<K, V> {
-
-        private KeyValueStore<K, V> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<K, V>) context.getStateStore(topic);
+            valueGetter.init(context);
         }
 
         @Override
-        public void process(K key, V value) {
-            store.put(key, value);
-            context().forward(key, value);
+        public void process(K key, V1 value) {
+            context().forward(key, joiner.apply(value, valueGetter.get(key)));
         }
     }
 

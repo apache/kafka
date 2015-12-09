@@ -14,7 +14,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -107,7 +106,6 @@ public abstract class AbstractCoordinator implements Closeable {
                                int heartbeatIntervalMs,
                                Metrics metrics,
                                String metricGrpPrefix,
-                               Map<String, String> metricTags,
                                Time time,
                                long retryBackoffMs) {
         this.client = client;
@@ -119,7 +117,7 @@ public abstract class AbstractCoordinator implements Closeable {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.heartbeat = new Heartbeat(this.sessionTimeoutMs, heartbeatIntervalMs, time.milliseconds());
         this.heartbeatTask = new HeartbeatTask();
-        this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
+        this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
     }
 
@@ -679,47 +677,39 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor joinLatency;
         public final Sensor syncLatency;
 
-        public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> tags) {
+        public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             this.heartbeatLatency = metrics.sensor("heartbeat-latency");
-            this.heartbeatLatency.add(new MetricName("heartbeat-response-time-max",
+            this.heartbeatLatency.add(metrics.metricName("heartbeat-response-time-max",
                 this.metricGrpName,
-                "The max time taken to receive a response to a heartbeat request",
-                tags), new Max());
-            this.heartbeatLatency.add(new MetricName("heartbeat-rate",
+                "The max time taken to receive a response to a heartbeat request"), new Max());
+            this.heartbeatLatency.add(metrics.metricName("heartbeat-rate",
                 this.metricGrpName,
-                "The average number of heartbeats per second",
-                tags), new Rate(new Count()));
+                "The average number of heartbeats per second"), new Rate(new Count()));
 
             this.joinLatency = metrics.sensor("join-latency");
-            this.joinLatency.add(new MetricName("join-time-avg",
+            this.joinLatency.add(metrics.metricName("join-time-avg",
                     this.metricGrpName,
-                    "The average time taken for a group rejoin",
-                    tags), new Avg());
-            this.joinLatency.add(new MetricName("join-time-max",
+                    "The average time taken for a group rejoin"), new Avg());
+            this.joinLatency.add(metrics.metricName("join-time-max",
                     this.metricGrpName,
-                    "The max time taken for a group rejoin",
-                    tags), new Avg());
-            this.joinLatency.add(new MetricName("join-rate",
+                    "The max time taken for a group rejoin"), new Avg());
+            this.joinLatency.add(metrics.metricName("join-rate",
                     this.metricGrpName,
-                    "The number of group joins per second",
-                    tags), new Rate(new Count()));
+                    "The number of group joins per second"), new Rate(new Count()));
 
             this.syncLatency = metrics.sensor("sync-latency");
-            this.syncLatency.add(new MetricName("sync-time-avg",
+            this.syncLatency.add(metrics.metricName("sync-time-avg",
                     this.metricGrpName,
-                    "The average time taken for a group sync",
-                    tags), new Avg());
-            this.syncLatency.add(new MetricName("sync-time-max",
+                    "The average time taken for a group sync"), new Avg());
+            this.syncLatency.add(metrics.metricName("sync-time-max",
                     this.metricGrpName,
-                    "The max time taken for a group sync",
-                    tags), new Avg());
-            this.syncLatency.add(new MetricName("sync-rate",
+                    "The max time taken for a group sync"), new Avg());
+            this.syncLatency.add(metrics.metricName("sync-rate",
                     this.metricGrpName,
-                    "The number of group syncs per second",
-                    tags), new Rate(new Count()));
+                    "The number of group syncs per second"), new Rate(new Count()));
 
             Measurable lastHeartbeat =
                 new Measurable() {
@@ -727,10 +717,9 @@ public abstract class AbstractCoordinator implements Closeable {
                         return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
                     }
                 };
-            metrics.addMetric(new MetricName("last-heartbeat-seconds-ago",
+            metrics.addMetric(metrics.metricName("last-heartbeat-seconds-ago",
                 this.metricGrpName,
-                "The number of seconds since the last controller heartbeat",
-                tags),
+                "The number of seconds since the last controller heartbeat"),
                 lastHeartbeat);
         }
     }

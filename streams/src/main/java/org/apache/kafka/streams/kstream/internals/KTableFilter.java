@@ -22,12 +22,14 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-class KTableFilter<K, V> extends KTableProcessorSupplier<K, V, V> {
+class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
+    private final KTableImpl<K, ?, V> parent;
     private final Predicate<K, V> predicate;
     private final boolean filterOut;
 
-    public KTableFilter(Predicate<K, V> predicate, boolean filterOut) {
+    public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<K, V> predicate, boolean filterOut) {
+        this.parent = parent;
         this.predicate = predicate;
         this.filterOut = filterOut;
     }
@@ -38,8 +40,11 @@ class KTableFilter<K, V> extends KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public KTableValueGetterSupplier<K, V> view(KTableValueGetterSupplier<K, V> parentValueGetterSupplier) {
-        return new KTableDerivedValueGetterSupplier<K, V, V>(parentValueGetterSupplier) {
+    public KTableValueGetterSupplier<K, V> view() {
+
+        final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
+
+        return new KTableValueGetterSupplier<K, V>() {
 
             public KTableValueGetter<K, V> get() {
                 return new KTableFilterValueGetter(parentValueGetterSupplier.get());
@@ -74,10 +79,12 @@ class KTableFilter<K, V> extends KTableProcessorSupplier<K, V, V> {
             this.parentGetter = parentGetter;
         }
 
+        @Override
         public void init(ProcessorContext context) {
             parentGetter.init(context);
         }
 
+        @Override
         public V get(K key) {
             return computeNewValue(key, parentGetter.get(key));
         }

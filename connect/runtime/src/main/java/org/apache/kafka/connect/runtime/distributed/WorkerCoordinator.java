@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -67,7 +66,6 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              int heartbeatIntervalMs,
                              Metrics metrics,
                              String metricGrpPrefix,
-                             Map<String, String> metricTags,
                              Time time,
                              long retryBackoffMs,
                              String restUrl,
@@ -79,13 +77,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 heartbeatIntervalMs,
                 metrics,
                 metricGrpPrefix,
-                metricTags,
                 time,
                 retryBackoffMs);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
-        this.sensors = new WorkerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
+        this.sensors = new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.listener = listener;
         this.rejoinRequested = false;
     }
@@ -254,7 +251,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         public final Metrics metrics;
         public final String metricGrpName;
 
-        public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> tags) {
+        public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
@@ -270,16 +267,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 }
             };
 
-            metrics.addMetric(new MetricName("assigned-connectors",
-                            this.metricGrpName,
-                            "The number of connector instances currently assigned to this consumer",
-                            tags),
-                    numConnectors);
-            metrics.addMetric(new MetricName("assigned-tasks",
-                            this.metricGrpName,
-                            "The number of tasks currently assigned to this consumer",
-                            tags),
-                    numTasks);
+            metrics.addMetric(metrics.metricName("assigned-connectors",
+                              this.metricGrpName,
+                              "The number of connector instances currently assigned to this consumer"), numConnectors);
+            metrics.addMetric(metrics.metricName("assigned-tasks",
+                              this.metricGrpName,
+                              "The number of tasks currently assigned to this consumer"), numTasks);
         }
     }
 

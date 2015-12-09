@@ -102,7 +102,7 @@ public class KStreamBuilder extends TopologyBuilder {
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableSource<>(topic);
         addProcessor(name, processorSupplier, source);
 
-        return new KTableImpl<>(this, name, processorSupplier, source, topic, keySerializer, valSerializer, keyDeserializer, valDeserializer);
+        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerializer, valSerializer, keyDeserializer, valDeserializer);
     }
 
     /**
