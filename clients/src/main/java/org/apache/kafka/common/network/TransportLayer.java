@@ -19,7 +19,7 @@ package org.apache.kafka.common.network;
 
 /*
  * Transport layer for underlying communication.
- * At very basic level it is wrapper around SocketChannel and can be used as substitue for SocketChannel
+ * At very basic level it is wrapper around SocketChannel and can be used as substitute for SocketChannel
  * and other network Channel implementations.
  * As NetworkClient replaces BlockingChannel and other implementations we will be using KafkaChannel as
  * a network I/O channel.
