@@ -38,11 +38,11 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
-                                                                    "partitions": 3,
+                                                                    "partitions": 20,
                                                                     "replication-factor": 3,
                                                                     'configs': {"min.insync.replicas": 2}}
                                                                 })
-        self.num_partitions = 3
+        self.num_partitions = 20
         self.timeout_sec = 60
         self.producer_throughput = 1000
         self.num_producers = 1
