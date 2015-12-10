@@ -24,6 +24,7 @@ from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.security.minikdc import MiniKdc
+from sets import Set
 import json
 import re
 import signal
@@ -356,6 +357,40 @@ class KafkaService(JmxMixin, Service):
 
         self.logger.debug("Verify partition reassignment:")
         self.logger.debug(output)
+
+    def check_data_logs_for_payload(self, topic, payload_vals):
+        """Check if a certain message payloads made it into the data files. Note that
+        this method takes no account of replication. It simply looks for the
+        payload in one of the partitions of the specified topic. payload_vals should be
+        an array of numbers.
+        """
+        found = Set([])
+
+        payload_match = "payload: " + "$|payload: ".join(str(x) for x in payload_vals) + "$"
+
+        for node in self.nodes:
+            data_logs = node.account.ssh_capture("find %s -regex  '.*/%s-.*/[^/]*.log'"
+                        % (KafkaService.DATA_LOG_DIR, topic))
+
+            #Check each data file to see if it contains the payload
+            for file in data_logs:
+                cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.DumpLogSegments " \
+                      "--print-data-log --files %s | grep -E \"%s\"" \
+                      % (kafka_dir(node), file.strip(), payload_match)
+
+                for line in node.account.ssh_capture(cmd, allow_fail=True):
+                    for val in payload_vals:
+                        if line.strip().endswith("payload: "+str(val)):
+                            found.add(val)
+                            self.logger.debug("Searched for and found payload %s in file [%s] via result line: [%s]"
+                                             % (val, file.strip(), line.strip()))
+
+        missing = list(set(payload_vals) - set(found))
+
+        if len(missing) > 0:
+            self.logger.warn("The following values were not found in the data files: " + str(missing))
+
+        return missing
 
     def restart_node(self, node, clean_shutdown=True):
         """Restart the given node."""

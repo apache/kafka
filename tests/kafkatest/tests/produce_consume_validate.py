@@ -42,12 +42,15 @@ class ProduceConsumeValidateTest(Test):
              err_msg="Consumer failed to start in a reasonable amount of time.")
 
     def stop_producer_and_consumer(self):
+        msg = ""
         for node in self.consumer.nodes:
             if not self.consumer.alive(node):
-                self.logger.warn("Consumer on %s is not alive and probably should be." % str(node.account))
+                msg = "The consumer has terminated, or timed out on node %s." % str(node.account)
         for node in self.producer.nodes:
             if not self.producer.alive(node):
-                self.logger.warn("Producer on %s is not alive and probably should be." % str(node.account))
+                msg += "The producer is terminated, or timed out on node %s." % str(node.account)
+        if len(msg) > 0:
+            raise Exception(msg)
 
         # Check that producer is still successfully producing
         currently_acked = self.producer.num_acked
@@ -100,7 +103,20 @@ class ProduceConsumeValidateTest(Test):
             else:
                 for i in range(20):
                     msg += str(acked_minus_consumed.pop()) + ", "
-                msg += "...plus " + str(len(acked_minus_consumed) - 20) + " more"
+                msg += "...plus " + str(len(acked_minus_consumed) - 20) + " more. Total Acked: " \
+                       + str(len(set(self.producer.acked))) + ", Total Consumed: " + str(len(set(self.consumed))) + ". "
+
+            #Check missed messages to see if they arise from the consumer dropping messages or data loss
+            num_to_check = 1000 if len(acked_minus_consumed) > 1000 else len(acked_minus_consumed)
+            missing = self.kafka.check_data_logs_for_payload(self.topic, list(acked_minus_consumed)[0:num_to_check])
+            if len(missing) > 0:
+                msg += "The first %s of the missing messages were validated to ensure they are in the kafka data logs. %s " \
+                       "This suggests data loss. The list of those missing is appended: %s\n" \
+                       % (num_to_check, len(missing), str(missing[0:10]) if len(missing) > 10 else str(missing))
+                success = False
+            else:
+                msg += "We validated that the first %s messages were found in the kafka data files. This suggests the " \
+                       "consumer missed these messages" % num_to_check
 
         # collect all logs if validation fails
         if not success:
@@ -108,4 +124,3 @@ class ProduceConsumeValidateTest(Test):
                 self.mark_for_collect(s)
 
         assert success, msg
-
