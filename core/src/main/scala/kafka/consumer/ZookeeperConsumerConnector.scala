@@ -162,15 +162,19 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     if (messageStreamCreated.getAndSet(true))
       throw new MessageStreamsExistException(this.getClass.getSimpleName +
                                    " can create message streams at most once",null)
-    consume(topicCountMap, keyDecoder, valueDecoder)
+    rebalanceLock synchronized {
+      consume(topicCountMap, keyDecoder, valueDecoder)
+    }
   }
 
   def createMessageStreamsByFilter[K,V](topicFilter: TopicFilter,
                                         numStreams: Int,
                                         keyDecoder: Decoder[K] = new DefaultDecoder(),
                                         valueDecoder: Decoder[V] = new DefaultDecoder()) = {
-    val wildcardStreamsHandler = new WildcardStreamsHandler[K,V](topicFilter, numStreams, keyDecoder, valueDecoder)
-    wildcardStreamsHandler.streams
+    rebalanceLock synchronized {
+      val wildcardStreamsHandler = new WildcardStreamsHandler[K, V](topicFilter, numStreams, keyDecoder, valueDecoder)
+      wildcardStreamsHandler.streams
+    }
   }
 
   def setConsumerRebalanceListener(listener: ConsumerRebalanceListener) {
