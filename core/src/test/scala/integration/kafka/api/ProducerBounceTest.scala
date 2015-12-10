@@ -25,12 +25,14 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 class ProducerBounceTest extends KafkaServerTestHarness {
-  private val producerBufferSize = 1024L * 1024L
+  private val producerBufferSize = 30000
+  private val serverMessageMaxBytes =  producerBufferSize/2
 
   val numServers = 2
 
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+  overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
