@@ -73,7 +73,6 @@ object RequestChannel extends Logging {
         ApiKeys.LEADER_AND_ISR.id -> LeaderAndIsrRequest.readFrom,
         ApiKeys.STOP_REPLICA.id -> StopReplicaRequest.readFrom,
         ApiKeys.UPDATE_METADATA_KEY.id -> UpdateMetadataRequest.readFrom,
-        ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom,
         ApiKeys.OFFSET_COMMIT.id -> OffsetCommitRequest.readFrom,
         ApiKeys.OFFSET_FETCH.id -> OffsetFetchRequest.readFrom
       )
