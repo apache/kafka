@@ -555,7 +555,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
       producer.flush()
       commitOffsets(mirrorMakerConsumer)
-      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsAssigned(partitions))
+      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsRevoked(partitions))
     }
 
     override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
