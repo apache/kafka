@@ -17,9 +17,39 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface WindowSupplier<K, V> {
 
-    String name();
+import java.util.Collection;
+import java.util.Collections;
 
-    Window<K, V> get();
+public class SlidingWindow extends WindowDef<Window> {
+
+    private long size;
+
+    private SlidingWindow(long size) {
+        this.size = size;
+    }
+
+    /**
+     * Returns a half-interval sliding window definition with the window size in milliseconds
+     */
+    public static SlidingWindow of(long size) {
+        return new SlidingWindow(size);
+    }
+
+    @Override
+    public Collection<Window> windowsFor(long timestamp) {
+        // TODO
+        return Collections.EMPTY_LIST;
+    }
+
+
+    @Override
+    public boolean equals(WindowDef<Window> other) {
+        if (!other.getClass().equals(SlidingWindow.class))
+            return false;
+
+        SlidingWindow otherWindow = (SlidingWindow) other;
+
+        return this.size == otherWindow.size;
+    }
 }
