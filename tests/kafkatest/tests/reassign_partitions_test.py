@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import matrix
+from ducktape.mark import parametrize
 from ducktape.utils.util import wait_until
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -21,7 +21,6 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer, is_int
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
-import re
 import random
 
 class ReassignPartitionsTest(ProduceConsumeValidateTest):
@@ -52,37 +51,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.zk.start()
 
     def min_cluster_size(self):
-        """Override this since we're adding services outside of the constructor"""
+        # Override this since we're adding services outside of the constructor
         return super(ReassignPartitionsTest, self).min_cluster_size() + self.num_producers + self.num_consumers
-
-    def parse_describe_topic(self, topic_description):
-        """Parse output of kafka-topics.sh --describe, which is a string of form
-        PartitionCount:2\tReplicationFactor:2\tConfigs:
-            Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
-            Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
-        into a dictionary structure appropriate for use with reassign-partitions tool:
-        {
-             "partitions": [
-              {"topic": "test_topic", "partition": 0, "replicas": [3, 1]},
-              {"topic": "test_topic", "partition": 1, "replicas": [1, 2]}
-            ]
-        }
-        """
-        lines = map(lambda x: x.strip(), topic_description.split("\n"))
-        partitions = []
-        for line in lines:
-            m = re.match(".*Leader:.*", line)
-            if m is None:
-                continue
-
-            fields = line.split("\t")
-            # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
-            fields = map(lambda x: x.split(" ")[1], fields)
-            partitions.append(
-                {"topic": fields[0],
-                 "partition": int(fields[1]),
-                 "replicas": map(int, fields[3].split(','))})
-        return {"partitions": partitions}
 
     def clean_bounce_some_brokers(self):
         """Bounce every other broker"""
@@ -90,7 +60,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
             self.kafka.restart_node(node, clean_shutdown=True)
 
     def reassign_partitions(self, bounce_brokers):
-        partition_info = self.parse_describe_topic(self.kafka.describe_topic(self.topic))
+        partition_info = self.kafka.parse_describe_topic(self.kafka.describe_topic(self.topic))
         self.logger.debug("Partitions before reassignment:" + str(partition_info))
 
         # jumble partition assignment in dictionary
@@ -115,8 +85,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         # Wait until finished or timeout
         wait_until(lambda: self.kafka.verify_reassign_partitions(partition_info), timeout_sec=self.timeout_sec, backoff_sec=.5)
 
-    @matrix(bounce_brokers=[True, False],
-            security_protocol=["PLAINTEXT", "SASL_SSL"])
+    @parametrize(security_protocol="PLAINTEXT", bounce_brokers=False)
+    @parametrize(security_protocol="PLAINTEXT", bounce_brokers=True)
     def test_reassign_partitions(self, bounce_brokers, security_protocol):
         """Reassign partitions tests.
         Setup: 1 zk, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2

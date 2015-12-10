@@ -263,6 +263,35 @@ class KafkaService(JmxMixin, Service):
             output += line
         return output
 
+    def parse_describe_topic(self, topic_description):
+        """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
+        PartitionCount:2\tReplicationFactor:2\tConfigs:
+            Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
+            Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
+        into a dictionary structure appropriate for use with reassign-partitions tool:
+        {
+            "partitions": [
+                {"topic": "test_topic", "partition": 0, "replicas": [3, 1]},
+                {"topic": "test_topic", "partition": 1, "replicas": [1, 2]}
+            ]
+        }
+        """
+        lines = map(lambda x: x.strip(), topic_description.split("\n"))
+        partitions = []
+        for line in lines:
+            m = re.match(".*Leader:.*", line)
+            if m is None:
+                continue
+
+            fields = line.split("\t")
+            # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
+            fields = map(lambda x: x.split(" ")[1], fields)
+            partitions.append(
+                {"topic": fields[0],
+                 "partition": int(fields[1]),
+                 "replicas": map(int, fields[3].split(','))})
+        return {"partitions": partitions}
+
     def verify_reassign_partitions(self, reassignment, node=None):
         """Run the reassign partitions admin tool in "verify" mode
         """
