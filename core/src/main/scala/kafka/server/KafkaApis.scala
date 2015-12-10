@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
+import java.lang.{Long => JLong}
 
 import kafka.admin.AdminUtils
 import kafka.api._
@@ -33,11 +34,15 @@ import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, 
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse,
+DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse,
+LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.Node
+import org.apache.kafka.common.{TopicPartition, Node}
 
 import scala.collection._
+import scala.collection.JavaConverters._
+
 /**
  * Logic to handle the various Kafka requests
  */
@@ -443,28 +448,32 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle an offset request
    */
   def handleOffsetRequest(request: RequestChannel.Request) {
-    val offsetRequest = request.requestObj.asInstanceOf[OffsetRequest]
+    val correlationId = request.header.correlationId
+    val clientId = request.header.clientId
+    val offsetRequest = request.body.asInstanceOf[ListOffsetRequest]
 
-    val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.requestInfo.partition  {
-      case (topicAndPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicAndPartition.topic))
+    val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.offsetData.asScala.partition {
+      case (topicPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
     }
 
-    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => PartitionOffsetsResponse(ErrorMapping.TopicAuthorizationCode, Nil))
+    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ =>
+      new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, List[JLong]().asJava)
+    )
 
     val responseMap = authorizedRequestInfo.map(elem => {
-      val (topicAndPartition, partitionOffsetRequestInfo) = elem
+      val (topicPartition, partitionData) = elem
       try {
         // ensure leader exists
-        val localReplica = if (!offsetRequest.isFromDebuggingClient)
-          replicaManager.getLeaderReplicaIfLocal(topicAndPartition.topic, topicAndPartition.partition)
+        val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
+          replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
         else
-          replicaManager.getReplicaOrException(topicAndPartition.topic, topicAndPartition.partition)
+          replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
         val offsets = {
           val allOffsets = fetchOffsets(replicaManager.logManager,
-                                        topicAndPartition,
-                                        partitionOffsetRequestInfo.time,
-                                        partitionOffsetRequestInfo.maxNumOffsets)
-          if (!offsetRequest.isFromOrdinaryClient) {
+                                        topicPartition,
+                                        partitionData.timestamp,
+                                        partitionData.maxNumOffsets)
+          if (offsetRequest.replicaId != ListOffsetRequest.CONSUMER_REPLICA_ID) {
             allOffsets
           } else {
             val hw = localReplica.highWatermark.messageOffset
@@ -474,35 +483,38 @@ class KafkaApis(val requestChannel: RequestChannel,
               allOffsets
           }
         }
-        (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.NoError, offsets))
+        (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE.code, offsets.map(new JLong(_)).asJava))
       } catch {
         // NOTE: UnknownTopicOrPartitionException and NotLeaderForPartitionException are special cased since these error messages
         // are typically transient and there is no value in logging the entire stack trace for the same
         case utpe: UnknownTopicOrPartitionException =>
           debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
-               offsetRequest.correlationId, offsetRequest.clientId, topicAndPartition, utpe.getMessage))
-          (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(utpe.getClass.asInstanceOf[Class[Throwable]]), Nil) )
+               correlationId, clientId, topicPartition, utpe.getMessage))
+          (topicPartition,  new ListOffsetResponse.PartitionData(ErrorMapping.codeFor(utpe.getClass.asInstanceOf[Class[Throwable]]), List[JLong]().asJava))
         case nle: NotLeaderForPartitionException =>
           debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
-               offsetRequest.correlationId, offsetRequest.clientId, topicAndPartition,nle.getMessage))
-          (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(nle.getClass.asInstanceOf[Class[Throwable]]), Nil) )
+               correlationId, clientId, topicPartition,nle.getMessage))
+          (topicPartition,  new ListOffsetResponse.PartitionData(ErrorMapping.codeFor(nle.getClass.asInstanceOf[Class[Throwable]]), List[JLong]().asJava))
         case e: Throwable =>
           error("Error while responding to offset request", e)
-          (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), Nil) )
+          (topicPartition,  new ListOffsetResponse.PartitionData(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), List[JLong]().asJava))
       }
     })
 
     val mergedResponseMap = responseMap ++ unauthorizedResponseStatus
-    val response = OffsetResponse(offsetRequest.correlationId, mergedResponseMap)
-    requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
+
+    val responseHeader = new ResponseHeader(correlationId)
+    val response = new ListOffsetResponse(mergedResponseMap.asJava)
+
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, response)))
   }
 
-  def fetchOffsets(logManager: LogManager, topicAndPartition: TopicAndPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    logManager.getLog(topicAndPartition) match {
+  def fetchOffsets(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+    logManager.getLog(TopicAndPartition(topicPartition.topic, topicPartition.partition)) match {
       case Some(log) =>
         fetchOffsetsBefore(log, timestamp, maxNumOffsets)
       case None =>
-        if (timestamp == OffsetRequest.LatestTime || timestamp == OffsetRequest.EarliestTime)
+        if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP || timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
           Seq(0L)
         else
           Nil
@@ -524,9 +536,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     var startIndex = -1
     timestamp match {
-      case OffsetRequest.LatestTime =>
+      case ListOffsetRequest.LATEST_TIMESTAMP =>
         startIndex = offsetTimeArray.length - 1
-      case OffsetRequest.EarliestTime =>
+      case ListOffsetRequest.EARLIEST_TIMESTAMP =>
         startIndex = 0
       case _ =>
         var isFound = false
