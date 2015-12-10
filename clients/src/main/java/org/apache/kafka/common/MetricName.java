@@ -18,7 +18,7 @@ import java.util.Map;
 import org.apache.kafka.common.utils.Utils;
 
 /**
- * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes
+ * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.MetricName(...).
  * <p>
  * This class captures the following parameters
  * <pre>
@@ -31,23 +31,27 @@ import org.apache.kafka.common.utils.Utils;
  * <p>
  * Ex: standard JMX MBean can be constructed like  <b>domainName:type=group,key1=val1,key2=val2</b>
  * <p>
+ *
  * Usage looks something like this:
  * <pre>{@code
  * // set up metrics:
- * Metrics metrics = new Metrics(); // this is the global repository of metrics and sensors
- * Sensor sensor = metrics.sensor("message-sizes");
  *
  * Map<String, String> metricTags = new LinkedHashMap<String, String>();
  * metricTags.put("client-id", "producer-1");
  * metricTags.put("topic", "topic");
  *
- * MetricName metricName = new MetricName("message-size-avg", "producer-metrics", "average message size", metricTags);
+ * MetricConfig metricConfig = new MetricConfig().tags(metricTags);
+ * Metrics metrics = new Metrics(metricConfig); // this is the global repository of metrics and sensors
+ *
+ * Sensor sensor = metrics.sensor("message-sizes");
+ *
+ * MetricName metricName = metrics.metricName("message-size-avg", "producer-metrics", "average message size");
  * sensor.add(metricName, new Avg());
  *
- * metricName = new MetricName("message-size-max", "producer-metrics", metricTags);
+ * metricName = metrics.metricName("message-size-max", "producer-metrics");
  * sensor.add(metricName, new Max());
  *
- * metricName = new MetricName("message-size-min", "producer-metrics", "message minimum size", "client-id", "my-client", "topic", "my-topic");
+ * metricName = metrics.metricName("message-size-min", "producer-metrics", "message minimum size", "client-id", "my-client", "topic", "my-topic");
  * sensor.add(metricName, new Min());
  *
  * // as messages are sent we record the sizes
@@ -63,6 +67,8 @@ public final class MetricName {
     private int hash = 0;
 
     /**
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String, Map)}
+     *
      * @param name        The name of the metric
      * @param group       logical group name of the metrics to which this metric belongs
      * @param description A human-readable description to include in the metric
@@ -76,11 +82,15 @@ public final class MetricName {
     }
 
     /**
+     * @deprecated This method will be removed in a future release.
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String, String...)}
+     *
      * @param name          The name of the metric
      * @param group         logical group name of the metrics to which this metric belongs
      * @param description   A human-readable description to include in the metric
      * @param keyValue      additional key/value attributes of the metric (must come in pairs)
      */
+    @Deprecated
     public MetricName(String name, String group, String description, String... keyValue) {
         this(name, group, description, getTags(keyValue));
     }
@@ -97,27 +107,39 @@ public final class MetricName {
     }
 
     /**
+     * @deprecated This method will be removed in a future release.
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, Map)}
+     *
      * @param name  The name of the metric
      * @param group logical group name of the metrics to which this metric belongs
      * @param tags  key/value attributes of the metric
      */
+    @Deprecated
     public MetricName(String name, String group, Map<String, String> tags) {
         this(name, group, "", tags);
     }
 
     /**
+     * @deprecated This method will be removed in a future release.
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String)}
+     *
      * @param name        The name of the metric
      * @param group       logical group name of the metrics to which this metric belongs
      * @param description A human-readable description to include in the metric
      */
+    @Deprecated
     public MetricName(String name, String group, String description) {
         this(name, group, description, new HashMap<String, String>());
     }
 
     /**
+     * @deprecated This method will be removed in a future release.
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String)}
+     *
      * @param name  The name of the metric
      * @param group logical group name of the metrics to which this metric belongs
      */
+    @Deprecated
     public MetricName(String name, String group) {
         this(name, group, "", new HashMap<String, String>());
     }

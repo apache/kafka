@@ -17,8 +17,8 @@
 package kafka.admin
 
 import junit.framework.Assert._
-import kafka.api.RequestKeys
 import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Test
 import java.util.Properties
 import kafka.utils._
@@ -444,8 +444,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
     // Test that the existing clientId overrides are read
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
     try {
-      assertEquals(new Quota(1000, true), server.apis.quotaManagers(RequestKeys.ProduceKey).quota(clientId));
-      assertEquals(new Quota(2000, true), server.apis.quotaManagers(RequestKeys.FetchKey).quota(clientId));
+      assertEquals(new Quota(1000, true), server.apis.quotaManagers(ApiKeys.PRODUCE.id).quota(clientId))
+      assertEquals(new Quota(2000, true), server.apis.quotaManagers(ApiKeys.FETCH.id).quota(clientId))
     } finally {
       server.shutdown()
       server.config.logDirs.foreach(CoreUtils.rm(_))

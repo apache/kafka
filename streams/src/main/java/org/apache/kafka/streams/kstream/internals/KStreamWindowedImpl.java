@@ -50,7 +50,7 @@ public final class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implement
         allSourceNodes.addAll(((KStreamWindowedImpl<K, V1>) other).sourceNodes);
 
         KStreamJoin<K, V2, V, V1> joinThis = new KStreamJoin<>(otherWindowName, valueJoiner);
-        KStreamJoin<K, V2, V1, V> joinOther = new KStreamJoin<>(thisWindowName, KStreamJoin.reverseJoiner(valueJoiner));
+        KStreamJoin<K, V2, V1, V> joinOther = new KStreamJoin<>(thisWindowName, reverseJoiner(valueJoiner));
         KStreamPassThrough<K, V2> joinMerge = new KStreamPassThrough<>();
 
         String joinThisName = topology.newName(JOINTHIS_NAME);

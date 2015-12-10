@@ -49,7 +49,7 @@ public class UnlimitedWindowDef<K, V> implements WindowSupplier<K, V> {
 
         @Override
         public void init(ProcessorContext context) {
-            context.register(this, null);
+            context.register(this, true, null);
         }
 
         @Override

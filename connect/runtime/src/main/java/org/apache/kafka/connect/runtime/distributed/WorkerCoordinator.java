@@ -18,10 +18,10 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.storage.KafkaConfigStorage;
@@ -35,7 +35,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -67,9 +66,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              int heartbeatIntervalMs,
                              Metrics metrics,
                              String metricGrpPrefix,
-                             Map<String, String> metricTags,
                              Time time,
-                             long requestTimeoutMs,
                              long retryBackoffMs,
                              String restUrl,
                              KafkaConfigStorage configStorage,
@@ -80,13 +77,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 heartbeatIntervalMs,
                 metrics,
                 metricGrpPrefix,
-                metricTags,
                 time,
                 retryBackoffMs);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
-        this.sensors = new WorkerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
+        this.sensors = new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.listener = listener;
         this.rejoinRequested = false;
     }
@@ -101,12 +97,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    public LinkedHashMap<String, ByteBuffer> metadata() {
-        LinkedHashMap<String, ByteBuffer> metadata = new LinkedHashMap<>();
+    public List<ProtocolMetadata> metadata() {
         configSnapshot = configStorage.snapshot();
         ConnectProtocol.WorkerState workerState = new ConnectProtocol.WorkerState(restUrl, configSnapshot.offset());
-        metadata.put(DEFAULT_SUBPROTOCOL, ConnectProtocol.serializeMetadata(workerState));
-        return metadata;
+        ByteBuffer metadata = ConnectProtocol.serializeMetadata(workerState);
+        return Collections.singletonList(new ProtocolMetadata(DEFAULT_SUBPROTOCOL, metadata));
     }
 
     @Override
@@ -256,7 +251,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         public final Metrics metrics;
         public final String metricGrpName;
 
-        public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> tags) {
+        public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
@@ -272,16 +267,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 }
             };
 
-            metrics.addMetric(new MetricName("assigned-connectors",
-                            this.metricGrpName,
-                            "The number of connector instances currently assigned to this consumer",
-                            tags),
-                    numConnectors);
-            metrics.addMetric(new MetricName("assigned-tasks",
-                            this.metricGrpName,
-                            "The number of tasks currently assigned to this consumer",
-                            tags),
-                    numTasks);
+            metrics.addMetric(metrics.metricName("assigned-connectors",
+                              this.metricGrpName,
+                              "The number of connector instances currently assigned to this consumer"), numConnectors);
+            metrics.addMetric(metrics.metricName("assigned-tasks",
+                              this.metricGrpName,
+                              "The number of tasks currently assigned to this consumer"), numTasks);
         }
     }
 

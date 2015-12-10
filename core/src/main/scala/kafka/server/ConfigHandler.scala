@@ -21,8 +21,8 @@ import java.util.Properties
 
 import kafka.common.TopicAndPartition
 import kafka.log.{Log, LogConfig, LogManager}
-import kafka.api.RequestKeys
 import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.common.protocol.ApiKeys
 
 import scala.collection.mutable
 import scala.collection.Map
@@ -71,12 +71,12 @@ class ClientIdConfigHandler(private val quotaManagers: Map[Short, ClientQuotaMan
 
   def processConfigChanges(clientId: String, clientConfig: Properties) = {
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
-      quotaManagers(RequestKeys.ProduceKey).updateQuota(clientId,
+      quotaManagers(ApiKeys.PRODUCE.id).updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
     }
 
     if (clientConfig.containsKey(ClientConfigOverride.ConsumerOverride)) {
-      quotaManagers(RequestKeys.FetchKey).updateQuota(clientId,
+      quotaManagers(ApiKeys.FETCH.id).updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ConsumerOverride).toLong, true))
     }
   }

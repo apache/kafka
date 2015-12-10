@@ -148,6 +148,17 @@ public class RequestResponseTest {
         assertEquals("Response data does not match", responseData, v1Response.responseData());
     }
 
+    @Test
+    public void testControlledShutdownResponse() {
+        ControlledShutdownResponse response = createControlledShutdownResponse();
+        ByteBuffer buffer = ByteBuffer.allocate(response.sizeOf());
+        response.writeTo(buffer);
+        buffer.rewind();
+        ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer);
+        assertEquals(response.errorCode(), deserialized.errorCode());
+        assertEquals(response.partitionsRemaining(), deserialized.partitionsRemaining());
+    }
+
 
     private AbstractRequestResponse createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
@@ -188,8 +199,8 @@ public class RequestResponseTest {
 
     private AbstractRequest createJoinGroupRequest() {
         ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
-        List<JoinGroupRequest.GroupProtocol> protocols = new ArrayList<>();
-        protocols.add(new JoinGroupRequest.GroupProtocol("consumer-range", metadata));
+        List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
+        protocols.add(new JoinGroupRequest.ProtocolMetadata("consumer-range", metadata));
         return new JoinGroupRequest("group1", 30000, "consumer1", "consumer", protocols);
     }
 
@@ -311,7 +322,7 @@ public class RequestResponseTest {
         return new ControlledShutdownRequest(10);
     }
 
-    private AbstractRequestResponse createControlledShutdownResponse() {
+    private ControlledShutdownResponse createControlledShutdownResponse() {
         HashSet<TopicPartition> topicPartitions = new HashSet<>(Arrays.asList(
                 new TopicPartition("test2", 5),
                 new TopicPartition("test1", 10)

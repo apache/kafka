@@ -33,7 +33,7 @@ public interface KStream<K, V> {
      * Creates a new instance of KStream consists of all elements of this stream which satisfy a predicate
      *
      * @param predicate the instance of Predicate
-     * @return the stream with only those elements that satisfy the predicate
+     * @return the instance of KStream with only those elements that satisfy the predicate
      */
     KStream<K, V> filter(Predicate<K, V> predicate);
 
@@ -41,22 +41,22 @@ public interface KStream<K, V> {
      * Creates a new instance of KStream consists all elements of this stream which do not satisfy a predicate
      *
      * @param predicate the instance of Predicate
-     * @return the stream with only those elements that do not satisfy the predicate
+     * @return the instance of KStream with only those elements that do not satisfy the predicate
      */
     KStream<K, V> filterOut(Predicate<K, V> predicate);
 
     /**
-     * Creates a new stream by applying transforming each element in this stream into a different element in the new stream.
+     * Creates a new instance of KStream by applying transforming each element in this stream into a different element in the new stream.
      *
      * @param mapper the instance of KeyValueMapper
      * @param <K1>   the key type of the new stream
      * @param <V1>   the value type of the new stream
-     * @return the mapped stream
+     * @return the instance of KStream
      */
     <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper);
 
     /**
-     * Creates a new instance of KStream by applying transforming each value in this stream into a different value in the new stream.
+     * Creates a new instance of KStream by transforming each value in this stream into a different value in the new stream.
      *
      * @param mapper the instance of ValueMapper
      * @param <V1>   the value type of the new stream
@@ -65,7 +65,7 @@ public interface KStream<K, V> {
     <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
     /**
-     * Creates a new instance of KStream by applying transforming each element in this stream into zero or more elements in the new stream.
+     * Creates a new instance of KStream by transforming each element in this stream into zero or more elements in the new stream.
      *
      * @param mapper the instance of KeyValueMapper
      * @param <K1>   the key type of the new stream
@@ -75,7 +75,7 @@ public interface KStream<K, V> {
     <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, Iterable<KeyValue<K1, V1>>> mapper);
 
     /**
-     * Creates a new instance of KStream by applying transforming each value in this stream into zero or more values in the new stream.
+     * Creates a new stream by transforming each value in this stream into zero or more values in the new stream.
      *
      * @param processor the instance of Processor
      * @param <V1>      the value type of the new stream
@@ -103,11 +103,11 @@ public interface KStream<K, V> {
     KStream<K, V>[] branch(Predicate<K, V>... predicates);
 
     /**
-     * Sends key-value to a topic, also creates a new stream from the topic.
+     * Sends key-value to a topic, also creates a new instance of KStream from the topic.
      * This is equivalent to calling to(topic) and from(topic).
      *
      * @param topic           the topic name
-     * @return the new stream that consumes the given topic
+     * @return the instance of KStream that consumes the given topic
      */
     KStream<K, V> through(String topic);
 
@@ -124,7 +124,7 @@ public interface KStream<K, V> {
      *                        if not specified the default key deserializer defined in the configuration will be used
      * @param valDeserializer value deserializer used to create the new KStream,
      *                        if not specified the default value deserializer defined in the configuration will be used
-     * @return the new stream that consumes the given topic
+     * @return the instance of KStream that consumes the given topic
      */
     KStream<K, V> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
 
@@ -160,7 +160,7 @@ public interface KStream<K, V> {
      *
      * @param valueTransformerSupplier the class of TransformerDef
      * @param stateStoreNames the names of the state store used by the processor
-     * @return the instance of KStream that contains transformed keys and values
+     * @return the instance of KStream that contains the keys and transformed values
      */
     <R> KStream<K, R> transformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier, String... stateStoreNames);
 
@@ -171,5 +171,15 @@ public interface KStream<K, V> {
      * @param stateStoreNames the names of the state store used by the processor
      */
     void process(ProcessorSupplier<K, V> processorSupplier, String... stateStoreNames);
+
+    /**
+     * Combines values of this stream with KTable using Left Join.
+     *
+     * @param ktable the instance of KTable joined with this stream
+     * @param joiner ValueJoiner
+     * @param <V1>   the value type of the other stream
+     * @param <V2>   the value type of the new stream
+     */
+    <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> ktable, ValueJoiner<V, V1, V2> joiner);
 
 }
