@@ -338,7 +338,7 @@ public class SchemaBuilder implements Schema {
         if (type != Type.STRUCT)
             throw new DataException("Cannot look up fields on non-struct type");
         for (Field field : fields)
-            if (field.name() == fieldName)
+            if (field.name().equals(fieldName))
                 return field;
         return null;
     }
