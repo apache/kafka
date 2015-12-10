@@ -85,7 +85,7 @@ public class SlidingWindowSupplier<K, V> implements WindowSupplier<K, V> {
             this.context = context;
             this.partition = context.id().partition;
             SlidingWindowRegistryCallback restoreFunc = new SlidingWindowRegistryCallback();
-            context.register(this, restoreFunc);
+            context.register(this, true, restoreFunc);
 
             for (ValueList<V> valueList : map.values()) {
                 valueList.clearDirtyValues();

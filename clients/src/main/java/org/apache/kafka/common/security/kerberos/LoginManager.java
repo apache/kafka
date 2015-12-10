@@ -49,7 +49,7 @@ public class LoginManager {
     private static String getServiceName(String loginContext, Map<String, ?> configs) throws IOException {
         String jaasServiceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
         String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
-        if (jaasServiceName != null && configServiceName != null && jaasServiceName != configServiceName) {
+        if (jaasServiceName != null && configServiceName != null && !jaasServiceName.equals(configServiceName)) {
             String message = "Conflicting serviceName values found in JAAS and Kafka configs " +
                 "value in JAAS file " + jaasServiceName + ", value in Kafka config " + configServiceName;
             throw new IllegalArgumentException(message);

@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -82,7 +81,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                SubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix,
-                               Map<String, String> metricTags,
                                Time time,
                                long retryBackoffMs,
                                OffsetCommitCallback defaultOffsetCommitCallback,
@@ -94,7 +92,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 heartbeatIntervalMs,
                 metrics,
                 metricGrpPrefix,
-                metricTags,
                 time,
                 retryBackoffMs);
         this.metadata = metadata;
@@ -109,7 +106,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         addMetadataListener();
 
         this.autoCommitTask = autoCommitEnabled ? new AutoCommitTask(autoCommitIntervalMs) : null;
-        this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
+        this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
     }
 
     @Override
@@ -639,23 +636,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         public final Sensor commitLatency;
 
-        public ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> tags) {
+        public ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             this.commitLatency = metrics.sensor("commit-latency");
-            this.commitLatency.add(new MetricName("commit-latency-avg",
+            this.commitLatency.add(metrics.metricName("commit-latency-avg",
                 this.metricGrpName,
-                "The average time taken for a commit request",
-                tags), new Avg());
-            this.commitLatency.add(new MetricName("commit-latency-max",
+                "The average time taken for a commit request"), new Avg());
+            this.commitLatency.add(metrics.metricName("commit-latency-max",
                 this.metricGrpName,
-                "The max time taken for a commit request",
-                tags), new Max());
-            this.commitLatency.add(new MetricName("commit-rate",
+                "The max time taken for a commit request"), new Max());
+            this.commitLatency.add(metrics.metricName("commit-rate",
                 this.metricGrpName,
-                "The number of commit calls per second",
-                tags), new Rate(new Count()));
+                "The number of commit calls per second"), new Rate(new Count()));
 
             Measurable numParts =
                 new Measurable() {
@@ -663,11 +657,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         return subscriptions.assignedPartitions().size();
                     }
                 };
-            metrics.addMetric(new MetricName("assigned-partitions",
+            metrics.addMetric(metrics.metricName("assigned-partitions",
                 this.metricGrpName,
-                "The number of partitions currently assigned to this consumer",
-                tags),
-                numParts);
+                "The number of partitions currently assigned to this consumer"), numParts);
         }
     }
 

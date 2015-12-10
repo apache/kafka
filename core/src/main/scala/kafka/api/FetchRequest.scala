@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -26,6 +26,8 @@ import kafka.message.MessageSet
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.nio.ByteBuffer
+import org.apache.kafka.common.protocol.ApiKeys
+
 import scala.collection.immutable.Map
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
@@ -65,7 +67,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         maxWait: Int = FetchRequest.DefaultMaxWait,
                         minBytes: Int = FetchRequest.DefaultMinBytes,
                         requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
-        extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
+        extends RequestOrResponse(Some(ApiKeys.FETCH.id)) {
 
   /**
    * Partitions the request info into a map of maps (one for each topic).

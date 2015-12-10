@@ -74,7 +74,7 @@ When a server is stopped gracefully it has two optimizations it will take advant
     <li>It will migrate any partitions the server is the leader for to other replicas prior to shutting down. This will make the leadership transfer faster and minimize the time each partition is unavailable to a few milliseconds.
 </ol>
 
-Syncing the logs will happen automatically happen whenever the server is stopped other than by a hard kill, but the controlled leadership migration requires using a special setting:
+Syncing the logs will happen automatically whenever the server is stopped other than by a hard kill, but the controlled leadership migration requires using a special setting:
 <pre>
     controlled.shutdown.enable=true
 </pre>
