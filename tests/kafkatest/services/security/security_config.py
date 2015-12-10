@@ -16,6 +16,7 @@
 import os
 import subprocess
 from ducktape.template import TemplateRenderer
+from kafkatest.services.kafka.directory import kafka_dir
 from kafkatest.services.security.minikdc import MiniKdc
 
 class Keytool(object):
@@ -171,6 +172,50 @@ class SecurityConfig(TemplateRenderer):
             return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
         else:
             return ""
+
+    #
+    # ACLs
+    #
+    def acls_command(self, node, properties):
+        cmd = "/opt/%s/bin/kafka-acls.sh %s" % (kafka_dir(node), properties)
+        node.account.ssh(cmd)
+
+    #
+    # Cluster action
+    #
+    def addClusterAcl(self, zk_connect):
+        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --cluster --operation=ClusterAction --allow-principal=User:kafka " % {
+                    'zk_connect': zk_connect
+                }
+
+
+    #
+    # Broker read, necessary for replication
+    #
+    def brokerReadAcl(self, zk_connect, topic):
+        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --operation=Read --allow-principal=User:kafka " % {
+                        'zk_connect': zk_connect,
+                        'topic': topic
+                }
+
+    #
+    # Produce
+    #
+    def produceAcl(self, zk_connect, topic):
+        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --producer --allow-principal=User:client " % {
+                        'zk_connect': zk_connect,
+                        'topic': topic
+                }
+
+    #
+    # Consume
+    #
+    def consumeAcl(self, zk_connect, topic, group):
+        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --group=%(group)s --consumer --allow-principal=User:client " % {
+                    'zk_connect': zk_connect,
+                    'topic': topic,
+                    'group': group
+                }
 
     def __str__(self):
         """

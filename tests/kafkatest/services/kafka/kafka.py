@@ -57,7 +57,7 @@ class KafkaService(JmxMixin, Service):
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
+                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, use_authorizer=False, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
                  jmx_attributes=[], zk_connect_timeout=5000):
         """
         :type context
@@ -76,6 +76,8 @@ class KafkaService(JmxMixin, Service):
         self.sasl_mechanism = sasl_mechanism
         self.topics = topics
         self.minikdc = None
+        if use_authorizer:
+            self.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
         #
         # In a heavily loaded and not very fast machine, it is
         # sometimes necessary to give more time for the zk client
