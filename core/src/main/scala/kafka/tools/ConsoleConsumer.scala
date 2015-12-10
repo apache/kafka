@@ -333,7 +333,7 @@ object ConsoleConsumer extends Logging {
   }
 }
 
-trait MessageFormatter {
+trait MessageFormatter extends Logging {
   def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream)
 
   def init(props: Properties) {}
@@ -362,6 +362,14 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
     output.write(if (value == null) "null".getBytes() else value)
     output.write(lineSeparator)
+  }
+}
+
+class LoggingMessageFormatter extends MessageFormatter   {
+  private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
+  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream): Unit = {
+    defaultWriter.writeTo(key, value, output)
+    logger.info(s"key:${if (key == null) "null" else new String(key)}, value:${if (value == null) "null" else new String(value)}")
   }
 }
 

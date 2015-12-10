@@ -358,34 +358,31 @@ class KafkaService(JmxMixin, Service):
         self.logger.debug("Verify partition reassignment:")
         self.logger.debug(output)
 
-    def check_data_logs_for_payload(self, topic, payload_vals):
-        """Check if a certain message payloads made it into the data files. Note that
+    def search_data_files(self, topic, messages):
+        """Check if a set of messages made it into the Kakfa data files. Note that
         this method takes no account of replication. It simply looks for the
-        payload in one of the partitions of the specified topic. payload_vals should be
-        an array of numbers.
+        payload in all the partition files of the specified topic. 'messages' should be
+        an array of numbers. The list of missing messages is returned.
         """
-        found = Set([])
-
-        payload_match = "payload: " + "$|payload: ".join(str(x) for x in payload_vals) + "$"
+        payload_match = "payload: " + "$|payload: ".join(str(x) for x in messages) + "$"
+        found = set([])
 
         for node in self.nodes:
-            data_logs = node.account.ssh_capture("find %s -regex  '.*/%s-.*/[^/]*.log'"
-                        % (KafkaService.DATA_LOG_DIR, topic))
+            # Grab all .log files in directories prefixed with this topic
+            files = node.account.ssh_capture("find %s -regex  '.*/%s-.*/[^/]*.log'" % (KafkaService.DATA_LOG_DIR, topic))
 
-            #Check each data file to see if it contains the payload
-            for file in data_logs:
-                cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.DumpLogSegments " \
-                      "--print-data-log --files %s | grep -E \"%s\"" \
-                      % (kafka_dir(node), file.strip(), payload_match)
+            # Check each data file to see if it contains the messages we want
+            for file in files:
+                cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.DumpLogSegments --print-data-log --files %s " \
+                      "| grep -E \"%s\"" % (kafka_dir(node), file.strip(), payload_match)
 
                 for line in node.account.ssh_capture(cmd, allow_fail=True):
-                    for val in payload_vals:
+                    for val in messages:
                         if line.strip().endswith("payload: "+str(val)):
+                            self.logger.debug("Found %s in data-file [%s] in line: [%s]" % (val, file.strip(), line.strip()))
                             found.add(val)
-                            self.logger.debug("Searched for and found payload %s in file [%s] via result line: [%s]"
-                                             % (val, file.strip(), line.strip()))
 
-        missing = list(set(payload_vals) - set(found))
+        missing = list(set(messages) - found)
 
         if len(missing) > 0:
             self.logger.warn("The following values were not found in the data files: " + str(missing))
