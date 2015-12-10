@@ -42,15 +42,19 @@ class KafkaService(JmxMixin, Service):
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
     # Logs such as controller.log, server.log, etc all go here
     OPERATIONAL_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-operational-logs")
+    OPERATIONAL_LOG_INFO_DIR = os.path.join(OPERATIONAL_LOG_DIR, "info")
+    OPERATIONAL_LOG_DEBUG_DIR = os.path.join(OPERATIONAL_LOG_DIR, "debug")
     # Kafka log segments etc go here
     DATA_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-data-logs")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
 
-
     logs = {
-        "kafka_operational_logs": {
-            "path": OPERATIONAL_LOG_DIR,
+        "kafka_operational_logs_info": {
+            "path": OPERATIONAL_LOG_INFO_DIR,
             "collect_default": True},
+        "kafka_operational_logs_debug": {
+            "path": OPERATIONAL_LOG_DEBUG_DIR,
+            "collect_default": False},
         "kafka_data": {
             "path": DATA_LOG_DIR,
             "collect_default": False}
@@ -66,7 +70,6 @@ class KafkaService(JmxMixin, Service):
         """
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
-        self.log_level = "DEBUG"
 
         self.zk = zk
         self.quota_config = quota_config
@@ -165,7 +168,6 @@ class KafkaService(JmxMixin, Service):
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
-        cmd += "export LOG_DIR=%s; " % KafkaService.OPERATIONAL_LOG_DIR
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-server-start.sh %s 1>> %s 2>> %s &" % (KafkaService.CONFIG_FILE, KafkaService.STDOUT_CAPTURE, KafkaService.STDERR_CAPTURE)
         return cmd
