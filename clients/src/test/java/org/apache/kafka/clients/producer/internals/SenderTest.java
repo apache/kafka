@@ -14,6 +14,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 import java.util.Collections;
@@ -27,6 +28,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -142,9 +144,13 @@ public class SenderTest {
             Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
             sender.run(time.milliseconds()); // connect
             sender.run(time.milliseconds()); // send produce request
+            String id = client.requests().peek().request().destination();
+            Node node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
-            client.disconnect(client.requests().peek().request().destination());
+            assertTrue("Client ready status should be true", client.isReady(node, 0L));
+            client.disconnect(id);
             assertEquals(0, client.inFlightRequestCount());
+            assertFalse("Client ready status should be false", client.isReady(node, 0L));
             sender.run(time.milliseconds()); // receive error
             sender.run(time.milliseconds()); // reconnect
             sender.run(time.milliseconds()); // resend
