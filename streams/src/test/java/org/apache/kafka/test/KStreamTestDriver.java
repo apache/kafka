@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 
 public class KStreamTestDriver {
 
@@ -115,6 +116,11 @@ public class KStreamTestDriver {
             currNode = thisNode;
         }
     }
+
+    public Map<String, StateStore> allStateStores() {
+        return context.allStateStores();
+    }
+
 
     private class MockRecordCollector extends RecordCollector {
         public MockRecordCollector() {

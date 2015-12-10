@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -178,4 +179,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return this.timestamp;
     }
 
+    public Map<String, StateStore> allStateStores() {
+        return Collections.unmodifiableMap(storeMap);
+    }
 }
