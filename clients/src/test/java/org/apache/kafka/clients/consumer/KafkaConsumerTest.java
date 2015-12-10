@@ -80,7 +80,7 @@ public class KafkaConsumerTest {
         Assert.assertTrue(consumer.assignment().isEmpty());
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testSeekNegative() {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testSeekNegative");
@@ -90,13 +90,6 @@ public class KafkaConsumerTest {
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<byte[], byte[]>(
                 props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
-        consumer.seek(new TopicPartition("nonExistTopic", 0), 1);
-        try {
-            consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
-        } catch (IllegalArgumentException e) {
-            Assert.assertEquals("seek offset must not be a negative number", e.getMessage());
-            return;
-        }
-        Assert.fail("should have caught an exception and returned");
+        consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
     }
 }
