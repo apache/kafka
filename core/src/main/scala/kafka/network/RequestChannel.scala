@@ -68,7 +68,6 @@ object RequestChannel extends Logging {
     private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse]=
       Map(ApiKeys.PRODUCE.id -> ProducerRequest.readFrom,
         ApiKeys.FETCH.id -> FetchRequest.readFrom,
-        ApiKeys.LIST_OFFSETS.id -> OffsetRequest.readFrom,
         ApiKeys.METADATA.id -> TopicMetadataRequest.readFrom,
         ApiKeys.LEADER_AND_ISR.id -> LeaderAndIsrRequest.readFrom,
         ApiKeys.STOP_REPLICA.id -> StopReplicaRequest.readFrom,
