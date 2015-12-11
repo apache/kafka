@@ -69,7 +69,6 @@ object RequestChannel extends Logging {
       Map(ApiKeys.PRODUCE.id -> ProducerRequest.readFrom,
         ApiKeys.FETCH.id -> FetchRequest.readFrom,
         ApiKeys.METADATA.id -> TopicMetadataRequest.readFrom,
-        ApiKeys.LEADER_AND_ISR.id -> LeaderAndIsrRequest.readFrom,
         ApiKeys.STOP_REPLICA.id -> StopReplicaRequest.readFrom,
         ApiKeys.UPDATE_METADATA_KEY.id -> UpdateMetadataRequest.readFrom,
         ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom,
