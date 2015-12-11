@@ -33,6 +33,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
     def setUp(self):
         self.topic = "test_topic"
+        self.group = "group"
         self.producer_throughput = 100
         self.num_producers = 1
         self.num_consumers = 1
@@ -55,7 +56,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
             self.test_context, self.num_consumers, self.kafka, self.topic,
             consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True)
 
-        self.consumer.group_id = "unique-test-group-" + str(random.random())
+        self.consumer.group_id = "group"
 
     def bounce(self):
         #Sleeps reduce the intermittent failures reported in KAFKA-2891. Should be removed once resolved.
@@ -74,6 +75,24 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         # Roll cluster to disable PLAINTEXT port
         self.kafka.close_port('PLAINTEXT')
+        self.bounce()
+
+    def roll_in_acls(self):
+
+        self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
+
+        self.add_cluster_props = self.kafka.security_config.addClusterAcl(self.zk.connect_setting())
+        self.kafka.security_config.acls_command(self.kafka.nodes[0], self.add_cluster_props)
+
+        self.broker_read_props = self.kafka.security_config.brokerReadAcl(self.zk.connect_setting(), self.topic)
+        self.kafka.security_config.acls_command(self.kafka.nodes[0], self.broker_read_props)
+
+        self.produce_props = self.kafka.security_config.produceAcl(self.zk.connect_setting(), self.topic)
+        self.kafka.security_config.acls_command(self.kafka.nodes[0], self.produce_props)
+
+        self.consume_props = self.kafka.security_config.consumeAcl(self.zk.connect_setting(), self.topic, self.group)
+        self.kafka.security_config.acls_command(self.kafka.nodes[0], self.consume_props)
+
         self.bounce()
 
     def open_secured_port(self, upgrade_protocol):
@@ -122,3 +141,19 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         #Roll in the security protocol. Disable Plaintext. Ensure we can produce and Consume throughout
         self.run_produce_consume_validate(self.roll_in_secured_settings, upgrade_protocol)
+
+    @matrix(upgrade_protocol=["SASL_PLAINTEXT", "SASL_SSL"])
+    def test_rolling_upgrade_phase_three(self, upgrade_protocol):
+        """
+        Start with a secured cluster. Enable ACLs
+        """
+        #Given we have a secured cluster
+        self.kafka.security_protocol = upgrade_protocol
+        self.kafka.interbroker_security_protocol = upgrade_protocol
+        self.kafka.start()
+
+        #Create Secured Producer and Consumer
+        self.create_producer_and_consumer()
+
+        #Roll in ACLs
+        self.run_produce_consume_validate(self.roll_in_acls)
