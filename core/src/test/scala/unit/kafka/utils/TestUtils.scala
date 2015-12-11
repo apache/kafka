@@ -456,7 +456,6 @@ object TestUtils extends Logging {
   def createNewProducer(brokerList: String,
                         acks: Int = -1,
                         maxBlockMs: Long = Long.MaxValue,
-                        blockOnBufferFull: Boolean = true,
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
