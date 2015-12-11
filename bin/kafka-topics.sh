@@ -14,4 +14,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-exec $(dirname $0)/kafka-run-class.sh kafka.admin.TopicCommand $@
+base_dir=$(dirname $0)/..
+
+if [ -z "$SCALA_VERSION" ]; then
+        SCALA_VERSION=2.10.6
+fi
+
+if [ -z "$SCALA_BINARY_VERSION" ]; then
+        SCALA_BINARY_VERSION=2.10
+fi
+
+shopt -s nullglob
+for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
+  do
+    for file in $dir/*.jar;
+      do
+        JARPATH=$JARPATH:$file
+      done
+  done
+  for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
+    do
+      JARPATH=$JARPATH:$file
+    done
+  for file in $base_dir/clients/build/libs/kafka-clients*.jar;
+  do
+    JARPATH=$JARPATH:$file
+  done
+shopt -u nullglob
+
+JARPATH=$JARPATH exec $(dirname $0)/kafka-run-class.sh kafka.admin.TopicCommand $@
