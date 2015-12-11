@@ -408,7 +408,8 @@ public class Fetcher<K, V> {
                 } else if (part.fetchOffset == position) {
                     long nextOffset = part.records.get(part.records.size() - 1).offset() + 1;
 
-                    log.trace("Returning fetched records for assigned partition {} and update consumed position to {}", part.partition, nextOffset);
+                    log.debug("Returning fetched records at offset {} for assigned partition {} and update " +
+                            "position to {}", position, part.partition, nextOffset);
 
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
                     if (records == null) {
@@ -422,7 +423,8 @@ public class Fetcher<K, V> {
                 } else {
                     // these records aren't next in line based on the last consumed position, ignore them
                     // they must be from an obsolete request
-                    log.debug("Ignoring fetched records for {} at offset {}", part.partition, part.fetchOffset);
+                    log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
+                            part.partition, part.fetchOffset, position);
                 }
             }
             this.records.clear();
@@ -512,6 +514,7 @@ public class Fetcher<K, V> {
 
                 long position = this.subscriptions.position(partition);
                 fetch.put(partition, new FetchRequest.PartitionData(position, this.fetchSize));
+                log.debug("Added fetch request for partition {} at offset {}", partition, position);
             }
         }
 
@@ -545,8 +548,11 @@ public class Fetcher<K, V> {
                 // we are interested in this fetch only if the beginning offset matches the
                 // current consumed position
                 Long position = subscriptions.position(tp);
-                if (position == null || position != fetchOffset)
+                if (position == null || position != fetchOffset) {
+                    log.debug("Discarding fetch response for partition {} since its offset {} does not match " +
+                            "the expected offset {}", tp, fetchOffset, position);
                     continue;
+                }
 
                 int bytes = 0;
                 ByteBuffer buffer = partition.recordSet;
@@ -558,6 +564,7 @@ public class Fetcher<K, V> {
                 }
 
                 if (!parsed.isEmpty()) {
+                    log.debug("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                     this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
