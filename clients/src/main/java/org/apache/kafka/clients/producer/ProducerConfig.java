@@ -193,10 +193,8 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>max.block.ms</code> */
     public static final String MAX_BLOCK_MS_CONFIG = "max.block.ms";
     private static final String MAX_BLOCK_MS_DOC = "The configuration controls how long {@link KafkaProducer#send()} and {@link KafkaProducer#partitionsFor} will block."
-                                                    + "These methods can be blocked for multiple reasons. For e.g: buffer full, metadata unavailable."
-                                                    + "This configuration imposes maximum limit on the total time spent in fetching metadata, serialization of key and value, partitioning and "
-                                                    + "allocation of buffer memory when doing a send(). In case of partitionsFor(), this configuration imposes a maximum time threshold on waiting "
-                                                    + "for metadata";
+                                                    + "These methods can be blocked either because the buffer is full or metadata unavailable."
+                                                    + "Blocking in the user-supplied serializers or partitioner will not be counted against this timeout.";
 
     /** <code>request.timeout.ms</code> */
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;

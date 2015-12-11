@@ -24,6 +24,7 @@ import kafka.api.ApiUtils._
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
+import org.apache.kafka.common.protocol.ApiKeys
 
 object ControlledShutdownRequest extends Logging {
   val CurrentVersion = 1.shortValue
@@ -43,7 +44,7 @@ case class ControlledShutdownRequest(versionId: Short,
                                      correlationId: Int,
                                      clientId: Option[String],
                                      brokerId: Int)
-  extends RequestOrResponse(Some(RequestKeys.ControlledShutdownKey)){
+  extends RequestOrResponse(Some(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id)){
 
   if (versionId > 0 && clientId.isEmpty)
     throw new IllegalArgumentException("`clientId` must be defined if `versionId` > 0")

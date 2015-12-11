@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-import java.util
 
 import kafka.admin.AdminUtils
 import kafka.api._
@@ -33,7 +32,7 @@ import kafka.network.RequestChannel.{Session, Response}
 import kafka.security.auth.{Authorizer, ClusterAction, Group, Create, Describe, Operation, Read, Resource, Topic, Write}
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{GroupCoordinatorRequest, GroupCoordinatorResponse, ListGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ResponseHeader, ResponseSend, SyncGroupRequest, SyncGroupResponse}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.Node
@@ -64,24 +63,24 @@ class KafkaApis(val requestChannel: RequestChannel,
     try{
       trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
         format(request.requestObj, request.connectionId, request.securityProtocol, request.session.principal))
-      request.requestId match {
-        case RequestKeys.ProduceKey => handleProducerRequest(request)
-        case RequestKeys.FetchKey => handleFetchRequest(request)
-        case RequestKeys.OffsetsKey => handleOffsetRequest(request)
-        case RequestKeys.MetadataKey => handleTopicMetadataRequest(request)
-        case RequestKeys.LeaderAndIsrKey => handleLeaderAndIsrRequest(request)
-        case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
-        case RequestKeys.UpdateMetadataKey => handleUpdateMetadataRequest(request)
-        case RequestKeys.ControlledShutdownKey => handleControlledShutdownRequest(request)
-        case RequestKeys.OffsetCommitKey => handleOffsetCommitRequest(request)
-        case RequestKeys.OffsetFetchKey => handleOffsetFetchRequest(request)
-        case RequestKeys.GroupCoordinatorKey => handleGroupCoordinatorRequest(request)
-        case RequestKeys.JoinGroupKey => handleJoinGroupRequest(request)
-        case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
-        case RequestKeys.LeaveGroupKey => handleLeaveGroupRequest(request)
-        case RequestKeys.SyncGroupKey => handleSyncGroupRequest(request)
-        case RequestKeys.DescribeGroupsKey => handleDescribeGroupRequest(request)
-        case RequestKeys.ListGroupsKey => handleListGroupsRequest(request)
+      ApiKeys.forId(request.requestId) match {
+        case ApiKeys.PRODUCE => handleProducerRequest(request)
+        case ApiKeys.FETCH => handleFetchRequest(request)
+        case ApiKeys.LIST_OFFSETS => handleOffsetRequest(request)
+        case ApiKeys.METADATA => handleTopicMetadataRequest(request)
+        case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
+        case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
+        case ApiKeys.UPDATE_METADATA_KEY => handleUpdateMetadataRequest(request)
+        case ApiKeys.CONTROLLED_SHUTDOWN_KEY => handleControlledShutdownRequest(request)
+        case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
+        case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
+        case ApiKeys.GROUP_COORDINATOR => handleGroupCoordinatorRequest(request)
+        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
+        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
+        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
+        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
+        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
+        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -350,7 +349,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
-      quotaManagers(RequestKeys.ProduceKey).recordAndMaybeThrottle(produceRequest.clientId,
+      quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(produceRequest.clientId,
                                                                    numBytesAppended,
                                                                    produceResponseCallback)
     }
@@ -419,7 +418,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.isFromFollower) {
         fetchResponseCallback(0)
       } else {
-        quotaManagers(RequestKeys.FetchKey).recordAndMaybeThrottle(fetchRequest.clientId,
+        quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
                                                                    FetchResponse.responseSize(responsePartitionData
                                                                                                       .groupBy(_._1.topic),
                                                                                               fetchRequest.versionId),
@@ -869,10 +868,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     )
 
     val quotaManagers = Map[Short, ClientQuotaManager](
-      RequestKeys.ProduceKey ->
-              new ClientQuotaManager(producerQuotaManagerCfg, metrics, RequestKeys.nameForKey(RequestKeys.ProduceKey), new org.apache.kafka.common.utils.SystemTime),
-      RequestKeys.FetchKey ->
-              new ClientQuotaManager(consumerQuotaManagerCfg, metrics, RequestKeys.nameForKey(RequestKeys.FetchKey), new org.apache.kafka.common.utils.SystemTime)
+      ApiKeys.PRODUCE.id ->
+              new ClientQuotaManager(producerQuotaManagerCfg, metrics, ApiKeys.PRODUCE.name, new org.apache.kafka.common.utils.SystemTime),
+      ApiKeys.FETCH.id ->
+              new ClientQuotaManager(consumerQuotaManagerCfg, metrics, ApiKeys.FETCH.name, new org.apache.kafka.common.utils.SystemTime)
     )
     quotaManagers
   }

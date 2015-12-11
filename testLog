@@ -1,0 +1,1377 @@
+To honour the JVM settings for this build a new JVM will be forked. Please consider using the daemon: https://docs.gradle.org/2.6/userguide/gradle_daemon.html.
+Building project 'core' with Scala version 2.10.6
+:cleanTest UP-TO-DATE
+:clients:cleanTest UP-TO-DATE
+:connect:cleanTest UP-TO-DATE
+:core:cleanTest
+:examples:cleanTest UP-TO-DATE
+:log4j-appender:cleanTest UP-TO-DATE
+:streams:cleanTest UP-TO-DATE
+:tools:cleanTest UP-TO-DATE
+:connect:api:cleanTest UP-TO-DATE
+:connect:file:cleanTest UP-TO-DATE
+:connect:json:cleanTest UP-TO-DATE
+:connect:runtime:cleanTest UP-TO-DATE
+:clients:compileJava UP-TO-DATE
+:clients:processResources UP-TO-DATE
+:clients:classes UP-TO-DATE
+:clients:determineCommitId UP-TO-DATE
+:clients:createVersionFile
+:clients:jar UP-TO-DATE
+:clients:compileTestJava UP-TO-DATE
+:clients:processTestResources UP-TO-DATE
+:clients:testClasses UP-TO-DATE
+:core:compileJava UP-TO-DATE
+:core:compileScala UP-TO-DATE
+:core:processResources UP-TO-DATE
+:core:classes UP-TO-DATE
+:core:compileTestJava UP-TO-DATE
+:core:compileTestScala UP-TO-DATE
+:core:processTestResources UP-TO-DATE
+:core:testClasses UP-TO-DATE
+:core:test
+
+kafka.KafkaTest > testGetKafkaConfigFromArgsWrongSetValue PASSED
+
+kafka.KafkaTest > testKafkaSslPasswords PASSED
+
+kafka.KafkaTest > testGetKafkaConfigFromArgs PASSED
+
+kafka.KafkaTest > testGetKafkaConfigFromArgsNonArgsAtTheEnd PASSED
+
+kafka.KafkaTest > testGetKafkaConfigFromArgsNonArgsOnly PASSED
+
+kafka.KafkaTest > testGetKafkaConfigFromArgsNonArgsAtTheBegging PASSED
+
+integration.kafka.api.AdminClientTest > testDescribeGroup FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at integration.kafka.api.AdminClientTest$$anonfun$testDescribeGroup$1.apply$mcZ$sp(AdminClientTest.scala:84)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:743)
+        at integration.kafka.api.AdminClientTest.testDescribeGroup(AdminClientTest.scala:83)
+
+kafka.admin.DeleteConsumerGroupTest > testGroupWideDeleteInZKDoesNothingForActiveConsumerGroup PASSED
+
+kafka.admin.AdminTest > testBasicPreferredReplicaElection PASSED
+
+kafka.admin.AdminTest > testPreferredReplicaJsonData PASSED
+
+kafka.admin.AddPartitionsTest > testWrongReplicaCount PASSED
+
+integration.kafka.api.AdminClientTest > testDescribeConsumerGroup FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at integration.kafka.api.AdminClientTest$$anonfun$testDescribeConsumerGroup$1.apply$mcZ$sp(AdminClientTest.scala:104)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:743)
+        at integration.kafka.api.AdminClientTest.testDescribeConsumerGroup(AdminClientTest.scala:103)
+
+kafka.admin.DeleteConsumerGroupTest > testGroupTopicWideDeleteInZKDoesNothingForActiveGroupConsumingMultipleTopics PASSED
+
+kafka.admin.AdminTest > testReassigningNonExistingPartition PASSED
+
+kafka.admin.AddPartitionsTest > testTopicDoesNotExist PASSED
+
+kafka.admin.AdminTest > testBootstrapClientIdConfig PASSED
+
+integration.kafka.api.AdminClientTest > testListGroups FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at integration.kafka.api.AdminClientTest$$anonfun$testListGroups$1.apply$mcZ$sp(AdminClientTest.scala:69)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:743)
+        at integration.kafka.api.AdminClientTest.testListGroups(AdminClientTest.scala:68)
+
+kafka.admin.DeleteConsumerGroupTest > testConsumptionOnRecreatedTopicAfterTopicWideDeleteInZK PASSED
+
+kafka.admin.DeleteConsumerGroupTest > testTopicWideDeleteInZK PASSED
+
+kafka.admin.AddPartitionsTest > testIncrementPartitions PASSED
+
+integration.kafka.api.AdminClientTest > testDescribeConsumerGroupForNonExistentGroup PASSED
+
+kafka.admin.ConfigCommandTest > testArgumentParse PASSED
+
+kafka.admin.AdminTest > testPartitionReassignmentNonOverlappingReplicas PASSED
+
+kafka.admin.AdminTest > testReplicaAssignment PASSED
+
+kafka.api.ApiUtilsTest > testShortStringNonASCII PASSED
+
+kafka.api.ApiUtilsTest > testShortStringASCII PASSED
+
+kafka.admin.DeleteConsumerGroupTest > testGroupTopicWideDeleteInZKForGroupConsumingOneTopic PASSED
+
+kafka.api.PlaintextProducerSendTest > testSerializerConstructors PASSED
+
+kafka.admin.AdminTest > testPartitionReassignmentWithLeaderNotInNewReplicas PASSED
+
+kafka.admin.AddPartitionsTest > testManualAssignmentOfReplicas PASSED
+
+kafka.api.PlaintextProducerSendTest > testClose PASSED
+
+kafka.admin.DeleteConsumerGroupTest > testGroupTopicWideDeleteInZKForGroupConsumingMultipleTopics PASSED
+
+kafka.admin.AdminTest > testTopicConfigChange PASSED
+
+kafka.admin.AdminTest > testResumePartitionReassignmentThatWasCompleted PASSED
+
+kafka.admin.AdminTest > testManualReplicaAssignment PASSED
+
+kafka.api.PlaintextProducerSendTest > testFlush PASSED
+
+kafka.admin.DeleteConsumerGroupTest > testGroupWideDeleteInZK PASSED
+
+kafka.api.PlaintextProducerSendTest > testSendToPartition PASSED
+
+kafka.api.AuthorizerIntegrationTest > testCommitWithTopicWrite PASSED
+
+kafka.admin.AddPartitionsTest > testReplicaPlacement PASSED
+
+kafka.api.AuthorizerIntegrationTest > testConsumeWithNoTopicAccess PASSED
+
+kafka.admin.AdminTest > testPartitionReassignmentWithLeaderInNewReplicas PASSED
+
+kafka.api.PlaintextProducerSendTest > testSendOffset PASSED
+
+kafka.api.AuthorizerIntegrationTest > testCreatePermissionNeededToReadFromNonExistentTopic PASSED
+
+kafka.api.PlaintextProducerSendTest > testAutoCreateTopic PASSED
+
+kafka.api.AuthorizerIntegrationTest > testOffsetFetchWithNoAccess PASSED
+
+kafka.admin.AdminTest > testShutdownBroker PASSED
+
+kafka.admin.AdminTest > testTopicCreationWithCollision PASSED
+
+kafka.admin.AdminTest > testTopicCreationInZK PASSED
+
+kafka.admin.TopicCommandTest > testTopicDeletion PASSED
+
+kafka.admin.TopicCommandTest > testConfigPreservationAcrossPartitionAlteration PASSED
+
+kafka.api.AuthorizerIntegrationTest > testListOfsetsWithTopicDescribe PASSED
+
+kafka.api.AuthorizerIntegrationTest > testProduceWithTopicRead PASSED
+
+kafka.api.AuthorizerIntegrationTest > testListOffsetsWithNoTopicAccess PASSED
+
+kafka.api.PlaintextConsumerTest > testPartitionsForAutoCreate PASSED
+
+kafka.admin.DeleteTopicTest > testDeleteTopicWithCleaner PASSED
+
+kafka.api.AuthorizerIntegrationTest > testCreatePermissionNeededForWritingToNonExistentTopic PASSED
+
+kafka.api.PlaintextProducerSendTest > testCloseWithZeroTimeoutFromCallerThread PASSED
+
+kafka.api.AuthorizerIntegrationTest > testConsumeWithNoGroupAccess PASSED
+
+kafka.api.PlaintextConsumerTest > testShrinkingTopicSubscriptions FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.PlaintextConsumerTest$$anonfun$testShrinkingTopicSubscriptions$1.apply$mcZ$sp(PlaintextConsumerTest.scala:234)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:743)
+        at kafka.api.PlaintextConsumerTest.testShrinkingTopicSubscriptions(PlaintextConsumerTest.scala:233)
+
+kafka.api.AuthorizerIntegrationTest > testConsumeWithTopicDescribe PASSED
+
+kafka.api.AuthorizerIntegrationTest > testOffsetFetchWithNoTopicAccess PASSED
+
+kafka.admin.DeleteTopicTest > testResumeDeleteTopicOnControllerFailover PASSED
+
+kafka.api.AuthorizerIntegrationTest > testCommitWithNoTopicAccess PASSED
+
+kafka.api.AuthorizerIntegrationTest > testProduceWithNoTopicAccess PASSED
+
+kafka.api.AuthorizerIntegrationTest > testProduceWithTopicWrite PASSED
+
+kafka.api.PlaintextProducerSendTest > testCloseWithZeroTimeoutFromSenderThread PASSED
+
+kafka.admin.DeleteTopicTest > testResumeDeleteTopicWithRecoveredFollower PASSED
+
+kafka.api.PlaintextProducerSendTest > testWrongSerializer PASSED
+
+kafka.api.RequestResponseSerializationTest > testSerializationAndDeserialization PASSED
+
+kafka.api.RequestResponseSerializationTest > testFetchResponseVersion PASSED
+
+kafka.api.RequestResponseSerializationTest > testProduceResponseVersion PASSED
+
+kafka.api.PlaintextConsumerTest > testMultiConsumerSessionTimeoutOnStopPolling FAILED
+    java.lang.AssertionError: Did not get valid initial assignment for partitions [topic1-2, topic1-4, topic-1, topic-0, topic1-0, topic1-3, topic1-5, topic1-1]
+        at org.junit.Assert.fail(Assert.java:88)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:747)
+        at kafka.api.PlaintextConsumerTest.validateGroupAssignment(PlaintextConsumerTest.scala:654)
+        at kafka.api.PlaintextConsumerTest.runMultiConsumerSessionTimeoutTest(PlaintextConsumerTest.scala:514)
+        at kafka.api.PlaintextConsumerTest.testMultiConsumerSessionTimeoutOnStopPolling(PlaintextConsumerTest.scala:486)
+
+kafka.admin.DeleteTopicTest > testDeleteTopicAlreadyMarkedAsDeleted PASSED
+
+kafka.api.AuthorizerIntegrationTest > testAuthorization PASSED
+
+kafka.api.PlaintextConsumerTest > testPartitionsForInvalidTopic PASSED
+
+kafka.api.SslConsumerTest > testPauseStateNotPreservedByRebalance FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.api.AuthorizerIntegrationTest > testConsumeWithTopicAndGroupRead PASSED
+
+kafka.api.AuthorizerIntegrationTest > testConsumeWithTopicWrite PASSED
+
+kafka.api.AuthorizerIntegrationTest > testOffsetFetchWithNoGroupAccess PASSED
+
+kafka.api.PlaintextConsumerTest > testSeek PASSED
+
+kafka.admin.DeleteTopicTest > testPartitionReassignmentDuringDeleteTopic PASSED
+
+kafka.api.SslConsumerTest > testUnsubscribeTopic FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.api.AuthorizerIntegrationTest > testCommitWithNoAccess PASSED
+
+kafka.api.AuthorizerIntegrationTest > testCommitWithNoGroupAccess PASSED
+
+kafka.api.AuthorizerIntegrationTest > testConsumeWithNoAccess PASSED
+
+kafka.admin.DeleteTopicTest > testDeleteNonExistingTopic PASSED
+
+kafka.api.SslConsumerTest > testListTopics PASSED
+
+kafka.api.AuthorizerIntegrationTest > testOffsetFetchWithTopicAndGroupRead PASSED
+
+kafka.admin.DeleteTopicTest > testRecreateTopicAfterDeletion PASSED
+
+kafka.api.AuthorizerIntegrationTest > testCommitWithTopicDescribe PASSED
+
+kafka.api.AuthorizerIntegrationTest > testProduceWithTopicDescribe PASSED
+
+kafka.api.PlaintextConsumerTest > testMultiConsumerSessionTimeoutOnClose FAILED
+    java.lang.AssertionError: Did not get valid initial assignment for partitions [topic1-2, topic1-4, topic-1, topic-0, topic1-0, topic1-3, topic1-5, topic1-1]
+        at org.junit.Assert.fail(Assert.java:88)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:747)
+        at kafka.api.PlaintextConsumerTest.validateGroupAssignment(PlaintextConsumerTest.scala:654)
+        at kafka.api.PlaintextConsumerTest.runMultiConsumerSessionTimeoutTest(PlaintextConsumerTest.scala:514)
+        at kafka.api.PlaintextConsumerTest.testMultiConsumerSessionTimeoutOnClose(PlaintextConsumerTest.scala:491)
+
+kafka.admin.DeleteTopicTest > testAddPartitionDuringDeleteTopic PASSED
+
+kafka.api.SslConsumerTest > testAutoCommitOnRebalance FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.api.AuthorizerIntegrationTest > testOffsetFetchTopicDescribe PASSED
+
+kafka.api.AuthorizerIntegrationTest > testCommitWithTopicAndGroupRead PASSED
+
+kafka.api.PlaintextConsumerTest > testFetchRecordTooLarge PASSED
+
+kafka.admin.DeleteTopicTest > testDeleteTopicWithAllAliveReplicas PASSED
+
+kafka.api.SslConsumerTest > testSimpleConsumption PASSED
+
+kafka.admin.DeleteTopicTest > testDeleteTopicDuringAddPartition PASSED
+
+kafka.api.SslConsumerTest > testPartitionReassignmentCallback FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.api.PlaintextConsumerTest > testMultiConsumerDefaultAssignment FAILED
+    java.lang.AssertionError: Did not get valid initial assignment for partitions [topic1-2, topic1-4, topic-1, topic-0, topic1-0, topic1-3, topic1-1]
+        at org.junit.Assert.fail(Assert.java:88)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:747)
+        at kafka.api.PlaintextConsumerTest.validateGroupAssignment(PlaintextConsumerTest.scala:654)
+        at kafka.api.PlaintextConsumerTest.subscribeConsumersAndWaitForAssignment(PlaintextConsumerTest.scala:581)
+        at kafka.api.PlaintextConsumerTest.testMultiConsumerDefaultAssignment(PlaintextConsumerTest.scala:463)
+
+kafka.api.ProducerBounceTest > testBrokerFailure PASSED
+
+kafka.api.SslConsumerTest > testCommitSpecifiedOffsets PASSED
+
+kafka.cluster.BrokerEndPointTest > testFromOldJSON PASSED
+
+kafka.cluster.BrokerEndPointTest > testSerDe PASSED
+
+kafka.cluster.BrokerEndPointTest > testEndpointFromURI PASSED
+
+kafka.cluster.BrokerEndPointTest > testHashAndEquals PASSED
+
+kafka.cluster.BrokerEndPointTest > testFromJSON PASSED
+
+kafka.cluster.BrokerEndPointTest > testBrokerEndpointFromURI PASSED
+
+kafka.api.PlaintextConsumerTest > testAutoCommitOnClose FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.PlaintextConsumerTest$$anonfun$testAutoCommitOnClose$1.apply$mcZ$sp(PlaintextConsumerTest.scala:45)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:743)
+        at kafka.api.PlaintextConsumerTest.testAutoCommitOnClose(PlaintextConsumerTest.scala:44)
+
+kafka.consumer.ConsumerIteratorTest > testConsumerIteratorDeduplicationDeepIterator PASSED
+
+kafka.consumer.ConsumerIteratorTest > testConsumerIteratorDecodingFailure PASSED
+
+kafka.api.ConsumerBounceTest > testSeekAndCommitWithBrokerFailures PASSED
+
+kafka.api.PlaintextConsumerTest > testExpandingTopicSubscriptions FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.PlaintextConsumerTest$$anonfun$testExpandingTopicSubscriptions$1.apply$mcZ$sp(PlaintextConsumerTest.scala:214)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:743)
+        at kafka.api.PlaintextConsumerTest.testExpandingTopicSubscriptions(PlaintextConsumerTest.scala:213)
+
+kafka.consumer.ZookeeperConsumerConnectorTest > testBasic PASSED
+
+kafka.api.SaslPlaintextConsumerTest > testPauseStateNotPreservedByRebalance FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.api.ConsumerBounceTest > testConsumptionWithBrokerFailures FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.ConsumerBounceTest.consumeWithBrokerFailures(ConsumerBounceTest.scala:97)
+        at kafka.api.ConsumerBounceTest.testConsumptionWithBrokerFailures(ConsumerBounceTest.scala:70)
+
+kafka.consumer.ZookeeperConsumerConnectorTest > testCompressionSetConsumption PASSED
+
+kafka.api.PlaintextConsumerTest > testPatternUnsubscription FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.PlaintextConsumerTest.testPatternUnsubscription(PlaintextConsumerTest.scala:172)
+
+kafka.consumer.ZookeeperConsumerConnectorTest > testLeaderSelectionForPartition PASSED
+
+kafka.api.SaslPlaintextConsumerTest > testUnsubscribeTopic FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.api.PlaintextConsumerTest > testGroupConsumption FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.BaseConsumerTest.consumeAndVerifyRecords(BaseConsumerTest.scala:288)
+        at kafka.api.PlaintextConsumerTest.testGroupConsumption(PlaintextConsumerTest.scala:100)
+
+kafka.consumer.ZookeeperConsumerConnectorTest > testConsumerDecoder PASSED
+
+kafka.consumer.ZookeeperConsumerConnectorTest > testConsumerRebalanceListener PASSED
+
+kafka.api.PlaintextConsumerTest > testPartitionsFor PASSED
+
+kafka.api.SaslPlaintextConsumerTest > testListTopics PASSED
+
+kafka.consumer.ZookeeperConsumerConnectorTest > testCompression PASSED
+
+kafka.coordinator.MemberMetadataTest > testMatchesSupportedProtocols PASSED
+
+kafka.coordinator.MemberMetadataTest > testMetadata PASSED
+
+kafka.coordinator.MemberMetadataTest > testMetadataRaisesOnUnsupportedProtocol PASSED
+
+kafka.coordinator.MemberMetadataTest > testVoteForPreferredProtocol PASSED
+
+kafka.coordinator.MemberMetadataTest > testVoteRaisesOnNoSupportedProtocols PASSED
+
+kafka.api.SaslPlaintextConsumerTest > testAutoCommitOnRebalance FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.integration.PlaintextTopicMetadataTest > testIsrAfterBrokerShutDownAndJoinsBack PASSED
+
+kafka.integration.PlaintextTopicMetadataTest > testAutoCreateTopicWithCollision PASSED
+
+kafka.integration.PlaintextTopicMetadataTest > testAliveBrokerListWithNoTopics PASSED
+
+kafka.api.PlaintextConsumerTest > testMultiConsumerRoundRobinAssignment FAILED
+    java.lang.AssertionError: Did not get valid initial assignment for partitions [topic2-3, topic1-2, topic2-0, topic2-5, topic1-4, topic2-7, topic2-1, topic2-6, topic1-0, topic1-3, topic2-4, topic1-1, topic2-2]
+        at org.junit.Assert.fail(Assert.java:88)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:747)
+        at kafka.api.PlaintextConsumerTest.validateGroupAssignment(PlaintextConsumerTest.scala:654)
+        at kafka.api.PlaintextConsumerTest.subscribeConsumersAndWaitForAssignment(PlaintextConsumerTest.scala:581)
+        at kafka.api.PlaintextConsumerTest.createConsumerGroupAndWaitForAssignment(PlaintextConsumerTest.scala:608)
+        at kafka.api.PlaintextConsumerTest.testMultiConsumerRoundRobinAssignment(PlaintextConsumerTest.scala:437)
+
+kafka.integration.PlaintextTopicMetadataTest > testAutoCreateTopic PASSED
+
+kafka.api.SaslPlaintextConsumerTest > testSimpleConsumption PASSED
+
+kafka.integration.PlaintextTopicMetadataTest > testGetAllTopicMetadata PASSED
+
+kafka.api.PlaintextConsumerTest > testPartitionPauseAndResume PASSED
+
+kafka.integration.PlaintextTopicMetadataTest > testAliveBrokersListWithNoTopicsAfterNewBrokerStartup PASSED
+
+kafka.api.SaslPlaintextConsumerTest > testPartitionReassignmentCallback FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.integration.PlaintextTopicMetadataTest > testBasicTopicMetadata PASSED
+
+kafka.api.PlaintextConsumerTest > testAutoCommitOnCloseAfterWakeup FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.PlaintextConsumerTest$$anonfun$testAutoCommitOnCloseAfterWakeup$1.apply$mcZ$sp(PlaintextConsumerTest.scala:71)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:743)
+        at kafka.api.PlaintextConsumerTest.testAutoCommitOnCloseAfterWakeup(PlaintextConsumerTest.scala:70)
+
+kafka.integration.PlaintextTopicMetadataTest > testTopicMetadataRequest PASSED
+
+kafka.api.SaslPlaintextConsumerTest > testCommitSpecifiedOffsets PASSED
+
+kafka.api.PlaintextConsumerTest > testAutoOffsetReset PASSED
+
+kafka.integration.PlaintextTopicMetadataTest > testAliveBrokersListWithNoTopicsAfterABrokerShutdown PASSED
+
+kafka.api.PlaintextConsumerTest > testFetchInvalidOffset PASSED
+
+kafka.api.SslEndToEndAuthorizationTest > testNoConsumeAcl PASSED
+
+kafka.api.PlaintextConsumerTest > testCommitMetadata PASSED
+
+kafka.integration.SaslSslTopicMetadataTest > testIsrAfterBrokerShutDownAndJoinsBack PASSED
+
+kafka.api.SslEndToEndAuthorizationTest > testProduceConsume PASSED
+
+kafka.integration.SaslSslTopicMetadataTest > testAutoCreateTopicWithCollision PASSED
+
+kafka.api.PlaintextConsumerTest > testRoundRobinAssignment FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.PlaintextConsumerTest$$anonfun$testRoundRobinAssignment$1.apply$mcZ$sp(PlaintextConsumerTest.scala:399)
+        at kafka.utils.TestUtils$.waitUntilTrue(TestUtils.scala:743)
+        at kafka.api.PlaintextConsumerTest.testRoundRobinAssignment(PlaintextConsumerTest.scala:398)
+
+kafka.integration.SaslSslTopicMetadataTest > testAliveBrokerListWithNoTopics PASSED
+
+kafka.api.SslEndToEndAuthorizationTest > testNoProduceAcl PASSED
+
+kafka.api.PlaintextConsumerTest > testPatternSubscription FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.PlaintextConsumerTest.testPatternSubscription(PlaintextConsumerTest.scala:127)
+
+kafka.integration.SaslSslTopicMetadataTest > testAutoCreateTopic PASSED
+
+kafka.integration.SaslSslTopicMetadataTest > testGetAllTopicMetadata PASSED
+
+kafka.api.PlaintextConsumerTest > testPauseStateNotPreservedByRebalance FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.api.SslEndToEndAuthorizationTest > testNoGroupAcl PASSED
+
+kafka.common.ConfigTest > testInvalidGroupIds PASSED
+
+kafka.common.ConfigTest > testInvalidClientIds PASSED
+
+kafka.consumer.MetricsTest > testMetricsReporterAfterDeletingTopic PASSED
+
+kafka.api.PlaintextConsumerTest > testUnsubscribeTopic FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.integration.SaslSslTopicMetadataTest > testAliveBrokersListWithNoTopicsAfterNewBrokerStartup PASSED
+
+kafka.consumer.MetricsTest > testMetricsLeak PASSED
+
+kafka.integration.SaslSslTopicMetadataTest > testBasicTopicMetadata PASSED
+
+kafka.api.PlaintextConsumerTest > testListTopics PASSED
+
+kafka.controller.ControllerFailoverTest > testMetadataUpdate PASSED
+
+kafka.integration.AutoOffsetResetTest > testResetToLatestWhenOffsetTooLow PASSED
+
+kafka.integration.SaslSslTopicMetadataTest > testTopicMetadataRequest PASSED
+
+kafka.api.PlaintextConsumerTest > testAutoCommitOnRebalance FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.integration.AutoOffsetResetTest > testResetToEarliestWhenOffsetTooLow PASSED
+
+kafka.integration.AutoOffsetResetTest > testResetToEarliestWhenOffsetTooHigh PASSED
+
+kafka.integration.AutoOffsetResetTest > testResetToLatestWhenOffsetTooHigh PASSED
+
+kafka.api.PlaintextConsumerTest > testSimpleConsumption PASSED
+
+kafka.integration.PrimitiveApiTest > testMultiProduce PASSED
+
+kafka.integration.SaslSslTopicMetadataTest > testAliveBrokersListWithNoTopicsAfterABrokerShutdown PASSED
+
+kafka.javaapi.message.ByteBufferMessageSetTest > testSizeInBytesWithCompression PASSED
+
+kafka.javaapi.message.ByteBufferMessageSetTest > testIteratorIsConsistentWithCompression PASSED
+
+kafka.javaapi.message.ByteBufferMessageSetTest > testIteratorIsConsistent PASSED
+
+kafka.javaapi.message.ByteBufferMessageSetTest > testEqualsWithCompression PASSED
+
+kafka.javaapi.message.ByteBufferMessageSetTest > testWrittenEqualsRead PASSED
+
+kafka.javaapi.message.ByteBufferMessageSetTest > testEquals PASSED
+
+kafka.javaapi.message.ByteBufferMessageSetTest > testSizeInBytes PASSED
+
+kafka.integration.PrimitiveApiTest > testDefaultEncoderProducerAndFetch PASSED
+
+kafka.api.PlaintextConsumerTest > testPartitionReassignmentCallback FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+
+kafka.integration.PrimitiveApiTest > testFetchRequestCanProperlySerialize PASSED
+
+kafka.integration.PrimitiveApiTest > testPipelinedProduceRequests PASSED
+
+kafka.integration.PrimitiveApiTest > testProduceAndMultiFetch PASSED
+
+kafka.api.PlaintextConsumerTest > testCommitSpecifiedOffsets PASSED
+
+kafka.integration.PrimitiveApiTest > testDefaultEncoderProducerAndFetchWithCompression PASSED
+
+kafka.integration.PrimitiveApiTest > testConsumerEmptyTopic PASSED
+
+kafka.log.LogCleanerIntegrationTest > cleanerTest[0] PASSED
+
+kafka.integration.PrimitiveApiTest > testEmptyFetchRequest PASSED
+
+kafka.api.QuotasTest > testProducerConsumerOverrideUnthrottled FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.QuotasTest.consume(QuotasTest.scala:202)
+        at kafka.api.QuotasTest.testProducerConsumerOverrideUnthrottled(QuotasTest.scala:175)
+
+kafka.api.QuotasTest > testThrottledProducerConsumer FAILED
+    org.apache.kafka.common.KafkaException: Unexpected error in join group response: The server experienced an unexpected error when processing the request
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:377)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$JoinGroupResponseHandler.handle(AbstractCoordinator.java:324)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:665)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator$CoordinatorResponseHandler.onSuccess(AbstractCoordinator.java:644)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture$1.onSuccess(RequestFuture.java:167)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.fireSuccess(RequestFuture.java:133)
+        at org.apache.kafka.clients.consumer.internals.RequestFuture.complete(RequestFuture.java:107)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$RequestFutureCompletionHandler.onComplete(ConsumerNetworkClient.java:380)
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:288)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.clientPoll(ConsumerNetworkClient.java:320)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:213)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:193)
+        at org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:163)
+        at org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup(AbstractCoordinator.java:222)
+        at org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.ensurePartitionAssignment(ConsumerCoordinator.java:311)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.pollOnce(KafkaConsumer.java:864)
+        at org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:827)
+        at kafka.api.QuotasTest.consume(QuotasTest.scala:202)
+        at kafka.api.QuotasTest.testThrottledProducerConsumer(QuotasTest.scala:134)
+
+kafka.integration.SslTopicMetadataTest > testIsrAfterBrokerShutDownAndJoinsBack PASSED
+
+kafka.integration.SslTopicMetadataTest > testAutoCreateTopicWithCollision PASSED
+
+kafka.integration.SslTopicMetadataTest > testAliveBrokerListWithNoTopics PASSED
+
+kafka.log.LogCleanerIntegrationTest > cleanerTest[1] PASSED
+
+kafka.integration.SslTopicMetadataTest > testAutoCreateTopic PASSED
+
+kafka.integration.SslTopicMetadataTest > testGetAllTopicMetadata PASSED
+
+kafka.api.SaslSslEndToEndAuthorizationTest > testNoConsumeAcl PASSED
+
+kafka.integration.SslTopicMetadataTest > testAliveBrokersListWithNoTopicsAfterNewBrokerStartup PASSED
+
+kafka.integration.SslTopicMetadataTest > testBasicTopicMetadata PASSED
+
+kafka.log.LogCleanerIntegrationTest > cleanerTest[2] PASSED
+
+kafka.api.SaslSslEndToEndAuthorizationTest > testProduceConsume PASSED
+
+kafka.integration.SslTopicMetadataTest > testTopicMetadataRequest PASSED
+
+kafka.integration.SslTopicMetadataTest > testAliveBrokersListWithNoTopicsAfterABrokerShutdown PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[0] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[1] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[2] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[3] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[4] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[5] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[6] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[7] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[8] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[9] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[10] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[11] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[12] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[13] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[14] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[15] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[16] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[17] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[18] PASSED
+
+kafka.log.BrokerCompressionTest > testBrokerSideCompression[19] PASSED
+
+kafka.log.LogConfigTest > testFromPropsEmpty PASSED
+
+kafka.log.LogConfigTest > testKafkaConfigToProps PASSED
+
+kafka.log.LogConfigTest > testFromPropsInvalid PASSED
+
+kafka.log.OffsetIndexTest > lookupExtremeCases PASSED
+
+kafka.log.OffsetIndexTest > appendTooMany PASSED
+
+kafka.log.OffsetIndexTest > randomLookupTest PASSED
+
+kafka.log.OffsetIndexTest > testReopen PASSED
+
+kafka.log.OffsetIndexTest > appendOutOfOrder PASSED
+
+kafka.log.OffsetIndexTest > truncate PASSED
+
+kafka.message.MessageTest > testChecksum PASSED
+
+kafka.message.MessageTest > testIsHashable PASSED
+
+kafka.message.MessageTest > testFieldValues PASSED
+
+kafka.message.MessageTest > testEquality PASSED
+
+kafka.producer.AsyncProducerTest > testFailedSendRetryLogic PASSED
+
+kafka.producer.AsyncProducerTest > testQueueTimeExpired PASSED
+
+kafka.producer.AsyncProducerTest > testPartitionAndCollateEvents PASSED
+
+kafka.producer.AsyncProducerTest > testBatchSize PASSED
+
+kafka.producer.AsyncProducerTest > testSerializeEvents PASSED
+
+kafka.api.SaslSslEndToEndAuthorizationTest > testNoProduceAcl PASSED
+
+kafka.producer.AsyncProducerTest > testProducerQueueSize PASSED
+
+kafka.producer.AsyncProducerTest > testRandomPartitioner PASSED
+
+kafka.producer.AsyncProducerTest > testInvalidConfiguration PASSED
+
+kafka.producer.AsyncProducerTest > testInvalidPartition PASSED
+
+kafka.log.LogCleanerIntegrationTest > cleanerTest[3] PASSED
+
+kafka.log.LogTest > testParseTopicPartitionNameForMissingTopic PASSED
+
+kafka.log.LogTest > testIndexRebuild PASSED
+
+kafka.log.LogTest > testLogRolls PASSED
+
+kafka.log.LogTest > testMessageSizeCheck PASSED
+
+kafka.log.LogTest > testAsyncDelete PASSED
+
+kafka.log.LogTest > testReadOutOfRange PASSED
+
+kafka.log.LogTest > testReadAtLogGap PASSED
+
+kafka.log.LogTest > testTimeBasedLogRoll PASSED
+
+kafka.log.LogTest > testLoadEmptyLog PASSED
+
+kafka.log.LogTest > testMessageSetSizeCheck PASSED
+
+kafka.log.LogTest > testIndexResizingAtTruncation PASSED
+
+kafka.log.LogTest > testCompactedTopicConstraints PASSED
+
+kafka.log.LogTest > testThatGarbageCollectingSegmentsDoesntChangeOffset PASSED
+
+kafka.log.LogTest > testAppendAndReadWithSequentialOffsets PASSED
+
+kafka.log.LogTest > testParseTopicPartitionNameForNull PASSED
+
+kafka.log.LogTest > testAppendAndReadWithNonSequentialOffsets PASSED
+
+kafka.log.LogTest > testParseTopicPartitionNameForMissingSeparator PASSED
+
+kafka.log.LogTest > testCorruptIndexRebuild PASSED
+
+kafka.log.LogTest > testBogusIndexSegmentsAreRemoved PASSED
+
+kafka.log.LogTest > testCompressedMessages PASSED
+
+kafka.log.LogTest > testAppendMessageWithNullPayload PASSED
+
+kafka.producer.AsyncProducerTest > testNoBroker PASSED
+
+kafka.producer.AsyncProducerTest > testProduceAfterClosed PASSED
+
+kafka.producer.AsyncProducerTest > testJavaProducer PASSED
+
+kafka.producer.AsyncProducerTest > testIncompatibleEncoder PASSED
+
+kafka.security.auth.ZkAuthorizationTest > testIsZkSecurityEnabled PASSED
+
+kafka.security.auth.ZkAuthorizationTest > testZkUtils PASSED
+
+kafka.security.auth.ZkAuthorizationTest > testZkAntiMigration PASSED
+
+kafka.security.auth.ZkAuthorizationTest > testZkMigration PASSED
+
+kafka.security.auth.ZkAuthorizationTest > testChroot PASSED
+
+kafka.security.auth.ZkAuthorizationTest > testDelete PASSED
+
+kafka.security.auth.ZkAuthorizationTest > testDeleteRecursive PASSED
+
+kafka.log.LogTest > testCorruptLog PASSED
+
+kafka.log.LogTest > testLogRecoversToCorrectOffset PASSED
+
+kafka.log.LogTest > testReopenThenTruncate PASSED
+
+kafka.log.LogTest > testParseTopicPartitionNameForMissingPartition PASSED
+
+kafka.log.LogTest > testParseTopicPartitionNameForEmptyName PASSED
+
+kafka.log.LogTest > testOpenDeletesObsoleteFiles PASSED
+
+kafka.log.LogTest > testSizeBasedLogRoll PASSED
+
+kafka.log.LogTest > testTimeBasedLogRollJitter PASSED
+
+kafka.log.LogTest > testParseTopicPartitionName PASSED
+
+kafka.log.LogTest > testTruncateTo PASSED
+
+kafka.log.LogTest > testCleanShutdownFile PASSED
+
+kafka.message.MessageCompressionTest > testCompressSize PASSED
+
+kafka.message.MessageCompressionTest > testSimpleCompressDecompress PASSED
+
+kafka.network.SocketServerTest > testMaxConnectionsPerIp PASSED
+
+kafka.network.SocketServerTest > simpleRequest PASSED
+
+kafka.network.SocketServerTest > testSessionPrincipal PASSED
+
+kafka.network.SocketServerTest > testSocketsCloseOnShutdown PASSED
+
+kafka.network.SocketServerTest > testMaxConnectionsPerIPOverrides PASSED
+
+kafka.network.SocketServerTest > testSslSocketServer PASSED
+
+kafka.network.SocketServerTest > tooBigRequestIsRejected FAILED
+    java.net.SocketException: Broken pipe
+        at java.net.SocketOutputStream.socketWrite0(Native Method)
+        at java.net.SocketOutputStream.socketWrite(SocketOutputStream.java:109)
+        at java.net.SocketOutputStream.write(SocketOutputStream.java:132)
+        at java.io.DataOutputStream.writeShort(DataOutputStream.java:168)
+        at kafka.network.SocketServerTest.sendRequest(SocketServerTest.scala:62)
+        at kafka.network.SocketServerTest.tooBigRequestIsRejected(SocketServerTest.scala:132)
+
+kafka.security.auth.SimpleAclAuthorizerTest > testAllowAllAccess PASSED
+
+kafka.security.auth.SimpleAclAuthorizerTest > testNoAclFound PASSED
+
+kafka.security.auth.SimpleAclAuthorizerTest > testAclManagementAPIs PASSED
+
+kafka.security.auth.SimpleAclAuthorizerTest > testWildCardAcls PASSED
+
+kafka.security.auth.SimpleAclAuthorizerTest > testTopicAcl PASSED
+
+kafka.server.DynamicConfigChangeTest > testProcessNotification PASSED
+
+kafka.security.auth.SimpleAclAuthorizerTest > testSuperUserHasAccess PASSED
+
+kafka.security.auth.SimpleAclAuthorizerTest > testDenyTakesPrecedence PASSED
+
+kafka.security.auth.SimpleAclAuthorizerTest > testNoAclFoundOverride PASSED
+
+kafka.security.auth.SimpleAclAuthorizerTest > testLoadCache PASSED
+
+kafka.server.DelayedOperationTest > testRequestPurge PASSED
+
+kafka.server.DelayedOperationTest > testRequestExpiry PASSED
+
+kafka.server.DelayedOperationTest > testRequestSatisfaction PASSED
+
+kafka.server.KafkaConfigTest > testAdvertiseConfigured PASSED
+
+kafka.server.KafkaConfigTest > testLogRetentionTimeHoursProvided PASSED
+
+kafka.server.KafkaConfigTest > testLogRollTimeBothMsAndHoursProvided PASSED
+
+kafka.server.KafkaConfigTest > testLogRetentionValid PASSED
+
+kafka.server.KafkaConfigTest > testSpecificProperties PASSED
+
+kafka.server.KafkaConfigTest > testDefaultCompressionType PASSED
+
+kafka.server.KafkaConfigTest > testDuplicateListeners PASSED
+
+kafka.server.KafkaConfigTest > testLogRetentionUnlimited PASSED
+
+kafka.server.KafkaConfigTest > testLogRetentionTimeMsProvided PASSED
+
+kafka.server.KafkaConfigTest > testLogRollTimeNoConfigProvided PASSED
+
+kafka.server.KafkaConfigTest > testAdvertiseDefaults PASSED
+
+kafka.server.KafkaConfigTest > testBadListenerProtocol PASSED
+
+kafka.server.KafkaConfigTest > testListenerDefaults PASSED
+
+kafka.server.KafkaConfigTest > testLogRetentionTimeBothMinutesAndHoursProvided PASSED
+
+kafka.server.KafkaConfigTest > testUncleanElectionDisabled PASSED
+
+kafka.server.KafkaConfigTest > testLogRetentionTimeNoConfigProvided PASSED
+
+kafka.server.KafkaConfigTest > testFromPropsInvalid PASSED
+
+kafka.server.KafkaConfigTest > testInvalidCompressionType PASSED
+
+kafka.server.KafkaConfigTest > testAdvertiseHostNameDefault PASSED
+
+kafka.server.KafkaConfigTest > testLogRetentionTimeMinutesProvided PASSED
+
+kafka.server.KafkaConfigTest > testValidCompressionType PASSED
+
+kafka.server.KafkaConfigTest > testUncleanElectionInvalid PASSED
+
+kafka.server.KafkaConfigTest > testLogRetentionTimeBothMinutesAndMsProvided PASSED
+
+kafka.api.SaslSslEndToEndAuthorizationTest > testNoGroupAcl PASSED
+
+kafka.server.KafkaConfigTest > testLogRollTimeMsProvided PASSED
+
+kafka.server.KafkaConfigTest > testUncleanLeaderElectionDefault PASSED
+
+kafka.server.KafkaConfigTest > testUncleanElectionEnabled PASSED
+
+kafka.server.KafkaConfigTest > testAdvertisePortDefault PASSED
+
+kafka.server.KafkaConfigTest > testVersionConfiguration PASSED
+
+kafka.server.DynamicConfigChangeTest > testClientQuotaConfigChange PASSED
+
+kafka.api.test.ProducerCompressionTest > testCompression[0] PASSED
+
+kafka.server.DynamicConfigChangeTest > testConfigChangeOnNonExistingTopic PASSED
+
+kafka.server.OffsetCommitTest > testUpdateOffsets PASSED
+
+kafka.api.test.ProducerCompressionTest > testCompression[1] PASSED
+
+kafka.server.DynamicConfigChangeTest > testConfigChange PASSED
+
+kafka.server.OffsetCommitTest > testLargeMetadataPayload PASSED
+
+kafka.api.test.ProducerCompressionTest > testCompression[2] PASSED
+
+kafka.server.OffsetCommitTest > testCommitAndFetchOffsets PASSED
+
+kafka.server.LeaderElectionTest > testLeaderElectionWithStaleControllerEpoch PASSED
+
+kafka.api.test.ProducerCompressionTest > testCompression[3] PASSED
+
+kafka.common.ZkNodeChangeNotificationListenerTest > testProcessNotification PASSED
+
+kafka.consumer.TopicFilterTest > testWhitelists PASSED
+
+kafka.consumer.TopicFilterTest > testWildcardTopicCountGetTopicCountMapEscapeJson PASSED
+
+kafka.consumer.TopicFilterTest > testBlacklists PASSED
+
+kafka.coordinator.GroupMetadataTest > testDeadToAwaitingSyncIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testPreparingRebalanceToStableIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testCannotRebalanceWhenDead PASSED
+
+kafka.coordinator.GroupMetadataTest > testSelectProtocol PASSED
+
+kafka.coordinator.GroupMetadataTest > testCannotRebalanceWhenPreparingRebalance PASSED
+
+kafka.coordinator.GroupMetadataTest > testDeadToPreparingRebalanceIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testCanRebalanceWhenAwaitingSync PASSED
+
+kafka.coordinator.GroupMetadataTest > testAwaitingSyncToPreparingRebalanceTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testStableToAwaitingSyncIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testDeadToDeadIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testSelectProtocolRaisesIfNoMembers PASSED
+
+kafka.coordinator.GroupMetadataTest > testStableToPreparingRebalanceTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testPreparingRebalanceToDeadTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testStableToStableIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testAwaitingSyncToStableTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testDeadToStableIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testAwaitingSyncToAwaitingSyncIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testSupportsProtocols PASSED
+
+kafka.coordinator.GroupMetadataTest > testCanRebalanceWhenStable PASSED
+
+kafka.coordinator.GroupMetadataTest > testPreparingRebalanceToPreparingRebalanceIllegalTransition PASSED
+
+kafka.coordinator.GroupMetadataTest > testSelectProtocolChoosesCompatibleProtocol PASSED
+
+kafka.server.OffsetCommitTest > testOffsetExpiration PASSED
+
+kafka.integration.MinIsrConfigTest > testDefaultKafkaConfig PASSED
+
+kafka.server.LeaderElectionTest > testLeaderElectionAndEpoch PASSED
+
+kafka.server.OffsetCommitTest > testNonExistingTopicOffsetCommit PASSED
+
+kafka.server.PlaintextReplicaFetchTest > testReplicaFetcherThread PASSED
+
+kafka.server.SaslSslReplicaFetchTest > testReplicaFetcherThread PASSED
+
+kafka.server.SimpleFetchTest > testReadFromLog PASSED
+
+kafka.utils.ByteBoundedBlockingQueueTest > testByteBoundedBlockingQueue PASSED
+
+kafka.utils.ReplicationUtilsTest > testUpdateLeaderAndIsr PASSED
+
+kafka.utils.ReplicationUtilsTest > testGetLeaderIsrAndEpochForPartition PASSED
+
+kafka.utils.timer.TimerTest > testAlreadyExpiredTask PASSED
+
+kafka.server.ServerGenerateBrokerIdTest > testAutoGenerateBrokerId PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testIsrAfterBrokerShutDownAndJoinsBack PASSED
+
+kafka.utils.timer.TimerTest > testTaskExpiration PASSED
+
+unit.kafka.security.auth.AclTest > testAclJsonConversion PASSED
+
+unit.kafka.tools.ConsoleConsumerTest > shouldLimitReadsToMaxMessageLimit PASSED
+
+unit.kafka.tools.ConsoleConsumerTest > shouldParseValidNewConsumerValidConfig PASSED
+
+unit.kafka.tools.ConsoleConsumerTest > shouldParseConfigsFromFile PASSED
+
+unit.kafka.tools.ConsoleConsumerTest > shouldParseValidOldConsumerValidConfig PASSED
+
+kafka.server.ServerGenerateBrokerIdTest > testMultipleLogDirsMetaProps PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testAutoCreateTopicWithCollision PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testAliveBrokerListWithNoTopics PASSED
+
+kafka.server.ServerGenerateBrokerIdTest > testUserConfigAndGeneratedBrokerId PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testAutoCreateTopic PASSED
+
+kafka.server.ServerGenerateBrokerIdTest > testConsistentBrokerIdFromUserConfigAndMetaProps PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testGetAllTopicMetadata PASSED
+
+kafka.server.SslReplicaFetchTest > testReplicaFetcherThread PASSED
+
+kafka.utils.CommandLineUtilsTest > testParseEmptyArg PASSED
+
+kafka.utils.CommandLineUtilsTest > testParseSingleArg PASSED
+
+kafka.utils.CommandLineUtilsTest > testParseArgs PASSED
+
+kafka.utils.SchedulerTest > testMockSchedulerNonPeriodicTask PASSED
+
+kafka.utils.SchedulerTest > testMockSchedulerPeriodicTask PASSED
+
+kafka.utils.SchedulerTest > testNonPeriodicTask PASSED
+
+kafka.utils.SchedulerTest > testRestart PASSED
+
+kafka.utils.SchedulerTest > testReentrantTaskInMockScheduler PASSED
+
+kafka.utils.SchedulerTest > testPeriodicTask PASSED
+
+kafka.zk.ZKEphemeralTest > testOverlappingSessions[0] PASSED
+
+kafka.zk.ZKEphemeralTest > testEphemeralNodeCleanup[0] PASSED
+
+kafka.zk.ZKEphemeralTest > testZkWatchedEphemeral[0] PASSED
+
+kafka.zk.ZKEphemeralTest > testSameSession[0] PASSED
+
+kafka.zk.ZKEphemeralTest > testOverlappingSessions[1] PASSED
+
+kafka.zk.ZKEphemeralTest > testEphemeralNodeCleanup[1] PASSED
+
+kafka.zk.ZKEphemeralTest > testZkWatchedEphemeral[1] PASSED
+
+kafka.zk.ZKEphemeralTest > testSameSession[1] PASSED
+
+unit.kafka.security.auth.OperationTest > testFromString PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testAliveBrokersListWithNoTopicsAfterNewBrokerStartup PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testBasicTopicMetadata PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testTopicMetadataRequest PASSED
+
+kafka.integration.SaslPlaintextTopicMetadataTest > testAliveBrokersListWithNoTopicsAfterABrokerShutdown PASSED
+
+kafka.javaapi.consumer.ZookeeperConsumerConnectorTest > testBasic PASSED
+
+kafka.log.FileMessageSetTest > testTruncate PASSED
+
+kafka.log.FileMessageSetTest > testIterationOverPartialAndTruncation PASSED
+
+kafka.log.FileMessageSetTest > testRead PASSED
+
+kafka.log.FileMessageSetTest > testFileSize PASSED
+
+kafka.log.FileMessageSetTest > testIteratorWithLimits PASSED
+
+kafka.log.FileMessageSetTest > testPreallocateTrue PASSED
+
+kafka.log.FileMessageSetTest > testIteratorIsConsistent PASSED
+
+kafka.log.FileMessageSetTest > testIterationDoesntChangePosition PASSED
+
+kafka.log.FileMessageSetTest > testWrittenEqualsRead PASSED
+
+kafka.log.FileMessageSetTest > testWriteTo PASSED
+
+kafka.log.FileMessageSetTest > testPreallocateFalse PASSED
+
+kafka.log.FileMessageSetTest > testPreallocateClearShutdown PASSED
+
+kafka.log.FileMessageSetTest > testSearch PASSED
+
+kafka.log.FileMessageSetTest > testSizeInBytes PASSED
+
+kafka.log.LogSegmentTest > testRecoveryWithCorruptMessage PASSED
+
+kafka.log.LogSegmentTest > testRecoveryFixesCorruptIndex PASSED
+
+kafka.log.LogSegmentTest > testReadFromGap PASSED
+
+kafka.log.LogSegmentTest > testTruncate PASSED
+
+kafka.log.LogSegmentTest > testReadBeforeFirstOffset PASSED
+
+kafka.log.LogSegmentTest > testCreateWithInitFileSizeAppendMessage PASSED
+
+kafka.log.LogSegmentTest > testChangeFileSuffixes PASSED
+
+kafka.log.LogSegmentTest > testMaxOffset PASSED
+
+kafka.log.LogSegmentTest > testNextOffsetCalculation PASSED
+
+kafka.log.LogSegmentTest > testReadOnEmptySegment PASSED
+
+kafka.log.LogSegmentTest > testReadAfterLast PASSED
+
+kafka.log.LogSegmentTest > testCreateWithInitFileSizeClearShutdown PASSED
+
+kafka.log.LogSegmentTest > testTruncateFull PASSED
+
+kafka.message.ByteBufferMessageSetTest > testOffsetAssignment PASSED
+
+kafka.message.ByteBufferMessageSetTest > testValidBytes PASSED
+
+kafka.message.ByteBufferMessageSetTest > testValidBytesWithCompression PASSED
+
+kafka.message.ByteBufferMessageSetTest > testIteratorIsConsistent PASSED
+
+kafka.message.ByteBufferMessageSetTest > testWrittenEqualsRead PASSED
+
+kafka.message.ByteBufferMessageSetTest > testWriteTo PASSED
+
+kafka.message.ByteBufferMessageSetTest > testEquals PASSED
+
+kafka.message.ByteBufferMessageSetTest > testSizeInBytes PASSED
+
+kafka.message.ByteBufferMessageSetTest > testIterator PASSED
+
+kafka.metrics.KafkaTimerTest > testKafkaTimer PASSED
+
+kafka.producer.SyncProducerTest > testReachableServer PASSED
+
+kafka.producer.SyncProducerTest > testMessageSizeTooLarge PASSED
+
+kafka.producer.SyncProducerTest > testNotEnoughReplicas PASSED
+
+kafka.producer.SyncProducerTest > testMessageSizeTooLargeWithAckZero PASSED
+
+kafka.producer.SyncProducerTest > testProducerCanTimeout PASSED
+
+kafka.producer.SyncProducerTest > testProduceRequestWithNoResponse PASSED
+
+kafka.producer.SyncProducerTest > testEmptyProduceRequest PASSED
+
+kafka.producer.SyncProducerTest > testProduceCorrectlyReceivesResponse PASSED
+
+kafka.server.ClientQuotaManagerTest > testQuotaViolation PASSED
+
+kafka.server.ClientQuotaManagerTest > testQuotaParsing PASSED
+
+kafka.server.IsrExpirationTest > testIsrExpirationForSlowFollowers PASSED
+
+kafka.server.IsrExpirationTest > testIsrExpirationForStuckFollowers PASSED
+
+kafka.server.IsrExpirationTest > testIsrExpirationIfNoFetchRequestMade PASSED
+
+kafka.server.LogRecoveryTest > testHWCheckpointNoFailuresMultipleLogSegments PASSED
+
+kafka.server.LogRecoveryTest > testHWCheckpointWithFailuresMultipleLogSegments PASSED
+
+kafka.server.LogRecoveryTest > testHWCheckpointNoFailuresSingleLogSegment PASSED
+
+kafka.server.LogRecoveryTest > testHWCheckpointWithFailuresSingleLogSegment PASSED
+
+kafka.server.SaslPlaintextReplicaFetchTest > testReplicaFetcherThread PASSED
+
+kafka.server.ServerStartupTest > testBrokerCreatesZKChroot PASSED
+
+kafka.server.ServerStartupTest > testConflictBrokerRegistration PASSED
+
+kafka.tools.ConsoleProducerTest > testParseKeyProp PASSED
+
+kafka.tools.ConsoleProducerTest > testValidConfigsOldProducer PASSED
+
+kafka.tools.ConsoleProducerTest > testInvalidConfigs PASSED
+
+kafka.tools.ConsoleProducerTest > testValidConfigsNewProducer PASSED
+
+kafka.utils.JsonTest > testJsonEncoding PASSED
+
+kafka.utils.timer.TimerTaskListTest > testAll PASSED
+
+unit.kafka.admin.AclCommandTest > testAclCli PASSED
+
+unit.kafka.admin.AclCommandTest > testProducerConsumerCli PASSED
+
+unit.kafka.security.auth.ResourceTypeTest > testFromString PASSED
+:core:test FAILED
+
+BUILD FAILED
+
+Total time: 8 mins 57.755 secs

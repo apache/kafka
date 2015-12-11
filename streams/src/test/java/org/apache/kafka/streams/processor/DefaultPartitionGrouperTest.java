@@ -21,6 +21,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import org.junit.Test;
 
@@ -43,42 +44,39 @@ public class DefaultPartitionGrouperTest {
             new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster metadata = new Cluster(Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet());
+    private Cluster metadata = new Cluster(Collections.singletonList(Node.noNode()), infos, Collections.<String>emptySet());
 
     @Test
     public void testGrouping() {
         PartitionGrouper grouper = new DefaultPartitionGrouper();
         int topicGroupId;
-        Map<TaskId, Set<TopicPartition>> expected;
+        Map<TaskId, Set<TopicPartition>> expectedPartitionsForTask;
         Map<Integer, Set<String>> topicGroups;
 
         topicGroups = new HashMap<>();
         topicGroups.put(0, mkSet("topic1"));
         topicGroups.put(1, mkSet("topic2"));
-        grouper.topicGroups(topicGroups);
 
-        expected = new HashMap<>();
+        expectedPartitionsForTask = new HashMap<>();
         topicGroupId = 0;
-        expected.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic1", 0)));
-        expected.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic1", 1)));
-        expected.put(new TaskId(topicGroupId, 2), mkSet(new TopicPartition("topic1", 2)));
+        expectedPartitionsForTask.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic1", 0)));
+        expectedPartitionsForTask.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic1", 1)));
+        expectedPartitionsForTask.put(new TaskId(topicGroupId, 2), mkSet(new TopicPartition("topic1", 2)));
         topicGroupId++;
-        expected.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic2", 0)));
-        expected.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic2", 1)));
+        expectedPartitionsForTask.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic2", 0)));
+        expectedPartitionsForTask.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic2", 1)));
 
-        assertEquals(expected, grouper.partitionGroups(metadata));
+        assertEquals(expectedPartitionsForTask, grouper.partitionGroups(topicGroups, metadata));
 
         topicGroups = new HashMap<>();
         topicGroups.put(0, mkSet("topic1", "topic2"));
-        grouper.topicGroups(topicGroups);
 
-        expected = new HashMap<>();
+        expectedPartitionsForTask = new HashMap<>();
         topicGroupId = 0;
-        expected.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
-        expected.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
-        expected.put(new TaskId(topicGroupId, 2), mkSet(new TopicPartition("topic1", 2)));
+        expectedPartitionsForTask.put(new TaskId(topicGroupId, 0), mkSet(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
+        expectedPartitionsForTask.put(new TaskId(topicGroupId, 1), mkSet(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
+        expectedPartitionsForTask.put(new TaskId(topicGroupId, 2), mkSet(new TopicPartition("topic1", 2)));
 
-        assertEquals(expected, grouper.partitionGroups(metadata));
+        assertEquals(expectedPartitionsForTask, grouper.partitionGroups(topicGroups, metadata));
     }
-
 }

@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
@@ -46,7 +47,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -68,14 +68,12 @@ public class WorkerCoordinatorTest {
     private int sessionTimeoutMs = 10;
     private int heartbeatIntervalMs = 2;
     private long retryBackoffMs = 100;
-    private long requestTimeoutMs = 5000;
     private MockTime time;
     private MockClient client;
     private Cluster cluster = TestUtils.singletonCluster("topic", 1);
     private Node node = cluster.nodes().get(0);
     private Metadata metadata;
     private Metrics metrics;
-    private Map<String, String> metricTags = new LinkedHashMap<>();
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
     @Mock private KafkaConfigStorage configStorage;
@@ -103,9 +101,7 @@ public class WorkerCoordinatorTest {
                 heartbeatIntervalMs,
                 metrics,
                 "consumer" + groupId,
-                metricTags,
                 time,
-                requestTimeoutMs,
                 retryBackoffMs,
                 LEADER_URL,
                 configStorage,
@@ -149,9 +145,12 @@ public class WorkerCoordinatorTest {
 
         PowerMock.replayAll();
 
-        LinkedHashMap<String, ByteBuffer> serialized = coordinator.metadata();
+        List<ProtocolMetadata> serialized = coordinator.metadata();
         assertEquals(1, serialized.size());
-        ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(serialized.get(WorkerCoordinator.DEFAULT_SUBPROTOCOL));
+
+        ProtocolMetadata defaultMetadata = serialized.get(0);
+        assertEquals(WorkerCoordinator.DEFAULT_SUBPROTOCOL, defaultMetadata.name());
+        ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(defaultMetadata.metadata());
         assertEquals(1, state.offset());
 
         PowerMock.verifyAll();

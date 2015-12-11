@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -69,10 +70,13 @@ public class StreamThread extends Thread {
     private static final AtomicInteger STREAMING_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
-    public final UUID clientUUID;
+    public final String jobId;
+    public final String clientId;
+    public final UUID processId;
 
     protected final StreamingConfig config;
     protected final TopologyBuilder builder;
+    protected final Set<String> sourceTopics;
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
@@ -81,7 +85,6 @@ public class StreamThread extends Thread {
     private final Map<TaskId, StreamTask> activeTasks;
     private final Map<TaskId, StandbyTask> standbyTasks;
     private final Set<TaskId> prevTasks;
-    private final String clientId;
     private final Time time;
     private final File stateDir;
     private final long pollTimeMs;
@@ -90,9 +93,14 @@ public class StreamThread extends Thread {
     private final long totalRecordsToProcess;
     private final StreamingMetricsImpl sensors;
 
+    private KafkaStreamingPartitionAssignor partitionAssignor = null;
+
     private long lastClean;
     private long lastCommit;
     private long recordsProcessed;
+
+    private final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
+    private boolean processStandbyRecords = false;
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
@@ -113,11 +121,12 @@ public class StreamThread extends Thread {
 
     public StreamThread(TopologyBuilder builder,
                         StreamingConfig config,
+                        String jobId,
                         String clientId,
-                        UUID clientUUID,
+                        UUID processId,
                         Metrics metrics,
                         Time time) throws Exception {
-        this(builder, config, null , null, null, clientId, clientUUID, metrics, time);
+        this(builder, config, null , null, null, jobId, clientId, processId, metrics, time);
     }
 
     StreamThread(TopologyBuilder builder,
@@ -125,18 +134,20 @@ public class StreamThread extends Thread {
                  Producer<byte[], byte[]> producer,
                  Consumer<byte[], byte[]> consumer,
                  Consumer<byte[], byte[]> restoreConsumer,
+                 String jobId,
                  String clientId,
-                 UUID clientUUID,
+                 UUID processId,
                  Metrics metrics,
                  Time time) throws Exception {
         super("StreamThread-" + STREAMING_THREAD_ID_SEQUENCE.getAndIncrement());
 
+        this.jobId = jobId;
         this.config = config;
         this.builder = builder;
+        this.sourceTopics = builder.sourceTopics();
         this.clientId = clientId;
-        this.clientUUID = clientUUID;
+        this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamingConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
-        this.partitionGrouper.topicGroups(builder.topicGroups());
 
         // set the producer and consumer clients
         this.producer = (producer != null) ? producer : createProducer();
@@ -147,6 +158,9 @@ public class StreamThread extends Thread {
         this.activeTasks = new HashMap<>();
         this.standbyTasks = new HashMap<>();
         this.prevTasks = new HashSet<>();
+
+        // standby ktables
+        this.standbyRecords = new HashMap<>();
 
         // read in task specific config values
         this.stateDir = new File(this.config.getString(StreamingConfig.STATE_DIR_CONFIG));
@@ -166,23 +180,27 @@ public class StreamThread extends Thread {
         this.running = new AtomicBoolean(true);
     }
 
+    public void partitionAssignor(KafkaStreamingPartitionAssignor partitionAssignor) {
+        this.partitionAssignor = partitionAssignor;
+    }
+
     private Producer<byte[], byte[]> createProducer() {
         log.info("Creating producer client for stream thread [" + this.getName() + "]");
-        return new KafkaProducer<>(config.getProducerConfigs(),
+        return new KafkaProducer<>(config.getProducerConfigs(this.clientId),
                 new ByteArraySerializer(),
                 new ByteArraySerializer());
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
         log.info("Creating consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getConsumerConfigs(this),
+        return new KafkaConsumer<>(config.getConsumerConfigs(this, this.jobId, this.clientId),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
 
     private Consumer<byte[], byte[]> createRestoreConsumer() {
         log.info("Creating restore consumer client for stream thread [" + this.getName() + "]");
-        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(),
+        return new KafkaConsumer<>(config.getRestoreConsumerConfigs(this.clientId),
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
     }
@@ -256,7 +274,7 @@ public class StreamThread extends Thread {
 
             ensureCopartitioning(builder.copartitionGroups());
 
-            consumer.subscribe(new ArrayList<>(builder.sourceTopics()), rebalanceListener);
+            consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
 
             while (stillRunning()) {
                 // try to fetch some records if necessary
@@ -293,15 +311,12 @@ public class StreamThread extends Thread {
                     }
 
                     maybePunctuate();
-                    maybeCommit();
                 } else {
                     // even when no task is assigned, we must poll to get a task.
                     requiresPoll = true;
                 }
-
-                if (!standbyTasks.isEmpty()) {
-                    updateStandbyTasks();
-                }
+                maybeCommit();
+                maybeUpdateStandbyTasks();
 
                 maybeClean();
             }
@@ -310,13 +325,38 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void updateStandbyTasks() {
-        ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
+    private void maybeUpdateStandbyTasks() {
+        if (!standbyTasks.isEmpty()) {
+            if (processStandbyRecords) {
+                if (!standbyRecords.isEmpty()) {
+                    for (StandbyTask task : standbyTasks.values()) {
+                        for (TopicPartition partition : task.changeLogPartitions()) {
+                            List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.remove(partition);
+                            if (remaining != null) {
+                                remaining = task.update(partition, remaining);
+                                if (remaining != null) {
+                                    standbyRecords.put(partition, remaining);
+                                } else {
+                                    restoreConsumer.resume(partition);
+                                }
+                            }
+                        }
+                    }
+                }
+                processStandbyRecords = false;
+            }
 
-        if (!records.isEmpty()) {
-            for (StandbyTask task : standbyTasks.values()) {
-                for (TopicPartition partition : task.changeLogPartitions()) {
-                    task.update(partition, records.records(partition));
+            ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
+
+            if (!records.isEmpty()) {
+                for (StandbyTask task : standbyTasks.values()) {
+                    for (TopicPartition partition : task.changeLogPartitions()) {
+                        List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
+                        if (remaining != null) {
+                            restoreConsumer.pause(partition);
+                            standbyRecords.put(partition, remaining);
+                        }
+                    }
                 }
             }
         }
@@ -359,6 +399,8 @@ public class StreamThread extends Thread {
 
             commitAll();
             lastCommit = now;
+
+            processStandbyRecords = true;
         } else {
             for (StreamTask task : activeTasks.values()) {
                 try {
@@ -478,19 +520,22 @@ public class StreamThread extends Thread {
         return tasks;
     }
 
-    protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
+    protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        return new StreamTask(id, consumer, producer, restoreConsumer, partitionsForTask, topology, config, sensors);
+        return new StreamTask(id, jobId, partitions, topology, consumer, producer, restoreConsumer, config, sensors);
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
+        if (partitionAssignor == null)
+            throw new KafkaException("Partition assignor has not been initialized while adding stream tasks: this should not happen.");
+
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
         for (TopicPartition partition : assignment) {
-            Set<TaskId> taskIds = partitionGrouper.taskIds(partition);
+            Set<TaskId> taskIds = partitionAssignor.tasksForPartition(partition);
             for (TaskId taskId : taskIds) {
                 Set<TopicPartition> partitions = partitionsForTask.get(taskId);
                 if (partitions == null) {
@@ -501,7 +546,7 @@ public class StreamThread extends Thread {
             }
         }
 
-        // create the tasks
+        // create the active tasks
         for (TaskId taskId : partitionsForTask.keySet()) {
             try {
                 activeTasks.put(taskId, createStreamTask(taskId, partitionsForTask.get(taskId)));
@@ -510,8 +555,6 @@ public class StreamThread extends Thread {
                 throw e;
             }
         }
-
-        lastClean = time.milliseconds();
     }
 
     private void removeStreamTasks() {
@@ -537,25 +580,33 @@ public class StreamThread extends Thread {
         sensors.taskDestructionSensor.record();
     }
 
-    protected StandbyTask createStandbyTask(TaskId id) {
+    protected StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStoreSuppliers().isEmpty()) {
-            return new StandbyTask(id, restoreConsumer, topology, config, sensors);
+            return new StandbyTask(id, jobId, partitions, topology, consumer, restoreConsumer, config, sensors);
         } else {
             return null;
         }
     }
 
     private void addStandbyTasks() {
+        if (partitionAssignor == null)
+            throw new KafkaException("Partition assignor has not been initialized while adding standby tasks: this should not happen.");
+
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
-        for (TaskId taskId : partitionGrouper.standbyTasks()) {
-            StandbyTask task = createStandbyTask(taskId);
+        // create the standby tasks
+        for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
+            TaskId taskId = entry.getKey();
+            Set<TopicPartition> partitions = entry.getValue();
+            StandbyTask task = createStandbyTask(taskId, partitions);
             if (task != null) {
                 standbyTasks.put(taskId, task);
+                // collect checked pointed offsets to position the restore consumer
+                // this include all partitions from which we restore states
                 checkpointedOffsets.putAll(task.checkpointedOffsets());
             }
         }
@@ -629,30 +680,30 @@ public class StreamThread extends Thread {
             this.metricTags.put("client-id", clientId + "-" + getName());
 
             this.commitTimeSensor = metrics.sensor("commit-time");
-            this.commitTimeSensor.add(new MetricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
-            this.commitTimeSensor.add(new MetricName("commit-time-max", metricGrpName, "The maximum commit time in ms", metricTags), new Max());
-            this.commitTimeSensor.add(new MetricName("commit-calls-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
+            this.commitTimeSensor.add(metrics.metricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
+            this.commitTimeSensor.add(metrics.metricName("commit-time-max", metricGrpName, "The maximum commit time in ms", metricTags), new Max());
+            this.commitTimeSensor.add(metrics.metricName("commit-calls-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
 
             this.pollTimeSensor = metrics.sensor("poll-time");
-            this.pollTimeSensor.add(new MetricName("poll-time-avg", metricGrpName, "The average poll time in ms", metricTags), new Avg());
-            this.pollTimeSensor.add(new MetricName("poll-time-max", metricGrpName, "The maximum poll time in ms", metricTags), new Max());
-            this.pollTimeSensor.add(new MetricName("poll-calls-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
+            this.pollTimeSensor.add(metrics.metricName("poll-time-avg", metricGrpName, "The average poll time in ms", metricTags), new Avg());
+            this.pollTimeSensor.add(metrics.metricName("poll-time-max", metricGrpName, "The maximum poll time in ms", metricTags), new Max());
+            this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
 
             this.processTimeSensor = metrics.sensor("process-time");
-            this.processTimeSensor.add(new MetricName("process-time-avg-ms", metricGrpName, "The average process time in ms", metricTags), new Avg());
-            this.processTimeSensor.add(new MetricName("process-time-max-ms", metricGrpName, "The maximum process time in ms", metricTags), new Max());
-            this.processTimeSensor.add(new MetricName("process-calls-rate", metricGrpName, "The average per-second number of process calls", metricTags), new Rate(new Count()));
+            this.processTimeSensor.add(metrics.metricName("process-time-avg-ms", metricGrpName, "The average process time in ms", metricTags), new Avg());
+            this.processTimeSensor.add(metrics.metricName("process-time-max-ms", metricGrpName, "The maximum process time in ms", metricTags), new Max());
+            this.processTimeSensor.add(metrics.metricName("process-calls-rate", metricGrpName, "The average per-second number of process calls", metricTags), new Rate(new Count()));
 
             this.punctuateTimeSensor = metrics.sensor("punctuate-time");
-            this.punctuateTimeSensor.add(new MetricName("punctuate-time-avg", metricGrpName, "The average punctuate time in ms", metricTags), new Avg());
-            this.punctuateTimeSensor.add(new MetricName("punctuate-time-max", metricGrpName, "The maximum punctuate time in ms", metricTags), new Max());
-            this.punctuateTimeSensor.add(new MetricName("punctuate-calls-rate", metricGrpName, "The average per-second number of punctuate calls", metricTags), new Rate(new Count()));
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-avg", metricGrpName, "The average punctuate time in ms", metricTags), new Avg());
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-max", metricGrpName, "The maximum punctuate time in ms", metricTags), new Max());
+            this.punctuateTimeSensor.add(metrics.metricName("punctuate-calls-rate", metricGrpName, "The average per-second number of punctuate calls", metricTags), new Rate(new Count()));
 
             this.taskCreationSensor = metrics.sensor("task-creation");
-            this.taskCreationSensor.add(new MetricName("task-creation-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
+            this.taskCreationSensor.add(metrics.metricName("task-creation-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
 
             this.taskDestructionSensor = metrics.sensor("task-destruction");
-            this.taskDestructionSensor.add(new MetricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
+            this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
         }
 
         @Override
@@ -670,23 +721,25 @@ public class StreamThread extends Thread {
             for (int i = 0; i < tags.length; i += 2)
                 tagMap.put(tags[i], tags[i + 1]);
 
+            String metricGroupName = "streaming-" + scopeName + "-metrics";
+
             // first add the global operation metrics if not yet, with the global tags only
-            Sensor parent = metrics.sensor(operationName);
-            addLatencyMetrics(this.metricGrpName, parent, "all", operationName, this.metricTags);
+            Sensor parent = metrics.sensor(scopeName + "-" + operationName);
+            addLatencyMetrics(metricGroupName, parent, "all", operationName, this.metricTags);
 
             // add the store operation metrics with additional tags
-            Sensor sensor = metrics.sensor(entityName + "-" + operationName, parent);
-            addLatencyMetrics("streaming-" + scopeName + "-metrics", sensor, entityName, operationName, tagMap);
+            Sensor sensor = metrics.sensor(scopeName + "-" + entityName + "-" + operationName, parent);
+            addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
 
             return sensor;
         }
 
         private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-            maybeAddMetric(sensor, new MetricName(opName + "-avg-latency-ms", metricGrpName,
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency-ms", metricGrpName,
                 "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
-            maybeAddMetric(sensor, new MetricName(opName + "-max-latency-ms", metricGrpName,
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency-ms", metricGrpName,
                 "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
-            maybeAddMetric(sensor, new MetricName(opName + "-qps", metricGrpName,
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", metricGrpName,
                 "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
         }
 

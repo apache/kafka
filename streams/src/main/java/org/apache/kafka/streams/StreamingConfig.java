@@ -42,6 +42,10 @@ public class StreamingConfig extends AbstractConfig {
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
 
+    /** <code>zookeeper.connect<code/> */
+    public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
+    private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management.";
+
     /** <code>commit.interval.ms</code> */
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor.";
@@ -83,8 +87,9 @@ public class StreamingConfig extends AbstractConfig {
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>PartitionGrouper</code> interface.";
 
-    /** <code>client.id</code> */
-    public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
+    /** <code>job.id</code> */
+    public static final String JOB_ID_CONFIG = "job.id";
+    public static final String JOB_ID_DOC = "An id string to identify for the stream job. It is used as 1) the default client-id prefix, 2) the group-id for membership management, 3) the changelog topic prefix.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -107,19 +112,30 @@ public class StreamingConfig extends AbstractConfig {
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
-    /**
-     * <code>bootstrap.servers</code>
-     */
+    /** <code>bootstrap.servers</code> */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+
+    /** <code>client.id</code> */
+    public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
     private static final String SYSTEM_TEMP_DIRECTORY = System.getProperty("java.io.tmpdir");
 
     static {
-        CONFIG = new ConfigDef().define(CLIENT_ID_CONFIG,
+        CONFIG = new ConfigDef().define(JOB_ID_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.MEDIUM,
+                                        StreamingConfig.JOB_ID_DOC)
+                                .define(CLIENT_ID_CONFIG,
                                         Type.STRING,
                                         "",
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(ZOOKEEPER_CONNECT_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.HIGH,
+                                        StreamingConfig.ZOOKEEPER_CONNECT_DOC)
                                 .define(STATE_DIR_CONFIG,
                                         Type.STRING,
                                         SYSTEM_TEMP_DIRECTORY,
@@ -221,19 +237,26 @@ public class StreamingConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    public Map<String, Object> getConsumerConfigs(StreamThread streamThread) {
-        Map<String, Object> props = getRestoreConsumerConfigs();
+    public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) {
+        Map<String, Object> props = getBaseConsumerConfigs();
+
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
         props.put(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG));
-        props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, KafkaStreamingPartitionAssignor.class.getName());
+
+        props.put(StreamingConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
+
         return props;
     }
 
-    public Map<String, Object> getRestoreConsumerConfigs() {
+    public Map<String, Object> getRestoreConsumerConfigs(String clientId) {
         Map<String, Object> props = getBaseConsumerConfigs();
 
-        // no group id for a restore consumer
+        // no need to set group id for a restore consumer
         props.remove(ConsumerConfig.GROUP_ID_CONFIG);
+
+        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-restore-consumer");
 
         return props;
     }
@@ -248,11 +271,12 @@ public class StreamingConfig extends AbstractConfig {
         props.remove(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG);
         props.remove(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG);
         props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+        props.remove(StreamingConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
         return props;
     }
 
-    public Map<String, Object> getProducerConfigs() {
+    public Map<String, Object> getProducerConfigs(String clientId) {
         Map<String, Object> props = this.originals();
 
         // set producer default property values
@@ -262,6 +286,8 @@ public class StreamingConfig extends AbstractConfig {
         props.remove(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG);
         props.remove(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
         props.remove(StreamingConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
+
+        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
     }

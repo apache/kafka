@@ -28,31 +28,38 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask {
     protected final TaskId id;
     protected final ProcessorTopology topology;
+    protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
     protected ProcessorContext processorContext;
 
     protected AbstractTask(TaskId id,
-                           Consumer<byte[], byte[]> restoreConsumer,
+                           String jobId,
+                           Collection<TopicPartition> partitions,
                            ProcessorTopology topology,
+                           Consumer<byte[], byte[]> consumer,
+                           Consumer<byte[], byte[]> restoreConsumer,
                            StreamingConfig config,
-                           Set<TopicPartition> partitions) {
+                           boolean isStandby) {
         this.id = id;
+        this.partitions = new HashSet<>(partitions);
         this.topology = topology;
-        this.partitions = partitions;
+        this.consumer = consumer;
 
         // create the processor state manager
         try {
             File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), id.toString());
             // if partitions is null, this is a standby task
-            this.stateMgr = new ProcessorStateManager(id.partition, stateFile, restoreConsumer, partitions == null);
+            this.stateMgr = new ProcessorStateManager(jobId, id.partition, partitions, stateFile, restoreConsumer, isStandby);
         } catch (IOException e) {
             throw new KafkaException("Error while creating the state manager", e);
         }

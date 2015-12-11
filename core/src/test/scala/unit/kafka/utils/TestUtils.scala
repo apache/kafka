@@ -29,13 +29,11 @@ import charset.Charset
 
 import kafka.security.auth.{Resource, Authorizer, Acl}
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.ssl.SslFactory
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.TestSslUtils
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import kafka.server._
 import kafka.producer._
 import kafka.message._
@@ -217,7 +215,7 @@ object TestUtils extends Logging {
     props.put("controlled.shutdown.retry.backoff.ms", "100")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
-      props.putAll(sslConfigs(Mode.SERVER, true, trustStoreFile, s"server$nodeId"))
+      props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -444,7 +442,7 @@ object TestUtils extends Logging {
                               certAlias: String): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
-      props.putAll(sslConfigs(mode, false, trustStoreFile, certAlias))
+      props.putAll(sslConfigs(mode, true, trustStoreFile, certAlias))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
@@ -473,7 +471,7 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, metadataFetchTimeout.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
-
+        
     /* Only use these if not already set */
     val defaultProps = Map(
       ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> "100",
@@ -486,7 +484,14 @@ object TestUtils extends Logging {
       if (!producerProps.containsKey(key)) producerProps.put(key, value)
     }
 
-    producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile))
+    /*
+     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determine whether
+     * securityConfigs has been invoked already. For example, we need to
+     * invoke it before this call in IntegrationTestHarness, otherwise the
+     * SSL client auth fails.
+     */
+    if(!producerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
+      producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile))
 
     new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
   }
@@ -503,29 +508,42 @@ object TestUtils extends Logging {
    * Create a new consumer with a few pre-configured properties.
    */
   def createNewConsumer(brokerList: String,
-                        groupId: String,
+                        groupId: String = "group",
                         autoOffsetReset: String = "earliest",
                         partitionFetchSize: Long = 4096L,
                         partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
                         sessionTimeout: Int = 30000,
                         securityProtocol: SecurityProtocol,
-                        trustStoreFile: Option[File] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
+                        trustStoreFile: Option[File] = None,
+                        props: Option[Properties] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
 
-    val consumerProps= new Properties()
+    val consumerProps = props.getOrElse(new Properties())
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
     consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, partitionFetchSize.toString)
 
-    consumerProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
-    consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
-    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, partitionAssignmentStrategy)
-    consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeout.toString)
+    val defaultProps = Map(
+      ConsumerConfig.RETRY_BACKOFF_MS_CONFIG -> "100",
+      ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG -> "200",
+      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
+      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
+      ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> partitionAssignmentStrategy,
+      ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG -> sessionTimeout.toString,
+      ConsumerConfig.GROUP_ID_CONFIG -> groupId)
 
-    consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile))
+    defaultProps.foreach { case (key, value) =>
+      if (!consumerProps.containsKey(key)) consumerProps.put(key, value)
+    }
+
+    /*
+     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determine whether
+     * securityConfigs has been invoked already. For example, we need to
+     * invoke it before this call in IntegrationTestHarness, otherwise the
+     * SSL client auth fails.
+     */
+    if(!consumerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
+      consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile))
 
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
@@ -990,12 +1008,7 @@ object TestUtils extends Logging {
     }
 
 
-    val sslConfigs = {
-      if (mode == Mode.SERVER)
-        TestSslUtils.createSslConfig(true, true, mode, trustStore, certAlias)
-      else
-        TestSslUtils.createSslConfig(clientCert, false, mode, trustStore, certAlias)
-    }
+    val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias)
 
     val sslProps = new Properties()
     sslConfigs.foreach { case (k, v) => sslProps.put(k, v) }

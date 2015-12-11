@@ -1,0 +1,10 @@
+Metadata-Version: 1.0
+Name: kafkatest
+Version: 0.9.0.0.dev0
+Summary: Apache Kafka System Tests
+Home-page: UNKNOWN
+Author: Apache Kafka
+Author-email: UNKNOWN
+License: apache2.0
+Description: UNKNOWN
+Platform: any

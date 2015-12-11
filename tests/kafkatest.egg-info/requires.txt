@@ -1,0 +1,2 @@
+ducktape==0.3.8
+requests>=2.5.0

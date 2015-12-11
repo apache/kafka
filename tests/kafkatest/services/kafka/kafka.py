@@ -30,6 +30,9 @@ import signal
 import subprocess
 import time
 import os.path
+import collections
+
+Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
 class KafkaService(JmxMixin, Service):
 
@@ -39,22 +42,27 @@ class KafkaService(JmxMixin, Service):
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
     # Logs such as controller.log, server.log, etc all go here
     OPERATIONAL_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-operational-logs")
+    OPERATIONAL_LOG_INFO_DIR = os.path.join(OPERATIONAL_LOG_DIR, "info")
+    OPERATIONAL_LOG_DEBUG_DIR = os.path.join(OPERATIONAL_LOG_DIR, "debug")
     # Kafka log segments etc go here
     DATA_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-data-logs")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
 
-
     logs = {
-        "kafka_operational_logs": {
-            "path": OPERATIONAL_LOG_DIR,
+        "kafka_operational_logs_info": {
+            "path": OPERATIONAL_LOG_INFO_DIR,
             "collect_default": True},
+        "kafka_operational_logs_debug": {
+            "path": OPERATIONAL_LOG_DEBUG_DIR,
+            "collect_default": False},
         "kafka_data": {
             "path": DATA_LOG_DIR,
             "collect_default": False}
     }
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
-                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None, jmx_attributes=[]):
+                 sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
+                 jmx_attributes=[], zk_connect_timeout=5000):
         """
         :type context
         :type zk: ZookeeperService
@@ -62,7 +70,6 @@ class KafkaService(JmxMixin, Service):
         """
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
-        self.log_level = "DEBUG"
 
         self.zk = zk
         self.quota_config = quota_config
@@ -72,6 +79,25 @@ class KafkaService(JmxMixin, Service):
         self.sasl_mechanism = sasl_mechanism
         self.topics = topics
         self.minikdc = None
+        #
+        # In a heavily loaded and not very fast machine, it is
+        # sometimes necessary to give more time for the zk client
+        # to have its session established, especially if the client
+        # is authenticating and waiting for the SaslAuthenticated
+        # in addition to the SyncConnected event.
+        #
+        # The defaut value for zookeeper.connect.timeout.ms is
+        # 2 seconds and here we increase it to 5 seconds, but
+        # it can be overriden by setting the corresponding parameter
+        # for this constructor.
+        self.zk_connect_timeout = zk_connect_timeout
+
+        self.port_mappings = {
+            'PLAINTEXT': Port('PLAINTEXT', 9092, False),
+            'SSL': Port('SSL', 9093, False),
+            'SASL_PLAINTEXT': Port('SASL_PLAINTEXT', 9094, False),
+            'SASL_SSL': Port('SASL_SSL', 9095, False)
+        }
 
         for node in self.nodes:
             node.version = version
@@ -79,13 +105,27 @@ class KafkaService(JmxMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, sasl_mechanism=self.sasl_mechanism)
+        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol, zk_sasl = self.zk.zk_sasl , sasl_mechanism=self.sasl_mechanism)
 
-    def start(self):
+    def open_port(self, protocol):
+        self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=True)
+
+    def close_port(self, protocol):
+        self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=False)
+
+    def start_minikdc(self, add_principals=""):
         if self.security_config.has_sasl_kerberos:
             if self.minikdc is None:
-                self.minikdc = MiniKdc(self.context, self.nodes)
+                self.minikdc = MiniKdc(self.context, self.nodes, extra_principals = add_principals)
                 self.minikdc.start()
+        else:
+            self.minikdc = None
+
+    def start(self, add_principals=""):
+        self.open_port(self.security_protocol)
+        self.open_port(self.interbroker_security_protocol)
+
+        self.start_minikdc(add_principals)
         Service.start(self)
 
         # Create topics if necessary
@@ -97,23 +137,37 @@ class KafkaService(JmxMixin, Service):
                 topic_cfg["topic"] = topic
                 self.create_topic(topic_cfg)
 
+    def set_protocol_and_port(self, node):
+        listeners = []
+        advertised_listeners = []
+
+        for protocol in self.port_mappings:
+            port = self.port_mappings[protocol]
+            if port.open:
+                listeners.append(port.name + "://:" + str(port.number))
+                advertised_listeners.append(port.name + "://" +  node.account.hostname + ":" + str(port.number))
+
+        self.listeners = ','.join(listeners)
+        self.advertised_listeners = ','.join(advertised_listeners)
+
     def prop_file(self, node):
         cfg = KafkaConfig(**node.config)
         cfg[config_property.ADVERTISED_HOSTNAME] = node.account.hostname
         cfg[config_property.ZOOKEEPER_CONNECT] = self.zk.connect_setting()
 
+        self.set_protocol_and_port(node)
+
         # TODO - clean up duplicate configuration logic
         prop_file = cfg.render()
         prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
-                                  security_config=self.security_config, 
-                                  interbroker_security_protocol=self.interbroker_security_protocol,
-                                  sasl_mechanism=self.sasl_mechanism)
+                                 security_config=self.security_config,
+                                 interbroker_security_protocol=self.interbroker_security_protocol,
+                                 sasl_mechanism=self.sasl_mechanism)
         return prop_file
 
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
-        cmd += "export LOG_DIR=%s; " % KafkaService.OPERATIONAL_LOG_DIR
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         cmd += "/opt/" + kafka_dir(node) + "/bin/kafka-server-start.sh %s 1>> %s 2>> %s &" % (KafkaService.CONFIG_FILE, KafkaService.STDOUT_CAPTURE, KafkaService.STDERR_CAPTURE)
         return cmd
@@ -211,6 +265,35 @@ class KafkaService(JmxMixin, Service):
             output += line
         return output
 
+    def parse_describe_topic(self, topic_description):
+        """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
+        PartitionCount:2\tReplicationFactor:2\tConfigs:
+            Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
+            Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
+        into a dictionary structure appropriate for use with reassign-partitions tool:
+        {
+            "partitions": [
+                {"topic": "test_topic", "partition": 0, "replicas": [3, 1]},
+                {"topic": "test_topic", "partition": 1, "replicas": [1, 2]}
+            ]
+        }
+        """
+        lines = map(lambda x: x.strip(), topic_description.split("\n"))
+        partitions = []
+        for line in lines:
+            m = re.match(".*Leader:.*", line)
+            if m is None:
+                continue
+
+            fields = line.split("\t")
+            # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
+            fields = map(lambda x: x.split(" ")[1], fields)
+            partitions.append(
+                {"topic": fields[0],
+                 "partition": int(fields[1]),
+                 "replicas": map(int, fields[3].split(','))})
+        return {"partitions": partitions}
+
     def verify_reassign_partitions(self, reassignment, node=None):
         """Run the reassign partitions admin tool in "verify" mode
         """
@@ -282,21 +365,9 @@ class KafkaService(JmxMixin, Service):
     def leader(self, topic, partition=0):
         """ Get the leader replica for the given topic and partition.
         """
-        kafka_dir = KAFKA_TRUNK
-        cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " %\
-              (kafka_dir, self.zk.connect_setting())
-        cmd += "get /brokers/topics/%s/partitions/%d/state" % (topic, partition)
-        self.logger.debug(cmd)
-
-        node = self.zk.nodes[0]
-        self.logger.debug("Querying zookeeper to find leader replica for topic %s: \n%s" % (cmd, topic))
-        partition_state = None
-        for line in node.account.ssh_capture(cmd):
-            # loop through all lines in the output, but only hold on to the first match
-            if partition_state is None:
-                match = re.match("^({.+})$", line)
-                if match is not None:
-                    partition_state = match.groups()[0]
+        self.logger.debug("Querying zookeeper to find leader replica for topic: \n%s" % (topic))
+        zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
+        partition_state = self.zk.query(zk_path)
 
         if partition_state is None:
             raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
@@ -308,9 +379,31 @@ class KafkaService(JmxMixin, Service):
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
         return self.get_node(leader_idx)
 
-    def bootstrap_servers(self):
+    def bootstrap_servers(self, protocol='PLAINTEXT'):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
 
         This is the format expected by many config files.
         """
-        return ','.join([node.account.hostname + ":9092" for node in self.nodes])
+        port_mapping = self.port_mappings[protocol]
+        self.logger.info("Bootstrap client port is: " + str(port_mapping.number))
+
+        if not port_mapping.open:
+            raise ValueError("We are retrieving bootstrap servers for the port: %s which is not currently open. - " % str(port_mapping))
+
+        return ','.join([node.account.hostname + ":" + str(port_mapping.number) for node in self.nodes])
+
+    def controller(self):
+        """ Get the controller node
+        """
+        self.logger.debug("Querying zookeeper to find controller broker")
+        controller_info = self.zk.query("/controller")
+
+        if controller_info is None:
+            raise Exception("Error finding controller info")
+
+        controller_info = json.loads(controller_info)
+        self.logger.debug(controller_info)
+
+        controller_idx = int(controller_info["brokerid"])
+        self.logger.info("Controller's ID: %d" % (controller_idx))
+        return self.get_node(controller_idx)

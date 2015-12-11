@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamingConfig;
 import org.apache.kafka.streams.StreamingMetrics;
@@ -44,17 +45,23 @@ public class StandbyTask extends AbstractTask {
      * Create {@link StandbyTask} with its assigned partitions
      *
      * @param id                    the ID of this task
-     * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
+     * @param jobId                 the ID of the job
+     * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
+     * @param consumer              the instance of {@link Consumer}
+     * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param config                the {@link StreamingConfig} specified by the user
      * @param metrics               the {@link StreamingMetrics} created by the thread
      */
     public StandbyTask(TaskId id,
-                       Consumer<byte[], byte[]> restoreConsumer,
+                       String jobId,
+                       Collection<TopicPartition> partitions,
                        ProcessorTopology topology,
+                       Consumer<byte[], byte[]> consumer,
+                       Consumer<byte[], byte[]> restoreConsumer,
                        StreamingConfig config,
                        StreamingMetrics metrics) {
-        super(id, restoreConsumer, topology, config, null);
+        super(id, jobId, partitions, topology, consumer, restoreConsumer, config, true);
 
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
@@ -64,6 +71,9 @@ public class StandbyTask extends AbstractTask {
         ((StandbyContextImpl) this.processorContext).initialized();
 
         this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointedOffsets());
+
+        // set initial offset limits
+        initializeOffsetLimits();
     }
 
     public Map<TopicPartition, Long> checkpointedOffsets() {
@@ -76,13 +86,24 @@ public class StandbyTask extends AbstractTask {
 
     /**
      * Updates a state store using records from one change log partition
+     * @return a list of records not consumed
      */
-    public void update(TopicPartition partition, List<ConsumerRecord<byte[], byte[]>> records) {
-        stateMgr.updateStandbyStates(partition, records);
+    public List<ConsumerRecord<byte[], byte[]>> update(TopicPartition partition, List<ConsumerRecord<byte[], byte[]>> records) {
+        return stateMgr.updateStandbyStates(partition, records);
     }
 
     public void commit() {
         stateMgr.flush();
+
+        // reinitialize offset limits
+        initializeOffsetLimits();
+    }
+
+    protected void initializeOffsetLimits() {
+        for (TopicPartition partition : partitions) {
+            OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+            stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+        }
     }
 
 }

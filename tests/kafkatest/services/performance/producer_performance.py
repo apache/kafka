@@ -47,7 +47,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
     def _worker(self, idx, node):
         args = self.args.copy()
         args.update({
-            'bootstrap_servers': self.kafka.bootstrap_servers(),
+            'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'jmx_port': self.jmx_port,
             'client_id': self.client_id,
             'kafka_directory': kafka_dir(node)
