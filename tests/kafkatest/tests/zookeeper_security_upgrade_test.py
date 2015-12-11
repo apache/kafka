@@ -34,10 +34,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
     def setUp(self):
         self.topic = "test_topic"
-<<<<<<< HEAD
         self.group = "group"
-=======
->>>>>>> upstream/trunk
         self.producer_throughput = 100
         self.num_producers = 1
         self.num_consumers = 1
@@ -58,33 +55,21 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
             self.test_context, self.num_consumers, self.kafka, self.topic,
             consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True)
 
-<<<<<<< HEAD
         self.consumer.group_id = self.group
-=======
-        self.consumer.group_id = "group"
-
->>>>>>> upstream/trunk
 
     @property
     def no_sasl(self):
         return self.kafka.security_protocol == "PLAINTEXT" or self.kafka.security_protocol == "SSL"
 
-<<<<<<< HEAD
     @property
     def has_sasl(self):
         return not self.no_sasl
 
-=======
->>>>>>> upstream/trunk
     def run_zk_migration(self):
         # change zk config (auth provider + jaas login)
         self.zk.kafka_opts = self.zk.security_system_properties
         self.zk.zk_sasl = True
-<<<<<<< HEAD
         if self.no_sasl:
-=======
-        if(self.no_sasl):
->>>>>>> upstream/trunk
             self.kafka.start_minikdc(self.zk.zk_principals)
         # restart zk
         for node in self.zk.nodes:
@@ -100,17 +85,12 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         for node in self.zk.nodes:
             self.zk.zookeeper_migration(node, "secure")
 
-<<<<<<< HEAD
         # restart broker with zookeeper.set.acl=true and acls
-=======
-        # restart broker with zookeeper.set.acl=true
->>>>>>> upstream/trunk
         self.kafka.zk_set_acl = "true"
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
             self.kafka.start_node(node)
 
-<<<<<<< HEAD
 
     @matrix(security_protocol=["PLAINTEXT","SSL","SASL_SSL","SASL_PLAINTEXT"])
     def test_zk_security_upgrade(self, security_protocol):
@@ -123,7 +103,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         #
         if self.has_sasl:
             self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
-            
+
             self.add_cluster_props = self.kafka.security_config.addClusterAcl(self.zk.connect_setting())
             self.kafka.security_config.acls_command(self.kafka.nodes[0], self.add_cluster_props)
 
@@ -135,12 +115,6 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
             self.consume_props = self.kafka.security_config.consumeAcl(self.zk.connect_setting(), self.topic, self.group)
             self.kafka.security_config.acls_command(self.kafka.nodes[0], self.consume_props)
-=======
-    @matrix(security_protocol=["SASL_SSL","SSL","SASL_PLAINTEXT","PLAINTEXT"])
-    def test_zk_security_upgrade(self, security_protocol):
-        self.zk.start()
-        self.kafka.security_protocol = security_protocol
->>>>>>> upstream/trunk
         if(self.no_sasl):
             self.kafka.start()
         else:
