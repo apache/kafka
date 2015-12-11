@@ -60,6 +60,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
             self.kafka.start_node(node)
+            time.sleep(10)
 
     def roll_in_secured_settings(self, client_protocol, broker_protocol):
 
