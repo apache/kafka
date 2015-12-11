@@ -31,6 +31,8 @@ Note: If you are willing to accept downtime, you can simply take all the brokers
 
 Note: Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
+Note: Broker IDs above 1000 are now reserved by default to automatically assigned broker IDs. If your cluster has existing broker IDs above that threshold make sure to increase the reserved.broker.max.id broker configuration property accordingly.
+
 <h5><a id="upgrade_9_breaking" href="#upgrade_9_breaking">Potential breaking changes in 0.9.0.0</a></h5>
 
 <ul>
