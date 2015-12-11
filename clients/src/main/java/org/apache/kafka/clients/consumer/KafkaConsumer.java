@@ -355,7 +355,7 @@ import java.util.regex.Pattern;
  *
  *     public void run() {
  *         try {
- *             consumer.subscribe("topic");
+ *             consumer.subscribe(Arrays.asList("topic"));
  *             while (!closed.get()) {
  *                 ConsumerRecords records = consumer.poll(10000);
  *                 // Handle new records
