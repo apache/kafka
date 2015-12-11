@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -37,12 +36,12 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +49,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,7 +60,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
-    private final Map<String, PartitionAssignor> protocolMap;
+    private final List<PartitionAssignor> assignors;
     private final org.apache.kafka.clients.Metadata metadata;
     private final MetadataSnapshot metadataSnapshot;
     private final ConsumerCoordinatorMetrics sensors;
@@ -83,7 +81,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                SubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix,
-                               Map<String, String> metricTags,
                                Time time,
                                long retryBackoffMs,
                                OffsetCommitCallback defaultOffsetCommitCallback,
@@ -95,7 +92,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 heartbeatIntervalMs,
                 metrics,
                 metricGrpPrefix,
-                metricTags,
                 time,
                 retryBackoffMs);
         this.metadata = metadata;
@@ -105,15 +101,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
         this.autoCommitEnabled = autoCommitEnabled;
-
-        this.protocolMap = new HashMap<>();
-        for (PartitionAssignor assignor : assignors)
-            this.protocolMap.put(assignor.name(), assignor);
+        this.assignors = assignors;
 
         addMetadataListener();
 
         this.autoCommitTask = autoCommitEnabled ? new AutoCommitTask(autoCommitIntervalMs) : null;
-        this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix, metricTags);
+        this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
     }
 
     @Override
@@ -122,13 +115,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    public LinkedHashMap<String, ByteBuffer> metadata() {
-        LinkedHashMap<String, ByteBuffer> metadata = new LinkedHashMap<>();
-        for (PartitionAssignor assignor : protocolMap.values()) {
+    public List<ProtocolMetadata> metadata() {
+        List<ProtocolMetadata> metadataList = new ArrayList<>();
+        for (PartitionAssignor assignor : assignors) {
             Subscription subscription = assignor.subscription(subscriptions.subscription());
-            metadata.put(assignor.name(), ConsumerProtocol.serializeSubscription(subscription));
+            ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
+            metadataList.add(new ProtocolMetadata(assignor.name(), metadata));
         }
-        return metadata;
+        return metadataList;
     }
 
     private void addMetadataListener() {
@@ -157,12 +151,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
     }
 
+    private PartitionAssignor lookupAssignor(String name) {
+        for (PartitionAssignor assignor : this.assignors) {
+            if (assignor.name().equals(name))
+                return assignor;
+        }
+        return null;
+    }
+
     @Override
     protected void onJoinComplete(int generation,
                                   String memberId,
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
-        PartitionAssignor assignor = protocolMap.get(assignmentStrategy);
+        PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
@@ -199,7 +201,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
                                                         Map<String, ByteBuffer> allSubscriptions) {
-        PartitionAssignor assignor = protocolMap.get(protocol);
+        PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
@@ -294,7 +296,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!future.isRetriable())
                 throw future.exception();
 
-            Utils.sleep(retryBackoffMs);
+            time.sleep(retryBackoffMs);
         }
     }
 
@@ -358,7 +360,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!future.isRetriable())
                 throw future.exception();
 
-            Utils.sleep(retryBackoffMs);
+            time.sleep(retryBackoffMs);
         }
     }
 
@@ -634,23 +636,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         public final Sensor commitLatency;
 
-        public ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> tags) {
+        public ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             this.commitLatency = metrics.sensor("commit-latency");
-            this.commitLatency.add(new MetricName("commit-latency-avg",
+            this.commitLatency.add(metrics.metricName("commit-latency-avg",
                 this.metricGrpName,
-                "The average time taken for a commit request",
-                tags), new Avg());
-            this.commitLatency.add(new MetricName("commit-latency-max",
+                "The average time taken for a commit request"), new Avg());
+            this.commitLatency.add(metrics.metricName("commit-latency-max",
                 this.metricGrpName,
-                "The max time taken for a commit request",
-                tags), new Max());
-            this.commitLatency.add(new MetricName("commit-rate",
+                "The max time taken for a commit request"), new Max());
+            this.commitLatency.add(metrics.metricName("commit-rate",
                 this.metricGrpName,
-                "The number of commit calls per second",
-                tags), new Rate(new Count()));
+                "The number of commit calls per second"), new Rate(new Count()));
 
             Measurable numParts =
                 new Measurable() {
@@ -658,11 +657,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         return subscriptions.assignedPartitions().size();
                     }
                 };
-            metrics.addMetric(new MetricName("assigned-partitions",
+            metrics.addMetric(metrics.metricName("assigned-partitions",
                 this.metricGrpName,
-                "The number of partitions currently assigned to this consumer",
-                tags),
-                numParts);
+                "The number of partitions currently assigned to this consumer"), numParts);
         }
     }
 

@@ -72,59 +72,59 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
 
   val endPoint = new EndPoint("localhost", 0, SecurityProtocol.PLAINTEXT)
-  
+
   val RequestKeyToResponseDeserializer: Map[Short, Class[_ <: Any]] =
-    Map(RequestKeys.MetadataKey -> classOf[requests.MetadataResponse],
-      RequestKeys.ProduceKey -> classOf[requests.ProduceResponse],
-      RequestKeys.FetchKey -> classOf[requests.FetchResponse],
-      RequestKeys.OffsetsKey -> classOf[requests.ListOffsetResponse],
-      RequestKeys.OffsetCommitKey -> classOf[requests.OffsetCommitResponse],
-      RequestKeys.OffsetFetchKey -> classOf[requests.OffsetFetchResponse],
-      RequestKeys.GroupCoordinatorKey -> classOf[requests.GroupCoordinatorResponse],
-      RequestKeys.UpdateMetadataKey -> classOf[requests.UpdateMetadataResponse],
-      RequestKeys.JoinGroupKey -> classOf[JoinGroupResponse],
-      RequestKeys.SyncGroupKey -> classOf[SyncGroupResponse],
-      RequestKeys.HeartbeatKey -> classOf[HeartbeatResponse],
-      RequestKeys.LeaveGroupKey -> classOf[LeaveGroupResponse],
-      RequestKeys.LeaderAndIsrKey -> classOf[requests.LeaderAndIsrResponse],
-      RequestKeys.StopReplicaKey -> classOf[requests.StopReplicaResponse],
-      RequestKeys.ControlledShutdownKey -> classOf[requests.ControlledShutdownResponse]
+    Map(ApiKeys.METADATA.id -> classOf[requests.MetadataResponse],
+      ApiKeys.PRODUCE.id -> classOf[requests.ProduceResponse],
+      ApiKeys.FETCH.id -> classOf[requests.FetchResponse],
+      ApiKeys.LIST_OFFSETS.id -> classOf[requests.ListOffsetResponse],
+      ApiKeys.OFFSET_COMMIT.id -> classOf[requests.OffsetCommitResponse],
+      ApiKeys.OFFSET_FETCH.id -> classOf[requests.OffsetFetchResponse],
+      ApiKeys.GROUP_COORDINATOR.id -> classOf[requests.GroupCoordinatorResponse],
+      ApiKeys.UPDATE_METADATA_KEY.id -> classOf[requests.UpdateMetadataResponse],
+      ApiKeys.JOIN_GROUP.id -> classOf[JoinGroupResponse],
+      ApiKeys.SYNC_GROUP.id -> classOf[SyncGroupResponse],
+      ApiKeys.HEARTBEAT.id -> classOf[HeartbeatResponse],
+      ApiKeys.LEAVE_GROUP.id -> classOf[LeaveGroupResponse],
+      ApiKeys.LEADER_AND_ISR.id -> classOf[requests.LeaderAndIsrResponse],
+      ApiKeys.STOP_REPLICA.id -> classOf[requests.StopReplicaResponse],
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> classOf[requests.ControlledShutdownResponse]
     )
 
   val RequestKeyToErrorCode = Map[Short, (Nothing) => Short](
-    RequestKeys.MetadataKey -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code()),
-    RequestKeys.ProduceKey -> ((resp: requests.ProduceResponse) => resp.responses().asScala.find(_._1 == tp).get._2.errorCode),
-    RequestKeys.FetchKey -> ((resp: requests.FetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
-    RequestKeys.OffsetsKey -> ((resp: requests.ListOffsetResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
-    RequestKeys.OffsetCommitKey -> ((resp: requests.OffsetCommitResponse) => resp.responseData().asScala.find(_._1 == tp).get._2),
-    RequestKeys.OffsetFetchKey -> ((resp: requests.OffsetFetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
-    RequestKeys.GroupCoordinatorKey -> ((resp: requests.GroupCoordinatorResponse) => resp.errorCode()),
-    RequestKeys.UpdateMetadataKey -> ((resp: requests.UpdateMetadataResponse) => resp.errorCode()),
-    RequestKeys.JoinGroupKey -> ((resp: JoinGroupResponse) => resp.errorCode()),
-    RequestKeys.SyncGroupKey -> ((resp: SyncGroupResponse) => resp.errorCode()),
-    RequestKeys.HeartbeatKey -> ((resp: HeartbeatResponse) => resp.errorCode()),
-    RequestKeys.LeaveGroupKey -> ((resp: LeaveGroupResponse) => resp.errorCode()),
-    RequestKeys.LeaderAndIsrKey -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
-    RequestKeys.StopReplicaKey -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
-    RequestKeys.ControlledShutdownKey -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode())
+    ApiKeys.METADATA.id -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2.code()),
+    ApiKeys.PRODUCE.id -> ((resp: requests.ProduceResponse) => resp.responses().asScala.find(_._1 == tp).get._2.errorCode),
+    ApiKeys.FETCH.id -> ((resp: requests.FetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    ApiKeys.LIST_OFFSETS.id -> ((resp: requests.ListOffsetResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    ApiKeys.OFFSET_COMMIT.id -> ((resp: requests.OffsetCommitResponse) => resp.responseData().asScala.find(_._1 == tp).get._2),
+    ApiKeys.OFFSET_FETCH.id -> ((resp: requests.OffsetFetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.errorCode),
+    ApiKeys.GROUP_COORDINATOR.id -> ((resp: requests.GroupCoordinatorResponse) => resp.errorCode()),
+    ApiKeys.UPDATE_METADATA_KEY.id -> ((resp: requests.UpdateMetadataResponse) => resp.errorCode()),
+    ApiKeys.JOIN_GROUP.id -> ((resp: JoinGroupResponse) => resp.errorCode()),
+    ApiKeys.SYNC_GROUP.id -> ((resp: SyncGroupResponse) => resp.errorCode()),
+    ApiKeys.HEARTBEAT.id -> ((resp: HeartbeatResponse) => resp.errorCode()),
+    ApiKeys.LEAVE_GROUP.id -> ((resp: LeaveGroupResponse) => resp.errorCode()),
+    ApiKeys.LEADER_AND_ISR.id -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
+    ApiKeys.STOP_REPLICA.id -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
+    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ((resp: requests.ControlledShutdownResponse) => resp.errorCode())
   )
 
   val RequestKeysToAcls = Map[Short, Map[Resource, Set[Acl]]](
-    RequestKeys.MetadataKey -> TopicDescribeAcl,
-    RequestKeys.ProduceKey -> TopicWriteAcl,
-    RequestKeys.FetchKey -> TopicReadAcl,
-    RequestKeys.OffsetsKey -> TopicDescribeAcl,
-    RequestKeys.OffsetCommitKey -> (TopicReadAcl ++ GroupReadAcl),
-    RequestKeys.OffsetFetchKey -> (TopicReadAcl ++ GroupReadAcl),
-    RequestKeys.GroupCoordinatorKey -> (TopicReadAcl ++ GroupReadAcl),
-    RequestKeys.UpdateMetadataKey -> ClusterAcl,
-    RequestKeys.JoinGroupKey -> GroupReadAcl,
-    RequestKeys.SyncGroupKey -> GroupReadAcl,
-    RequestKeys.HeartbeatKey -> GroupReadAcl,
-    RequestKeys.LeaveGroupKey -> GroupReadAcl,
-    RequestKeys.LeaderAndIsrKey -> ClusterAcl,
-    RequestKeys.StopReplicaKey -> ClusterAcl,
-    RequestKeys.ControlledShutdownKey -> ClusterAcl
+    ApiKeys.METADATA.id -> TopicDescribeAcl,
+    ApiKeys.PRODUCE.id -> TopicWriteAcl,
+    ApiKeys.FETCH.id -> TopicReadAcl,
+    ApiKeys.LIST_OFFSETS.id -> TopicDescribeAcl,
+    ApiKeys.OFFSET_COMMIT.id -> (TopicReadAcl ++ GroupReadAcl),
+    ApiKeys.OFFSET_FETCH.id -> (TopicReadAcl ++ GroupReadAcl),
+    ApiKeys.GROUP_COORDINATOR.id -> (TopicReadAcl ++ GroupReadAcl),
+    ApiKeys.UPDATE_METADATA_KEY.id -> ClusterAcl,
+    ApiKeys.JOIN_GROUP.id -> GroupReadAcl,
+    ApiKeys.SYNC_GROUP.id -> GroupReadAcl,
+    ApiKeys.HEARTBEAT.id -> GroupReadAcl,
+    ApiKeys.LEAVE_GROUP.id -> GroupReadAcl,
+    ApiKeys.LEADER_AND_ISR.id -> ClusterAcl,
+    ApiKeys.STOP_REPLICA.id -> ClusterAcl,
+    ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ClusterAcl
   )
 
   // configure the servers and clients
@@ -191,7 +191,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
 
   private def createJoinGroupRequest = {
     new JoinGroupRequest(group, 30000, "", "consumer",
-      List( new JoinGroupRequest.GroupProtocol("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
+      List( new JoinGroupRequest.ProtocolMetadata("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
   }
 
   private def createSyncGroupRequest = {
@@ -227,21 +227,21 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   @Test
   def testAuthorization() {
     val requestKeyToRequest = mutable.LinkedHashMap[Short, AbstractRequest](
-      RequestKeys.MetadataKey -> createMetadataRequest,
-      RequestKeys.ProduceKey -> createProduceRequest,
-      RequestKeys.FetchKey -> createFetchRequest,
-      RequestKeys.OffsetsKey -> createListOffsetsRequest,
-      RequestKeys.OffsetFetchKey -> createOffsetFetchRequest,
-      RequestKeys.GroupCoordinatorKey -> createGroupCoordinatorRequest,
-      RequestKeys.UpdateMetadataKey -> createUpdateMetadataRequest,
-      RequestKeys.JoinGroupKey -> createJoinGroupRequest,
-      RequestKeys.SyncGroupKey -> createSyncGroupRequest,
-      RequestKeys.OffsetCommitKey -> createOffsetCommitRequest,
-      RequestKeys.HeartbeatKey -> createHeartbeatRequest,
-      RequestKeys.LeaveGroupKey -> createLeaveGroupRequest,
-      RequestKeys.LeaderAndIsrKey -> createLeaderAndIsrRequest,
-      RequestKeys.StopReplicaKey -> createStopReplicaRequest,
-      RequestKeys.ControlledShutdownKey -> createControlledShutdownRequest
+      ApiKeys.METADATA.id -> createMetadataRequest,
+      ApiKeys.PRODUCE.id -> createProduceRequest,
+      ApiKeys.FETCH.id -> createFetchRequest,
+      ApiKeys.LIST_OFFSETS.id -> createListOffsetsRequest,
+      ApiKeys.OFFSET_FETCH.id -> createOffsetFetchRequest,
+      ApiKeys.GROUP_COORDINATOR.id -> createGroupCoordinatorRequest,
+      ApiKeys.UPDATE_METADATA_KEY.id -> createUpdateMetadataRequest,
+      ApiKeys.JOIN_GROUP.id -> createJoinGroupRequest,
+      ApiKeys.SYNC_GROUP.id -> createSyncGroupRequest,
+      ApiKeys.OFFSET_COMMIT.id -> createOffsetCommitRequest,
+      ApiKeys.HEARTBEAT.id -> createHeartbeatRequest,
+      ApiKeys.LEAVE_GROUP.id -> createLeaveGroupRequest,
+      ApiKeys.LEADER_AND_ISR.id -> createLeaderAndIsrRequest,
+      ApiKeys.STOP_REPLICA.id -> createStopReplicaRequest,
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> createControlledShutdownRequest
     )
 
     val socket = new Socket("localhost", servers.head.boundPort())
@@ -497,6 +497,20 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
     this.consumers.head.position(tp)
+  }
+
+  @Test
+  def testListOffsetsWithNoTopicAccess() {
+    val e = intercept[TopicAuthorizationException] {
+      this.consumers.head.partitionsFor(topic);
+    }
+    assertEquals(Set(topic), e.unauthorizedTopics().asScala)
+  }
+
+  @Test
+  def testListOfsetsWithTopicDescribe() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
+    this.consumers.head.partitionsFor(topic);
   }
 
   def removeAllAcls() = {

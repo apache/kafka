@@ -52,11 +52,7 @@ class AdminClient(val time: Time,
       client.poll(future)
 
       if (future.succeeded())
-        return if (future.value().wasDisconnected()) {
-          throw new DisconnectException()
-        } else {
-          future.value().responseBody()
-        }
+        return future.value().responseBody()
 
       now = time.milliseconds()
     } while (now < deadline && future.exception().isInstanceOf[SendFailedException])
@@ -230,7 +226,6 @@ object AdminClient {
       metrics,
       time,
       "admin",
-      Map[String, String](),
       channelBuilder)
 
     val networkClient = new NetworkClient(

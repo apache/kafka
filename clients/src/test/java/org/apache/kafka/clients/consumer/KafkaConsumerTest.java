@@ -23,6 +23,7 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
 
@@ -77,5 +78,18 @@ public class KafkaConsumerTest {
         consumer.unsubscribe();
         Assert.assertTrue(consumer.subscription().isEmpty());
         Assert.assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSeekNegative() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testSeekNegative");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<byte[], byte[]>(
+                props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
+        consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
     }
 }

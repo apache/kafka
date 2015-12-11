@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 import kafka.common.ErrorMapping
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
+import org.apache.kafka.common.protocol.ApiKeys
 
 object GroupCoordinatorRequest {
   val CurrentVersion = 0.shortValue
@@ -44,7 +45,7 @@ case class GroupCoordinatorRequest(group: String,
                                    versionId: Short = GroupCoordinatorRequest.CurrentVersion,
                                    correlationId: Int = 0,
                                    clientId: String = GroupCoordinatorRequest.DefaultClientId)
-  extends RequestOrResponse(Some(RequestKeys.GroupCoordinatorKey)) {
+  extends RequestOrResponse(Some(ApiKeys.GROUP_COORDINATOR.id)) {
 
   def sizeInBytes =
     2 + /* versionId */

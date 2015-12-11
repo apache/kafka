@@ -22,14 +22,16 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -52,7 +54,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -73,7 +74,7 @@ public class FetcherTest {
     private int maxWaitMs = 0;
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
-    private MockTime time = new MockTime();
+    private MockTime time = new MockTime(1);
     private MockClient client = new MockClient(time);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
@@ -81,7 +82,6 @@ public class FetcherTest {
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private Metrics metrics = new Metrics(time);
-    private Map<String, String> metricTags = new LinkedHashMap<String, String>();
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
 
@@ -395,7 +395,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testGetAllTopics() throws InterruptedException {
+    public void testGetAllTopics() {
         // sending response before request, as getTopicMetadata is a blocking call
         client.prepareResponse(
             new MetadataResponse(cluster, Collections.<String, Errors>emptyMap()).toStruct());
@@ -403,6 +403,63 @@ public class FetcherTest {
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
 
         assertEquals(cluster.topics().size(), allTopics.size());
+    }
+
+    @Test
+    public void testGetAllTopicsDisconnect() {
+        // first try gets a disconnect, next succeeds
+        client.prepareResponse(null, true);
+        client.prepareResponse(new MetadataResponse(cluster, Collections.<String, Errors>emptyMap()).toStruct());
+        Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
+        assertEquals(cluster.topics().size(), allTopics.size());
+    }
+
+    @Test(expected = TimeoutException.class)
+    public void testGetAllTopicsTimeout() {
+        // since no response is prepared, the request should timeout
+        fetcher.getAllTopicMetadata(50L);
+    }
+
+    @Test
+    public void testGetAllTopicsUnauthorized() {
+        client.prepareResponse(new MetadataResponse(cluster,
+                Collections.singletonMap(topicName, Errors.TOPIC_AUTHORIZATION_FAILED)).toStruct());
+        try {
+            fetcher.getAllTopicMetadata(10L);
+            fail();
+        } catch (TopicAuthorizationException e) {
+            assertEquals(Collections.singleton(topicName), e.unauthorizedTopics());
+        }
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void testGetTopicMetadataInvalidTopic() {
+        client.prepareResponse(new MetadataResponse(cluster,
+                Collections.singletonMap(topicName, Errors.INVALID_TOPIC_EXCEPTION)).toStruct());
+        fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
+    }
+
+    @Test
+    public void testGetTopicMetadataUnknownTopic() {
+        Cluster emptyCluster = new Cluster(this.cluster.nodes(), Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet());
+        client.prepareResponse(new MetadataResponse(emptyCluster,
+                Collections.singletonMap(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION)).toStruct());
+
+        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
+        assertNull(topicMetadata.get(topicName));
+    }
+
+    @Test
+    public void testGetTopicMetadataLeaderNotAvailable() {
+        Cluster emptyCluster = new Cluster(this.cluster.nodes(), Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet());
+        client.prepareResponse(new MetadataResponse(emptyCluster,
+                Collections.singletonMap(topicName, Errors.LEADER_NOT_AVAILABLE)).toStruct());
+        client.prepareResponse(new MetadataResponse(this.cluster,
+                Collections.<String, Errors>emptyMap()).toStruct());
+        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(Collections.singletonList(topicName), 5000L);
+        assertTrue(topicMetadata.containsKey(topicName));
     }
 
     /*
@@ -425,8 +482,8 @@ public class FetcherTest {
         }
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric avgMetric = allMetrics.get(new MetricName("fetch-throttle-time-avg", metricGroup, "", metricTags));
-        KafkaMetric maxMetric = allMetrics.get(new MetricName("fetch-throttle-time-max", metricGroup, "", metricTags));
+        KafkaMetric avgMetric = allMetrics.get(metrics.metricName("fetch-throttle-time-avg", metricGroup, ""));
+        KafkaMetric maxMetric = allMetrics.get(metrics.metricName("fetch-throttle-time-max", metricGroup, ""));
         assertEquals(200, avgMetric.value(), EPSILON);
         assertEquals(300, maxMetric.value(), EPSILON);
     }
@@ -457,7 +514,7 @@ public class FetcherTest {
     }
 
     private  Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions, Metrics metrics) {
-        return new Fetcher<byte[], byte[]>(consumerClient,
+        return new Fetcher<>(consumerClient,
                 minBytes,
                 maxWaitMs,
                 fetchSize,
@@ -468,7 +525,6 @@ public class FetcherTest {
                 subscriptions,
                 metrics,
                 "consumer" + groupId,
-                metricTags,
                 time,
                 retryBackoffMs);
     }

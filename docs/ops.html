@@ -74,7 +74,7 @@ When a server is stopped gracefully it has two optimizations it will take advant
     <li>It will migrate any partitions the server is the leader for to other replicas prior to shutting down. This will make the leadership transfer faster and minimize the time each partition is unavailable to a few milliseconds.
 </ol>
 
-Syncing the logs will happen automatically happen whenever the server is stopped other than by a hard kill, but the controlled leadership migration requires using a special setting:
+Syncing the logs will happen automatically whenever the server is stopped other than by a hard kill, but the controlled leadership migration requires using a special setting:
 <pre>
     controlled.shutdown.enable=true
 </pre>
@@ -390,19 +390,23 @@ producer.purgatory.purge.interval.requests=100
 Our client configuration varies a fair amount between different use cases.
 
 <h3><a id="java" href="#java">Java Version</a></h3>
-We're currently running JDK 1.7 u51, and we've switched over to the G1 collector. If you do this (and we highly recommend it), make sure you're on u51. We tried out u21 in testing, but we had a number of problems with the GC implementation in that version.
 
-Our tuning looks like this:
+From a security perspective, we recommend you use the latest released version of JDK 1.8 as older freely available versions have disclosed security vulnerabilities.
+
+LinkedIn is currently running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. If you decide to use the G1 collector (the current default) and you are still on JDK 1.7, make sure you are on u51 or newer. LinkedIn tried out u21 in testing, but they had a number of problems with the GC implementation in that version.
+
+LinkedIn's tuning looks like this:
 <pre>
--Xms4g -Xmx4g -XX:PermSize=48m -XX:MaxPermSize=48m -XX:+UseG1GC
--XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35
+-Xmx6g -Xms6g -XX:MetaspaceSize=96m -XX:+UseG1GC
+-XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M
+-XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80
 </pre>
 
 For reference, here are the stats on one of LinkedIn's busiest clusters (at peak):
-        - 15 brokers
-        - 15.5k partitions (replication factor 2)
-        - 400k messages/sec in
-        - 70 MB/sec inbound, 400 MB/sec+ outbound
+        - 60 brokers
+        - 50k partitions (replication factor 2)
+        - 800k messages/sec in
+        - 300 MB/sec inbound, 1 GB/sec+ outbound
 
 The tuning looks fairly aggressive, but all of the brokers in that cluster have a 90% GC pause time of about 21ms, and they're doing less than 1 young GC per second.
 

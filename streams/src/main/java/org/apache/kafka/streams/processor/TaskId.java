@@ -17,6 +17,9 @@
 
 package org.apache.kafka.streams.processor;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class TaskId implements Comparable<TaskId> {
@@ -45,6 +48,15 @@ public class TaskId implements Comparable<TaskId> {
         } catch (Exception e) {
             throw new TaskIdFormatException();
         }
+    }
+
+    public void writeTo(DataOutputStream out) throws IOException {
+        out.writeInt(topicGroupId);
+        out.writeInt(partition);
+    }
+
+    public static TaskId readFrom(DataInputStream in) throws IOException {
+        return new TaskId(in.readInt(), in.readInt());
     }
 
     public void writeTo(ByteBuffer buf) {

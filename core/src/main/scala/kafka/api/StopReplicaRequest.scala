@@ -23,6 +23,7 @@ import kafka.network.{RequestOrResponseSend, RequestChannel, InvalidRequestExcep
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
+import org.apache.kafka.common.protocol.ApiKeys
 import collection.Set
 
 
@@ -60,7 +61,7 @@ case class StopReplicaRequest(versionId: Short,
                               controllerEpoch: Int,
                               deletePartitions: Boolean,
                               partitions: Set[TopicAndPartition])
-        extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
+        extends RequestOrResponse(Some(ApiKeys.STOP_REPLICA.id)) {
 
   def this(deletePartitions: Boolean, partitions: Set[TopicAndPartition], controllerId: Int, controllerEpoch: Int, correlationId: Int) = {
     this(StopReplicaRequest.CurrentVersion, correlationId, StopReplicaRequest.DefaultClientId,

@@ -113,11 +113,17 @@ public class KafkaBasedLogTest {
     private KafkaProducer<String, String> producer;
     private MockConsumer<String, String> consumer;
 
-    private List<ConsumerRecord<String, String>> consumedRecords = new ArrayList<>();
+    private Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
     private Callback<ConsumerRecord<String, String>> consumedCallback = new Callback<ConsumerRecord<String, String>>() {
         @Override
         public void onCompletion(Throwable error, ConsumerRecord<String, String> record) {
-            consumedRecords.add(record);
+            TopicPartition partition = new TopicPartition(record.topic(), record.partition());
+            List<ConsumerRecord<String, String>> records = consumedRecords.get(partition);
+            if (records == null) {
+                records = new ArrayList<>();
+                consumedRecords.put(partition, records);
+            }
+            records.add(record);
         }
     };
 
@@ -200,8 +206,9 @@ public class KafkaBasedLogTest {
 
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(2, consumedRecords.size());
-        assertEquals(TP0_VALUE, consumedRecords.get(0).value());
-        assertEquals(TP1_VALUE, consumedRecords.get(1).value());
+
+        assertEquals(TP0_VALUE, consumedRecords.get(TP0).get(0).value());
+        assertEquals(TP1_VALUE, consumedRecords.get(TP1).get(0).value());
 
         store.stop();
 
@@ -308,11 +315,15 @@ public class KafkaBasedLogTest {
         });
         readEndFutureCallback.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(getInvoked.get());
-        assertEquals(4, consumedRecords.size());
-        assertEquals(TP0_VALUE, consumedRecords.get(0).value());
-        assertEquals(TP0_VALUE_NEW, consumedRecords.get(1).value());
-        assertEquals(TP1_VALUE, consumedRecords.get(2).value());
-        assertEquals(TP1_VALUE_NEW, consumedRecords.get(3).value());
+        assertEquals(2, consumedRecords.size());
+
+        assertEquals(2, consumedRecords.get(TP0).size());
+        assertEquals(TP0_VALUE, consumedRecords.get(TP0).get(0).value());
+        assertEquals(TP0_VALUE_NEW, consumedRecords.get(TP0).get(1).value());
+
+        assertEquals(2, consumedRecords.get(TP1).size());
+        assertEquals(TP1_VALUE, consumedRecords.get(TP1).get(0).value());
+        assertEquals(TP1_VALUE_NEW, consumedRecords.get(TP1).get(1).value());
 
         // Cleanup
         store.stop();

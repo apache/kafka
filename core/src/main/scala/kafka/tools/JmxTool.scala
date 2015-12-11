@@ -90,9 +90,6 @@ object JmxTool extends Logging {
         List(null)
 
     val names = queries.map((name: ObjectName) => mbsc.queryNames(name, null): mutable.Set[ObjectName]).flatten
-    val allAttributes: Iterable[(ObjectName, Array[String])] =
-      names.map((name: ObjectName) => (name, mbsc.getMBeanInfo(name).getAttributes().map(_.getName)))
-
 
     val numExpectedAttributes: Map[ObjectName, Int] =
       attributesWhitelistExists match {

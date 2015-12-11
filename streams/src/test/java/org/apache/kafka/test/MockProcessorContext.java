@@ -17,6 +17,7 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.StreamingMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -109,17 +111,24 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public File stateDir() {
-        throw new UnsupportedOperationException("stateDir() not supported.");
+        return driver.stateDir;
     }
 
     @Override
     public StreamingMetrics metrics() {
-        throw new UnsupportedOperationException("metrics() not supported.");
+        return new StreamingMetrics() {
+            @Override
+            public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
+                return null;
+            }
+            @Override
+            public void recordLatency(Sensor sensor, long startNs, long endNs) {
+            }
+        };
     }
 
     @Override
-    public void register(StateStore store, StateRestoreCallback func) {
-        if (func != null) throw new UnsupportedOperationException("StateRestoreCallback not supported.");
+    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback func) {
         storeMap.put(store.name(), store);
     }
 
@@ -170,4 +179,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return this.timestamp;
     }
 
+    public Map<String, StateStore> allStateStores() {
+        return Collections.unmodifiableMap(storeMap);
+    }
 }

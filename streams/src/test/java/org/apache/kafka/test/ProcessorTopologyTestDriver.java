@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -124,6 +125,8 @@ public class ProcessorTopologyTestDriver {
 
     private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
 
+    private final String jobId = "test-driver-job";
+
     private final TaskId id;
     private final ProcessorTopology topology;
     private final StreamTask task;
@@ -158,11 +161,12 @@ public class ProcessorTopologyTestDriver {
         }
 
         task = new StreamTask(id,
+            jobId,
+            partitionsByTopic.values(),
+            topology,
             consumer,
             producer,
             restoreStateConsumer,
-            partitionsByTopic.values(),
-            topology,
             config,
             new StreamingMetrics() {
                 @Override
@@ -324,12 +328,12 @@ public class ProcessorTopologyTestDriver {
         };
         // For each store name ...
         for (String storeName : storeNames) {
-            String topicName = storeName;
+            String topicName = jobId + "-" + storeName + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX;
             // Set up the restore-state topic ...
             // consumer.subscribe(new TopicPartition(topicName, 1));
             // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...
             List<PartitionInfo> partitionInfos = new ArrayList<>();
-            partitionInfos.add(new PartitionInfo(topicName, id.partition, null, null, null));
+            partitionInfos.add(new PartitionInfo(topicName , id.partition, null, null, null));
             consumer.updatePartitions(topicName, partitionInfos);
             consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, id.partition), 0L));
         }

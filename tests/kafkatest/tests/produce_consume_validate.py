@@ -38,7 +38,7 @@ class ProduceConsumeValidateTest(Test):
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=10,
              err_msg="Producer failed to start in a reasonable amount of time.")
         self.consumer.start()
-        wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=10,
+        wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=30,
              err_msg="Consumer failed to start in a reasonable amount of time.")
 
     def stop_producer_and_consumer(self):
@@ -51,22 +51,26 @@ class ProduceConsumeValidateTest(Test):
 
         # Check that producer is still successfully producing
         currently_acked = self.producer.num_acked
-        wait_until(lambda: self.producer.num_acked > currently_acked + 5, timeout_sec=10,
+        wait_until(lambda: self.producer.num_acked > currently_acked + 5, timeout_sec=30,
              err_msg="Expected producer to still be producing.")
 
         self.producer.stop()
         self.consumer.wait()
 
-    def run_produce_consume_validate(self, core_test_action=None):
+    def run_produce_consume_validate(self, core_test_action=None, *args):
         """Top-level template for simple produce/consume/validate tests."""
+        try:
+            self.start_producer_and_consumer()
 
-        self.start_producer_and_consumer()
+            if core_test_action is not None:
+                core_test_action(*args)
 
-        if core_test_action is not None:
-            core_test_action()
-
-        self.stop_producer_and_consumer()
-        self.validate()
+            self.stop_producer_and_consumer()
+            self.validate()
+        except BaseException as e:
+            for s in self.test_context.services:
+                self.mark_for_collect(s)
+            raise e
 
     def validate(self):
         """Check that each acked message was consumed."""

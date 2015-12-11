@@ -49,7 +49,7 @@ class EndToEndLatencyService(PerformanceService):
             security_config_file = ""
         args.update({
             'zk_connect': self.kafka.zk.connect_setting(),
-            'bootstrap_servers': self.kafka.bootstrap_servers(),
+            'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'security_config_file': security_config_file,
             'kafka_dir': kafka_dir(node)
         })
