@@ -194,5 +194,5 @@ public interface KStream<K, V> {
      * @param <T>   the value type of the aggregated table
      * @param <W>   the window definition type
      */
-    <T, W extends WindowDef<? extends Window>> WindowedKTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, W windowDef);
+    <T, W extends WindowDef<? extends Window>> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, W windowDef);
 }
