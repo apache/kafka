@@ -31,8 +31,8 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.WindowDef;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.lang.reflect.Array;
@@ -61,7 +61,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
 
-    private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
+    private static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     public static final String SINK_NAME = "KSTREAM-SINK-";
 
@@ -184,7 +184,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                  Deserializer<V> valDeserializer) {
         to(topic, keySerializer, valSerializer);
 
-        return topology.from(keyDeserializer, valDeserializer, topic);
+        return topology.stream(keyDeserializer, valDeserializer, topic);
     }
 
     @Override
@@ -245,13 +245,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <V1, V2, W extends WindowDef<? extends Window>> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, W windowDef) {
+    public <V1, V2, W extends WindowDef> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, WindowDef<W> windowDef) {
         // TODO
-        return null;
+        String name = topology.newName(JOINTHIS_NAME);
+
+        topology.addProcessor(name, new ProcessorSupplier() {
+            @Override
+            public Processor get() {
+                return null;
+            }
+        }, this.name);
+
+        return new KStreamImpl<>(topology, name, sourceNodes);
     }
 
     @Override
-    public <T, W extends WindowDef<? extends Window>> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, W windowDef) {
+    public <T, W extends WindowDef> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, WindowDef<W> windowDef) {
         // TODO
         return null;
     }

@@ -15,39 +15,38 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.internals;
 
-public class Window implements Comparable<Window> {
+public abstract class AbstractWindows {
 
-    private long start;
-    private long end;
+    private static final long DEFAULT_EMIT_DURATION = 1000L;
 
-    public Window(long start, long end) {
-        this.start = start;
-        this.end = end;
+    private static final long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L;   // one day
+
+    private long emitDuration;
+
+    private long maintainDuration;
+
+    protected AbstractWindows() {
+        this.emitDuration = DEFAULT_EMIT_DURATION;
+        this.maintainDuration = DEFAULT_MAINTAIN_DURATION;
     }
 
     /**
-     * Returns the start timestamp of this window, inclusive
+     * Set the window emit duration in milliseconds of system time
      */
-    public long start() {
-        return start;
+    public AbstractWindows emit(long duration) {
+        this.emitDuration = duration;
+
+        return this;
     }
 
     /**
-     * Returns the end timestamp of this window, exclusive
+     * Set the window maintain duration in milliseconds of system time
      */
-    public long end() {
-        return end;
-    }
+    public AbstractWindows until(long duration) {
+        this.maintainDuration = duration;
 
-    @Override
-    public int compareTo(Window other) {
-        if (this.start() > other.start())
-            return 1;
-        else if (this.start() < other.start())
-            return -1;
-        else
-            return 0;
+        return this;
     }
 }

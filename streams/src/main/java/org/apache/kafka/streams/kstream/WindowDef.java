@@ -19,40 +19,9 @@ package org.apache.kafka.streams.kstream;
 
 import java.util.Collection;
 
-public abstract class WindowDef<W extends Window> {
+public interface WindowDef<W extends WindowDef> {
 
-    private static long DEFAULT_EMIT_DURATION = 1000L;
+    boolean equalTo(W other);
 
-    private static long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L;   // one day
-
-    private long emitDuration;
-
-    private long maintainDuration;
-
-    abstract public boolean equals(WindowDef<W> other);
-
-    abstract public Collection<W> windowsFor(long timestamp);
-
-    protected WindowDef() {
-        this.emitDuration = DEFAULT_EMIT_DURATION;
-        this.maintainDuration = DEFAULT_MAINTAIN_DURATION;
-    }
-
-    /**
-     * Set the window emit duration in milliseconds of system time
-     */
-    public WindowDef<W> emit(long duration) {
-        this.emitDuration = duration;
-
-        return this;
-    }
-
-    /**
-     * Set the window maintain duration in milliseconds of system time
-     */
-    WindowDef<W> until(long duration) {
-        this.maintainDuration = duration;
-
-        return this;
-    }
+    Collection<Window> windowsFor(long timestamp);
 }

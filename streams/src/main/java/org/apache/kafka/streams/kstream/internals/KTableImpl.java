@@ -19,9 +19,12 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.AggregateSupplier;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValue;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -233,4 +236,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return new KTableImpl<>(topology, name, leftJoin, allSourceNodes);
     }
 
+    @Override
+    public <K1, V1> KTable<K1, V1> aggregate(AggregateSupplier<K1, KeyValue<K, V>, V1> aggregateSupplier, KeyValueMapper<K, V, K1> selector) {
+        // TODO
+        return null;
+    }
 }

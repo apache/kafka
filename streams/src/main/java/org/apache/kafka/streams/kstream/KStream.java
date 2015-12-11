@@ -182,9 +182,8 @@ public interface KStream<K, V> {
      * @param windowDef the window definition
      * @param <V1>   the value type of the other stream
      * @param <V2>   the value type of the new stream
-     * @param <W>   the window definition type
      */
-    <V1, V2, W extends WindowDef<? extends Window>> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, W windowDef);
+    <V1, V2, W extends WindowDef> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, WindowDef<W> windowDef);
 
     /**
      * Aggregate values of this stream by key on a window basis.
@@ -192,7 +191,6 @@ public interface KStream<K, V> {
      * @param aggregateSupplier the class of aggregateSupplier
      * @param windowDef the window definition
      * @param <T>   the value type of the aggregated table
-     * @param <W>   the window definition type
      */
-    <T, W extends WindowDef<? extends Window>> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, W windowDef);
+    <T, W extends WindowDef> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, WindowDef<W> windowDef);
 }

@@ -17,37 +17,35 @@
 
 package org.apache.kafka.streams.kstream;
 
-public class Window implements Comparable<Window> {
 
-    private long start;
-    private long end;
+import org.apache.kafka.streams.kstream.internals.AbstractWindows;
 
-    public Window(long start, long end) {
-        this.start = start;
-        this.end = end;
+import java.util.Collection;
+import java.util.Collections;
+
+public class SlidingWindows extends AbstractWindows implements WindowDef<SlidingWindows> {
+
+    private long size;
+
+    private SlidingWindows(long size) {
+        this.size = size;
     }
 
     /**
-     * Returns the start timestamp of this window, inclusive
+     * Returns a half-interval sliding window definition with the window size in milliseconds
      */
-    public long start() {
-        return start;
-    }
-
-    /**
-     * Returns the end timestamp of this window, exclusive
-     */
-    public long end() {
-        return end;
+    public static SlidingWindows of(long size) {
+        return new SlidingWindows(size);
     }
 
     @Override
-    public int compareTo(Window other) {
-        if (this.start() > other.start())
-            return 1;
-        else if (this.start() < other.start())
-            return -1;
-        else
-            return 0;
+    public Collection<Window> windowsFor(long timestamp) {
+        // TODO
+        return Collections.<Window>emptyList();
+    }
+
+    @Override
+    public boolean equalTo(SlidingWindows other) {
+        return this.size == other.size;
     }
 }

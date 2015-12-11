@@ -52,7 +52,7 @@ public class KStreamFilterTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.from(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
         stream.filter(isMultipleOfThree).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);
@@ -72,7 +72,7 @@ public class KStreamFilterTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.from(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
         stream.filterOut(isMultipleOfThree).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

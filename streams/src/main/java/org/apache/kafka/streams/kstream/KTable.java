@@ -138,4 +138,13 @@ public interface KTable<K, V> {
      */
     <V1, V2> KTable<K, V2> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, V2> joiner);
 
+    /**
+     * Aggregate values of this table by the selected key.
+     *
+     * @param aggregateSupplier the class of aggregateSupplier
+     * @param selector the KeyValue mapper that select the aggregate key
+     * @param <K1>   the key type of the aggregated table
+     * @param <V1>   the value type of the aggregated table
+     */
+    <K1, V1> KTable<K1, V1> aggregate(AggregateSupplier<K1, KeyValue<K, V>, V1> aggregateSupplier, KeyValueMapper<K, V, K1> selector);
 }

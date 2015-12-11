@@ -54,7 +54,7 @@ public class KStreamMapTest {
         MockProcessorSupplier<String, Integer> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.from(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
         stream.map(mapper).process(processor);
 
         KStreamTestDriver driver = new KStreamTestDriver(builder);

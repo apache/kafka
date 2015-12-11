@@ -67,7 +67,7 @@ public class KStreamBranchTest {
         KStream<Integer, String>[] branches;
         MockProcessorSupplier<Integer, String>[] processors;
 
-        stream = builder.from(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
