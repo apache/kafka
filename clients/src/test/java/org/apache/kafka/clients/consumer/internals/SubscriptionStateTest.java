@@ -60,13 +60,11 @@ public class SubscriptionStateTest {
     public void partitionReset() {
         state.assignFromUser(Arrays.asList(tp0));
         state.seek(tp0, 5);
-        assertEquals(5L, (long) state.fetched(tp0));
-        assertEquals(5L, (long) state.consumed(tp0));
+        assertEquals(5L, (long) state.position(tp0));
         state.needOffsetReset(tp0);
         assertFalse(state.isFetchable(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
-        assertEquals(null, state.fetched(tp0));
-        assertEquals(null, state.consumed(tp0));
+        assertEquals(null, state.position(tp0));
 
         // seek should clear the reset and make the partition fetchable
         state.seek(tp0, 0);
@@ -114,33 +112,20 @@ public class SubscriptionStateTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void invalidConsumedPositionUpdate() {
+    public void invalidPositionUpdate() {
         state.subscribe(Arrays.asList(topic), rebalanceListener);
         state.assignFromSubscribed(asList(tp0));
-        state.consumed(tp0, 0);
+        state.position(tp0, 0);
     }
 
     @Test(expected = IllegalStateException.class)
-    public void invalidFetchPositionUpdate() {
-        state.subscribe(Arrays.asList(topic), rebalanceListener);
-        state.assignFromSubscribed(asList(tp0));
-        state.fetched(tp0, 0);
+    public void cantChangePositionForNonAssignedPartition() {
+        state.position(tp0, 1);
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void cantChangeFetchPositionForNonAssignedPartition() {
-        state.fetched(tp0, 1);
-    }
-    
-    @Test(expected = IllegalStateException.class)
-    public void cantChangeConsumedPositionForNonAssignedPartition() {
-        state.consumed(tp0, 1);
-    }
-    
     public void assertAllPositions(TopicPartition tp, Long offset) {
         assertEquals(offset.longValue(), state.committed(tp).offset());
-        assertEquals(offset, state.fetched(tp));
-        assertEquals(offset, state.consumed(tp));
+        assertEquals(offset, state.position(tp));
     }
 
     @Test(expected = IllegalStateException.class)
