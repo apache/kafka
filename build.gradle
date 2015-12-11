@@ -28,7 +28,7 @@ buildscript {
 }
 
 def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.13'
-def slf4japi="org.slf4j:slf4j-api:1.7.13"
+def slf4japi='org.slf4j:slf4j-api:1.7.13'
 def junit='junit:junit:4.12'
 def easymock='org.easymock:easymock:3.4'
 def powermock='org.powermock:powermock-module-junit4:1.6.3'
@@ -36,6 +36,22 @@ def powermock_easymock='org.powermock:powermock-api-easymock:1.6.3'
 def jackson_version = '2.6.3'
 def jetty_version = '9.2.14.v20151106'
 def jersey_version = '2.22.1'
+
+apply plugin: 'java'
+dependencies {
+  compile "$slf4jlog4j"
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    into "$buildDir/dependant-libs"
+}
+jar {
+  println "rootProject jar executed"
+  dependsOn('copyDependantLibs')
+}
 
 allprojects {
   apply plugin: 'idea'
@@ -300,11 +316,9 @@ project(':core') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-    }
     from (configurations.runtime) {
       exclude('kafka-clients*')
+      exclude('slf4j-log4j12*')
     }
     into "$buildDir/dependant-libs-${resolvedScalaVersion}"
   }
@@ -525,11 +539,9 @@ project(':tools') {
     }
 
     tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
         from (configurations.runtime) {
             exclude('kafka-clients*')
+            exclude('slf4j-log4j12*')
         }
         into "$buildDir/dependant-libs-${resolvedScalaVersion}"
     }
@@ -585,11 +597,9 @@ project(':streams') {
     }
 
     tasks.create(name: "copyDependantLibs", type: Copy) {
-        from (configurations.testRuntime) {
-            include('slf4j-log4j12*')
-        }
         from (configurations.runtime) {
             exclude('kafka-clients*')
+            exclude('slf4j-log4j12*')
         }
         into "$buildDir/dependant-libs-${resolvedScalaVersion}"
     }
@@ -677,12 +687,10 @@ project(':connect:api') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-    }
     from (configurations.runtime) {
       exclude('kafka-clients*')
       exclude('connect-*')
+      exclude('slf4j-log4j12*')
     }
     into "$buildDir/dependant-libs"
   }
@@ -739,12 +747,10 @@ project(':connect:json') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-    }
     from (configurations.runtime) {
       exclude('kafka-clients*')
       exclude('connect-*')
+      exclude('slf4j-log4j12*')
     }
     into "$buildDir/dependant-libs"
   }
@@ -809,12 +815,10 @@ project(':connect:runtime') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-    }
     from (configurations.runtime) {
       exclude('kafka-clients*')
       exclude('connect-*')
+      exclude('slf4j-log4j12*')
     }
     into "$buildDir/dependant-libs"
   }
@@ -876,12 +880,10 @@ project(':connect:file') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-    }
     from (configurations.runtime) {
       exclude('kafka-clients*')
       exclude('connect-*')
+      exclude('slf4j-log4j12*')
     }
     into "$buildDir/dependant-libs"
   }
