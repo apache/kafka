@@ -55,7 +55,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public static final String OUTEROTHER_NAME = "KTABLE-OUTEROTHER-";
 
-    public static final String LEFTJOIN_NAME = "KTABLE-LEFTJOIN-";
+    public static final String LEFTTHIS_NAME = "KTABLE-LEFTTHIS-";
+    public static final String LEFTOTHER_NAME = "KTABLE-LEFTOTHER-";
 
     public static final String MERGE_NAME = "KTABLE-MERGE-";
 
@@ -193,7 +194,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(joinOtherName, joinOther, ((KTableImpl) other).name);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
 
-        return new KTableImpl<>(topology, name, joinThis, allSourceNodes);
+        return new KTableImpl<>(topology, joinMergeName, joinThis, allSourceNodes);
     }
 
     @SuppressWarnings("unchecked")
@@ -205,8 +206,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String joinOtherName = topology.newName(OUTEROTHER_NAME);
         String joinMergeName = topology.newName(MERGE_NAME);
 
-        KTableKTableLeftJoin<K, R, V, V1> joinThis = new KTableKTableLeftJoin<>(this, (KTableImpl<K, ?, V1>) other, joiner);
-        KTableKTableLeftJoin<K, R, V1, V> joinOther = new KTableKTableLeftJoin<>((KTableImpl<K, ?, V1>) other, this, reverseJoiner(joiner));
+        KTableKTableOuterJoin<K, R, V, V1> joinThis = new KTableKTableOuterJoin<>(this, (KTableImpl<K, ?, V1>) other, joiner);
+        KTableKTableOuterJoin<K, R, V1, V> joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, ?, V1>) other, this, reverseJoiner(joiner));
         KTableMerge<K, R> joinMerge = new KTableMerge<>(
                 new KTableImpl<K, V, R>(topology, joinThisName, null, this.sourceNodes),
                 new KTableImpl<K, V1, R>(topology, joinOtherName, null, ((KTableImpl<K, ?, ?>) other).sourceNodes)
@@ -216,7 +217,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(joinOtherName, joinOther, ((KTableImpl) other).name);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
 
-        return new KTableImpl<>(topology, name, joinMerge, allSourceNodes);
+        return new KTableImpl<>(topology, joinMergeName, joinThis, allSourceNodes);
     }
 
     @SuppressWarnings("unchecked")
@@ -224,13 +225,22 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
-        String name = topology.newName(LEFTJOIN_NAME);
+        String joinThisName = topology.newName(LEFTTHIS_NAME);
+        String joinOtherName = topology.newName(LEFTOTHER_NAME);
+        String joinMergeName = topology.newName(MERGE_NAME);
 
-        KTableKTableLeftJoin<K, R, V, V1> leftJoin = new KTableKTableLeftJoin<>(this, (KTableImpl<K, ?, V1>) other, joiner);
+        KTableKTableLeftJoin<K, R, V, V1> joinThis = new KTableKTableLeftJoin<>(this, (KTableImpl<K, ?, V1>) other, joiner);
+        KTableKTableRightJoin<K, R, V1, V> joinOther = new KTableKTableRightJoin<>((KTableImpl<K, ?, V1>) other, this, reverseJoiner(joiner));
+        KTableMerge<K, R> joinMerge = new KTableMerge<>(
+                new KTableImpl<K, V, R>(topology, joinThisName, null, this.sourceNodes),
+                new KTableImpl<K, V1, R>(topology, joinOtherName, null, ((KTableImpl<K, ?, ?>) other).sourceNodes)
+        );
 
-        topology.addProcessor(name, leftJoin, this.name);
+        topology.addProcessor(joinThisName, joinThis, this.name);
+        topology.addProcessor(joinOtherName, joinOther, ((KTableImpl) other).name);
+        topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
 
-        return new KTableImpl<>(topology, name, leftJoin, allSourceNodes);
+        return new KTableImpl<>(topology, joinMergeName, joinThis, allSourceNodes);
     }
 
 }
