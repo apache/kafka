@@ -59,9 +59,10 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val firstDirty = log.activeSegment.baseOffset
     // wait until we clean up to base_offset of active segment - minDirtyMessages
     cleaner.awaitCleaned("log", 0, firstDirty)
-
+    val compactedSize = log.logSegments.map(_.size).sum
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
-    assertTrue("log cleaner should have processed up to offset " + firstDirty, lastCleaned >= firstDirty);
+    assertTrue("log cleaner should have processed up to offset %d, but lastCleaned=%d".format(firstDirty, lastCleaned), lastCleaned >= firstDirty);
+    assertTrue("log should have been compacted:  startSize=%d compactedSize=%d".format(startSize, compactedSize), startSize > compactedSize)
     
     val read = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends.toMap, read.toMap)
@@ -73,7 +74,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     cleaner.awaitCleaned("log", 0, firstDirty2)
 
     val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
-    assertTrue("log cleaner should have processed up to offset " + firstDirty2, lastCleaned2 >= firstDirty2);
+    assertTrue("log cleaner should have processed, firstDirty=%d, lastCleaned=%d, firstDirty2=%d, lastCleaned2=%d.".format(firstDirty, lastCleaned, firstDirty2, lastCleaned2), lastCleaned2 > lastCleaned);
 
     val read2 = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends2.toMap, read2.toMap)
