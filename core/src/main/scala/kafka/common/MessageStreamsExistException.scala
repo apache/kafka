@@ -17,7 +17,7 @@
 package kafka.common
 
 /**
- * Indicates a createMessageStreams can't be called more thane once
+ * Indicates a createMessageStreams can't be called more than once
 */
 class MessageStreamsExistException(message: String, t: Throwable) extends RuntimeException(message, t) {
 }
