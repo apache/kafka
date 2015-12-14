@@ -408,7 +408,7 @@ public class Fetcher<K, V> {
                 } else if (part.fetchOffset == position) {
                     long nextOffset = part.records.get(part.records.size() - 1).offset() + 1;
 
-                    log.debug("Returning fetched records at offset {} for assigned partition {} and update " +
+                    log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
                             "position to {}", position, part.partition, nextOffset);
 
                     List<ConsumerRecord<K, V>> records = drained.get(part.partition);
@@ -514,7 +514,7 @@ public class Fetcher<K, V> {
 
                 long position = this.subscriptions.position(partition);
                 fetch.put(partition, new FetchRequest.PartitionData(position, this.fetchSize));
-                log.debug("Added fetch request for partition {} at offset {}", partition, position);
+                log.trace("Added fetch request for partition {} at offset {}", partition, position);
             }
         }
 
@@ -564,7 +564,7 @@ public class Fetcher<K, V> {
                 }
 
                 if (!parsed.isEmpty()) {
-                    log.debug("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
+                    log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                     this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
