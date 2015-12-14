@@ -301,7 +301,7 @@ public class KafkaConfigStorage {
      */
     public void putTaskConfigs(Map<ConnectorTaskId, Map<String, String>> configs) {
         // Make sure we're at the end of the log. We should be the only writer, but we want to make sure we don't have
-        // any outstanding lagging data to consume.
+        // any outstanding logging data to consume.
         try {
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {

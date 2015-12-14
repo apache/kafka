@@ -326,9 +326,9 @@ import java.util.regex.Pattern;
  *
  * <p>
  * One of such cases is stream processing, where processor fetches from two topics and performs the join on these two streams.
- * When one of the topic is long lagging behind the other, the processor would like to pause fetching from the ahead topic
+ * When one of the topics is long lagging behind the other, the processor would like to pause fetching from the ahead topic
  * in order to get the lagging stream to catch up. Another example is bootstraping upon consumer starting up where there are
- * a lot of history data to catch up, the applciations usually wants to get the latest data on some of the topics before consider
+ * a lot of history data to catch up, the applications usually want to get the latest data on some of the topics before consider
  * fetching other topics.
  *
  * <p>
