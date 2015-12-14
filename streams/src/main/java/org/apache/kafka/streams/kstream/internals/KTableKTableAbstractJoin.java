@@ -27,7 +27,7 @@ abstract class KTableKTableAbstractJoin<K, V, V1, V2> implements KTableProcessor
     protected final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
     protected final ValueJoiner<V1, V2, V> joiner;
 
-    protected boolean oldValueEnabled = false;
+    protected boolean sendOldValues = false;
 
     KTableKTableAbstractJoin(KTableImpl<K, ?, V1> table1,
                              KTableImpl<K, ?, V2> table2,
@@ -40,10 +40,10 @@ abstract class KTableKTableAbstractJoin<K, V, V1, V2> implements KTableProcessor
     }
 
     @Override
-    public final void enableSendingOldValue() {
-        table1.enableSendingOldValue();
-        table2.enableSendingOldValue();
-        oldValueEnabled = true;
+    public final void enableSendingOldValues() {
+        table1.enableSendingOldValues();
+        table2.enableSendingOldValues();
+        sendOldValues = true;
     }
 
 }

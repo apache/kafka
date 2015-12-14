@@ -242,7 +242,7 @@ public class KTableFilterTest {
                         }
                     });
 
-            table2.enableSendingOldValue();
+            table2.enableSendingOldValues();
 
             MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
             MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();

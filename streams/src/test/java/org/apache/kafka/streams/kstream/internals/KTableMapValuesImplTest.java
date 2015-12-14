@@ -270,7 +270,7 @@ public class KTableMapValuesImplTest {
                         }
                     });
 
-            table2.enableSendingOldValue();
+            table2.enableSendingOldValues();
 
             MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
 

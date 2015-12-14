@@ -28,7 +28,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     public final String topic;
 
     private boolean materialized = false;
-    private boolean sendValueEnabled = false;
+    private boolean sendOldValues = false;
 
     public KTableSource(String topic) {
         this.topic = topic;
@@ -47,8 +47,8 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         return materialized;
     }
 
-    public void enableSendingOldValue() {
-        sendValueEnabled = true;
+    public void enableSendingOldValues() {
+        sendOldValues = true;
     }
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
@@ -71,7 +71,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void process(K key, V value) {
-            V oldValue = sendValueEnabled ? store.get(key) : null;
+            V oldValue = sendOldValues ? store.get(key) : null;
             store.put(key, value);
 
             context().forward(key, new Change<>(value, oldValue));

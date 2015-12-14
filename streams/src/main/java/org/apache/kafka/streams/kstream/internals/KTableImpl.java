@@ -67,7 +67,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valDeserializer;
 
-    private boolean sendingOldValueEnabled = false;
+    private boolean sendOldValues = false;
 
     public KTableImpl(KStreamBuilder topology,
                       String name,
@@ -173,21 +173,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @SuppressWarnings("unchecked")
-    void enableSendingOldValue() {
-        if (!sendingOldValueEnabled) {
+    void enableSendingOldValues() {
+        if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {
                 KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
                 materialize(source);
-                source.enableSendingOldValue();
+                source.enableSendingOldValues();
             } else {
-                ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValue();
+                ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValues();
             }
-            sendingOldValueEnabled = true;
+            sendOldValues = true;
         }
     }
 
     boolean sendingOldValueEnabled() {
-        return sendingOldValueEnabled;
+        return sendOldValues;
     }
 
     private void materialize(KTableSource<K, ?> source) {

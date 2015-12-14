@@ -68,7 +68,7 @@ class KTableKTableRightJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V,
 
             if (value2 != null) {
                 newValue = joiner.apply(change.newValue, value2);
-                if (oldValueEnabled)
+                if (sendOldValues)
                     oldValue = joiner.apply(change.oldValue, value2);
             }
 

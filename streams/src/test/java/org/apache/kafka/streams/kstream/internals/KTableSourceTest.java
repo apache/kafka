@@ -168,7 +168,7 @@ public class KTableSourceTest {
             KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
                     builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
 
-            table1.enableSendingOldValue();
+            table1.enableSendingOldValues();
 
             assertTrue(table1.sendingOldValueEnabled());
 

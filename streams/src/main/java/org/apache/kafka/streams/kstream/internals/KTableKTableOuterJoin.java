@@ -68,7 +68,7 @@ class KTableKTableOuterJoin<K, V, V1, V2> extends KTableKTableAbstractJoin<K, V,
             if (change.newValue != null || value2 != null)
                 newValue = joiner.apply(change.newValue, value2);
 
-            if (oldValueEnabled) {
+            if (sendOldValues) {
                 if (change.oldValue != null || value2 != null)
                     oldValue = joiner.apply(change.oldValue, value2);
             }

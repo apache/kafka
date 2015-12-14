@@ -28,7 +28,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final Predicate<K, V> predicate;
     private final boolean filterOut;
 
-    private boolean sendOldValue = false;
+    private boolean sendOldValues = false;
 
     public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<K, V> predicate, boolean filterOut) {
         this.parent = parent;
@@ -56,9 +56,9 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public void enableSendingOldValue() {
-        parent.enableSendingOldValue();
-        sendOldValue = true;
+    public void enableSendingOldValues() {
+        parent.enableSendingOldValues();
+        sendOldValues = true;
     }
 
     private V computeValue(K key, V value) {
@@ -75,7 +75,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         @Override
         public void process(K key, Change<V> change) {
             V newValue = computeValue(key, change.newValue);
-            V oldValue = sendOldValue ? computeValue(key, change.oldValue) : null;
+            V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
             context().forward(key, new Change<>(newValue, oldValue));
         }

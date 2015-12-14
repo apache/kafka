@@ -280,7 +280,7 @@ public class KTableKTableLeftJoinTest {
             table2 = builder.table(keySerializer, valSerializer, keyDeserializer, valDeserializer, topic2);
             joined = table1.leftJoin(table2, joiner);
 
-            ((KTableImpl<?, ?, ?>) joined).enableSendingOldValue();
+            ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 
             proc = new MockProcessorSupplier<>();
             builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);

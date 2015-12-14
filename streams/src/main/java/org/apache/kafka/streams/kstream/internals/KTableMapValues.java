@@ -27,7 +27,7 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
     private final KTableImpl<K1, ?, V1> parent;
     private final ValueMapper<V1, V2> mapper;
 
-    private boolean oldValueEnabled = false;
+    private boolean sendOldValues = false;
 
     public KTableMapValues(KTableImpl<K1, ?, V1> parent, ValueMapper<V1, V2> mapper) {
         this.parent = parent;
@@ -53,9 +53,9 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
     }
 
     @Override
-    public void enableSendingOldValue() {
-        parent.enableSendingOldValue();
-        oldValueEnabled = true;
+    public void enableSendingOldValues() {
+        parent.enableSendingOldValues();
+        sendOldValues = true;
     }
 
     private V2 computeValue(V1 value) {
@@ -72,7 +72,7 @@ class KTableMapValues<K1, V1, V2> implements KTableProcessorSupplier<K1, V1, V2>
         @Override
         public void process(K1 key, Change<V1> change) {
             V2 newValue = computeValue(change.newValue);
-            V2 oldValue = oldValueEnabled ? computeValue(change.oldValue) : null;
+            V2 oldValue = sendOldValues ? computeValue(change.oldValue) : null;
 
             context().forward(key, new Change(newValue, oldValue));
         }
