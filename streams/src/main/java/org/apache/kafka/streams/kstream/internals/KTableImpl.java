@@ -195,7 +195,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             if (!source.isMaterialized()) {
                 StateStoreSupplier storeSupplier =
                         new KTableStoreSupplier<>(source.topic, keySerializer, keyDeserializer, valSerializer, valDeserializer, null);
-                // mark this state is non internal hence it is read directly from a user topic
+                // mark this state as non internal hence it is read directly from a user topic
                 topology.addStateStore(storeSupplier, false, name);
                 source.materialize();
             }
