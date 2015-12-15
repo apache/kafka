@@ -17,7 +17,8 @@
 package kafka.common
 
 import kafka.utils.{Time, SystemTime, ZkUtils, Logging}
-import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
+import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
+import org.apache.zookeeper.Watcher.Event.KeeperState
 import scala.collection.JavaConverters._
 
 /**
@@ -37,7 +38,7 @@ trait NotificationHandler {
  * The caller/user of this class should ensure that they use zkClient.subscribeStateChanges and call processAllNotifications
  * method of this class from ZkStateChangeListener's handleNewSession() method. This is necessary to ensure that if zk session
  * is terminated and reestablished any missed notification will be processed immediately.
- * @param zkClient
+ * @param zkUtils
  * @param seqNodeRoot
  * @param seqNodePrefix
  * @param notificationHandler
@@ -58,6 +59,7 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
   def init() {
     zkUtils.makeSurePersistentPathExists(seqNodeRoot)
     zkUtils.zkClient.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
+    zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
     processAllNotifications()
   }
 
@@ -122,6 +124,21 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
       } catch {
         case e: Exception => error(s"Error processing notification change for path = $path and notification= $notifications :", e)
       }
+    }
+  }
+
+  object ZkStateChangeListener extends IZkStateListener {
+
+    override def handleNewSession() {
+      processAllNotifications
+    }
+
+    override def handleSessionEstablishmentError(error: Throwable) {
+      fatal("Could not establish session with zookeeper", error)
+    }
+
+    override def handleStateChanged(state: KeeperState) {
+      //no op
     }
   }
 
