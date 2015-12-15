@@ -401,12 +401,12 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a hexidecimal string for the given bytes
+   * Create a hexadecimal string for the given bytes
    */
   def hexString(bytes: Array[Byte]): String = hexString(ByteBuffer.wrap(bytes))
 
   /**
-   * Create a hexidecimal string for the given bytes
+   * Create a hexadecimal string for the given bytes
    */
   def hexString(buffer: ByteBuffer): String = {
     val builder = new StringBuilder("0x")
@@ -711,7 +711,7 @@ object TestUtils extends Logging {
 
   /**
    * Execute the given block. If it throws an assert error, retry. Repeat
-   * until no error is thrown or the time limit ellapses
+   * until no error is thrown or the time limit elapses
    */
   def retry(maxWaitMs: Long)(block: => Unit) {
     var wait = 1L

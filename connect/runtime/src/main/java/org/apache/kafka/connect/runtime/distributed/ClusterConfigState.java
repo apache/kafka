@@ -86,7 +86,7 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the number of tasks assigned for the given conncetor.
+     * Get the number of tasks assigned for the given connector.
      * @param connectorName name of the connector to look up tasks for
      * @return the number of tasks
      */
