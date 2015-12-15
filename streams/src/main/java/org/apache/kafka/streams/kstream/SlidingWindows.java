@@ -23,9 +23,15 @@ import java.util.Collections;
 
 public class SlidingWindows extends Windows<SlidingWindow> {
 
+    private static final String NAME = "SLIDING-WINDOWS-";
+
     private long size;
 
     private SlidingWindows(long size) {
+        super();
+
+        setName(newName(NAME));
+
         this.size = size;
     }
 

@@ -22,4 +22,14 @@ public class UnlimitedWindow extends Window {
     public UnlimitedWindow(long start) {
         super(start, Long.MAX_VALUE);
     }
+
+    @Override
+    public boolean overlap(Window other) {
+        return super.overlap(other) && other.getClass().equals(UnlimitedWindow.class);
+    }
+
+    @Override
+    public boolean equalsTo(Window other) {
+        return super.equalsTo(other) && other.getClass().equals(UnlimitedWindow.class);
+    }
 }

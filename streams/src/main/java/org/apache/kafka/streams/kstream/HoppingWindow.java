@@ -22,4 +22,14 @@ public class HoppingWindow extends Window {
     public HoppingWindow(long start, long end) {
         super(start, end);
     }
+
+    @Override
+    public boolean overlap(Window other) {
+        return super.overlap(other) && other.getClass().equals(HoppingWindow.class);
+    }
+
+    @Override
+    public boolean equalsTo(Window other) {
+        return super.equalsTo(other) && other.getClass().equals(HoppingWindow.class);
+    }
 }

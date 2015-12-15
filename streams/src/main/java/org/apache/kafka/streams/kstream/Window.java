@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public abstract class Window implements Comparable<Window> {
+public abstract class Window {
 
     private long start;
     private long end;
@@ -41,13 +41,11 @@ public abstract class Window implements Comparable<Window> {
         return end;
     }
 
-    @Override
-    public int compareTo(Window other) {
-        if (this.start() > other.start())
-            return 1;
-        else if (this.start() < other.start())
-            return -1;
-        else
-            return 0;
+    public boolean overlap(Window other) {
+        return this.start() < other.end() || other.start() < this.end();
+    }
+
+    public boolean equalsTo(Window other) {
+        return this.start() == other.start() && this.end() == other.end();
     }
 }

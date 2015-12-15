@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream;
 
 import java.util.Collection;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class Windows<W extends Window> {
 
@@ -25,13 +26,28 @@ public abstract class Windows<W extends Window> {
 
     private static final long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L;   // one day
 
+    private static final AtomicInteger NAME_INDEX = new AtomicInteger(0);
+
     private long emitDuration;
 
     private long maintainDuration;
 
+    private String name;
+
     protected Windows() {
         this.emitDuration = DEFAULT_EMIT_DURATION;
         this.maintainDuration = DEFAULT_MAINTAIN_DURATION;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    /**
+     * Set the window name
+     */
+    protected void setName(String name) {
+        this.name = name;
     }
 
     /**
@@ -58,6 +74,10 @@ public abstract class Windows<W extends Window> {
 
     public long maintainMs() {
         return this.maintainDuration;
+    }
+
+    protected String newName(String prefix) {
+        return prefix + String.format("%010d", NAME_INDEX.getAndIncrement());
     }
 
     abstract boolean equalTo(Windows other);

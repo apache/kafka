@@ -22,12 +22,16 @@ import java.util.Collections;
 
 public class HoppingWindows extends Windows<HoppingWindow> {
 
+    private static final String NAME = "HOPPING-WINDOWS-";
+
     private long size;
 
     private long period;
 
     private HoppingWindows(long size) {
         super();
+
+        setName(newName(NAME));
 
         this.size = size;
         this.period = size;

@@ -22,10 +22,14 @@ import java.util.Collections;
 
 public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
+    private static final String NAME = "UNLIMITED-WINDOWS-";
+
     private long start;
 
     private UnlimitedWindows(long start) {
         super();
+
+        setName(newName(NAME));
 
         this.start = start;
     }
