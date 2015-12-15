@@ -19,5 +19,5 @@ package org.apache.kafka.streams.kstream;
 
 public interface AggregateSupplier<K, V, T> {
 
-    Aggregator<K, V, T> get(Class<K> keyClass, Class<V> valueClass, Class<T> aggClass);
+    Aggregator<K, V, T> get();
 }

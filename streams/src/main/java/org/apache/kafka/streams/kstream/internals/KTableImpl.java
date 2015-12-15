@@ -254,9 +254,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1> KTable<K1, V1>sum(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name) {
+    public <K1, V1> KTable<K1, Long> sum(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, ValueMapper<V1, Long> valueMapper, String name) {
 
-        return this.aggregate(new SumSupplier<>(), selector, name);
+        return this.aggregate(new SumSupplier<>(valueMapper), selector, name);
     }
 
     @Override

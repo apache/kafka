@@ -154,7 +154,7 @@ public interface KTable<K, V> {
     /**
      * Sum values of this table by the selected key on a window basis.
      */
-    <K1, V1> KTable<K1, V1>sum(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
+    <K1, V1> KTable<K1, Long>sum(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, ValueMapper<V1, Long> valueMapper, String name);
 
     /**
      * Count number of records of this table by the selected key on a window basis.

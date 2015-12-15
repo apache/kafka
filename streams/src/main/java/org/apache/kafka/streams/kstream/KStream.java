@@ -199,7 +199,7 @@ public interface KStream<K, V> {
     /**
      * Sum values of this stream by key on a window basis.
      */
-    <W extends Window> KWindowedTable<K, V, W> sumByKey(Windows<W> windows);
+    <W extends Window> KWindowedTable<K, Long, W> sumByKey(ValueMapper<V, Long> valueMapper, Windows<W> windows);
 
     /**
      * Count number of records of this stream by key on a window basis.

@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.KWindowedTable;
 import org.apache.kafka.streams.kstream.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.WindowMapper;
 
@@ -56,33 +57,44 @@ public class KTableJob {
         // stream aggregate
         KStream<String, Integer> stream1 = builder.stream("topic1");
 
-        KWindowedTable<String, Integer, HoppingWindow> wtable1 = stream1.sumByKey(HoppingWindows.of(1000).every(500).emit(1000).until(1000 * 60 * 60 * 24 /* one day */));
+        @SuppressWarnings("unchecked")
+        KWindowedTable<String, Long, HoppingWindow> wtable1 = stream1.sumByKey(new ValueMapper<Integer, Long>() {
+            @Override
+            public Long apply(Integer value) {
+                return (long) value;
+            }
+        }, HoppingWindows.of(1000).every(500).emit(1000).until(1000 * 60 * 60 * 24 /* one day */));
 
         // table aggregation
         KTable<String, String> table1 = builder.table("topic2");
 
-        KTable<String, Integer> table2 = table1.sum(new KeyValueMapper<String, String, KeyValue<String, Integer>>() {
+        KTable<String, Long> table2 = table1.sum(new KeyValueMapper<String, String, KeyValue<String, Integer>>() {
             @Override
             public KeyValue<String, Integer> apply(String key, String value) {
                 return new KeyValue<>(value, new Integer(key));
             }
+        }, new ValueMapper<Integer, Long>() {
+            @Override
+            public Long apply(Integer value) {
+                return (long) value;
+            }
         }, "table2");
 
         // stream-table join
-        KStream<String, Integer> stream2 = stream1.leftJoin(table2, new ValueJoiner<Integer, Integer, Integer>() {
+        KStream<String, Long> stream2 = stream1.leftJoin(table2, new ValueJoiner<Integer, Long, Long>() {
             @Override
-            public Integer apply(Integer value1, Integer value2) {
+            public Long apply(Integer value1, Long value2) {
                 if (value2 == null)
-                    return 0;
+                    return 0L;
                 else
                     return value1 * value2;
             }
         });
 
         // table-table join
-        KTable<String, String> table3 = table1.outerJoin(table2, new ValueJoiner<String, Integer, String>() {
+        KTable<String, String> table3 = table1.outerJoin(table2, new ValueJoiner<String, Long, String>() {
             @Override
-            public String apply(String value1, Integer value2) {
+            public String apply(String value1, Long value2) {
                 if (value2 == null)
                     return value1 + "-null";
                 else if (value1 == null)
@@ -93,9 +105,9 @@ public class KTableJob {
         });
 
         // windowed table self join
-        KWindowedTable<String, Integer, HoppingWindow> wtable2 = wtable1.leftJoin(wtable1, 1000 * 60 * 60 * 24 * 7 /* a week ago*/, new ValueJoiner<Integer, Integer, Integer>() {
+        KWindowedTable<String, Long, HoppingWindow> wtable2 = wtable1.leftJoin(wtable1, 1000 * 60 * 60 * 24 * 7 /* a week ago*/, new ValueJoiner<Long, Long, Long>() {
             @Override
-            public Integer apply(Integer value1, Integer value2) {
+            public Long apply(Long value1, Long value2) {
                 if (value2 == null)
                     return value1;
                 else
@@ -103,9 +115,9 @@ public class KTableJob {
             }
         });
 
-        KStream<String, String> stream3 = wtable2.toStream(new WindowMapper<String, Integer, HoppingWindow, String, String>() {
+        KStream<String, String> stream3 = wtable2.toStream(new WindowMapper<String, Long, HoppingWindow, String, String>() {
             @Override
-            public KeyValue<String, String> apply(String key, Integer value, HoppingWindow window) {
+            public KeyValue<String, String> apply(String key, Long value, HoppingWindow window) {
                 return new KeyValue<>(key + window.start(), value.toString());
             }
         });

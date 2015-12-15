@@ -45,7 +45,7 @@ public class CountSupplier<K, V> implements AggregateSupplier<K, V, Long> {
     }
 
     @Override
-    public Aggregator<K, V, Long> get(Class<K> keyClass, Class<V> valueClass, Class<Long> aggClass) {
+    public Aggregator<K, V, Long> get() {
         return new Count();
     }
 }

@@ -268,9 +268,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <W extends Window> KWindowedTable<K, V, W> sumByKey(Windows<W> windows) {
+    public <W extends Window> KWindowedTable<K, Long, W> sumByKey(ValueMapper<V, Long> valueMapper, Windows<W> windows) {
 
-        return this.aggregateByKey(new SumSupplier<>(), windows);
+        return this.aggregateByKey(new SumSupplier<>(valueMapper), windows);
     }
 
     @Override

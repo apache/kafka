@@ -36,7 +36,7 @@ public class TopKSupplier<K, V> implements AggregateSupplier<K, V, Collection<V>
         this.k = k;
     }
 
-    private class TopK<K, V> implements Aggregator<K, V, Collection<V>> {
+    private class TopK implements Aggregator<K, V, Collection<V>> {
 
         private final Map<K, PriorityQueue<V>> sorted = new HashMap<>();
 
@@ -96,7 +96,7 @@ public class TopKSupplier<K, V> implements AggregateSupplier<K, V, Collection<V>
     }
 
     @Override
-    public Aggregator<K, V, Collection<V>> get(Class<K> keyClass, Class<V> valueClass, Class<Collection<V>> aggClass) {
-        return new TopK<>();
+    public Aggregator<K, V, Collection<V>> get() {
+        return new TopK();
     }
 }
