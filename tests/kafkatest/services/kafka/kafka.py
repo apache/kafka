@@ -19,12 +19,10 @@ from ducktape.utils.util import wait_until
 from config import KafkaConfig
 from kafkatest.services.kafka import config_property
 from kafkatest.services.kafka.version import TRUNK
-from kafkatest.services.kafka.directory import kafka_dir, KAFKA_TRUNK
 
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.security.minikdc import MiniKdc
-from sets import Set
 import json
 import re
 import signal
@@ -372,14 +370,14 @@ class KafkaService(JmxMixin, Service):
             files = node.account.ssh_capture("find %s -regex  '.*/%s-.*/[^/]*.log'" % (KafkaService.DATA_LOG_DIR, topic))
 
             # Check each data file to see if it contains the messages we want
-            for file in files:
+            for log in files:
                 cmd = "/opt/%s/bin/kafka-run-class.sh kafka.tools.DumpLogSegments --print-data-log --files %s " \
-                      "| grep -E \"%s\"" % (kafka_dir(node), file.strip(), payload_match)
+                      "| grep -E \"%s\"" % (kafka_dir(node), log.strip(), payload_match)
 
                 for line in node.account.ssh_capture(cmd, allow_fail=True):
                     for val in messages:
                         if line.strip().endswith("payload: "+str(val)):
-                            self.logger.debug("Found %s in data-file [%s] in line: [%s]" % (val, file.strip(), line.strip()))
+                            self.logger.debug("Found %s in data-file [%s] in line: [%s]" % (val, log.strip(), line.strip()))
                             found.add(val)
 
         missing = list(set(messages) - found)
