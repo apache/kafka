@@ -183,38 +183,42 @@ class SecurityConfig(TemplateRenderer):
     #
     # Cluster action
     #
-    def addClusterAcl(self, zk_connect):
-        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --cluster --operation=ClusterAction --allow-principal=User:kafka " % {
-                    'zk_connect': zk_connect
+    def addClusterAcl(self, zk_connect, principal="User:kafka"):
+        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --cluster --operation=ClusterAction --allow-principal=%(principal)s " % {
+                    'zk_connect': zk_connect,
+                    'principal': principal
                 }
 
 
     #
     # Broker read, necessary for replication
     #
-    def brokerReadAcl(self, zk_connect, topic):
-        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --operation=Read --allow-principal=User:kafka " % {
+    def brokerReadAcl(self, zk_connect, topic, principal="User:kafka"):
+        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --operation=Read --allow-principal=%(principal)s " % {
                         'zk_connect': zk_connect,
-                        'topic': topic
+                        'topic': topic,
+                        'principal': principal
                 }
 
     #
     # Produce
     #
-    def produceAcl(self, zk_connect, topic):
-        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --producer --allow-principal=User:client " % {
+    def produceAcl(self, zk_connect, topic, principal="User:client"):
+        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --producer --allow-principal=%(principal)s " % {
                         'zk_connect': zk_connect,
-                        'topic': topic
+                        'topic': topic,
+                        'principal': principal
                 }
 
     #
     # Consume
     #
-    def consumeAcl(self, zk_connect, topic, group):
-        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --group=%(group)s --consumer --allow-principal=User:client " % {
+    def consumeAcl(self, zk_connect, topic, group, principal="User:client"):
+        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s --group=%(group)s --consumer --allow-principal=%(principal)s " % {
                     'zk_connect': zk_connect,
                     'topic': topic,
-                    'group': group
+                    'group': group,
+                    'principal': principal
                 }
 
     def __str__(self):

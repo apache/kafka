@@ -62,8 +62,10 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         return self.kafka.security_protocol == "PLAINTEXT" or self.kafka.security_protocol == "SSL"
 
     @property
-    def has_sasl(self):
-        return not self.no_sasl
+    def is_secure(self):
+        return self.kafka.security_protocol == "SASL_PLAINTEXT" \
+                or self.kafka.security_protocol == "SSL" \
+                or self.kafka.security_protocol == "SASL_SSL"
 
     def run_zk_migration(self):
         # change zk config (auth provider + jaas login)
@@ -101,19 +103,25 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         #
         # Set acls
         #
-        if self.has_sasl:
+        if self.is_secure:
             self.kafka.authorizer_class_name = "kafka.security.auth.SimpleAclAuthorizer"
+            if security_protocol == "SSL":
+                self.kafka_principal = "User:CN=systemtest"
+                self.client_principal = "User:CN=systemtest"
+            else:
+                self.kafka_principal = "User:kafka"
+                self.client_principal = "User:client"
 
-            self.add_cluster_props = self.kafka.security_config.addClusterAcl(self.zk.connect_setting())
+            self.add_cluster_props = self.kafka.security_config.addClusterAcl(self.zk.connect_setting(), self.kafka_principal)
             self.kafka.security_config.acls_command(self.kafka.nodes[0], self.add_cluster_props)
 
-            self.broker_read_props = self.kafka.security_config.brokerReadAcl(self.zk.connect_setting(), self.topic)
+            self.broker_read_props = self.kafka.security_config.brokerReadAcl(self.zk.connect_setting(), "*", self.kafka_principal)
             self.kafka.security_config.acls_command(self.kafka.nodes[0], self.broker_read_props)
 
-            self.produce_props = self.kafka.security_config.produceAcl(self.zk.connect_setting(), self.topic)
+            self.produce_props = self.kafka.security_config.produceAcl(self.zk.connect_setting(), self.topic, self.client_principal)
             self.kafka.security_config.acls_command(self.kafka.nodes[0], self.produce_props)
 
-            self.consume_props = self.kafka.security_config.consumeAcl(self.zk.connect_setting(), self.topic, self.group)
+            self.consume_props = self.kafka.security_config.consumeAcl(self.zk.connect_setting(), self.topic, self.group, self.client_principal)
             self.kafka.security_config.acls_command(self.kafka.nodes[0], self.consume_props)
         if(self.no_sasl):
             self.kafka.start()
