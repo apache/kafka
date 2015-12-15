@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.lang.reflect.Array;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -264,5 +265,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, Windows<W> windows) {
         // TODO
         return null;
+    }
+
+    @Override
+    public <W extends Window> KWindowedTable<K, V, W> sumByKey(Windows<W> windows) {
+
+        return this.aggregateByKey(new SumSupplier<>(), windows);
+    }
+
+    @Override
+    public <W extends Window> KWindowedTable<K, Long, W> countByKey(Windows<W> windows) {
+
+        return this.aggregateByKey(new CountSupplier<>(), windows);
+    }
+
+    @Override
+    public <W extends Window> KWindowedTable<K, Collection<V>, W> topKByKey(int k, Windows<W> windows) {
+
+        return this.aggregateByKey(new TopKSupplier<>(k), windows);
     }
 }

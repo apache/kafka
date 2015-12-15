@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
+import java.util.Collection;
+
 /**
  * KStream is an abstraction of a stream of key-value pairs.
  *
@@ -193,4 +195,19 @@ public interface KStream<K, V> {
      * @param <T>   the value type of the aggregated table
      */
     <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, Windows<W> windows);
+
+    /**
+     * Sum values of this stream by key on a window basis.
+     */
+    <W extends Window> KWindowedTable<K, V, W> sumByKey(Windows<W> windows);
+
+    /**
+     * Count number of records of this stream by key on a window basis.
+     */
+    <W extends Window> KWindowedTable<K, Long, W> countByKey(Windows<W> windows);
+
+    /**
+     * Get the top-k records of this stream by key on a window basis.
+     */
+    <W extends Window> KWindowedTable<K, Collection<V>, W> topKByKey(int k, Windows<W> windows);
 }
