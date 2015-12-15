@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.AggregateSupplier;
+import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KWindowedTable;
@@ -262,7 +262,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, Windows<W> windows) {
+    public <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier, Windows<W> windows) {
         // TODO
         return null;
     }

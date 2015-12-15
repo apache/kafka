@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.AggregateSupplier;
+import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.Aggregator;
 
 import java.util.Collection;
@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 
-public class TopKSupplier<K, V> implements AggregateSupplier<K, V, Collection<V>> {
+public class TopKSupplier<K, V> implements AggregatorSupplier<K, V, Collection<V>> {
 
     private final int k;
 

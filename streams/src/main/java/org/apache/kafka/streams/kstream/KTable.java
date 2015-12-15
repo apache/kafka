@@ -143,13 +143,13 @@ public interface KTable<K, V> {
     /**
      * Aggregate values of this table by the selected key.
      *
-     * @param aggregateSupplier the class of aggregateSupplier
+     * @param aggregatorSupplier the class of aggregatorSupplier
      * @param selector the KeyValue mapper that select the aggregate key
      * @param name the name of the resulted table
      * @param <K1>   the key type of the aggregated table
      * @param <V1>   the value type of the aggregated table
      */
-    <K1, V1, V2> KTable<K1, V2> aggregate(AggregateSupplier<K1, V1, V2> aggregateSupplier, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
+    <K1, V1, V2> KTable<K1, V2> aggregate(AggregatorSupplier<K1, V1, V2> aggregatorSupplier, KeyValueMapper<K, V, KeyValue<K1, V1>> selector, String name);
 
     /**
      * Sum values of this table by the selected key on a window basis.

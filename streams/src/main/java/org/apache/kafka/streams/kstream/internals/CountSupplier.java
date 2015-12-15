@@ -17,10 +17,10 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.AggregateSupplier;
+import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.Aggregator;
 
-public class CountSupplier<K, V> implements AggregateSupplier<K, V, Long> {
+public class CountSupplier<K, V> implements AggregatorSupplier<K, V, Long> {
 
     private class Count implements Aggregator<K, V, Long> {
         @Override

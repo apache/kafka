@@ -17,11 +17,11 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.AggregateSupplier;
+import org.apache.kafka.streams.kstream.AggregatorSupplier;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.ValueMapper;
 
-public class SumSupplier<K, V> implements AggregateSupplier<K, V, Long> {
+public class SumSupplier<K, V> implements AggregatorSupplier<K, V, Long> {
 
     private final ValueMapper<V, Long> valueMapper;
 

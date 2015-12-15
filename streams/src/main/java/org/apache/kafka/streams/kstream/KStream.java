@@ -190,11 +190,11 @@ public interface KStream<K, V> {
     /**
      * Aggregate values of this stream by key on a window basis.
      *
-     * @param aggregateSupplier the class of aggregateSupplier
+     * @param aggregatorSupplier the class of aggregatorSupplier
      * @param windows the window definition
      * @param <T>   the value type of the aggregated table
      */
-    <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, Windows<W> windows);
+    <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregatorSupplier<K, V, T> aggregatorSupplier, Windows<W> windows);
 
     /**
      * Sum values of this stream by key on a window basis.
