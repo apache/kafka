@@ -2,7 +2,9 @@ Apache Kafka
 =================
 See our [web site](http://kafka.apache.org) for details on the project.
 
-You need to have [gradle](http://www.gradle.org/installation) installed.
+You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
+
+Java 7 should be used for building in order to support both Java 7 and Java 8 at runtime.
 
 ### First bootstrap and download the wrapper ###
     cd kafka_source_dir
