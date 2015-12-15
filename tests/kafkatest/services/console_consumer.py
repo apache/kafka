@@ -136,6 +136,7 @@ class ConsoleConsumer(JmxMixin, BackgroundThreadService):
         self.client_id = client_id
         self.print_key = print_key
         self.log_values = log_values
+        self.log_level = "TRACE"
 
     def prop_file(self, node):
         """Return a string which can be used to create a configuration file appropriate for the given node."""

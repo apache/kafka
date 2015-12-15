@@ -53,7 +53,6 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
             consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True, log_values=True)
 
         self.consumer.group_id = "unique-test-group-" + str(random.random())
-        self.consumer.log_level = "TRACE"
 
     def bounce(self):
         self.kafka.start_minikdc()
