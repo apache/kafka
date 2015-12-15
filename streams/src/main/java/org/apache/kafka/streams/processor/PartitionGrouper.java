@@ -19,39 +19,18 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.internals.KafkaStreamingPartitionAssignor;
 
 import java.util.Map;
 import java.util.Set;
 
-public abstract class PartitionGrouper {
-
-    protected Map<Integer, Set<String>> topicGroups;
-
-    private KafkaStreamingPartitionAssignor partitionAssignor = null;
+public interface PartitionGrouper {
 
     /**
      * Returns a map of task ids to groups of partitions.
      *
-     * @param metadata
+     * @param topicGroups The subscribed topic groups
+     * @param metadata Metadata of the consuming cluster
      * @return a map of task ids to groups of partitions
      */
-    public abstract Map<TaskId, Set<TopicPartition>> partitionGroups(Cluster metadata);
-
-    public void topicGroups(Map<Integer, Set<String>> topicGroups) {
-        this.topicGroups = topicGroups;
-    }
-
-    public void partitionAssignor(KafkaStreamingPartitionAssignor partitionAssignor) {
-        this.partitionAssignor = partitionAssignor;
-    }
-
-    public Set<TaskId> taskIds(TopicPartition partition) {
-        return partitionAssignor.taskIds(partition);
-    }
-
-    public Set<TaskId> standbyTasks() {
-        return partitionAssignor.standbyTasks();
-    }
-
+    Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata);
 }

@@ -17,28 +17,49 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
 
+import java.io.File;
 import java.util.List;
+import java.util.Map;
 
 public class KStreamTestDriver {
 
     private final ProcessorTopology topology;
     private final MockProcessorContext context;
+    public final File stateDir;
+
     private ProcessorNode currNode;
 
     public KStreamTestDriver(KStreamBuilder builder) {
-        this(builder, null, null);
+        this(builder, null, null, null, null, null);
     }
 
-    public KStreamTestDriver(KStreamBuilder builder, Serializer<?> serializer, Deserializer<?> deserializer) {
+    public KStreamTestDriver(KStreamBuilder builder, File stateDir) {
+        this(builder, stateDir, null, null, null, null);
+    }
+
+    public KStreamTestDriver(KStreamBuilder builder,
+                             File stateDir,
+                             Serializer<?> keySerializer, Deserializer<?> keyDeserializer,
+                             Serializer<?> valSerializer, Deserializer<?> valDeserializer) {
         this.topology = builder.build(null);
-        this.context = new MockProcessorContext(this, serializer, deserializer);
+        this.context = new MockProcessorContext(this, keySerializer, keyDeserializer, valSerializer, valDeserializer, new MockRecordCollector());
+        this.stateDir = stateDir;
+
+        for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
+            StateStore store = stateStoreSupplier.get();
+            store.init(context);
+        }
 
         for (ProcessorNode node : topology.processors()) {
             currNode = node;
@@ -48,6 +69,10 @@ public class KStreamTestDriver {
                 currNode = null;
             }
         }
+    }
+
+    public ProcessorContext context() {
+        return context;
     }
 
     public void process(String topicName, Object key, Object value) {
@@ -89,6 +114,28 @@ public class KStreamTestDriver {
             childNode.process(key, value);
         } finally {
             currNode = thisNode;
+        }
+    }
+
+    public Map<String, StateStore> allStateStores() {
+        return context.allStateStores();
+    }
+
+
+    private class MockRecordCollector extends RecordCollector {
+        public MockRecordCollector() {
+            super(null);
+        }
+
+        public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+            // The serialization is skipped.
+            process(record.topic(), record.key(), record.value());
+        }
+
+        public void flush() {
+        }
+
+        public void close() {
         }
     }
 

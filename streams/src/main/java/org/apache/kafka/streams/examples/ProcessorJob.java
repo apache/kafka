@@ -49,7 +49,7 @@ public class ProcessorJob {
                 public void init(ProcessorContext context) {
                     this.context = context;
                     this.context.schedule(1000);
-                    this.kvStore = (KeyValueStore<String, Integer>) context.getStateStore("local-state");
+                    this.kvStore = (KeyValueStore<String, Integer>) context.getStateStore("LOCAL-STATE");
                 }
 
                 @Override
@@ -90,8 +90,9 @@ public class ProcessorJob {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamingConfig.CLIENT_ID_CONFIG, "Example-Processor-Job");
+        props.put(StreamingConfig.JOB_ID_CONFIG, "example-processor");
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamingConfig.ZOOKEEPER_CONNECT_CONFIG, "localhost:2181");
         props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         props.put(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -104,8 +105,7 @@ public class ProcessorJob {
         builder.addSource("SOURCE", new StringDeserializer(), new StringDeserializer(), "topic-source");
 
         builder.addProcessor("PROCESS", new MyProcessorSupplier(), "SOURCE");
-        builder.addStateStore(Stores.create("local-state").withStringKeys().withIntegerValues().inMemory().build());
-        builder.connectProcessorAndStateStores("local-state", "PROCESS");
+        builder.addStateStore(Stores.create("LOCAL-STATE").withStringKeys().withIntegerValues().inMemory().build(), "PROCESS");
 
         builder.addSink("SINK", "topic-sink", new StringSerializer(), new IntegerSerializer(), "PROCESS");
 

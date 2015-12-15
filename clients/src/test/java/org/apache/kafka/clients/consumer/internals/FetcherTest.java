@@ -54,7 +54,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -83,7 +82,6 @@ public class FetcherTest {
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private Metrics metrics = new Metrics(time);
-    private Map<String, String> metricTags = new LinkedHashMap<String, String>();
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
 
@@ -121,8 +119,7 @@ public class FetcherTest {
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(3, records.size());
-        assertEquals(4L, (long) subscriptions.fetched(tp)); // this is the next fetching position
-        assertEquals(4L, (long) subscriptions.consumed(tp));
+        assertEquals(4L, (long) subscriptions.position(tp)); // this is the next fetching position
         long offset = 1;
         for (ConsumerRecord<byte[], byte[]> record : records) {
             assertEquals(offset, record.offset());
@@ -151,8 +148,7 @@ public class FetcherTest {
         consumerClient.poll(0);
         consumerRecords = fetcher.fetchedRecords().get(tp);
         assertEquals(3, consumerRecords.size());
-        assertEquals(31L, (long) subscriptions.fetched(tp)); // this is the next fetching position
-        assertEquals(31L, (long) subscriptions.consumed(tp));
+        assertEquals(31L, (long) subscriptions.position(tp)); // this is the next fetching position
 
         assertEquals(15L, consumerRecords.get(0).offset());
         assertEquals(20L, consumerRecords.get(1).offset());
@@ -269,8 +265,7 @@ public class FetcherTest {
         consumerClient.poll(0);
         assertTrue(subscriptions.isOffsetResetNeeded(tp));
         assertEquals(0, fetcher.fetchedRecords().size());
-        assertEquals(null, subscriptions.fetched(tp));
-        assertEquals(null, subscriptions.consumed(tp));
+        assertEquals(null, subscriptions.position(tp));
     }
 
     @Test
@@ -318,8 +313,7 @@ public class FetcherTest {
         // disconnects should have no affect on subscription state
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(0, (long) subscriptions.fetched(tp));
-        assertEquals(0, (long) subscriptions.consumed(tp));
+        assertEquals(0, (long) subscriptions.position(tp));
     }
 
     @Test
@@ -331,8 +325,7 @@ public class FetcherTest {
 
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.fetched(tp));
-        assertEquals(5, (long) subscriptions.consumed(tp));
+        assertEquals(5, (long) subscriptions.position(tp));
     }
 
     @Test
@@ -345,8 +338,7 @@ public class FetcherTest {
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.fetched(tp));
-        assertEquals(5, (long) subscriptions.consumed(tp));
+        assertEquals(5, (long) subscriptions.position(tp));
     }
 
     @Test
@@ -359,8 +351,7 @@ public class FetcherTest {
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.fetched(tp));
-        assertEquals(5, (long) subscriptions.consumed(tp));
+        assertEquals(5, (long) subscriptions.position(tp));
     }
 
     @Test
@@ -373,8 +364,7 @@ public class FetcherTest {
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.fetched(tp));
-        assertEquals(5, (long) subscriptions.consumed(tp));
+        assertEquals(5, (long) subscriptions.position(tp));
     }
 
     @Test
@@ -392,8 +382,7 @@ public class FetcherTest {
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.fetched(tp));
-        assertEquals(5, (long) subscriptions.consumed(tp));
+        assertEquals(5, (long) subscriptions.position(tp));
     }
 
     @Test
@@ -484,8 +473,8 @@ public class FetcherTest {
         }
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric avgMetric = allMetrics.get(new MetricName("fetch-throttle-time-avg", metricGroup, "", metricTags));
-        KafkaMetric maxMetric = allMetrics.get(new MetricName("fetch-throttle-time-max", metricGroup, "", metricTags));
+        KafkaMetric avgMetric = allMetrics.get(metrics.metricName("fetch-throttle-time-avg", metricGroup, ""));
+        KafkaMetric maxMetric = allMetrics.get(metrics.metricName("fetch-throttle-time-max", metricGroup, ""));
         assertEquals(200, avgMetric.value(), EPSILON);
         assertEquals(300, maxMetric.value(), EPSILON);
     }
@@ -527,7 +516,6 @@ public class FetcherTest {
                 subscriptions,
                 metrics,
                 "consumer" + groupId,
-                metricTags,
                 time,
                 retryBackoffMs);
     }

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -37,13 +38,11 @@ public class StreamingConfigTest {
 
     private Properties props = new Properties();
     private StreamingConfig streamingConfig;
-    private StreamThread streamThreadPlaceHolder = null;
+    private StreamThread streamThreadPlaceHolder;
 
 
     @Before
     public void setUp() {
-        props.put(StreamingConfig.CLIENT_ID_CONFIG, "Example-Processor-Job");
-        props.put("group.id", "test-consumer-group");
         props.put(StreamingConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
@@ -53,18 +52,24 @@ public class StreamingConfigTest {
         streamingConfig = new StreamingConfig(props);
     }
 
-
+    @Test
+    public void testGetProducerConfigs() throws Exception {
+        Map<String, Object> returnedProps = streamingConfig.getProducerConfigs("client");
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-producer");
+    }
 
     @Test
     public void testGetConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamingConfig.getConsumerConfigs(streamThreadPlaceHolder);
-        assertEquals(returnedProps.get("group.id"), "test-consumer-group");
+        Map<String, Object> returnedProps = streamingConfig.getConsumerConfigs(streamThreadPlaceHolder, "example-job", "client");
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-consumer");
+        assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), "example-job");
 
     }
 
     @Test
     public void testGetRestoreConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamingConfig.getRestoreConsumerConfigs();
-        assertNull(returnedProps.get("group.id"));
+        Map<String, Object> returnedProps = streamingConfig.getRestoreConsumerConfigs("client");
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-restore-consumer");
+        assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }
 }

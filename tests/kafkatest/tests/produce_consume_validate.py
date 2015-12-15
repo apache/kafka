@@ -59,14 +59,18 @@ class ProduceConsumeValidateTest(Test):
 
     def run_produce_consume_validate(self, core_test_action=None, *args):
         """Top-level template for simple produce/consume/validate tests."""
+        try:
+            self.start_producer_and_consumer()
 
-        self.start_producer_and_consumer()
+            if core_test_action is not None:
+                core_test_action(*args)
 
-        if core_test_action is not None:
-            core_test_action(*args)
-
-        self.stop_producer_and_consumer()
-        self.validate()
+            self.stop_producer_and_consumer()
+            self.validate()
+        except BaseException as e:
+            for s in self.test_context.services:
+                self.mark_for_collect(s)
+            raise e
 
     def validate(self):
         """Check that each acked message was consumed."""

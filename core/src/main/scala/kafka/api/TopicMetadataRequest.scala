@@ -24,6 +24,7 @@ import kafka.common.ErrorMapping
 import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
+import org.apache.kafka.common.protocol.ApiKeys
 
 import scala.collection.mutable.ListBuffer
 
@@ -52,7 +53,7 @@ case class TopicMetadataRequest(versionId: Short,
                                 correlationId: Int,
                                 clientId: String,
                                 topics: Seq[String])
- extends RequestOrResponse(Some(RequestKeys.MetadataKey)){
+ extends RequestOrResponse(Some(ApiKeys.METADATA.id)){
 
   def this(topics: Seq[String], correlationId: Int) =
     this(TopicMetadataRequest.CurrentVersion, correlationId, TopicMetadataRequest.DefaultClientId, topics)

@@ -27,9 +27,9 @@ It also meant the system would have to handle low-latency delivery to handle mor
 <p>
 We wanted to support partitioned, distributed, real-time processing of these feeds to create new, derived feeds. This motivated our partitioning and consumer model.
 <p>
-Finally in cases where the stream is fed into other data systems for serving we knew the system would have to be able to guarantee fault-tolerance in the presence of machine failures.
+Finally in cases where the stream is fed into other data systems for serving, we knew the system would have to be able to guarantee fault-tolerance in the presence of machine failures.
 <p>
-Supporting these uses led use to a design with a number of unique elements, more akin to a database log then a traditional messaging system. We will outline some elements of the design in the following sections.
+Supporting these uses led us to a design with a number of unique elements, more akin to a database log than a traditional messaging system. We will outline some elements of the design in the following sections.
 
 <h3><a id="persistence" href="#persistence">4.2 Persistence</a></h3>
 <h4><a id="design_filesystem" href="#design_filesystem">Don't fear the filesystem!</a></h4>
@@ -359,7 +359,7 @@ Further cleaner configurations are described <a href="/documentation.html#broker
 
 <h4><a id="design_quotasnecessary" href="#design_quotasnecessary">Why are quotas necessary?</a></h4>
 <p>
-It is possible for producers and consumers to produce/consume very high volumes of data and thus monopolize broker resources, cause network saturation and generally DOS other clients and the brokers themselves. Having quotas protects against these issues and is all tbe more important in large multi-tenant clusters where a small set of badly behaved clients can degrade user experience for the well behaved ones. In fact, when running Kafka as a service this even makes it possible to enforce API limits according to an agreed upon contract.
+It is possible for producers and consumers to produce/consume very high volumes of data and thus monopolize broker resources, cause network saturation and generally DOS other clients and the brokers themselves. Having quotas protects against these issues and is all the more important in large multi-tenant clusters where a small set of badly behaved clients can degrade user experience for the well behaved ones. In fact, when running Kafka as a service this even makes it possible to enforce API limits according to an agreed upon contract.
 </p>
 <h4><a id="design_quotasenforcement" href="#design_quotasenforcement">Enforcement</a></h4>
 <p>
@@ -375,6 +375,6 @@ Client byte rate is measured over multiple small windows (for e.g. 30 windows of
 <h4><a id="design_quotasoverrides" href="#design_quotasoverrides">Quota overrides</a></h4>
 <p>
     It is possible to override the default quota for client-ids that need a higher (or even lower) quota. The mechanism is similar to the per-topic log config overrides.
-    Client-id overrides are written to ZooKeeper under <i><b>/config/clients</b></i>. These overrides are read by all brokers and are effective immediately. This lets us change quotas without having to do a rolling restart of the entire cluster. See <a href="/ops.html#quotas">here</a> for details.
+    Client-id overrides are written to ZooKeeper under <i><b>/config/clients</b></i>. These overrides are read by all brokers and are effective immediately. This lets us change quotas without having to do a rolling restart of the entire cluster. See <a href="#quotas">here</a> for details.
 
 </p>

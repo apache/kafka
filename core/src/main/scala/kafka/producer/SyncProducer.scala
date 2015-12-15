@@ -24,6 +24,7 @@ import kafka.api._
 import kafka.network.{RequestOrResponseSend, BlockingChannel}
 import kafka.utils._
 import org.apache.kafka.common.network.NetworkReceive
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.utils.Utils._
 
 object SyncProducer {
@@ -55,7 +56,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       val buffer = new RequestOrResponseSend("", request).buffer
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
-      if(requestTypeId == RequestKeys.ProduceKey) {
+      if(requestTypeId == ApiKeys.PRODUCE.id) {
         val request = ProducerRequest.readFrom(buffer)
         trace(request.toString)
       }

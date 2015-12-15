@@ -57,7 +57,7 @@ public class MockClient implements KafkaClient {
     private final Time time;
     private int correlation = 0;
     private Node node = null;
-    private final Set<Integer> ready = new HashSet<>();
+    private final Set<String> ready = new HashSet<>();
     private final Queue<ClientRequest> requests = new ArrayDeque<>();
     private final Queue<ClientResponse> responses = new ArrayDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
@@ -68,12 +68,12 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean isReady(Node node, long now) {
-        return ready.contains(node.id());
+        return ready.contains(node.idString());
     }
 
     @Override
     public boolean ready(Node node, long now) {
-        ready.add(node.id());
+        ready.add(node.idString());
         return true;
     }
 
@@ -92,7 +92,7 @@ public class MockClient implements KafkaClient {
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
-            if (request.request().destination() == node) {
+            if (request.request().destination().equals(node)) {
                 responses.add(new ClientResponse(request, now, true, null));
                 iter.remove();
             }
@@ -180,7 +180,7 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public int inFlightRequestCount(String nodeId) {
+    public int inFlightRequestCount(String node) {
         return requests.size();
     }
 
@@ -203,8 +203,8 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public void close(String nodeId) {
-        ready.remove(Integer.valueOf(nodeId));
+    public void close(String node) {
+        ready.remove(node);
     }
 
     @Override
