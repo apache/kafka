@@ -131,6 +131,3 @@ Apache Kafka is interested in building the community; we would welcome any thoug
 
 To contribute follow the instructions here:
  * http://kafka.apache.org/contributing.html
-
-We also welcome patches for the website and documentation which can be found here:
- * https://svn.apache.org/repos/asf/kafka/site
