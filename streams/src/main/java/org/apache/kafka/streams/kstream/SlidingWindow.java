@@ -17,7 +17,10 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface WindowMapper<K, V, W extends Window, K1, V1> {
 
-    KeyValue<K1, V1> apply(K key, V value, W window);
+public class SlidingWindow extends Window {
+
+    public SlidingWindow(long start, long end) {
+        super(start, end);
+    }
 }

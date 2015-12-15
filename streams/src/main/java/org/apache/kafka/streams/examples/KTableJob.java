@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.kstream.AggregateSupplier;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.HoppingWindow;
 import org.apache.kafka.streams.kstream.HoppingWindows;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.StreamingConfig;
@@ -55,7 +56,7 @@ public class KTableJob {
         // stream aggregate
         KStream<String, Integer> stream1 = builder.stream("topic1");
 
-        KWindowedTable<String, Integer, HoppingWindows> wtable1 = stream1.aggregateByKey(new AggregateSupplier<String, Integer, Integer>() {
+        KWindowedTable<String, Integer, HoppingWindow> wtable1 = stream1.aggregateByKey(new AggregateSupplier<String, Integer, Integer>() {
             @Override
             public Aggregator<String, Integer, Integer> get() {
                 return new Aggregator<String, Integer, Integer>() {
@@ -80,7 +81,7 @@ public class KTableJob {
                     }
                 };
             }
-        }, HoppingWindows.of(1000).every(500));
+        }, HoppingWindows.of(1000).every(500).emit(1000).until(1000 * 60 * 60 * 24 /* one day */));
 
         // table aggregation
         KTable<String, String> table1 = builder.table("topic2");
@@ -142,7 +143,7 @@ public class KTableJob {
         });
 
         // windowed table self join
-        KWindowedTable<String, Integer, HoppingWindows> wtable2 = wtable1.leftJoin(wtable1, 1000 * 60 * 60 * 24 * 7 /* a week ago*/, new ValueJoiner<Integer, Integer, Integer>() {
+        KWindowedTable<String, Integer, HoppingWindow> wtable2 = wtable1.leftJoin(wtable1, 1000 * 60 * 60 * 24 * 7 /* a week ago*/, new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 if (value2 == null)
@@ -152,9 +153,9 @@ public class KTableJob {
             }
         });
 
-        KStream<String, String> stream3 = wtable2.toStream(new WindowMapper<String, Integer, String, String>() {
+        KStream<String, String> stream3 = wtable2.toStream(new WindowMapper<String, Integer, HoppingWindow, String, String>() {
             @Override
-            public KeyValue<String, String> apply(String key, Integer value, Window window) {
+            public KeyValue<String, String> apply(String key, Integer value, HoppingWindow window) {
                 return new KeyValue<>(key + window.start(), value.toString());
             }
         });

@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream;
 
-public abstract class AbstractWindows {
+import java.util.Collection;
+
+public abstract class Windows<W extends Window> {
 
     private static final long DEFAULT_EMIT_DURATION = 1000L;
 
@@ -27,7 +29,7 @@ public abstract class AbstractWindows {
 
     private long maintainDuration;
 
-    protected AbstractWindows() {
+    protected Windows() {
         this.emitDuration = DEFAULT_EMIT_DURATION;
         this.maintainDuration = DEFAULT_MAINTAIN_DURATION;
     }
@@ -35,7 +37,7 @@ public abstract class AbstractWindows {
     /**
      * Set the window emit duration in milliseconds of system time
      */
-    public AbstractWindows emit(long duration) {
+    public Windows emit(long duration) {
         this.emitDuration = duration;
 
         return this;
@@ -44,9 +46,21 @@ public abstract class AbstractWindows {
     /**
      * Set the window maintain duration in milliseconds of system time
      */
-    public AbstractWindows until(long duration) {
+    public Windows until(long duration) {
         this.maintainDuration = duration;
 
         return this;
     }
+
+    public long emitEveryMs() {
+        return this.emitDuration;
+    }
+
+    public long maintainMs() {
+        return this.maintainDuration;
+    }
+
+    abstract boolean equalTo(Windows other);
+
+    abstract Collection<Window> windowsFor(long timestamp);
 }

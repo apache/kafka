@@ -25,7 +25,7 @@ package org.apache.kafka.streams.kstream;
  * @param <V> the type of values
  * @param <W> the type of window definition
  */
-public interface KWindowedTable<K, V, W extends WindowDef> {
+public interface KWindowedTable<K, V, W extends Window> {
 
     /**
      * Creates a new instance of KTable consists of all elements of this stream which satisfy a predicate
@@ -58,7 +58,7 @@ public interface KWindowedTable<K, V, W extends WindowDef> {
      * @param windowMapper the class of WindowMapper
      * @return the instance of KStream that contains transformed keys and values
      */
-    <K1, V1> KStream<K1, V1> toStream(WindowMapper<K, V, K1, V1> windowMapper);
+    <K1, V1> KStream<K1, V1> toStream(WindowMapper<K, V, W, K1, V1> windowMapper);
 
     /**
      * Combines values of this KWindowedTable with another KWindowedTable using Inner Join.

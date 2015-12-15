@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.streams.kstream.UnlimitedWindow;
+import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -106,14 +106,14 @@ public class KStreamImplTest {
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, UnlimitedWindow.on(0));
+        }, UnlimitedWindows.on(0));
 
         KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, UnlimitedWindow.on(0));
+        }, UnlimitedWindows.on(0));
 
         stream4.to("topic-5");
 

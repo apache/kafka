@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.kstream;
 
-public interface WindowMapper<K, V, W extends Window, K1, V1> {
+public class HoppingWindow extends Window {
 
-    KeyValue<K1, V1> apply(K key, V value, W window);
+    public HoppingWindow(long start, long end) {
+        super(start, end);
+    }
 }

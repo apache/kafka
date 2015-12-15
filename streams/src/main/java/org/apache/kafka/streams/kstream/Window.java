@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-public class Window implements Comparable<Window> {
+public abstract class Window implements Comparable<Window> {
 
     private long start;
     private long end;

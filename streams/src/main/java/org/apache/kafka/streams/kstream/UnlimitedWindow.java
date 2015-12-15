@@ -17,36 +17,9 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.internals.AbstractWindows;
+public class UnlimitedWindow extends Window {
 
-import java.util.Collection;
-import java.util.Collections;
-
-public class UnlimitedWindow extends AbstractWindows implements WindowDef<UnlimitedWindow> {
-
-    private long start;
-
-    private UnlimitedWindow(long start) {
-        super();
-
-        this.start = start;
-    }
-
-    /**
-     * Returns an unlimited window definition
-     */
-    public static UnlimitedWindow on(long start) {
-        return new UnlimitedWindow(start);
-    }
-
-    @Override
-    public Collection<Window> windowsFor(long timestamp) {
-        // TODO
-        return Collections.<Window>emptyList();
-    }
-
-    @Override
-    public boolean equalTo(UnlimitedWindow other) {
-        return true;
+    public UnlimitedWindow(long start) {
+        super(start, Long.MAX_VALUE);
     }
 }

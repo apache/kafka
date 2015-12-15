@@ -17,12 +17,10 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.internals.AbstractWindows;
-
 import java.util.Collection;
 import java.util.Collections;
 
-public class HoppingWindows extends AbstractWindows implements WindowDef<HoppingWindows> {
+public class HoppingWindows extends Windows<HoppingWindow> {
 
     private long size;
 
@@ -60,7 +58,12 @@ public class HoppingWindows extends AbstractWindows implements WindowDef<Hopping
     }
 
     @Override
-    public boolean equalTo(HoppingWindows other) {
-        return this.size == other.size && this.period == other.period;
+    public boolean equalTo(Windows other) {
+        if (!other.getClass().equals(HoppingWindows.class))
+            return false;
+
+        HoppingWindows otherWindows = (HoppingWindows) other;
+
+        return this.size == otherWindows.size && this.period == otherWindows.period;
     }
 }

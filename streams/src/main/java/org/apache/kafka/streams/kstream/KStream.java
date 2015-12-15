@@ -179,18 +179,18 @@ public interface KStream<K, V> {
      *
      * @param kstream the instance of KStream joined with this stream
      * @param joiner ValueJoiner
-     * @param windowDef the window definition
+     * @param windows the window definition
      * @param <V1>   the value type of the other stream
      * @param <V2>   the value type of the new stream
      */
-    <V1, V2, W extends WindowDef> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, WindowDef<W> windowDef);
+    <V1, V2, W extends Window> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, Windows<W> windows);
 
     /**
      * Aggregate values of this stream by key on a window basis.
      *
      * @param aggregateSupplier the class of aggregateSupplier
-     * @param windowDef the window definition
+     * @param windows the window definition
      * @param <T>   the value type of the aggregated table
      */
-    <T, W extends WindowDef> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, WindowDef<W> windowDef);
+    <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, Windows<W> windows);
 }

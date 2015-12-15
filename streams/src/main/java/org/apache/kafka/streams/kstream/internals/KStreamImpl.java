@@ -31,7 +31,8 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.WindowDef;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
@@ -245,7 +246,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <V1, V2, W extends WindowDef> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, WindowDef<W> windowDef) {
+    public <V1, V2, W extends Window> KStream<K, V2> join(KStream<K, V1> kstream, ValueJoiner<V, V1, V2> joiner, Windows<W> windows) {
         // TODO
         String name = topology.newName(JOINTHIS_NAME);
 
@@ -260,7 +261,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <T, W extends WindowDef> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, WindowDef<W> windowDef) {
+    public <T, W extends Window> KWindowedTable<K, T, W> aggregateByKey(AggregateSupplier<K, V, T> aggregateSupplier, Windows<W> windows) {
         // TODO
         return null;
     }

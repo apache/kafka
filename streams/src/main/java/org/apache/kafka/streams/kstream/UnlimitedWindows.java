@@ -18,10 +18,38 @@
 package org.apache.kafka.streams.kstream;
 
 import java.util.Collection;
+import java.util.Collections;
 
-public interface WindowDef<W extends WindowDef> {
+public class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
-    boolean equalTo(W other);
+    private long start;
 
-    Collection<Window> windowsFor(long timestamp);
+    private UnlimitedWindows(long start) {
+        super();
+
+        this.start = start;
+    }
+
+    /**
+     * Returns an unlimited window definition
+     */
+    public static UnlimitedWindows on(long start) {
+        return new UnlimitedWindows(start);
+    }
+
+    @Override
+    public Collection<Window> windowsFor(long timestamp) {
+        // TODO
+        return Collections.<Window>emptyList();
+    }
+
+    @Override
+    public boolean equalTo(Windows other) {
+        if (!other.getClass().equals(UnlimitedWindows.class))
+            return false;
+
+        UnlimitedWindows otherWindows = (UnlimitedWindows) other;
+
+        return this.start == otherWindows.start;
+    }
 }

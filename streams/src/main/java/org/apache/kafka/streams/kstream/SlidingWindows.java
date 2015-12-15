@@ -18,12 +18,10 @@
 package org.apache.kafka.streams.kstream;
 
 
-import org.apache.kafka.streams.kstream.internals.AbstractWindows;
-
 import java.util.Collection;
 import java.util.Collections;
 
-public class SlidingWindows extends AbstractWindows implements WindowDef<SlidingWindows> {
+public class SlidingWindows extends Windows<SlidingWindow> {
 
     private long size;
 
@@ -45,7 +43,12 @@ public class SlidingWindows extends AbstractWindows implements WindowDef<Sliding
     }
 
     @Override
-    public boolean equalTo(SlidingWindows other) {
-        return this.size == other.size;
+    public boolean equalTo(Windows other) {
+        if (!other.getClass().equals(SlidingWindows.class))
+            return false;
+
+        SlidingWindows otherWindows = (SlidingWindows) other;
+
+        return this.size == otherWindows.size;
     }
 }
